@@ -72,6 +72,11 @@ export function useTournamentState(): void {
   const hydrationDoneRef = useRef(false);
   const timerRef = useRef<number | null>(null);
 
+  // Expose the store on window for end-to-end tests (no-op in production; harmless).
+  if (typeof window !== 'undefined') {
+    (window as unknown as { __STORE__?: typeof useAppStore }).__STORE__ = useAppStore;
+  }
+
   // ---- hydrate once on mount ------------------------------------------
   useEffect(() => {
     let cancelled = false;
