@@ -89,7 +89,8 @@ class ScheduleConfig:
 class SolverOptions:
     """Solver execution options."""
     time_limit_seconds: float = 5.0
-    num_workers: int = 4
+    num_workers: int = 1
+    random_seed: int = 42
     log_progress: bool = False
 
 
