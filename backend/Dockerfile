@@ -22,6 +22,10 @@ COPY backend/app/ ./app/
 COPY backend/api/ ./api/
 COPY backend/services/ ./services/
 
+# Directory for the tournament state file — mounted as a Docker volume in
+# production so state survives container recreation.
+RUN mkdir -p /app/data
+
 # Expose port
 EXPOSE 8000
 

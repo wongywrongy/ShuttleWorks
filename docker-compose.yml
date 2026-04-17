@@ -8,6 +8,9 @@ services:
       - "8000:8000"
     environment:
       - LOG_LEVEL=info
+      - BACKEND_DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
