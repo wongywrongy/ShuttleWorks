@@ -81,6 +81,7 @@ class RosterImportDTO(BaseModel):
 # Match - simplified for school sparring (supports dual and tri-meets)
 class MatchDTO(BaseModel):
     id: str
+    matchNumber: Optional[int] = None  # Display ordinal (frontend-authored sequence)
     sideA: List[str] = Field(default_factory=list)  # List of player IDs (School A)
     sideB: List[str] = Field(default_factory=list)  # List of player IDs (School B)
     sideC: Optional[List[str]] = None  # List of player IDs (School C) - for tri-meets
@@ -97,6 +98,39 @@ class ScheduleAssignment(BaseModel):
     slotId: int
     courtId: int
     durationSlots: int
+
+
+class PreviousAssignmentDTO(BaseModel):
+    """Typed previous assignment used by /schedule re-solve and drag pin-and-resolve."""
+    matchId: str
+    slotId: int
+    courtId: int
+    locked: bool = False
+    pinnedSlotId: Optional[int] = None
+    pinnedCourtId: Optional[int] = None
+
+
+class ProposedMoveDTO(BaseModel):
+    """A single drag target evaluated by /schedule/validate."""
+    matchId: str
+    slotId: int
+    courtId: int
+
+
+class ValidationConflict(BaseModel):
+    """One reason a proposed move or a full schedule is infeasible."""
+    type: str  # court_conflict | player_overlap | availability | rest | out_of_day | invalid_court | ...
+    description: str
+    matchId: Optional[str] = None
+    otherMatchId: Optional[str] = None
+    playerId: Optional[str] = None
+    courtId: Optional[int] = None
+    slotId: Optional[int] = None
+
+
+class ValidationResponseDTO(BaseModel):
+    feasible: bool
+    conflicts: List[ValidationConflict] = Field(default_factory=list)
 
 
 class SoftViolation(BaseModel):
@@ -131,3 +165,30 @@ class MatchStateDTO(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str
+
+
+# ---- Tournament state (whole-document persistence) --------------------
+
+class TournamentStateDTO(BaseModel):
+    """Authoritative persisted state for one tournament.
+
+    Writes come as a single blob: frontend Zustand state snapshotted and
+    PUT to /tournament/state. Server stamps `updatedAt` on write; the
+    client's value is ignored.
+    """
+    version: int = 1
+    updatedAt: Optional[str] = None
+    config: Optional[TournamentConfig] = None
+    groups: List[RosterGroupDTO] = Field(default_factory=list)
+    players: List[PlayerDTO] = Field(default_factory=list)
+    matches: List[MatchDTO] = Field(default_factory=list)
+    schedule: Optional[ScheduleDTO] = None
+    scheduleStats: Optional[dict] = None
+    scheduleIsStale: bool = False
+
+
+class SolverOptionsDTO(BaseModel):
+    """Optional per-request override of solver parameters (no UI yet)."""
+    timeLimitSeconds: Optional[float] = None
+    numWorkers: Optional[int] = None
+    randomSeed: Optional[int] = None
