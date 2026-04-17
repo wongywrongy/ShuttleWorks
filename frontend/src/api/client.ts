@@ -8,9 +8,15 @@ import type {
   PlayerDTO,
   MatchDTO,
   ScheduleDTO,
+  ScheduleAssignment,
   MatchStateDTO,
   SolverProgressEvent,
+  SolverModelBuiltEvent,
+  SolverPhaseEvent,
+  ProposedMove,
+  ValidationResponseDTO,
   MatchGenerationRule,
+  TournamentStateDTO,
 } from './dto';
 
 // Use /api proxy in dev, or explicit URL in production
@@ -61,24 +67,35 @@ class ApiClient {
   }
 
   /**
-   * Generate schedule with progress updates via Server-Sent Events
-   * @param abortSignal Optional AbortSignal to cancel the request
+   * Generate schedule with progress updates via Server-Sent Events.
+   *
+   * The backend emits these event types:
+   *   - ``model_built`` (once) — model statistics
+   *   - ``phase``                 — presolve | search | proving
+   *   - ``progress`` (many)       — intermediate solution
+   *   - ``complete``              — final ScheduleDTO
+   *   - ``error``                 — solver exception
+   *   - ``done``                  — stream terminator (always last)
    */
   async generateScheduleWithProgress(
     request: GenerateScheduleRequest,
-    onProgress: (event: SolverProgressEvent) => void,
+    callbacks: {
+      onProgress?: (event: SolverProgressEvent) => void;
+      onModelBuilt?: (event: SolverModelBuiltEvent) => void;
+      onPhase?: (event: SolverPhaseEvent) => void;
+    } | ((event: SolverProgressEvent) => void),
     abortSignal?: AbortSignal
   ): Promise<ScheduleDTO> {
-    return new Promise((resolve, reject) => {
-      // Use same base URL as axios client - this will use /api proxy in dev
-      const url = `${API_BASE_URL}/schedule/stream`;
+    // Back-compat: old call sites pass a single progress callback.
+    const cb = typeof callbacks === 'function'
+      ? { onProgress: callbacks }
+      : callbacks;
 
-      // Use fetch API for SSE streaming (EventSource doesn't support POST)
+    return new Promise((resolve, reject) => {
+      const url = `${API_BASE_URL}/schedule/stream`;
       fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
         signal: abortSignal,
       })
@@ -86,52 +103,54 @@ class ApiClient {
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
-
           const reader = response.body?.getReader();
-          if (!reader) {
-            throw new Error('Response body is not readable');
-          }
+          if (!reader) throw new Error('Response body is not readable');
 
           const decoder = new TextDecoder();
           let buffer = '';
 
           while (true) {
             const { done, value } = await reader.read();
-
             if (done) break;
-
             buffer += decoder.decode(value, { stream: true });
 
-            // Process complete SSE messages (delimited by \n\n)
             const messages = buffer.split('\n\n');
-            buffer = messages.pop() || ''; // Keep incomplete message in buffer
+            buffer = messages.pop() || '';
 
             for (const message of messages) {
               if (!message.trim()) continue;
-
-              // Parse SSE format: "data: {...}"
               const dataMatch = message.match(/^data: (.+)$/m);
               if (!dataMatch) continue;
 
               try {
                 const event = JSON.parse(dataMatch[1]);
-
-                if (event.type === 'progress') {
-                  onProgress({
-                    elapsed_ms: event.elapsed_ms,
-                    current_objective: event.current_objective,
-                    best_bound: event.best_bound,
-                    solution_count: event.solution_count,
-                    current_assignments: event.current_assignments,
-                    gap_percent: event.gap_percent,
-                    messages: event.messages,
-                  });
-                } else if (event.type === 'complete') {
-                  resolve(event.result as ScheduleDTO);
-                  return;
-                } else if (event.type === 'error') {
-                  reject(new Error(event.message));
-                  return;
+                switch (event.type) {
+                  case 'model_built':
+                    cb.onModelBuilt?.(event as SolverModelBuiltEvent);
+                    break;
+                  case 'phase':
+                    cb.onPhase?.({ phase: event.phase });
+                    break;
+                  case 'progress':
+                    cb.onProgress?.({
+                      elapsed_ms: event.elapsed_ms,
+                      current_objective: event.current_objective,
+                      best_bound: event.best_bound,
+                      solution_count: event.solution_count,
+                      current_assignments: event.current_assignments,
+                      gap_percent: event.gap_percent,
+                      messages: event.messages,
+                    });
+                    break;
+                  case 'complete':
+                    resolve(event.result as ScheduleDTO);
+                    return;
+                  case 'error':
+                    reject(new Error(event.message));
+                    return;
+                  case 'done':
+                    // Stream terminator — no-op, resolve/reject already handled.
+                    break;
                 }
               } catch (e) {
                 console.error('Failed to parse SSE event:', e);
@@ -144,10 +163,54 @@ class ApiClient {
   }
 
   /**
+   * Fast feasibility check for a proposed drag-to-reschedule target.
+   * Backed by the pure-Python /schedule/validate endpoint — no CP-SAT solve.
+   */
+  async validateMove(args: {
+    config: TournamentConfig;
+    players: PlayerDTO[];
+    matches: MatchDTO[];
+    assignments: ScheduleAssignment[];
+    proposedMove: ProposedMove;
+    previousAssignments?: any[];
+    signal?: AbortSignal;
+  }): Promise<ValidationResponseDTO> {
+    const { signal, ...body } = args;
+    const response = await this.client.post<ValidationResponseDTO>(
+      '/schedule/validate',
+      body,
+      { signal },
+    );
+    return response.data;
+  }
+
+  /**
    * Health check
    */
   async health(): Promise<{ status: string; version: string }> {
     const response = await this.client.get('/health');
+    return response.data;
+  }
+
+  /**
+   * Fetch the server-side tournament state.
+   * Returns `null` when the server has no state yet (HTTP 204).
+   */
+  async getTournamentState(): Promise<TournamentStateDTO | null> {
+    const response = await this.client.get<TournamentStateDTO>(
+      '/tournament/state',
+      { validateStatus: (s) => s === 200 || s === 204 },
+    );
+    if (response.status === 204) return null;
+    return response.data;
+  }
+
+  /** Overwrite the tournament state file. Returns the stamped state. */
+  async putTournamentState(state: TournamentStateDTO): Promise<TournamentStateDTO> {
+    const response = await this.client.put<TournamentStateDTO>(
+      '/tournament/state',
+      state,
+    );
     return response.data;
   }
 

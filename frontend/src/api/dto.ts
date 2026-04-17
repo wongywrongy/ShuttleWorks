@@ -251,6 +251,59 @@ export interface SolverProgressEvent {
   messages?: SolverProgressMessage[];
 }
 
+// SSE "model_built" event — emitted once after CP-SAT model construction completes.
+export interface SolverModelBuiltEvent {
+  numMatches: number;
+  numPlayers: number;
+  numIntervals: number;
+  numNoOverlap: number;
+  numVariables: number;
+  multiMatchPlayers?: number;
+  totalSlots?: number;
+  courtCount?: number;
+}
+
+// SSE "phase" event — emitted on solver phase transitions.
+export type SolverPhaseName = 'presolve' | 'search' | 'proving';
+export interface SolverPhaseEvent {
+  phase: SolverPhaseName;
+}
+
+// Drag-to-reschedule types matching /schedule/validate.
+export interface ProposedMove {
+  matchId: string;
+  slotId: number;
+  courtId: number;
+}
+
+export interface ValidationConflictDTO {
+  type: string;
+  description: string;
+  matchId?: string;
+  otherMatchId?: string;
+  playerId?: string;
+  courtId?: number;
+  slotId?: number;
+}
+
+export interface ValidationResponseDTO {
+  feasible: boolean;
+  conflicts: ValidationConflictDTO[];
+}
+
+// Whole-tournament persistence DTO (server-side JSON file at data/tournament.json).
+export interface TournamentStateDTO {
+  version: number;
+  updatedAt?: string | null;
+  config: TournamentConfig | null;
+  groups: RosterGroupDTO[];
+  players: PlayerDTO[];
+  matches: MatchDTO[];
+  schedule: ScheduleDTO | null;
+  scheduleStats?: unknown;
+  scheduleIsStale: boolean;
+}
+
 // Constraint Visualization Types
 export interface ConstraintViolation {
   type: 'rest' | 'overlap' | 'availability' | 'court_capacity' | 'game_proximity_min' | 'game_proximity_max';
