@@ -1,7 +1,7 @@
 """Main FastAPI application - stateless scheduler for school sparring."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import schedule, match_state
+from api import schedule, match_state, tournament_state
 
 app = FastAPI(
     title="School Sparring Scheduler API",
@@ -33,6 +33,7 @@ app.add_middleware(
 # Register API routers
 app.include_router(schedule.router)
 app.include_router(match_state.router)
+app.include_router(tournament_state.router)
 
 # Health check endpoint
 @app.get("/health")
