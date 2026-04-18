@@ -84,3 +84,98 @@ code {
 .animate-slide-up {
   animation: slide-up 0.3s ease-out;
 }
+
+/* ---- Solver theater primitives -----------------------------------------
+ * Custom CSS reserved for effects Tailwind can't express cleanly on its own.
+ * Keep these tiny and composable — each utility is opt-in via className.
+ * All motion is gated by prefers-reduced-motion at the bottom of this file.
+ * --------------------------------------------------------------------- */
+
+/* Marching-ants border: two alternating dashed backgrounds animated via
+ * background-position (see tailwind keyframes "marching-ants"). Used on
+ * pinned matches while the solver is still running. */
+.pin-marquee {
+  --ant-a: #f59e0b;     /* amber-500 */
+  --ant-b: transparent;
+  background-image:
+    linear-gradient(90deg, var(--ant-a) 50%, var(--ant-b) 50%),
+    linear-gradient(90deg, var(--ant-a) 50%, var(--ant-b) 50%),
+    linear-gradient(0deg, var(--ant-a) 50%, var(--ant-b) 50%),
+    linear-gradient(0deg, var(--ant-a) 50%, var(--ant-b) 50%);
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  background-size: 14px 2px, 14px 2px, 2px 14px, 2px 14px;
+  background-position: left top, right bottom, left top, right bottom;
+}
+
+/* Scanline: a thin emerald bar swept across the HUD by "scan-sweep". */
+.scan-bar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.scan-bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 22%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(16, 185, 129, 0.00) 10%,
+    rgba(16, 185, 129, 0.18) 50%,
+    rgba(16, 185, 129, 0.00) 90%,
+    transparent 100%
+  );
+  filter: blur(6px);
+  animation: scan-sweep 1.6s linear infinite;
+}
+
+/* Sheen overlay — a diagonal light band that passes once when the solver
+ * proves optimal. Add `.sheen` + `animate-sheen` on the container. */
+.sheen-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.sheen-overlay::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  bottom: -50%;
+  width: 30%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  transform: translateX(-120%) skewX(-20deg);
+  animation: sheen 1.1s ease-out forwards;
+}
+
+/* Dotted grid background for the Gantt — subtle, adds depth. */
+.gantt-grid {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.07) 1px, transparent 1.5px);
+  background-size: 28px 8px;
+  background-position: 0 0;
+}
+
+/* Global: respect user motion preferences. Disables infinite animations but
+ * keeps short, signaling ones (drop-ok, shake) that communicate feedback.
+ * Infinite motion (scan-sweep, phase-glow, marching-ants, cell-pulse) is
+ * cut. Short transitions (position slides) are kept short. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-scan-sweep,
+  .animate-phase-glow,
+  .animate-marching-ants,
+  .animate-cell-pulse,
+  .pin-marquee,
+  .scan-bar::after {
+    animation: none !important;
+  }
+}

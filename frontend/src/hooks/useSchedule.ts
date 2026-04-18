@@ -22,6 +22,8 @@ export function useSchedule() {
   const setIsGenerating = useAppStore((state) => state.setIsGenerating);
   const setGenerationProgress = useAppStore((state) => state.setGenerationProgress);
   const setGenerationError = useAppStore((state) => state.setGenerationError);
+  const setSolverHud = useAppStore((state) => state.setSolverHud);
+  const resetSolverHud = useAppStore((state) => state.resetSolverHud);
 
   const [view, setView] = useState<ScheduleView>('timeslot');
 
@@ -46,6 +48,7 @@ export function useSchedule() {
       setIsGenerating(true);
       setGenerationError(null);
       setGenerationProgress(null);
+      resetSolverHud();
 
       // Call stateless API with progress tracking
       const result = await apiClient.generateScheduleWithProgress(
@@ -54,9 +57,28 @@ export function useSchedule() {
           players,
           matches,
         },
-        (progress) => {
-          // Update global state - survives tab switches
-          setGenerationProgress(progress);
+        {
+          onProgress: (progress) => {
+            setGenerationProgress(progress);
+            setSolverHud({
+              solutionCount: progress.solution_count ?? 0,
+              objective: progress.current_objective,
+              bestBound: progress.best_bound,
+              gapPercent: progress.gap_percent ?? undefined,
+              elapsedMs: progress.elapsed_ms,
+            });
+          },
+          onModelBuilt: (m) => {
+            setSolverHud({
+              numMatches: m.numMatches,
+              numIntervals: m.numIntervals,
+              numNoOverlap: m.numNoOverlap,
+              numVariables: m.numVariables,
+            });
+          },
+          onPhase: ({ phase }) => {
+            setSolverHud({ phase });
+          },
         },
         abortController.signal
       );
@@ -85,7 +107,14 @@ export function useSchedule() {
       setIsGenerating(false);
       abortControllerRef.current = null;
     }
-  }, [config, players, matches, setSchedule, setScheduleStats, setIsGenerating, setGenerationProgress, setGenerationError]);
+  }, [config, players, matches, setSchedule, setScheduleStats, setIsGenerating, setGenerationProgress, setGenerationError, setSolverHud, resetSolverHud]);
+
+  const cancelGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  }, []);
 
   const reoptimizeSchedule = useCallback(async () => {
     if (!config || !schedule) {
@@ -114,6 +143,99 @@ export function useSchedule() {
     }
   }, [config, players, matches, schedule, setSchedule, setIsGenerating, setGenerationError]);
 
+  /**
+   * Drag-drop pin-and-resolve.
+   *
+   * The dragged match is marked with `pinnedSlotId`/`pinnedCourtId` in the
+   * previous-assignments payload and we re-solve with a tight 3 s time limit.
+   * The optimistic pin is reflected in the store immediately so the UI can
+   * animate before the solver returns.
+   */
+  const pinAndResolve = useCallback(
+    async (pin: { matchId: string; slotId: number; courtId: number }) => {
+      if (!config || !schedule) {
+        throw new Error('No schedule to re-solve');
+      }
+
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      const store = useAppStore.getState();
+      store.setPendingPin(pin);
+
+      const previousAssignments = schedule.assignments.map((a) =>
+        a.matchId === pin.matchId
+          ? {
+              matchId: a.matchId,
+              slotId: pin.slotId,
+              courtId: pin.courtId,
+              durationSlots: a.durationSlots,
+              pinnedSlotId: pin.slotId,
+              pinnedCourtId: pin.courtId,
+            }
+          : {
+              matchId: a.matchId,
+              slotId: a.slotId,
+              courtId: a.courtId,
+              durationSlots: a.durationSlots,
+            },
+      );
+
+      try {
+        setIsGenerating(true);
+        setGenerationError(null);
+        resetSolverHud();
+
+        const result = await apiClient.generateScheduleWithProgress(
+          {
+            config,
+            players,
+            matches,
+            previousAssignments,
+          },
+          {
+            onProgress: (progress) => {
+              setGenerationProgress(progress);
+              setSolverHud({
+                solutionCount: progress.solution_count ?? 0,
+                objective: progress.current_objective,
+                bestBound: progress.best_bound,
+                gapPercent: progress.gap_percent ?? undefined,
+                elapsedMs: progress.elapsed_ms,
+              });
+            },
+            onModelBuilt: (m) => {
+              setSolverHud({
+                numMatches: m.numMatches,
+                numIntervals: m.numIntervals,
+                numNoOverlap: m.numNoOverlap,
+                numVariables: m.numVariables,
+              });
+            },
+            onPhase: ({ phase }) => setSolverHud({ phase }),
+          },
+          abortController.signal,
+        );
+
+        setSchedule(result);
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return;
+        }
+        const message = err instanceof Error ? err.message : 'Failed to re-solve with pin';
+        setGenerationError(message);
+        throw err;
+      } finally {
+        setIsGenerating(false);
+        abortControllerRef.current = null;
+      }
+    },
+    [config, schedule, players, matches, setSchedule, setIsGenerating, setGenerationError, setGenerationProgress, setSolverHud, resetSolverHud],
+  );
+
   return {
     schedule,
     loading: isGenerating,
@@ -122,6 +244,8 @@ export function useSchedule() {
     setView,
     generateSchedule,
     reoptimizeSchedule,
+    cancelGeneration,
+    pinAndResolve,
     loadSchedule: () => {}, // No-op for stateless (schedule is already in store)
     generationProgress,
   };
