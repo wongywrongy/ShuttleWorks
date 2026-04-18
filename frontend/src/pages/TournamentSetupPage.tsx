@@ -3,6 +3,7 @@ import { useTournament } from '../hooks/useTournament';
 import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
 import { TournamentFileManagement } from '../features/tournaments/TournamentFileManagement';
+import { BackupPanel } from '../features/setup/BackupPanel';
 import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicator';
 import type { TournamentConfig } from '../api/dto';
 
@@ -84,6 +85,10 @@ export function TournamentSetupPage() {
 
       <div className="mt-3">
         <TournamentFileManagement />
+      </div>
+
+      <div className="mt-3">
+        <BackupPanel />
       </div>
     </div>
   );

@@ -33,6 +33,22 @@ export interface SolverLogEntry {
   type: 'info' | 'solution' | 'violation' | 'stats' | 'progress';
 }
 
+// Toast notifications (in-app, ephemeral).
+export type ToastLevel = 'info' | 'success' | 'warn' | 'error';
+
+export interface Toast {
+  id: string;
+  level: ToastLevel;
+  message: string;
+  /** Extra detail shown in a smaller line below the message. Useful for request IDs or error codes. */
+  detail?: string;
+  /** If set, a button with this label appears and invokes `onAction` when clicked. */
+  actionLabel?: string;
+  onAction?: () => void;
+  /** Milliseconds before auto-dismiss. `null` means sticky (used for errors). */
+  durationMs?: number | null;
+}
+
 // Tabs in the one-shell layout. Not persisted — reset to 'setup' on reload.
 export type AppTab = 'setup' | 'roster' | 'matches' | 'schedule' | 'live' | 'tv';
 
@@ -100,6 +116,22 @@ interface AppState {
   // Last /schedule/validate result during an active drag. Not persisted.
   lastValidation: ValidationSnapshot | null;
   setLastValidation: (v: ValidationSnapshot | null) => void;
+
+  // Server persistence status for the tournament state. Not persisted —
+  // reset on reload. `dirty` means there are edits the server hasn't
+  // acknowledged yet; `error` means the last save failed.
+  persistStatus: 'idle' | 'dirty' | 'saving' | 'error';
+  lastSavedAt: string | null;
+  lastSaveError: string | null;
+  setPersistStatus: (status: 'idle' | 'dirty' | 'saving' | 'error') => void;
+  setLastSavedAt: (iso: string | null) => void;
+  setLastSaveError: (msg: string | null) => void;
+
+  // Toast notifications — not persisted.
+  toasts: Toast[];
+  pushToast: (toast: Omit<Toast, 'id'>) => string;
+  dismissToast: (id: string) => void;
+  clearToasts: () => void;
 
   // Tournament Configuration
   config: TournamentConfig | null;
@@ -198,6 +230,10 @@ export const useAppStore = create<AppState>()(
       schedule: null,
       scheduleStats: null,
       scheduleIsStale: false,
+      persistStatus: 'idle' as const,
+      lastSavedAt: null,
+      lastSaveError: null,
+      toasts: [] as Toast[],
       isGenerating: false,
       generationProgress: null,
       generationError: null,
@@ -208,6 +244,30 @@ export const useAppStore = create<AppState>()(
 
       // Shell actions
       setActiveTab: (activeTab) => set({ activeTab }),
+
+      // Persist status
+      setPersistStatus: (persistStatus) => set({ persistStatus }),
+      setLastSavedAt: (lastSavedAt) => set({ lastSavedAt }),
+      setLastSaveError: (lastSaveError) => set({ lastSaveError }),
+
+      // Toast actions. `pushToast` returns the new id so callers can
+      // dismiss specific toasts (useful for the SSE reconnect flow).
+      pushToast: (toast) => {
+        const id =
+          (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+            ? crypto.randomUUID()
+            : `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const entry: Toast = {
+          id,
+          durationMs: toast.level === 'error' ? null : 5_000,
+          ...toast,
+        };
+        set((state) => ({ toasts: [...state.toasts, entry] }));
+        return id;
+      },
+      dismissToast: (id) =>
+        set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+      clearToasts: () => set({ toasts: [] }),
 
       // Solver HUD actions
       setSolverHud: (patch) => set((state) => ({ solverHud: { ...state.solverHud, ...patch } })),

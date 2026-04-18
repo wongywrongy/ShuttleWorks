@@ -96,8 +96,114 @@ def test_updated_at_stamped_server_side_ignores_client_value(client):
     assert body["updatedAt"] != "1999-01-01T00:00:00Z"
 
 
-def test_corrupt_file_returns_500_with_reset_hint(client, tmp_path):
+def test_corrupt_file_with_no_backup_returns_500(client, tmp_path):
     (tmp_path / "tournament.json").write_text("{ not json }")
     r = client.get("/tournament/state")
     assert r.status_code == 500
     assert "corrupt" in r.json().get("detail", "").lower()
+
+
+def test_corrupt_file_auto_recovers_from_backup(client, tmp_path):
+    """A corrupt live file should silently fall back to the newest backup.
+
+    Backups are snapshots of the *previous* live content taken right before
+    each PUT, so after two writes the pool contains the first payload only.
+    Recovery therefore rolls back one step.
+    """
+    first = {"version": 1, "groups": [{"id": "g1", "name": "UCSC"}],
+             "players": [], "matches": [], "scheduleIsStale": False}
+    client.put("/tournament/state", json=first)
+    second = {"version": 1, "groups": [{"id": "g2", "name": "Stanford"}],
+              "players": [], "matches": [], "scheduleIsStale": False}
+    client.put("/tournament/state", json=second)
+    # Corrupt the live (Stanford) file.
+    (tmp_path / "tournament.json").write_text("{ not json }")
+
+    r = client.get("/tournament/state")
+    assert r.status_code == 200
+    body = r.json()
+    # The most recent backup snapshots the pre-Stanford content (UCSC).
+    assert body["groups"][0]["name"] == "UCSC"
+    assert "recoveredFromBackup" in body
+
+
+def test_backup_rotation_keeps_last_10(client, tmp_path):
+    """Eleven writes should leave exactly ten backup files on disk."""
+    for i in range(12):
+        payload = {"version": 1,
+                   "groups": [{"id": f"g{i}", "name": f"S{i}"}],
+                   "players": [], "matches": [], "scheduleIsStale": False}
+        client.put("/tournament/state", json=payload)
+    backups_dir = tmp_path / "backups"
+    files = sorted(p.name for p in backups_dir.iterdir() if p.name.startswith("tournament-"))
+    assert len(files) == 10, f"expected 10 backups, got {len(files)}: {files}"
+
+
+def test_list_backups_returns_newest_first(client):
+    for i in range(3):
+        payload = {"version": 1,
+                   "groups": [{"id": f"g{i}", "name": f"S{i}"}],
+                   "players": [], "matches": [], "scheduleIsStale": False}
+        client.put("/tournament/state", json=payload)
+    r = client.get("/tournament/state/backups")
+    assert r.status_code == 200
+    entries = r.json()["backups"]
+    # PUT #1 rotates no backup (no prior file); PUT #2 rotates backup of #1;
+    # PUT #3 rotates backup of #2. So we expect exactly 2 entries.
+    assert len(entries) == 2
+    # Newest first.
+    assert entries[0]["modifiedAt"] >= entries[1]["modifiedAt"]
+
+
+def test_restore_backup_replaces_live_file(client):
+    first = {"version": 1, "groups": [{"id": "g1", "name": "FIRST"}],
+             "players": [], "matches": [], "scheduleIsStale": False}
+    second = {"version": 1, "groups": [{"id": "g2", "name": "SECOND"}],
+              "players": [], "matches": [], "scheduleIsStale": False}
+    client.put("/tournament/state", json=first)
+    client.put("/tournament/state", json=second)
+    # The backup pool now contains a copy of `first`.
+    backups = client.get("/tournament/state/backups").json()["backups"]
+    assert backups
+    target = backups[-1]["filename"]  # the oldest one, which is `first`
+
+    r = client.post(f"/tournament/state/restore/{target}")
+    assert r.status_code == 200
+    assert r.json()["groups"][0]["name"] == "FIRST"
+    # The live file now matches `first` too.
+    live = client.get("/tournament/state").json()
+    assert live["groups"][0]["name"] == "FIRST"
+
+
+def test_restore_unknown_backup_404(client):
+    r = client.post("/tournament/state/restore/no-such-file.json")
+    assert r.status_code == 404
+
+
+def test_create_backup_endpoint_snapshots_on_demand(client):
+    payload = {"version": 1, "groups": [{"id": "g1", "name": "UCSC"}],
+               "players": [], "matches": [], "scheduleIsStale": False}
+    client.put("/tournament/state", json=payload)
+    before = client.get("/tournament/state/backups").json()["backups"]
+    r = client.post("/tournament/state/backup")
+    assert r.status_code == 200
+    assert r.json()["created"] is True
+    after = client.get("/tournament/state/backups").json()["backups"]
+    assert len(after) == len(before) + 1
+
+
+def test_migration_too_new_version_rejects(client, tmp_path):
+    """A payload saved by a newer app version must fail loudly."""
+    (tmp_path / "tournament.json").write_text(json.dumps({
+        "version": 99,
+        "config": None,
+        "groups": [],
+        "players": [],
+        "matches": [],
+        "schedule": None,
+        "scheduleStats": None,
+        "scheduleIsStale": False,
+    }))
+    r = client.get("/tournament/state")
+    assert r.status_code == 409
+    assert "newer" in r.json().get("detail", "").lower()

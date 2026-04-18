@@ -19,6 +19,37 @@ import { useAppStore } from '../store/appStore';
 const DEBOUNCE_MS = 500;
 const LEGACY_KEY = 'scheduler-storage';
 
+// Module-level timer so `forceSaveNow()` can flush from anywhere.
+let moduleTimer: number | null = null;
+let flushPromise: Promise<void> | null = null;
+
+/** Cancel any pending debounced save and flush immediately. */
+export async function forceSaveNow(): Promise<void> {
+  if (moduleTimer !== null) {
+    window.clearTimeout(moduleTimer);
+    moduleTimer = null;
+  }
+  if (flushPromise) return flushPromise;
+  flushPromise = (async () => {
+    const store = useAppStore.getState();
+    store.setPersistStatus('saving');
+    try {
+      await apiClient.putTournamentState(snapshot(useAppStore.getState()));
+      useAppStore.getState().setLastSavedAt(new Date().toISOString());
+      useAppStore.getState().setLastSaveError(null);
+      useAppStore.getState().setPersistStatus('idle');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      useAppStore.getState().setLastSaveError(message);
+      useAppStore.getState().setPersistStatus('error');
+      throw err;
+    } finally {
+      flushPromise = null;
+    }
+  })();
+  return flushPromise;
+}
+
 function snapshot(state: ReturnType<typeof useAppStore.getState>): TournamentStateDTO {
   return {
     version: 1,
@@ -70,7 +101,6 @@ function readLegacyLocalStorage(): TournamentStateDTO | null {
 
 export function useTournamentState(): void {
   const hydrationDoneRef = useRef(false);
-  const timerRef = useRef<number | null>(null);
 
   // Expose the store on window for end-to-end tests (no-op in production; harmless).
   if (typeof window !== 'undefined') {
@@ -119,18 +149,22 @@ export function useTournamentState(): void {
         state.scheduleIsStale !== prev.scheduleIsStale;
       if (!changed) return;
 
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-      }
-      timerRef.current = window.setTimeout(() => {
-        apiClient
-          .putTournamentState(snapshot(useAppStore.getState()))
-          .catch((err) => console.error('[useTournamentState] put failed:', err));
+      // Mark dirty immediately so the unsaved-changes UI can react before
+      // the debounced flush fires.
+      if (state.persistStatus !== 'saving') state.setPersistStatus('dirty');
+
+      if (moduleTimer !== null) window.clearTimeout(moduleTimer);
+      moduleTimer = window.setTimeout(() => {
+        moduleTimer = null;
+        forceSaveNow().catch((err) => {
+          console.error('[useTournamentState] put failed:', err);
+        });
       }, DEBOUNCE_MS);
     });
     return () => {
       unsub();
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      // Keep the module timer alive across unmount — the hook lives at the
+      // shell level, so this cleanup only fires on full app teardown.
     };
   }, []);
 }

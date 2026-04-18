@@ -302,6 +302,23 @@ export interface TournamentStateDTO {
   schedule: ScheduleDTO | null;
   scheduleStats?: unknown;
   scheduleIsStale: boolean;
+  /** Set only when the backend auto-restored a corrupted file from backup. */
+  recoveredFromBackup?: string;
+}
+
+export interface BackupEntryDTO {
+  filename: string;
+  sizeBytes: number;
+  modifiedAt: string;
+}
+
+export interface BackupListDTO {
+  backups: BackupEntryDTO[];
+}
+
+export interface BackupCreatedDTO {
+  created: boolean;
+  filename: string | null;
 }
 
 // Constraint Visualization Types
