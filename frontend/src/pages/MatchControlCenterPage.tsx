@@ -1,6 +1,15 @@
 /**
- * Match Control Center Page - Unified Design (matches Schedule page style)
- * Layout: Status Bar → Gantt Chart → Workflow Panel (In Progress | Tabbed Center | Details) → Suggested Next Dock
+ * Match Control Center Page
+ *
+ * Redesigned to mirror the Schedule page's shell:
+ *   - Header bar with progress metrics + actions
+ *   - Gantt pane in a rounded card
+ *   - Matches pane (WorkflowPanel, flattened to a single column) below
+ *   - Collapsible Match Details sidebar on the right
+ *
+ * The old legend strip and separate Suggested Next dock were removed —
+ * status colours on the Gantt plus the "Up Next" ordering inside the
+ * workflow panel already surface the same information.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
@@ -11,7 +20,6 @@ import { useAppStore } from '../store/appStore';
 import { GanttChart } from '../features/control-center/GanttChart';
 import { WorkflowPanel } from '../features/control-center/WorkflowPanel';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
-import { SuggestedNextDock } from '../features/control-center/SuggestedNextDock';
 
 export function MatchControlCenterPage() {
   const liveTracking = useLiveTracking();
@@ -23,6 +31,7 @@ export function MatchControlCenterPage() {
 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [currentSlot, setCurrentSlot] = useState(0);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   // Update current slot every minute
   useEffect(() => {
@@ -32,6 +41,11 @@ export function MatchControlCenterPage() {
     }, 60000);
     return () => clearInterval(interval);
   }, [liveOps.getCurrentSlot]);
+
+  // When the user picks a match, auto-open the details sidebar.
+  useEffect(() => {
+    if (selectedMatchId) setDetailsOpen(true);
+  }, [selectedMatchId]);
 
   // Compute traffic light status for all matches
   const trafficLights = useTrafficLights(
@@ -348,13 +362,11 @@ export function MatchControlCenterPage() {
 
   return (
     <div className="w-full h-[calc(100vh-56px)] flex flex-col px-2 py-1 gap-2">
-      {/* Main content area */}
       <div className="flex-1 min-h-0 flex gap-2">
-        {/* Left side - Gantt + Workflow */}
+        {/* Main area - Gantt + Matches list */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
-          {/* Status + Gantt Chart panel */}
+          {/* Gantt panel */}
           <div className="bg-white rounded border border-gray-200 flex flex-col overflow-hidden flex-shrink-0">
-            {/* Header with status metrics and actions */}
             <div className="px-2 py-1.5 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-3 text-xs">
                 <span className="font-medium text-gray-700">{stats?.percentage || 0}%</span>
@@ -370,16 +382,16 @@ export function MatchControlCenterPage() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={liveOps.triggerReoptimize}
-                disabled={liveOps.isReoptimizing}
-                className="px-2 py-1 bg-gray-700 text-white rounded text-[10px] font-medium hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-wait"
-              >
-                {liveOps.isReoptimizing ? 'Optimizing...' : 'Re-optimize'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={liveOps.triggerReoptimize}
+                  disabled={liveOps.isReoptimizing}
+                  className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
+                </button>
+              </div>
             </div>
-
-            {/* Gantt Chart */}
             <div className="p-2 overflow-x-auto">
               <GanttChart
                 schedule={liveOps.schedule}
@@ -394,7 +406,7 @@ export function MatchControlCenterPage() {
             </div>
           </div>
 
-          {/* Workflow Panel */}
+          {/* Matches panel (workflow: In Progress pinned + tabbed Up Next/Finished) */}
           <div className="flex-1 min-h-0 bg-white rounded border border-gray-200 flex flex-col overflow-hidden">
             <WorkflowPanel
               matchesByStatus={liveTracking.matchesByStatus}
@@ -417,49 +429,56 @@ export function MatchControlCenterPage() {
           </div>
         </div>
 
-        {/* Right side - Match Details sidebar */}
-        <div className="w-56 flex-shrink-0 bg-white rounded border border-gray-200 flex flex-col overflow-hidden">
-          <div className="px-2 py-1.5 border-b border-gray-200 flex-shrink-0">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-              Match Details
-            </span>
+        {/* Collapsible Match Details sidebar */}
+        {detailsOpen ? (
+          <div className="w-72 flex-shrink-0 bg-white rounded border border-gray-200 flex flex-col overflow-hidden">
+            <div className="px-2 py-1.5 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Match Details
+              </span>
+              <button
+                onClick={() => setDetailsOpen(false)}
+                title="Collapse details"
+                aria-label="Collapse details"
+                className="text-gray-400 hover:text-gray-600 text-xs leading-none"
+              >
+                ›
+              </button>
+            </div>
+            <MatchDetailsPanel
+              assignment={selectedAssignment}
+              match={selectedMatch}
+              matchState={selectedState}
+              matches={liveOps.matches}
+              trafficLight={selectedTrafficLight}
+              analysis={selectedAnalysis}
+              playerNames={playerNames}
+              slotToTime={liveOps.slotToTime}
+              onSelectMatch={setSelectedMatchId}
+              schedule={liveOps.schedule}
+              matchStates={liveOps.matchStates}
+              players={players}
+              config={liveOps.config}
+              currentSlot={currentSlot}
+            />
           </div>
-          <MatchDetailsPanel
-            assignment={selectedAssignment}
-            match={selectedMatch}
-            matchState={selectedState}
-            matches={liveOps.matches}
-            trafficLight={selectedTrafficLight}
-            analysis={selectedAnalysis}
-            playerNames={playerNames}
-            slotToTime={liveOps.slotToTime}
-            onSelectMatch={setSelectedMatchId}
-            schedule={liveOps.schedule}
-            matchStates={liveOps.matchStates}
-            players={players}
-            config={liveOps.config}
-            currentSlot={currentSlot}
-          />
-        </div>
+        ) : (
+          <button
+            onClick={() => setDetailsOpen(true)}
+            title="Show match details"
+            aria-label="Show match details"
+            className="w-6 flex-shrink-0 bg-white rounded border border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 text-xs"
+          >
+            ‹
+          </button>
+        )}
       </div>
-
-      {/* Suggested Next Dock */}
-      <SuggestedNextDock
-        schedule={liveOps.schedule}
-        matches={liveOps.matches}
-        matchStates={liveOps.matchStates}
-        trafficLights={trafficLights}
-        onSelectMatch={setSelectedMatchId}
-        selectedMatchId={selectedMatchId}
-        slotToTime={liveOps.slotToTime}
-        playerNames={playerNames}
-      />
 
       {liveTracking.isLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div className="bg-white rounded border border-gray-200 p-4">
             <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mx-auto" />
-            <p className="text-gray-600 mt-2 text-xs">Loading...</p>
+            <p className="text-gray-600 mt-2 text-xs">Loading…</p>
           </div>
         </div>
       )}

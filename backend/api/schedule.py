@@ -2,12 +2,13 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional, AsyncGenerator
+from typing import List, Optional, Tuple, AsyncGenerator
 import json
 import asyncio
 from app.schemas import (
     TournamentConfig, PlayerDTO, MatchDTO, ScheduleDTO,
-    ScheduleAssignment, SoftViolation, SolverStatus
+    ScheduleAssignment, SoftViolation, SolverStatus,
+    PreviousAssignmentDTO, ProposedMoveDTO, ValidationResponseDTO,
 )
 import sys
 import os
@@ -41,7 +42,18 @@ class GenerateScheduleRequest(BaseModel):
     config: TournamentConfig
     players: List[PlayerDTO]
     matches: List[MatchDTO]
-    previousAssignments: Optional[List[dict]] = None
+    # Accept both typed and untyped for back-compat; legacy clients sent raw dicts.
+    previousAssignments: Optional[List[PreviousAssignmentDTO]] = None
+
+
+class ValidateMoveRequest(BaseModel):
+    """Request to validate a single drag target without invoking CP-SAT."""
+    config: TournamentConfig
+    players: List[PlayerDTO]
+    matches: List[MatchDTO]
+    assignments: List[ScheduleAssignment]
+    proposedMove: ProposedMoveDTO
+    previousAssignments: Optional[List[PreviousAssignmentDTO]] = None
 
 
 @router.post("/schedule", response_model=ScheduleDTO)
@@ -97,33 +109,45 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
     """
     Generate schedule with real-time progress updates via Server-Sent Events.
 
-    Streams progress events during optimization:
-    - type: 'progress' - intermediate solution found
-    - type: 'complete' - optimization finished successfully
-    - type: 'error' - optimization failed
+    Event types streamed (JSON after ``data:`` prefix):
 
-    Args:
-        request: Contains tournament config, players, and matches
+    - ``{type: 'model_built', numMatches, numIntervals, numNoOverlap, numVariables, ...}``
+      emitted once, after ``scheduler.build()`` completes.
+    - ``{type: 'phase', phase: 'presolve' | 'search' | 'proving'}``
+      emitted on phase transitions (see below).
+    - ``{type: 'progress', ...}`` — each intermediate solution.
+    - ``{type: 'complete', result: ScheduleDTO}`` — final result.
+    - ``{type: 'error', message: str}`` — on solver exception.
+    - ``{type: 'done'}`` — always the last event; stream terminator.
 
-    Returns:
-        StreamingResponse with text/event-stream content
+    Phase state machine: presolve → search (on first solution) → proving
+    (on optimal final status).
     """
     async def event_generator() -> AsyncGenerator[str, None]:
         """Generate Server-Sent Events for progress updates."""
         progress_queue: asyncio.Queue = asyncio.Queue()
-        result_holder = {}
-        error_holder = {}
+        result_holder: dict = {}
+        error_holder: dict = {}
+        state = {"phase": None, "solutions": 0}
 
         # Get the running event loop BEFORE starting the thread
         loop = asyncio.get_running_loop()
 
+        def emit(event: dict) -> None:
+            loop.call_soon_threadsafe(progress_queue.put_nowait, event)
+
+        def set_phase(phase: str) -> None:
+            if state["phase"] != phase:
+                state["phase"] = phase
+                emit({"type": "phase", "phase": phase})
+
         def progress_callback(progress_data: dict):
             """Called by solver when a new solution is found (from worker thread)."""
-            # Thread-safe way to put data in async queue
-            loop.call_soon_threadsafe(
-                progress_queue.put_nowait,
-                {'type': 'progress', **progress_data}
-            )
+            state["solutions"] += 1
+            # First solution means solver has exited presolve into active search.
+            if state["solutions"] == 1:
+                set_phase("search")
+            emit({"type": "progress", **progress_data})
 
         def solve_in_thread():
             """Run solver in thread pool to avoid blocking event loop."""
@@ -134,7 +158,6 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
                 matches = _convert_matches(request.matches)
                 previous_assignments = _convert_previous_assignments(request.previousAssignments)
 
-                # Create scheduler with progress callback
                 scheduler = CPSATScheduler(
                     config=schedule_config,
                     solver_options=SolverOptions(
@@ -148,7 +171,20 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
                 scheduler.set_previous_assignments(previous_assignments)
                 scheduler.build()
 
-                # Solve with progress callback
+                stats = scheduler._compute_model_stats()
+                emit({
+                    "type": "model_built",
+                    "numMatches": stats["num_matches"],
+                    "numPlayers": stats["num_players"],
+                    "numIntervals": stats["num_intervals"],
+                    "numNoOverlap": stats["num_no_overlap"],
+                    "numVariables": stats["num_variables"],
+                    "multiMatchPlayers": stats["multi_match_players"],
+                    "totalSlots": stats["total_slots"],
+                    "courtCount": stats["court_count"],
+                })
+                set_phase("presolve")
+
                 result = scheduler.solve(progress_callback=progress_callback)
                 result_holder['result'] = result
 
@@ -156,10 +192,7 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
                 error_holder['error'] = str(e)
 
             # Signal completion (thread-safe)
-            loop.call_soon_threadsafe(
-                progress_queue.put_nowait,
-                {'type': 'done'}
-            )
+            emit({"type": "done"})
 
         # Start solver in background thread
         loop.run_in_executor(None, solve_in_thread)
@@ -169,16 +202,19 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
             event = await progress_queue.get()
 
             if event['type'] == 'done':
-                # Send final result or error
                 if 'error' in error_holder:
                     yield f"data: {json.dumps({'type': 'error', 'message': error_holder['error']})}\n\n"
                 elif 'result' in result_holder:
-                    result_dto = _convert_result_to_dto(result_holder['result'])
+                    result = result_holder['result']
+                    # If solver reported OPTIMAL, that's a proved-optimal final — emit proving phase.
+                    if getattr(result.status, "value", None) == "optimal":
+                        yield f"data: {json.dumps({'type': 'phase', 'phase': 'proving'})}\n\n"
+                    result_dto = _convert_result_to_dto(result)
                     yield f"data: {json.dumps({'type': 'complete', 'result': result_dto.model_dump()})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
                 break
 
-            elif event['type'] == 'progress':
-                # Send progress update
+            else:
                 yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(
@@ -189,6 +225,27 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Disable nginx buffering
         }
+    )
+
+
+@router.post("/schedule/validate", response_model=ValidationResponseDTO)
+async def validate_schedule_move(request: ValidateMoveRequest) -> ValidationResponseDTO:
+    """Cheap (pure-Python) feasibility check for a drag-to-reschedule move.
+
+    No CP-SAT invocation. Used by the frontend during a drag to paint a red
+    ring on the target cell when the proposed (slot, court) would violate a
+    hard constraint. Target latency: <50 ms.
+    """
+    # Import lazily to keep the /validate helper out of the /schedule cold path.
+    from api._validate import validate_move
+
+    return validate_move(
+        config=request.config,
+        players=request.players,
+        matches=request.matches,
+        assignments=request.assignments,
+        proposed_move=request.proposedMove,
+        previous_assignments=request.previousAssignments,
     )
 
 
@@ -207,6 +264,14 @@ def _convert_to_schedule_config(config: TournamentConfig) -> ScheduleConfig:
 
     # Calculate default rest slots
     default_rest_slots = config.defaultRestMinutes // config.intervalMinutes
+
+    # Convert break windows (HH:mm) to half-open [start_slot, end_slot) ranges.
+    break_slots: List[Tuple[int, int]] = []
+    for b in (config.breaks or []):
+        s = _time_to_slot(b.start, config.dayStart, config.intervalMinutes)
+        e = _time_to_slot(b.end, config.dayStart, config.intervalMinutes)
+        if e > s:
+            break_slots.append((s, e))
 
     return ScheduleConfig(
         total_slots=total_slots,
@@ -236,6 +301,8 @@ def _convert_to_schedule_config(config: TournamentConfig) -> ScheduleConfig:
         # Player overlap
         allow_player_overlap=config.allowPlayerOverlap if config.allowPlayerOverlap is not None else False,
         player_overlap_penalty=config.playerOverlapPenalty if config.playerOverlapPenalty is not None else 50.0,
+        # Break windows
+        break_slots=break_slots,
     )
 
 
@@ -284,13 +351,21 @@ def _convert_matches(matches: List[MatchDTO]) -> List[Match]:
     return match_list
 
 
-def _convert_previous_assignments(assignments_data: Optional[List[dict]]) -> List[PreviousAssignment]:
-    """Convert previous assignments from dict format to PreviousAssignment objects."""
+def _convert_previous_assignments(
+    assignments_data: Optional[List] = None,
+) -> List[PreviousAssignment]:
+    """Convert previous assignments to core ``PreviousAssignment`` objects.
+
+    Accepts either a list of ``PreviousAssignmentDTO`` (typed) or a list of raw
+    dicts — legacy clients before the DTO was introduced send dicts.
+    """
     if not assignments_data:
         return []
 
-    previous_assignments = []
+    previous_assignments: List[PreviousAssignment] = []
     for pa in assignments_data:
+        if hasattr(pa, 'model_dump'):
+            pa = pa.model_dump()
         previous_assignments.append(PreviousAssignment(
             match_id=pa.get('matchId', ''),
             slot_id=pa.get('slotId', 0),

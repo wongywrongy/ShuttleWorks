@@ -4,9 +4,12 @@ import { useTournament } from '../hooks/useTournament';
 import { useAppStore } from '../store/appStore';
 import { useSmoothedAssignments } from '../hooks/useSmoothedAssignments';
 import { ScheduleActions } from '../features/schedule/ScheduleActions';
+import { DragGantt } from '../features/schedule/DragGantt';
 import { LiveTimelineGrid } from '../features/schedule/live/LiveTimelineGrid';
 import { SolverProgressLog } from '../features/schedule/live/SolverProgressLog';
 import { LiveMetricsBar } from '../features/schedule/live/LiveMetricsBar';
+import { exportScheduleXlsx } from '../features/exports/xlsxExports';
+import { StaleBanner } from '../features/schedule/StaleBanner';
 import { computeConstraintViolations } from '../utils/constraintChecker';
 import { formatSlotTime } from '../utils/timeUtils';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -219,21 +222,26 @@ export function SchedulePage() {
   // Use global loading state - persists across tab switches
   const isOptimizing = loading;
 
-  const handleGenerate = async () => {
-    // Warn if schedule already exists
-    if (schedule) {
-      const confirmed = window.confirm(
-        'WARNING: Generating a new schedule will REPLACE the current schedule!\n\n' +
-        'All existing schedule data will be lost.\n\n' +
-        'Are you sure you want to continue?'
-      );
-      if (!confirmed) return;
-    }
+  // Two-click inline guard replaces the old window.confirm() dialog:
+  // first click when a schedule exists flips the button into "Confirm replace"
+  // state; second click within 4s actually regenerates. Any unrelated action
+  // resets the guard. This is both less intrusive and unblocks Playwright.
+  const [confirmingReplace, setConfirmingReplace] = useState(false);
+  useEffect(() => {
+    if (!confirmingReplace) return;
+    const t = window.setTimeout(() => setConfirmingReplace(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [confirmingReplace]);
 
+  const handleGenerate = async () => {
+    if (schedule && !confirmingReplace) {
+      setConfirmingReplace(true);
+      return;
+    }
+    setConfirmingReplace(false);
     try {
       await generateSchedule();
     } catch (err) {
-      // Error is already set in the hook
       console.error('Generation failed:', err);
     }
   };
@@ -287,6 +295,7 @@ export function SchedulePage() {
 
   return (
     <div className="w-full h-[calc(100vh-56px)] flex flex-col px-2 py-1 gap-2">
+      <StaleBanner />
       {/* Alerts */}
       {needsConfig && (
         <div className="p-2 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded text-xs flex-shrink-0">
@@ -337,24 +346,45 @@ export function SchedulePage() {
                   bestBound={bestBound}
                   status={status}
                 />
-                <ScheduleActions
-                  onGenerate={handleGenerate}
-                  onReoptimize={handleReoptimize}
-                  generating={isOptimizing}
-                  reoptimizing={isOptimizing}
-                  hasSchedule={!!schedule}
-                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void exportScheduleXlsx(schedule, matches, players, config)}
+                    disabled={!schedule || schedule.assignments.length === 0}
+                    data-testid="export-schedule"
+                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ⤓ Export XLSX
+                  </button>
+                  <ScheduleActions
+                    onGenerate={handleGenerate}
+                    onReoptimize={handleReoptimize}
+                    generating={isOptimizing}
+                    reoptimizing={isOptimizing}
+                    hasSchedule={!!schedule}
+                    confirmingReplace={confirmingReplace}
+                  />
+                </div>
               </div>
 
-              {/* Timeline Grid */}
+              {/* Drag-to-reschedule Gantt (live solver-aware) */}
               <div className="p-2 overflow-auto">
-                <LiveTimelineGrid
-                  assignments={displayAssignments}
-                  matches={matches}
-                  players={players}
-                  config={config}
-                  status={status}
-                />
+                {schedule && !isOptimizing ? (
+                  <DragGantt
+                    schedule={schedule}
+                    matches={matches}
+                    config={config}
+                    readOnly={isOptimizing}
+                  />
+                ) : (
+                  <LiveTimelineGrid
+                    assignments={displayAssignments}
+                    matches={matches}
+                    players={players}
+                    config={config}
+                    status={status}
+                  />
+                )}
               </div>
             </div>
 
@@ -417,6 +447,7 @@ export function SchedulePage() {
             generating={isOptimizing}
             reoptimizing={isOptimizing}
             hasSchedule={!!schedule}
+            confirmingReplace={confirmingReplace}
           />
         </div>
       )}

@@ -162,43 +162,7 @@ export function GanttChart({
   };
 
   return (
-    <div className="bg-white rounded border border-gray-200 overflow-hidden">
-      {/* Legend - only shows what's on the grid */}
-      <div className="px-2 py-1 border-b border-gray-200 bg-gray-50 flex items-center gap-4 text-[10px]">
-        <span className="flex items-center gap-1.5 text-gray-600">
-          <span className="w-3 h-3 rounded bg-gray-100 border border-gray-300" />
-          Scheduled
-        </span>
-        <span className="flex items-center gap-1.5 text-gray-600">
-          <span className="w-3 h-3 rounded bg-blue-100 border border-blue-400" />
-          Called
-        </span>
-        <span className="flex items-center gap-1.5 text-gray-600">
-          <span className="w-3 h-3 rounded bg-green-200 border border-green-500" />
-          In Progress
-        </span>
-        <span className="flex items-center gap-1.5 text-gray-600">
-          <span className="w-3 h-3 rounded bg-gray-50 border border-gray-200" />
-          Finished
-        </span>
-        <span className="flex items-center gap-1.5 text-gray-600">
-          <span className="w-3 h-3 rounded bg-gray-100 border border-gray-300 ring-2 ring-inset ring-yellow-400" />
-          Late
-        </span>
-        <span className="flex items-center gap-1.5 text-gray-600">
-          <span className="w-3 h-3 rounded bg-gray-100 border border-gray-300 ring-2 ring-inset ring-red-400" />
-          Postponed
-        </span>
-        <span className="flex items-center gap-1.5 text-gray-600">
-          <span className="w-3 h-3 rounded bg-gray-100 border border-gray-300 ring-2 ring-inset ring-blue-500" />
-          Selected
-        </span>
-        <span className="flex items-center gap-1.5 text-gray-600">
-          <span className="w-3 h-3 rounded bg-gray-100 border border-gray-300 ring-2 ring-inset ring-purple-500" />
-          Impacted
-        </span>
-      </div>
-
+    <div className="overflow-hidden">
       {/* Grid */}
       <div className="overflow-x-auto">
         <div className="min-w-max">

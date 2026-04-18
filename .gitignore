@@ -23,6 +23,7 @@ build/
 
 # Testing
 .pytest_cache/
+.benchmarks/
 .coverage
 htmlcov/
 
@@ -49,3 +50,30 @@ frontend/build/
 frontend/.vite/
 frontend/.env.local
 frontend/.env.*.local
+
+# Persisted tournament state (Docker volume)
+/data/
+
+# E2E tests
+e2e/node_modules/
+e2e/playwright-report/
+e2e/test-results/
+e2e/blob-report/
+e2e/.playwright/
+
+# Playwright MCP scratch dir — screenshots, page snapshots, console logs,
+# and any downloaded artifacts from browser_navigate / browser_take_screenshot.
+.playwright-mcp/
+
+# Loose debug artifacts dropped at the repo root during manual MCP testing.
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webm
+/schedule_*.csv
+/schedule_*.xlsx
+/roster_*.csv
+/roster_*.xlsx
+/matches_*.csv
+/matches_*.xlsx

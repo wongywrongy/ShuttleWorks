@@ -8,9 +8,19 @@ services:
       - "8000:8000"
     environment:
       - LOG_LEVEL=info
+      - BACKEND_DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
+    # Read-only root filesystem with a writable tmpfs for /tmp — the
+    # app only persists inside ./data, so anything else getting written
+    # is a bug we'd rather surface immediately.
+    read_only: true
+    tmpfs:
+      - /tmp
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      # Deep health: verifies data dir writable + CP-SAT solver imports.
+      test: ["CMD", "python", "-c", "import urllib.request,sys,json; r=urllib.request.urlopen('http://localhost:8000/health/deep'); sys.exit(0 if json.load(r).get('status')=='healthy' else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -24,7 +34,8 @@ services:
           cpus: '0.5'
           memory: 256M
 
-  # Frontend - React app served by nginx
+  # Frontend - React app served by nginx (non-root, listens on 8080; we
+  # remap to host port 80 so the user still visits http://localhost).
   frontend:
     build:
       context: ./frontend
@@ -32,11 +43,17 @@ services:
       args:
         - VITE_API_BASE_URL=/api
     ports:
-      - "80:80"
+      - "80:8080"
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      # nginx writes its pid + client body temp files here.
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
     deploy:
       resources:
         limits:

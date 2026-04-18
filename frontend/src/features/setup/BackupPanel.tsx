@@ -1,0 +1,179 @@
+/**
+ * Backup management for the persisted tournament state.
+ *
+ * The backend rolls a backup into ``./data/backups/tournament-<iso>.json``
+ * on every save (last 10 kept). This panel lists them, lets the user
+ * snapshot on demand, and restores any backup with a confirmation step.
+ */
+import { useCallback, useEffect, useState } from 'react';
+import { apiClient } from '../../api/client';
+import type { BackupEntryDTO, TournamentStateDTO } from '../../api/dto';
+import { useAppStore } from '../../store/appStore';
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatWhen(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
+
+function applyStateToStore(state: TournamentStateDTO): void {
+  // Mirror the hydration path in useTournamentState so the in-memory
+  // store matches the file we just restored — no page reload required.
+  useAppStore.setState({
+    config: state.config ?? null,
+    groups: state.groups ?? [],
+    players: state.players ?? [],
+    matches: state.matches ?? [],
+    schedule: state.schedule ?? null,
+    scheduleStats: (state.scheduleStats as never) ?? null,
+    scheduleIsStale: state.scheduleIsStale ?? false,
+  });
+}
+
+export function BackupPanel() {
+  const [entries, setEntries] = useState<BackupEntryDTO[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiClient.listTournamentBackups();
+      setEntries(res.backups);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to list backups');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const handleCreate = async () => {
+    setBusyAction('create');
+    setError(null);
+    try {
+      await apiClient.createTournamentBackup();
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Backup failed');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleRestore = async (filename: string) => {
+    setBusyAction(filename);
+    setError(null);
+    try {
+      const restored = await apiClient.restoreTournamentBackup(filename);
+      applyStateToStore(restored);
+      setConfirmRestore(null);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Restore failed');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  return (
+    <div
+      className="rounded border border-gray-200 bg-white p-3"
+      data-testid="backup-panel"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Backups</h3>
+          <p className="text-xs text-gray-500">
+            Auto-saved before every write. Last 10 kept.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCreate}
+          disabled={busyAction !== null}
+          data-testid="backup-create"
+          className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busyAction === 'create' ? 'Saving…' : 'Back up now'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="mt-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="mt-2">
+        {loading && entries.length === 0 ? (
+          <div className="py-4 text-center text-xs text-gray-400">Loading…</div>
+        ) : entries.length === 0 ? (
+          <div className="py-4 text-center text-xs text-gray-400">
+            No backups yet — one will appear the next time you save.
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {entries.map((e) => (
+              <li
+                key={e.filename}
+                className="flex items-center justify-between py-1.5 text-xs"
+                data-testid={`backup-row-${e.filename}`}
+              >
+                <div className="min-w-0 flex-1 pr-2">
+                  <div className="truncate font-mono text-gray-700">{e.filename}</div>
+                  <div className="text-gray-400">
+                    {formatWhen(e.modifiedAt)} · {formatBytes(e.sizeBytes)}
+                  </div>
+                </div>
+                {confirmRestore === e.filename ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-orange-600">Replace current state?</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRestore(e.filename)}
+                      disabled={busyAction !== null}
+                      className="rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {busyAction === e.filename ? 'Restoring…' : 'Confirm'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmRestore(null)}
+                      disabled={busyAction !== null}
+                      className="rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRestore(e.filename)}
+                    disabled={busyAction !== null}
+                    data-testid={`backup-restore-${e.filename}`}
+                    className="rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Restore
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}

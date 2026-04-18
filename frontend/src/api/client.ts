@@ -3,14 +3,23 @@
  * Communicates with the stateless scheduling backend
  */
 import axios, { type AxiosInstance } from 'axios';
+import { useAppStore } from '../store/appStore';
 import type {
   TournamentConfig,
   PlayerDTO,
   MatchDTO,
   ScheduleDTO,
+  ScheduleAssignment,
   MatchStateDTO,
   SolverProgressEvent,
+  SolverModelBuiltEvent,
+  SolverPhaseEvent,
+  ProposedMove,
+  ValidationResponseDTO,
   MatchGenerationRule,
+  TournamentStateDTO,
+  BackupListDTO,
+  BackupCreatedDTO,
 } from './dto';
 
 // Use /api proxy in dev, or explicit URL in production
@@ -39,14 +48,45 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response) {
-          const message = error.response.data?.detail || error.response.data?.message || 'An error occurred';
-          throw new Error(message);
-        } else if (error.request) {
-          throw new Error('No response from server. Please check if the backend is running.');
-        } else {
-          throw new Error(error.message || 'An unexpected error occurred');
+        // User-initiated aborts: swallow silently. React Query / SWR-style
+        // cancellations legitimately flow through here and shouldn't produce
+        // a user-visible toast.
+        if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+          throw error;
         }
+
+        const requestId: string | undefined =
+          error.response?.headers?.['x-request-id'] ??
+          error.response?.headers?.['X-Request-ID'];
+
+        let message: string;
+        if (error.response) {
+          message =
+            error.response.data?.detail ||
+            error.response.data?.message ||
+            `Server error ${error.response.status}`;
+        } else if (error.request) {
+          message = 'No response from server. Is the backend running?';
+        } else {
+          message = error.message || 'An unexpected error occurred';
+        }
+
+        // Surface the failure exactly once, at the edge, so every hook /
+        // component gets consistent UI without needing to handle it.
+        try {
+          useAppStore.getState().pushToast({
+            level: 'error',
+            message,
+            detail: requestId ? `request ${requestId.slice(0, 8)}` : undefined,
+          });
+        } catch {
+          // The store may not be ready during very-early-lifecycle calls —
+          // fall through to the thrown error below.
+        }
+
+        const err = new Error(message) as Error & { requestId?: string };
+        if (requestId) err.requestId = requestId;
+        throw err;
       }
     );
   }
@@ -61,77 +101,116 @@ class ApiClient {
   }
 
   /**
-   * Generate schedule with progress updates via Server-Sent Events
-   * @param abortSignal Optional AbortSignal to cancel the request
+   * Generate schedule with progress updates via Server-Sent Events.
+   *
+   * The backend emits these event types:
+   *   - ``model_built`` (once) — model statistics
+   *   - ``phase``                 — presolve | search | proving
+   *   - ``progress`` (many)       — intermediate solution
+   *   - ``complete``              — final ScheduleDTO
+   *   - ``error``                 — solver exception
+   *   - ``done``                  — stream terminator (always last)
    */
   async generateScheduleWithProgress(
     request: GenerateScheduleRequest,
-    onProgress: (event: SolverProgressEvent) => void,
+    callbacks: {
+      onProgress?: (event: SolverProgressEvent) => void;
+      onModelBuilt?: (event: SolverModelBuiltEvent) => void;
+      onPhase?: (event: SolverPhaseEvent) => void;
+    } | ((event: SolverProgressEvent) => void),
     abortSignal?: AbortSignal
   ): Promise<ScheduleDTO> {
+    // Back-compat: old call sites pass a single progress callback.
+    const cb = typeof callbacks === 'function'
+      ? { onProgress: callbacks }
+      : callbacks;
+
     return new Promise((resolve, reject) => {
-      // Use same base URL as axios client - this will use /api proxy in dev
       const url = `${API_BASE_URL}/schedule/stream`;
 
-      // Use fetch API for SSE streaming (EventSource doesn't support POST)
-      fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(request),
-        signal: abortSignal,
-      })
+      // Initial-handshake retry with backoff. A dropped-mid-stream failure
+      // is *not* retried here because the solver has already started; a
+      // reconnect would silently kick off a duplicate run. Instead we
+      // surface a toast with a Retry action so the user stays in control.
+      const BACKOFFS_MS = [500, 1_000, 2_000];
+
+      const startFetch = async (attempt = 0): Promise<Response> => {
+        try {
+          const r = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+            signal: abortSignal,
+          });
+          return r;
+        } catch (err) {
+          if ((err as Error).name === 'AbortError') throw err;
+          if (attempt >= BACKOFFS_MS.length) throw err;
+          await new Promise((r) => setTimeout(r, BACKOFFS_MS[attempt]));
+          return startFetch(attempt + 1);
+        }
+      };
+
+      let reconnectToastId: string | null = null;
+
+      startFetch()
         .then(async (response) => {
+          // Clear the reconnecting toast once we have a response.
+          if (reconnectToastId) {
+            useAppStore.getState().dismissToast(reconnectToastId);
+            reconnectToastId = null;
+          }
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
-
           const reader = response.body?.getReader();
-          if (!reader) {
-            throw new Error('Response body is not readable');
-          }
+          if (!reader) throw new Error('Response body is not readable');
 
           const decoder = new TextDecoder();
           let buffer = '';
 
           while (true) {
             const { done, value } = await reader.read();
-
             if (done) break;
-
             buffer += decoder.decode(value, { stream: true });
 
-            // Process complete SSE messages (delimited by \n\n)
             const messages = buffer.split('\n\n');
-            buffer = messages.pop() || ''; // Keep incomplete message in buffer
+            buffer = messages.pop() || '';
 
             for (const message of messages) {
               if (!message.trim()) continue;
-
-              // Parse SSE format: "data: {...}"
               const dataMatch = message.match(/^data: (.+)$/m);
               if (!dataMatch) continue;
 
               try {
                 const event = JSON.parse(dataMatch[1]);
-
-                if (event.type === 'progress') {
-                  onProgress({
-                    elapsed_ms: event.elapsed_ms,
-                    current_objective: event.current_objective,
-                    best_bound: event.best_bound,
-                    solution_count: event.solution_count,
-                    current_assignments: event.current_assignments,
-                    gap_percent: event.gap_percent,
-                    messages: event.messages,
-                  });
-                } else if (event.type === 'complete') {
-                  resolve(event.result as ScheduleDTO);
-                  return;
-                } else if (event.type === 'error') {
-                  reject(new Error(event.message));
-                  return;
+                switch (event.type) {
+                  case 'model_built':
+                    cb.onModelBuilt?.(event as SolverModelBuiltEvent);
+                    break;
+                  case 'phase':
+                    cb.onPhase?.({ phase: event.phase });
+                    break;
+                  case 'progress':
+                    cb.onProgress?.({
+                      elapsed_ms: event.elapsed_ms,
+                      current_objective: event.current_objective,
+                      best_bound: event.best_bound,
+                      solution_count: event.solution_count,
+                      current_assignments: event.current_assignments,
+                      gap_percent: event.gap_percent,
+                      messages: event.messages,
+                    });
+                    break;
+                  case 'complete':
+                    resolve(event.result as ScheduleDTO);
+                    return;
+                  case 'error':
+                    reject(new Error(event.message));
+                    return;
+                  case 'done':
+                    // Stream terminator — no-op, resolve/reject already handled.
+                    break;
                 }
               } catch (e) {
                 console.error('Failed to parse SSE event:', e);
@@ -139,8 +218,56 @@ class ApiClient {
             }
           }
         })
-        .catch(reject);
+        .catch((err: Error) => {
+          // Silently swallow user-cancelled solves — the caller (useSchedule)
+          // aborts on navigation or new-solve-click and doesn't want a toast.
+          if (err.name === 'AbortError') {
+            reject(err);
+            return;
+          }
+          // Mid-stream failure: surface a Retry affordance so the user can
+          // rerun the solve after fixing the network/backend. We deliberately
+          // don't auto-retry here to avoid silent duplicate solves.
+          try {
+            useAppStore.getState().pushToast({
+              level: 'error',
+              message: 'Solver stream dropped',
+              detail: err.message,
+              actionLabel: 'Retry',
+              onAction: () => {
+                // Fire-and-forget — caller already saw this promise reject, so
+                // the retry starts a fresh solve via the same request object.
+                void this.generateScheduleWithProgress(request, callbacks, abortSignal);
+              },
+            });
+          } catch {
+            /* store unavailable — fall through */
+          }
+          reject(err);
+        });
     });
+  }
+
+  /**
+   * Fast feasibility check for a proposed drag-to-reschedule target.
+   * Backed by the pure-Python /schedule/validate endpoint — no CP-SAT solve.
+   */
+  async validateMove(args: {
+    config: TournamentConfig;
+    players: PlayerDTO[];
+    matches: MatchDTO[];
+    assignments: ScheduleAssignment[];
+    proposedMove: ProposedMove;
+    previousAssignments?: any[];
+    signal?: AbortSignal;
+  }): Promise<ValidationResponseDTO> {
+    const { signal, ...body } = args;
+    const response = await this.client.post<ValidationResponseDTO>(
+      '/schedule/validate',
+      body,
+      { signal },
+    );
+    return response.data;
   }
 
   /**
@@ -149,6 +276,48 @@ class ApiClient {
   async health(): Promise<{ status: string; version: string }> {
     const response = await this.client.get('/health');
     return response.data;
+  }
+
+  /**
+   * Fetch the server-side tournament state.
+   * Returns `null` when the server has no state yet (HTTP 204).
+   */
+  async getTournamentState(): Promise<TournamentStateDTO | null> {
+    const response = await this.client.get<TournamentStateDTO>(
+      '/tournament/state',
+      { validateStatus: (s) => s === 200 || s === 204 },
+    );
+    if (response.status === 204) return null;
+    return response.data;
+  }
+
+  /** Overwrite the tournament state file. Returns the stamped state. */
+  async putTournamentState(state: TournamentStateDTO): Promise<TournamentStateDTO> {
+    const response = await this.client.put<TournamentStateDTO>(
+      '/tournament/state',
+      state,
+    );
+    return response.data;
+  }
+
+  /** List rolling backups of the tournament state (newest first). */
+  async listTournamentBackups(): Promise<BackupListDTO> {
+    const res = await this.client.get<BackupListDTO>('/tournament/state/backups');
+    return res.data;
+  }
+
+  /** Snapshot the live file into the backup pool right now. */
+  async createTournamentBackup(): Promise<BackupCreatedDTO> {
+    const res = await this.client.post<BackupCreatedDTO>('/tournament/state/backup');
+    return res.data;
+  }
+
+  /** Replace the live file with the named backup. Returns the newly-current state. */
+  async restoreTournamentBackup(filename: string): Promise<TournamentStateDTO> {
+    const res = await this.client.post<TournamentStateDTO>(
+      `/tournament/state/restore/${encodeURIComponent(filename)}`,
+    );
+    return res.data;
   }
 
   // Match State Management (File-based)

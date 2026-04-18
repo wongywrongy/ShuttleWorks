@@ -1,0 +1,158 @@
+/**
+ * Left-hand player pool for the PositionGrid.
+ *
+ * Two jobs:
+ *   1. Bulk-import players — paste a list of names (one per line, optionally
+ *      separated by commas) and add them all to the active school.
+ *   2. Serve as the drag source — each player becomes a draggable chip that
+ *      can be dropped on a cell in the PositionGrid.
+ *
+ * Players already assigned to every event (no empty rank slots left for them)
+ * are faded out so the operator can tell at a glance who's still waiting.
+ */
+import { useMemo, useState } from 'react';
+import { v4 as uuid } from 'uuid';
+import { useAppStore } from '../../store/appStore';
+import { DraggablePlayerChip } from './PositionGrid';
+
+function parseNames(input: string): string[] {
+  return input
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function PlayerPool({ schoolId }: { schoolId: string }) {
+  const players = useAppStore((s) => s.players);
+  const groups = useAppStore((s) => s.groups);
+  const addPlayer = useAppStore((s) => s.addPlayer);
+  const deletePlayer = useAppStore((s) => s.deletePlayer);
+
+  const [draft, setDraft] = useState('');
+  const [expanded, setExpanded] = useState(false);
+
+  const pool = useMemo(
+    () =>
+      players
+        .filter((p) => p.groupId === schoolId)
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [players, schoolId],
+  );
+
+  const school = groups.find((g) => g.id === schoolId);
+
+  const commitImport = () => {
+    const names = parseNames(draft);
+    if (names.length === 0) return;
+    for (const name of names) {
+      addPlayer({
+        id: uuid(),
+        name,
+        groupId: schoolId,
+        ranks: [],
+        availability: [],
+      });
+    }
+    setDraft('');
+    setExpanded(false);
+  };
+
+  return (
+    <div
+      className="rounded border border-gray-200 bg-white overflow-hidden"
+      data-testid="player-pool"
+    >
+      <div className="border-b border-gray-100 bg-gray-50 px-3 py-2">
+        <div className="flex items-baseline justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Players
+          </span>
+          <span className="text-[11px] text-gray-400 tabular-nums">
+            {pool.length} in {school?.name ?? '—'}
+          </span>
+        </div>
+      </div>
+
+      <div className="border-b border-gray-100 px-3 py-2">
+        {expanded ? (
+          <div className="space-y-2">
+            <textarea
+              autoFocus
+              rows={5}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={'Paste names — one per line or comma-separated.\nToan Le\nKyle Wong\nSean Hsieh'}
+              data-testid="bulk-import-textarea"
+              className="w-full resize-y rounded border border-gray-200 px-2 py-1.5 text-sm outline-none focus:border-blue-400"
+            />
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-gray-500">
+                {parseNames(draft).length} name{parseNames(draft).length === 1 ? '' : 's'} detected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft('');
+                    setExpanded(false);
+                  }}
+                  className="rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={commitImport}
+                  disabled={parseNames(draft).length === 0}
+                  data-testid="bulk-import-commit"
+                  className="rounded bg-blue-600 px-2 py-0.5 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Add {parseNames(draft).length || ''}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            data-testid="bulk-import-toggle"
+            className="flex w-full items-center justify-between rounded border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <span>＋ Bulk-import players</span>
+            <span className="text-[10px] text-gray-400">paste a list</span>
+          </button>
+        )}
+      </div>
+
+      <div className="max-h-[32rem] overflow-y-auto p-2">
+        {pool.length === 0 ? (
+          <div className="py-6 text-center text-xs text-gray-400">
+            No players yet.
+            <br />Use the bulk import above.
+          </div>
+        ) : (
+          <ul className="space-y-1">
+            {pool.map((p) => (
+              <li key={p.id} className="group relative flex items-center gap-1">
+                <span className="flex-1">
+                  <DraggablePlayerChip player={p} schoolId={schoolId} />
+                </span>
+                <button
+                  type="button"
+                  onClick={() => deletePlayer(p.id)}
+                  title={`Remove ${p.name}`}
+                  aria-label={`Remove ${p.name}`}
+                  className="rounded p-1 text-gray-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}

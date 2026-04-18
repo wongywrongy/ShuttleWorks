@@ -1,18 +1,25 @@
-.PHONY: build run stop logs clean dev help
+.PHONY: build run rebuild stop logs clean dev help test-e2e test-e2e-rebuild test-e2e-dev test-e2e-install
 
 # Default target
 help:
 	@echo "Tournament Scheduler - Available Commands"
 	@echo ""
 	@echo "Production (Docker):"
-	@echo "  make build    - Build Docker images"
-	@echo "  make run      - Build and run production (http://localhost)"
-	@echo "  make stop     - Stop all containers"
-	@echo "  make logs     - View container logs"
-	@echo "  make clean    - Stop and remove containers, images, volumes"
+	@echo "  make build             - Build Docker images"
+	@echo "  make run               - Build and run production (http://localhost)"
+	@echo "  make rebuild           - Fresh rebuild: stop, remove old images, rebuild with --no-cache, run"
+	@echo "  make stop              - Stop all containers"
+	@echo "  make logs              - View container logs"
+	@echo "  make clean             - Stop and remove containers, images, volumes"
 	@echo ""
 	@echo "Development (Hybrid):"
-	@echo "  make dev      - Run backend (Docker) + frontend (npm dev server)"
+	@echo "  make dev               - Run backend (Docker) + frontend (npm dev server)"
+	@echo ""
+	@echo "End-to-end tests (Playwright):"
+	@echo "  make test-e2e-install  - Install Playwright browsers (one-time)"
+	@echo "  make test-e2e          - Boot stack + run smoke tests + tear down"
+	@echo "  make test-e2e-rebuild  - Force rebuild images before running tests"
+	@echo "  make test-e2e-dev      - Run tests against http://localhost:5173 (requires 'make dev')"
 	@echo ""
 
 # === Production Commands ===
@@ -29,6 +36,20 @@ run:
 	@echo "  API Docs: http://localhost:8000/docs"
 	@echo ""
 	@echo "Run 'make logs' to view logs"
+
+# Nuclear rebuild: stop, remove old images, rebuild both containers from
+# scratch with no layer cache. Use this when UI changes aren't showing up.
+# Also forces you to hard-refresh the browser — nginx is configured to
+# send no-cache on index.html so a simple reload is enough going forward.
+rebuild:
+	docker-compose down --rmi local --remove-orphans || true
+	docker-compose build --no-cache
+	docker-compose up -d
+	@echo ""
+	@echo "Fresh rebuild complete."
+	@echo "  Frontend: http://localhost  (hard-refresh the browser: Cmd+Shift+R)"
+	@echo "  Backend:  http://localhost:8000"
+	@echo ""
 
 stop:
 	docker-compose down
@@ -53,3 +74,17 @@ dev:
 	@echo ""
 	@echo "Starting frontend dev server..."
 	cd frontend && npm run dev
+
+# === End-to-end tests (Playwright) ===
+
+test-e2e-install:
+	cd e2e && npm install && npx playwright install --with-deps chromium
+
+test-e2e:
+	cd e2e && npm install --silent && npx playwright test
+
+test-e2e-rebuild:
+	cd e2e && npm install --silent && E2E_REBUILD=1 npx playwright test
+
+test-e2e-dev:
+	cd e2e && npm install --silent && E2E_BASE_URL=http://localhost:5173 E2E_MANAGE_STACK=0 npx playwright test
