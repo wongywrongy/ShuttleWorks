@@ -243,10 +243,11 @@ class CPSATScheduler:
         return out
 
     def _allowed_starts(self, match: Match) -> Optional[List[Tuple[int]]]:
-        """Starts where [t, t+d) sits inside the intersection of every side player's availability windows.
+        """Starts where [t, t+d) sits inside the intersection of every side player's availability windows
+        and does not overlap any break window.
 
-        Returns ``None`` when no player on the match has any availability data
-        (i.e. availability is unconstrained). Returns an empty list when the
+        Returns ``None`` only when there are no availability constraints *and* no break
+        windows (i.e. the match is unconstrained). Returns an empty list when the
         match is infeasible.
         """
         T = self.config.total_slots
@@ -254,6 +255,8 @@ class CPSATScheduler:
         max_start = T - d
         if max_start < 0:
             return []
+
+        breaks = self.config.break_slots
 
         per_player_allowed: List[Set[int]] = []
         for player_id in get_player_ids(match):
@@ -268,10 +271,20 @@ class CPSATScheduler:
                         break
             per_player_allowed.append(allowed)
 
-        if not per_player_allowed:
+        if not per_player_allowed and not breaks:
             return None
 
-        intersection = set.intersection(*per_player_allowed) if per_player_allowed else set()
+        if per_player_allowed:
+            intersection = set.intersection(*per_player_allowed)
+        else:
+            intersection = set(range(max_start + 1))
+
+        if breaks:
+            intersection = {
+                t for t in intersection
+                if not any(t < be and t + d > bs for bs, be in breaks)
+            }
+
         return [(t,) for t in sorted(intersection)]
 
     def _add_court_capacity(self) -> None:

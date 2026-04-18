@@ -84,6 +84,10 @@ class ScheduleConfig:
     allow_player_overlap: bool = False
     player_overlap_penalty: float = 50.0
 
+    # Break windows (lunch, etc.) — half-open [start_slot, end_slot) ranges
+    # during which no match may occupy any slot. Applied as a hard constraint.
+    break_slots: List[Tuple[int, int]] = field(default_factory=list)
+
 
 @dataclass
 class SolverOptions:

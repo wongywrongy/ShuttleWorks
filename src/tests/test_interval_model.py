@@ -74,6 +74,47 @@ class TestAvailability:
         assert result.status == SolverStatus.INFEASIBLE
 
 
+class TestBreakWindows:
+    def test_match_avoids_break(self):
+        """A match cannot start or run through a break window."""
+        # 10 slots, break occupies [4, 6). Duration-2 match must start at 0,1,2 or 6,7,8.
+        config = ScheduleConfig(total_slots=10, court_count=1, break_slots=[(4, 6)])
+        players = [Player(id="p1", name="P1"), Player(id="p2", name="P2")]
+        matches = [Match(id="m1", event_code="MS1", side_a=["p1"], side_b=["p2"], duration_slots=2)]
+        result = CPSATBackend().solve(_request(config, players, matches))
+        assert result.status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE)
+        s = result.assignments[0].slot_id
+        assert s + 2 <= 4 or s >= 6, f"match started at {s}, which overlaps break [4,6)"
+
+    def test_break_with_no_player_availability(self):
+        """Break alone (no player availability) still constrains starts."""
+        # No availability data on players; break at [2, 4); duration-2 match.
+        config = ScheduleConfig(total_slots=8, court_count=1, break_slots=[(2, 4)])
+        players = [Player(id="p1", name="P1"), Player(id="p2", name="P2")]
+        matches = [Match(id="m1", event_code="MS1", side_a=["p1"], side_b=["p2"], duration_slots=2)]
+        result = CPSATBackend().solve(_request(config, players, matches))
+        assert result.status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE)
+        s = result.assignments[0].slot_id
+        # Start 1 would run into break at slot 2; start 3 would overlap slot 3.
+        assert s + 2 <= 2 or s >= 4, f"match started at {s}, which overlaps break [2,4)"
+
+    def test_break_flagged_by_validator(self):
+        """find_conflicts reports a 'break' conflict when an assignment overlaps a break."""
+        cfg = ScheduleConfig(total_slots=10, court_count=2, break_slots=[(4, 6)])
+        matches = {
+            "m1": Match(id="m1", event_code="MS1", side_a=["p1"], side_b=["p2"], duration_slots=2),
+        }
+        # Start at 3, duration 2 → covers [3,5), overlaps break [4,6) at slot 4.
+        bad = [Assignment(match_id="m1", slot_id=3, court_id=1, duration_slots=2)]
+        conflicts = find_conflicts(
+            config=cfg,
+            players={"p1": Player(id="p1", name="P1"), "p2": Player(id="p2", name="P2")},
+            matches=matches,
+            assignments=bad,
+        )
+        assert any(c.type == "break" for c in conflicts)
+
+
 class TestPinAndLock:
     def test_pinned_slot_only(self):
         config = ScheduleConfig(total_slots=10, court_count=3)

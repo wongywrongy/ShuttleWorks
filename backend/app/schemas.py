@@ -119,7 +119,7 @@ class ProposedMoveDTO(BaseModel):
 
 class ValidationConflict(BaseModel):
     """One reason a proposed move or a full schedule is infeasible."""
-    type: str  # court_conflict | player_overlap | availability | rest | out_of_day | invalid_court | ...
+    type: str  # court_conflict | player_overlap | availability | rest | break | out_of_day | invalid_court | ...
     description: str
     matchId: Optional[str] = None
     otherMatchId: Optional[str] = None
