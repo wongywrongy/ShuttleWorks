@@ -704,22 +704,25 @@ export function WorkflowPanel({
     return [...matchesByStatus.started].sort((a, b) => a.slotId - b.slotId);
   }, [matchesByStatus.started]);
 
+  // Single-column stack:
+  //   1. In-Progress pinned strip at top (collapses entirely when no active matches)
+  //   2. Tabbed Up Next / Finished below, filling remaining height
+  // Mirrors the Schedule page's vertical rhythm. 3-column layout retired.
+  const hasActive = startedSorted.length > 0;
+
   return (
-    <div className="h-full flex overflow-hidden min-h-0">
-      {/* In Progress Column */}
-      <div className="w-64 border-r border-gray-200 flex flex-col flex-shrink-0">
-        <div className="px-2 py-1.5 border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">In Progress</span>
+    <div className="h-full flex flex-col overflow-hidden min-h-0">
+      {hasActive && (
+        <div className="flex-shrink-0 border-b border-gray-200">
+          <div className="px-2 py-1.5 flex items-center justify-between border-b border-gray-100">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">In Progress</span>
+            </div>
+            <span className="text-[10px] text-gray-400">{matchesByStatus.started.length} active</span>
           </div>
-          <span className="text-[10px] text-gray-400">{matchesByStatus.started.length}</span>
-        </div>
-        <div className="flex-1 overflow-auto p-1.5">
-          {startedSorted.length === 0 ? (
-            <div className="text-center text-gray-400 text-[10px] py-4">No active matches</div>
-          ) : (
-            startedSorted.map((assignment) => (
+          <div className="p-1.5 max-h-44 overflow-auto">
+            {startedSorted.map((assignment) => (
               <InProgressCard
                 key={assignment.matchId}
                 assignment={assignment}
@@ -732,34 +735,36 @@ export function WorkflowPanel({
                 onUpdateStatus={onUpdateStatus}
                 onUndoStart={onUndoStart}
               />
-            ))
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Tabbed Up Next / Finished */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-200 flex-shrink-0">
-          <button
-            onClick={() => setActiveTab('up_next')}
-            className={`px-2 py-0.5 text-xs rounded transition-colors ${
-              activeTab === 'up_next'
-                ? 'bg-gray-700 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            Up Next ({upNextSorted.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('finished')}
-            className={`px-2 py-0.5 text-xs rounded transition-colors ${
-              activeTab === 'finished'
-                ? 'bg-gray-700 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            Finished ({finishedSorted.length})
-          </button>
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setActiveTab('up_next')}
+              className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                activeTab === 'up_next'
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Up Next ({upNextSorted.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('finished')}
+              className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                activeTab === 'finished'
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Finished ({finishedSorted.length})
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-auto p-1.5">
           {activeTab === 'up_next' && (
