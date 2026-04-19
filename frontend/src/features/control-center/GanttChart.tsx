@@ -4,7 +4,6 @@
  * Delayed matches get a yellow ring to stand out
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
-import { Check } from 'lucide-react';
 import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../utils/timeUtils';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import type {
@@ -345,18 +344,10 @@ export function GanttChart({
                           : '')
                       }
                     >
-                      <div className="px-1.5 h-full flex items-center gap-1 overflow-hidden">
-                        {/* Pulsing dot for in-progress */}
-                        {isInProgress && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-                        )}
-                        {/* Checkmark for finished */}
-                        {status === 'finished' && (
-                          <Check
-                            aria-label="Finished"
-                            className="h-3 w-3 flex-shrink-0 text-gray-400"
-                          />
-                        )}
+                      <div className="px-1.5 h-full flex items-center overflow-hidden">
+                        {/* Status is already carried by the block's
+                            fill + border colour and the inset ring for
+                            conflicts — an extra icon is just noise. */}
                         <span className={`text-[11px] font-medium truncate ${styles.text}`}>
                           {match ? getMatchLabel(match) : '?'}
                         </span>
