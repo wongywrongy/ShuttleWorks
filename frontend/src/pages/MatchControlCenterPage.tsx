@@ -138,66 +138,53 @@ export function MatchControlCenterPage() {
     console.log(`Removed player ${playerId} from match ${matchId}`);
   }, [liveOps.matches, updateMatch]);
 
-  // Handle cascading court shift when starting a match
+  // Handle cascading court shift when starting a match.
+  //
+  // We intentionally DO NOT mutate schedule.assignments[starting].slotId.
+  // Instead, the starting match's real runtime position is derived
+  // downstream from `matchState.actualStartTime` (see getRenderSlot in
+  // timeUtils + GanttChart). That lets the block slide smoothly to the
+  // wall-clock slot instead of snapping.
+  //
+  // We DO still shift subsequent scheduled/called matches off the
+  // blocked court-slot window so the paper schedule stops promising
+  // courts that are physically occupied.
   const handleCascadingStart = useCallback((
     matchId: string,
     courtId: number
   ) => {
-    if (!schedule) return;
+    if (!schedule || !liveOps.config) return;
 
-    // Find the assignment for this match
     const startingAssignmentIdx = schedule.assignments.findIndex(a => a.matchId === matchId);
     if (startingAssignmentIdx === -1) return;
 
     const startingAssignment = schedule.assignments[startingAssignmentIdx];
     const duration = startingAssignment.durationSlots;
 
-    // Create a working copy of assignments
+    // Working copy for the cascade of *other* matches.
     const workingAssignments = schedule.assignments.map(a => ({ ...a }));
 
-    // Find the next available slot on the target court
-    // This is right after the last finished/in-progress match on that court
-    let nextAvailableSlot = 0; // Start from beginning
+    // Anchor for the cascade is the current wall-clock slot — that's
+    // where the match is actually about to block the court.
+    const nowSlot = Math.max(0, currentSlot);
 
-    for (const a of workingAssignments) {
-      if (a.matchId === matchId) continue;
-      const state = liveOps.matchStates[a.matchId];
-
-      // Only consider matches on the target court
-      if (a.courtId !== courtId) continue;
-
-      // If match is started or finished, we need to start after it ends
-      if (state?.status === 'started' || state?.status === 'finished') {
-        const matchEnd = a.slotId + a.durationSlots;
-        if (matchEnd > nextAvailableSlot) {
-          nextAvailableSlot = matchEnd;
-        }
-      }
-    }
-
-    // Store original position of the starting match
     const originalSlot = startingAssignment.slotId;
     const originalCourt = startingAssignment.courtId;
 
-    // Move the starting match to the target court and available slot
-    workingAssignments[startingAssignmentIdx] = {
-      ...startingAssignment,
-      slotId: nextAvailableSlot,
-      courtId: courtId,
-    };
-
-    const startSlot = nextAvailableSlot;
-    const endSlot = startSlot + duration;
-
-    // Store original position in match state
+    // Store original position in match state for Undo, but leave the
+    // assignment in schedule.assignments untouched.
     const currentStartState = liveOps.matchStates[matchId];
     setMatchState(matchId, {
       ...currentStartState,
       matchId: matchId,
       status: currentStartState?.status || 'scheduled',
+      actualCourtId: courtId !== originalCourt ? courtId : undefined,
       originalSlotId: originalSlot,
       originalCourtId: originalCourt,
     });
+
+    const startSlot = nowSlot;
+    const endSlot = startSlot + duration;
 
     // Now handle cascading for any conflicts on the target court
     const processedIds = new Set<string>([matchId]);
@@ -257,7 +244,7 @@ export function MatchControlCenterPage() {
     });
 
     console.log(`Started match ${matchId} on court ${courtId} at slot ${startSlot}. Shifted ${shiftsApplied.length} matches.`);
-  }, [schedule, liveOps.matchStates, setSchedule, setMatchState]);
+  }, [schedule, liveOps.config, currentSlot, liveOps.matchStates, setSchedule, setMatchState]);
 
   // Handle undo start - restore match to original position
   const handleUndoStart = useCallback((matchId: string) => {

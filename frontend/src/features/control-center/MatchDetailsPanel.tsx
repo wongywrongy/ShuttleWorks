@@ -10,7 +10,29 @@ import type { TrafficLightResult } from '../../utils/trafficLight';
 import { getMatchLabel } from '../../utils/matchUtils';
 import { getMatchPlayerIds } from '../../utils/trafficLight';
 import { ElapsedTimer } from '../../components/common/ElapsedTimer';
-import { timeToSlot } from '../../utils/timeUtils';
+import { parseMatchStartMs, timeToSlot } from '../../utils/timeUtils';
+
+/** Render an ISO-8601 timestamp as the operator's local HH:mm clock.
+ *  Falls back to "—" on unparseable input rather than leaking "Invalid Date". */
+function formatIsoClock(iso: string | null | undefined): string {
+  const ms = parseMatchStartMs(iso);
+  if (ms === null) return '—';
+  const d = new Date(ms);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Format the gap between two ISO timestamps as Xm / Xh Ym.
+ *  Zero / negative / unparseable gaps become "0m" — never a negative. */
+function formatDuration(aIso: string, bIso: string): string {
+  const aMs = parseMatchStartMs(aIso);
+  const bMs = parseMatchStartMs(bIso);
+  if (aMs === null || bMs === null) return '0m';
+  const mins = Math.max(0, Math.round((bMs - aMs) / 60_000));
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
 import { BadmintonScoreDialog } from '../tracking/BadmintonScoreDialog';
 import { MatchScoreDialog } from '../tracking/MatchScoreDialog';
 
@@ -406,15 +428,63 @@ export function MatchDetailsPanel({
         })()}
       </div>
 
-      {/* Timing (only for in_progress) */}
-      {status === 'started' && (
+      {/* Timing — shows every lifecycle stamp the match has accrued
+          so the operator can audit waits vs. runs at a glance. */}
+      {(matchState?.calledAt || matchState?.actualStartTime || matchState?.actualEndTime) && (
         <div className="mb-3">
           <div className="text-[9px] font-medium text-gray-500 uppercase tracking-wide mb-1">
             Timing
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Elapsed</span>
-            <ElapsedTimer startTime={matchState?.actualStartTime} className="font-semibold tabular-nums" />
+          <div className="space-y-0.5 text-xs">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-gray-500">Scheduled</span>
+              <span className="tabular-nums text-gray-700">{scheduledTime}</span>
+            </div>
+            {matchState?.calledAt && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-gray-500">Called</span>
+                <span className="tabular-nums text-gray-700">
+                  {formatIsoClock(matchState.calledAt)}
+                  {matchState.actualStartTime ? (
+                    <span className="ml-1 text-[10px] text-gray-400">
+                      · waited {formatDuration(matchState.calledAt, matchState.actualStartTime)}
+                    </span>
+                  ) : (
+                    <span className="ml-1 text-[10px] text-blue-600">
+                      · {formatDuration(matchState.calledAt, new Date().toISOString())} ago
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+            {matchState?.actualStartTime && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-gray-500">Started</span>
+                <span className="tabular-nums text-gray-700">
+                  {formatIsoClock(matchState.actualStartTime)}
+                  {status === 'started' && (
+                    <span className="ml-1 text-[10px] text-green-700">
+                      · playing{' '}
+                      <ElapsedTimer
+                        startTime={matchState.actualStartTime}
+                        className="tabular-nums"
+                      />
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+            {matchState?.actualEndTime && matchState?.actualStartTime && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-gray-500">Finished</span>
+                <span className="tabular-nums text-gray-700">
+                  {formatIsoClock(matchState.actualEndTime)}
+                  <span className="ml-1 text-[10px] text-gray-400">
+                    · ran {formatDuration(matchState.actualStartTime, matchState.actualEndTime)}
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}

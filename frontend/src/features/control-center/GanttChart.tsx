@@ -5,7 +5,7 @@
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
 import { Check } from 'lucide-react';
-import { calculateTotalSlots, formatSlotTime } from '../../utils/timeUtils';
+import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../utils/timeUtils';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import type {
   ScheduleDTO,
@@ -251,9 +251,17 @@ export function GanttChart({
                     ringClass = 'ring-2 ring-inset ring-yellow-400';
                   }
 
-                  // Calculate position
-                  const left = (assignment.slotId - minSlot) * SLOT_WIDTH;
-                  const width = Math.max(48, assignment.durationSlots * SLOT_WIDTH - 2);
+                  // Live render position: started/finished blocks use
+                  // actualStartTime / actualEndTime; scheduled/called
+                  // stay at the paper slot. Any change to the render
+                  // slot animates via the existing transition-all.
+                  const render = getRenderSlot(
+                    assignment,
+                    matchStates[assignment.matchId],
+                    config,
+                  );
+                  const left = (render.slotId - minSlot) * SLOT_WIDTH;
+                  const width = Math.max(48, render.durationSlots * SLOT_WIDTH - 2);
 
                   return (
                     <div

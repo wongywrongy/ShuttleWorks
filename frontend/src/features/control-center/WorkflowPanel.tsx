@@ -468,6 +468,15 @@ function UpNextCard({
           )}
         </span>
         <span className="flex items-center gap-1 whitespace-nowrap text-[10px]">
+          {isCalled && matchState?.calledAt && (
+            <span
+              className="rounded bg-blue-100 px-1 font-medium text-blue-700"
+              title={`Called at ${new Date(matchState.calledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+            >
+              waiting{' '}
+              <ElapsedTimer startTime={matchState.calledAt} className="tabular-nums" />
+            </span>
+          )}
           {matchState?.postponed && (
             <span className="rounded bg-orange-100 px-1 font-medium text-orange-700">postponed</span>
           )}

@@ -170,7 +170,13 @@ export function useLiveTracking() {
         ...additionalData,
       };
 
-      // Set timestamps based on status transitions
+      // Set timestamps based on status transitions. Each is stamped
+      // on the FIRST transition only; if the operator undoes and
+      // re-fires, the original timestamp stays so "Called Xm ago" is
+      // an audit field, not a derived one that resets.
+      if (status === 'called' && !currentState.calledAt) {
+        newState.calledAt = now;
+      }
       if (status === 'started' && !currentState.actualStartTime) {
         newState.actualStartTime = now;
       }

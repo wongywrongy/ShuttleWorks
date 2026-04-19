@@ -231,6 +231,65 @@ export function parseMatchStartMs(value: string | null | undefined): number | nu
 }
 
 /**
+ * Compute the slot + duration a match should be rendered at on the
+ * Gantt grid, given its paper assignment and its live matchState.
+ *
+ * The paper slot (``assignment.slotId``) is what the solver scheduled.
+ * That's the right render position for matches that have not yet been
+ * called or started — the operator is looking at the plan. Once a
+ * match starts, the right position is where it is actually being
+ * played on the clock; and once it finishes, the right duration is
+ * how long it actually ran. This is the "live play head" behaviour.
+ *
+ * Falls back to the paper assignment whenever the relevant timestamp
+ * is missing or unparseable, so a corrupt field can never leave a
+ * block without a position.
+ */
+export function getRenderSlot(
+  assignment: { slotId: number; durationSlots: number },
+  matchState: MatchStateDTO | undefined | null,
+  config: TournamentConfig,
+): { slotId: number; durationSlots: number } {
+  const status = matchState?.status;
+
+  if (status === 'finished' && matchState?.actualStartTime && matchState?.actualEndTime) {
+    const startMs = parseMatchStartMs(matchState.actualStartTime);
+    const endMs = parseMatchStartMs(matchState.actualEndTime);
+    if (startMs !== null && endMs !== null && endMs >= startMs) {
+      const startSlot = _msToSlot(startMs, config);
+      const minutes = (endMs - startMs) / 60_000;
+      const duration = Math.max(1, Math.round(minutes / config.intervalMinutes));
+      return { slotId: startSlot, durationSlots: duration };
+    }
+  }
+
+  if (status === 'started' && matchState?.actualStartTime) {
+    const startMs = parseMatchStartMs(matchState.actualStartTime);
+    if (startMs !== null) {
+      return {
+        slotId: _msToSlot(startMs, config),
+        durationSlots: assignment.durationSlots,
+      };
+    }
+  }
+
+  return { slotId: assignment.slotId, durationSlots: assignment.durationSlots };
+}
+
+/** Convert an epoch-ms timestamp to a schedule slot index using the
+ *  config's day start + interval. Handles overnight schedules. */
+function _msToSlot(ms: number, config: TournamentConfig): number {
+  const d = new Date(ms);
+  const minutesOfDay = d.getHours() * 60 + d.getMinutes();
+  const startMinutes = timeToMinutes(config.dayStart);
+  const endMinutes = timeToMinutes(config.dayEnd);
+  const isOvernight = endMinutes <= startMinutes;
+  let effective = minutesOfDay;
+  if (isOvernight && effective < startMinutes) effective += 24 * 60;
+  return Math.max(0, Math.floor((effective - startMinutes) / config.intervalMinutes));
+}
+
+/**
  * Get status badge color
  */
 export function getStatusColor(status: MatchStateDTO['status']): string {

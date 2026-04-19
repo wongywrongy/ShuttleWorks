@@ -135,6 +135,28 @@ def test_reset_empties_the_file(client):
     assert client.get("/match-states").json() == {}
 
 
+def test_called_at_roundtrips(client):
+    """calledAt and originalSlotId/originalCourtId must persist through
+    PUT → GET without being dropped by Pydantic validation."""
+    payload = {
+        "matchId": "m1",
+        "status": "called",
+        "calledAt": "2026-04-19T18:30:00.000Z",
+        "actualStartTime": None,
+        "actualEndTime": None,
+        "score": None,
+        "notes": None,
+        "originalSlotId": 5,
+        "originalCourtId": 3,
+    }
+    r = client.put("/match-states/m1", json=payload)
+    assert r.status_code == 200
+    got = client.get("/match-states/m1").json()
+    assert got["calledAt"] == "2026-04-19T18:30:00.000Z"
+    assert got["originalSlotId"] == 5
+    assert got["originalCourtId"] == 3
+
+
 def test_match_state_file_is_integrity_stamped(client, tmp_path):
     """Writes go through the shared atomic_write_json helper, which
     injects a SHA-256 _integrity field into every payload."""

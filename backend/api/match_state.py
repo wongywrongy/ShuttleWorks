@@ -62,11 +62,17 @@ class MatchScore(BaseModel):
 class MatchStateDTO(BaseModel):
     matchId: str
     status: MatchStatus = "scheduled"
+    calledAt: Optional[str] = None  # ISO-8601 UTC
     actualStartTime: Optional[str] = None  # ISO-8601 UTC
     actualEndTime: Optional[str] = None  # ISO-8601 UTC
     score: Optional[MatchScore] = None
     notes: Optional[str] = None
     updatedAt: Optional[str] = None
+    # Persisted so Undo survives a page reload. Frontend records these
+    # whenever a match is shifted from its scheduled slot/court; they
+    # are not part of any solver input.
+    originalSlotId: Optional[int] = None
+    originalCourtId: Optional[int] = None
 
     @field_validator("status", mode="before")
     @classmethod
