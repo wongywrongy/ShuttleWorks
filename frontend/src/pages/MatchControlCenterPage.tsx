@@ -460,6 +460,7 @@ export function MatchControlCenterPage() {
               players={players}
               config={liveOps.config}
               currentSlot={currentSlot}
+              onUpdateStatus={liveTracking.updateMatchStatus}
             />
           </div>
         ) : (

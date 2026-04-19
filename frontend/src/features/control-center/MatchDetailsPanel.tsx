@@ -1,14 +1,16 @@
 /**
  * Match Details Panel - Shows selected match details
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
-import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, TournamentConfig } from '../../api/dto';
+import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, SetScore, TournamentConfig } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import { getMatchLabel } from '../../utils/matchUtils';
 import { getMatchPlayerIds } from '../../utils/trafficLight';
 import { ElapsedTimer } from '../../components/common/ElapsedTimer';
 import { timeToSlot } from '../../utils/timeUtils';
+import { BadmintonScoreDialog } from '../tracking/BadmintonScoreDialog';
+import { MatchScoreDialog } from '../tracking/MatchScoreDialog';
 
 interface MatchDetailsPanelProps {
   assignment?: ScheduleAssignment;
@@ -25,6 +27,11 @@ interface MatchDetailsPanelProps {
   players?: PlayerDTO[];
   config?: TournamentConfig | null;
   currentSlot?: number;
+  onUpdateStatus?: (
+    matchId: string,
+    status: MatchStateDTO['status'],
+    additionalData?: Partial<MatchStateDTO>,
+  ) => Promise<void>;
 }
 
 /**
@@ -90,8 +97,11 @@ export function MatchDetailsPanel({
   players: _players,
   config,
   currentSlot,
+  onUpdateStatus,
 }: MatchDetailsPanelProps) {
   const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
+  const [showEditScore, setShowEditScore] = useState(false);
+  const [savingScore, setSavingScore] = useState(false);
 
   // Calculate rest times for all players in the match
   const playerRestTimes = useMemo(() => {
@@ -186,43 +196,133 @@ export function MatchDetailsPanel({
         const winnerNames = (winnerIds ?? []).map((id) => playerNames.get(id) ?? id).join(' & ');
 
         return (
-          <div className="mb-3 rounded border border-purple-200 bg-purple-50 px-2 py-1.5 text-xs text-purple-800">
-            <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-purple-600">
-              <span>Done</span>
-              {score && (
-                <span className="ml-auto font-mono text-purple-900">
-                  {score.sideA}–{score.sideB}
-                </span>
+          <div className="mb-3 rounded border border-purple-200 bg-purple-50 px-2 py-2 text-xs text-purple-800">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-purple-600">
+                Done
+              </span>
+              {onUpdateStatus && (
+                <button
+                  type="button"
+                  onClick={() => setShowEditScore(true)}
+                  className="rounded border border-purple-300 bg-white px-2 py-0.5 text-[10px] font-medium text-purple-700 hover:bg-purple-100"
+                  title="Edit score"
+                >
+                  ✎ Edit score
+                </button>
               )}
             </div>
             {winner && winnerNames ? (
-              <div className="mt-0.5 font-semibold text-purple-900">
-                🏆 {winnerNames}
+              <div className="mt-1 flex items-baseline justify-between gap-2">
+                <span className="font-semibold text-purple-900 truncate">
+                  🏆 {winnerNames}
+                </span>
+                {score && (
+                  <span className="font-mono text-sm font-bold tabular-nums text-purple-900">
+                    {score.sideA}–{score.sideB}
+                    <span className="ml-1 text-[10px] font-medium text-purple-600">sets</span>
+                  </span>
+                )}
               </div>
             ) : (
-              <div className="mt-0.5 text-purple-700">Tied</div>
+              <div className="mt-1 text-purple-700">Tied</div>
             )}
-            {sets.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1 text-[10px] font-mono">
+            {sets.length > 0 ? (
+              <div className="mt-2 space-y-0.5">
                 {sets.map((s, i) => {
                   const setWinner = s.sideA > s.sideB ? 'A' : s.sideB > s.sideA ? 'B' : null;
                   return (
-                    <span
+                    <div
                       key={i}
-                      className={`rounded px-1 py-0.5 ${
-                        setWinner === winner
-                          ? 'bg-purple-200 text-purple-900'
-                          : 'bg-white text-purple-700'
-                      }`}
-                      title={`Set ${i + 1}`}
+                      className="flex items-center justify-between rounded bg-white/70 px-1.5 py-0.5 font-mono text-[11px]"
                     >
-                      {s.sideA}–{s.sideB}
-                    </span>
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-purple-500">
+                        Set {i + 1}
+                      </span>
+                      <span className="tabular-nums">
+                        <span
+                          className={setWinner === 'A' ? 'font-bold text-purple-900' : 'text-purple-700'}
+                        >
+                          {s.sideA}
+                        </span>
+                        <span className="mx-0.5 text-purple-400">–</span>
+                        <span
+                          className={setWinner === 'B' ? 'font-bold text-purple-900' : 'text-purple-700'}
+                        >
+                          {s.sideB}
+                        </span>
+                      </span>
+                    </div>
                   );
                 })}
               </div>
+            ) : (
+              <div className="mt-1 text-[10px] text-purple-500">
+                No per-set scores recorded — tap Edit to fill them in.
+              </div>
             )}
           </div>
+        );
+      })()}
+
+      {showEditScore && onUpdateStatus && match && (() => {
+        const sideAName = (match.sideA || []).map((id) => playerNames.get(id) || id).join(' & ');
+        const sideBName = (match.sideB || []).map((id) => playerNames.get(id) || id).join(' & ');
+        const useBadminton = config?.scoringFormat === 'badminton';
+        const setsToWin = config?.setsToWin ?? 2;
+        const pointsPerSet = config?.pointsPerSet ?? 21;
+        const deuceEnabled = config?.deuceEnabled ?? true;
+        const label = getMatchLabel(match);
+
+        const handleBadmintonSubmit = async (sets: SetScore[], _winner: 'A' | 'B', notes: string) => {
+          if (!onUpdateStatus) return;
+          setSavingScore(true);
+          try {
+            const setsWonA = sets.filter((s) => s.sideA > s.sideB).length;
+            const setsWonB = sets.filter((s) => s.sideB > s.sideA).length;
+            await onUpdateStatus(match.id, 'finished', {
+              sets,
+              score: { sideA: setsWonA, sideB: setsWonB },
+              notes,
+            });
+            setShowEditScore(false);
+          } finally {
+            setSavingScore(false);
+          }
+        };
+
+        const handleSimpleSubmit = async (score: { sideA: number; sideB: number }, notes: string) => {
+          if (!onUpdateStatus) return;
+          setSavingScore(true);
+          try {
+            await onUpdateStatus(match.id, 'finished', { score, notes });
+            setShowEditScore(false);
+          } finally {
+            setSavingScore(false);
+          }
+        };
+
+        return useBadminton ? (
+          <BadmintonScoreDialog
+            matchName={label}
+            sideAName={sideAName}
+            sideBName={sideBName}
+            setsToWin={setsToWin}
+            pointsPerSet={pointsPerSet}
+            deuceEnabled={deuceEnabled}
+            onSubmit={handleBadmintonSubmit}
+            onCancel={() => setShowEditScore(false)}
+            isSubmitting={savingScore}
+          />
+        ) : (
+          <MatchScoreDialog
+            matchName={label}
+            sideAName={sideAName}
+            sideBName={sideBName}
+            onSubmit={handleSimpleSubmit}
+            onCancel={() => setShowEditScore(false)}
+            isSubmitting={savingScore}
+          />
         );
       })()}
 
