@@ -2,7 +2,7 @@
  * Match Details Panel - Shows selected match details
  */
 import { useMemo, useState } from 'react';
-import { ChevronRight, Pencil, Trophy } from 'lucide-react';
+import { ChevronRight, Pencil } from 'lucide-react';
 import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
 import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, SetScore, TournamentConfig } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
@@ -217,10 +217,11 @@ export function MatchDetailsPanel({
             </div>
             {winner && winnerNames ? (
               <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="inline-flex items-center gap-1 font-semibold text-blue-800 truncate">
-                  <Trophy aria-hidden="true" className="h-3.5 w-3.5" />
-                  <span className="sr-only">Winner:</span>
-                  {winnerNames}
+                <span className="min-w-0 truncate">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    Winner
+                  </span>{' '}
+                  <span className="font-semibold text-blue-800">{winnerNames}</span>
                 </span>
                 {score && (
                   <span className="font-mono text-sm font-bold tabular-nums text-slate-900">
@@ -370,12 +371,11 @@ export function MatchDetailsPanel({
               <div key={key} className="flex items-center justify-between gap-1">
                 <span className={`${sideClass(side)} inline-flex items-center gap-1`}>
                   {winner === side && (
-                    <>
-                      <Trophy aria-hidden="true" className="h-3 w-3" />
-                      <span className="sr-only">Winner:</span>
-                    </>
+                    <span className="rounded bg-blue-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-blue-800">
+                      Won
+                    </span>
                   )}
-                  {name}
+                  <span>{name}</span>
                 </span>
                 {restInfo ? (
                   <span

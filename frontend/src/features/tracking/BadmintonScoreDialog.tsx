@@ -6,7 +6,7 @@
  * and fits on laptop screens without horizontal scroll.
  */
 import { useId, useMemo, useState } from 'react';
-import { Trophy, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Modal } from '../../components/common/Modal';
 import type { SetScore } from '../../api/dto';
 
@@ -272,15 +272,16 @@ export function BadmintonScoreDialog({
           {/* Winner callout */}
           {matchWinner ? (
             <div
-              className="flex items-center justify-center gap-2 rounded bg-green-50 px-3 py-2 text-sm font-medium text-green-800"
+              className="flex items-center justify-center gap-3 rounded bg-green-50 px-3 py-2 text-sm text-green-900"
               role="status"
             >
-              <Trophy aria-hidden="true" className="h-4 w-4" />
-              <span className="sr-only">Winner:</span>
-              <span>
-                {matchWinner === 'A' ? sideAName || 'Side A' : sideBName || 'Side B'} wins
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-green-700">
+                Winner
               </span>
-              <span className="rounded bg-white/60 px-2 py-0.5 font-mono text-xs text-green-900">
+              <span className="font-semibold">
+                {matchWinner === 'A' ? sideAName || 'Side A' : sideBName || 'Side B'}
+              </span>
+              <span className="rounded bg-white/60 px-2 py-0.5 font-mono text-xs">
                 {setsWonA}–{setsWonB}
               </span>
             </div>
