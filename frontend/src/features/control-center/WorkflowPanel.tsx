@@ -234,6 +234,7 @@ function UpNextCard({
   const [updating, setUpdating] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCourtDialog, setShowCourtDialog] = useState(false);
+  const [showScoreDialog, setShowScoreDialog] = useState(false);
 
   if (!match) return null;
 
@@ -348,6 +349,46 @@ function UpNextCard({
     }
   };
 
+  // Scoring config, mirrors InProgressCard so the dialog behaves the same
+  // whether the match came from called-shortcut or the normal Start → Finish flow.
+  const useBadmintonScoring = config?.scoringFormat === 'badminton';
+  const setsToWin = config?.setsToWin ?? 2;
+  const pointsPerSet = config?.pointsPerSet ?? 21;
+  const deuceEnabled = config?.deuceEnabled ?? true;
+
+  const handleSimpleScoreSubmit = async (
+    score: { sideA: number; sideB: number },
+    notes: string,
+  ) => {
+    setUpdating(true);
+    try {
+      await onUpdateStatus(assignment.matchId, 'finished', { score, notes });
+      setShowScoreDialog(false);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleBadmintonScoreSubmit = async (
+    sets: SetScore[],
+    _winner: 'A' | 'B',
+    notes: string,
+  ) => {
+    setUpdating(true);
+    try {
+      const setsWonA = sets.filter((s) => s.sideA > s.sideB).length;
+      const setsWonB = sets.filter((s) => s.sideB > s.sideA).length;
+      await onUpdateStatus(assignment.matchId, 'finished', {
+        sets,
+        score: { sideA: setsWonA, sideB: setsWonB },
+        notes,
+      });
+      setShowScoreDialog(false);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   return (
     <>
       <div
@@ -380,6 +421,14 @@ function UpNextCard({
                   Start
                 </button>
                 <button
+                  onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
+                  disabled={updating}
+                  className="px-2.5 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 disabled:bg-gray-400"
+                  title="Enter score without tracking start/finish times"
+                >
+                  Score
+                </button>
+                <button
                   onClick={(e) => { e.stopPropagation(); handleUndo(); }}
                   disabled={updating}
                   className="px-2.5 py-1 bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300 disabled:bg-gray-100"
@@ -399,6 +448,14 @@ function UpNextCard({
                   }`}
                 >
                   Call
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
+                  disabled={updating}
+                  className="px-2.5 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 disabled:bg-gray-400"
+                  title="Enter score directly — skips call / start"
+                >
+                  Score
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); handlePostpone(); }}
@@ -558,6 +615,31 @@ function UpNextCard({
           onCancel={() => setShowCourtDialog(false)}
           isSubmitting={updating}
         />
+      )}
+
+      {showScoreDialog && (
+        useBadmintonScoring ? (
+          <BadmintonScoreDialog
+            matchName={getMatchLabel(match)}
+            sideAName={sideANames}
+            sideBName={sideBNames}
+            setsToWin={setsToWin}
+            pointsPerSet={pointsPerSet}
+            deuceEnabled={deuceEnabled}
+            onSubmit={handleBadmintonScoreSubmit}
+            onCancel={() => setShowScoreDialog(false)}
+            isSubmitting={updating}
+          />
+        ) : (
+          <MatchScoreDialog
+            matchName={getMatchLabel(match)}
+            sideAName={sideANames}
+            sideBName={sideBNames}
+            onSubmit={handleSimpleScoreSubmit}
+            onCancel={() => setShowScoreDialog(false)}
+            isSubmitting={updating}
+          />
+        )
       )}
     </>
   );

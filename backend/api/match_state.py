@@ -13,8 +13,18 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/match-states", tags=["match-states"])
 
-# File path for tournament state
-STATE_FILE_PATH = Path(__file__).parent.parent / "tournament_state.json"
+# File path for the match-state JSON. Lives in the writable data dir
+# (bind-mounted in docker-compose); /app itself is read-only.
+def _data_dir() -> Path:
+    return Path(os.environ.get("BACKEND_DATA_DIR", "/app/data"))
+
+
+def _state_path() -> Path:
+    return _data_dir() / "match_states.json"
+
+
+# Back-compat alias used throughout this module.
+STATE_FILE_PATH = _state_path()
 
 
 # DTOs
@@ -68,6 +78,9 @@ def _read_state_file() -> TournamentStateFile:
 
 def _write_state_file(state: TournamentStateFile) -> None:
     """Write the tournament state file with backup."""
+    # Ensure the writable data dir exists (it's bind-mounted in docker).
+    STATE_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     # Create backup before writing
     if STATE_FILE_PATH.exists():
         backup_path = STATE_FILE_PATH.with_suffix('.backup.json')
