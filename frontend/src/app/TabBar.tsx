@@ -1,5 +1,6 @@
 import { useAppStore, type AppTab } from '../store/appStore';
 import { AppStatusPopover } from '../components/AppStatusPopover';
+import { INTERACTIVE_BASE } from '../lib/utils';
 
 type TabDef = { id: AppTab; label: string; hint?: string };
 
@@ -42,13 +43,24 @@ export function TabBar() {
               disabled={isDisabled}
               onClick={() => setActiveTab(tab.id)}
               aria-current={isActive ? 'page' : undefined}
+              aria-disabled={isDisabled || undefined}
+              title={
+                isDisabled
+                  ? tab.id === 'matches'
+                    ? 'Add players first'
+                    : tab.id === 'schedule' || tab.id === 'live'
+                      ? 'Create matches first'
+                      : undefined
+                  : undefined
+              }
               data-testid={`tab-${tab.id}`}
               className={[
-                'rounded px-3 py-1.5 text-sm font-medium transition-colors',
+                INTERACTIVE_BASE,
+                'rounded px-3 py-1.5 text-sm font-medium',
                 isActive
-                  ? 'bg-blue-100 text-blue-700'
+                  ? 'bg-blue-100 text-blue-700 shadow-inner'
                   : isDisabled
-                    ? 'text-gray-300 cursor-not-allowed'
+                    ? 'text-gray-300'
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
               ].join(' ')}
             >

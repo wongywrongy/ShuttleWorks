@@ -11,6 +11,7 @@ import { useEffect, type ComponentType } from 'react';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle, type LucideProps } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import type { Toast as ToastEntry, ToastLevel } from '../store/appStore';
+import { INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET } from '../lib/utils';
 
 const LEVEL_STYLES: Record<
   ToastLevel,
@@ -56,7 +57,7 @@ function Item({ toast }: { toast: ToastEntry }) {
             toast.onAction?.();
             dismiss(toast.id);
           }}
-          className="rounded border border-current bg-white/40 px-2 py-0.5 text-[11px] font-medium hover:bg-white/70"
+          className={`${INTERACTIVE_BASE} rounded border border-current bg-white px-2 py-0.5 text-[11px] font-semibold hover:bg-white/90`}
         >
           {toast.actionLabel}
         </button>
@@ -65,7 +66,7 @@ function Item({ toast }: { toast: ToastEntry }) {
         type="button"
         onClick={() => dismiss(toast.id)}
         aria-label="Dismiss"
-        className="opacity-60 hover:opacity-100"
+        className={`${INTERACTIVE_BASE_QUIET} flex h-6 w-6 items-center justify-center rounded opacity-60 hover:opacity-100 hover:bg-black/5`}
       >
         <X aria-hidden="true" className="h-4 w-4" />
       </button>

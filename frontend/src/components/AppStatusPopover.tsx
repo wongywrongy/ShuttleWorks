@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useAppStore } from '../store/appStore';
+import { INTERACTIVE_BASE } from '../lib/utils';
 
 interface DeepHealth {
   status: 'healthy' | 'degraded';
@@ -126,7 +127,7 @@ export function AppStatusPopover() {
         data-testid="app-status-chip"
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs ${chipTone} hover:brightness-95`}
+        className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs ${chipTone} hover:brightness-95`}
       >
         <span className={`h-1.5 w-1.5 rounded-full ${chipDot}`} />
         {chipLabel}
@@ -144,7 +145,7 @@ export function AppStatusPopover() {
             <button
               type="button"
               onClick={() => void refreshHealth()}
-              className="rounded border border-gray-300 px-2 py-0.5 text-[10px] text-gray-600 hover:bg-gray-50"
+              className={`${INTERACTIVE_BASE} rounded border border-gray-300 px-2 py-0.5 text-[10px] text-gray-600 hover:bg-gray-50`}
               aria-label="Refresh health"
             >
               Refresh
@@ -199,7 +200,8 @@ export function AppStatusPopover() {
               onClick={handleBackupNow}
               disabled={backingUp}
               data-testid="app-status-backup"
-              className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              aria-busy={backingUp}
+              className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50`}
             >
               {backingUp ? 'Backing up…' : 'Back up now'}
             </button>
@@ -209,7 +211,7 @@ export function AppStatusPopover() {
                 setActiveTab('setup');
                 setOpen(false);
               }}
-              className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50"
+              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50`}
             >
               Manage backups
               <ChevronRight aria-hidden="true" className="h-3 w-3" />

@@ -4,7 +4,7 @@
  * Center: Tabbed Up Next / Finished with colored left borders
  */
 import { useState, useMemo } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO, TournamentConfig, SetScore, PlayerDTO } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import { formatSlotTime } from '../../utils/timeUtils';
@@ -14,6 +14,12 @@ import { MatchScoreDialog } from '../tracking/MatchScoreDialog';
 import { BadmintonScoreDialog } from '../tracking/BadmintonScoreDialog';
 import { EditMatchDialog } from './EditMatchDialog';
 import { CourtSelectDialog } from './CourtSelectDialog';
+import { INTERACTIVE_BASE } from '../../lib/utils';
+
+// Shared button base used by every action pill on the match card:
+// transition + focus-visible ring + active scale + disabled not-allowed.
+// Kept terse so it composes cleanly with each action's colour classes.
+const ACTION_BTN = `${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium`;
 
 interface WorkflowPanelProps {
   matchesByStatus: {
@@ -141,15 +147,18 @@ function InProgressCard({
             <button
               onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
               disabled={updating}
-              className="px-2.5 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 disabled:bg-gray-400"
+              className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700`}
+              aria-label="Finish match and enter score"
             >
+              {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
               Finish
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); handleUndo(); }}
               disabled={updating}
-              className="px-2.5 py-1 bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300 disabled:bg-gray-100"
+              className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300`}
               title={wasMoved ? 'Undo and restore to original position' : 'Undo to called status'}
+              aria-label="Undo match state"
             >
               Undo
             </button>
@@ -427,34 +436,40 @@ function UpNextCard({
                   <button
                     onClick={(e) => { e.stopPropagation(); handleCheckInAll(); }}
                     disabled={updating}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:bg-gray-400"
+                    className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700`}
                     title={`Mark all ${missingPlayers.length} missing player${missingPlayers.length === 1 ? '' : 's'} as present`}
                     aria-label="Confirm all players present"
                   >
-                    <Check aria-hidden="true" className="h-3.5 w-3.5" />
+                    {updating
+                      ? <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
+                      : <Check aria-hidden="true" className="h-3.5 w-3.5" />}
                     Confirm all
                   </button>
                 )}
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowCourtDialog(true); }}
                   disabled={updating}
-                  className="px-2.5 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:bg-gray-400"
+                  className={`${ACTION_BTN} bg-green-600 text-white hover:bg-green-700`}
                   title={allPlayersConfirmed ? 'Start match' : 'Start — assumes all players present'}
+                  aria-label="Start match"
                 >
+                  {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
                   Start
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
                   disabled={updating}
-                  className="px-2.5 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 disabled:bg-gray-400"
+                  className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700`}
                   title="Enter score without tracking start/finish times"
+                  aria-label="Enter score"
                 >
                   Score
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleUndo(); }}
                   disabled={updating}
-                  className="px-2.5 py-1 bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300 disabled:bg-gray-100"
+                  className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300`}
+                  aria-label="Undo"
                 >
                   Undo
                 </button>
@@ -464,13 +479,14 @@ function UpNextCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); handleCall(); }}
                   disabled={updating || light === 'red'}
-                  className={`px-2.5 py-1 rounded text-xs font-medium ${
+                  className={[
+                    ACTION_BTN,
                     light === 'green'
-                      ? 'bg-gray-700 text-white hover:bg-gray-800 disabled:bg-gray-400'
+                      ? 'bg-gray-800 text-white hover:bg-gray-900'
                       : light === 'yellow'
-                        ? 'bg-yellow-500 text-white hover:bg-yellow-600 disabled:bg-gray-400'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
+                        ? 'bg-amber-500 text-white hover:bg-amber-600'
+                        : 'bg-gray-200 text-gray-400',
+                  ].join(' ')}
                   title={
                     light === 'yellow'
                       ? `Call anyway — ${trafficLight?.reason ?? 'player still resting'}`
@@ -478,32 +494,38 @@ function UpNextCard({
                         ? trafficLight?.reason ?? 'Blocked'
                         : 'Call match'
                   }
+                  aria-label="Call match"
                 >
+                  {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
                   Call
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
                   disabled={updating}
-                  className="px-2.5 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 disabled:bg-gray-400"
+                  className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700`}
                   title="Enter score directly — skips call / start"
+                  aria-label="Enter score"
                 >
                   Score
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); handlePostpone(); }}
                   disabled={updating}
-                  className={`px-2 py-1 rounded text-xs font-medium ${
+                  className={[
+                    ACTION_BTN,
                     matchState?.postponed
                       ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                      : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                  }`}
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+                  ].join(' ')}
+                  aria-pressed={Boolean(matchState?.postponed)}
                 >
                   {matchState?.postponed ? 'Restore' : 'Postpone'}
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowEditDialog(true); }}
                   disabled={updating}
-                  className="px-2 py-1 bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300 disabled:bg-gray-100"
+                  className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300`}
+                  aria-label="Edit match"
                 >
                   Edit
                 </button>
@@ -523,13 +545,16 @@ function UpNextCard({
                     <button
                       onClick={(e) => { e.stopPropagation(); handleConfirmPlayer(p.id); }}
                       disabled={updating}
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded font-medium transition-colors ${
+                      className={[
+                        INTERACTIVE_BASE,
+                        'inline-flex items-center gap-1 px-2 py-1 rounded font-medium',
                         isConfirmed
-                          ? 'bg-green-100 text-green-700 border border-green-300'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
-                      }`}
+                          ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200',
+                      ].join(' ')}
                       title={isConfirmed ? `${p.name} confirmed` : `Click to confirm ${p.name}`}
                       aria-label={isConfirmed ? `${p.name} confirmed present` : `Confirm ${p.name} present`}
+                      aria-pressed={isConfirmed}
                     >
                       {isConfirmed && (
                         <Check aria-hidden="true" className="h-3 w-3 flex-shrink-0" />
@@ -555,13 +580,16 @@ function UpNextCard({
                     <button
                       onClick={(e) => { e.stopPropagation(); handleConfirmPlayer(p.id); }}
                       disabled={updating}
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded font-medium transition-colors ${
+                      className={[
+                        INTERACTIVE_BASE,
+                        'inline-flex items-center gap-1 px-2 py-1 rounded font-medium',
                         isConfirmed
-                          ? 'bg-green-100 text-green-700 border border-green-300'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
-                      }`}
+                          ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200',
+                      ].join(' ')}
                       title={isConfirmed ? `${p.name} confirmed` : `Click to confirm ${p.name}`}
                       aria-label={isConfirmed ? `${p.name} confirmed present` : `Confirm ${p.name} present`}
+                      aria-pressed={isConfirmed}
                     >
                       {isConfirmed && (
                         <Check aria-hidden="true" className="h-3 w-3 flex-shrink-0" />

@@ -13,6 +13,8 @@ import { StaleBanner } from '../features/schedule/StaleBanner';
 import { computeConstraintViolations } from '../utils/constraintChecker';
 import { formatSlotTime } from '../utils/timeUtils';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Download } from 'lucide-react';
+import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig } from '../api/dto';
 
 type TableView = 'time' | 'court';
@@ -352,9 +354,15 @@ export function SchedulePage() {
                     onClick={() => void exportScheduleXlsx(schedule, matches, players, config)}
                     disabled={!schedule || schedule.assignments.length === 0}
                     data-testid="export-schedule"
-                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    title={
+                      !schedule || schedule.assignments.length === 0
+                        ? 'Generate a schedule first'
+                        : 'Download schedule as XLSX'
+                    }
+                    className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50`}
                   >
-                    ⤓ Export XLSX
+                    <Download aria-hidden="true" className="h-4 w-4" />
+                    Export XLSX
                   </button>
                   <ScheduleActions
                     onGenerate={handleGenerate}

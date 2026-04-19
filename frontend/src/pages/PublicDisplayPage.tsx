@@ -16,6 +16,7 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { formatSlotTime, parseMatchStartMs } from '../utils/timeUtils';
+import { INTERACTIVE_BASE } from '../lib/utils';
 
 type ViewMode = 'courts' | 'schedule' | 'standings';
 
@@ -199,11 +200,13 @@ export function PublicDisplayPage() {
   const progressPct = totalCount === 0 ? 0 : Math.round((finishedCount / totalCount) * 100);
 
   const tabClass = (mode: ViewMode) =>
-    `rounded-lg px-4 py-2 text-lg font-semibold transition-colors ${
+    [
+      INTERACTIVE_BASE,
+      'rounded-lg px-4 py-2 text-lg font-semibold',
       view === mode
-        ? 'bg-blue-600 text-white shadow'
-        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-    }`;
+        ? 'bg-blue-600 text-white shadow-inner'
+        : 'bg-slate-800 text-slate-300 hover:bg-slate-700',
+    ].join(' ');
 
   return (
     <div
@@ -457,7 +460,7 @@ function FullscreenButton({
       onClick={onToggle}
       data-testid="tv-fullscreen-toggle"
       title={`${isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} (F)`}
-      className={`inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 ${className}`}
+      className={`${INTERACTIVE_BASE} inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 ${className}`}
       aria-pressed={isFullscreen}
     >
       {isFullscreen ? (

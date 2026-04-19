@@ -6,11 +6,13 @@
  * snapshot on demand, and restores any backup with a confirmation step.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import type { BackupEntryDTO, ScheduleDTO, TournamentStateDTO } from '../../api/dto';
 import { useAppStore } from '../../store/appStore';
 import { parseScheduleXlsx, type ImportResult } from './importScheduleXlsx';
 import { ScheduleImportModal } from './ScheduleImportModal';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -195,8 +197,12 @@ export function BackupPanel() {
           onClick={handleCreate}
           disabled={busyAction !== null}
           data-testid="backup-create"
-          className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-busy={busyAction === 'create'}
+          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50`}
         >
+          {busyAction === 'create' && (
+            <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
+          )}
           {busyAction === 'create' ? 'Saving…' : 'Back up now'}
         </button>
       </div>
@@ -235,15 +241,19 @@ export function BackupPanel() {
                       type="button"
                       onClick={() => handleRestore(e.filename)}
                       disabled={busyAction !== null}
-                      className="rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700 disabled:opacity-50"
+                      aria-busy={busyAction === e.filename}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700`}
                     >
+                      {busyAction === e.filename && (
+                        <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
+                      )}
                       {busyAction === e.filename ? 'Restoring…' : 'Confirm'}
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmRestore(null)}
                       disabled={busyAction !== null}
-                      className="rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-600 hover:bg-gray-50"
+                      className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-50`}
                     >
                       Cancel
                     </button>
@@ -254,7 +264,7 @@ export function BackupPanel() {
                     onClick={() => setConfirmRestore(e.filename)}
                     disabled={busyAction !== null}
                     data-testid={`backup-restore-${e.filename}`}
-                    className="rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-50`}
                   >
                     Restore
                   </button>
@@ -278,7 +288,7 @@ export function BackupPanel() {
             onClick={() => fileInputRef.current?.click()}
             disabled={busyAction !== null}
             data-testid="schedule-import-open"
-            className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50`}
           >
             Recover from XLSX…
           </button>

@@ -1,3 +1,6 @@
+import { Loader2 } from 'lucide-react';
+import { INTERACTIVE_BASE } from '../../lib/utils';
+
 interface ScheduleActionsProps {
   onGenerate: () => void;
   onReoptimize: () => void;
@@ -7,6 +10,8 @@ interface ScheduleActionsProps {
   /** When true, the Generate button enters a "are-you-sure?" inline state. */
   confirmingReplace?: boolean;
 }
+
+const BTN = `${INTERACTIVE_BASE} inline-flex items-center gap-2 rounded px-3 py-1.5 text-sm font-medium`;
 
 export function ScheduleActions({
   onGenerate,
@@ -24,15 +29,17 @@ export function ScheduleActions({
         onClick={onGenerate}
         disabled={generating}
         data-testid="schedule-generate"
+        aria-busy={generating}
         className={[
-          'rounded px-3 py-1.5 text-sm font-medium transition-colors',
+          BTN,
           generating
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            ? 'bg-gray-100 text-gray-500'
             : confirming
               ? 'bg-red-600 text-white hover:bg-red-700 motion-safe:animate-pulse'
               : 'bg-blue-600 text-white hover:bg-blue-700',
         ].join(' ')}
       >
+        {generating && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
         {generating
           ? 'Generating…'
           : confirming
@@ -46,13 +53,15 @@ export function ScheduleActions({
           type="button"
           onClick={onReoptimize}
           disabled={reoptimizing}
+          aria-busy={reoptimizing}
           className={[
-            'rounded px-3 py-1.5 text-sm font-medium transition-colors',
+            BTN,
             reoptimizing
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              ? 'bg-gray-100 text-gray-500'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
           ].join(' ')}
         >
+          {reoptimizing && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
           {reoptimizing ? 'Optimizing…' : 'Re-optimize'}
         </button>
       )}

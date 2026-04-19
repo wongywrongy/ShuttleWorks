@@ -3,7 +3,9 @@
  * Simple, compact score entry dialog (used when scoringFormat is 'simple').
  */
 import { useEffect, useId, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Modal } from '../../components/common/Modal';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 
 interface MatchScoreDialogProps {
   matchName: string;
@@ -109,15 +111,17 @@ export function MatchScoreDialog({
             type="button"
             onClick={onCancel}
             disabled={isSubmitting}
-            className="flex-1 px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50"
+            className={`${INTERACTIVE_BASE} flex-1 rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-200`}
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting || !canSubmit}
-            className="flex-1 px-3 py-1.5 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-300 font-medium"
+            aria-busy={isSubmitting}
+            className={`${INTERACTIVE_BASE} inline-flex flex-1 items-center justify-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700`}
           >
+            {isSubmitting && <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
             {isSubmitting ? 'Saving…' : 'Done'}
           </button>
         </div>

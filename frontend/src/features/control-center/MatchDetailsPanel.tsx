@@ -3,6 +3,7 @@
  */
 import { useMemo, useState } from 'react';
 import { ChevronRight, Pencil } from 'lucide-react';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
 import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, SetScore, TournamentConfig } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
@@ -206,7 +207,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={() => setShowEditScore(true)}
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-50"
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-50`}
                   title="Edit score"
                   aria-label="Edit score"
                 >

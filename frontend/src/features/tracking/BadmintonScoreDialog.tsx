@@ -6,8 +6,9 @@
  * and fits on laptop screens without horizontal scroll.
  */
 import { useId, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { Modal } from '../../components/common/Modal';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { SetScore } from '../../api/dto';
 
 interface BadmintonScoreDialogProps {
@@ -312,15 +313,17 @@ export function BadmintonScoreDialog({
               type="button"
               onClick={onCancel}
               disabled={isSubmitting}
-              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50`}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting || !matchWinner}
-              className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
+              aria-busy={isSubmitting}
+              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700`}
             >
+              {isSubmitting && <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
               {isSubmitting ? 'Saving…' : 'Save & Finish'}
             </button>
           </div>

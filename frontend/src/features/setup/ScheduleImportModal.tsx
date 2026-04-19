@@ -8,7 +8,9 @@
  *     replaces the entire tournament state.
  */
 import { useId } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Modal } from '../../components/common/Modal';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { ImportResult, ImportWarning } from './importScheduleXlsx';
 
 interface Props {
@@ -106,7 +108,7 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50`}
           >
             Cancel
           </button>
@@ -115,8 +117,10 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
             onClick={onApply}
             disabled={!canApply}
             data-testid="schedule-import-apply"
-            className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+            aria-busy={busy}
+            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700`}
           >
+            {busy && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
             {busy ? 'Applying…' : applyLabel}
           </button>
         </div>
