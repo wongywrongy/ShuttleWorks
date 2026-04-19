@@ -14,14 +14,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
-import { formatSlotTime } from '../utils/timeUtils';
+import { formatSlotTime, parseMatchStartMs } from '../utils/timeUtils';
 
 type ViewMode = 'courts' | 'schedule' | 'standings';
 
 function formatElapsed(startIso: string | undefined): string | null {
-  if (!startIso) return null;
-  const started = new Date(startIso).getTime();
-  if (Number.isNaN(started)) return null;
+  const started = parseMatchStartMs(startIso);
+  if (started === null) return null;
   const secs = Math.max(0, Math.floor((Date.now() - started) / 1000));
   const m = Math.floor(secs / 60);
   const s = secs % 60;

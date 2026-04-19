@@ -198,6 +198,39 @@ export function timeToSlot(time: string, config: TournamentConfig): number {
 export const slotToTime = formatSlotTime;
 
 /**
+ * Parse a match's actualStartTime / actualEndTime into an epoch ms value.
+ *
+ * The canonical format written by useLiveTracking is ISO-8601 UTC
+ * (e.g. ``2026-04-19T18:05:37.000Z``) so the primary path is
+ * ``Date.parse``. A one-release fallback handles legacy ``HH:MM`` values
+ * from pre-ISO tournaments: assume "today in the browser's local time
+ * zone" and warn once so the drift is visible. The fallback can be
+ * removed after a deploy cycle.
+ */
+export function parseMatchStartMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const asIso = Date.parse(value);
+  if (!Number.isNaN(asIso)) return asIso;
+
+  const m = /^(\d{2}):(\d{2})$/.exec(value.trim());
+  if (m) {
+    const hh = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[parseMatchStartMs] legacy HH:MM timestamp detected (%s); assuming today local — upgrade writer to ISO',
+        value,
+      );
+      const d = new Date();
+      d.setHours(hh, mm, 0, 0);
+      return d.getTime();
+    }
+  }
+  return null;
+}
+
+/**
  * Get status badge color
  */
 export function getStatusColor(status: MatchStateDTO['status']): string {

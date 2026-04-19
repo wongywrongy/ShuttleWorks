@@ -154,11 +154,10 @@ export function useLiveTracking() {
         throw new Error(`Invalid state transition: cannot go from '${currentStatus}' to '${status}'`);
       }
 
-      const now = new Date().toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
+      // ISO-8601 UTC — parsed by parseMatchStartMs on every reader.
+      // Do NOT switch to a locale-dependent format: ElapsedTimer and the
+      // TV PublicDisplayPage both assume a canonical timestamp shape.
+      const now = new Date().toISOString();
 
       const newState: MatchStateDTO = {
         ...currentState,
@@ -202,11 +201,7 @@ export function useLiveTracking() {
         status: 'finished',
         score,
         notes,
-        actualEndTime: new Date().toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }),
+        actualEndTime: new Date().toISOString(),
       });
       setMatchState(matchId, updated);
     } catch (error) {
