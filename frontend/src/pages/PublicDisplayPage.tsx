@@ -381,89 +381,101 @@ export function PublicDisplayPage() {
       </div>
 
       <div className="px-6 pb-28 pt-6">
-        {/* ---------- Courts view ---------------------------------------- */}
+        {/* ---------- Courts view ----------------------------------------
+         *
+         * Each court gets one compact horizontal strip. Courts are
+         * peers — they run in parallel, never in conflict with each
+         * other — so the visual metaphor is a set of independent
+         * rails, not a deck of layered cards. Two-column grid on wide
+         * screens halves the vertical footprint so a 6+ court
+         * tournament still fits above the fold on a 1080p TV.
+         */}
         {view === 'courts' && (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-2 lg:grid-cols-2">
             {courtMatches.map(({ courtId, match, state, status }) => {
               const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
-              const borderClass =
+              const accentClass =
                 status === 'active'
-                  ? 'border-emerald-500/80 bg-emerald-950/40'
+                  ? 'border-l-emerald-500 bg-gradient-to-r from-emerald-950/60 to-slate-900/60'
                   : status === 'called'
-                    ? 'border-amber-400/80 bg-amber-950/40'
-                    : 'border-slate-800 bg-slate-900/40';
-              // Aggregate score — shown whichever scoring format is in
-              // use so the audience can see the running state on TV.
+                    ? 'border-l-amber-400 bg-gradient-to-r from-amber-950/60 to-slate-900/60'
+                    : 'border-l-slate-700 bg-slate-900/40';
               const aggregate = state?.score
                 ? `${state.score.sideA}–${state.score.sideB}`
                 : null;
+
               return (
                 <div
                   key={courtId}
-                  className={`rounded-2xl border-2 p-6 shadow-lg transition ${borderClass}`}
+                  className={`rounded-xl border-l-4 border-y border-r border-y-slate-800 border-r-slate-800 shadow-lg ${accentClass}`}
                 >
-                  <div className="flex items-baseline justify-between">
-                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      Court
-                    </div>
-                    <div className="text-5xl font-black tabular-nums leading-none">
-                      {courtId}
-                    </div>
-                  </div>
-                  <div className="mt-4 min-h-[7.5rem]">
-                    {match ? (
-                      <>
-                        <div className="text-2xl font-bold text-slate-100">
-                          {match.eventRank || `M${match.matchNumber || '?'}`}
-                        </div>
-                        <div className="mt-2 space-y-1 text-xl leading-tight text-slate-100">
-                          <div className="truncate" title={formatPlayers(match.sideA)}>
-                            {formatPlayers(match.sideA)}
-                          </div>
-                          <div className="text-sm uppercase tracking-widest text-slate-500">
-                            vs
-                          </div>
-                          <div className="truncate" title={formatPlayers(match.sideB)}>
-                            {formatPlayers(match.sideB)}
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-lg text-slate-500">
-                        Available
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-4 flex items-center justify-between">
-                    {status === 'called' && (
-                      <span className="inline-flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 text-sm font-bold uppercase tracking-wider text-amber-300">
-                        <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                        Now Calling
+                  <div className="grid items-center gap-3 px-4 py-3 grid-cols-[auto_auto_1fr_auto_auto]">
+                    {/* Court number — anchor of the strip */}
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        Court
                       </span>
-                    )}
-                    {status === 'active' && (
-                      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3 py-1 text-sm font-bold uppercase tracking-wider text-emerald-300">
-                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                        In Progress
+                      <span className="text-4xl font-black tabular-nums leading-none">
+                        {courtId}
                       </span>
-                    )}
-                    <div className="flex items-center gap-3">
-                      {status === 'active' && aggregate && (
-                        <span className="tabular-nums text-lg font-semibold text-slate-100">
-                          {aggregate}
+                    </div>
+
+                    {/* Event code */}
+                    <div className="min-w-[3.5rem] text-xl font-bold text-slate-200 tabular-nums">
+                      {match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
+                    </div>
+
+                    {/* Players (grows) */}
+                    <div className="min-w-0 text-xl leading-tight text-slate-100">
+                      {match ? (
+                        <div className="truncate" title={`${formatPlayers(match.sideA)} vs ${formatPlayers(match.sideB)}`}>
+                          {formatPlayers(match.sideA)}
+                          <span className="mx-2 text-sm uppercase tracking-widest text-slate-500">vs</span>
+                          {formatPlayers(match.sideB)}
+                        </div>
+                      ) : (
+                        <span className="text-slate-500">Available</span>
+                      )}
+                    </div>
+
+                    {/* Status pill */}
+                    <div>
+                      {status === 'active' && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-emerald-300">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Live
                         </span>
                       )}
+                      {status === 'called' && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-amber-300">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          Calling
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Score + elapsed (tabular so vertical alignment stays steady) */}
+                    <div className="flex items-baseline gap-3 tabular-nums">
+                      {aggregate && (
+                        <span className="text-lg font-semibold text-slate-100">{aggregate}</span>
+                      )}
                       {elapsed && (
-                        <span className="tabular-nums text-lg text-slate-300">{elapsed}</span>
+                        <span className="text-lg text-slate-300 min-w-[3.5rem] text-right">
+                          {elapsed}
+                        </span>
                       )}
                     </div>
                   </div>
+
+                  {/* Per-set breakdown lives inside the strip so the
+                      card doesn't change geometry between sets and a
+                      long badminton match doesn't push neighbours. */}
                   {status === 'active' && state?.sets && state.sets.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2 text-base font-mono">
+                    <div className="border-t border-slate-800/60 px-4 py-1.5 flex flex-wrap gap-1.5 text-sm font-mono">
                       {state.sets.map((s, i) => (
                         <span
                           key={i}
-                          className="rounded bg-slate-800 px-2 py-1 tabular-nums text-slate-200"
+                          className="rounded bg-slate-800 px-1.5 py-0.5 tabular-nums text-slate-200"
                           title={`Set ${i + 1}`}
                         >
                           {s.sideA}–{s.sideB}
