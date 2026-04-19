@@ -135,6 +135,36 @@ def test_reset_empties_the_file(client):
     assert client.get("/match-states").json() == {}
 
 
+def test_match_state_file_is_integrity_stamped(client, tmp_path):
+    """Writes go through the shared atomic_write_json helper, which
+    injects a SHA-256 _integrity field into every payload."""
+    client.put("/match-states/m1", json=_ok_state("m1", "called"))
+    with open(tmp_path / "match_states.json") as f:
+        raw = json.load(f)
+    assert "_integrity" in raw
+    assert len(raw["_integrity"]) == 64
+
+
+def test_match_state_tamper_recovers_from_backup(client, tmp_path):
+    """A hand-edit that doesn't update the checksum triggers recovery
+    of the prior snapshot."""
+    client.put("/match-states/m1", json=_ok_state("m1", "called"))
+    client.put("/match-states/m1", json=_ok_state("m1", "started"))
+
+    # Tamper with the live file.
+    with open(tmp_path / "match_states.json") as f:
+        raw = json.load(f)
+    raw["matchStates"]["m1"]["status"] = "finished"  # desync vs checksum
+    with open(tmp_path / "match_states.json", "w") as f:
+        json.dump(raw, f)
+
+    # Read recovers from the most recent un-tampered backup.
+    r = client.get("/match-states")
+    assert r.status_code == 200
+    # 'started' was the last clean state before the tamper.
+    assert r.json()["m1"]["status"] in {"called", "started"}
+
+
 def test_delete_removes_match(client):
     client.put("/match-states/m1", json=_ok_state("m1", "called"))
     r = client.delete("/match-states/m1")

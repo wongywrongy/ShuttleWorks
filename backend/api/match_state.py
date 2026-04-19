@@ -138,28 +138,20 @@ def _read_state_file() -> TournamentStateFile:
 def _write_state_file(state: TournamentStateFile) -> None:
     """Atomic write + rolling backup.
 
-    Writes ``match_states.json.tmp`` first, then ``os.replace`` onto the
-    live path (atomic on POSIX + Windows ≥ Vista). Backup rotation
-    happens AFTER the successful replace so the previous state only
-    disappears once the new one is durable.
+    Delegates to ``_backups.atomic_write_json`` which: stamps a SHA-256
+    integrity field, writes to ``.tmp``, ``fsync()``s the fd, ``os.replace``
+    atomically onto the live file, then ``fsync()``s the containing
+    directory for full durability across power loss. Rolling backup
+    rotation happens AFTER the successful replace so the previous
+    state only disappears once the new one is durable.
     """
     _ensure_dir()
     state.lastUpdated = _now_iso()
-
     path = _state_path()
-    tmp = path.with_suffix(".tmp")
 
     try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(state.model_dump(), f, indent=2, ensure_ascii=False)
-        # Atomic rename onto live file.
-        os.replace(tmp, path)
+        _backups.atomic_write_json(path, state.model_dump())
     except OSError as e:
-        if tmp.exists():
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
         log.error("match-state write failed: %s", e)
         raise HTTPException(
             status_code=500, detail="could not persist match state"

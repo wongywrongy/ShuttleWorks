@@ -8,7 +8,6 @@ If the live file is unreadable, GET auto-restores the most recent backup
 and surfaces ``recoveredFromBackup: true`` in the payload so the UI can
 notify the operator.
 """
-import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -133,17 +132,9 @@ async def put_tournament_state(state: TournamentStateDTO):
         # Backups are best-effort — don't block saving because of them.
         log.warning("backup rotation failed: %s", e)
 
-    tmp = path.with_suffix(".tmp")
     try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(stamped.model_dump(), f, indent=2, ensure_ascii=False)
-        os.replace(tmp, path)  # atomic on POSIX
+        _backups.atomic_write_json(path, stamped.model_dump())
     except OSError as e:
-        if tmp.exists():
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
         log.error("tournament-state write failed: %s", e)
         raise HTTPException(status_code=500, detail="could not persist tournament state")
     return stamped

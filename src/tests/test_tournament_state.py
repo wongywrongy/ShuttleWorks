@@ -285,6 +285,101 @@ def test_put_rejects_malformed_time(client):
     assert r.status_code == 422
 
 
+def test_integrity_field_present_after_put(client, tmp_path):
+    """Every PUT should stamp the on-disk file with _integrity SHA-256."""
+    payload = {"version": 1, "groups": [{"id": "g1", "name": "UCSC"}],
+               "players": [], "matches": [], "scheduleIsStale": False}
+    r = client.put("/tournament/state", json=payload)
+    assert r.status_code == 200
+
+    with open(tmp_path / "tournament.json") as f:
+        raw = json.load(f)
+    assert "_integrity" in raw
+    assert isinstance(raw["_integrity"], str)
+    assert len(raw["_integrity"]) == 64  # SHA-256 hex digest
+
+
+def test_legacy_file_without_integrity_still_loads(client, tmp_path):
+    """Backwards compat: files written by older builds had no integrity
+    field — they must continue to load unchanged."""
+    legacy = {
+        "version": 1,
+        "groups": [{"id": "g1", "name": "LEGACY"}],
+        "players": [], "matches": [], "scheduleIsStale": False,
+    }
+    (tmp_path / "tournament.json").write_text(json.dumps(legacy))
+    r = client.get("/tournament/state")
+    assert r.status_code == 200
+    assert r.json()["groups"][0]["name"] == "LEGACY"
+    # No recovery should have triggered.
+    assert "recoveredFromBackup" not in r.json()
+
+
+def test_tampered_integrity_triggers_backup_recovery(client, tmp_path):
+    """If someone edits the live file by hand, the checksum mismatches
+    and recovery kicks in."""
+    good = {"version": 1, "groups": [{"id": "g1", "name": "GOOD"}],
+            "players": [], "matches": [], "scheduleIsStale": False}
+    client.put("/tournament/state", json=good)
+    client.put("/tournament/state", json=good)
+
+    # Edit the live file so its stored checksum no longer matches.
+    with open(tmp_path / "tournament.json") as f:
+        raw = json.load(f)
+    raw["groups"][0]["name"] = "TAMPERED"
+    # Leave the stored _integrity field as-is so it mismatches.
+    with open(tmp_path / "tournament.json", "w") as f:
+        json.dump(raw, f)
+
+    r = client.get("/tournament/state")
+    assert r.status_code == 200
+    body = r.json()
+    # Recovery from the most recent backup — backup still says GOOD.
+    assert body["groups"][0]["name"] == "GOOD"
+    assert "recoveredFromBackup" in body
+
+
+def test_truncated_file_triggers_backup_recovery(client, tmp_path):
+    """A file that parses as partial JSON fails both the parser AND the
+    integrity check — recovery picks up from the backup."""
+    good = {"version": 1, "groups": [{"id": "g1", "name": "GOOD"}],
+            "players": [], "matches": [], "scheduleIsStale": False}
+    client.put("/tournament/state", json=good)
+    client.put("/tournament/state", json=good)
+
+    # Truncate the file to the first 40 bytes — partial JSON.
+    original = (tmp_path / "tournament.json").read_text()
+    (tmp_path / "tournament.json").write_text(original[:40])
+
+    r = client.get("/tournament/state")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["groups"][0]["name"] == "GOOD"
+    assert "recoveredFromBackup" in body
+
+
+def test_integrity_stable_across_key_order(client, tmp_path):
+    """The checksum uses sort_keys=True, so re-ordering keys outside
+    the server doesn't break validation on the next read."""
+    payload = {"version": 1, "groups": [{"id": "g1", "name": "X"}],
+               "players": [], "matches": [], "scheduleIsStale": False}
+    client.put("/tournament/state", json=payload)
+
+    # Rewrite the file with a fresh dump (different key order may come
+    # out of json.load → json.dump) but keep the same _integrity field.
+    with open(tmp_path / "tournament.json") as f:
+        raw = json.load(f)
+    # Force a visibly different key order.
+    reordered = {k: raw[k] for k in sorted(raw.keys(), reverse=True)}
+    with open(tmp_path / "tournament.json", "w") as f:
+        json.dump(reordered, f)
+
+    # Read back — integrity check must pass because the hash uses
+    # sort_keys and is independent of on-disk order.
+    r = client.get("/tournament/state")
+    assert r.status_code == 200
+
+
 def test_put_rejects_bad_scoring_format(client):
     """scoringFormat is a Literal; unknown values must 422."""
     payload = {

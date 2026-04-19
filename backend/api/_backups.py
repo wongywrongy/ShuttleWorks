@@ -14,6 +14,7 @@ recent *readable* backup.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -25,6 +26,16 @@ from typing import Callable, Iterator, List, Optional, Tuple
 KEEP = 10  # rolling window size per stem
 
 log = logging.getLogger("scheduler.backups")
+
+# Field name inserted at the top level of every persisted payload. Its
+# value is the SHA-256 of the payload JSON with the checksum field
+# removed and replaced by the literal string ``"<pending>"`` (so the
+# hash is deterministic regardless of how the serialiser orders keys
+# relative to the checksum slot). Chosen to be underscore-prefixed so
+# it sorts out-of-the-way and is unlikely to collide with a real
+# domain key.
+INTEGRITY_FIELD = "_integrity"
+INTEGRITY_PLACEHOLDER = "<pending>"
 
 
 def backup_dir(data_dir: Path) -> Path:
@@ -161,6 +172,100 @@ def restore_backup(data_dir: Path, live_path: Path, filename: str) -> Path:
     return live_path
 
 
+def _compute_integrity(payload: dict) -> str:
+    """SHA-256 over the payload with the integrity field stubbed out.
+
+    The checksum must be deterministic regardless of where the key
+    lands in a JSON document, so we temporarily replace it with a
+    fixed placeholder before hashing. Uses sort_keys=True so dict
+    iteration order doesn't affect the hash.
+    """
+    stubbed = {**payload, INTEGRITY_FIELD: INTEGRITY_PLACEHOLDER}
+    canonical = json.dumps(stubbed, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def stamp_integrity(payload: dict) -> dict:
+    """Return ``payload`` with ``INTEGRITY_FIELD`` set to its SHA-256.
+
+    Mutates a shallow copy, not the original. Callers write this to
+    disk so a later reader can detect truncation, corruption, or tamper
+    even when the JSON still parses.
+    """
+    stamped = {**payload, INTEGRITY_FIELD: _compute_integrity(payload)}
+    return stamped
+
+
+def verify_integrity(payload: dict) -> Optional[str]:
+    """Check the payload's ``INTEGRITY_FIELD`` against its recomputed
+    SHA-256. Returns None on success, or a short reason string on
+    failure.
+
+    Backwards-compatible: a payload with no integrity field is treated
+    as valid — older files written before the integrity stamp landed
+    must continue to load. A failure is reported only when a field is
+    present but doesn't match the computed hash.
+    """
+    claimed = payload.get(INTEGRITY_FIELD)
+    if claimed is None:
+        return None  # legacy file; treat as valid
+    if not isinstance(claimed, str):
+        return "non-string integrity field"
+    stripped = {k: v for k, v in payload.items() if k != INTEGRITY_FIELD}
+    expected = _compute_integrity(stripped)
+    if expected != claimed:
+        return "checksum mismatch"
+    return None
+
+
+def atomic_write_json(live_path: Path, payload: dict) -> None:
+    """Write ``payload`` to ``live_path`` atomically with full durability.
+
+    The steps:
+      1. Stamp ``INTEGRITY_FIELD`` onto the payload so readers can
+         detect corruption beyond JSON-parse errors.
+      2. Serialise to a sibling ``.tmp`` file under the live path's
+         parent (so the rename stays on the same filesystem).
+      3. ``flush()`` + ``os.fsync()`` on the tmp fd so the data is on
+         disk — not just in the kernel buffer — before we swap.
+      4. ``os.replace`` for the atomic rename.
+      5. ``fsync`` the containing directory so the rename itself is
+         durable across a power loss.
+
+    Leaves the tmp file cleaned up on any error path.
+    """
+    stamped = stamp_integrity(payload)
+    tmp = live_path.with_suffix(live_path.suffix + ".tmp")
+    try:
+        # ``os.open`` + fd instead of ``open()`` so we can fsync cleanly.
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            data = json.dumps(stamped, indent=2, ensure_ascii=False).encode("utf-8")
+            os.write(fd, data)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, live_path)
+        # Best-effort dir fsync so the rename entry is durable too.
+        try:
+            dir_fd = os.open(live_path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            # Some filesystems (e.g. tmpfs, some Windows setups) don't
+            # support dir fsync. The rename itself is still atomic.
+            pass
+    except OSError:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+        raise
+
+
 def read_with_recovery(
     data_dir: Path,
     live_path: Path,
@@ -176,19 +281,34 @@ def read_with_recovery(
     and ``ValueError`` when *every* candidate fails to parse.
     """
     parser = parse or (lambda b: json.loads(b.decode("utf-8")))
+
+    def try_parse(p: Path) -> dict:
+        """Parse + verify integrity. Raises ValueError on either
+        malformed JSON or a present-but-mismatched checksum."""
+        with open(p, "rb") as f:
+            payload = parser(f.read())
+        if not isinstance(payload, dict):
+            raise ValueError(f"{p.name}: payload is not a JSON object")
+        mismatch = verify_integrity(payload)
+        if mismatch is not None:
+            raise ValueError(f"{p.name}: {mismatch}")
+        # Strip the integrity field before returning so downstream
+        # Pydantic models and migration code don't have to know about
+        # it. Legacy files without the field are returned as-is.
+        payload.pop(INTEGRITY_FIELD, None)
+        return payload
+
     # 1. Try the live file first.
     if live_path.exists():
         try:
-            with open(live_path, "rb") as f:
-                return parser(f.read()), None
+            return try_parse(live_path), None
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
             log.warning("live %s unreadable (%s); falling back to backups", live_path.name, e)
     # 2. Iterate backups newest → oldest; promote the first readable one.
     errors: List[str] = []
     for candidate in iter_backups_by_mtime_desc(data_dir, live_path.stem):
         try:
-            with open(candidate, "rb") as f:
-                payload = parser(f.read())
+            payload = try_parse(candidate)
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError, OSError) as e:
             errors.append(f"{candidate.name}: {e}")
             log.warning("backup %s unreadable (%s); trying next", candidate.name, e)
