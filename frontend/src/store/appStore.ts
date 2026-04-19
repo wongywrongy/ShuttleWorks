@@ -283,7 +283,32 @@ export const useAppStore = create<AppState>()(
       // Edits no longer nuke the schedule — they mark it stale. The stored
       // schedule remains visible (with a "stale" banner) until the user
       // explicitly re-solves or dismisses.
-      setConfig: (config) => set({ config, scheduleIsStale: true }),
+      //
+      // Scoring-only fields (scoringFormat, setsToWin, pointsPerSet,
+      // deuceEnabled) don't affect the solver — changing them should not
+      // flag the schedule as stale. Only diff across scheduling-relevant
+      // fields before toggling the stale bit.
+      setConfig: (config) =>
+        set((state) => {
+          const prev = state.config;
+          if (!prev) return { config, scheduleIsStale: state.scheduleIsStale };
+          const SCORING_ONLY_KEYS: Array<keyof TournamentConfig> = [
+            'scoringFormat',
+            'setsToWin',
+            'pointsPerSet',
+            'deuceEnabled',
+          ];
+          const changedKeys = (Object.keys(config) as Array<keyof TournamentConfig>).filter(
+            (k) => JSON.stringify(config[k]) !== JSON.stringify(prev[k]),
+          );
+          const schedulingFieldsChanged = changedKeys.some(
+            (k) => !SCORING_ONLY_KEYS.includes(k),
+          );
+          return {
+            config,
+            scheduleIsStale: schedulingFieldsChanged ? true : state.scheduleIsStale,
+          };
+        }),
 
       // Group actions
       addGroup: (group) =>
