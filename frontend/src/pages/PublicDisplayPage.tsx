@@ -391,7 +391,18 @@ export function PublicDisplayPage() {
          * tournament still fits above the fold on a 1080p TV.
          */}
         {view === 'courts' && (
-          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-2 lg:grid-cols-2">
+          // Single-column layout in every mode. Each court is its own
+          // rail; the reason we tried two columns earlier was purely
+          // vertical density, but the cost is truncated doubles names.
+          // Fullscreen mode bumps type sizes and lets long names wrap
+          // onto two lines instead of clipping with ellipsis.
+          <div
+            className={
+              isFullscreen
+                ? 'mx-auto flex max-w-[120rem] flex-col gap-3'
+                : 'mx-auto flex max-w-6xl flex-col gap-2'
+            }
+          >
             {courtMatches.map(({ courtId, match, state, status }) => {
               const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
               const accentClass =
@@ -403,35 +414,54 @@ export function PublicDisplayPage() {
               const aggregate = state?.score
                 ? `${state.score.sideA}–${state.score.sideB}`
                 : null;
+              const sideA = match ? formatPlayers(match.sideA) : '';
+              const sideB = match ? formatPlayers(match.sideB) : '';
 
               return (
                 <div
                   key={courtId}
                   className={`rounded-xl border-l-4 border-y border-r border-y-slate-800 border-r-slate-800 shadow-lg ${accentClass}`}
                 >
-                  <div className="grid items-center gap-3 px-4 py-3 grid-cols-[auto_auto_1fr_auto_auto]">
+                  <div
+                    className={`grid items-center gap-3 px-4 ${isFullscreen ? 'py-5' : 'py-3'} grid-cols-[auto_auto_1fr_auto_auto]`}
+                  >
                     {/* Court number — anchor of the strip */}
                     <div className="flex items-baseline gap-2">
                       <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                         Court
                       </span>
-                      <span className="text-4xl font-black tabular-nums leading-none">
+                      <span
+                        className={`${isFullscreen ? 'text-6xl' : 'text-4xl'} font-black tabular-nums leading-none`}
+                      >
                         {courtId}
                       </span>
                     </div>
 
                     {/* Event code */}
-                    <div className="min-w-[3.5rem] text-xl font-bold text-slate-200 tabular-nums">
+                    <div
+                      className={`min-w-[3.5rem] ${isFullscreen ? 'text-3xl' : 'text-xl'} font-bold text-slate-200 tabular-nums`}
+                    >
                       {match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
                     </div>
 
-                    {/* Players (grows) */}
-                    <div className="min-w-0 text-xl leading-tight text-slate-100">
+                    {/* Players (grows). Always rendered on their own
+                        lines so long doubles names never truncate —
+                        there's plenty of horizontal room in the single-
+                        column layout, and an operator watching the
+                        scoreboard from across a gym must be able to
+                        read every name in full. */}
+                    <div
+                      className={`min-w-0 ${isFullscreen ? 'text-3xl' : 'text-xl'} leading-tight text-slate-100`}
+                    >
                       {match ? (
-                        <div className="truncate" title={`${formatPlayers(match.sideA)} vs ${formatPlayers(match.sideB)}`}>
-                          {formatPlayers(match.sideA)}
-                          <span className="mx-2 text-sm uppercase tracking-widest text-slate-500">vs</span>
-                          {formatPlayers(match.sideB)}
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-medium">{sideA}</span>
+                          <span
+                            className={`${isFullscreen ? 'text-sm' : 'text-xs'} uppercase tracking-widest text-slate-500`}
+                          >
+                            vs
+                          </span>
+                          <span className="font-medium">{sideB}</span>
                         </div>
                       ) : (
                         <span className="text-slate-500">Available</span>
@@ -441,13 +471,17 @@ export function PublicDisplayPage() {
                     {/* Status pill */}
                     <div>
                       {status === 'active' && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-emerald-300">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-emerald-300`}
+                        >
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                           Live
                         </span>
                       )}
                       {status === 'called' && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-amber-300">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-amber-300`}
+                        >
                           <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
                           Calling
                         </span>
@@ -455,12 +489,12 @@ export function PublicDisplayPage() {
                     </div>
 
                     {/* Score + elapsed (tabular so vertical alignment stays steady) */}
-                    <div className="flex items-baseline gap-3 tabular-nums">
+                    <div className={`flex items-baseline gap-3 tabular-nums ${isFullscreen ? 'text-2xl' : 'text-lg'}`}>
                       {aggregate && (
-                        <span className="text-lg font-semibold text-slate-100">{aggregate}</span>
+                        <span className="font-semibold text-slate-100">{aggregate}</span>
                       )}
                       {elapsed && (
-                        <span className="text-lg text-slate-300 min-w-[3.5rem] text-right">
+                        <span className="text-slate-300 min-w-[4.5rem] text-right">
                           {elapsed}
                         </span>
                       )}
@@ -471,11 +505,13 @@ export function PublicDisplayPage() {
                       card doesn't change geometry between sets and a
                       long badminton match doesn't push neighbours. */}
                   {status === 'active' && state?.sets && state.sets.length > 0 && (
-                    <div className="border-t border-slate-800/60 px-4 py-1.5 flex flex-wrap gap-1.5 text-sm font-mono">
+                    <div
+                      className={`border-t border-slate-800/60 px-4 ${isFullscreen ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} flex flex-wrap gap-1.5 font-mono`}
+                    >
                       {state.sets.map((s, i) => (
                         <span
                           key={i}
-                          className="rounded bg-slate-800 px-1.5 py-0.5 tabular-nums text-slate-200"
+                          className={`rounded bg-slate-800 ${isFullscreen ? 'px-2.5 py-1' : 'px-1.5 py-0.5'} tabular-nums text-slate-200`}
                           title={`Set ${i + 1}`}
                         >
                           {s.sideA}–{s.sideB}
