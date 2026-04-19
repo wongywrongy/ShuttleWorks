@@ -128,6 +128,56 @@ export function GanttChart({
     return byCourtMap;
   }, [schedule.assignments, config, config.courtCount, matchStates]);
 
+  // Horizontal sub-lane packing. When matches on the same court
+  // overlap in time (e.g. a late-starting match drifts into the next
+  // scheduled slot), we keep the court row at its normal 32 px height
+  // and split the overlap window *horizontally* — each overlapping
+  // block gets 1/N of the slot width and sits side-by-side. No lane
+  // is hidden; labels truncate a bit under overlap but every match is
+  // reachable. Classic interval-partitioning, but assigning X offsets
+  // instead of Y.
+  const packing = useMemo(() => {
+    const laneByMatchId = new Map<string, number>();
+    const groupSizeByMatchId = new Map<string, number>();
+    courtAssignments.forEach((assignments) => {
+      // Walk the sorted list, tracking an active overlap group. When
+      // a block starts after every currently-placed block has ended,
+      // flush the group (stamp each member with the group size it
+      // belonged to) and start a new one.
+      let active: { matchId: string; lane: number; end: number }[] = [];
+      const flush = () => {
+        const size = active.length;
+        for (const a of active) groupSizeByMatchId.set(a.matchId, size);
+        active = [];
+      };
+      for (const a of assignments) {
+        const r = getRenderSlot(a, matchStates[a.matchId], config);
+        const start = r.slotId;
+        const end = start + r.durationSlots;
+        // Prune anyone who has finished before this block starts —
+        // they're done colliding with anything from here on.
+        active = active.filter((x) => x.end > start);
+        if (active.length === 0) flush();
+        // Pick the smallest unused lane index in the current group.
+        const used = new Set(active.map((x) => x.lane));
+        let lane = 0;
+        while (used.has(lane)) lane++;
+        laneByMatchId.set(a.matchId, lane);
+        active.push({ matchId: a.matchId, lane, end });
+      }
+      flush();
+      // Any members that shared a group with someone but never flushed
+      // because they had no prune event still need their group size;
+      // set to max lane used + 1 as a fallback.
+      for (const a of assignments) {
+        if (!groupSizeByMatchId.has(a.matchId)) {
+          groupSizeByMatchId.set(a.matchId, (laneByMatchId.get(a.matchId) ?? 0) + 1);
+        }
+      }
+    });
+    return { laneByMatchId, groupSizeByMatchId };
+  }, [courtAssignments, matchStates, config]);
+
   // Track state changes for animation
   useEffect(() => {
     const currentStates: Record<string, string> = {};
@@ -265,8 +315,16 @@ export function GanttChart({
                     matchStates[assignment.matchId],
                     config,
                   );
-                  const left = (render.slotId - minSlot) * SLOT_WIDTH;
-                  const width = Math.max(48, render.durationSlots * SLOT_WIDTH - 2);
+                  const baseLeft = (render.slotId - minSlot) * SLOT_WIDTH;
+                  const baseWidth = Math.max(48, render.durationSlots * SLOT_WIDTH - 2);
+                  // If this block shares its time window with others on
+                  // the same court, shrink width + offset horizontally
+                  // so every block stays visible without making the row
+                  // taller. Non-overlapping blocks keep full width.
+                  const groupSize = packing.groupSizeByMatchId.get(assignment.matchId) ?? 1;
+                  const lane = packing.laneByMatchId.get(assignment.matchId) ?? 0;
+                  const width = groupSize > 1 ? baseWidth / groupSize : baseWidth;
+                  const left = groupSize > 1 ? baseLeft + lane * width : baseLeft;
 
                   return (
                     <div
