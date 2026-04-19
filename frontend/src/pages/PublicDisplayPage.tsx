@@ -9,24 +9,56 @@
  * Designed to be readable from across a gym: oversized type, high
  * contrast, and a built-in fullscreen toggle so the operator can hit
  * F or a button to take over the display without F11 ceremony.
+ *
+ * The /display route mounts this page *outside* AppShell, so the
+ * tournament-state hydrator (``useTournamentState``) is not in scope
+ * here — we run a dedicated read-only polling loop below so the TV
+ * stays fresh against the same backend without needing the operator
+ * UI to be open.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Maximize2, Minimize2 } from 'lucide-react';
+import { apiClient } from '../api/client';
 import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { formatSlotTime, parseMatchStartMs } from '../utils/timeUtils';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
 type ViewMode = 'courts' | 'schedule' | 'standings';
+type LiveStatus = 'live' | 'reconnecting' | 'offline';
 
-function formatElapsed(startIso: string | undefined): string | null {
+// Poll cadence. 10 s keeps server load negligible but new matches /
+// state changes land in under ~20 s worst case (one 10 s gap + the
+// pre-existing 5 s match-state poll in useLiveTracking).
+const TOURNAMENT_POLL_MS = 10_000;
+// How long we'll tolerate no successful fetch before flipping the
+// status pill to "Reconnecting". Chosen to give the 10 s poll plus
+// one retry room before alarming the operator.
+const RECONNECTING_AFTER_MS = 25_000;
+// After this long with no success we admit we're offline.
+const OFFLINE_AFTER_MS = 60_000;
+
+function formatElapsed(startIso: string | undefined | null): string | null {
   const started = parseMatchStartMs(startIso);
   if (started === null) return null;
   const secs = Math.max(0, Math.floor((Date.now() - started) / 1000));
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** Safe parse for the ``tournamentDate`` config field. Returns null on
+ *  any malformed / missing input so we don't render "Invalid Date". */
+function formatTournamentDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 export function PublicDisplayPage() {
@@ -37,11 +69,62 @@ export function PublicDisplayPage() {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(() =>
     typeof document !== 'undefined' ? Boolean(document.fullscreenElement) : false,
   );
+  const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const { schedule, config, matches, matchStates, matchesByStatus } = useLiveTracking();
   const players = useAppStore((state) => state.players);
   const groups = useAppStore((state) => state.groups);
+
+  // -----------------------------------------------------------------
+  // Dedicated read-only polling loop.
+  //
+  // The standalone /display route does not mount AppShell, so the
+  // tournament-state hydrator that normally runs there is absent. We
+  // hydrate + refresh here. Writes are intentionally *never* issued
+  // from this page; the TV is a read-only mirror of whatever the
+  // operator is authoring on another tab / device.
+  // -----------------------------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+
+    const pull = async () => {
+      try {
+        const remote = await apiClient.getTournamentState();
+        if (cancelled) return;
+        if (remote) {
+          useAppStore.setState({
+            config: remote.config ?? null,
+            groups: remote.groups ?? [],
+            players: remote.players ?? [],
+            matches: remote.matches ?? [],
+            schedule: remote.schedule ?? null,
+            scheduleStats: (remote.scheduleStats as never) ?? null,
+            scheduleIsStale: remote.scheduleIsStale ?? false,
+          });
+        }
+        setLastSyncMs(Date.now());
+        setSyncError(null);
+      } catch (err) {
+        if (cancelled) return;
+        // Leave the last-known-good state on screen and let the
+        // status pill flip to Reconnecting / Offline based on time
+        // since the last success. A single failed poll is not a
+        // reason to clear the display.
+        setSyncError(err instanceof Error ? err.message : 'Connection lost');
+      }
+    };
+
+    // Kick off immediately so a fresh /display tab doesn't stare at
+    // an empty screen for 10 s waiting for the first interval tick.
+    void pull();
+    const t = window.setInterval(() => void pull(), TOURNAMENT_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, []);
 
   // 1 Hz tick drives both the wall clock and the elapsed timer on active matches.
   useEffect(() => {
@@ -59,10 +142,20 @@ export function PublicDisplayPage() {
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      // Request on the page root so overlay chrome stays hidden.
-      (rootRef.current ?? document.documentElement).requestFullscreen?.().catch(() => {});
+      // Request on the page root so overlay chrome stays hidden. We
+      // surface any error to the console so the operator can look it
+      // up instead of staring at a button that looks broken — the
+      // Fullscreen API can reject quietly on iframes, kiosk browsers,
+      // and insecure contexts.
+      (rootRef.current ?? document.documentElement)
+        .requestFullscreen?.()
+        .catch((err) => {
+          console.warn('[PublicDisplay] fullscreen request denied:', err);
+        });
     } else {
-      document.exitFullscreen?.().catch(() => {});
+      document.exitFullscreen?.().catch((err) => {
+        console.warn('[PublicDisplay] exit fullscreen failed:', err);
+      });
     }
   }, []);
 
@@ -86,9 +179,40 @@ export function PublicDisplayPage() {
     hour12: true,
   });
 
+  // Derive the liveness status from the last-successful sync rather
+  // than the most recent attempt — that way a single flaky request
+  // doesn't flash "Offline" on a healthy system.
+  const liveStatus: LiveStatus = useMemo(() => {
+    if (lastSyncMs === null) {
+      // Pre-first-sync: be optimistic; a fail would have flipped this.
+      return syncError ? 'reconnecting' : 'live';
+    }
+    const age = now.getTime() - lastSyncMs;
+    if (age >= OFFLINE_AFTER_MS) return 'offline';
+    if (age >= RECONNECTING_AFTER_MS) return 'reconnecting';
+    return 'live';
+  }, [lastSyncMs, now, syncError]);
+
   const playerNames = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
   const groupNames = useMemo(() => new Map(groups.map((g) => [g.id, g.name])), [groups]);
   const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
+
+  // Indexing helpers we'll reuse below. O(1) by-matchId lookups so the
+  // courts / standings derivations don't re-scan the full matchesByStatus
+  // array on every tick.
+  const matchesByCourt = useMemo(() => {
+    const active = new Map<number, string>();
+    const called = new Map<number, string>();
+    for (const a of matchesByStatus.started) {
+      const courtId = matchStates[a.matchId]?.actualCourtId ?? a.courtId;
+      active.set(courtId, a.matchId);
+    }
+    for (const a of matchesByStatus.called) {
+      const courtId = matchStates[a.matchId]?.actualCourtId ?? a.courtId;
+      if (!active.has(courtId)) called.set(courtId, a.matchId);
+    }
+    return { active, called };
+  }, [matchesByStatus.started, matchesByStatus.called, matchStates]);
 
   // Get current match on each court (active > called > empty).
   const courtMatches = useMemo(() => {
@@ -101,22 +225,22 @@ export function PublicDisplayPage() {
     };
     const courts: Row[] = [];
     for (let courtId = 1; courtId <= config.courtCount; courtId++) {
-      const active = matchesByStatus.started.find((a) => (matchStates[a.matchId]?.actualCourtId ?? a.courtId) === courtId);
-      if (active) {
+      const activeId = matchesByCourt.active.get(courtId);
+      if (activeId) {
         courts.push({
           courtId,
-          match: matchMap.get(active.matchId) || null,
-          state: matchStates[active.matchId] || null,
+          match: matchMap.get(activeId) || null,
+          state: matchStates[activeId] || null,
           status: 'active',
         });
         continue;
       }
-      const called = matchesByStatus.called.find((a) => (matchStates[a.matchId]?.actualCourtId ?? a.courtId) === courtId);
-      if (called) {
+      const calledId = matchesByCourt.called.get(courtId);
+      if (calledId) {
         courts.push({
           courtId,
-          match: matchMap.get(called.matchId) || null,
-          state: matchStates[called.matchId] || null,
+          match: matchMap.get(calledId) || null,
+          state: matchStates[calledId] || null,
           status: 'called',
         });
         continue;
@@ -124,7 +248,7 @@ export function PublicDisplayPage() {
       courts.push({ courtId, match: null, state: null, status: 'empty' });
     }
     return courts;
-  }, [schedule, config, matchesByStatus, matchMap, matchStates]);
+  }, [schedule, config, matchesByCourt, matchMap, matchStates]);
 
   // Next 10 scheduled matches.
   const upcomingMatches = useMemo(() => {
@@ -139,12 +263,14 @@ export function PublicDisplayPage() {
   const standings = useMemo(() => {
     const groupScores: Record<string, { wins: number; losses: number; matchesPlayed: number }> = {};
     groups.forEach((g) => (groupScores[g.id] = { wins: 0, losses: 0, matchesPlayed: 0 }));
+    // Index players by id so the inner loop is O(1) instead of O(N) scans.
+    const playerById = new Map(players.map((p) => [p.id, p]));
     matchesByStatus.finished.forEach((assignment) => {
       const match = matchMap.get(assignment.matchId);
       const state = matchStates[assignment.matchId];
       if (!match || !state?.score) return;
-      const sideAGroupId = players.find((p) => match.sideA?.includes(p.id))?.groupId;
-      const sideBGroupId = players.find((p) => match.sideB?.includes(p.id))?.groupId;
+      const sideAGroupId = match.sideA?.map((id) => playerById.get(id)?.groupId).find(Boolean);
+      const sideBGroupId = match.sideB?.map((id) => playerById.get(id)?.groupId).find(Boolean);
       if (!sideAGroupId || !sideBGroupId || sideAGroupId === sideBGroupId) return;
       const aWon = state.score.sideA > state.score.sideB;
       const bWon = state.score.sideB > state.score.sideA;
@@ -182,14 +308,17 @@ export function PublicDisplayPage() {
         ref={rootRef}
         className="min-h-screen bg-slate-950 text-white flex items-center justify-center"
       >
-        <FullscreenButton
-          isFullscreen={isFullscreen}
-          onToggle={toggleFullscreen}
-          className="absolute right-4 top-4"
-        />
+        <div className="absolute right-4 top-4 flex items-center gap-3">
+          <LiveStatusPill status={liveStatus} error={syncError} />
+          <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+        </div>
         <div className="text-center">
           <div className="text-6xl font-bold tracking-tight">Tournament Display</div>
-          <div className="mt-3 text-2xl text-slate-400">No schedule generated yet</div>
+          <div className="mt-3 text-2xl text-slate-400">
+            {liveStatus === 'live'
+              ? 'No schedule generated yet'
+              : 'Waiting for connection to the server…'}
+          </div>
         </div>
       </div>
     );
@@ -218,15 +347,12 @@ export function PublicDisplayPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-4 min-w-0">
             <div className="text-3xl font-bold tracking-tight">Tournament Status</div>
-            {config.tournamentDate && (
+            {formatTournamentDate(config.tournamentDate) && (
               <div className="text-base text-slate-400 whitespace-nowrap">
-                {new Date(config.tournamentDate).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                })}
+                {formatTournamentDate(config.tournamentDate)}
               </div>
             )}
+            <LiveStatusPill status={liveStatus} error={syncError} />
           </div>
           <div className="flex items-center gap-3">
             <div className="flex gap-2">
@@ -266,6 +392,11 @@ export function PublicDisplayPage() {
                   : status === 'called'
                     ? 'border-amber-400/80 bg-amber-950/40'
                     : 'border-slate-800 bg-slate-900/40';
+              // Aggregate score — shown whichever scoring format is in
+              // use so the audience can see the running state on TV.
+              const aggregate = state?.score
+                ? `${state.score.sideA}–${state.score.sideB}`
+                : null;
               return (
                 <div
                   key={courtId}
@@ -316,9 +447,16 @@ export function PublicDisplayPage() {
                         In Progress
                       </span>
                     )}
-                    {elapsed && (
-                      <span className="tabular-nums text-lg text-slate-300">{elapsed}</span>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {status === 'active' && aggregate && (
+                        <span className="tabular-nums text-lg font-semibold text-slate-100">
+                          {aggregate}
+                        </span>
+                      )}
+                      {elapsed && (
+                        <span className="tabular-nums text-lg text-slate-300">{elapsed}</span>
+                      )}
+                    </div>
                   </div>
                   {status === 'active' && state?.sets && state.sets.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2 text-base font-mono">
@@ -470,5 +608,44 @@ function FullscreenButton({
       )}
       <span>{isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}</span>
     </button>
+  );
+}
+
+/**
+ * Small pill showing whether the TV is still talking to the backend.
+ * Driven by ``liveStatus`` derived from the last-successful sync age.
+ */
+function LiveStatusPill({
+  status,
+  error,
+}: {
+  status: LiveStatus;
+  error: string | null;
+}) {
+  const styles =
+    status === 'live'
+      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+      : status === 'reconnecting'
+        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+        : 'border-red-500/40 bg-red-500/10 text-red-300';
+  const dot =
+    status === 'live'
+      ? 'bg-emerald-400 animate-pulse'
+      : status === 'reconnecting'
+        ? 'bg-amber-400 animate-pulse'
+        : 'bg-red-400';
+  const label =
+    status === 'live' ? 'Live' : status === 'reconnecting' ? 'Reconnecting…' : 'Offline';
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${styles}`}
+      title={error ?? `Live data ${status}`}
+      data-testid="tv-live-status"
+      role="status"
+      aria-live="polite"
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+      {label}
+    </span>
   );
 }
