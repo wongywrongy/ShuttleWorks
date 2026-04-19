@@ -70,7 +70,8 @@ export function BackupPanel() {
       const friendly =
         raw.includes('schedule export') ||
         raw.includes('Roster sheet') ||
-        raw.includes('dual meets')
+        raw.includes('dual meets') ||
+        raw.includes('XLSX too large')
           ? raw
           : 'Could not read XLSX — file may be corrupted';
       pushToast({ level: 'error', message: friendly });

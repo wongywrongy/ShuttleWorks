@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { isValidTime } from '../../lib/time';
 import { SetupGuide } from './SetupGuide';
@@ -43,21 +43,47 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
   const [showGuide, setShowGuide] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Re-sync formData whenever the parent's config prop changes. Without
-  // this, a hydration or server-patch that lands after mount would be
-  // silently overwritten the next time the form is submitted (formData
-  // is frozen to mount-time values).
+  // Baseline ref tracks the LAST config prop we accepted from the parent.
+  // When a new config arrives (hydration lands, another tab saved, etc.)
+  // we compare field-by-field: if formData[key] still matches the
+  // previous baseline, the user hasn't touched it and we can safely
+  // adopt the incoming value. If formData[key] has drifted from the
+  // baseline, the user has a pending edit and we must NOT clobber it.
+  // Stops a debounced autosave in another tab from wiping what the user
+  // is still typing.
+  const baselineRef = useRef<TournamentConfig>(config);
+  const breakBaselineRef = useRef<BreakWindow[]>(config.breaks ?? []);
+
   useEffect(() => {
-    setFormData((prev) => ({
-      ...prev,
-      ...config,
-      rankCounts: config.rankCounts ?? prev.rankCounts,
-      scoringFormat: config.scoringFormat ?? prev.scoringFormat ?? 'badminton',
-      setsToWin: config.setsToWin ?? prev.setsToWin ?? 2,
-      pointsPerSet: config.pointsPerSet ?? prev.pointsPerSet ?? 21,
-      deuceEnabled: config.deuceEnabled ?? prev.deuceEnabled ?? true,
-    }));
-    setBreakWindows(config.breaks ?? []);
+    setFormData((prev) => {
+      const merged: TournamentConfig = { ...prev };
+      const prevBaseline = baselineRef.current;
+      (Object.keys(config) as Array<keyof TournamentConfig>).forEach((key) => {
+        const userTouched =
+          JSON.stringify(prev[key]) !== JSON.stringify(prevBaseline[key]);
+        if (!userTouched) {
+          (merged as Record<string, unknown>)[key] = config[key];
+        }
+      });
+      // Preserve the badminton defaults when the server returned null.
+      if (merged.scoringFormat == null) merged.scoringFormat = 'badminton';
+      if (merged.setsToWin == null) merged.setsToWin = 2;
+      if (merged.pointsPerSet == null) merged.pointsPerSet = 21;
+      if (merged.deuceEnabled == null) merged.deuceEnabled = true;
+      return merged;
+    });
+    // Breaks array gets the same dirty-check, on structural equality.
+    const prevBreaks = breakBaselineRef.current;
+    const breakUserTouched =
+      JSON.stringify(breakWindows) !== JSON.stringify(prevBreaks);
+    if (!breakUserTouched) {
+      setBreakWindows(config.breaks ?? []);
+    }
+    baselineRef.current = config;
+    breakBaselineRef.current = config.breaks ?? [];
+    // `breakWindows` is intentionally excluded — including it would
+    // re-run this effect on every user edit and defeat the point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
 
   const validate = (): boolean => {

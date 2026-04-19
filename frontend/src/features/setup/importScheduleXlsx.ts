@@ -122,7 +122,18 @@ function nameKey(names: string[]): string {
   return names.map((n) => n.trim().toLowerCase()).filter(Boolean).sort().join('|');
 }
 
+// Upper bound on the XLSX size we'll attempt to parse. ExcelJS holds
+// the decoded workbook entirely in memory, so a 500 MB tournament export
+// would stall the main thread and can OOM the browser. 20 MB comfortably
+// covers realistic tournaments (the sample UCSC vs SJSU file is ~46 KB).
+const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
+
 async function loadWorkbook(file: File): Promise<ExcelJSNs.Workbook> {
+  if (file.size > MAX_IMPORT_BYTES) {
+    throw new Error(
+      `XLSX too large (${Math.round(file.size / 1024 / 1024)} MB); max 20 MB`,
+    );
+  }
   const ExcelJS: ExcelJSType = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await file.arrayBuffer());
@@ -172,11 +183,16 @@ interface ScheduleParse {
     sideAText: string;
     sideBText: string;
   }>;
+  /** Rows that had content but failed pre-parse. Surfaced to the user
+   *  as warnings rather than silently dropped — prior behaviour hid
+   *  time-format mistakes and court mis-types. */
+  droppedWarnings: ImportWarning[];
   warmupTimeLabel: string | null;
 }
 
 function readScheduleRows(sheet: ExcelJSNs.Worksheet): ScheduleParse {
   const rows: ScheduleParse['rows'] = [];
+  const droppedWarnings: ImportWarning[] = [];
   const last = sheet.actualRowCount ?? sheet.rowCount ?? 1;
   let warmupTimeLabel: string | null = null;
 
@@ -194,18 +210,42 @@ function readScheduleRows(sheet: ExcelJSNs.Worksheet): ScheduleParse {
     const courtRaw = row.getCell(2).value;
     const event = cellString(row.getCell(5).value);
 
+    // Structurally empty rows (blank separators, ExcelJS padding) are
+    // skipped silently.
     if (!timeLabel && courtRaw == null && !event && !sideA && !sideB) continue;
 
     const mins = parseAmPm(timeLabel);
-    if (mins == null) continue; // skipped silently; warnings are generated downstream
+    if (mins == null) {
+      droppedWarnings.push({
+        row: r,
+        timeLabel,
+        court: String(courtRaw ?? ''),
+        event,
+        sideA,
+        sideB,
+        reason: timeLabel ? 'unrecognized time format' : 'missing time',
+      });
+      continue;
+    }
 
     const court = typeof courtRaw === 'number' ? courtRaw : parseInt(String(courtRaw ?? ''), 10);
-    if (!Number.isInteger(court) || court <= 0) continue;
+    if (!Number.isInteger(court) || court <= 0) {
+      droppedWarnings.push({
+        row: r,
+        timeLabel,
+        court: String(courtRaw ?? ''),
+        event,
+        sideA,
+        sideB,
+        reason: 'invalid court number',
+      });
+      continue;
+    }
 
     rows.push({ r, timeLabel, mins, court, event, sideAText: sideA, sideBText: sideB });
   }
 
-  return { sheet, rows, warmupTimeLabel };
+  return { sheet, rows, droppedWarnings, warmupTimeLabel };
 }
 
 // ---------- schedule-only mode -------------------------------------------
@@ -218,7 +258,7 @@ export async function parseScheduleOnly(
 ): Promise<ScheduleOnlyResult> {
   const wb = await loadWorkbook(file);
   const sheet = findScheduleSheet(wb);
-  const { rows } = readScheduleRows(sheet);
+  const { rows, droppedWarnings } = readScheduleRows(sheet);
 
   const playerNameById = new Map(players.map((p) => [p.id, p.name ?? '']));
   const keyFromIds = (ids: string[] | undefined): string =>
@@ -245,9 +285,9 @@ export async function parseScheduleOnly(
   const interval = config.intervalMinutes;
 
   const assignments: ImportedAssignment[] = [];
-  const warnings: ImportWarning[] = [];
+  const warnings: ImportWarning[] = [...droppedWarnings];
   const seen = new Set<string>();
-  let totalRows = 0;
+  let totalRows = droppedWarnings.length;
 
   for (const row of rows) {
     totalRows++;
@@ -531,7 +571,8 @@ export async function parseFullRebuild(file: File): Promise<RebuildPlan | null> 
   const [dh, dm] = config.dayStart.split(':').map((x) => parseInt(x, 10));
   const dayStartMin = dh * 60 + (dm || 0);
   const assignments: ImportedAssignment[] = [];
-  const warnings: ImportWarning[] = [];
+  // Seed with any rows dropped before full parse (bad times, bad courts).
+  const warnings: ImportWarning[] = [...scheduleParse.droppedWarnings];
   const seen = new Set<string>();
 
   for (const row of scheduleParse.rows) {
@@ -585,7 +626,7 @@ export async function parseFullRebuild(file: File): Promise<RebuildPlan | null> 
     matches,
     assignments,
     warnings,
-    totalScheduleRows: scheduleParse.rows.length,
+    totalScheduleRows: scheduleParse.rows.length + scheduleParse.droppedWarnings.length,
     schools: roster.schools,
   };
 }

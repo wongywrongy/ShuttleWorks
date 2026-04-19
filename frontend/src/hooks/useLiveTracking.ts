@@ -177,12 +177,36 @@ export function useLiveTracking() {
       // Update local state immediately for responsive UI
       setMatchState(matchId, newState);
 
-      // Sync to backend
+      // Sync to backend. On failure, surface a sticky error toast with
+      // a Retry action so the operator knows the change didn't land
+      // (and can replay it). Silent failures were hiding real data-loss
+      // events in prior builds.
       try {
         await apiClient.updateMatchState(matchId, newState);
       } catch (apiError) {
         console.error('Failed to sync match status to backend:', apiError);
-        // Don't revert - local state is still valid for this session
+        const detail = apiError instanceof Error ? apiError.message : 'Network error';
+        try {
+          useAppStore.getState().pushToast({
+            level: 'error',
+            message: `Match ${matchId.slice(0, 8)}… did not save`,
+            detail,
+            actionLabel: 'Retry',
+            onAction: () => {
+              // Replay the same transition; the hook will re-push a toast
+              // on another failure, capped to one-per-match by id.
+              void (async () => {
+                try {
+                  await apiClient.updateMatchState(matchId, newState);
+                } catch {
+                  /* a second failure will be caught by the Retry loop */
+                }
+              })();
+            },
+          });
+        } catch {
+          /* toast store unavailable — never block the UI on telemetry */
+        }
       }
     } catch (error) {
       console.error('Failed to update match status:', error);
