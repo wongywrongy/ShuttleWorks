@@ -586,11 +586,14 @@ export async function parseFullRebuild(file: File): Promise<RebuildPlan | null> 
 // ---------- public entrypoint --------------------------------------------
 
 /**
- * Decide which mode to run based on the current app state.
+ * Decide which mode to run based on what's in the XLSX.
  *
- *   - app has matches → schedule-only
- *   - app is empty AND xlsx has a roster sheet → full-rebuild
- *   - app is empty AND xlsx has no roster sheet → error the caller translates
+ * Presence of a Roster sheet is treated as "the user wants the whole
+ * tournament rebuilt" — even if they happen to have stale matches loaded
+ * already. The full-rebuild modal warns explicitly before overwriting,
+ * so there's no silent destruction. Schedule-only only runs when the
+ * XLSX has no Roster sheet (i.e. the plain Schedule-XLSX export), in
+ * which case existing matches + config are required.
  */
 export async function parseScheduleXlsx(
   file: File,
@@ -598,14 +601,13 @@ export async function parseScheduleXlsx(
   players: PlayerDTO[],
   config: TournamentConfig | null,
 ): Promise<ImportResult> {
-  if (matches.length > 0 && config) {
-    return parseScheduleOnly(file, matches, players, config);
-  }
   const plan = await parseFullRebuild(file);
-  if (!plan) {
+  if (plan) return { mode: 'full-rebuild', plan };
+
+  if (matches.length === 0 || !config) {
     throw new Error(
       `App is empty and this XLSX has no Roster sheet. Load a roster (or a different XLSX) first.`,
     );
   }
-  return { mode: 'full-rebuild', plan };
+  return parseScheduleOnly(file, matches, players, config);
 }
