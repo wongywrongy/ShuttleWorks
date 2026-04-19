@@ -19,10 +19,10 @@ import type { MatchStateDTO } from '../api/dto';
  * Key = current status, Value = array of valid next statuses
  */
 const VALID_TRANSITIONS: Record<MatchStateDTO['status'], MatchStateDTO['status'][]> = {
-  scheduled: ['called', 'scheduled'], // can call or delay (stays scheduled)
-  called: ['started', 'scheduled'],    // can start or undo to scheduled
-  started: ['finished', 'called'],     // can finish or undo to called
-  finished: ['started'],               // can only undo to started
+  scheduled: ['called', 'scheduled', 'finished'], // call, stay, or record score after-the-fact
+  called: ['started', 'scheduled', 'finished'],   // start, undo, or record score after-the-fact
+  started: ['finished', 'called'],                // finish or undo to called
+  finished: ['started', 'finished'],              // undo to started OR edit score (stays finished)
 };
 
 /**
