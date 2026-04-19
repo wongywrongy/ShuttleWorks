@@ -77,26 +77,13 @@ export async function parseScheduleXlsx(
 
   // --- Warm-up detection ----------------------------------------------
   // The export merges F:G across the warmup block and writes "Warm up".
-  // Collect those row numbers and skip them in the main loop.
-  const warmupRows = new Set<number>();
-  const mergedRanges: string[] = [];
-  const rawMerges = (sheet as unknown as { _merges?: Record<string, unknown> })._merges;
-  if (rawMerges) {
-    for (const key of Object.keys(rawMerges)) {
-      const val = rawMerges[key];
-      mergedRanges.push(typeof val === 'string' ? val : String(key));
-    }
-  }
-  for (const addr of mergedRanges) {
-    const m = /^F(\d+):G(\d+)$/.exec(addr);
-    if (!m) continue;
-    const r1 = Number(m[1]);
-    const r2 = Number(m[2]);
-    const top = sheet.getCell(`F${r1}`).value;
-    if (typeof top === 'string' && top.trim().toLowerCase() === 'warm up') {
-      for (let r = r1; r <= r2; r++) warmupRows.add(r);
-    }
-  }
+  // ExcelJS's merge metadata isn't always faithfully round-tripped on
+  // load, so detect by value instead: any row whose Side A cell reads
+  // "Warm up" is part of the warmup block.
+  const isWarmupRow = (rowNumber: number): boolean => {
+    const v = sheet.getCell(`F${rowNumber}`).value;
+    return typeof v === 'string' && v.trim().toLowerCase() === 'warm up';
+  };
 
   // --- Build match lookup keys ----------------------------------------
   const playerNameById = new Map(players.map((p) => [p.id, p.name ?? '']));
@@ -158,7 +145,7 @@ export async function parseScheduleXlsx(
 
   const lastRow = sheet.actualRowCount ?? sheet.rowCount ?? 1;
   for (let r = 2; r <= lastRow; r++) {
-    if (warmupRows.has(r)) continue;
+    if (isWarmupRow(r)) continue;
     const row = sheet.getRow(r);
     const timeLabel = String(row.getCell(1).value ?? '').trim();
     const courtRaw = row.getCell(2).value;

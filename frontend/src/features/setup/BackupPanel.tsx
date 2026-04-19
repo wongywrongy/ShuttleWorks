@@ -70,10 +70,15 @@ export function BackupPanel() {
       const result = await parseScheduleXlsx(file, matches, players, config);
       setImportResult(result);
     } catch (err) {
-      pushToast({
-        level: 'error',
-        message: err instanceof Error ? err.message : 'Could not read XLSX',
-      });
+      // parseScheduleXlsx throws its own friendly header-mismatch message
+      // ("…schedule export (column N header mismatch)"); anything else is
+      // almost certainly an ExcelJS zip-decode error — surface a clean
+      // fallback rather than leaking JSZip internals.
+      const raw = err instanceof Error ? err.message : '';
+      const friendly = raw.includes('schedule export')
+        ? raw
+        : 'Could not read XLSX — file may be corrupted';
+      pushToast({ level: 'error', message: friendly });
     }
   };
 
