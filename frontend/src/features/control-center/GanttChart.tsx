@@ -31,7 +31,11 @@ interface GanttChartProps {
   trafficLights?: Map<string, TrafficLightResult>;
 }
 
-const SLOT_WIDTH = 48;
+// Wider slots so event codes like "MS12" / "WD5" don't truncate even
+// when a court has two overlapping matches sharing a slot (each block
+// then takes SLOT_WIDTH / 2 = 40 px, which still comfortably fits a
+// 4-char code at text-[11px]).
+const SLOT_WIDTH = 80;
 const ROW_HEIGHT = 32;
 
 // Status-based colors - intuitive and distinct
