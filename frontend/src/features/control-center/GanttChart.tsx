@@ -31,11 +31,14 @@ interface GanttChartProps {
   trafficLights?: Map<string, TrafficLightResult>;
 }
 
-// Wider slots so event codes like "MS12" / "WD5" don't truncate even
-// when a court has two overlapping matches sharing a slot (each block
-// then takes SLOT_WIDTH / 2 = 40 px, which still comfortably fits a
-// 4-char code at text-[11px]).
-const SLOT_WIDTH = 80;
+// Slot width chosen so that even when a court has TWO overlapping
+// matches sharing the slot (each block getting SLOT_WIDTH/2 under the
+// sub-lane packing rule), every block still gets enough horizontal
+// room to show a 4-character event code like "MS17" without clipping.
+// 96 ÷ 2 = 48 px per half-block, which matches the pre-overlap
+// single-block width and is proven to fit a 4-char code comfortably
+// at text-[11px].
+const SLOT_WIDTH = 96;
 const ROW_HEIGHT = 32;
 
 // Status-based colors - intuitive and distinct
@@ -137,44 +140,43 @@ export function GanttChart({
   // and split the overlap window *horizontally* — each overlapping
   // block gets 1/N of the slot width and sits side-by-side. No lane
   // is hidden; labels truncate a bit under overlap but every match is
-  // reachable. Classic interval-partitioning, but assigning X offsets
-  // instead of Y.
+  // reachable.
+  //
+  // Each block's ``groupSize`` is the max number of blocks that were
+  // simultaneously active on this court at any point during the
+  // block's lifetime. A 1-block group keeps full width; a 2-block
+  // group halves; a 3-block group thirds. The block's ``lane`` is the
+  // lowest unused horizontal lane at the moment it was placed.
   const packing = useMemo(() => {
     const laneByMatchId = new Map<string, number>();
     const groupSizeByMatchId = new Map<string, number>();
     courtAssignments.forEach((assignments) => {
-      // Walk the sorted list, tracking an active overlap group. When
-      // a block starts after every currently-placed block has ended,
-      // flush the group (stamp each member with the group size it
-      // belonged to) and start a new one.
       let active: { matchId: string; lane: number; end: number }[] = [];
-      const flush = () => {
-        const size = active.length;
-        for (const a of active) groupSizeByMatchId.set(a.matchId, size);
-        active = [];
-      };
       for (const a of assignments) {
         const r = getRenderSlot(a, matchStates[a.matchId], config);
         const start = r.slotId;
         const end = start + r.durationSlots;
-        // Prune anyone who has finished before this block starts —
-        // they're done colliding with anything from here on.
+
+        // Prune ended blocks so their lane indices free up. Their
+        // group-size stamps have already been updated in prior
+        // iterations (see the "max-concurrent" bump below).
         active = active.filter((x) => x.end > start);
-        if (active.length === 0) flush();
-        // Pick the smallest unused lane index in the current group.
+
+        // Lowest unused lane index for the new block.
         const used = new Set(active.map((x) => x.lane));
         let lane = 0;
         while (used.has(lane)) lane++;
         laneByMatchId.set(a.matchId, lane);
+
         active.push({ matchId: a.matchId, lane, end });
-      }
-      flush();
-      // Any members that shared a group with someone but never flushed
-      // because they had no prune event still need their group size;
-      // set to max lane used + 1 as a fallback.
-      for (const a of assignments) {
-        if (!groupSizeByMatchId.has(a.matchId)) {
-          groupSizeByMatchId.set(a.matchId, (laneByMatchId.get(a.matchId) ?? 0) + 1);
+
+        // Stamp the CURRENT group size onto every still-active block.
+        // By `max`, a block that was once part of a 3-block group
+        // keeps size=3 even after two of its neighbours finish.
+        const size = active.length;
+        for (const x of active) {
+          const prior = groupSizeByMatchId.get(x.matchId) ?? 1;
+          if (size > prior) groupSizeByMatchId.set(x.matchId, size);
         }
       }
     });
@@ -348,16 +350,24 @@ export function GanttChart({
                           : '')
                       }
                     >
-                      <div className="px-1 h-full flex items-center justify-center overflow-hidden">
-                        {/* Status is already carried by the block's
-                            fill + border colour and the inset ring for
-                            conflicts — an extra icon is just noise.
-                            Overflow is hidden (clipped) rather than
-                            ellipsis-ed so half-width overlap blocks
-                            still show as many characters of the event
-                            code as physically fit. */}
+                      <div
+                        className={`h-full flex items-center justify-center overflow-hidden ${
+                          groupSize > 1 ? 'px-0' : 'px-1'
+                        }`}
+                      >
+                        {/* Status carried entirely by block fill +
+                            border + any inset conflict ring; no extra
+                            glyphs. Overlap blocks drop the font a tick
+                            and tighten letter-spacing so a 4-char code
+                            like MS17 clears the ~44 px available at
+                            half-width. No ellipsis on overflow — we
+                            clip to show as many characters as fit. */}
                         <span
-                          className={`text-[11px] font-medium whitespace-nowrap overflow-hidden ${styles.text}`}
+                          className={`font-semibold whitespace-nowrap overflow-hidden tabular-nums ${styles.text} ${
+                            groupSize > 1
+                              ? 'text-[9px] tracking-tighter'
+                              : 'text-[11px]'
+                          }`}
                         >
                           {match ? getMatchLabel(match) : '?'}
                         </span>
