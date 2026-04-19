@@ -7,6 +7,8 @@
  *   - full-rebuild: detected schools/players/matches/assignments, Apply
  *     replaces the entire tournament state.
  */
+import { useId } from 'react';
+import { Modal } from '../../components/common/Modal';
 import type { ImportResult, ImportWarning } from './importScheduleXlsx';
 
 interface Props {
@@ -47,6 +49,7 @@ function WarningTable({ warnings }: { warnings: ImportWarning[] }) {
 }
 
 export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) {
+  const titleId = useId();
   let title = 'Recover schedule from XLSX';
   let summary: React.ReactNode = null;
   let warnings: ImportWarning[] = [];
@@ -84,15 +87,14 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
   }
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      data-testid="schedule-import-modal"
+    <Modal
+      onClose={onCancel}
+      titleId={titleId}
+      locked={busy}
+      panelClassName="w-full max-w-lg rounded-lg bg-white p-4 shadow-xl focus:outline-none"
     >
-      <div className="w-full max-w-lg rounded-md bg-white p-4 shadow-xl">
-        <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
+      <div data-testid="schedule-import-modal">
+        <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
         <p className="mt-1 text-xs text-gray-600" data-testid="schedule-import-summary">
           {summary}
         </p>
@@ -119,6 +121,6 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -5,8 +5,9 @@
  * winner buttons), rather than a wide matrix, so it reads top-to-bottom
  * and fits on laptop screens without horizontal scroll.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Trophy, X } from 'lucide-react';
+import { Modal } from '../../components/common/Modal';
 import type { SetScore } from '../../api/dto';
 
 interface BadmintonScoreDialogProps {
@@ -32,6 +33,7 @@ export function BadmintonScoreDialog({
   onCancel,
   isSubmitting = false,
 }: BadmintonScoreDialogProps) {
+  const titleId = useId();
   const maxSets = setsToWin * 2 - 1;
   const maxPoints = deuceEnabled ? (pointsPerSet === 21 ? 30 : pointsPerSet + 10) : pointsPerSet;
 
@@ -40,14 +42,8 @@ export function BadmintonScoreDialog({
   );
   const [notes, setNotes] = useState('');
 
-  // Close on Escape.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  // Escape + focus trap + backdrop close are handled by the Modal
+  // primitive — no ad-hoc keyboard listener here.
 
   const setWinners = useMemo(() => {
     return sets.map((set) => {
@@ -113,21 +109,17 @@ export function BadmintonScoreDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Finish match — enter set scores"
-      onClick={onCancel}
+    <Modal
+      onClose={onCancel}
+      titleId={titleId}
+      locked={isSubmitting}
+      widthClass="max-w-xl"
+      panelClassName="w-full max-w-xl rounded-lg bg-white shadow-xl focus:outline-none"
     >
-      <div
-        className="w-full max-w-xl rounded-md bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Header */}
-        <div className="flex items-start justify-between rounded-t-md border-b border-gray-200 bg-gray-50 px-4 py-3">
+        <div className="flex items-start justify-between rounded-t-lg border-b border-gray-200 bg-gray-50 px-4 py-3">
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-gray-900">
+            <h3 id={titleId} className="truncate text-sm font-semibold text-gray-900">
               Finish {matchName}
             </h3>
             <p className="mt-0.5 text-[11px] text-gray-500">
@@ -215,18 +207,30 @@ export function BadmintonScoreDialog({
                     <button
                       type="button"
                       onClick={() => setQuickWinner(i, 'A')}
-                      disabled={matchDecided}
+                      // Gate Quick-winner until the operator has entered
+                      // at least one side's score. Otherwise a single tap
+                      // silently decides the set with A=21, B=0 — a
+                      // real-world gotcha reported by live users.
+                      disabled={matchDecided || (set.sideA === 0 && set.sideB === 0)}
                       className="rounded border border-blue-200 bg-blue-50 px-1.5 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40"
-                      title={`Quick: ${sideAName || 'A'} wins`}
+                      title={
+                        set.sideA === 0 && set.sideB === 0
+                          ? 'Enter at least one score first'
+                          : `Quick: ${sideAName || 'A'} wins`
+                      }
                     >
                       A
                     </button>
                     <button
                       type="button"
                       onClick={() => setQuickWinner(i, 'B')}
-                      disabled={matchDecided}
+                      disabled={matchDecided || (set.sideA === 0 && set.sideB === 0)}
                       className="rounded border border-rose-200 bg-rose-50 px-1.5 py-1 text-[10px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-40"
-                      title={`Quick: ${sideBName || 'B'} wins`}
+                      title={
+                        set.sideA === 0 && set.sideB === 0
+                          ? 'Enter at least one score first'
+                          : `Quick: ${sideBName || 'B'} wins`
+                      }
                     >
                       B
                     </button>
@@ -301,7 +305,6 @@ export function BadmintonScoreDialog({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

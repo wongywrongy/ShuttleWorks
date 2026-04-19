@@ -2,7 +2,8 @@
  * Court Selection Dialog
  * Shown when starting a match to confirm/change the court
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { Modal } from '../../components/common/Modal';
 
 interface CourtSelectDialogProps {
   matchName: string;
@@ -23,18 +24,23 @@ export function CourtSelectDialog({
   onCancel,
   isSubmitting = false,
 }: CourtSelectDialogProps) {
+  const titleId = useId();
   const [selectedCourt, setSelectedCourt] = useState(scheduledCourt);
 
   const isOccupied = occupiedCourts.includes(selectedCourt);
   const courts = Array.from({ length: courtCount }, (_, i) => i + 1);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-64">
-        {/* Header */}
-        <div className="px-3 py-2 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900">Start {matchName}</h3>
-        </div>
+    <Modal
+      onClose={onCancel}
+      titleId={titleId}
+      locked={isSubmitting}
+      panelClassName="w-64 rounded-lg bg-white shadow-xl focus:outline-none"
+    >
+      {/* Header */}
+      <div className="px-3 py-2 border-b border-gray-200">
+        <h3 id={titleId} className="text-sm font-semibold text-gray-900">Start {matchName}</h3>
+      </div>
 
         {/* Court Selection */}
         <div className="p-3">
@@ -91,11 +97,10 @@ export function CourtSelectDialog({
               disabled={isSubmitting}
               className="flex-1 px-3 py-1.5 text-sm text-white bg-green-600 rounded hover:bg-green-700 disabled:bg-gray-300 font-medium"
             >
-              {isSubmitting ? 'Starting...' : 'Start'}
+              {isSubmitting ? 'Starting…' : 'Start'}
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

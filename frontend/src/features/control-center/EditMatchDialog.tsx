@@ -2,8 +2,9 @@
  * Edit Match Dialog
  * Allows substituting or removing players from a match
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { X } from 'lucide-react';
+import { Modal } from '../../components/common/Modal';
 import type { PlayerDTO } from '../../api/dto';
 
 interface PlayerInMatch {
@@ -33,6 +34,7 @@ export function EditMatchDialog({
   onClose,
   isSubmitting = false,
 }: EditMatchDialogProps) {
+  const titleId = useId();
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerInMatch | null>(null);
   const [mode, setMode] = useState<'replace' | 'remove' | null>(null);
   const [substituteId, setSubstituteId] = useState<string>('');
@@ -163,18 +165,22 @@ export function EditMatchDialog({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl p-4 w-96 max-w-[90vw] max-h-[90vh] overflow-auto">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-sm font-semibold text-gray-900">Edit {matchName}</h3>
-          <button
-            onClick={onClose}
-            aria-label="Close edit dialog"
-            className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            <X aria-hidden="true" className="h-4 w-4" />
-          </button>
-        </div>
+    <Modal
+      onClose={onClose}
+      titleId={titleId}
+      locked={isSubmitting}
+      panelClassName="w-96 max-w-[90vw] max-h-[90vh] overflow-auto rounded-lg bg-white p-4 shadow-xl focus:outline-none"
+    >
+      <div className="flex justify-between items-center mb-3">
+        <h3 id={titleId} className="text-sm font-semibold text-gray-900">Edit {matchName}</h3>
+        <button
+          onClick={onClose}
+          aria-label="Close edit dialog"
+          className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        >
+          <X aria-hidden="true" className="h-4 w-4" />
+        </button>
+      </div>
 
         {/* Side A */}
         <div className="mb-4">
@@ -192,14 +198,13 @@ export function EditMatchDialog({
           {sideBPlayers.map(renderPlayerRow)}
         </div>
 
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="w-full px-3 py-1.5 text-sm text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
-        >
-          Done
-        </button>
-      </div>
-    </div>
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="w-full px-3 py-1.5 text-sm text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+      >
+        Done
+      </button>
+    </Modal>
   );
 }

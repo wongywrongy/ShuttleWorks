@@ -197,16 +197,16 @@ export function MatchDetailsPanel({
         const winnerNames = (winnerIds ?? []).map((id) => playerNames.get(id) ?? id).join(' & ');
 
         return (
-          <div className="mb-3 rounded border border-purple-200 bg-purple-50 px-2 py-2 text-xs text-purple-800">
+          <div className="mb-3 rounded border border-slate-300 bg-slate-50 px-2 py-2 text-xs text-slate-800">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-purple-600">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                 Done
               </span>
               {onUpdateStatus && (
                 <button
                   type="button"
                   onClick={() => setShowEditScore(true)}
-                  className="inline-flex items-center gap-1 rounded border border-purple-300 bg-white px-2 py-0.5 text-[10px] font-medium text-purple-700 hover:bg-purple-100"
+                  className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-50"
                   title="Edit score"
                   aria-label="Edit score"
                 >
@@ -217,20 +217,20 @@ export function MatchDetailsPanel({
             </div>
             {winner && winnerNames ? (
               <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="inline-flex items-center gap-1 font-semibold text-purple-900 truncate">
+                <span className="inline-flex items-center gap-1 font-semibold text-blue-800 truncate">
                   <Trophy aria-hidden="true" className="h-3.5 w-3.5" />
                   <span className="sr-only">Winner:</span>
                   {winnerNames}
                 </span>
                 {score && (
-                  <span className="font-mono text-sm font-bold tabular-nums text-purple-900">
+                  <span className="font-mono text-sm font-bold tabular-nums text-slate-900">
                     {score.sideA}–{score.sideB}
-                    <span className="ml-1 text-[10px] font-medium text-purple-600">sets</span>
+                    <span className="ml-1 text-[10px] font-medium text-slate-500">sets</span>
                   </span>
                 )}
               </div>
             ) : (
-              <div className="mt-1 text-purple-700">Tied</div>
+              <div className="mt-1 text-slate-600">Tied</div>
             )}
             {sets.length > 0 ? (
               <div className="mt-2 space-y-0.5">
@@ -239,20 +239,20 @@ export function MatchDetailsPanel({
                   return (
                     <div
                       key={i}
-                      className="flex items-center justify-between rounded bg-white/70 px-1.5 py-0.5 font-mono text-[11px]"
+                      className="flex items-center justify-between rounded bg-white px-1.5 py-0.5 font-mono text-[11px]"
                     >
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-purple-500">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                         Set {i + 1}
                       </span>
                       <span className="tabular-nums">
                         <span
-                          className={setWinner === 'A' ? 'font-bold text-purple-900' : 'text-purple-700'}
+                          className={setWinner === 'A' ? 'font-bold text-slate-900' : 'text-slate-600'}
                         >
                           {s.sideA}
                         </span>
-                        <span className="mx-0.5 text-purple-400">–</span>
+                        <span className="mx-0.5 text-slate-400">–</span>
                         <span
-                          className={setWinner === 'B' ? 'font-bold text-purple-900' : 'text-purple-700'}
+                          className={setWinner === 'B' ? 'font-bold text-slate-900' : 'text-slate-600'}
                         >
                           {s.sideB}
                         </span>
@@ -262,7 +262,7 @@ export function MatchDetailsPanel({
                 })}
               </div>
             ) : (
-              <div className="mt-1 text-[10px] text-purple-500">
+              <div className="mt-1 text-[10px] text-slate-500">
                 No per-set scores recorded — tap Edit to fill them in.
               </div>
             )}
