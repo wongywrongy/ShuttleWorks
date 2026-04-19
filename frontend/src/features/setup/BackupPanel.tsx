@@ -57,14 +57,6 @@ export function BackupPanel() {
     if (!file) return;
 
     const { matches, players, config } = useAppStore.getState();
-    if (!config) {
-      pushToast({ level: 'error', message: 'Load a tournament config first' });
-      return;
-    }
-    if (matches.length === 0) {
-      pushToast({ level: 'error', message: 'Load matches first — nothing to match against' });
-      return;
-    }
 
     try {
       const result = await parseScheduleXlsx(file, matches, players, config);
@@ -75,9 +67,12 @@ export function BackupPanel() {
       // almost certainly an ExcelJS zip-decode error — surface a clean
       // fallback rather than leaking JSZip internals.
       const raw = err instanceof Error ? err.message : '';
-      const friendly = raw.includes('schedule export')
-        ? raw
-        : 'Could not read XLSX — file may be corrupted';
+      const friendly =
+        raw.includes('schedule export') ||
+        raw.includes('Roster sheet') ||
+        raw.includes('dual meets')
+          ? raw
+          : 'Could not read XLSX — file may be corrupted';
       pushToast({ level: 'error', message: friendly });
     }
   };
@@ -86,22 +81,51 @@ export function BackupPanel() {
     if (!importResult) return;
     setImporting(true);
     try {
-      const current = useAppStore.getState().schedule;
-      const next: ScheduleDTO = current
-        ? { ...current, assignments: importResult.assignments }
-        : {
-            assignments: importResult.assignments,
-            unscheduledMatches: [],
-            softViolations: [],
-            objectiveScore: null,
-            infeasibleReasons: [],
-            status: 'feasible',
-          };
-      useAppStore.getState().setSchedule(next);
-      pushToast({
-        level: importResult.warnings.length > 0 ? 'warn' : 'success',
-        message: `Schedule recovered — ${importResult.assignments.length} assignment${importResult.assignments.length === 1 ? '' : 's'} applied${importResult.warnings.length > 0 ? `, ${importResult.warnings.length} row${importResult.warnings.length === 1 ? '' : 's'} skipped` : ''}.`,
-      });
+      if (importResult.mode === 'schedule-only') {
+        const current = useAppStore.getState().schedule;
+        const next: ScheduleDTO = current
+          ? { ...current, assignments: importResult.assignments }
+          : {
+              assignments: importResult.assignments,
+              unscheduledMatches: [],
+              softViolations: [],
+              objectiveScore: null,
+              infeasibleReasons: [],
+              status: 'feasible',
+            };
+        useAppStore.getState().setSchedule(next);
+        pushToast({
+          level: importResult.warnings.length > 0 ? 'warn' : 'success',
+          message: `Schedule recovered — ${importResult.assignments.length} assignment${importResult.assignments.length === 1 ? '' : 's'} applied${importResult.warnings.length > 0 ? `, ${importResult.warnings.length} row${importResult.warnings.length === 1 ? '' : 's'} skipped` : ''}.`,
+        });
+      } else {
+        // full-rebuild: overwrite the server state, then hydrate the store.
+        const { plan } = importResult;
+        const schedule: ScheduleDTO = {
+          assignments: plan.assignments,
+          unscheduledMatches: [],
+          softViolations: [],
+          objectiveScore: null,
+          infeasibleReasons: [],
+          status: 'feasible',
+        };
+        const stamped = await apiClient.putTournamentState({
+          version: 1,
+          config: plan.config,
+          groups: plan.groups,
+          players: plan.players,
+          matches: plan.matches,
+          schedule,
+          scheduleStats: null,
+          scheduleIsStale: false,
+        });
+        applyStateToStore(stamped);
+        pushToast({
+          level: plan.warnings.length > 0 ? 'warn' : 'success',
+          message: `Tournament rebuilt — ${plan.players.length} players, ${plan.matches.length} matches, ${plan.assignments.length} assignments${plan.warnings.length > 0 ? ` (${plan.warnings.length} rows skipped)` : ''}.`,
+        });
+        await refresh();
+      }
       setImportResult(null);
     } finally {
       setImporting(false);

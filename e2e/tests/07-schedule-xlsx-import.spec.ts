@@ -135,6 +135,58 @@ test.describe('schedule XLSX import — disaster recovery', () => {
     await fs.unlink(tmp).catch(() => {});
   });
 
+  test('full rebuild from a real two-school XLSX with Roster sheet', async ({ page }) => {
+    // Empty the server — no config, no roster, no matches.
+    await resetServerState(page);
+    await page.goto('/');
+    await page.getByTestId('tab-setup').click();
+
+    const fixture = path.join(
+      path.dirname(new URL(import.meta.url).pathname),
+      '..',
+      'fixtures',
+      'schedule-full-rebuild.xlsx',
+    );
+    const decodedFixture = decodeURIComponent(fixture);
+    await page.getByTestId('schedule-import-file').setInputFiles(decodedFixture);
+
+    // Full-rebuild modal should open with UCSC + SJSU detected.
+    await expect(page.getByTestId('schedule-import-modal')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('schedule-import-summary')).toContainText(/SJSU|UCSC/);
+    await expect(page.getByTestId('schedule-import-summary')).toContainText(/2 schools/);
+
+    // Apply.
+    await page.getByTestId('schedule-import-apply').click();
+    await expect(page.getByTestId('schedule-import-modal')).not.toBeVisible({ timeout: 15_000 });
+
+    // Server should now have players, matches, and schedule assignments.
+    await expect
+      .poll(
+        async () => {
+          const r = await page.request.get('/api/tournament/state');
+          const j = await r.json();
+          return {
+            groups: j.groups?.length ?? 0,
+            players: j.players?.length ?? 0,
+            matches: j.matches?.length ?? 0,
+            assignments: j.schedule?.assignments?.length ?? 0,
+            hasConfig: !!j.config,
+          };
+        },
+        { timeout: 10_000 },
+      )
+      .toMatchObject({
+        groups: 2,
+        hasConfig: true,
+      });
+
+    const after = await page.request.get('/api/tournament/state');
+    const afterJson = await after.json();
+    expect(afterJson.players.length).toBeGreaterThan(10);
+    expect(afterJson.matches.length).toBeGreaterThan(10);
+    expect(afterJson.schedule.assignments.length).toBeGreaterThan(10);
+  });
+
   test('bad file is rejected with a toast, no modal opens', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('tab-setup').click();
