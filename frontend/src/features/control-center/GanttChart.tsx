@@ -116,8 +116,8 @@ export function GanttChart({
       courtList.push(assignment);
       byCourtMap.set(effectiveCourtId, courtList);
     }
-    // Sort by the *rendered* slot (actual when started, paper otherwise)
-    // so overlap detection below sees the real on-screen geometry.
+    // Sort by the *rendered* slot so a later-starting match renders
+    // after earlier ones on the same court.
     byCourtMap.forEach((assignments) => {
       assignments.sort((a, b) => {
         const ra = getRenderSlot(a, matchStates[a.matchId], config);
@@ -127,44 +127,6 @@ export function GanttChart({
     });
     return byCourtMap;
   }, [schedule.assignments, config, config.courtCount, matchStates]);
-
-  // Assign each match to a horizontal "lane" within its court row using
-  // classic interval partitioning: a block gets the lowest lane index
-  // whose previous block has already ended by the time this one starts.
-  // When two matches actually overlap on the same court (e.g. a late-
-  // starting match collides with the next scheduled slot), the lane
-  // count for that court grows and blocks render at a reduced height,
-  // stacked vertically. Industry pattern — same as Google Calendar or
-  // Outlook for conflicting events. No block is ever hidden.
-  const laneInfo = useMemo(() => {
-    const laneByMatchId = new Map<string, number>();
-    const lanesPerCourt = new Map<number, number>();
-    courtAssignments.forEach((assignments, courtId) => {
-      // Each lane tracks the end slot of the last block placed on it.
-      const laneEnds: number[] = [];
-      for (const a of assignments) {
-        const r = getRenderSlot(a, matchStates[a.matchId], config);
-        const start = r.slotId;
-        const end = start + r.durationSlots;
-        // Find the first lane whose last block has already ended by start.
-        let placed = -1;
-        for (let i = 0; i < laneEnds.length; i++) {
-          if (laneEnds[i] <= start) {
-            placed = i;
-            laneEnds[i] = end;
-            break;
-          }
-        }
-        if (placed === -1) {
-          placed = laneEnds.length;
-          laneEnds.push(end);
-        }
-        laneByMatchId.set(a.matchId, placed);
-      }
-      lanesPerCourt.set(courtId, Math.max(1, laneEnds.length));
-    });
-    return { laneByMatchId, lanesPerCourt };
-  }, [courtAssignments, matchStates, config]);
 
   // Track state changes for animation
   useEffect(() => {
@@ -235,18 +197,12 @@ export function GanttChart({
           </div>
 
           {/* Court rows */}
-          {courts.map(courtId => {
-            const lanes = laneInfo.lanesPerCourt.get(courtId) ?? 1;
-            const rowHeight = ROW_HEIGHT * lanes;
-            return (
+          {courts.map(courtId => (
             <div key={courtId} className="flex border-b border-gray-100">
-              <div
-                className="w-10 flex-shrink-0 px-1 bg-gray-50 text-xs font-medium text-gray-600 flex items-center"
-                style={{ height: rowHeight }}
-              >
+              <div className="w-10 flex-shrink-0 px-1 bg-gray-50 text-xs font-medium text-gray-600 flex items-center">
                 C{courtId}
               </div>
-              <div className="flex-1 relative" style={{ height: rowHeight }}>
+              <div className="flex-1 relative" style={{ height: ROW_HEIGHT }}>
                 {/* Slot grid lines */}
                 <div className="absolute inset-0 flex">
                   {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map(slot => (
@@ -312,27 +268,18 @@ export function GanttChart({
                   const left = (render.slotId - minSlot) * SLOT_WIDTH;
                   const width = Math.max(48, render.durationSlots * SLOT_WIDTH - 2);
 
-                  // Lane vertical layout: when blocks on this court
-                  // collide in time (e.g. a late-starting match drifted
-                  // into the next scheduled block's slot), each block
-                  // gets a horizontal lane inside the row and renders
-                  // at a reduced height, stacked. No block is hidden.
-                  const lane = laneInfo.laneByMatchId.get(assignment.matchId) ?? 0;
-                  const blockHeight = ROW_HEIGHT - 4;
-                  const blockTop = 2 + lane * ROW_HEIGHT;
-
                   return (
                     <div
                       key={assignment.matchId}
                       onClick={() => onMatchSelect(assignment.matchId)}
-                      className={`absolute rounded border cursor-pointer
+                      className={`absolute top-0.5 rounded border cursor-pointer
                         ${styles.bg} ${styles.border}
                         transition-all duration-150 ease-out
                         ${isAnimated ? 'scale-105' : ''}
                         ${ringClass}
                         ${isInProgress ? 'shadow-sm' : ''}
                         hover:brightness-95`}
-                      style={{ left, width, height: blockHeight, top: blockTop }}
+                      style={{ left, width, height: ROW_HEIGHT - 4 }}
                       title={
                         (match ? getMatchLabel(match) : '?') +
                         (traffic?.reason && conflictActionable
@@ -361,8 +308,7 @@ export function GanttChart({
                 })}
               </div>
             </div>
-            );
-          })}
+          ))}
         </div>
       </div>
     </div>
