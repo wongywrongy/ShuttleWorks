@@ -62,7 +62,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
         const userTouched =
           JSON.stringify(prev[key]) !== JSON.stringify(prevBaseline[key]);
         if (!userTouched) {
-          (merged as Record<string, unknown>)[key] = config[key];
+          (merged as unknown as Record<string, unknown>)[key] = config[key];
         }
       });
       // Preserve the badminton defaults when the server returned null.

@@ -132,45 +132,43 @@ function InProgressCard({
     <>
       <div
         onClick={onSelect}
-        className={`rounded border p-1.5 mb-1 cursor-pointer transition-all ${
+        style={{ gridTemplateColumns: 'auto auto auto 1fr auto auto' }}
+        className={[
+          'grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
           isSelected
-            ? 'border-blue-500 ring-1 ring-blue-200 bg-blue-50'
-            : 'border-green-200 bg-green-50 hover:border-green-300'
-        }`}
+            ? 'border-l-blue-500 bg-blue-50'
+            : 'border-l-green-500 bg-green-50/60 hover:bg-green-50',
+        ].join(' ')}
       >
-        <div className="flex justify-between items-center mb-0.5">
-          <div className="flex items-center gap-1">
-            <span className="font-medium text-xs text-gray-700">{getMatchLabel(match)}</span>
-            <span className="text-[10px] text-gray-500">C{displayCourtId}</span>
-          </div>
-          <div className="flex gap-1">
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
-              disabled={updating}
-              className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700`}
-              aria-label="Finish match and enter score"
-            >
-              {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
-              Finish
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleUndo(); }}
-              disabled={updating}
-              className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300`}
-              title={wasMoved ? 'Undo and restore to original position' : 'Undo to called status'}
-              aria-label="Undo match state"
-            >
-              Undo
-            </button>
-          </div>
-        </div>
-        <div className="text-[10px] text-gray-600 truncate">{sideANames} vs {sideBNames}</div>
-        <div className="text-[10px] text-gray-500 flex items-center gap-1">
+        <span className="font-semibold text-gray-800 tabular-nums">{getMatchLabel(match)}</span>
+        <span className="text-[11px] text-gray-500">C{displayCourtId}</span>
+        <span className="tabular-nums text-[11px] text-gray-500">
           <ElapsedTimer startTime={matchState?.actualStartTime} />
+        </span>
+        <span className="truncate text-gray-700" title={`${sideANames} vs ${sideBNames}`}>
+          {sideANames} <span className="text-gray-400">vs</span> {sideBNames}
           {wasMoved && (
-            <span className="text-[9px] text-orange-500">(moved)</span>
+            <span className="ml-1 text-[10px] text-orange-500">(moved)</span>
           )}
-        </div>
+        </span>
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
+          disabled={updating}
+          className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700 !px-2 !py-0.5 !text-[11px]`}
+          aria-label="Finish match and enter score"
+        >
+          {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+          Finish
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); handleUndo(); }}
+          disabled={updating}
+          className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300 !px-2 !py-0.5 !text-[11px]`}
+          title={wasMoved ? 'Undo and restore to original position' : 'Undo to called status'}
+          aria-label="Undo match state"
+        >
+          Undo
+        </button>
       </div>
 
       {showScoreDialog && (
@@ -417,39 +415,100 @@ function UpNextCard({
     <>
       <div
         onClick={onSelect}
-        className={`rounded border border-l-2 p-1.5 mb-1 cursor-pointer transition-all ${borderColorClass} ${
-          isSelected ? 'border-blue-500 ring-1 ring-blue-200 bg-blue-50' : `${bgColorClass} hover:brightness-95`
-        }`}
+        // Columns: dot · event · C·time · players (grows) · status tag · actions.
+        // Inline style is used rather than a Tailwind arbitrary class to
+        // avoid an edge case where the JIT dropped the arbitrary value.
+        style={{ gridTemplateColumns: 'auto auto auto 1fr auto auto' }}
+        className={[
+          'grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
+          borderColorClass,
+          isSelected ? 'bg-blue-50' : `${bgColorClass} hover:brightness-[0.98]`,
+        ].join(' ')}
       >
-        <div className="flex justify-between items-center mb-0.5">
-          <div className="flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${dotColorClass}`} />
-            <span className="font-medium text-xs text-gray-700">{getMatchLabel(match)}</span>
-            <span className="text-[10px] text-gray-500">C{assignment.courtId} · {scheduledTime}</span>
-            {matchState?.postponed && <span className="text-[9px] text-orange-600 font-medium">(postponed)</span>}
-            {isLate && !matchState?.postponed && <span className="text-[9px] text-yellow-600 font-medium">(late)</span>}
-          </div>
-          <div className="flex gap-1">
+        <span className={`w-1.5 h-1.5 rounded-full ${dotColorClass}`} />
+        <span className="font-semibold text-gray-800 tabular-nums">{getMatchLabel(match)}</span>
+        <span className="tabular-nums text-[11px] text-gray-500">C{assignment.courtId} · {scheduledTime}</span>
+        <span className="truncate text-gray-700" title={`${sideANames} vs ${sideBNames}`}>
+          {hasDelayedPlayers ? (
+            <>
+              {sideAPlayers.map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && <span className="mx-0.5 text-gray-400">&</span>}
+                  {p.name}
+                  {p.delayCount > 0 && (
+                    <span
+                      className="ml-0.5 rounded bg-yellow-100 px-1 text-[9px] font-medium text-yellow-700"
+                      title={`${p.delayCount} delay(s)`}
+                    >
+                      {p.delayCount}
+                    </span>
+                  )}
+                </span>
+              ))}
+              <span className="mx-1 text-gray-400">vs</span>
+              {sideBPlayers.map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && <span className="mx-0.5 text-gray-400">&</span>}
+                  {p.name}
+                  {p.delayCount > 0 && (
+                    <span
+                      className="ml-0.5 rounded bg-yellow-100 px-1 text-[9px] font-medium text-yellow-700"
+                      title={`${p.delayCount} delay(s)`}
+                    >
+                      {p.delayCount}
+                    </span>
+                  )}
+                </span>
+              ))}
+            </>
+          ) : (
+            <>
+              {sideANames} <span className="text-gray-400">vs</span> {sideBNames}
+            </>
+          )}
+        </span>
+        <span className="flex items-center gap-1 whitespace-nowrap text-[10px]">
+          {matchState?.postponed && (
+            <span className="rounded bg-orange-100 px-1 font-medium text-orange-700">postponed</span>
+          )}
+          {isLate && !matchState?.postponed && (
+            <span className="rounded bg-yellow-100 px-1 font-medium text-yellow-700">late</span>
+          )}
+          {trafficLight?.reason && light !== 'green' && (
+            <span
+              className={[
+                'max-w-[180px] truncate rounded px-1 font-medium',
+                light === 'yellow'
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : 'bg-red-100 text-red-700',
+              ].join(' ')}
+              title={trafficLight.reason}
+            >
+              {trafficLight.reason}
+            </span>
+          )}
+        </span>
+        <div className="flex gap-1">
             {isCalled ? (
               <>
                 {!allPlayersConfirmed && onConfirmPlayer && (
                   <button
                     onClick={(e) => { e.stopPropagation(); handleCheckInAll(); }}
                     disabled={updating}
-                    className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700`}
+                    className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700 !px-2 !py-0.5 !text-[11px]`}
                     title={`Mark all ${missingPlayers.length} missing player${missingPlayers.length === 1 ? '' : 's'} as present`}
                     aria-label="Confirm all players present"
                   >
                     {updating
                       ? <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
-                      : <Check aria-hidden="true" className="h-3.5 w-3.5" />}
-                    Confirm all
+                      : <Check aria-hidden="true" className="h-3 w-3" />}
+                    All in
                   </button>
                 )}
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowCourtDialog(true); }}
                   disabled={updating}
-                  className={`${ACTION_BTN} bg-green-600 text-white hover:bg-green-700`}
+                  className={`${ACTION_BTN} bg-green-600 text-white hover:bg-green-700 !px-2 !py-0.5 !text-[11px]`}
                   title={allPlayersConfirmed ? 'Start match' : 'Start — assumes all players present'}
                   aria-label="Start match"
                 >
@@ -459,7 +518,7 @@ function UpNextCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
                   disabled={updating}
-                  className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700`}
+                  className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700 !px-2 !py-0.5 !text-[11px]`}
                   title="Enter score without tracking start/finish times"
                   aria-label="Enter score"
                 >
@@ -468,7 +527,7 @@ function UpNextCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); handleUndo(); }}
                   disabled={updating}
-                  className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300`}
+                  className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300 !px-2 !py-0.5 !text-[11px]`}
                   aria-label="Undo"
                 >
                   Undo
@@ -481,6 +540,7 @@ function UpNextCard({
                   disabled={updating || light === 'red'}
                   className={[
                     ACTION_BTN,
+                    '!px-2 !py-0.5 !text-[11px]',
                     light === 'green'
                       ? 'bg-gray-800 text-white hover:bg-gray-900'
                       : light === 'yellow'
@@ -502,7 +562,7 @@ function UpNextCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
                   disabled={updating}
-                  className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700`}
+                  className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700 !px-2 !py-0.5 !text-[11px]`}
                   title="Enter score directly — skips call / start"
                   aria-label="Enter score"
                 >
@@ -513,18 +573,20 @@ function UpNextCard({
                   disabled={updating}
                   className={[
                     ACTION_BTN,
+                    '!px-2 !py-0.5 !text-[11px]',
                     matchState?.postponed
                       ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
                   ].join(' ')}
                   aria-pressed={Boolean(matchState?.postponed)}
+                  title={matchState?.postponed ? 'Restore match' : 'Postpone match'}
                 >
-                  {matchState?.postponed ? 'Restore' : 'Postpone'}
+                  {matchState?.postponed ? 'Restore' : 'Post'}
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowEditDialog(true); }}
                   disabled={updating}
-                  className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300`}
+                  className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300 !px-2 !py-0.5 !text-[11px]`}
                   aria-label="Edit match"
                 >
                   Edit
@@ -533,127 +595,45 @@ function UpNextCard({
             )}
           </div>
         </div>
-        {/* Player names - clickable for check-in when called */}
-        {isCalled && onConfirmPlayer ? (
-          <div className="flex items-center gap-1.5 flex-wrap text-xs mt-1">
-            <span className="flex items-center gap-1">
-              {sideAPlayers.map((p, i) => {
-                const isConfirmed = confirmations[p.id] || false;
-                return (
-                  <span key={p.id} className="flex items-center">
-                    {i > 0 && <span className="mx-0.5 text-gray-400">&</span>}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleConfirmPlayer(p.id); }}
-                      disabled={updating}
-                      className={[
-                        INTERACTIVE_BASE,
-                        'inline-flex items-center gap-1 px-2 py-1 rounded font-medium',
-                        isConfirmed
-                          ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200',
-                      ].join(' ')}
-                      title={isConfirmed ? `${p.name} confirmed` : `Click to confirm ${p.name}`}
-                      aria-label={isConfirmed ? `${p.name} confirmed present` : `Confirm ${p.name} present`}
-                      aria-pressed={isConfirmed}
-                    >
-                      {isConfirmed && (
-                        <Check aria-hidden="true" className="h-3 w-3 flex-shrink-0" />
-                      )}
-                      {p.name}
-                    </button>
-                    {p.delayCount > 0 && (
-                      <span className="ml-0.5 px-1 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[9px] font-medium" title={`${p.delayCount} delay(s)`}>
-                        {p.delayCount}
-                      </span>
-                    )}
+      {/* Player check-in strip — only shown for called matches with
+          unconfirmed players. Sits directly under the row, no extra
+          card-level padding, so the strip behaves as a sub-line. */}
+      {isCalled && onConfirmPlayer && (
+        <div className="flex flex-wrap items-center gap-1 border-l-2 border-l-transparent bg-gray-50/60 px-2 py-0.5 text-[11px]">
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Check in</span>
+          {[...sideAPlayers, ...sideBPlayers].map((p) => {
+            const isConfirmed = confirmations[p.id] || false;
+            return (
+              <button
+                key={p.id}
+                onClick={(e) => { e.stopPropagation(); handleConfirmPlayer(p.id); }}
+                disabled={updating}
+                className={[
+                  INTERACTIVE_BASE,
+                  'inline-flex items-center gap-0.5 rounded border px-1.5 py-0 font-medium',
+                  isConfirmed
+                    ? 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100',
+                ].join(' ')}
+                title={isConfirmed ? `${p.name} confirmed` : `Click to confirm ${p.name}`}
+                aria-label={isConfirmed ? `${p.name} confirmed present` : `Confirm ${p.name} present`}
+                aria-pressed={isConfirmed}
+              >
+                {isConfirmed && <Check aria-hidden="true" className="h-3 w-3 flex-shrink-0" />}
+                {p.name}
+                {p.delayCount > 0 && (
+                  <span
+                    className="ml-0.5 rounded bg-yellow-100 px-0.5 text-[9px] font-semibold text-yellow-700"
+                    title={`${p.delayCount} delay(s)`}
+                  >
+                    {p.delayCount}
                   </span>
-                );
-              })}
-            </span>
-            <span className="text-gray-400 font-medium">vs</span>
-            <span className="flex items-center gap-1">
-              {sideBPlayers.map((p, i) => {
-                const isConfirmed = confirmations[p.id] || false;
-                return (
-                  <span key={p.id} className="flex items-center">
-                    {i > 0 && <span className="mx-0.5 text-gray-400">&</span>}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleConfirmPlayer(p.id); }}
-                      disabled={updating}
-                      className={[
-                        INTERACTIVE_BASE,
-                        'inline-flex items-center gap-1 px-2 py-1 rounded font-medium',
-                        isConfirmed
-                          ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200',
-                      ].join(' ')}
-                      title={isConfirmed ? `${p.name} confirmed` : `Click to confirm ${p.name}`}
-                      aria-label={isConfirmed ? `${p.name} confirmed present` : `Confirm ${p.name} present`}
-                      aria-pressed={isConfirmed}
-                    >
-                      {isConfirmed && (
-                        <Check aria-hidden="true" className="h-3 w-3 flex-shrink-0" />
-                      )}
-                      {p.name}
-                    </button>
-                    {p.delayCount > 0 && (
-                      <span className="ml-0.5 px-1 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[9px] font-medium" title={`${p.delayCount} delay(s)`}>
-                        {p.delayCount}
-                      </span>
-                    )}
-                  </span>
-                );
-              })}
-            </span>
-          </div>
-        ) : (
-          <div className="text-[10px] text-gray-600 truncate flex items-center gap-1">
-            {hasDelayedPlayers ? (
-              <>
-                <span className="flex items-center gap-0.5">
-                  {sideAPlayers.map((p, i) => (
-                    <span key={p.id} className="flex items-center">
-                      {i > 0 && <span className="mx-0.5">&</span>}
-                      <span>{p.name}</span>
-                      {p.delayCount > 0 && (
-                        <span className="ml-0.5 px-0.5 bg-yellow-100 text-yellow-700 rounded text-[8px] font-medium" title={`${p.delayCount} delay(s)`}>
-                          {p.delayCount}
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </span>
-                <span className="text-gray-400">vs</span>
-                <span className="flex items-center gap-0.5">
-                  {sideBPlayers.map((p, i) => (
-                    <span key={p.id} className="flex items-center">
-                      {i > 0 && <span className="mx-0.5">&</span>}
-                      <span>{p.name}</span>
-                      {p.delayCount > 0 && (
-                        <span className="ml-0.5 px-0.5 bg-yellow-100 text-yellow-700 rounded text-[8px] font-medium" title={`${p.delayCount} delay(s)`}>
-                          {p.delayCount}
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </span>
-              </>
-            ) : (
-              <span>{sideANames} <span className="text-gray-400">vs</span> {sideBNames}</span>
-            )}
-          </div>
-        )}
-
-        {/* Conflict reason - always visible for yellow/red */}
-        {trafficLight?.reason && light !== 'green' && (
-          <div className={`mt-1 px-1.5 py-0.5 rounded text-[9px] flex items-center gap-1 ${
-            light === 'yellow' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-          }`}>
-            <span className={`w-1 h-1 rounded-full ${dotColorClass}`} />
-            {trafficLight.reason}
-          </div>
-        )}
-      </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Edit Match Dialog */}
       {showEditDialog && (
@@ -755,33 +735,35 @@ function FinishedCard({
   return (
     <div
       onClick={onSelect}
-      className={`rounded border p-1.5 mb-1 cursor-pointer transition-all ${
+      style={{ gridTemplateColumns: 'auto auto 1fr auto auto' }}
+      className={[
+        'grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
         isSelected
-          ? 'border-blue-500 ring-1 ring-blue-200 bg-blue-50'
-          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-      }`}
+          ? 'border-l-blue-500 bg-blue-50'
+          : 'border-l-gray-300 bg-gray-50/60 hover:bg-gray-50',
+      ].join(' ')}
     >
-      <div className="flex justify-between items-center mb-0.5">
-        <div className="flex items-center gap-1">
-          <span className="font-medium text-xs text-gray-500">{getMatchLabel(match)}</span>
-          <span className="text-[10px] text-gray-400">C{assignment.courtId}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {score && (
-            <span className="font-medium text-xs text-purple-600">
-              {score.sideA}-{score.sideB}
-            </span>
-          )}
-          <button
-            onClick={(e) => { e.stopPropagation(); handleUndo(); }}
-            disabled={updating}
-            className="px-2.5 py-1 bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300 disabled:bg-gray-100"
-          >
-            Undo
-          </button>
-        </div>
-      </div>
-      <div className="text-[10px] text-gray-500 truncate">{sideANames} <span className="text-gray-400">vs</span> {sideBNames}</div>
+      <span className="font-semibold text-gray-600 tabular-nums">{getMatchLabel(match)}</span>
+      <span className="tabular-nums text-[11px] text-gray-400">C{assignment.courtId}</span>
+      <span className="truncate text-gray-600" title={`${sideANames} vs ${sideBNames}`}>
+        {sideANames} <span className="text-gray-400">vs</span> {sideBNames}
+      </span>
+      {score ? (
+        <span className="font-mono text-xs font-semibold tabular-nums text-blue-700">
+          {score.sideA}–{score.sideB}
+        </span>
+      ) : (
+        <span className="text-[10px] text-gray-400">no score</span>
+      )}
+      <button
+        onClick={(e) => { e.stopPropagation(); handleUndo(); }}
+        disabled={updating}
+        className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300 !px-2 !py-0.5 !text-[11px]`}
+        aria-label="Undo finish"
+      >
+        {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+        Undo
+      </button>
     </div>
   );
 }

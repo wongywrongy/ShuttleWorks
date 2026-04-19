@@ -6,6 +6,7 @@
 import { useMemo, useEffect, useState, useRef } from 'react';
 import { Check } from 'lucide-react';
 import { calculateTotalSlots, formatSlotTime } from '../../utils/timeUtils';
+import type { TrafficLightResult } from '../../utils/trafficLight';
 import type {
   ScheduleDTO,
   MatchDTO,
@@ -23,6 +24,12 @@ interface GanttChartProps {
   selectedMatchId?: string | null;
   onMatchSelect: (matchId: string) => void;
   impactedMatchIds?: string[];
+  /** Per-match traffic-light result so the grid can surface conflicts
+   *  (player resting / blocked) as a visible ring on still-actionable
+   *  blocks. The rows/cards already surface this, but operators working
+   *  from the Gantt view were missing it.
+   */
+  trafficLights?: Map<string, TrafficLightResult>;
 }
 
 const SLOT_WIDTH = 48;
@@ -67,6 +74,7 @@ export function GanttChart({
   selectedMatchId,
   onMatchSelect,
   impactedMatchIds = [],
+  trafficLights,
 }: GanttChartProps) {
   const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
   const impactedSet = useMemo(() => new Set(impactedMatchIds), [impactedMatchIds]);
@@ -215,15 +223,30 @@ export function GanttChart({
                   const isInProgress = status === 'started';
 
                   const isImpacted = impactedSet.has(assignment.matchId);
+                  const traffic = trafficLights?.get(assignment.matchId);
+                  // Conflict rings are only meaningful while the match
+                  // is still actionable (scheduled / called). Once
+                  // started or finished, the traffic light is moot.
+                  const conflictActionable =
+                    traffic && (status === 'scheduled' || status === 'called');
+                  const isBlocked = conflictActionable && traffic.status === 'red';
+                  const isResting = conflictActionable && traffic.status === 'yellow';
 
-                  // Determine which inset ring to show (priority: selected > impacted > postponed > late)
+                  // Ring priority: selected > blocked conflict > impacted
+                  // > postponed > resting > late. Conflict-red outranks
+                  // impacted because a player physically can't be on the
+                  // court — harder constraint than a soft impact.
                   let ringClass = '';
                   if (isSelected) {
                     ringClass = 'ring-2 ring-inset ring-blue-500';
+                  } else if (isBlocked) {
+                    ringClass = 'ring-2 ring-inset ring-red-500';
                   } else if (isImpacted) {
                     ringClass = 'ring-2 ring-inset ring-purple-500';
                   } else if (isPostponed) {
                     ringClass = 'ring-2 ring-inset ring-red-400';
+                  } else if (isResting) {
+                    ringClass = 'ring-2 ring-inset ring-amber-400';
                   } else if (isLate) {
                     ringClass = 'ring-2 ring-inset ring-yellow-400';
                   }
@@ -244,7 +267,12 @@ export function GanttChart({
                         ${isInProgress ? 'shadow-sm' : ''}
                         hover:brightness-95`}
                       style={{ left, width, height: ROW_HEIGHT - 4 }}
-                      title={match ? getMatchLabel(match) : '?'}
+                      title={
+                        (match ? getMatchLabel(match) : '?') +
+                        (traffic?.reason && conflictActionable
+                          ? ` — ${traffic.reason}`
+                          : '')
+                      }
                     >
                       <div className="px-1.5 h-full flex items-center gap-1 overflow-hidden">
                         {/* Pulsing dot for in-progress */}

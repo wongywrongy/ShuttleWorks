@@ -228,11 +228,11 @@ export function PlayerListView({
               >
                 Name
                 {sortField === 'name' && (
-                  {sortDirection === 'asc' ? (
+                  sortDirection === 'asc' ? (
                     <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
                   ) : (
                     <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
-                  )}
+                  )
                 )}
               </button>
             </th>
@@ -243,11 +243,11 @@ export function PlayerListView({
               >
                 School
                 {sortField === 'school' && (
-                  {sortDirection === 'asc' ? (
+                  sortDirection === 'asc' ? (
                     <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
                   ) : (
                     <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
-                  )}
+                  )
                 )}
               </button>
             </th>

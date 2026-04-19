@@ -402,6 +402,7 @@ export function MatchControlCenterPage() {
                 selectedMatchId={selectedMatchId}
                 onMatchSelect={setSelectedMatchId}
                 impactedMatchIds={selectedAnalysis?.directlyImpacted}
+                trafficLights={trafficLights}
               />
             </div>
           </div>

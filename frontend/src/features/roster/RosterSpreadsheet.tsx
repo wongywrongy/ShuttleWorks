@@ -9,7 +9,7 @@
  * commits on blur. No modals.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronUp } from 'lucide-react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
 import type { AvailabilityWindow, PlayerDTO, TournamentConfig } from '../../api/dto';

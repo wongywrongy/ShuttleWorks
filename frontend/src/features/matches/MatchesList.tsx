@@ -213,11 +213,11 @@ export function MatchesList({
               >
                 Event
                 {sortField === 'eventRank' && (
-                  {sortDirection === 'asc' ? (
+                  sortDirection === 'asc' ? (
                     <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
                   ) : (
                     <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
-                  )}
+                  )
                 )}
               </button>
             </th>
@@ -228,11 +228,11 @@ export function MatchesList({
               >
                 Type
                 {sortField === 'type' && (
-                  {sortDirection === 'asc' ? (
+                  sortDirection === 'asc' ? (
                     <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
                   ) : (
                     <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
-                  )}
+                  )
                 )}
               </button>
             </th>
