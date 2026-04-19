@@ -413,6 +413,13 @@ function inferConfig(schedule: ScheduleParse, courtMax: number): TournamentConfi
     defaultRestMinutes: 30,
     freezeHorizonSlots: 0,
     rankCounts: {},
+    // Badminton scoring is the app's whole domain; default to per-set
+    // entry so the Finish dialog asks for individual game scores instead
+    // of a single sideA/sideB aggregate. Setup tab can override later.
+    scoringFormat: 'badminton',
+    setsToWin: 2,
+    pointsPerSet: 21,
+    deuceEnabled: true,
   };
 }
 

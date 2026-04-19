@@ -328,6 +328,20 @@ function UpNextCard({
     }
   };
 
+  const handleCheckInAll = async () => {
+    if (!onConfirmPlayer) return;
+    setUpdating(true);
+    try {
+      await Promise.all(
+        allPlayerIds
+          .filter((id) => !confirmations[id])
+          .map((id) => onConfirmPlayer(assignment.matchId, id, true)),
+      );
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handlePostpone = async () => {
     setUpdating(true);
     try {
@@ -408,15 +422,21 @@ function UpNextCard({
           <div className="flex gap-1">
             {isCalled ? (
               <>
+                {!allPlayersConfirmed && onConfirmPlayer && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleCheckInAll(); }}
+                    disabled={updating}
+                    className="px-2.5 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:bg-gray-400"
+                    title={`Mark all ${missingPlayers.length} missing player${missingPlayers.length === 1 ? '' : 's'} as present`}
+                  >
+                    ✓ All
+                  </button>
+                )}
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowCourtDialog(true); }}
-                  disabled={updating || !allPlayersConfirmed}
-                  className={`px-2.5 py-1 rounded text-xs font-medium ${
-                    allPlayersConfirmed
-                      ? 'bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
-                  title={!allPlayersConfirmed ? `Waiting for: ${missingPlayers.map(id => playerNames.get(id) || id).join(', ')}` : 'Start match'}
+                  disabled={updating}
+                  className="px-2.5 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:bg-gray-400"
+                  title={allPlayersConfirmed ? 'Start match' : 'Start — assumes all players present'}
                 >
                   Start
                 </button>
