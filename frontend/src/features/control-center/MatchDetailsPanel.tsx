@@ -172,11 +172,59 @@ export function MatchDetailsPanel({
           In Progress
         </div>
       )}
-      {status === 'finished' && (
-        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded mb-3 text-[10px] font-medium bg-purple-50 text-purple-700">
-          Done {matchState?.score ? `${matchState.score.sideA}-${matchState.score.sideB}` : ''}
-        </div>
-      )}
+      {status === 'finished' && (() => {
+        const score = matchState?.score;
+        const sets = matchState?.sets ?? [];
+        const winner: 'A' | 'B' | null = score
+          ? score.sideA > score.sideB
+            ? 'A'
+            : score.sideB > score.sideA
+              ? 'B'
+              : null
+          : null;
+        const winnerIds = winner === 'A' ? match.sideA : winner === 'B' ? match.sideB : [];
+        const winnerNames = (winnerIds ?? []).map((id) => playerNames.get(id) ?? id).join(' & ');
+
+        return (
+          <div className="mb-3 rounded border border-purple-200 bg-purple-50 px-2 py-1.5 text-xs text-purple-800">
+            <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-purple-600">
+              <span>Done</span>
+              {score && (
+                <span className="ml-auto font-mono text-purple-900">
+                  {score.sideA}–{score.sideB}
+                </span>
+              )}
+            </div>
+            {winner && winnerNames ? (
+              <div className="mt-0.5 font-semibold text-purple-900">
+                🏆 {winnerNames}
+              </div>
+            ) : (
+              <div className="mt-0.5 text-purple-700">Tied</div>
+            )}
+            {sets.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1 text-[10px] font-mono">
+                {sets.map((s, i) => {
+                  const setWinner = s.sideA > s.sideB ? 'A' : s.sideB > s.sideA ? 'B' : null;
+                  return (
+                    <span
+                      key={i}
+                      className={`rounded px-1 py-0.5 ${
+                        setWinner === winner
+                          ? 'bg-purple-200 text-purple-900'
+                          : 'bg-white text-purple-700'
+                      }`}
+                      title={`Set ${i + 1}`}
+                    >
+                      {s.sideA}–{s.sideB}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Reason for yellow/red */}
       {status === 'scheduled' && trafficLight?.reason && light !== 'green' && (
@@ -194,45 +242,57 @@ export function MatchDetailsPanel({
         <div className="text-[9px] font-medium text-gray-500 uppercase tracking-wide mb-1">
           Players
         </div>
-        <div className="text-xs text-gray-700 space-y-0.5">
-          {(match.sideA || []).map((playerId, i) => {
+        {(() => {
+          const score = matchState?.score;
+          const winner: 'A' | 'B' | null =
+            status === 'finished' && score
+              ? score.sideA > score.sideB
+                ? 'A'
+                : score.sideB > score.sideA
+                  ? 'B'
+                  : null
+              : null;
+          const sideClass = (side: 'A' | 'B') =>
+            winner === side
+              ? 'text-green-700 font-semibold'
+              : winner && winner !== side
+                ? 'text-gray-400 line-through decoration-1'
+                : 'text-gray-700';
+          const renderRow = (playerId: string, side: 'A' | 'B', key: number) => {
             const name = playerNames.get(playerId) || playerId;
             const restInfo = playerRestTimes.get(playerId);
             return (
-              <div key={i} className="flex items-center justify-between gap-1">
-                <span>{name}</span>
+              <div key={key} className="flex items-center justify-between gap-1">
+                <span className={sideClass(side)}>
+                  {winner === side && <span className="mr-1">🏆</span>}
+                  {name}
+                </span>
                 {restInfo ? (
-                  <span className="text-[9px] text-gray-700" title={`Since ${restInfo.lastMatchLabel || 'last match'}`}>
+                  <span
+                    className="text-[9px] text-gray-700"
+                    title={`Since ${restInfo.lastMatchLabel || 'last match'}`}
+                  >
                     {restInfo.restMinutes >= 60
-                      ? `${Math.floor(restInfo.restMinutes / 60)}h${restInfo.restMinutes % 60 > 0 ? ` ${restInfo.restMinutes % 60}m` : ''}`
-                      : `${restInfo.restMinutes}m`} rest
+                      ? `${Math.floor(restInfo.restMinutes / 60)}h${
+                          restInfo.restMinutes % 60 > 0 ? ` ${restInfo.restMinutes % 60}m` : ''
+                        }`
+                      : `${restInfo.restMinutes}m`}{' '}
+                    rest
                   </span>
                 ) : (
                   <span className="text-[9px] text-gray-400">1st match</span>
                 )}
               </div>
             );
-          })}
-          <div className="text-[10px] text-gray-400">vs</div>
-          {(match.sideB || []).map((playerId, i) => {
-            const name = playerNames.get(playerId) || playerId;
-            const restInfo = playerRestTimes.get(playerId);
-            return (
-              <div key={i} className="flex items-center justify-between gap-1">
-                <span>{name}</span>
-                {restInfo ? (
-                  <span className="text-[9px] text-gray-700" title={`Since ${restInfo.lastMatchLabel || 'last match'}`}>
-                    {restInfo.restMinutes >= 60
-                      ? `${Math.floor(restInfo.restMinutes / 60)}h${restInfo.restMinutes % 60 > 0 ? ` ${restInfo.restMinutes % 60}m` : ''}`
-                      : `${restInfo.restMinutes}m`} rest
-                  </span>
-                ) : (
-                  <span className="text-[9px] text-gray-400">1st match</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+          };
+          return (
+            <div className="text-xs space-y-0.5">
+              {(match.sideA || []).map((id, i) => renderRow(id, 'A', i))}
+              <div className="text-[10px] text-gray-400">vs</div>
+              {(match.sideB || []).map((id, i) => renderRow(id, 'B', i))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Timing (only for in_progress) */}
