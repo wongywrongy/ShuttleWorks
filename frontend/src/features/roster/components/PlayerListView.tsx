@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { PlayerListItem } from './PlayerListItem';
 import { usePlayerSelection } from '../hooks/usePlayerSelection';
 import type { PlayerDTO, RosterGroupDTO } from '../../../api/dto';
@@ -227,7 +228,11 @@ export function PlayerListView({
               >
                 Name
                 {sortField === 'name' && (
-                  <span className="text-gray-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
+                  ) : (
+                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
+                  )}
                 )}
               </button>
             </th>
@@ -238,7 +243,11 @@ export function PlayerListView({
               >
                 School
                 {sortField === 'school' && (
-                  <span className="text-gray-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
+                  ) : (
+                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
+                  )}
                 )}
               </button>
             </th>

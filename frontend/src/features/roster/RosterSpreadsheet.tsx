@@ -9,6 +9,7 @@
  * commits on blur. No modals.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
 import type { AvailabilityWindow, PlayerDTO, TournamentConfig } from '../../api/dto';
@@ -255,8 +256,12 @@ function PlayerRow({
               </span>
             ))
           )}
-          <span className="ml-auto text-[10px] text-gray-400">
-            {rankPickerOpen ? '▴' : 'edit'}
+          <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-gray-400">
+            {rankPickerOpen ? (
+              <ChevronUp aria-hidden="true" className="h-3 w-3" />
+            ) : (
+              'edit'
+            )}
           </span>
         </button>
         {rankPickerOpen ? (
@@ -288,8 +293,12 @@ function PlayerRow({
               {formatWindows(player.availability)}
             </span>
           )}
-          <span className="ml-auto text-[10px] text-gray-400">
-            {availPickerOpen ? '▴' : 'edit'}
+          <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-gray-400">
+            {availPickerOpen ? (
+              <ChevronUp aria-hidden="true" className="h-3 w-3" />
+            ) : (
+              'edit'
+            )}
           </span>
         </button>
         {availPickerOpen ? (
@@ -499,7 +508,7 @@ function AvailabilityPicker({
                 onChange={(e) => updateAt(i, { start: e.target.value })}
                 className="w-24 rounded border border-gray-200 px-1.5 py-0.5 text-xs tabular-nums outline-none focus:border-blue-400"
               />
-              <span className="text-xs text-gray-400">→</span>
+              <span className="text-xs text-gray-400" aria-hidden="true">to</span>
               <input
                 type="time"
                 value={w.end}

@@ -72,7 +72,26 @@ export function BadmintonScoreDialog({
     setSets((prev) => {
       const next = [...prev];
       const clamped = Math.max(0, Math.min(maxPoints, value));
+      const other = side === 'sideA' ? 'sideB' : 'sideA';
+      const otherScore = next[setIndex][other];
+
       next[setIndex] = { ...next[setIndex], [side]: clamped };
+
+      // Loser-first auto-fill.
+      // Tournament directors routinely enter the losing side's number
+      // and expect the winner to default to "match format won" — which
+      // is unambiguous when the entered score is clearly below the
+      // deuce threshold (pointsPerSet - 1) and the other side is still
+      // untouched. Above the deuce threshold we can't safely guess
+      // (could be 22-20, 23-21, etc.), so we leave both sides to the
+      // operator in those cases.
+      //
+      // Runs only when the operator typed a true losing score: strictly
+      // positive, below pointsPerSet - 1, and the other side has not
+      // been edited yet (is 0).
+      if (clamped > 0 && clamped < pointsPerSet - 1 && otherScore === 0) {
+        next[setIndex] = { ...next[setIndex], [other]: pointsPerSet };
+      }
       return next;
     });
   };
@@ -267,7 +286,7 @@ export function BadmintonScoreDialog({
             </div>
           ) : (
             <div className="rounded border border-dashed border-gray-200 px-3 py-2 text-center text-[11px] text-gray-500">
-              Enter set scores or tap A/B to pick a set winner. Match decides once someone wins {setsToWin} set{setsToWin === 1 ? '' : 's'}.
+              Type the losing side's score and the winner auto-fills to {pointsPerSet}. Deuce sets need both scores entered manually. Match decides once someone wins {setsToWin} set{setsToWin === 1 ? '' : 's'}.
             </div>
           )}
 

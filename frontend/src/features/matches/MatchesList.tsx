@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Menu } from '@headlessui/react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { MatchDTO } from '../../api/dto';
 import { usePlayerNames } from '../../hooks/usePlayerNames';
 
@@ -212,7 +213,11 @@ export function MatchesList({
               >
                 Event
                 {sortField === 'eventRank' && (
-                  <span className="text-gray-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
+                  ) : (
+                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
+                  )}
                 )}
               </button>
             </th>
@@ -223,7 +228,11 @@ export function MatchesList({
               >
                 Type
                 {sortField === 'type' && (
-                  <span className="text-gray-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
+                  ) : (
+                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
+                  )}
                 )}
               </button>
             </th>

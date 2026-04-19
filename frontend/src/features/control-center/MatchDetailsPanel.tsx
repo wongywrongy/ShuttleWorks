@@ -2,7 +2,7 @@
  * Match Details Panel - Shows selected match details
  */
 import { useMemo, useState } from 'react';
-import { Pencil, Trophy } from 'lucide-react';
+import { ChevronRight, Pencil, Trophy } from 'lucide-react';
 import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
 import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, SetScore, TournamentConfig } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
@@ -443,7 +443,7 @@ export function MatchDetailsPanel({
               >
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-medium text-gray-700">{eventLabel}</span>
-                  <span className="text-gray-400 text-[10px]">→</span>
+                  <ChevronRight aria-hidden="true" className="h-3 w-3 text-gray-400" />
                 </div>
                 {sharedPlayerNames.length > 0 && (
                   <div className="text-[10px] text-gray-500 mt-0.5">

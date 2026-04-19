@@ -3,6 +3,7 @@
  * Provides export, import, and reset functionality for tournament state
  */
 import { useRef, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 
 interface FileManagementButtonsProps {
   onExport: () => Promise<void>;
@@ -91,10 +92,14 @@ export function FileManagementButtons({
         <button
           onClick={handleSync}
           disabled={syncing}
-          className="text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
           title="Refresh match states from server"
         >
-          {syncing ? '↻ Syncing...' : '↻ Refresh'}
+          <RefreshCw
+            aria-hidden="true"
+            className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`}
+          />
+          {syncing ? 'Syncing…' : 'Refresh'}
         </button>
       </div>
 

@@ -12,6 +12,7 @@
  *   RosterSpreadsheet (detail view — availability, rest, notes)
  */
 import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import {
   DndContext,
   MouseSensor,
@@ -180,7 +181,11 @@ export function RosterTab() {
           className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600 hover:bg-gray-50"
         >
           <span>Player details ({players.length}) — availability, rest, notes</span>
-          <span className="text-gray-400">{detailsOpen ? '▴' : '▾'}</span>
+          {detailsOpen ? (
+            <ChevronUp aria-hidden="true" className="h-3.5 w-3.5 text-gray-400" />
+          ) : (
+            <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 text-gray-400" />
+          )}
         </button>
         {detailsOpen ? (
           <div className="border-t border-gray-100">

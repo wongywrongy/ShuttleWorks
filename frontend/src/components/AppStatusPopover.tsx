@@ -9,6 +9,7 @@
  * terminal on tournament day.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useAppStore } from '../store/appStore';
 
@@ -208,9 +209,10 @@ export function AppStatusPopover() {
                 setActiveTab('setup');
                 setOpen(false);
               }}
-              className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50"
             >
-              Manage backups →
+              Manage backups
+              <ChevronRight aria-hidden="true" className="h-3 w-3" />
             </button>
           </div>
 

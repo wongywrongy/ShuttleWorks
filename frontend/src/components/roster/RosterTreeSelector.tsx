@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import React from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { RosterGroupDTO } from '../../api/dto';
 
 interface RosterTreeSelectorProps {
@@ -83,9 +84,15 @@ export function RosterTreeSelector({
                 e.stopPropagation();
                 toggleExpand(group.id);
               }}
+              aria-label={isExpanded ? 'Collapse' : 'Expand'}
+              aria-expanded={isExpanded}
               className="mr-2 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700"
             >
-              {isExpanded ? '▼' : '▶'}
+              {isExpanded ? (
+                <ChevronDown aria-hidden="true" className="h-3 w-3" />
+              ) : (
+                <ChevronRight aria-hidden="true" className="h-3 w-3" />
+              )}
             </button>
           )}
           {!hasChildren && <span className="mr-2 w-4" />}

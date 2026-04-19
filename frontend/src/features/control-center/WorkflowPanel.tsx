@@ -365,7 +365,7 @@ function UpNextCard({
   };
 
   // Scoring config, mirrors InProgressCard so the dialog behaves the same
-  // whether the match came from called-shortcut or the normal Start → Finish flow.
+  // whether the match came from called-shortcut or the normal Start / Finish flow.
   const useBadmintonScoring = config?.scoringFormat === 'badminton';
   const setsToWin = config?.setsToWin ?? 2;
   const pointsPerSet = config?.pointsPerSet ?? 21;

@@ -8,7 +8,7 @@
  *
  * Interaction:
  *   - Drag a player chip from the PlayerPool onto a cell; OR
- *   - Click a cell → searchable player picker opens inline.
+ *   - Click a cell: a searchable player picker opens inline.
  *   - Click × on a chip inside a cell to unassign.
  *
  * All state lives in Zustand — any assignment = `updatePlayer(id, { ranks })`.
@@ -515,7 +515,7 @@ function PlayerSearchPicker({
         )}
       </div>
       <div className="flex items-center justify-between border-t border-gray-100 px-2 py-1 text-[10px] text-gray-500">
-        <span>↑↓ navigate · Enter to pick · Esc to close</span>
+        <span>Up/Down to navigate · Enter to pick · Esc to close</span>
         <button
           type="button"
           onClick={onClose}

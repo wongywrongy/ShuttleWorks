@@ -1,13 +1,17 @@
 /**
- * Hook for live tracking page logic
- * Manages match state fetching, updating, and grouping for the live tracking interface
+ * Hook for live tracking page logic.
  *
- * Match State Machine:
- *   scheduled → called → started → finished
- *       ↓         ↓         ↓          ↓
- *    (delay)   (undo)    (undo)     (undo)
- *       ↓         ↓         ↓          ↓
- *   scheduled  scheduled  called    started
+ * Manages match-state fetching, updating, and grouping for the live
+ * tracking interface.
+ *
+ * Match state machine (happy path reads left-to-right):
+ *
+ *   scheduled -> called -> started -> finished
+ *
+ * Every forward transition has an undo edge to the prior state, plus
+ * an ad-hoc "delay" edge that leaves a match in `scheduled` with a
+ * reason attached. See VALID_TRANSITIONS below for the authoritative
+ * table.
  */
 import { useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/appStore';
@@ -150,7 +154,7 @@ export function useLiveTracking() {
 
       // Validate state transition
       if (!isValidTransition(currentStatus, status)) {
-        console.warn(`Invalid state transition: ${currentStatus} → ${status} for match ${matchId}`);
+        console.warn(`Invalid state transition: ${currentStatus} to ${status} for match ${matchId}`);
         throw new Error(`Invalid state transition: cannot go from '${currentStatus}' to '${status}'`);
       }
 

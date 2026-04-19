@@ -399,7 +399,7 @@ export function DragGantt({
           )}
           {pendingPin ? (
             <span className="text-blue-700" data-testid="drag-gantt-pin">
-              Pin in flight: {pendingPin.matchId.slice(0, 6)} → Court {pendingPin.courtId},{' '}
+              Pin in flight: {pendingPin.matchId.slice(0, 6)} to Court {pendingPin.courtId},{' '}
               {formatSlotTime(pendingPin.slotId, config)}
             </span>
           ) : null}

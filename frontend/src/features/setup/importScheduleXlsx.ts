@@ -528,7 +528,7 @@ export async function parseFullRebuild(file: File): Promise<RebuildPlan | null> 
         if (!p.ranks!.includes(eventRank)) p.ranks!.push(eventRank);
       }
 
-      if (aNames.length === 0 || bNames.length === 0) continue; // no opponent → no match
+      if (aNames.length === 0 || bNames.length === 0) continue; // no opponent: no match
 
       const sideAIds = aNames.map((n) => ensurePlayer(0, n));
       const sideBIds = bNames.map((n) => ensurePlayer(1, n));
