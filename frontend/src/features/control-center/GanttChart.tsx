@@ -348,11 +348,17 @@ export function GanttChart({
                           : '')
                       }
                     >
-                      <div className="px-1.5 h-full flex items-center overflow-hidden">
+                      <div className="px-1 h-full flex items-center justify-center overflow-hidden">
                         {/* Status is already carried by the block's
                             fill + border colour and the inset ring for
-                            conflicts — an extra icon is just noise. */}
-                        <span className={`text-[11px] font-medium truncate ${styles.text}`}>
+                            conflicts — an extra icon is just noise.
+                            Overflow is hidden (clipped) rather than
+                            ellipsis-ed so half-width overlap blocks
+                            still show as many characters of the event
+                            code as physically fit. */}
+                        <span
+                          className={`text-[11px] font-medium whitespace-nowrap overflow-hidden ${styles.text}`}
+                        >
                           {match ? getMatchLabel(match) : '?'}
                         </span>
                       </div>
