@@ -62,34 +62,26 @@ def _migrate(raw: dict) -> dict:
 
 
 def _read_with_recovery(path: Path) -> tuple[dict, Optional[str]]:
-    """Load ``path`` or auto-recover from the most recent backup.
+    """Load ``path`` or iterate backups newest→oldest until one parses.
 
-    Returns ``(payload, recovered_from_filename_or_None)``. Raises
-    ``HTTPException`` with a readable detail if nothing is salvageable.
+    Returns ``(payload, recovered_from_filename_or_None)``. Delegates to
+    ``_backups.read_with_recovery`` so tournament_state and match_state
+    share one recovery path — a single corrupt backup no longer blocks
+    recovery of older snapshots.
     """
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f), None
-    except json.JSONDecodeError:
-        log.warning("tournament.json is unreadable; attempting backup recovery")
-        latest = _backups.latest_backup(_data_dir(), path.stem)
-        if latest is None:
-            raise HTTPException(
-                status_code=500,
-                detail="tournament.json is corrupt and no backup exists; reset via Setup",
-            )
-        try:
-            with open(latest, "r", encoding="utf-8") as f:
-                payload = json.load(f)
-        except (json.JSONDecodeError, OSError) as inner:
-            raise HTTPException(
-                status_code=500,
-                detail=f"backup {latest.name} is also unreadable ({inner}); reset via Setup",
-            )
-        # Promote the backup to the live file so subsequent requests hit it.
-        _backups.restore_backup(_data_dir(), path, latest.name)
-        log.warning("recovered tournament.json from backup %s", latest.name)
-        return payload, latest.name
+        return _backups.read_with_recovery(_data_dir(), path)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=500,
+            detail="tournament state is missing and no backup exists; reset via Setup",
+        )
+    except ValueError as e:
+        log.error("tournament-state recovery failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="tournament state unreadable; reset via Setup",
+        )
 
 
 @router.get("/state")
@@ -107,7 +99,8 @@ async def get_tournament_state():
     except HTTPException:
         raise
     except OSError as e:
-        raise HTTPException(status_code=500, detail=f"read failed: {e}")
+        log.error("tournament-state read failed: %s", e)
+        raise HTTPException(status_code=500, detail="could not read tournament state")
 
     data = _migrate(data)
     if recovered_from is not None:
@@ -151,7 +144,8 @@ async def put_tournament_state(state: TournamentStateDTO):
                 tmp.unlink()
             except OSError:
                 pass
-        raise HTTPException(status_code=500, detail=f"write failed: {e}")
+        log.error("tournament-state write failed: %s", e)
+        raise HTTPException(status_code=500, detail="could not persist tournament state")
     return stamped
 
 
