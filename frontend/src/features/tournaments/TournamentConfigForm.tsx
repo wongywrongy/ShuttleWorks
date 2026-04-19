@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { isValidTime } from '../../lib/time';
 import { SetupGuide } from './SetupGuide';
@@ -30,8 +30,10 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
     targetFinishSlot: config.targetFinishSlot ?? null,
     allowPlayerOverlap: config.allowPlayerOverlap ?? false,
     playerOverlapPenalty: config.playerOverlapPenalty ?? 50.0,
-    // Scoring format
-    scoringFormat: config.scoringFormat ?? 'simple',
+    // Badminton is the app's domain; default to per-set scoring so the
+    // Live-page Finish dialog asks for game scores instead of a single
+    // sideA/sideB aggregate.
+    scoringFormat: config.scoringFormat ?? 'badminton',
     setsToWin: config.setsToWin ?? 2,
     pointsPerSet: config.pointsPerSet ?? 21,
     deuceEnabled: config.deuceEnabled ?? true,
@@ -40,6 +42,23 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
   const [breakWindows, setBreakWindows] = useState<BreakWindow[]>(config.breaks || []);
   const [showGuide, setShowGuide] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Re-sync formData whenever the parent's config prop changes. Without
+  // this, a hydration or server-patch that lands after mount would be
+  // silently overwritten the next time the form is submitted (formData
+  // is frozen to mount-time values).
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      ...config,
+      rankCounts: config.rankCounts ?? prev.rankCounts,
+      scoringFormat: config.scoringFormat ?? prev.scoringFormat ?? 'badminton',
+      setsToWin: config.setsToWin ?? prev.setsToWin ?? 2,
+      pointsPerSet: config.pointsPerSet ?? prev.pointsPerSet ?? 21,
+      deuceEnabled: config.deuceEnabled ?? prev.deuceEnabled ?? true,
+    }));
+    setBreakWindows(config.breaks ?? []);
+  }, [config]);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
