@@ -460,12 +460,21 @@ function UpNextCard({
               <>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleCall(); }}
-                  disabled={updating || light !== 'green'}
+                  disabled={updating || light === 'red'}
                   className={`px-2.5 py-1 rounded text-xs font-medium ${
                     light === 'green'
                       ? 'bg-gray-700 text-white hover:bg-gray-800 disabled:bg-gray-400'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : light === 'yellow'
+                        ? 'bg-yellow-500 text-white hover:bg-yellow-600 disabled:bg-gray-400'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
+                  title={
+                    light === 'yellow'
+                      ? `Call anyway — ${trafficLight?.reason ?? 'player still resting'}`
+                      : light === 'red'
+                        ? trafficLight?.reason ?? 'Blocked'
+                        : 'Call match'
+                  }
                 >
                   Call
                 </button>
