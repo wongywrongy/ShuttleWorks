@@ -48,6 +48,15 @@ class TournamentConfig(BaseModel):
     # Player overlap
     allowPlayerOverlap: Optional[bool] = False
     playerOverlapPenalty: Optional[float] = 50.0
+    # Scoring format — surfaces on the Live-page Finish dialog and the TV
+    # per-court card. Strictly UI metadata, not a solver input. Declaring
+    # the fields here so FastAPI's Pydantic serializer doesn't strip them
+    # on every PUT round-trip (prior cause of the "badminton reverts to
+    # simple" bug).
+    scoringFormat: Optional[str] = None  # 'simple' | 'badminton'
+    setsToWin: Optional[int] = None  # 1 (Bo1), 2 (Bo3), 3 (Bo5)
+    pointsPerSet: Optional[int] = None  # 11, 15, 21
+    deuceEnabled: Optional[bool] = None
 
 
 # Availability
