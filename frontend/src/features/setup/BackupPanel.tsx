@@ -5,10 +5,12 @@
  * on every save (last 10 kept). This panel lists them, lets the user
  * snapshot on demand, and restores any backup with a confirmation step.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../../api/client';
-import type { BackupEntryDTO, TournamentStateDTO } from '../../api/dto';
+import type { BackupEntryDTO, ScheduleDTO, TournamentStateDTO } from '../../api/dto';
 import { useAppStore } from '../../store/appStore';
+import { parseScheduleXlsx, type ImportResult } from './importScheduleXlsx';
+import { ScheduleImportModal } from './ScheduleImportModal';
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -42,6 +44,64 @@ export function BackupPanel() {
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const pushToast = useAppStore((s) => s.pushToast);
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+
+    const { matches, players, config } = useAppStore.getState();
+    if (!config) {
+      pushToast({ level: 'error', message: 'Load a tournament config first' });
+      return;
+    }
+    if (matches.length === 0) {
+      pushToast({ level: 'error', message: 'Load matches first — nothing to match against' });
+      return;
+    }
+
+    try {
+      const result = await parseScheduleXlsx(file, matches, players, config);
+      setImportResult(result);
+    } catch (err) {
+      pushToast({
+        level: 'error',
+        message: err instanceof Error ? err.message : 'Could not read XLSX',
+      });
+    }
+  };
+
+  const handleApplyImport = async () => {
+    if (!importResult) return;
+    setImporting(true);
+    try {
+      const current = useAppStore.getState().schedule;
+      const next: ScheduleDTO = current
+        ? { ...current, assignments: importResult.assignments }
+        : {
+            assignments: importResult.assignments,
+            unscheduledMatches: [],
+            softViolations: [],
+            objectiveScore: null,
+            infeasibleReasons: [],
+            status: 'feasible',
+          };
+      useAppStore.getState().setSchedule(next);
+      pushToast({
+        level: importResult.warnings.length > 0 ? 'warn' : 'success',
+        message: `Schedule recovered — ${importResult.assignments.length} assignment${importResult.assignments.length === 1 ? '' : 's'} applied${importResult.warnings.length > 0 ? `, ${importResult.warnings.length} row${importResult.warnings.length === 1 ? '' : 's'} skipped` : ''}.`,
+      });
+      setImportResult(null);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -174,6 +234,43 @@ export function BackupPanel() {
           </ul>
         )}
       </div>
+
+      <div className="mt-3 border-t border-gray-100 pt-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold text-gray-700">Recover schedule</div>
+            <p className="text-xs text-gray-500">
+              Rebuild schedule assignments from a Schedule XLSX export.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busyAction !== null}
+            data-testid="schedule-import-open"
+            className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Recover from XLSX…
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx"
+          className="hidden"
+          data-testid="schedule-import-file"
+          onChange={handleFileSelected}
+        />
+      </div>
+
+      {importResult && (
+        <ScheduleImportModal
+          result={importResult}
+          busy={importing}
+          onApply={handleApplyImport}
+          onCancel={() => setImportResult(null)}
+        />
+      )}
     </div>
   );
 }
