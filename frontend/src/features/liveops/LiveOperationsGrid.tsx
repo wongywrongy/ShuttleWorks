@@ -3,6 +3,7 @@
  * Displays schedule with actual vs planned times, progress, and re-optimize controls
  */
 import { useMemo } from 'react';
+import { Check } from 'lucide-react';
 import { calculateTotalSlots, formatSlotTime } from '../../utils/timeUtils';
 import { calculateScheduleProgress } from '../../utils/scheduleProgress';
 import type {
@@ -273,8 +274,18 @@ export function LiveOperationsGrid({
 
                   // Status icon for started/finished
                   let statusIcon = null;
-                  if (state?.status === 'finished') statusIcon = <span className="text-green-600">✓</span>;
-                  else if (state?.status === 'started') statusIcon = <span className="text-blue-600 animate-pulse">●</span>;
+                  if (state?.status === 'finished') {
+                    statusIcon = (
+                      <Check aria-label="Finished" className="h-3.5 w-3.5 text-green-600" />
+                    );
+                  } else if (state?.status === 'started') {
+                    statusIcon = (
+                      <span
+                        aria-label="In progress"
+                        className="h-2 w-2 rounded-full bg-blue-600 animate-pulse"
+                      />
+                    );
+                  }
 
                   // Traffic light indicator for scheduled/called matches
                   let trafficLightDot = null;

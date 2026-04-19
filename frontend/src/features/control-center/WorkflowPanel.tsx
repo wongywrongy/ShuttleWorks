@@ -4,6 +4,7 @@
  * Center: Tabbed Up Next / Finished with colored left borders
  */
 import { useState, useMemo } from 'react';
+import { Check } from 'lucide-react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO, TournamentConfig, SetScore, PlayerDTO } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import { formatSlotTime } from '../../utils/timeUtils';
@@ -426,10 +427,12 @@ function UpNextCard({
                   <button
                     onClick={(e) => { e.stopPropagation(); handleCheckInAll(); }}
                     disabled={updating}
-                    className="px-2.5 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:bg-gray-400"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:bg-gray-400"
                     title={`Mark all ${missingPlayers.length} missing player${missingPlayers.length === 1 ? '' : 's'} as present`}
+                    aria-label="Confirm all players present"
                   >
-                    ✓ All
+                    <Check aria-hidden="true" className="h-3.5 w-3.5" />
+                    Confirm all
                   </button>
                 )}
                 <button
@@ -520,14 +523,18 @@ function UpNextCard({
                     <button
                       onClick={(e) => { e.stopPropagation(); handleConfirmPlayer(p.id); }}
                       disabled={updating}
-                      className={`px-2 py-1 rounded font-medium transition-colors ${
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded font-medium transition-colors ${
                         isConfirmed
                           ? 'bg-green-100 text-green-700 border border-green-300'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
                       }`}
                       title={isConfirmed ? `${p.name} confirmed` : `Click to confirm ${p.name}`}
+                      aria-label={isConfirmed ? `${p.name} confirmed present` : `Confirm ${p.name} present`}
                     >
-                      {isConfirmed ? '✓ ' : ''}{p.name}
+                      {isConfirmed && (
+                        <Check aria-hidden="true" className="h-3 w-3 flex-shrink-0" />
+                      )}
+                      {p.name}
                     </button>
                     {p.delayCount > 0 && (
                       <span className="ml-0.5 px-1 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[9px] font-medium" title={`${p.delayCount} delay(s)`}>
@@ -548,14 +555,18 @@ function UpNextCard({
                     <button
                       onClick={(e) => { e.stopPropagation(); handleConfirmPlayer(p.id); }}
                       disabled={updating}
-                      className={`px-2 py-1 rounded font-medium transition-colors ${
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded font-medium transition-colors ${
                         isConfirmed
                           ? 'bg-green-100 text-green-700 border border-green-300'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
                       }`}
                       title={isConfirmed ? `${p.name} confirmed` : `Click to confirm ${p.name}`}
+                      aria-label={isConfirmed ? `${p.name} confirmed present` : `Confirm ${p.name} present`}
                     >
-                      {isConfirmed ? '✓ ' : ''}{p.name}
+                      {isConfirmed && (
+                        <Check aria-hidden="true" className="h-3 w-3 flex-shrink-0" />
+                      )}
+                      {p.name}
                     </button>
                     {p.delayCount > 0 && (
                       <span className="ml-0.5 px-1 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[9px] font-medium" title={`${p.delayCount} delay(s)`}>

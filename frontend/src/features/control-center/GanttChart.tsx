@@ -4,6 +4,7 @@
  * Delayed matches get a yellow ring to stand out
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
+import { Check } from 'lucide-react';
 import { calculateTotalSlots, formatSlotTime } from '../../utils/timeUtils';
 import type {
   ScheduleDTO,
@@ -252,7 +253,10 @@ export function GanttChart({
                         )}
                         {/* Checkmark for finished */}
                         {status === 'finished' && (
-                          <span className="text-gray-400 text-[10px] flex-shrink-0">✓</span>
+                          <Check
+                            aria-label="Finished"
+                            className="h-3 w-3 flex-shrink-0 text-gray-400"
+                          />
                         )}
                         <span className={`text-[11px] font-medium truncate ${styles.text}`}>
                           {match ? getMatchLabel(match) : '?'}

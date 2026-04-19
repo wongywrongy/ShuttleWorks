@@ -2,6 +2,7 @@
  * Match Details Panel - Shows selected match details
  */
 import { useMemo, useState } from 'react';
+import { Pencil, Trophy } from 'lucide-react';
 import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
 import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, SetScore, TournamentConfig } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
@@ -205,17 +206,21 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={() => setShowEditScore(true)}
-                  className="rounded border border-purple-300 bg-white px-2 py-0.5 text-[10px] font-medium text-purple-700 hover:bg-purple-100"
+                  className="inline-flex items-center gap-1 rounded border border-purple-300 bg-white px-2 py-0.5 text-[10px] font-medium text-purple-700 hover:bg-purple-100"
                   title="Edit score"
+                  aria-label="Edit score"
                 >
-                  ✎ Edit score
+                  <Pencil aria-hidden="true" className="h-3 w-3" />
+                  Edit score
                 </button>
               )}
             </div>
             {winner && winnerNames ? (
               <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="font-semibold text-purple-900 truncate">
-                  🏆 {winnerNames}
+                <span className="inline-flex items-center gap-1 font-semibold text-purple-900 truncate">
+                  <Trophy aria-hidden="true" className="h-3.5 w-3.5" />
+                  <span className="sr-only">Winner:</span>
+                  {winnerNames}
                 </span>
                 {score && (
                   <span className="font-mono text-sm font-bold tabular-nums text-purple-900">
@@ -363,8 +368,13 @@ export function MatchDetailsPanel({
             const restInfo = playerRestTimes.get(playerId);
             return (
               <div key={key} className="flex items-center justify-between gap-1">
-                <span className={sideClass(side)}>
-                  {winner === side && <span className="mr-1">🏆</span>}
+                <span className={`${sideClass(side)} inline-flex items-center gap-1`}>
+                  {winner === side && (
+                    <>
+                      <Trophy aria-hidden="true" className="h-3 w-3" />
+                      <span className="sr-only">Winner:</span>
+                    </>
+                  )}
                   {name}
                 </span>
                 {restInfo ? (

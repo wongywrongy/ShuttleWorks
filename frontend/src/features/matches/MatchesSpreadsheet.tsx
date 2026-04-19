@@ -4,6 +4,7 @@
  * players / event rank / duration inline.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../api/dto';
@@ -332,7 +333,12 @@ function PlayerMultiPicker({
                         ].join(' ')}
                       >
                         <span>{playerLabel(p, groups)}</span>
-                        {isOn ? <span className="text-blue-500">✓</span> : null}
+                        {isOn ? (
+                          <Check
+                            aria-label="Selected"
+                            className="h-3.5 w-3.5 text-blue-500"
+                          />
+                        ) : null}
                       </button>
                     );
                   })}

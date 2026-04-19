@@ -3,6 +3,7 @@
  * Displays match details with status and action buttons
  */
 import { useState } from 'react';
+import { Pin } from 'lucide-react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO, SetScore, TournamentConfig, DelayReason } from '../../api/dto';
 import { formatSlotTime } from '../../utils/timeUtils';
 import type { TrafficLightResult } from '../../utils/trafficLight';
@@ -209,7 +210,12 @@ export function MatchStatusCard({
             />
           )}
           <div className="font-semibold text-gray-900 w-14 flex-shrink-0 truncate flex items-center gap-0.5">
-            {isPinned && <span className="text-orange-500" title="Pinned to court/time">📌</span>}
+            {isPinned && (
+              <Pin
+                aria-label="Pinned to court and time"
+                className="h-3 w-3 flex-shrink-0 text-orange-500"
+              />
+            )}
             {match.eventRank || `M${match.matchNumber || '?'}`}
           </div>
           <div className="flex-shrink-0 flex items-center gap-1">
@@ -257,10 +263,12 @@ export function MatchStatusCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); handleTogglePin(); }}
                   disabled={updating || dimmed}
-                  className={`px-1.5 py-0.5 rounded ${isPinned ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                  aria-label={isPinned ? 'Unpin match' : 'Pin match to court and time'}
+                  aria-pressed={isPinned}
+                  className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded ${isPinned ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
                   title={isPinned ? 'Unpin match' : 'Pin to court/time'}
                 >
-                  📌
+                  <Pin aria-hidden="true" className="h-3.5 w-3.5" />
                 </button>
               </>
             )}

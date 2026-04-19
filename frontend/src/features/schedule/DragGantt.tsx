@@ -10,6 +10,7 @@
  *   else around the new anchor.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, X as XIcon } from 'lucide-react';
 import {
   DndContext,
   MouseSensor,
@@ -379,12 +380,14 @@ export function DragGantt({
         >
           {activeAssignment && hoverCell && validation ? (
             validation.feasible ? (
-              <span className="text-emerald-700">
-                ✓ Feasible — drop to pin at Court {hoverCell.courtId}, {formatSlotTime(hoverCell.slotId, config)}
+              <span className="inline-flex items-center gap-1 text-emerald-700">
+                <Check aria-hidden="true" className="h-3.5 w-3.5" />
+                Feasible — drop to pin at Court {hoverCell.courtId}, {formatSlotTime(hoverCell.slotId, config)}
               </span>
             ) : (
-              <span className="text-red-700">
-                ✗ Infeasible ({validation.conflicts.length} conflict{validation.conflicts.length === 1 ? '' : 's'}):{' '}
+              <span className="inline-flex items-center gap-1 text-red-700">
+                <XIcon aria-hidden="true" className="h-3.5 w-3.5" />
+                Infeasible ({validation.conflicts.length} conflict{validation.conflicts.length === 1 ? '' : 's'}):{' '}
                 {validation.conflicts[0]?.description}
               </span>
             )

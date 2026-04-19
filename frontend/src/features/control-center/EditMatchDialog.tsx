@@ -3,6 +3,7 @@
  * Allows substituting or removing players from a match
  */
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import type { PlayerDTO } from '../../api/dto';
 
 interface PlayerInMatch {
@@ -168,9 +169,10 @@ export function EditMatchDialog({
           <h3 className="text-sm font-semibold text-gray-900">Edit {matchName}</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            aria-label="Close edit dialog"
+            className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
-            ✕
+            <X aria-hidden="true" className="h-4 w-4" />
           </button>
         </div>
 

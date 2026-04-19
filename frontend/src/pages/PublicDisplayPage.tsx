@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { formatSlotTime, parseMatchStartMs } from '../utils/timeUtils';
@@ -459,9 +460,11 @@ function FullscreenButton({
       className={`inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 ${className}`}
       aria-pressed={isFullscreen}
     >
-      <span aria-hidden="true" className="text-base leading-none">
-        {isFullscreen ? '🗗' : '⛶'}
-      </span>
+      {isFullscreen ? (
+        <Minimize2 aria-hidden="true" className="h-4 w-4" />
+      ) : (
+        <Maximize2 aria-hidden="true" className="h-4 w-4" />
+      )}
       <span>{isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}</span>
     </button>
   );

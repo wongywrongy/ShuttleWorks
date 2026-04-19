@@ -6,6 +6,7 @@
  * and fits on laptop screens without horizontal scroll.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { Trophy, X } from 'lucide-react';
 import type { SetScore } from '../../api/dto';
 
 interface BadmintonScoreDialogProps {
@@ -139,9 +140,9 @@ export function BadmintonScoreDialog({
             onClick={onCancel}
             disabled={isSubmitting}
             className="ml-2 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-600"
-            aria-label="Close"
+            aria-label="Close score dialog"
           >
-            ×
+            <X aria-hidden="true" className="h-4 w-4" />
           </button>
         </div>
 
@@ -233,10 +234,11 @@ export function BadmintonScoreDialog({
                       type="button"
                       onClick={() => clearSet(i)}
                       disabled={matchDecided || (set.sideA === 0 && set.sideB === 0)}
-                      className="rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[10px] font-medium text-gray-500 hover:bg-gray-100 disabled:opacity-40"
+                      aria-label={`Clear set ${i + 1}`}
+                      className="inline-flex items-center justify-center rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-40"
                       title="Clear this set"
                     >
-                      ✕
+                      <X aria-hidden="true" className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
@@ -246,8 +248,12 @@ export function BadmintonScoreDialog({
 
           {/* Winner callout */}
           {matchWinner ? (
-            <div className="flex items-center justify-center gap-2 rounded bg-green-50 px-3 py-2 text-sm font-medium text-green-800">
-              <span>🏆</span>
+            <div
+              className="flex items-center justify-center gap-2 rounded bg-green-50 px-3 py-2 text-sm font-medium text-green-800"
+              role="status"
+            >
+              <Trophy aria-hidden="true" className="h-4 w-4" />
+              <span className="sr-only">Winner:</span>
               <span>
                 {matchWinner === 'A' ? sideAName || 'Side A' : sideBName || 'Side B'} wins
               </span>
