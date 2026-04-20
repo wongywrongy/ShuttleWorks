@@ -108,7 +108,7 @@ export function RankBadgeEditor({
 
   if (!schoolId) {
     return (
-      <span className={`text-xs text-gray-400 italic ${className}`}>
+      <span className={`text-xs text-muted-foreground italic ${className}`}>
         Assign school first
       </span>
     );
@@ -123,8 +123,8 @@ export function RankBadgeEditor({
         }}
         className={`text-xs focus:outline-none cursor-pointer ${
           currentRanks.length > 0
-            ? 'text-gray-700 hover:text-gray-900'
-            : 'text-gray-400 hover:text-gray-600'
+            ? 'text-foreground hover:text-foreground'
+            : 'text-muted-foreground hover:text-muted-foreground'
         }`}
       >
         {currentRanks.length > 0 ? currentRanks.sort().join(', ') : '+ Events'}
@@ -156,7 +156,7 @@ export function RankBadgeEditor({
                 leaveTo="opacity-0 scale-95"
               >
                 <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-lg bg-white p-6 shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-semibold text-gray-900 mb-4">
+                  <Dialog.Title as="h3" className="text-lg font-semibold text-foreground mb-4">
                     Select Ranks/Events
                   </Dialog.Title>
 
@@ -195,7 +195,7 @@ export function RankBadgeEditor({
                         <button
                           type="button"
                           onClick={cancelReassign}
-                          className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                          className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
                         >
                           Cancel
                         </button>
@@ -204,14 +204,14 @@ export function RankBadgeEditor({
                   )}
 
                   <div className="mt-6 flex justify-between items-center">
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-muted-foreground">
                       {selectedRanks.length} rank{selectedRanks.length !== 1 ? 's' : ''} selected
                     </span>
                     <div className="flex gap-3">
                       <button
                         type="button"
                         onClick={() => setIsOpen(false)}
-                        className="px-4 py-2 text-sm text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md"
+                        className="px-4 py-2 text-sm text-foreground bg-muted hover:bg-accent hover:text-accent-foreground rounded-md"
                       >
                         Cancel
                       </button>

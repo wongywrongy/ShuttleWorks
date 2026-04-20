@@ -98,23 +98,23 @@ export function AutoGeneratePanel() {
   };
 
   return (
-    <div className="rounded border border-gray-200 bg-white p-3">
+    <div className="rounded border border-border bg-white p-3">
       <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Auto-generate
         </span>
-        <span className="text-[11px] text-gray-400">
+        <span className="text-[11px] text-muted-foreground">
           {ranks.length} ranks × {groups.length} schools
         </span>
       </div>
-      <p className="mb-2 text-xs text-gray-600">
+      <p className="mb-2 text-xs text-muted-foreground">
         One match per rank × pair of schools. Singles use one player per
         side, doubles use the paired players (both whose ranks include the
         rank) per side.
         {preview.length > 0 ? (
           <>
             {' '}Will produce{' '}
-            <span className="font-semibold text-gray-800">{preview.length}</span>{' '}
+            <span className="font-semibold text-foreground">{preview.length}</span>{' '}
             match{preview.length === 1 ? '' : 'es'}.
           </>
         ) : null}
@@ -135,7 +135,7 @@ export function AutoGeneratePanel() {
           className={[
             'rounded px-3 py-1.5 text-sm font-medium transition-colors',
             !canGenerate
-              ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+              ? 'cursor-not-allowed bg-muted text-muted-foreground'
               : confirm && hasExisting
                 ? 'bg-red-600 text-white hover:bg-red-700 motion-safe:animate-pulse'
                 : 'bg-blue-600 text-white hover:bg-blue-700',
@@ -153,7 +153,7 @@ export function AutoGeneratePanel() {
           <button
             type="button"
             onClick={() => setConfirm(false)}
-            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+            className="rounded border border-border bg-white px-3 py-1.5 text-sm text-foreground hover:bg-muted/40"
           >
             Cancel
           </button>

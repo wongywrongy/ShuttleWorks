@@ -23,11 +23,11 @@ export function ProgressSummary({
 
       {/* Progress Bar */}
       <div className="mb-3">
-        <div className="flex justify-between text-xs text-gray-600 mb-1">
+        <div className="flex justify-between text-xs text-muted-foreground mb-1">
           <span>{finished} of {total} matches completed</span>
           <span className="font-semibold">{percentage}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+        <div className="w-full bg-muted rounded-full h-4 overflow-hidden">
           <div
             className="bg-gradient-to-r from-blue-500 to-purple-600 h-full rounded-full transition-all duration-500 flex items-center justify-center text-white text-xs font-medium"
             style={{ width: `${percentage}%` }}
@@ -39,24 +39,24 @@ export function ProgressSummary({
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <div className="bg-gray-50 rounded p-2 text-center">
-          <div className="text-xl font-bold text-gray-900">{total}</div>
-          <div className="text-xs text-gray-600">Total</div>
+        <div className="bg-muted/40 rounded p-2 text-center">
+          <div className="text-xl font-bold text-foreground">{total}</div>
+          <div className="text-xs text-muted-foreground">Total</div>
         </div>
 
         <div className="bg-purple-50 rounded p-2 text-center">
           <div className="text-xl font-bold text-purple-700">{finished}</div>
-          <div className="text-xs text-gray-600">Finished</div>
+          <div className="text-xs text-muted-foreground">Finished</div>
         </div>
 
         <div className="bg-green-50 rounded p-2 text-center">
           <div className="text-xl font-bold text-green-700">{inProgress}</div>
-          <div className="text-xs text-gray-600">In Progress</div>
+          <div className="text-xs text-muted-foreground">In Progress</div>
         </div>
 
         <div className="bg-blue-50 rounded p-2 text-center">
           <div className="text-xl font-bold text-blue-700">{remaining}</div>
-          <div className="text-xs text-gray-600">Remaining</div>
+          <div className="text-xs text-muted-foreground">Remaining</div>
         </div>
       </div>
 

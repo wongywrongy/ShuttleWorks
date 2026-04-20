@@ -60,7 +60,7 @@ export function BulkActionsToolbar({
                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <span className="font-semibold text-gray-900">
+            <span className="font-semibold text-foreground">
               {selectedCount} player{selectedCount !== 1 ? 's' : ''} selected
             </span>
           </div>
@@ -102,7 +102,7 @@ export function BulkActionsToolbar({
               <Menu.Items className="absolute bottom-full mb-2 right-0 w-56 origin-bottom-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
                 <div className="py-1">
                   {schools.length === 0 ? (
-                    <div className="px-4 py-2 text-sm text-gray-500">
+                    <div className="px-4 py-2 text-sm text-muted-foreground">
                       No schools available
                     </div>
                   ) : (
@@ -112,7 +112,7 @@ export function BulkActionsToolbar({
                           <button
                             onClick={() => onBulkSchoolAssign(school.id)}
                             className={`${
-                              active ? 'bg-blue-50 text-blue-900' : 'text-gray-900'
+                              active ? 'bg-blue-50 text-blue-900' : 'text-foreground'
                             } group flex w-full items-center px-4 py-2 text-sm`}
                           >
                             {school.name}
@@ -170,7 +170,7 @@ export function BulkActionsToolbar({
             {/* Clear Selection */}
             <button
               onClick={onClearSelection}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-200 text-gray-700 text-sm font-medium rounded-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-muted text-foreground text-sm font-medium rounded-sm hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
               Clear Selection
             </button>

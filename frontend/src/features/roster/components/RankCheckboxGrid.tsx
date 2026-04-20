@@ -54,7 +54,7 @@ export function RankCheckboxGrid({
             <div key={categoryKey} className="space-y-1">
               {/* Category Header */}
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-700">{categoryKey}</span>
+                <span className="text-xs font-medium text-foreground">{categoryKey}</span>
               </div>
 
               {/* Rank buttons */}
@@ -87,7 +87,7 @@ export function RankCheckboxGrid({
                           ? 'bg-blue-600 text-white border-blue-600'
                           : isTaken
                           ? 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-400'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400'
+                          : 'bg-white text-foreground border-border hover:border-blue-400'
                       }`}
                       title={rank.assignedTo ? `Assigned to ${rank.assignedTo}` : undefined}
                     >
@@ -103,8 +103,8 @@ export function RankCheckboxGrid({
 
       {/* Selection Summary */}
       {showSelected && selectedRanks.length > 0 && (
-        <div className="pt-2 border-t border-gray-200">
-          <div className="text-xs text-gray-600">
+        <div className="pt-2 border-t border-border">
+          <div className="text-xs text-muted-foreground">
             <span className="font-medium">{selectedRanks.length}</span> selected: {selectedRanks.sort().join(', ')}
           </div>
         </div>

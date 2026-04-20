@@ -23,7 +23,7 @@ export function SafeDisplay({
   // Check if value is null or undefined
   if (value === null || value === undefined) {
     return (
-      <span className={`text-gray-400 italic ${className}`}>
+      <span className={`text-muted-foreground italic ${className}`}>
         {fallback}
       </span>
     );

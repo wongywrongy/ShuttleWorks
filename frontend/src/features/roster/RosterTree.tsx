@@ -50,7 +50,7 @@ export function RosterTree({
     return (
       <div key={group.id}>
         <div
-          className={`flex items-center py-1.5 px-2 rounded cursor-pointer hover:bg-gray-50 ${
+          className={`flex items-center py-1.5 px-2 rounded cursor-pointer hover:bg-muted/40 ${
             isSelected ? 'bg-blue-50 border border-blue-200' : ''
           }`}
           style={{ paddingLeft: `${indent + 8}px` }}
@@ -64,7 +64,7 @@ export function RosterTree({
               }}
               aria-label={isExpanded ? 'Collapse group' : 'Expand group'}
               aria-expanded={isExpanded}
-              className="mr-2 w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-700"
+              className="mr-2 w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground"
             >
               {isExpanded ? (
                 <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
@@ -75,14 +75,14 @@ export function RosterTree({
           )}
           {!hasChildren && <span className="mr-2 w-5" />}
           <span
-            className={`w-2 h-2 rounded-full mr-2 ${group.type === 'group' ? 'bg-gray-400' : 'bg-blue-400'}`}
+            className={`w-2 h-2 rounded-full mr-2 ${group.type === 'group' ? 'bg-muted-foreground/60' : 'bg-blue-400'}`}
             style={{ backgroundColor: group.metadata?.color || undefined }}
           />
           <span className={`text-sm flex-1 ${group.type === 'group' ? 'font-semibold' : ''}`}>
             {group.name}
           </span>
           {group.metadata?.description && (
-            <span className="text-xs text-gray-500 ml-2 truncate max-w-xs">
+            <span className="text-xs text-muted-foreground ml-2 truncate max-w-xs">
               {group.metadata.description}
             </span>
           )}
@@ -95,7 +95,7 @@ export function RosterTree({
             {groupPlayers.map(player => (
               <div
                 key={player.id}
-                className={`flex items-center py-1 px-2 rounded cursor-pointer hover:bg-gray-50 ${
+                className={`flex items-center py-1 px-2 rounded cursor-pointer hover:bg-muted/40 ${
                   selectedPlayerId === player.id ? 'bg-green-50 border border-green-200' : ''
                 }`}
                 style={{ paddingLeft: `${(level + 1) * 24 + 32}px` }}
@@ -106,7 +106,7 @@ export function RosterTree({
                   {player.name}
                 </span>
                 {player.availability.length > 0 && (
-                  <span className="text-xs text-gray-500 ml-2">
+                  <span className="text-xs text-muted-foreground ml-2">
                     ({player.availability.length} availability window{player.availability.length > 1 ? 's' : ''})
                   </span>
                 )}
@@ -120,7 +120,7 @@ export function RosterTree({
 
   if (rootGroups.length === 0 && players.filter(p => !p.groupId).length === 0) {
     return (
-      <div className="p-8 bg-white rounded-lg shadow text-center text-gray-500">
+      <div className="p-8 bg-white rounded-lg shadow text-center text-muted-foreground">
         No groups or players. Create a group or add players to get started.
       </div>
     );
@@ -134,14 +134,14 @@ export function RosterTree({
         {players.filter(p => !p.groupId).map(player => (
           <div
             key={player.id}
-            className={`flex items-center py-1.5 px-2 rounded cursor-pointer hover:bg-gray-50 ${
+            className={`flex items-center py-1.5 px-2 rounded cursor-pointer hover:bg-muted/40 ${
               selectedPlayerId === player.id ? 'bg-green-50 border border-green-200' : ''
             }`}
             onClick={() => onPlayerClick?.(player)}
           >
             <span className="text-sm ml-8 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-              {player.name} <span className="text-xs text-gray-500">(Ungrouped)</span>
+              {player.name} <span className="text-xs text-muted-foreground">(Ungrouped)</span>
             </span>
           </div>
         ))}

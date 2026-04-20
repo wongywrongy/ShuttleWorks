@@ -63,23 +63,23 @@ export function SuggestedNextDock({
   };
 
   return (
-    <div className="flex-shrink-0 bg-white rounded border border-gray-200 px-3 py-2 flex items-center gap-3">
+    <div className="flex-shrink-0 bg-white rounded border border-border px-3 py-2 flex items-center gap-3">
       {/* Label with pulsing dot */}
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Suggested</span>
+        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Suggested</span>
         {greenMatches.length > 0 && (
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
         )}
       </div>
 
-      <div className="w-px h-5 bg-gray-200 flex-shrink-0" />
+      <div className="w-px h-5 bg-muted flex-shrink-0" />
 
       {/* Suggestions or empty state */}
       <div className="flex gap-2 overflow-auto flex-1">
         {allFinished ? (
-          <div className="text-xs text-gray-500">All matches complete</div>
+          <div className="text-xs text-muted-foreground">All matches complete</div>
         ) : greenMatches.length === 0 ? (
-          <div className="text-xs text-gray-500">No matches ready to call</div>
+          <div className="text-xs text-muted-foreground">No matches ready to call</div>
         ) : (
           greenMatches.map((assignment, _i) => {
             const match = matchMap.get(assignment.matchId);
@@ -98,15 +98,15 @@ export function SuggestedNextDock({
                     ? 'bg-green-50 border-green-300'
                     : isPostponed
                       ? 'bg-orange-50 border-orange-300'
-                      : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                      : 'bg-muted/40 border-border hover:border-border'
                 }`}
               >
                 <div className="flex items-center gap-1 mb-0.5">
-                  <span className="font-semibold text-xs text-gray-900">{matchLabel}</span>
-                  <span className="text-[10px] text-gray-500">C{assignment.courtId}</span>
+                  <span className="font-semibold text-xs text-foreground">{matchLabel}</span>
+                  <span className="text-[10px] text-muted-foreground">C{assignment.courtId}</span>
                   {isPostponed && <span className="text-[9px] text-orange-600">(postponed)</span>}
                 </div>
-                <div className="text-[10px] text-gray-600 max-w-[200px] truncate">
+                <div className="text-[10px] text-muted-foreground max-w-[200px] truncate">
                   {formatPlayers(match)}
                 </div>
               </div>

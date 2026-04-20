@@ -40,13 +40,13 @@ export function CourtSelectDialog({
       panelClassName="w-64 rounded-lg bg-white shadow-xl focus:outline-none"
     >
       {/* Header */}
-      <div className="px-3 py-2 border-b border-gray-200">
-        <h3 id={titleId} className="text-sm font-semibold text-gray-900">Start {matchName}</h3>
+      <div className="px-3 py-2 border-b border-border">
+        <h3 id={titleId} className="text-sm font-semibold text-foreground">Start {matchName}</h3>
       </div>
 
         {/* Court Selection */}
         <div className="p-3">
-          <div className="text-xs text-gray-500 mb-2">Select court:</div>
+          <div className="text-xs text-muted-foreground mb-2">Select court:</div>
 
           <div className="grid grid-cols-4 gap-1 mb-3">
             {courts.map((court) => {
@@ -62,7 +62,7 @@ export function CourtSelectDialog({
                       ? 'bg-green-600 text-white border-green-600'
                       : courtOccupied
                         ? 'bg-yellow-50 text-yellow-700 border-yellow-300 hover:bg-yellow-100'
-                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                        : 'bg-muted/40 text-foreground border-border hover:bg-muted'
                   }`}
                 >
                   {court}
@@ -80,7 +80,7 @@ export function CourtSelectDialog({
 
           {/* Different from scheduled */}
           {selectedCourt !== scheduledCourt && (
-            <div className="text-[10px] text-gray-500 mb-3">
+            <div className="text-[10px] text-muted-foreground mb-3">
               Originally scheduled: Court {scheduledCourt}
             </div>
           )}
@@ -90,7 +90,7 @@ export function CourtSelectDialog({
             <button
               onClick={onCancel}
               disabled={isSubmitting}
-              className={`${INTERACTIVE_BASE} flex-1 rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-200`}
+              className={`${INTERACTIVE_BASE} flex-1 rounded bg-muted px-3 py-1.5 text-sm text-foreground hover:bg-muted`}
             >
               Cancel
             </button>

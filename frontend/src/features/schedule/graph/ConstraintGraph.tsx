@@ -100,16 +100,16 @@ export function ConstraintGraph({ data, width = 500, height = 350 }: ConstraintG
   if (data.nodes.length === 0) {
     return (
       <div
-        className="flex items-center justify-center bg-gray-50 border border-gray-200 rounded-lg"
+        className="flex items-center justify-center bg-muted/40 border border-border rounded-lg"
         style={{ width, height }}
       >
-        <span className="text-gray-400 text-sm">No players to visualize</span>
+        <span className="text-muted-foreground text-sm">No players to visualize</span>
       </div>
     );
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="border border-border rounded-lg overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
       <ForceGraph2D
         ref={fgRef}
         graphData={data}

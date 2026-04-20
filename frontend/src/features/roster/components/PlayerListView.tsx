@@ -121,20 +121,20 @@ export function PlayerListView({
 
   if (players.length === 0) {
     return (
-      <div className="p-8 bg-white rounded border border-gray-200 text-center">
-        <div className="text-gray-400 mb-3">
+      <div className="p-8 bg-white rounded border border-border text-center">
+        <div className="text-muted-foreground mb-3">
           <svg className="mx-auto h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
           </svg>
         </div>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           No players yet. Add players or import from CSV.
         </p>
         <div className="flex items-center justify-center gap-2">
           {onImportCSV && (
             <button
               onClick={onImportCSV}
-              className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm"
+              className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm"
             >
               Import CSV
             </button>
@@ -142,7 +142,7 @@ export function PlayerListView({
           {onAddSchool && (
             <button
               onClick={onAddSchool}
-              className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm"
+              className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm"
             >
               Add School
             </button>
@@ -150,7 +150,7 @@ export function PlayerListView({
           {onAddPlayer && (
             <button
               onClick={onAddPlayer}
-              className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm"
+              className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm"
             >
               Add Player
             </button>
@@ -164,19 +164,19 @@ export function PlayerListView({
   const someSelected = selection.selectedCount > 0 && !allSelected;
 
   return (
-    <div className="bg-white rounded border border-gray-200 overflow-visible">
+    <div className="bg-white rounded border border-border overflow-visible">
       {/* Search Bar */}
-      <div className="px-2 py-1.5 border-b border-gray-200">
+      <div className="px-2 py-1.5 border-b border-border">
         <div className="relative">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search name, school, event..."
-            className="w-full px-2 py-1 pl-7 text-xs border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+            className="w-full px-2 py-1 pl-7 text-xs border border-border rounded focus:outline-none focus:border-muted-foreground/40"
           />
           <svg
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -186,7 +186,7 @@ export function PlayerListView({
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -198,14 +198,14 @@ export function PlayerListView({
 
       {/* No results state */}
       {filteredPlayers.length === 0 && players.length > 0 && (
-        <div className="px-2 py-4 text-center text-xs text-gray-500">
+        <div className="px-2 py-4 text-center text-xs text-muted-foreground">
           No players match "{searchQuery}"
         </div>
       )}
 
       {filteredPlayers.length > 0 && (
       <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-gray-100">
+        <thead className="sticky top-0 bg-muted">
           <tr>
             <th className="px-2 py-1 w-8">
               <input
@@ -217,21 +217,21 @@ export function PlayerListView({
                   }
                 }}
                 onChange={handleSelectAll}
-                className="w-3.5 h-3.5 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
+                className="w-3.5 h-3.5 text-foreground border-border rounded focus:ring-gray-500"
                 aria-label="Select all players"
               />
             </th>
             <th className="px-2 py-1 text-left">
               <button
                 onClick={() => handleSort('name')}
-                className="font-medium text-gray-600 flex items-center gap-0.5 hover:text-gray-800"
+                className="font-medium text-muted-foreground flex items-center gap-0.5 hover:text-foreground"
               >
                 Name
                 {sortField === 'name' && (
                   sortDirection === 'asc' ? (
-                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
+                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-muted-foreground" />
                   ) : (
-                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
+                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-muted-foreground" />
                   )
                 )}
               </button>
@@ -239,19 +239,19 @@ export function PlayerListView({
             <th className="px-2 py-1 text-left">
               <button
                 onClick={() => handleSort('school')}
-                className="font-medium text-gray-600 flex items-center gap-0.5 hover:text-gray-800"
+                className="font-medium text-muted-foreground flex items-center gap-0.5 hover:text-foreground"
               >
                 School
                 {sortField === 'school' && (
                   sortDirection === 'asc' ? (
-                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
+                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-muted-foreground" />
                   ) : (
-                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
+                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-muted-foreground" />
                   )
                 )}
               </button>
             </th>
-            <th className="px-2 py-1 text-left font-medium text-gray-600">
+            <th className="px-2 py-1 text-left font-medium text-muted-foreground">
               Events
             </th>
             <th className="px-2 py-1 text-right">
@@ -259,7 +259,7 @@ export function PlayerListView({
                 {onImportCSV && (
                   <button
                     onClick={onImportCSV}
-                    className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+                    className="px-1.5 py-0.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                   >
                     Import
                   </button>
@@ -267,7 +267,7 @@ export function PlayerListView({
                 {onAddSchool && (
                   <button
                     onClick={onAddSchool}
-                    className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+                    className="px-1.5 py-0.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                   >
                     + School
                   </button>
@@ -275,7 +275,7 @@ export function PlayerListView({
                 {onAddPlayer && (
                   <button
                     onClick={onAddPlayer}
-                    className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+                    className="px-1.5 py-0.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                   >
                     + Player
                   </button>
@@ -305,11 +305,11 @@ export function PlayerListView({
 
       {/* Selection info - shown below table when players are selected */}
       {selection.hasSelection && (
-        <div className="px-2 py-1 bg-gray-50 border-t border-gray-200 text-xs text-gray-600 flex items-center justify-between">
+        <div className="px-2 py-1 bg-muted/40 border-t border-border text-xs text-muted-foreground flex items-center justify-between">
           <span>{selection.selectedCount} selected{searchQuery && ` (${filteredPlayers.length} shown)`}</span>
           <button
             onClick={() => selection.clearSelection()}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-muted-foreground hover:text-foreground"
           >
             Clear
           </button>

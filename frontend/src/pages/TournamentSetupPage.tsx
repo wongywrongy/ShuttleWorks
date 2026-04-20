@@ -5,6 +5,7 @@ import { TournamentConfigForm } from '../features/tournaments/TournamentConfigFo
 import { TournamentFileManagement } from '../features/tournaments/TournamentFileManagement';
 import { BackupPanel } from '../features/setup/BackupPanel';
 import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicator';
+import { ThemeToggle } from '../components/ThemeToggle';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {
@@ -44,7 +45,7 @@ export function TournamentSetupPage() {
   if (loading && !config && !error) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading tournament configuration...</div>
+        <div className="text-muted-foreground">Loading tournament configuration...</div>
       </div>
     );
   }
@@ -76,6 +77,21 @@ export function TournamentSetupPage() {
           {saveError}
         </div>
       )}
+
+      <section
+        aria-labelledby="appearance-heading"
+        className="mb-3 rounded-md border border-border bg-card p-4"
+      >
+        <h3 id="appearance-heading" className="text-sm font-semibold text-card-foreground">
+          Appearance
+        </h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Per-device theme. Not included in tournament export.
+        </p>
+        <div className="mt-3">
+          <ThemeToggle size="md" />
+        </div>
+      </section>
 
       <TournamentConfigForm
         config={displayConfig}

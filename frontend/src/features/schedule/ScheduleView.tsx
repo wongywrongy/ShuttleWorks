@@ -52,13 +52,13 @@ export function ScheduleView({ schedule, view, config }: ScheduleViewProps) {
 
           return (
             <div key={slotId} className="px-3 py-2">
-              <div className="font-medium text-gray-800 text-sm mb-1">{timeRange}</div>
+              <div className="font-medium text-foreground text-sm mb-1">{timeRange}</div>
               <div className="space-y-0.5">
                 {slotAssignments
                   .sort((a, b) => a.courtId - b.courtId)
                   .slice(0, config.courtCount)
                   .map((assignment) => (
-                    <div key={`${assignment.matchId}-${assignment.courtId}`} className="text-sm text-gray-600">
+                    <div key={`${assignment.matchId}-${assignment.courtId}`} className="text-sm text-muted-foreground">
                       {formatMatchLine(assignment)}
                     </div>
                   ))}
@@ -87,7 +87,7 @@ export function ScheduleView({ schedule, view, config }: ScheduleViewProps) {
 
           return (
             <div key={courtId} className="px-3 py-2">
-              <div className="font-medium text-gray-800 text-sm mb-1">Court {courtId}</div>
+              <div className="font-medium text-foreground text-sm mb-1">Court {courtId}</div>
               <div className="space-y-1">
                 {courtAssignments.map((assignment) => {
                   const timeRange = formatSlotRange(
@@ -98,9 +98,9 @@ export function ScheduleView({ schedule, view, config }: ScheduleViewProps) {
                   );
                   return (
                     <div key={`${assignment.matchId}-${assignment.slotId}`} className="text-sm">
-                      <span className="text-gray-800">{timeRange}</span>
-                      <span className="text-gray-400 mx-1">·</span>
-                      <span className="text-gray-600">{formatMatchLine(assignment)}</span>
+                      <span className="text-foreground">{timeRange}</span>
+                      <span className="text-muted-foreground mx-1">·</span>
+                      <span className="text-muted-foreground">{formatMatchLine(assignment)}</span>
                     </div>
                   );
                 })}

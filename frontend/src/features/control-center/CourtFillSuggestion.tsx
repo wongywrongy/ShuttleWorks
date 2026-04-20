@@ -37,13 +37,13 @@ export function CourtFillSuggestion({
           </div>
 
           <div className="mt-1.5">
-            <div className="text-gray-900 font-medium">
+            <div className="text-foreground font-medium">
               Suggested: <span className="text-green-700">{suggestedMatch.matchLabel}</span>
             </div>
-            <div className="text-gray-600 text-sm truncate">
+            <div className="text-muted-foreground text-sm truncate">
               {suggestedMatch.players}
             </div>
-            <div className="text-gray-500 text-xs mt-0.5">
+            <div className="text-muted-foreground text-xs mt-0.5">
               Originally: Court {suggestedMatch.originalCourt} at {suggestedMatch.originalTime}
             </div>
           </div>
@@ -54,14 +54,14 @@ export function CourtFillSuggestion({
           <button
             onClick={() => onAccept(suggestedMatch.matchId, court.courtId)}
             disabled={isLoading}
-            className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Call to C{court.courtId}
           </button>
           <button
             onClick={() => onSkip(court.courtId)}
             disabled={isLoading}
-            className="px-3 py-1.5 bg-white text-gray-600 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-1.5 bg-white text-muted-foreground text-sm border border-border rounded hover:bg-muted/40 disabled:bg-muted disabled:cursor-not-allowed transition-colors"
           >
             Skip
           </button>

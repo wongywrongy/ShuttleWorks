@@ -44,24 +44,24 @@ const ROW_HEIGHT = 32;
 // Status-based colors - intuitive and distinct
 const STATUS_STYLES = {
   scheduled: {
-    bg: 'bg-gray-100',
-    border: 'border-gray-300',
-    text: 'text-gray-600',
+    bg: 'bg-muted dark:bg-gray-500/15',
+    border: 'border-border dark:border-gray-500/40',
+    text: 'text-muted-foreground dark:text-gray-100',
   },
   called: {
-    bg: 'bg-blue-100',
-    border: 'border-blue-400',
-    text: 'text-blue-700',
+    bg: 'bg-blue-100 dark:bg-blue-500/15',
+    border: 'border-blue-400 dark:border-blue-500/40',
+    text: 'text-blue-700 dark:text-blue-200',
   },
   started: {
-    bg: 'bg-green-200',
-    border: 'border-green-500',
-    text: 'text-green-800',
+    bg: 'bg-green-200 dark:bg-emerald-500/15',
+    border: 'border-green-500 dark:border-emerald-500/40',
+    text: 'text-green-800 dark:text-emerald-200',
   },
   finished: {
-    bg: 'bg-gray-50',
-    border: 'border-gray-200',
-    text: 'text-gray-400',
+    bg: 'bg-muted/40 dark:bg-gray-500/10',
+    border: 'border-border dark:border-gray-500/30',
+    text: 'text-muted-foreground dark:text-muted-foreground',
   },
 };
 
@@ -236,13 +236,13 @@ export function GanttChart({
       <div className="overflow-x-auto">
         <div className="min-w-max">
           {/* Time header */}
-          <div className="flex border-b border-gray-200">
-            <div className="w-10 flex-shrink-0 px-1 py-0.5 bg-gray-50 text-xs text-gray-500" />
+          <div className="flex border-b border-border">
+            <div className="w-10 flex-shrink-0 px-1 py-0.5 bg-card text-xs text-muted-foreground" />
             {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
               <div
                 key={slot}
                 style={{ width: SLOT_WIDTH }}
-                className={`flex-shrink-0 px-0.5 py-0.5 text-center text-[10px] border-l border-gray-100 bg-gray-50 text-gray-400 ${
+                className={`flex-shrink-0 px-0.5 py-0.5 text-center text-[10px] border-l border-border bg-card text-muted-foreground ${
                   slot === currentSlot ? 'bg-blue-50 text-blue-600 font-medium' : ''
                 }`}
               >
@@ -253,8 +253,8 @@ export function GanttChart({
 
           {/* Court rows */}
           {courts.map(courtId => (
-            <div key={courtId} className="flex border-b border-gray-100">
-              <div className="w-10 flex-shrink-0 px-1 bg-gray-50 text-xs font-medium text-gray-600 flex items-center">
+            <div key={courtId} className="flex border-b border-border">
+              <div className="w-10 flex-shrink-0 px-1 bg-card text-xs font-medium text-muted-foreground flex items-center">
                 C{courtId}
               </div>
               <div className="flex-1 relative" style={{ height: ROW_HEIGHT }}>
@@ -264,7 +264,7 @@ export function GanttChart({
                     <div
                       key={slot}
                       style={{ width: SLOT_WIDTH }}
-                      className={`flex-shrink-0 border-l border-gray-100 ${
+                      className={`flex-shrink-0 border-l border-border ${
                         slot === currentSlot ? 'bg-blue-50/30' : ''
                       }`}
                     />

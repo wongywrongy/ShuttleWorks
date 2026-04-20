@@ -25,11 +25,11 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="min-h-screen flex items-center justify-center bg-muted">
           <div className="bg-white p-4 rounded shadow max-w-2xl">
             <h1 className="text-xl font-bold text-red-600 mb-3">Something went wrong</h1>
-            <p className="text-gray-700 mb-3 text-sm">{this.state.error?.message}</p>
-            <pre className="bg-gray-100 p-3 rounded-sm overflow-auto text-xs">
+            <p className="text-foreground mb-3 text-sm">{this.state.error?.message}</p>
+            <pre className="bg-muted p-3 rounded-sm overflow-auto text-xs">
               {this.state.error?.stack}
             </pre>
             <button

@@ -87,24 +87,24 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
 
   if (events.length === 0) {
     return (
-      <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-xs text-gray-500">
+      <div className="rounded border border-dashed border-border bg-card p-6 text-center text-xs text-muted-foreground">
         No events configured. Set <strong>Event Categories</strong> in the Setup tab to enable the roster grid.
       </div>
     );
   }
 
   return (
-    <div className="rounded border border-gray-200 bg-white overflow-hidden">
-      <div className="flex items-baseline justify-between border-b border-gray-200 bg-gray-50 px-3 py-2">
+    <div className="rounded border border-border bg-card overflow-hidden">
+      <div className="flex items-baseline justify-between border-b border-border bg-muted/40 px-3 py-2">
         <div className="flex items-baseline gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+          <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
             Position grid
           </span>
-          <span className="text-[11px] text-gray-500">
+          <span className="text-[11px] text-muted-foreground">
             {school?.name ?? '—'} · click a cell or drag a player onto it
           </span>
         </div>
-        <span className="text-[11px] text-gray-500">
+        <span className="text-[11px] text-muted-foreground">
           {events.length} events · up to {maxRows} positions
         </span>
       </div>
@@ -116,7 +116,7 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
         >
           <thead>
             <tr>
-              <th className="w-12 border-b-2 border-r border-gray-300 bg-gray-100 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+              <th className="w-12 border-b-2 border-r border-border bg-muted py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 #
               </th>
               {events.map((ev) => {
@@ -124,7 +124,7 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
                 return (
                   <th
                     key={ev.prefix}
-                    className={`border-b-2 border-r border-gray-300 px-3 py-2 text-left text-xs font-bold tracking-wide last:border-r-0 ${label?.header ?? 'bg-gray-100 text-gray-700'}`}
+                    className={`border-b-2 border-r border-border px-3 py-2 text-left text-xs font-bold tracking-wide last:border-r-0 ${label?.header ?? 'bg-muted text-foreground'}`}
                     title={label?.full}
                   >
                     {ev.prefix}
@@ -139,7 +139,7 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
           <tbody>
             {Array.from({ length: maxRows }, (_, i) => i + 1).map((row) => (
               <tr key={row}>
-                <td className="w-12 border-b border-r border-gray-200 bg-gray-50 py-2 text-center text-xs font-semibold text-gray-500 tabular-nums">
+                <td className="w-12 border-b border-r border-border bg-muted/40 py-2 text-center text-xs font-semibold text-muted-foreground tabular-nums">
                   {row}
                 </td>
                 {events.map((ev) => {
@@ -242,10 +242,10 @@ function PositionCell({
       ref={setNodeRef}
       data-testid={`pos-cell-${schoolId}-${rank}`}
       className={[
-        'relative align-top border-b border-r border-gray-200 last:border-r-0 transition-colors min-w-[160px]',
-        disabled ? 'bg-gray-100/60 text-gray-300' : bodyTint,
+        'relative align-top border-b border-r border-border last:border-r-0 transition-colors min-w-[160px]',
+        disabled ? 'bg-muted/60 text-muted-foreground/70' : bodyTint,
         isDragging && !disabled
-          ? 'ring-1 ring-inset ring-gray-300'
+          ? 'ring-1 ring-inset ring-border'
           : '',
         dragHover
           ? 'bg-emerald-100 ring-[3px] ring-inset ring-emerald-500 shadow-inner'
@@ -265,17 +265,17 @@ function PositionCell({
             setPickerOpen((v) => !v);
           }}
           data-testid={`pos-cell-btn-${schoolId}-${rank}`}
-          className="block w-full rounded px-2 py-2 text-left hover:bg-white/70 focus:outline-none focus:bg-white"
+          className="block w-full rounded px-2 py-2 text-left hover:bg-card/70 focus:outline-none focus:bg-card"
         >
           <div className="flex flex-col gap-1">
             {doubles && occupants.length === 2 ? (
               // Complete doubles pair — one chip, "Name1 & Name2" on one line
               // (wraps on very long names; never truncates).
               <span
-                className="group inline-flex flex-wrap items-center gap-x-1 gap-y-0 rounded border border-blue-300 bg-white px-2 py-0.5 text-[11px] font-medium leading-tight shadow-sm"
+                className="group inline-flex flex-wrap items-center gap-x-1 gap-y-0 rounded border border-blue-300 bg-card px-2 py-0.5 text-[11px] font-medium leading-tight shadow-sm dark:border-blue-500/30"
               >
                 <NamePill player={occupants[0]} accent="blue"  onRemove={removeRank} rank={rank} />
-                <span aria-hidden className="text-gray-400">&</span>
+                <span aria-hidden className="text-muted-foreground">&</span>
                 <NamePill player={occupants[1]} accent="indigo" onRemove={removeRank} rank={rank} />
               </span>
             ) : (
@@ -286,9 +286,9 @@ function PositionCell({
                     'group inline-flex items-center justify-between gap-1 rounded border px-2 py-0.5 text-[11px] font-medium leading-tight shadow-sm',
                     doubles
                       ? i === 0
-                        ? 'border-blue-300 bg-white text-blue-900'
-                        : 'border-indigo-300 bg-white text-indigo-900'
-                      : 'border-gray-300 bg-white text-gray-800',
+                        ? 'border-blue-300 bg-card text-blue-900 dark:border-blue-500/30 dark:text-blue-300'
+                        : 'border-indigo-300 bg-card text-indigo-900 dark:border-indigo-500/30 dark:text-indigo-300'
+                      : 'border-border bg-card text-foreground',
                   ].join(' ')}
                 >
                   <span className="break-words">{p.name || '(unnamed)'}</span>
@@ -308,7 +308,7 @@ function PositionCell({
                       }
                     }}
                     aria-label={`Unassign ${p.name} from ${rank}`}
-                    className="cursor-pointer opacity-0 transition-opacity group-hover:opacity-100 text-gray-400 hover:text-red-600"
+                    className="cursor-pointer opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-red-600 dark:hover:text-red-300"
                   >
                     ×
                   </span>
@@ -316,12 +316,12 @@ function PositionCell({
               ))
             )}
             {doubles && occupants.length === 1 ? (
-              <span className="rounded border border-dashed border-gray-400 px-2 py-0.5 text-[10px] italic text-gray-500">
+              <span className="rounded border border-dashed border-border px-2 py-0.5 text-[10px] italic text-muted-foreground">
                 ＋ add partner
               </span>
             ) : null}
             {occupants.length === 0 ? (
-              <span className="inline-flex items-center gap-1 text-[11px] italic text-gray-500">
+              <span className="inline-flex items-center gap-1 text-[11px] italic text-muted-foreground">
                 <span aria-hidden>＋</span>
                 {doubles ? 'add pair' : 'add player'}
               </span>
@@ -360,7 +360,7 @@ function NamePill({
   onRemove: (playerId: string) => void;
   rank: string;
 }) {
-  const text = accent === 'blue' ? 'text-blue-900' : 'text-indigo-900';
+  const text = accent === 'blue' ? 'text-blue-900 dark:text-blue-300' : 'text-indigo-900 dark:text-indigo-300';
   return (
     <span className={`inline-flex items-center gap-0.5 ${text}`}>
       <span className="break-words">{player.name || '(unnamed)'}</span>
@@ -380,7 +380,7 @@ function NamePill({
           }
         }}
         aria-label={`Unassign ${player.name} from ${rank}`}
-        className="cursor-pointer text-gray-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-600"
+        className="cursor-pointer text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-600 dark:hover:text-red-300"
       >
         ×
       </span>
@@ -454,10 +454,10 @@ function PlayerSearchPicker({
     <div
       ref={ref}
       data-testid={`picker-${schoolId}-${rank}`}
-      className="absolute left-1 right-1 top-full z-40 mt-1 rounded-md border border-gray-300 bg-white shadow-xl"
+      className="absolute left-1 right-1 top-full z-40 mt-1 rounded-md border border-border bg-card shadow-xl"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="border-b border-gray-100 px-2 py-1.5">
+      <div className="border-b border-border/60 px-2 py-1.5">
         <input
           ref={inputRef}
           value={query}
@@ -477,12 +477,12 @@ function PlayerSearchPicker({
           }}
           placeholder={`Search players for ${rank}…`}
           data-testid="picker-search"
-          className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-blue-400"
+          className="w-full rounded border border-border px-2 py-1 text-sm outline-none focus:border-blue-400"
         />
       </div>
       <div className="max-h-64 overflow-y-auto p-1">
         {candidates.length === 0 ? (
-          <div className="px-2 py-3 text-center text-xs italic text-gray-400">
+          <div className="px-2 py-3 text-center text-xs italic text-muted-foreground">
             {query
               ? 'No matching players.'
               : 'No more players available — add some to the pool.'}
@@ -499,12 +499,12 @@ function PlayerSearchPicker({
                 data-testid={`picker-option-${p.id}`}
                 className={[
                   'flex w-full items-center justify-between rounded px-2 py-1 text-left text-sm transition-colors',
-                  i === activeIndex ? 'bg-blue-50 text-blue-900' : 'text-gray-700 hover:bg-gray-50',
+                  i === activeIndex ? 'bg-blue-50 text-blue-900 dark:bg-blue-500/15 dark:text-blue-300' : 'text-foreground hover:bg-muted/50',
                 ].join(' ')}
               >
                 <span className="truncate">{p.name || '(unnamed)'}</span>
                 {currentRanks.length > 0 ? (
-                  <span className="ml-2 truncate text-[10px] font-normal text-gray-400">
+                  <span className="ml-2 truncate text-[10px] font-normal text-muted-foreground">
                     {currentRanks.slice(0, 3).join(', ')}
                     {currentRanks.length > 3 ? '…' : ''}
                   </span>
@@ -514,12 +514,12 @@ function PlayerSearchPicker({
           })
         )}
       </div>
-      <div className="flex items-center justify-between border-t border-gray-100 px-2 py-1 text-[10px] text-gray-500">
+      <div className="flex items-center justify-between border-t border-border/60 px-2 py-1 text-[10px] text-muted-foreground">
         <span>Up/Down to navigate · Enter to pick · Esc to close</span>
         <button
           type="button"
           onClick={onClose}
-          className="rounded px-1 hover:text-gray-800"
+          className="rounded px-1 hover:text-foreground"
         >
           Done
         </button>
@@ -551,15 +551,15 @@ export function DraggablePlayerChip({
       style={style}
       data-testid={`pool-chip-${player.id}`}
       className={[
-        'inline-flex w-full items-center gap-1.5 rounded border border-gray-200 bg-white px-2 py-1 text-left text-sm shadow-sm transition-all',
+        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-all',
         isDragging
           ? 'z-30 shadow-lg ring-2 ring-blue-400 cursor-grabbing opacity-90 scale-[1.02]'
           : 'cursor-grab hover:border-blue-400',
       ].join(' ')}
     >
-      <span aria-hidden className="text-gray-300">⠿</span>
+      <span aria-hidden className="text-muted-foreground/70">⠿</span>
       <span className="flex-1 truncate">{player.name || '(unnamed)'}</span>
-      <span className="text-[10px] text-gray-400 tabular-nums">
+      <span className="text-[10px] text-muted-foreground tabular-nums">
         {(player.ranks ?? []).length}
       </span>
     </button>

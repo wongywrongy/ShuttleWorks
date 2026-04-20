@@ -182,13 +182,13 @@ export function BackupPanel() {
 
   return (
     <div
-      className="rounded border border-gray-200 bg-white p-3"
+      className="rounded border border-border bg-white p-3"
       data-testid="backup-panel"
     >
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700">Backups</h3>
-          <p className="text-xs text-gray-500">
+          <h3 className="text-sm font-semibold text-foreground">Backups</h3>
+          <p className="text-xs text-muted-foreground">
             Auto-saved before every write. Last 10 kept.
           </p>
         </div>
@@ -198,7 +198,7 @@ export function BackupPanel() {
           disabled={busyAction !== null}
           data-testid="backup-create"
           aria-busy={busyAction === 'create'}
-          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50`}
+          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-white px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
         >
           {busyAction === 'create' && (
             <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
@@ -215,9 +215,9 @@ export function BackupPanel() {
 
       <div className="mt-2">
         {loading && entries.length === 0 ? (
-          <div className="py-4 text-center text-xs text-gray-400">Loading…</div>
+          <div className="py-4 text-center text-xs text-muted-foreground">Loading…</div>
         ) : entries.length === 0 ? (
-          <div className="py-4 text-center text-xs text-gray-400">
+          <div className="py-4 text-center text-xs text-muted-foreground">
             No backups yet — one will appear the next time you save.
           </div>
         ) : (
@@ -229,8 +229,8 @@ export function BackupPanel() {
                 data-testid={`backup-row-${e.filename}`}
               >
                 <div className="min-w-0 flex-1 pr-2">
-                  <div className="truncate font-mono text-gray-700">{e.filename}</div>
-                  <div className="text-gray-400">
+                  <div className="truncate font-mono text-foreground">{e.filename}</div>
+                  <div className="text-muted-foreground">
                     {formatWhen(e.modifiedAt)} · {formatBytes(e.sizeBytes)}
                   </div>
                 </div>
@@ -253,7 +253,7 @@ export function BackupPanel() {
                       type="button"
                       onClick={() => setConfirmRestore(null)}
                       disabled={busyAction !== null}
-                      className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-50`}
+                      className={`${INTERACTIVE_BASE} rounded border border-border bg-white px-2 py-0.5 text-foreground hover:bg-muted/40`}
                     >
                       Cancel
                     </button>
@@ -264,7 +264,7 @@ export function BackupPanel() {
                     onClick={() => setConfirmRestore(e.filename)}
                     disabled={busyAction !== null}
                     data-testid={`backup-restore-${e.filename}`}
-                    className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-50`}
+                    className={`${INTERACTIVE_BASE} rounded border border-border bg-white px-2 py-0.5 text-foreground hover:bg-muted/40`}
                   >
                     Restore
                   </button>
@@ -275,11 +275,11 @@ export function BackupPanel() {
         )}
       </div>
 
-      <div className="mt-3 border-t border-gray-100 pt-3">
+      <div className="mt-3 border-t border-border/60 pt-3">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xs font-semibold text-gray-700">Recover schedule</div>
-            <p className="text-xs text-gray-500">
+            <div className="text-xs font-semibold text-foreground">Recover schedule</div>
+            <p className="text-xs text-muted-foreground">
               Rebuild schedule assignments from a Schedule XLSX export.
             </p>
           </div>
@@ -288,7 +288,7 @@ export function BackupPanel() {
             onClick={() => fileInputRef.current?.click()}
             disabled={busyAction !== null}
             data-testid="schedule-import-open"
-            className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50`}
+            className={`${INTERACTIVE_BASE} rounded border border-border bg-white px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
           >
             Recover from XLSX…
           </button>

@@ -136,19 +136,19 @@ function InProgressCard({
         className={[
           'grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
           isSelected
-            ? 'border-l-blue-500 bg-blue-50'
-            : 'border-l-green-500 bg-green-50/60 hover:bg-green-50',
+            ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-500/15'
+            : 'border-l-green-500 bg-green-50/60 hover:bg-green-50 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15',
         ].join(' ')}
       >
-        <span className="font-semibold text-gray-800 tabular-nums">{getMatchLabel(match)}</span>
-        <span className="text-[11px] text-gray-500">C{displayCourtId}</span>
-        <span className="tabular-nums text-[11px] text-gray-500">
+        <span className="font-semibold text-foreground tabular-nums">{getMatchLabel(match)}</span>
+        <span className="text-[11px] text-muted-foreground">C{displayCourtId}</span>
+        <span className="tabular-nums text-[11px] text-muted-foreground">
           <ElapsedTimer startTime={matchState?.actualStartTime} />
         </span>
-        <span className="truncate text-gray-700" title={`${sideANames} vs ${sideBNames}`}>
-          {sideANames} <span className="text-gray-400">vs</span> {sideBNames}
+        <span className="truncate text-foreground" title={`${sideANames} vs ${sideBNames}`}>
+          {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
           {wasMoved && (
-            <span className="ml-1 text-[10px] text-orange-500">(moved)</span>
+            <span className="ml-1 text-[10px] text-orange-500 dark:text-orange-300">(moved)</span>
           )}
         </span>
         <button
@@ -163,7 +163,7 @@ function InProgressCard({
         <button
           onClick={(e) => { e.stopPropagation(); handleUndo(); }}
           disabled={updating}
-          className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300 !px-2 !py-0.5 !text-[11px]`}
+          className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-[11px]`}
           title={wasMoved ? 'Undo and restore to original position' : 'Undo to called status'}
           aria-label="Undo match state"
         >
@@ -290,10 +290,10 @@ function UpNextCard({
       : 'border-l-red-500';
 
   const bgColorClass = light === 'green'
-    ? 'bg-white'
+    ? 'bg-card'
     : light === 'yellow'
-      ? 'bg-yellow-50'
-      : 'bg-red-50';
+      ? 'bg-yellow-50 dark:bg-yellow-500/10'
+      : 'bg-red-50 dark:bg-red-500/10';
 
   const dotColorClass = light === 'green'
     ? 'bg-green-500'
@@ -422,22 +422,22 @@ function UpNextCard({
         className={[
           'grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
           borderColorClass,
-          isSelected ? 'bg-blue-50' : `${bgColorClass} hover:brightness-[0.98]`,
+          isSelected ? 'bg-blue-50 dark:bg-blue-500/15' : `${bgColorClass} hover:brightness-[0.98]`,
         ].join(' ')}
       >
         <span className={`w-1.5 h-1.5 rounded-full ${dotColorClass}`} />
-        <span className="font-semibold text-gray-800 tabular-nums">{getMatchLabel(match)}</span>
-        <span className="tabular-nums text-[11px] text-gray-500">C{assignment.courtId} · {scheduledTime}</span>
-        <span className="truncate text-gray-700" title={`${sideANames} vs ${sideBNames}`}>
+        <span className="font-semibold text-foreground tabular-nums">{getMatchLabel(match)}</span>
+        <span className="tabular-nums text-[11px] text-muted-foreground">C{assignment.courtId} · {scheduledTime}</span>
+        <span className="truncate text-foreground" title={`${sideANames} vs ${sideBNames}`}>
           {hasDelayedPlayers ? (
             <>
               {sideAPlayers.map((p, i) => (
                 <span key={p.id}>
-                  {i > 0 && <span className="mx-0.5 text-gray-400">&</span>}
+                  {i > 0 && <span className="mx-0.5 text-muted-foreground">&</span>}
                   {p.name}
                   {p.delayCount > 0 && (
                     <span
-                      className="ml-0.5 rounded bg-yellow-100 px-1 text-[9px] font-medium text-yellow-700"
+                      className="ml-0.5 rounded bg-yellow-100 px-1 text-[9px] font-medium text-yellow-700 dark:bg-amber-500/15 dark:text-amber-200"
                       title={`${p.delayCount} delay(s)`}
                     >
                       {p.delayCount}
@@ -445,14 +445,14 @@ function UpNextCard({
                   )}
                 </span>
               ))}
-              <span className="mx-1 text-gray-400">vs</span>
+              <span className="mx-1 text-muted-foreground">vs</span>
               {sideBPlayers.map((p, i) => (
                 <span key={p.id}>
-                  {i > 0 && <span className="mx-0.5 text-gray-400">&</span>}
+                  {i > 0 && <span className="mx-0.5 text-muted-foreground">&</span>}
                   {p.name}
                   {p.delayCount > 0 && (
                     <span
-                      className="ml-0.5 rounded bg-yellow-100 px-1 text-[9px] font-medium text-yellow-700"
+                      className="ml-0.5 rounded bg-yellow-100 px-1 text-[9px] font-medium text-yellow-700 dark:bg-amber-500/15 dark:text-amber-200"
                       title={`${p.delayCount} delay(s)`}
                     >
                       {p.delayCount}
@@ -463,14 +463,14 @@ function UpNextCard({
             </>
           ) : (
             <>
-              {sideANames} <span className="text-gray-400">vs</span> {sideBNames}
+              {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
             </>
           )}
         </span>
         <span className="flex items-center gap-1 whitespace-nowrap text-[10px]">
           {isCalled && matchState?.calledAt && (
             <span
-              className="rounded bg-blue-100 px-1 font-medium text-blue-700"
+              className="rounded bg-blue-100 px-1 font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
               title={`Called at ${new Date(matchState.calledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
             >
               waiting{' '}
@@ -478,18 +478,18 @@ function UpNextCard({
             </span>
           )}
           {matchState?.postponed && (
-            <span className="rounded bg-orange-100 px-1 font-medium text-orange-700">postponed</span>
+            <span className="rounded bg-orange-100 px-1 font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-200">postponed</span>
           )}
           {isLate && !matchState?.postponed && (
-            <span className="rounded bg-yellow-100 px-1 font-medium text-yellow-700">late</span>
+            <span className="rounded bg-yellow-100 px-1 font-medium text-yellow-700 dark:bg-amber-500/15 dark:text-amber-200">late</span>
           )}
           {trafficLight?.reason && light !== 'green' && (
             <span
               className={[
                 'max-w-[180px] truncate rounded px-1 font-medium',
                 light === 'yellow'
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : 'bg-red-100 text-red-700',
+                  ? 'bg-yellow-100 text-yellow-700 dark:bg-amber-500/15 dark:text-amber-200'
+                  : 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-200',
               ].join(' ')}
               title={trafficLight.reason}
             >
@@ -536,7 +536,7 @@ function UpNextCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); handleUndo(); }}
                   disabled={updating}
-                  className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300 !px-2 !py-0.5 !text-[11px]`}
+                  className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-[11px]`}
                   aria-label="Undo"
                 >
                   Undo
@@ -551,10 +551,10 @@ function UpNextCard({
                     ACTION_BTN,
                     '!px-2 !py-0.5 !text-[11px]',
                     light === 'green'
-                      ? 'bg-gray-800 text-white hover:bg-gray-900'
+                      ? 'bg-primary text-primary-foreground hover:brightness-110'
                       : light === 'yellow'
                         ? 'bg-amber-500 text-white hover:bg-amber-600'
-                        : 'bg-gray-200 text-gray-400',
+                        : 'bg-muted text-muted-foreground opacity-60',
                   ].join(' ')}
                   title={
                     light === 'yellow'
@@ -584,8 +584,8 @@ function UpNextCard({
                     ACTION_BTN,
                     '!px-2 !py-0.5 !text-[11px]',
                     matchState?.postponed
-                      ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+                      ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-500/15 dark:text-orange-200 dark:hover:bg-orange-500/25'
+                      : 'bg-muted text-foreground hover:bg-muted/80',
                   ].join(' ')}
                   aria-pressed={Boolean(matchState?.postponed)}
                   title={matchState?.postponed ? 'Restore match' : 'Postpone match'}
@@ -595,7 +595,7 @@ function UpNextCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowEditDialog(true); }}
                   disabled={updating}
-                  className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300 !px-2 !py-0.5 !text-[11px]`}
+                  className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-[11px]`}
                   aria-label="Edit match"
                 >
                   Edit
@@ -608,8 +608,8 @@ function UpNextCard({
           unconfirmed players. Sits directly under the row, no extra
           card-level padding, so the strip behaves as a sub-line. */}
       {isCalled && onConfirmPlayer && (
-        <div className="flex flex-wrap items-center gap-1 border-l-2 border-l-transparent bg-gray-50/60 px-2 py-0.5 text-[11px]">
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Check in</span>
+        <div className="flex flex-wrap items-center gap-1 border-l-2 border-l-transparent bg-muted/40 px-2 py-0.5 text-[11px]">
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Check in</span>
           {[...sideAPlayers, ...sideBPlayers].map((p) => {
             const isConfirmed = confirmations[p.id] || false;
             return (
@@ -621,8 +621,8 @@ function UpNextCard({
                   INTERACTIVE_BASE,
                   'inline-flex items-center gap-0.5 rounded border px-1.5 py-0 font-medium',
                   isConfirmed
-                    ? 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100',
+                    ? 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25'
+                    : 'border-border bg-card text-foreground hover:bg-muted',
                 ].join(' ')}
                 title={isConfirmed ? `${p.name} confirmed` : `Click to confirm ${p.name}`}
                 aria-label={isConfirmed ? `${p.name} confirmed present` : `Confirm ${p.name} present`}
@@ -632,7 +632,7 @@ function UpNextCard({
                 {p.name}
                 {p.delayCount > 0 && (
                   <span
-                    className="ml-0.5 rounded bg-yellow-100 px-0.5 text-[9px] font-semibold text-yellow-700"
+                    className="ml-0.5 rounded bg-yellow-100 px-0.5 text-[9px] font-semibold text-yellow-700 dark:bg-amber-500/15 dark:text-amber-200"
                     title={`${p.delayCount} delay(s)`}
                   >
                     {p.delayCount}
@@ -748,26 +748,26 @@ function FinishedCard({
       className={[
         'grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
         isSelected
-          ? 'border-l-blue-500 bg-blue-50'
-          : 'border-l-gray-300 bg-gray-50/60 hover:bg-gray-50',
+          ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-500/15'
+          : 'border-l-border bg-muted/40 hover:bg-muted/60',
       ].join(' ')}
     >
-      <span className="font-semibold text-gray-600 tabular-nums">{getMatchLabel(match)}</span>
-      <span className="tabular-nums text-[11px] text-gray-400">C{assignment.courtId}</span>
-      <span className="truncate text-gray-600" title={`${sideANames} vs ${sideBNames}`}>
-        {sideANames} <span className="text-gray-400">vs</span> {sideBNames}
+      <span className="font-semibold text-muted-foreground tabular-nums">{getMatchLabel(match)}</span>
+      <span className="tabular-nums text-[11px] text-muted-foreground">C{assignment.courtId}</span>
+      <span className="truncate text-muted-foreground" title={`${sideANames} vs ${sideBNames}`}>
+        {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
       </span>
       {score ? (
-        <span className="font-mono text-xs font-semibold tabular-nums text-blue-700">
+        <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 dark:text-blue-300">
           {score.sideA}–{score.sideB}
         </span>
       ) : (
-        <span className="text-[10px] text-gray-400">no score</span>
+        <span className="text-[10px] text-muted-foreground">no score</span>
       )}
       <button
         onClick={(e) => { e.stopPropagation(); handleUndo(); }}
         disabled={updating}
-        className={`${ACTION_BTN} bg-gray-200 text-gray-700 hover:bg-gray-300 !px-2 !py-0.5 !text-[11px]`}
+        className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-[11px]`}
         aria-label="Undo finish"
       >
         {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
@@ -854,13 +854,13 @@ export function WorkflowPanel({
   return (
     <div className="h-full flex flex-col overflow-hidden min-h-0">
       {hasActive && (
-        <div className="flex-shrink-0 border-b border-gray-200">
-          <div className="px-2 py-1.5 flex items-center justify-between border-b border-gray-100">
+        <div className="flex-shrink-0 border-b border-border">
+          <div className="px-2 py-1.5 flex items-center justify-between border-b border-border/60">
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">In Progress</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">In Progress</span>
             </div>
-            <span className="text-[10px] text-gray-400">{matchesByStatus.started.length} active</span>
+            <span className="text-[10px] text-muted-foreground">{matchesByStatus.started.length} active</span>
           </div>
           <div className="p-1.5 max-h-44 overflow-auto">
             {startedSorted.map((assignment) => (
@@ -883,14 +883,14 @@ export function WorkflowPanel({
 
       {/* Tabbed Up Next / Finished */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-1">
             <button
               onClick={() => setActiveTab('up_next')}
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
                 activeTab === 'up_next'
-                  ? 'bg-gray-700 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               Up Next ({upNextSorted.length})
@@ -899,8 +899,8 @@ export function WorkflowPanel({
               onClick={() => setActiveTab('finished')}
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
                 activeTab === 'finished'
-                  ? 'bg-gray-700 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               Finished ({finishedSorted.length})
@@ -910,7 +910,7 @@ export function WorkflowPanel({
         <div className="flex-1 overflow-auto p-1.5">
           {activeTab === 'up_next' && (
             upNextSorted.length === 0 ? (
-              <div className="text-center text-gray-400 text-[10px] py-4">No matches pending</div>
+              <div className="text-center text-muted-foreground text-[10px] py-4">No matches pending</div>
             ) : (
               upNextSorted.map((assignment) => (
                 <UpNextCard
@@ -939,7 +939,7 @@ export function WorkflowPanel({
           )}
           {activeTab === 'finished' && (
             finishedSorted.length === 0 ? (
-              <div className="text-center text-gray-400 text-xs py-4">No completed matches</div>
+              <div className="text-center text-muted-foreground text-xs py-4">No completed matches</div>
             ) : (
               finishedSorted.map((assignment) => (
                 <FinishedCard

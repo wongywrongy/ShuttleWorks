@@ -120,10 +120,10 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
       </h3>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-foreground mb-2">
           Step 1: Select {requiredSchools} Schools
         </label>
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs text-muted-foreground mb-3">
           Click on schools to select them for the {matchType === 'tri' ? 'tri-meet' : 'dual meet'}. Matches will be generated for ALL ranks automatically.
         </p>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -140,11 +140,11 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
                 className={`p-3 rounded border-2 transition-all ${
                   isSelected
                     ? 'border-blue-600 bg-blue-50'
-                    : 'border-gray-300 bg-white hover:border-blue-400'
+                    : 'border-border bg-white hover:border-blue-400'
                 }`}
               >
-                <div className="font-medium text-gray-900">{school.name}</div>
-                <div className="text-xs text-gray-500 mt-1">{playerCount} players</div>
+                <div className="font-medium text-foreground">{school.name}</div>
+                <div className="text-xs text-muted-foreground mt-1">{playerCount} players</div>
                 {isSelected && (
                   <div className="mt-2 inline-block px-2 py-0.5 bg-blue-600 text-white text-xs rounded">
                     {matchType === 'tri'
@@ -171,23 +171,23 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
 
       {previewMatches.length > 0 && (
         <div className="mb-4">
-          <h4 className="font-semibold text-gray-900 mb-2 text-sm">
+          <h4 className="font-semibold text-foreground mb-2 text-sm">
             Preview: {previewMatches.length} Matches to be Created
           </h4>
-          <div className="border border-gray-300 rounded-sm overflow-hidden">
+          <div className="border border-border rounded-sm overflow-hidden">
             <div className="max-h-64 overflow-y-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0">
+                <thead className="bg-muted/40 sticky top-0">
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Rank</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">
                       {groups.find(g => g.id === selectedSchools[0])?.name || 'School A'}
                     </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">
                       {groups.find(g => g.id === selectedSchools[1])?.name || 'School B'}
                     </th>
                     {matchType === 'tri' && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">
                         {groups.find(g => g.id === selectedSchools[2])?.name || 'School C'}
                       </th>
                     )}
@@ -201,20 +201,20 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
                     const hasIncompleteC = isDoublesRank && matchType === 'tri' && match.playersC && match.playersC.length === 1;
 
                     return (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-sm font-medium text-gray-900">
+                      <tr key={idx} className="hover:bg-muted/40">
+                        <td className="px-3 py-2 text-sm font-medium text-foreground">
                           {match.rank}
                         </td>
-                        <td className={`px-3 py-2 text-sm ${hasIncompleteA ? 'text-yellow-700 bg-yellow-50' : 'text-gray-700'}`}>
+                        <td className={`px-3 py-2 text-sm ${hasIncompleteA ? 'text-yellow-700 bg-yellow-50' : 'text-foreground'}`}>
                           {hasIncompleteA && <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1.5" title="Incomplete doubles pair" />}
                           {match.playersA.map(p => p.name).join(', ') || '-'}
                         </td>
-                        <td className={`px-3 py-2 text-sm ${hasIncompleteB ? 'text-yellow-700 bg-yellow-50' : 'text-gray-700'}`}>
+                        <td className={`px-3 py-2 text-sm ${hasIncompleteB ? 'text-yellow-700 bg-yellow-50' : 'text-foreground'}`}>
                           {hasIncompleteB && <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1.5" title="Incomplete doubles pair" />}
                           {match.playersB.map(p => p.name).join(', ') || '-'}
                         </td>
                         {matchType === 'tri' && (
-                          <td className={`px-3 py-2 text-sm ${hasIncompleteC ? 'text-yellow-700 bg-yellow-50' : 'text-gray-700'}`}>
+                          <td className={`px-3 py-2 text-sm ${hasIncompleteC ? 'text-yellow-700 bg-yellow-50' : 'text-foreground'}`}>
                             {hasIncompleteC && <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1.5" title="Incomplete doubles pair" />}
                             {match.playersC?.map(p => p.name).join(', ') || '-'}
                           </td>
@@ -236,7 +236,7 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
       <div className="flex gap-2 justify-end">
         <button
           onClick={onCancel}
-          className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-sm text-sm hover:bg-gray-300"
+          className="px-3 py-1.5 bg-muted text-foreground rounded-sm text-sm hover:bg-accent hover:text-accent-foreground"
         >
           Cancel
         </button>

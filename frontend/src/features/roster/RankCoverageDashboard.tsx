@@ -47,7 +47,7 @@ export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardPro
 
   // Get cell styling based on coverage (3 colors only)
   const getCellStyle = (percent: number, expected: number) => {
-    if (expected === 0) return 'bg-gray-100 text-gray-400';
+    if (expected === 0) return 'bg-muted text-muted-foreground';
     if (percent === 100) return 'bg-green-100 text-green-800 font-semibold';
     if (percent > 0) return 'bg-yellow-100 text-yellow-800';
     return 'bg-red-100 text-red-800';
@@ -68,10 +68,10 @@ export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardPro
   };
 
   return (
-    <div className="bg-white rounded shadow-sm border border-gray-200 overflow-hidden mb-4">
-      <div className="px-3 py-1.5 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-800">Rank Coverage</h3>
-        <div className="flex gap-3 text-xs text-gray-500">
+    <div className="bg-white rounded shadow-sm border border-border overflow-hidden mb-4">
+      <div className="px-3 py-1.5 border-b border-border flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground">Rank Coverage</h3>
+        <div className="flex gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-green-200"></span>100%</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-200"></span>1-99%</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-200"></span>0%</span>
@@ -80,23 +80,23 @@ export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardPro
 
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-muted/40">
             <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-0 bg-gray-50">
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider sticky left-0 bg-muted/40">
                 School
               </th>
               {rankCategories.map(cat => {
                 const expected = config.rankCounts?.[cat] || 0;
                 return (
-                  <th key={cat} className="px-3 py-2 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                  <th key={cat} className="px-3 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     <div>{cat}</div>
-                    <div className="text-gray-500 font-normal normal-case mt-0.5">
+                    <div className="text-muted-foreground font-normal normal-case mt-0.5">
                       (of {expected})
                     </div>
                   </th>
                 );
               })}
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 uppercase tracking-wider bg-gray-100">
+              <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider bg-muted">
                 Total
               </th>
             </tr>
@@ -109,11 +109,11 @@ export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardPro
                 : 0;
 
               return (
-                <tr key={school.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 text-sm font-medium text-gray-900 sticky left-0 bg-white">
+                <tr key={school.id} className="hover:bg-muted/40">
+                  <td className="px-3 py-2 text-sm font-medium text-foreground sticky left-0 bg-white">
                     <button
                       onClick={() => onEditSchool?.(school)}
-                      className="hover:text-gray-600 transition-colors"
+                      className="hover:text-muted-foreground transition-colors"
                     >
                       {school.name}
                     </button>
@@ -127,7 +127,7 @@ export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardPro
                         {coverage.expected > 0 ? (
                           <span className="font-semibold">{coverage.filled}/{coverage.expected}</span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </td>
                     );

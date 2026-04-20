@@ -137,12 +137,12 @@ export function BadmintonScoreDialog({
       panelClassName="w-full max-w-xl rounded-lg bg-white shadow-xl focus:outline-none"
     >
         {/* Header */}
-        <div className="flex items-start justify-between rounded-t-lg border-b border-gray-200 bg-gray-50 px-4 py-3">
+        <div className="flex items-start justify-between rounded-t-lg border-b border-border bg-muted/40 px-4 py-3">
           <div className="min-w-0">
-            <h3 id={titleId} className="truncate text-sm font-semibold text-gray-900">
+            <h3 id={titleId} className="truncate text-sm font-semibold text-foreground">
               Finish {matchName}
             </h3>
-            <p className="mt-0.5 text-[11px] text-gray-500">
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
               Best of {maxSets} · first to {setsToWin} set{setsToWin === 1 ? '' : 's'} ·{' '}
               {pointsPerSet} pts{deuceEnabled ? ` (deuce, cap ${maxPoints})` : ''}
             </p>
@@ -151,7 +151,7 @@ export function BadmintonScoreDialog({
             type="button"
             onClick={onCancel}
             disabled={isSubmitting}
-            className="ml-2 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+            className="ml-2 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-muted-foreground"
             aria-label="Close score dialog"
           >
             <X aria-hidden="true" className="h-4 w-4" />
@@ -170,7 +170,7 @@ export function BadmintonScoreDialog({
               title={sideAName}
             >
               {sideAName || 'Side A'}
-              <span className="ml-1 text-[10px] font-mono text-gray-500">{setsWonA} set{setsWonA === 1 ? '' : 's'}</span>
+              <span className="ml-1 text-[10px] font-mono text-muted-foreground">{setsWonA} set{setsWonA === 1 ? '' : 's'}</span>
             </div>
             <div
               className={`truncate rounded px-2 py-1 text-xs font-semibold ${
@@ -181,7 +181,7 @@ export function BadmintonScoreDialog({
               title={sideBName}
             >
               {sideBName || 'Side B'}
-              <span className="ml-1 text-[10px] font-mono text-gray-500">{setsWonB} set{setsWonB === 1 ? '' : 's'}</span>
+              <span className="ml-1 text-[10px] font-mono text-muted-foreground">{setsWonB} set{setsWonB === 1 ? '' : 's'}</span>
             </div>
           </div>
 
@@ -196,7 +196,7 @@ export function BadmintonScoreDialog({
                   ? 'bg-blue-50/60 border-blue-200'
                   : wonBy === 'B'
                     ? 'bg-rose-50/60 border-rose-200'
-                    : 'bg-white border-gray-200';
+                    : 'bg-white border-border';
               const scoreInput = (side: 'sideA' | 'sideB', isWinning: boolean) => (
                 <input
                   type="number"
@@ -208,7 +208,7 @@ export function BadmintonScoreDialog({
                   className={`w-full rounded border px-2 py-1.5 text-center text-base font-mono tabular-nums ${
                     isWinning
                       ? 'border-green-400 bg-green-50 font-semibold text-green-800'
-                      : 'border-gray-300 bg-white text-gray-800'
+                      : 'border-border bg-white text-foreground'
                   } focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200`}
                 />
               );
@@ -217,11 +217,11 @@ export function BadmintonScoreDialog({
                   key={i}
                   className={`grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 rounded border px-2 py-1.5 ${rowClass}`}
                 >
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Set {i + 1}
                   </span>
                   {scoreInput('sideA', wonBy === 'A')}
-                  <span className="text-xs text-gray-400">–</span>
+                  <span className="text-xs text-muted-foreground">–</span>
                   {scoreInput('sideB', wonBy === 'B')}
                   <div className="flex gap-1">
                     <button
@@ -259,7 +259,7 @@ export function BadmintonScoreDialog({
                       onClick={() => clearSet(i)}
                       disabled={matchDecided || (set.sideA === 0 && set.sideB === 0)}
                       aria-label={`Clear set ${i + 1}`}
-                      className="inline-flex items-center justify-center rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-40"
+                      className="inline-flex items-center justify-center rounded border border-border bg-muted/40 px-1.5 py-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
                       title="Clear this set"
                     >
                       <X aria-hidden="true" className="h-3.5 w-3.5" />
@@ -287,22 +287,22 @@ export function BadmintonScoreDialog({
               </span>
             </div>
           ) : (
-            <div className="rounded border border-dashed border-gray-200 px-3 py-2 text-center text-[11px] text-gray-500">
+            <div className="rounded border border-dashed border-border px-3 py-2 text-center text-[11px] text-muted-foreground">
               Type the losing side's score and the winner auto-fills to {pointsPerSet}. Deuce sets need both scores entered manually. Match decides once someone wins {setsToWin} set{setsToWin === 1 ? '' : 's'}.
             </div>
           )}
 
           {/* Notes */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor="score-notes">
-              Notes <span className="font-normal text-gray-400">(optional)</span>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="score-notes">
+              Notes <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <textarea
               id="score-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              className="w-full rounded border border-border px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
               placeholder="Retirement, dispute, umpire notes…"
             />
           </div>
@@ -313,7 +313,7 @@ export function BadmintonScoreDialog({
               type="button"
               onClick={onCancel}
               disabled={isSubmitting}
-              className={`${INTERACTIVE_BASE} rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50`}
+              className={`${INTERACTIVE_BASE} rounded border border-border bg-white px-3 py-1.5 text-sm text-foreground hover:bg-muted/40`}
             >
               Cancel
             </button>

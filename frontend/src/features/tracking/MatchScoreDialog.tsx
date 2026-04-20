@@ -66,14 +66,14 @@ export function MatchScoreDialog({
       panelClassName="w-72 rounded-lg bg-white shadow-xl focus:outline-none"
     >
       {/* Header */}
-      <div className="px-3 py-2 border-b border-gray-200">
-        <h3 id={titleId} className="text-sm font-semibold text-gray-900">{matchName}</h3>
+      <div className="px-3 py-2 border-b border-border">
+        <h3 id={titleId} className="text-sm font-semibold text-foreground">{matchName}</h3>
       </div>
 
       {/* Score Entry */}
       <form onSubmit={handleSubmit} className="p-3">
         {/* Player names */}
-        <div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
+        <div className="flex justify-between text-[10px] text-muted-foreground mb-1 px-1">
           <span className="truncate max-w-[45%]">{sideAName}</span>
           <span className="truncate max-w-[45%] text-right">{sideBName}</span>
         </div>
@@ -86,19 +86,19 @@ export function MatchScoreDialog({
             value={scoreA}
             onChange={(e) => handleScoreAChange(e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, 'A')}
-            className="flex-1 px-2 py-2 text-center text-lg font-semibold border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 px-2 py-2 text-center text-lg font-semibold border border-border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="0"
             min="0"
             aria-label={`Score for ${sideAName || 'side A'}`}
           />
-          <span className="text-gray-400 text-lg font-medium" aria-hidden="true">–</span>
+          <span className="text-muted-foreground text-lg font-medium" aria-hidden="true">–</span>
           <input
             ref={inputBRef}
             type="number"
             value={scoreB}
             onChange={(e) => setScoreB(e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, 'B')}
-            className="flex-1 px-2 py-2 text-center text-lg font-semibold border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 px-2 py-2 text-center text-lg font-semibold border border-border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="0"
             min="0"
             aria-label={`Score for ${sideBName || 'side B'}`}
@@ -111,7 +111,7 @@ export function MatchScoreDialog({
             type="button"
             onClick={onCancel}
             disabled={isSubmitting}
-            className={`${INTERACTIVE_BASE} flex-1 rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-200`}
+            className={`${INTERACTIVE_BASE} flex-1 rounded bg-muted px-3 py-1.5 text-sm text-foreground hover:bg-muted`}
           >
             Cancel
           </button>

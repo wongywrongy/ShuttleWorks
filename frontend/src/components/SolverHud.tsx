@@ -73,9 +73,9 @@ export function SolverHud() {
   const showHud = isGenerating || hud.solutionCount > 0 || hud.phase !== null;
   if (!showHud) {
     return (
-      <footer className="sticky bottom-0 z-10 flex items-center justify-between border-t border-gray-200 bg-white px-4 py-2 text-xs text-gray-500">
+      <footer className="sticky bottom-0 z-10 flex items-center justify-between border-t border-border bg-white px-4 py-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-300" aria-hidden />
+          <span className="h-1.5 w-1.5 rounded-full bg-border" aria-hidden />
           Solver idle — click Generate to begin.
         </span>
       </footer>
@@ -86,7 +86,7 @@ export function SolverHud() {
     <footer
       data-testid="solver-hud"
       className={[
-        'relative sticky bottom-0 z-10 flex items-center gap-4 border-t border-gray-200 bg-white px-4 py-2 text-xs text-gray-700 overflow-hidden',
+        'relative sticky bottom-0 z-10 flex items-center gap-4 border-t border-border bg-white px-4 py-2 text-xs text-foreground overflow-hidden',
       ].join(' ')}
     >
       {/* Scanline — only during active solve */}
@@ -123,16 +123,16 @@ export function SolverHud() {
           data-testid="solver-hud-model"
           className="tabular-nums motion-safe:animate-[block-in_0.35s_ease-out_backwards]"
         >
-          <span className="text-gray-400">Model</span>{' '}
-          <span className="text-gray-700 font-medium">
+          <span className="text-muted-foreground">Model</span>{' '}
+          <span className="text-foreground font-medium">
             {hud.numMatches}
           </span>
-          <span className="text-gray-400 mx-1">·</span>
+          <span className="text-muted-foreground mx-1">·</span>
           <span className="tabular-nums">{hud.numIntervals ?? '—'}</span>{' '}
-          <span className="text-gray-400">intervals</span>
-          <span className="text-gray-400 mx-1">·</span>
+          <span className="text-muted-foreground">intervals</span>
+          <span className="text-muted-foreground mx-1">·</span>
           <span className="tabular-nums">{hud.numNoOverlap ?? '—'}</span>{' '}
-          <span className="text-gray-400">no-overlap</span>
+          <span className="text-muted-foreground">no-overlap</span>
         </span>
       ) : null}
 
@@ -141,7 +141,7 @@ export function SolverHud() {
           data-testid="solver-hud-solutions"
           className="inline-flex items-center gap-1.5"
         >
-          <span className="text-gray-400">Solutions</span>
+          <span className="text-muted-foreground">Solutions</span>
           <span
             key={hud.solutionCount}
             className="inline-block tabular-nums font-semibold motion-safe:animate-solution-tick"
@@ -153,7 +153,7 @@ export function SolverHud() {
 
       {animatedObjective !== undefined ? (
         <span data-testid="solver-hud-objective" className="inline-flex items-baseline gap-1.5">
-          <span className="text-gray-400">Objective</span>
+          <span className="text-muted-foreground">Objective</span>
           <span
             key={objKey}
             className="tabular-nums font-semibold motion-safe:animate-obj-flash"
@@ -162,12 +162,12 @@ export function SolverHud() {
           </span>
           {animatedBound !== undefined ? (
             <>
-              <span className="text-gray-400">bound</span>
-              <span className="tabular-nums text-gray-500">{Math.round(animatedBound)}</span>
+              <span className="text-muted-foreground">bound</span>
+              <span className="tabular-nums text-muted-foreground">{Math.round(animatedBound)}</span>
             </>
           ) : null}
           {hud.gapPercent !== undefined ? (
-            <span className="text-gray-400">({hud.gapPercent.toFixed(1)}%)</span>
+            <span className="text-muted-foreground">({hud.gapPercent.toFixed(1)}%)</span>
           ) : null}
         </span>
       ) : null}
@@ -175,7 +175,7 @@ export function SolverHud() {
       {hud.elapsedMs > 0 ? (
         <span
           data-testid="solver-hud-elapsed"
-          className="tabular-nums text-gray-500"
+          className="tabular-nums text-muted-foreground"
         >
           {(hud.elapsedMs / 1000).toFixed(1)}s
         </span>
@@ -194,7 +194,7 @@ function CancelButton() {
       type="button"
       onClick={cancelGeneration}
       data-testid="solver-hud-cancel"
-      className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+      className="rounded border border-border bg-white px-2 py-1 text-xs text-foreground hover:bg-muted/40 transition-colors"
     >
       Cancel
     </button>

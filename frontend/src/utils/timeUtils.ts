@@ -295,14 +295,14 @@ function _msToSlot(ms: number, config: TournamentConfig): number {
 export function getStatusColor(status: MatchStateDTO['status']): string {
   switch (status) {
     case 'scheduled':
-      return 'bg-gray-200 text-gray-700';
+      return 'bg-muted text-foreground';
     case 'called':
-      return 'bg-blue-200 text-blue-800';
+      return 'bg-blue-200 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200';
     case 'started':
-      return 'bg-green-200 text-green-800';
+      return 'bg-green-200 text-green-800 dark:bg-green-500/20 dark:text-green-200';
     case 'finished':
-      return 'bg-purple-200 text-purple-800';
+      return 'bg-purple-200 text-purple-800 dark:bg-purple-500/20 dark:text-purple-200';
     default:
-      return 'bg-gray-200 text-gray-700';
+      return 'bg-muted text-foreground';
   }
 }

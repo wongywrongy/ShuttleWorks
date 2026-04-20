@@ -189,8 +189,8 @@ export function MatchStatusCard({
             : isDelayed
               ? 'border-yellow-400 bg-yellow-50'
               : dimmed
-                ? 'border-gray-100 opacity-50 bg-white'
-                : 'border-gray-200 hover:border-gray-300 bg-white'
+                ? 'border-border/60 opacity-50 bg-white'
+                : 'border-border hover:border-border bg-white'
         } ${onSelect && !dimmed ? 'cursor-pointer' : ''}`}
         onClick={handleCardClick}
       >
@@ -209,7 +209,7 @@ export function MatchStatusCard({
               title={trafficLight.reason || 'Ready to call'}
             />
           )}
-          <div className="font-semibold text-gray-900 w-14 flex-shrink-0 truncate flex items-center gap-0.5">
+          <div className="font-semibold text-foreground w-14 flex-shrink-0 truncate flex items-center gap-0.5">
             {isPinned && (
               <Pin
                 aria-label="Pinned to court and time"
@@ -219,14 +219,14 @@ export function MatchStatusCard({
             {match.eventRank || `M${match.matchNumber || '?'}`}
           </div>
           <div className="flex-shrink-0 flex items-center gap-1">
-            <span className="text-gray-500">C{assignment.courtId}</span>
+            <span className="text-muted-foreground">C{assignment.courtId}</span>
             {/* Show scheduled time, with actual times if available */}
             {actualStart ? (
               <span className="text-green-600" title={`Scheduled: ${scheduledTime}`}>
                 {actualStart}{actualEnd ? ` - ${actualEnd}` : ''}
               </span>
             ) : (
-              <span className={isDelayed ? 'text-yellow-700 font-medium' : 'text-gray-500'}>
+              <span className={isDelayed ? 'text-yellow-700 font-medium' : 'text-muted-foreground'}>
                 {scheduledTime}
               </span>
             )}
@@ -237,7 +237,7 @@ export function MatchStatusCard({
           <div className="flex-1" />
           {/* Score if finished */}
           {matchState?.score && (
-            <div className="font-semibold text-gray-900 flex-shrink-0" title={matchState.sets ? `Sets: ${matchState.sets.map(s => `${s.sideA}-${s.sideB}`).join(', ')}` : undefined}>
+            <div className="font-semibold text-foreground flex-shrink-0" title={matchState.sets ? `Sets: ${matchState.sets.map(s => `${s.sideA}-${s.sideB}`).join(', ')}` : undefined}>
               {matchState.score.sideA}-{matchState.score.sideB}
             </div>
           )}
@@ -248,7 +248,7 @@ export function MatchStatusCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); handleStatusChange('called', { delayed: false }); }}
                   disabled={updating || dimmed || trafficLight?.status !== 'green'}
-                  className="px-2 py-0.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="px-2 py-0.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   title={trafficLight?.status !== 'green' ? trafficLight?.reason : undefined}
                 >
                   Call
@@ -256,7 +256,7 @@ export function MatchStatusCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowDelayDialog(true); }}
                   disabled={updating || dimmed}
-                  className="px-2 py-0.5 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="px-2 py-0.5 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Delay
                 </button>
@@ -265,7 +265,7 @@ export function MatchStatusCard({
                   disabled={updating || dimmed}
                   aria-label={isPinned ? 'Unpin match' : 'Pin match to court and time'}
                   aria-pressed={isPinned}
-                  className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded ${isPinned ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                  className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded ${isPinned ? 'bg-orange-500 text-white' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
                   title={isPinned ? 'Unpin match' : 'Pin to court/time'}
                 >
                   <Pin aria-hidden="true" className="h-3.5 w-3.5" />
@@ -277,21 +277,21 @@ export function MatchStatusCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); handleStatusChange('started'); }}
                   disabled={updating}
-                  className="px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
+                  className="px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
                 >
                   Start
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowDelayDialog(true); }}
                   disabled={updating}
-                  className="px-2 py-0.5 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:bg-gray-400"
+                  className="px-2 py-0.5 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
                 >
                   Delay
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleUndo(); }}
                   disabled={updating}
-                  className="px-2 py-0.5 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:bg-gray-300"
+                  className="px-2 py-0.5 bg-muted-foreground/60 text-white rounded hover:brightness-110 disabled:opacity-50"
                   title="Undo: back to scheduled"
                 >
                   Undo
@@ -303,14 +303,14 @@ export function MatchStatusCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowScoreDialog(true); }}
                   disabled={updating}
-                  className="px-2 py-0.5 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:bg-gray-400"
+                  className="px-2 py-0.5 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
                 >
                   Finish
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleUndo(); }}
                   disabled={updating}
-                  className="px-2 py-0.5 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:bg-gray-300"
+                  className="px-2 py-0.5 bg-muted-foreground/60 text-white rounded hover:brightness-110 disabled:opacity-50"
                   title="Undo: back to called"
                 >
                   Undo
@@ -323,7 +323,7 @@ export function MatchStatusCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); handleUndo(); }}
                   disabled={updating}
-                  className="px-2 py-0.5 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:bg-gray-300"
+                  className="px-2 py-0.5 bg-muted-foreground/60 text-white rounded hover:brightness-110 disabled:opacity-50"
                   title="Undo: reopen match"
                 >
                   Undo
@@ -334,7 +334,7 @@ export function MatchStatusCard({
         </div>
 
         {/* Row 2: Players */}
-        <div className="text-gray-600 truncate mt-0.5">
+        <div className="text-muted-foreground truncate mt-0.5">
           {sideANames || '?'} vs {sideBNames || '?'}
         </div>
       </div>

@@ -73,8 +73,8 @@ export function EditMatchDialog({
 
     return (
       <div key={player.id} className="mb-2">
-        <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200">
-          <span className="text-sm text-gray-800">{player.name}</span>
+        <div className="flex items-center justify-between p-2 bg-muted/40 rounded border border-border">
+          <span className="text-sm text-foreground">{player.name}</span>
           <div className="flex gap-1">
             <button
               onClick={() => {
@@ -85,7 +85,7 @@ export function EditMatchDialog({
               className={`px-2 py-1 text-[10px] rounded ${
                 isSelected && mode === 'replace'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               Replace
@@ -99,7 +99,7 @@ export function EditMatchDialog({
               className={`px-2 py-1 text-[10px] rounded ${
                 isSelected && mode === 'remove'
                   ? 'bg-red-600 text-white'
-                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               Remove
@@ -125,13 +125,13 @@ export function EditMatchDialog({
               <button
                 onClick={handleReplace}
                 disabled={!substituteId || isSubmitting}
-                className="flex-1 px-2 py-1 text-[10px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+                className="flex-1 px-2 py-1 text-[10px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
               >
                 Confirm
               </button>
               <button
                 onClick={resetSelection}
-                className="px-2 py-1 text-[10px] bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
+                className="px-2 py-1 text-[10px] bg-muted text-muted-foreground rounded hover:bg-accent hover:text-accent-foreground"
               >
                 Cancel
               </button>
@@ -147,13 +147,13 @@ export function EditMatchDialog({
               <button
                 onClick={handleRemove}
                 disabled={isSubmitting}
-                className="flex-1 px-2 py-1 text-[10px] bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-400"
+                className="flex-1 px-2 py-1 text-[10px] bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
               >
                 Confirm
               </button>
               <button
                 onClick={resetSelection}
-                className="px-2 py-1 text-[10px] bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
+                className="px-2 py-1 text-[10px] bg-muted text-muted-foreground rounded hover:bg-accent hover:text-accent-foreground"
               >
                 Cancel
               </button>
@@ -172,11 +172,11 @@ export function EditMatchDialog({
       panelClassName="w-96 max-w-[90vw] max-h-[90vh] overflow-auto rounded-lg bg-white p-4 shadow-xl focus:outline-none"
     >
       <div className="flex justify-between items-center mb-3">
-        <h3 id={titleId} className="text-sm font-semibold text-gray-900">Edit {matchName}</h3>
+        <h3 id={titleId} className="text-sm font-semibold text-foreground">Edit {matchName}</h3>
         <button
           onClick={onClose}
           aria-label="Close edit dialog"
-          className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-muted-foreground"
         >
           <X aria-hidden="true" className="h-4 w-4" />
         </button>
@@ -184,7 +184,7 @@ export function EditMatchDialog({
 
         {/* Side A */}
         <div className="mb-4">
-          <div className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-2">
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">
             Side A
           </div>
           {sideAPlayers.map(renderPlayerRow)}
@@ -192,7 +192,7 @@ export function EditMatchDialog({
 
         {/* Side B */}
         <div className="mb-4">
-          <div className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-2">
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">
             Side B
           </div>
           {sideBPlayers.map(renderPlayerRow)}
@@ -201,7 +201,7 @@ export function EditMatchDialog({
       {/* Close button */}
       <button
         onClick={onClose}
-        className="w-full px-3 py-1.5 text-sm text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+        className="w-full px-3 py-1.5 text-sm text-foreground bg-muted rounded hover:bg-muted"
       >
         Done
       </button>

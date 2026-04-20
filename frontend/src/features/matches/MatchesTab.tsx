@@ -19,7 +19,7 @@ export function MatchesTab() {
           onClick={() => void exportMatchesXlsx(matches, players, groups)}
           disabled={matches.length === 0}
           data-testid="export-matches"
-          className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded border border-border bg-white px-3 py-1 text-xs text-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
         >
           ⤓ Export matches XLSX
         </button>

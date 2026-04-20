@@ -63,12 +63,12 @@ export function BulkSchoolAssignDialog({
               <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded bg-white p-4 text-left align-middle shadow transition-all">
                 <Dialog.Title
                   as="h3"
-                  className="text-lg font-medium leading-6 text-gray-900"
+                  className="text-lg font-medium leading-6 text-foreground"
                 >
                   Assign to {targetSchoolName}
                 </Dialog.Title>
                 <div className="mt-2">
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     You are about to assign {selectedPlayerIds.length} player{selectedPlayerIds.length !== 1 ? 's' : ''} to <strong>{targetSchoolName}</strong>.
                   </p>
 
@@ -95,7 +95,7 @@ export function BulkSchoolAssignDialog({
                 <div className="mt-4 flex gap-2 justify-end">
                   <button
                     type="button"
-                    className="inline-flex justify-center rounded-sm border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="inline-flex justify-center rounded-sm border border-border bg-white px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onClick={onClose}
                   >
                     Cancel

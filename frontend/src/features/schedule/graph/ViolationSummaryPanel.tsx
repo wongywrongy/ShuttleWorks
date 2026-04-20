@@ -46,8 +46,8 @@ export function ViolationSummaryPanel({
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 w-56 text-sm">
-      <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+    <div className="bg-white border border-border rounded-lg p-4 w-56 text-sm">
+      <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
         <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
         Solver Status
       </h3>
@@ -56,20 +56,20 @@ export function ViolationSummaryPanel({
       {(solutionCount !== undefined || elapsed !== undefined) && (
         <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
           {elapsed !== undefined && (
-            <div className="bg-gray-50 rounded p-2">
-              <div className="text-gray-500">Elapsed</div>
+            <div className="bg-muted/40 rounded p-2">
+              <div className="text-muted-foreground">Elapsed</div>
               <div className="font-mono font-medium">{formatElapsed(elapsed)}</div>
             </div>
           )}
           {solutionCount !== undefined && (
-            <div className="bg-gray-50 rounded p-2">
-              <div className="text-gray-500">Solutions</div>
+            <div className="bg-muted/40 rounded p-2">
+              <div className="text-muted-foreground">Solutions</div>
               <div className="font-mono font-medium">{solutionCount}</div>
             </div>
           )}
           {objectiveScore !== undefined && (
-            <div className="bg-gray-50 rounded p-2 col-span-2">
-              <div className="text-gray-500">Objective Score</div>
+            <div className="bg-muted/40 rounded p-2 col-span-2">
+              <div className="text-muted-foreground">Objective Score</div>
               <div className="font-mono font-medium">{objectiveScore.toFixed(1)}</div>
             </div>
           )}
@@ -98,17 +98,17 @@ export function ViolationSummaryPanel({
 
       {/* Breakdown by type */}
       <div className="space-y-1.5">
-        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide">By Type</h4>
+        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">By Type</h4>
         {Object.entries(TYPE_LABELS).map(([type, label]) => {
           const count = byType[type] || 0;
           return (
             <div
               key={type}
               className={`flex justify-between items-center text-xs p-1.5 rounded ${
-                count > 0 ? 'bg-gray-50' : ''
+                count > 0 ? 'bg-muted/40' : ''
               }`}
             >
-              <span className="flex items-center gap-1.5 text-gray-600">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
                 <span className={`w-2 h-2 rounded-full ${TYPE_COLORS[type]}`} />
                 {label}
               </span>
@@ -125,22 +125,22 @@ export function ViolationSummaryPanel({
       </div>
 
       {/* Legend */}
-      <div className="mt-4 pt-3 border-t border-gray-200">
-        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+      <div className="mt-4 pt-3 border-t border-border">
+        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
           Edge Legend
         </h4>
         <div className="space-y-1 text-xs">
           <div className="flex items-center gap-2">
             <div className="w-6 h-0.5 bg-red-500 rounded"></div>
-            <span className="text-gray-600">Hard violation</span>
+            <span className="text-muted-foreground">Hard violation</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-0.5 bg-yellow-500 rounded"></div>
-            <span className="text-gray-600">Soft violation</span>
+            <span className="text-muted-foreground">Soft violation</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-0.5 bg-green-500 rounded"></div>
-            <span className="text-gray-600">Satisfied</span>
+            <span className="text-muted-foreground">Satisfied</span>
           </div>
         </div>
       </div>

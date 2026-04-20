@@ -33,7 +33,7 @@ export function ScheduleActions({
         className={[
           BTN,
           generating
-            ? 'bg-gray-100 text-gray-500'
+            ? 'bg-muted text-muted-foreground'
             : confirming
               ? 'bg-red-600 text-white hover:bg-red-700 motion-safe:animate-pulse'
               : 'bg-blue-600 text-white hover:bg-blue-700',
@@ -57,8 +57,8 @@ export function ScheduleActions({
           className={[
             BTN,
             reoptimizing
-              ? 'bg-gray-100 text-gray-500'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-muted text-foreground hover:bg-accent hover:text-accent-foreground',
           ].join(' ')}
         >
           {reoptimizing && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}

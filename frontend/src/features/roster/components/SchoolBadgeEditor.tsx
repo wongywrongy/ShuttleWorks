@@ -33,7 +33,7 @@ export function SchoolBadgeEditor({
   return (
     <Menu as="div" className={`relative inline-block ${className}`}>
       <Menu.Button
-        className="text-xs text-gray-700 hover:text-gray-900 focus:outline-none cursor-pointer"
+        className="text-xs text-foreground hover:text-foreground focus:outline-none cursor-pointer"
       >
         {displayText}
       </Menu.Button>
@@ -50,7 +50,7 @@ export function SchoolBadgeEditor({
         <Menu.Items className="absolute left-0 z-10 mt-1 w-40 origin-top-left rounded bg-white shadow-sm ring-1 ring-black ring-opacity-5 focus:outline-none">
           <div className="py-0.5">
             {schools.length === 0 ? (
-              <div className="px-3 py-1.5 text-xs text-gray-500">
+              <div className="px-3 py-1.5 text-xs text-muted-foreground">
                 No schools available
               </div>
             ) : (
@@ -63,8 +63,8 @@ export function SchoolBadgeEditor({
                       <button
                         onClick={() => onSchoolChange(school.id)}
                         className={`${
-                          active ? 'bg-gray-100' : ''
-                        } group flex w-full items-center justify-between px-3 py-1.5 text-xs text-gray-700`}
+                          active ? 'bg-muted' : ''
+                        } group flex w-full items-center justify-between px-3 py-1.5 text-xs text-foreground`}
                       >
                         <span className="flex items-center gap-1.5">
                           {color && (
@@ -77,7 +77,7 @@ export function SchoolBadgeEditor({
                         </span>
                         {isSelected && (
                           <svg
-                            className="h-3 w-3 text-gray-500"
+                            className="h-3 w-3 text-muted-foreground"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"

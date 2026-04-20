@@ -26,7 +26,7 @@ const EVENT_COLORS: Record<string, { bg: string; border: string; label: string }
   XD: { bg: 'bg-orange-100', border: 'border-orange-300', label: "Mixed Doubles" },
 };
 
-const DEFAULT_COLOR = { bg: 'bg-gray-100', border: 'border-gray-300', label: 'Unknown' };
+const DEFAULT_COLOR = { bg: 'bg-muted', border: 'border-border', label: 'Unknown' };
 
 export function LiveTimelineGrid({
   assignments,
@@ -145,7 +145,7 @@ export function LiveTimelineGrid({
 
   if (assignments.length === 0) {
     return (
-      <div className="bg-gray-50 rounded border border-gray-200 p-4 text-center text-gray-500">
+      <div className="bg-muted/40 rounded border border-border p-4 text-center text-muted-foreground">
         <div className="flex flex-col items-center gap-2">
           <div className="flex gap-1">
             {[0, 1, 2].map(i => (
@@ -163,12 +163,12 @@ export function LiveTimelineGrid({
   }
 
   return (
-    <div className="bg-white rounded border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded border border-border overflow-hidden">
       {/* Header with legend and status */}
-      <div className="px-2 py-1 border-b border-gray-200 bg-gray-50 flex items-center gap-3 text-xs">
+      <div className="px-2 py-1 border-b border-border bg-muted/40 flex items-center gap-3 text-xs">
         {/* Legend */}
         {Object.entries(EVENT_COLORS).map(([key, { bg, border, label }]) => (
-          <span key={key} className="flex items-center gap-1 text-gray-500" title={label}>
+          <span key={key} className="flex items-center gap-1 text-muted-foreground" title={label}>
             <span className={`w-2.5 h-2.5 rounded ${bg} border ${border}`}></span>
             {key}
           </span>
@@ -195,13 +195,13 @@ export function LiveTimelineGrid({
       <div className="overflow-x-auto">
         <div className="min-w-max">
           {/* Time header */}
-          <div className="flex border-b border-gray-200">
-            <div className="w-12 flex-shrink-0 px-1 py-0.5 bg-gray-50 text-xs text-gray-500" />
+          <div className="flex border-b border-border">
+            <div className="w-12 flex-shrink-0 px-1 py-0.5 bg-muted/40 text-xs text-muted-foreground" />
             {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
               <div
                 key={slot}
                 style={{ width: SLOT_WIDTH }}
-                className="flex-shrink-0 px-0.5 py-0.5 text-center text-xs border-l border-gray-100 bg-gray-50 text-gray-400"
+                className="flex-shrink-0 px-0.5 py-0.5 text-center text-xs border-l border-border/60 bg-muted/40 text-muted-foreground"
               >
                 {i % 2 === 0 ? slotLabels[slot] : ''}
               </div>
@@ -210,8 +210,8 @@ export function LiveTimelineGrid({
 
           {/* Court rows */}
           {courts.map(courtId => (
-            <div key={courtId} className="flex border-b border-gray-100">
-              <div className="w-12 flex-shrink-0 px-1 bg-gray-50 text-xs font-medium text-gray-600 flex items-center">
+            <div key={courtId} className="flex border-b border-border/60">
+              <div className="w-12 flex-shrink-0 px-1 bg-muted/40 text-xs font-medium text-muted-foreground flex items-center">
                 C{courtId}
               </div>
               <div className="flex-1 relative" style={{ height: ROW_HEIGHT }}>
@@ -221,7 +221,7 @@ export function LiveTimelineGrid({
                     <div
                       key={slot}
                       style={{ width: SLOT_WIDTH }}
-                      className="flex-shrink-0 border-l border-gray-100"
+                      className="flex-shrink-0 border-l border-border/60"
                     />
                   ))}
                 </div>
@@ -247,7 +247,7 @@ export function LiveTimelineGrid({
                       title={getMatchTooltip(assignment.matchId, assignment)}
                     >
                       <div className="px-1 h-full flex items-center overflow-hidden">
-                        <span className="text-xs font-medium truncate text-gray-700">
+                        <span className="text-xs font-medium truncate text-foreground">
                           {match ? getMatchLabel(match) : '?'}
                         </span>
                       </div>

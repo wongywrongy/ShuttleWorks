@@ -43,24 +43,24 @@ export function PlayerListItem({
   const schoolColor = currentSchool?.metadata?.color;
 
   return (
-    <tr className={`border-t border-gray-100 hover:bg-gray-50 ${isSelected ? 'bg-gray-100' : ''}`}>
+    <tr className={`border-t border-border/60 hover:bg-muted/40 ${isSelected ? 'bg-muted' : ''}`}>
       {/* Checkbox Column */}
       <td className="px-2 py-1">
         <input
           type="checkbox"
           checked={isSelected}
           onChange={onToggleSelect}
-          className="w-3.5 h-3.5 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
+          className="w-3.5 h-3.5 text-foreground border-border rounded focus:ring-gray-500"
           aria-label={`Select ${player.name}`}
         />
       </td>
 
       {/* Player Name Column */}
-      <td className="px-2 py-1 font-medium text-gray-700">{player.name}</td>
+      <td className="px-2 py-1 font-medium text-foreground">{player.name}</td>
 
       {/* School Column - colored cell background */}
       <td
-        className="px-2 py-1 text-gray-600"
+        className="px-2 py-1 text-muted-foreground"
         style={schoolColor ? { backgroundColor: `${schoolColor}15` } : undefined}
       >
         <SchoolBadgeEditor
@@ -71,7 +71,7 @@ export function PlayerListItem({
       </td>
 
       {/* Events/Ranks Column */}
-      <td className="px-2 py-1 text-gray-600">
+      <td className="px-2 py-1 text-muted-foreground">
         <RankBadgeEditor
           currentRanks={player.ranks || []}
           schoolId={player.groupId}
@@ -84,7 +84,7 @@ export function PlayerListItem({
       {/* Actions Column */}
       <td className="px-2 py-1 text-right">
         <Menu as="div" className="relative inline-block text-left">
-          <Menu.Button className="inline-flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 focus:outline-none rounded">
+          <Menu.Button className="inline-flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-muted-foreground focus:outline-none rounded">
             <span className="sr-only">Open menu</span>
             <svg
               className="w-4 h-4"
@@ -102,11 +102,11 @@ export function PlayerListItem({
                   <button
                     onClick={onEdit}
                     className={`${
-                      active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
+                      active ? 'bg-muted text-foreground' : 'text-foreground'
                     } group flex w-full items-center px-3 py-1.5 text-xs`}
                   >
                     <svg
-                      className="mr-2 h-3.5 w-3.5 text-gray-400"
+                      className="mr-2 h-3.5 w-3.5 text-muted-foreground"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"

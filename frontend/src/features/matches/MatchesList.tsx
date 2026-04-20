@@ -104,8 +104,8 @@ export function MatchesList({
 
   if (matches.length === 0) {
     return (
-      <div className="p-8 bg-white rounded border border-gray-200 text-center">
-        <div className="text-gray-400 mb-3">
+      <div className="p-8 bg-white rounded border border-border text-center">
+        <div className="text-muted-foreground mb-3">
           <svg className="mx-auto h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
@@ -115,14 +115,14 @@ export function MatchesList({
             />
           </svg>
         </div>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           No matches yet. Use the visual generator or add manually.
         </p>
         <div className="flex items-center justify-center gap-2">
           {onVisualGeneratorDual && (
             <button
               onClick={onVisualGeneratorDual}
-              className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm"
+              className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm"
             >
               Dual Generator
             </button>
@@ -130,7 +130,7 @@ export function MatchesList({
           {onVisualGeneratorTri && (
             <button
               onClick={onVisualGeneratorTri}
-              className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm"
+              className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm"
             >
               Tri Generator
             </button>
@@ -138,7 +138,7 @@ export function MatchesList({
           {onAddMatch && (
             <button
               onClick={onAddMatch}
-              className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm"
+              className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm"
             >
               Add Match
             </button>
@@ -149,19 +149,19 @@ export function MatchesList({
   }
 
   return (
-    <div className="bg-white rounded border border-gray-200 overflow-visible">
+    <div className="bg-white rounded border border-border overflow-visible">
       {/* Search Bar */}
-      <div className="px-2 py-1.5 border-b border-gray-200">
+      <div className="px-2 py-1.5 border-b border-border">
         <div className="relative">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search event, player..."
-            className="w-full px-2 py-1 pl-7 text-xs border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+            className="w-full px-2 py-1 pl-7 text-xs border border-border rounded focus:outline-none focus:border-muted-foreground/40"
           />
           <svg
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -171,7 +171,7 @@ export function MatchesList({
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -183,14 +183,14 @@ export function MatchesList({
 
       {/* No results state */}
       {filteredMatches.length === 0 && matches.length > 0 && (
-        <div className="px-2 py-4 text-center text-xs text-gray-500">
+        <div className="px-2 py-4 text-center text-xs text-muted-foreground">
           No matches found for "{searchQuery}"
         </div>
       )}
 
       {filteredMatches.length > 0 && (
       <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-gray-100">
+        <thead className="sticky top-0 bg-muted">
           <tr>
             <th className="px-2 py-1 w-8">
               <input
@@ -202,47 +202,47 @@ export function MatchesList({
                   }
                 }}
                 onChange={toggleSelectAll}
-                className="w-3.5 h-3.5 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
+                className="w-3.5 h-3.5 text-foreground border-border rounded focus:ring-gray-500"
                 aria-label="Select all matches"
               />
             </th>
-            <th className="px-2 py-1 text-left font-medium text-gray-600 w-16">
+            <th className="px-2 py-1 text-left font-medium text-muted-foreground w-16">
               <button
                 onClick={() => handleSort('eventRank')}
-                className="flex items-center gap-0.5 hover:text-gray-800 focus:outline-none"
+                className="flex items-center gap-0.5 hover:text-foreground focus:outline-none"
               >
                 Event
                 {sortField === 'eventRank' && (
                   sortDirection === 'asc' ? (
-                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
+                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-muted-foreground" />
                   ) : (
-                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
+                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-muted-foreground" />
                   )
                 )}
               </button>
             </th>
-            <th className="px-2 py-1 text-left font-medium text-gray-600 w-12">
+            <th className="px-2 py-1 text-left font-medium text-muted-foreground w-12">
               <button
                 onClick={() => handleSort('type')}
-                className="flex items-center gap-0.5 hover:text-gray-800 focus:outline-none"
+                className="flex items-center gap-0.5 hover:text-foreground focus:outline-none"
               >
                 Type
                 {sortField === 'type' && (
                   sortDirection === 'asc' ? (
-                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-gray-400" />
+                    <ArrowUp aria-label="sorted ascending" className="h-3 w-3 text-muted-foreground" />
                   ) : (
-                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-gray-400" />
+                    <ArrowDown aria-label="sorted descending" className="h-3 w-3 text-muted-foreground" />
                   )
                 )}
               </button>
             </th>
-            <th className="px-2 py-1 text-left font-medium text-gray-600">
+            <th className="px-2 py-1 text-left font-medium text-muted-foreground">
               Side A
             </th>
-            <th className="px-2 py-1 text-left font-medium text-gray-600">
+            <th className="px-2 py-1 text-left font-medium text-muted-foreground">
               Side B
             </th>
-            <th className="px-2 py-1 text-left font-medium text-gray-600">
+            <th className="px-2 py-1 text-left font-medium text-muted-foreground">
               Side C
             </th>
             <th className="px-2 py-1 text-right">
@@ -250,7 +250,7 @@ export function MatchesList({
                 {onVisualGeneratorDual && (
                   <button
                     onClick={onVisualGeneratorDual}
-                    className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+                    className="px-1.5 py-0.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                   >
                     Dual
                   </button>
@@ -258,7 +258,7 @@ export function MatchesList({
                 {onVisualGeneratorTri && (
                   <button
                     onClick={onVisualGeneratorTri}
-                    className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+                    className="px-1.5 py-0.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                   >
                     Tri
                   </button>
@@ -266,7 +266,7 @@ export function MatchesList({
                 {onAddMatch && (
                   <button
                     onClick={onAddMatch}
-                    className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+                    className="px-1.5 py-0.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                   >
                     + Add
                   </button>
@@ -281,33 +281,33 @@ export function MatchesList({
             return (
               <tr
                 key={match.id}
-                className={`border-t border-gray-100 hover:bg-gray-50 ${isSelected ? 'bg-gray-100' : ''}`}
+                className={`border-t border-border/60 hover:bg-muted/40 ${isSelected ? 'bg-muted' : ''}`}
               >
                 <td className="px-2 py-1">
                   <input
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => toggleSelection(match.id)}
-                    className="w-3.5 h-3.5 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
+                    className="w-3.5 h-3.5 text-foreground border-border rounded focus:ring-gray-500"
                     aria-label={`Select match ${match.eventRank || match.id}`}
                   />
                 </td>
-                <td className="px-2 py-1 font-medium text-gray-700">{match.eventRank || '-'}</td>
-              <td className="px-2 py-1 text-gray-500">
+                <td className="px-2 py-1 font-medium text-foreground">{match.eventRank || '-'}</td>
+              <td className="px-2 py-1 text-muted-foreground">
                 {match.matchType === 'tri' ? 'Tri' : 'Dual'}
               </td>
-              <td className="px-2 py-1 text-gray-600 truncate max-w-32" title={getPlayerNames(match.sideA).join(' & ')}>
+              <td className="px-2 py-1 text-muted-foreground truncate max-w-32" title={getPlayerNames(match.sideA).join(' & ')}>
                 {match.sideA.length > 0 ? getPlayerNames(match.sideA).join(' & ') : '-'}
               </td>
-              <td className="px-2 py-1 text-gray-600 truncate max-w-32" title={getPlayerNames(match.sideB).join(' & ')}>
+              <td className="px-2 py-1 text-muted-foreground truncate max-w-32" title={getPlayerNames(match.sideB).join(' & ')}>
                 {match.sideB.length > 0 ? getPlayerNames(match.sideB).join(' & ') : '-'}
               </td>
-              <td className="px-2 py-1 text-gray-600 truncate max-w-32" title={match.sideC ? getPlayerNames(match.sideC).join(' & ') : ''}>
+              <td className="px-2 py-1 text-muted-foreground truncate max-w-32" title={match.sideC ? getPlayerNames(match.sideC).join(' & ') : ''}>
                 {match.sideC && match.sideC.length > 0 ? getPlayerNames(match.sideC).join(' & ') : '-'}
               </td>
               <td className="px-2 py-1 text-right">
                 <Menu as="div" className="relative inline-block text-left">
-                  <Menu.Button className="inline-flex items-center justify-center w-8 h-8 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded">
+                  <Menu.Button className="inline-flex items-center justify-center w-8 h-8 text-muted-foreground hover:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring rounded">
                     <span className="sr-only">Open menu</span>
                     <svg
                       className="w-5 h-5"
@@ -325,11 +325,11 @@ export function MatchesList({
                           <button
                             onClick={() => onEdit(match)}
                             className={`${
-                              active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
+                              active ? 'bg-muted text-foreground' : 'text-foreground'
                             } group flex w-full items-center px-4 py-2 text-sm`}
                           >
                             <svg
-                              className="mr-3 h-4 w-4 text-gray-400"
+                              className="mr-3 h-4 w-4 text-muted-foreground"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -384,11 +384,11 @@ export function MatchesList({
 
       {/* Selection info - shown below table when matches are selected */}
       {selectedIds.size > 0 && (
-        <div className="px-2 py-1 bg-gray-50 border-t border-gray-200 text-xs text-gray-600 flex items-center justify-between">
+        <div className="px-2 py-1 bg-muted/40 border-t border-border text-xs text-muted-foreground flex items-center justify-between">
           <span>{selectedIds.size} selected{searchQuery && ` (${filteredMatches.length} shown)`}</span>
           <button
             onClick={() => setSelectedIds(new Set())}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-muted-foreground hover:text-foreground"
           >
             Clear
           </button>

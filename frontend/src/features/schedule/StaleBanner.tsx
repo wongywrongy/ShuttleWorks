@@ -19,7 +19,7 @@ export function StaleBanner() {
   return (
     <div
       data-testid="stale-banner"
-      className="flex items-center justify-between gap-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm"
+      className="flex items-center justify-between gap-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
     >
       <span className="flex items-center gap-2">
         <AlertTriangle aria-hidden="true" className="h-4 w-4" />
@@ -30,7 +30,7 @@ export function StaleBanner() {
           type="button"
           onClick={() => setStale(false)}
           data-testid="stale-banner-dismiss"
-          className="rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-900 hover:bg-amber-100"
+          className="rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-900 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-500/15"
         >
           Keep anyway
         </button>
@@ -41,7 +41,7 @@ export function StaleBanner() {
           }}
           disabled={loading}
           data-testid="stale-banner-resolve"
-          className="rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+          className="rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50 dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-amber-950"
         >
           {loading ? 'Re-solving…' : 'Re-solve'}
         </button>

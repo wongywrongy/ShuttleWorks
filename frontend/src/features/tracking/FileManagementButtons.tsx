@@ -88,11 +88,11 @@ export function FileManagementButtons({
   return (
     <div className="bg-white rounded-lg shadow p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold text-gray-900">File Management</h3>
+        <h3 className="text-lg font-semibold text-foreground">File Management</h3>
         <button
           onClick={handleSync}
           disabled={syncing}
-          className="inline-flex items-center gap-1.5 text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-sm px-3 py-1 bg-muted text-foreground rounded hover:bg-muted disabled:opacity-50"
           title="Refresh match states from server"
         >
           <RefreshCw
@@ -103,7 +103,7 @@ export function FileManagementButtons({
         </button>
       </div>
 
-      <p className="text-sm text-gray-600 mb-4">
+      <p className="text-sm text-muted-foreground mb-4">
         Export your tournament state to move it between computers, or import a previously saved state.
       </p>
 
@@ -112,7 +112,7 @@ export function FileManagementButtons({
         <button
           onClick={handleExport}
           disabled={loading}
-          className="flex-1 min-w-[120px] px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium"
+          className="flex-1 min-w-[120px] px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
         >
           {loading ? 'Exporting...' : 'Export'}
         </button>
@@ -121,7 +121,7 @@ export function FileManagementButtons({
         <button
           onClick={handleImportClick}
           disabled={loading}
-          className="flex-1 min-w-[120px] px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 text-sm font-medium"
+          className="flex-1 min-w-[120px] px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 text-sm font-medium"
         >
           {loading ? 'Importing...' : 'Import'}
         </button>
@@ -130,7 +130,7 @@ export function FileManagementButtons({
         <button
           onClick={handleReset}
           disabled={loading}
-          className="flex-1 min-w-[120px] px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 text-sm font-medium"
+          className="flex-1 min-w-[120px] px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
         >
           Reset All
         </button>
@@ -146,7 +146,7 @@ export function FileManagementButtons({
       />
 
       {/* Help Text */}
-      <div className="mt-4 p-3 bg-blue-50 rounded-md text-xs text-gray-700">
+      <div className="mt-4 p-3 bg-blue-50 rounded-md text-xs text-foreground">
         <p className="font-medium text-blue-900 mb-1">Portable State File</p>
         <p>
           The tournament state is saved in <code className="bg-white px-1 py-0.5 rounded">tournament_state.json</code>.

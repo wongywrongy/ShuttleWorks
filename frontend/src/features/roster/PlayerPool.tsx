@@ -60,21 +60,21 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
 
   return (
     <div
-      className="rounded border border-gray-200 bg-white overflow-hidden"
+      className="rounded border border-border bg-white overflow-hidden"
       data-testid="player-pool"
     >
-      <div className="border-b border-gray-100 bg-gray-50 px-3 py-2">
+      <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
         <div className="flex items-baseline justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Players
           </span>
-          <span className="text-[11px] text-gray-400 tabular-nums">
+          <span className="text-[11px] text-muted-foreground tabular-nums">
             {pool.length} in {school?.name ?? '—'}
           </span>
         </div>
       </div>
 
-      <div className="border-b border-gray-100 px-3 py-2">
+      <div className="border-b border-border/60 px-3 py-2">
         {expanded ? (
           <div className="space-y-2">
             <textarea
@@ -84,10 +84,10 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
               onChange={(e) => setDraft(e.target.value)}
               placeholder={'Paste names — one per line or comma-separated.\nToan Le\nKyle Wong\nSean Hsieh'}
               data-testid="bulk-import-textarea"
-              className="w-full resize-y rounded border border-gray-200 px-2 py-1.5 text-sm outline-none focus:border-blue-400"
+              className="w-full resize-y rounded border border-border px-2 py-1.5 text-sm outline-none focus:border-blue-400"
             />
             <div className="flex items-center justify-between text-[11px]">
-              <span className="text-gray-500">
+              <span className="text-muted-foreground">
                 {parseNames(draft).length} name{parseNames(draft).length === 1 ? '' : 's'} detected
               </span>
               <div className="flex gap-2">
@@ -97,7 +97,7 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
                     setDraft('');
                     setExpanded(false);
                   }}
-                  className="rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-50"
+                  className="rounded border border-border bg-white px-2 py-0.5 text-foreground hover:bg-muted/40"
                 >
                   Cancel
                 </button>
@@ -118,17 +118,17 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
             type="button"
             onClick={() => setExpanded(true)}
             data-testid="bulk-import-toggle"
-            className="flex w-full items-center justify-between rounded border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+            className="flex w-full items-center justify-between rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
           >
             <span>＋ Bulk-import players</span>
-            <span className="text-[10px] text-gray-400">paste a list</span>
+            <span className="text-[10px] text-muted-foreground">paste a list</span>
           </button>
         )}
       </div>
 
       <div className="max-h-[32rem] overflow-y-auto p-2">
         {pool.length === 0 ? (
-          <div className="py-6 text-center text-xs text-gray-400">
+          <div className="py-6 text-center text-xs text-muted-foreground">
             No players yet.
             <br />Use the bulk import above.
           </div>
@@ -144,7 +144,7 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
                   onClick={() => deletePlayer(p.id)}
                   title={`Remove ${p.name}`}
                   aria-label={`Remove ${p.name}`}
-                  className="rounded p-1 text-gray-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                  className="rounded p-1 text-muted-foreground/60 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                 >
                   ×
                 </button>
