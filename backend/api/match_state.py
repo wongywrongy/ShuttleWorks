@@ -1,36 +1,104 @@
-"""Match state management API - File-based storage.
+"""Match state management API.
 
-Manages tournament match states in a portable JSON file that can be moved between PCs.
+Tournament-day match states (called / started / finished + scores) are
+persisted to ``./data/match_states.json`` using the same atomic-write +
+rolling-backup discipline that ``tournament_state.py`` uses for the
+main tournament file:
+
+  1. write new payload to ``match_states.json.tmp``
+  2. ``os.replace`` atomically onto ``match_states.json``
+  3. snapshot the new live file into ``./data/backups/match_states-<iso>.json``
+     and prune to ``_backups.KEEP`` newest
+
+Reads auto-recover from the most recent *parseable* backup if the live
+file is corrupted (via ``_backups.read_with_recovery``) so a crash mid-
+write never takes a tournament offline.
 """
+from __future__ import annotations
+
+import asyncio
 import json
+import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional
-from fastapi import APIRouter, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from typing import Dict, Literal, Optional
+
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field, field_validator
+
+from api import _backups
 
 router = APIRouter(prefix="/match-states", tags=["match-states"])
 
-# File path for tournament state
-STATE_FILE_PATH = Path(__file__).parent.parent / "tournament_state.json"
+log = logging.getLogger("scheduler.match_state")
+
+# Import payload cap. Anything larger is almost certainly not a
+# legitimate match_states.json — cap at 20 MB to bound memory.
+MAX_IMPORT_BYTES = 20 * 1024 * 1024
+
+# Serialise read-modify-write cycles. Every mutating endpoint reads the
+# current state from disk, mutates it in memory, then writes it back —
+# without this lock, two concurrent PUTs on different match IDs would
+# race and one update would be lost (last writer wins on the full
+# dict). Single-process FastAPI + a single uvicorn worker means an
+# asyncio.Lock is sufficient; if we ever scale to multiple workers,
+# replace with a file-system lock or move state into a real DB.
+_state_lock = asyncio.Lock()
+
+
+def _data_dir() -> Path:
+    return Path(os.environ.get("BACKEND_DATA_DIR", "/app/data"))
+
+
+def _state_path() -> Path:
+    return _data_dir() / "match_states.json"
+
+
+def _ensure_dir() -> None:
+    _data_dir().mkdir(parents=True, exist_ok=True)
 
 
 # DTOs
+MatchStatus = Literal["scheduled", "called", "started", "finished"]
+
+
 class MatchScore(BaseModel):
-    sideA: int
-    sideB: int
+    sideA: int = Field(..., ge=0, le=99)
+    sideB: int = Field(..., ge=0, le=99)
 
 
 class MatchStateDTO(BaseModel):
     matchId: str
-    status: str  # 'scheduled' | 'called' | 'started' | 'finished'
-    actualStartTime: Optional[str] = None
-    actualEndTime: Optional[str] = None
+    status: MatchStatus = "scheduled"
+    calledAt: Optional[str] = None  # ISO-8601 UTC
+    actualStartTime: Optional[str] = None  # ISO-8601 UTC
+    actualEndTime: Optional[str] = None  # ISO-8601 UTC
     score: Optional[MatchScore] = None
     notes: Optional[str] = None
     updatedAt: Optional[str] = None
+    # Persisted so Undo survives a page reload. Frontend records these
+    # whenever a match is shifted from its scheduled slot/court; they
+    # are not part of any solver input.
+    originalSlotId: Optional[int] = None
+    originalCourtId: Optional[int] = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def coerce_unknown_status(cls, v):
+        """Legacy payloads may carry freeform status strings. Coerce any
+        unrecognised value back to ``scheduled`` so a corrupt row doesn't
+        break the whole file read.
+        """
+        if v in ("scheduled", "called", "started", "finished"):
+            return v
+        return "scheduled"
+
+    # Permit extra fields (client may send playerConfirmations, sets, etc.);
+    # we deliberately don't persist them here — match_state.py is focused on
+    # the status/timestamp/score core.
+    model_config = {"extra": "allow"}
 
 
 class TournamentStateFile(BaseModel):
@@ -39,65 +107,82 @@ class TournamentStateFile(BaseModel):
     version: str = "1.0"
 
 
-# File utilities
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def _read_state_file() -> TournamentStateFile:
-    """Read the tournament state file."""
-    if not STATE_FILE_PATH.exists():
-        # Initialize empty state file
-        return TournamentStateFile(
-            matchStates={},
-            lastUpdated=datetime.utcnow().isoformat() + "Z",
-            version="1.0"
-        )
+    """Load the match-state file, auto-recovering from backup on corruption.
+
+    Returns an empty state when neither the live file nor any backup exists.
+    """
+    path = _state_path()
+    if not path.exists():
+        # Check for a viable backup — the live file may have been deleted
+        # but a snapshot could still carry the previous tournament day's
+        # state.
+        if _backups.latest_backup(_data_dir(), path.stem) is None:
+            return TournamentStateFile(
+                matchStates={}, lastUpdated=_now_iso(), version="1.0"
+            )
 
     try:
-        with open(STATE_FILE_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return TournamentStateFile(**data)
-    except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=500,
-            detail="Tournament state file is corrupted. Please restore from backup or reset."
+        data, recovered_from = _backups.read_with_recovery(_data_dir(), path)
+    except FileNotFoundError:
+        return TournamentStateFile(
+            matchStates={}, lastUpdated=_now_iso(), version="1.0"
         )
-    except Exception as e:
+    except ValueError as e:
+        log.error("match-state recovery failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Error reading tournament state file: {str(e)}"
+            detail="match state unreadable; reset via Setup",
+        )
+
+    if recovered_from is not None:
+        log.warning("match-state recovered from %s", recovered_from)
+    try:
+        return TournamentStateFile(**data)
+    except Exception as e:
+        log.error("match-state schema mismatch after recovery: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="match state schema mismatch; reset via Setup",
         )
 
 
 def _write_state_file(state: TournamentStateFile) -> None:
-    """Write the tournament state file with backup."""
-    # Create backup before writing
-    if STATE_FILE_PATH.exists():
-        backup_path = STATE_FILE_PATH.with_suffix('.backup.json')
-        try:
-            STATE_FILE_PATH.replace(backup_path)
-        except Exception:
-            pass  # Backup failed, but continue with write
+    """Atomic write + rolling backup.
 
-    # Update timestamp
-    state.lastUpdated = datetime.utcnow().isoformat() + "Z"
+    Delegates to ``_backups.atomic_write_json`` which: stamps a SHA-256
+    integrity field, writes to ``.tmp``, ``fsync()``s the fd, ``os.replace``
+    atomically onto the live file, then ``fsync()``s the containing
+    directory for full durability across power loss. Rolling backup
+    rotation happens AFTER the successful replace so the previous
+    state only disappears once the new one is durable.
+    """
+    _ensure_dir()
+    state.lastUpdated = _now_iso()
+    path = _state_path()
 
-    # Write to temp file first (atomic write)
-    temp_path = STATE_FILE_PATH.with_suffix('.tmp')
     try:
-        with open(temp_path, 'w', encoding='utf-8') as f:
-            json.dump(state.model_dump(), f, indent=2, ensure_ascii=False)
-
-        # Atomic rename
-        temp_path.replace(STATE_FILE_PATH)
-    except Exception as e:
-        # Clean up temp file if it exists
-        if temp_path.exists():
-            temp_path.unlink()
+        _backups.atomic_write_json(path, state.model_dump())
+    except OSError as e:
+        log.error("match-state write failed: %s", e)
         raise HTTPException(
-            status_code=500,
-            detail=f"Error writing tournament state file: {str(e)}"
+            status_code=500, detail="could not persist match state"
         )
 
+    # Rotate a snapshot of the freshly-written live file. Best-effort —
+    # a failure here doesn't invalidate the save.
+    try:
+        _backups.create_backup(_data_dir(), path)
+    except OSError as e:
+        log.warning("match-state backup rotation failed: %s", e)
 
-# API Endpoints
+
+# ---------- API endpoints -------------------------------------------------
+
 
 @router.get("", response_model=Dict[str, MatchStateDTO])
 async def get_all_match_states():
@@ -108,158 +193,125 @@ async def get_all_match_states():
 
 @router.get("/{match_id}", response_model=MatchStateDTO)
 async def get_match_state(match_id: str):
-    """Get a single match state."""
+    """Get a single match state, or a default `scheduled` if unseen."""
     state = _read_state_file()
-
     if match_id not in state.matchStates:
-        # Return default state if not found
-        return MatchStateDTO(
-            matchId=match_id,
-            status="scheduled"
-        )
-
+        return MatchStateDTO(matchId=match_id, status="scheduled")
     return state.matchStates[match_id]
 
 
 @router.put("/{match_id}", response_model=MatchStateDTO)
 async def update_match_state(match_id: str, update: MatchStateDTO):
     """Update a match state in the file."""
-    state = _read_state_file()
-
-    # Update timestamp
-    update.updatedAt = datetime.utcnow().isoformat() + "Z"
-    update.matchId = match_id  # Ensure match_id is set correctly
-
-    # Update the state
-    state.matchStates[match_id] = update
-
-    # Write to file
-    _write_state_file(state)
-
+    async with _state_lock:
+        state = _read_state_file()
+        update.updatedAt = _now_iso()
+        update.matchId = match_id
+        state.matchStates[match_id] = update
+        _write_state_file(state)
     return update
 
 
 @router.delete("/{match_id}")
 async def delete_match_state(match_id: str):
     """Remove a match state from the file (reset to default)."""
-    state = _read_state_file()
-
-    if match_id in state.matchStates:
-        del state.matchStates[match_id]
-        _write_state_file(state)
-
+    async with _state_lock:
+        state = _read_state_file()
+        if match_id in state.matchStates:
+            del state.matchStates[match_id]
+            _write_state_file(state)
     return {"message": f"Match state for {match_id} deleted successfully"}
 
 
 @router.post("/reset")
 async def reset_all_match_states():
     """Clear all match states (empty the file)."""
-    state = TournamentStateFile(
-        matchStates={},
-        lastUpdated=datetime.utcnow().isoformat() + "Z",
-        version="1.0"
-    )
-
-    _write_state_file(state)
-
+    async with _state_lock:
+        state = TournamentStateFile(
+            matchStates={}, lastUpdated=_now_iso(), version="1.0"
+        )
+        _write_state_file(state)
     return {"message": "All match states reset successfully"}
 
 
 @router.get("/export/download")
 async def export_match_states():
-    """Download the tournament_state.json file."""
-    if not STATE_FILE_PATH.exists():
-        # Create empty file if it doesn't exist
+    """Download the match_states.json file."""
+    path = _state_path()
+    if not path.exists():
         state = TournamentStateFile(
-            matchStates={},
-            lastUpdated=datetime.utcnow().isoformat() + "Z",
-            version="1.0"
+            matchStates={}, lastUpdated=_now_iso(), version="1.0"
         )
         _write_state_file(state)
-
     return FileResponse(
-        path=STATE_FILE_PATH,
-        filename="tournament_state.json",
-        media_type="application/json"
+        path=path,
+        filename="match_states.json",
+        media_type="application/json",
     )
 
 
 @router.post("/import/upload")
-async def import_match_states(file: UploadFile = File(...)):
-    """Upload and import a tournament_state.json file from another PC."""
-    if not file.filename.endswith('.json'):
-        raise HTTPException(
-            status_code=400,
-            detail="File must be a JSON file"
-        )
+async def import_match_states(request: Request, file: UploadFile = File(...)):
+    """Upload and import a match_states.json file.
+
+    - Rejects non-JSON uploads and files larger than MAX_IMPORT_BYTES.
+    - Validates the payload against TournamentStateFile before persisting.
+    """
+    if not (file.filename or "").endswith(".json"):
+        raise HTTPException(status_code=400, detail="file must be a .json file")
+
+    # Enforce a Content-Length cap when the header is set so we never
+    # drain an attacker's multi-GB upload into memory.
+    declared_length = request.headers.get("content-length")
+    if declared_length and declared_length.isdigit():
+        if int(declared_length) > MAX_IMPORT_BYTES:
+            raise HTTPException(status_code=413, detail="upload too large")
+
+    # Read with an explicit cap even when Content-Length is missing.
+    content = await file.read(MAX_IMPORT_BYTES + 1)
+    if len(content) > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=413, detail="upload too large")
 
     try:
-        # Read uploaded file
-        content = await file.read()
-        data = json.loads(content.decode('utf-8'))
+        data = json.loads(content.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="invalid JSON file")
 
-        # Validate structure
+    try:
         state = TournamentStateFile(**data)
-
-        # Write to file
-        _write_state_file(state)
-
-        return {
-            "message": "Tournament state imported successfully",
-            "matchCount": len(state.matchStates),
-            "lastUpdated": state.lastUpdated
-        }
-
-    except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid JSON file"
-        )
     except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Error importing file: {str(e)}"
-        )
+        log.warning("match-state import validation failed: %s", e)
+        raise HTTPException(status_code=400, detail="payload does not match schema")
+
+    async with _state_lock:
+        _write_state_file(state)
+    return {
+        "message": "Tournament state imported successfully",
+        "matchCount": len(state.matchStates),
+        "lastUpdated": state.lastUpdated,
+    }
 
 
 @router.post("/import-bulk")
 async def import_match_states_bulk(match_states: Dict[str, MatchStateDTO]):
-    """
-    Bulk import match states from a dictionary (used for v2.0 tournament export).
-    Merges imported states with existing states.
+    """Merge a dict of match states into the existing file.
+
+    Used by the v2.0 tournament-export flow: imports existing states and
+    augments them with the incoming payload without wiping others.
     """
     if not match_states:
-        return {
-            "message": "No match states to import",
-            "importedCount": 0
-        }
+        return {"message": "No match states to import", "importedCount": 0}
 
-    try:
-        # Read existing state
+    async with _state_lock:
         state = _read_state_file()
-
-        # Update/add each match state
-        imported_count = 0
         for match_id, match_state in match_states.items():
-            # Ensure the matchId is set correctly
             match_state.matchId = match_id
-            # Update timestamp
-            match_state.updatedAt = datetime.utcnow().isoformat() + "Z"
-            # Add to state
+            match_state.updatedAt = _now_iso()
             state.matchStates[match_id] = match_state
-            imported_count += 1
 
-        # Write to file
         _write_state_file(state)
-
-        return {
-            "message": "Match states imported successfully",
-            "importedCount": imported_count,
-            "totalStates": len(state.matchStates)
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Error importing match states: {str(e)}"
-        )
+    return {
+        "message": "Match states imported successfully",
+        "importedCount": len(match_states),
+        "totalStates": len(state.matchStates),
+    }

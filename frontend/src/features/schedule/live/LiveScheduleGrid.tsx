@@ -57,9 +57,9 @@ export function LiveScheduleGrid({
   );
 
   return (
-    <div className="bg-white rounded border border-gray-200">
+    <div className="bg-card rounded border border-border">
       {/* Header with metrics and actions */}
-      <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+      <div className="px-3 py-2 border-b border-border flex items-center justify-between">
         <LiveMetricsBar
           elapsed={elapsed}
           solutionCount={solutionCount}
@@ -90,10 +90,10 @@ export function LiveScheduleGrid({
       </div>
 
       {/* Solver Progress Log (bottom) */}
-      <div className="px-3 py-2 border-t border-gray-200 bg-gray-50">
+      <div className="px-3 py-2 border-t border-border bg-muted/40">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Log</span>
-          <span className="text-xs text-gray-400">{assignments.length}/{totalMatches ?? matches.length} matches</span>
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Log</span>
+          <span className="text-xs text-muted-foreground">{assignments.length}/{totalMatches ?? matches.length} matches</span>
         </div>
         <SolverProgressLog
           solutionCount={solutionCount}

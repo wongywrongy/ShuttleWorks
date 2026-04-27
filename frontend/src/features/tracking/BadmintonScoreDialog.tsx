@@ -1,8 +1,14 @@
 /**
- * Badminton Score Dialog Component
- * Modal dialog for entering set-by-set scores with deuce support
+ * Badminton score dialog — per-set entry with deuce support.
+ *
+ * Laid out as one row per set (Side A input · Side B input · quick
+ * winner buttons), rather than a wide matrix, so it reads top-to-bottom
+ * and fits on laptop screens without horizontal scroll.
  */
-import { useState, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
+import { Loader2, X } from 'lucide-react';
+import { Modal } from '../../components/common/Modal';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { SetScore } from '../../api/dto';
 
 interface BadmintonScoreDialogProps {
@@ -26,271 +32,302 @@ export function BadmintonScoreDialog({
   deuceEnabled,
   onSubmit,
   onCancel,
-  isSubmitting = false
+  isSubmitting = false,
 }: BadmintonScoreDialogProps) {
-  const maxSets = setsToWin * 2 - 1; // Best of 1=1, Best of 3=3, Best of 5=5
+  const titleId = useId();
+  const maxSets = setsToWin * 2 - 1;
   const maxPoints = deuceEnabled ? (pointsPerSet === 21 ? 30 : pointsPerSet + 10) : pointsPerSet;
 
-  // Initialize empty sets
-  const [sets, setSets] = useState<SetScore[]>(
-    Array.from({ length: maxSets }, () => ({ sideA: 0, sideB: 0 }))
+  const [sets, setSets] = useState<SetScore[]>(() =>
+    Array.from({ length: maxSets }, () => ({ sideA: 0, sideB: 0 })),
   );
   const [notes, setNotes] = useState('');
 
-  // Calculate winner of each set
+  // Escape + focus trap + backdrop close are handled by the Modal
+  // primitive — no ad-hoc keyboard listener here.
+
   const setWinners = useMemo(() => {
     return sets.map((set) => {
       const { sideA, sideB } = set;
-      if (sideA === 0 && sideB === 0) return null; // Not played
+      if (sideA === 0 && sideB === 0) return null;
 
-      // Standard win condition
-      if (sideA >= pointsPerSet && sideA > sideB) {
-        if (!deuceEnabled || sideA - sideB >= 2 || sideA >= maxPoints) return 'A';
-      }
-      if (sideB >= pointsPerSet && sideB > sideA) {
-        if (!deuceEnabled || sideB - sideA >= 2 || sideB >= maxPoints) return 'B';
-      }
+      const reached = (n: number) => n >= pointsPerSet;
+      const twoAhead = (x: number, y: number) => x - y >= 2;
 
-      // Deuce handling
-      if (deuceEnabled && sideA >= pointsPerSet - 1 && sideB >= pointsPerSet - 1) {
-        if (sideA - sideB >= 2) return 'A';
-        if (sideB - sideA >= 2) return 'B';
-        if (sideA >= maxPoints) return 'A';
-        if (sideB >= maxPoints) return 'B';
+      if (reached(sideA) && sideA > sideB) {
+        if (!deuceEnabled || twoAhead(sideA, sideB) || sideA >= maxPoints) return 'A';
       }
-
-      return null; // Incomplete
+      if (reached(sideB) && sideB > sideA) {
+        if (!deuceEnabled || twoAhead(sideB, sideA) || sideB >= maxPoints) return 'B';
+      }
+      return null;
     });
   }, [sets, pointsPerSet, deuceEnabled, maxPoints]);
 
-  // Count sets won
-  const setsWonA = setWinners.filter(w => w === 'A').length;
-  const setsWonB = setWinners.filter(w => w === 'B').length;
+  const setsWonA = setWinners.filter((w) => w === 'A').length;
+  const setsWonB = setWinners.filter((w) => w === 'B').length;
+  const matchWinner: 'A' | 'B' | null =
+    setsWonA >= setsToWin ? 'A' : setsWonB >= setsToWin ? 'B' : null;
 
-  // Determine match winner
-  const matchWinner = useMemo(() => {
-    if (setsWonA >= setsToWin) return 'A';
-    if (setsWonB >= setsToWin) return 'B';
-    return null;
-  }, [setsWonA, setsWonB, setsToWin]);
+  const updateScore = (setIndex: number, side: 'sideA' | 'sideB', value: number) => {
+    setSets((prev) => {
+      const next = [...prev];
+      const clamped = Math.max(0, Math.min(maxPoints, value));
+      const other = side === 'sideA' ? 'sideB' : 'sideA';
+      const otherScore = next[setIndex][other];
 
-  // Update a set score with auto-fill logic
-  const updateSet = (setIndex: number, side: 'sideA' | 'sideB', value: number) => {
-    setSets(prev => {
-      const newSets = [...prev];
-      const clampedValue = Math.max(0, Math.min(maxPoints, value));
-      newSets[setIndex] = { ...newSets[setIndex], [side]: clampedValue };
+      next[setIndex] = { ...next[setIndex], [side]: clamped };
 
-      // Auto-fill winner's score if this is clearly a losing score
-      // A score is "clearly losing" if it's below deuce threshold (pointsPerSet - 1)
-      const otherSide = side === 'sideA' ? 'sideB' : 'sideA';
-      const otherScore = newSets[setIndex][otherSide];
-
-      // Only auto-fill if:
-      // 1. The entered score is a clear losing score (below deuce threshold)
-      // 2. The other side doesn't have a score yet (is 0)
-      if (clampedValue > 0 && clampedValue < pointsPerSet - 1 && otherScore === 0) {
-        // Auto-fill winner with standard winning score
-        newSets[setIndex] = { ...newSets[setIndex], [otherSide]: pointsPerSet };
+      // Loser-first auto-fill.
+      // Tournament directors routinely enter the losing side's number
+      // and expect the winner to default to "match format won" — which
+      // is unambiguous when the entered score is clearly below the
+      // deuce threshold (pointsPerSet - 1) and the other side is still
+      // untouched. Above the deuce threshold we can't safely guess
+      // (could be 22-20, 23-21, etc.), so we leave both sides to the
+      // operator in those cases.
+      //
+      // Runs only when the operator typed a true losing score: strictly
+      // positive, below pointsPerSet - 1, and the other side has not
+      // been edited yet (is 0).
+      if (clamped > 0 && clamped < pointsPerSet - 1 && otherScore === 0) {
+        next[setIndex] = { ...next[setIndex], [other]: pointsPerSet };
       }
-
-      return newSets;
+      return next;
     });
   };
 
-  // Quick set winner (auto-fill winning score)
   const setQuickWinner = (setIndex: number, winner: 'A' | 'B') => {
-    setSets(prev => {
-      const newSets = [...prev];
-      const loserScore = newSets[setIndex][winner === 'A' ? 'sideB' : 'sideA'];
-      // If loser is close to winning points, winner needs 2 more (deuce) or max
+    setSets((prev) => {
+      const next = [...prev];
+      const loserScore = next[setIndex][winner === 'A' ? 'sideB' : 'sideA'];
       let winnerScore = pointsPerSet;
       if (deuceEnabled && loserScore >= pointsPerSet - 1) {
         winnerScore = Math.min(maxPoints, loserScore + 2);
       }
-      newSets[setIndex] = {
+      next[setIndex] = {
         sideA: winner === 'A' ? winnerScore : loserScore,
         sideB: winner === 'B' ? winnerScore : loserScore,
       };
-      return newSets;
+      return next;
+    });
+  };
+
+  const clearSet = (setIndex: number) => {
+    setSets((prev) => {
+      const next = [...prev];
+      next[setIndex] = { sideA: 0, sideB: 0 };
+      return next;
     });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!matchWinner) {
-      alert('Please complete enough sets to determine a winner');
-      return;
-    }
-
-    // Filter to only completed sets
-    const completedSets = sets.slice(0, setsWonA + setsWonB);
-    onSubmit(completedSets, matchWinner, notes);
+    if (!matchWinner) return;
+    const played = sets.slice(0, setsWonA + setsWonB);
+    onSubmit(played, matchWinner, notes);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded shadow max-w-lg w-full mx-4">
+    <Modal
+      onClose={onCancel}
+      titleId={titleId}
+      locked={isSubmitting}
+      widthClass="max-w-xl"
+      panelClassName="w-full max-w-xl rounded-lg bg-card shadow-xl focus:outline-none"
+    >
         {/* Header */}
-        <div className="bg-purple-600 text-white px-4 py-2 rounded-t">
-          <h3 className="text-base font-semibold">Finish Match: {matchName}</h3>
-          <p className="text-xs text-purple-200">Best of {maxSets} (first to {setsToWin} sets)</p>
+        <div className="flex items-start justify-between rounded-t-lg border-b border-border bg-muted/40 px-4 py-3">
+          <div className="min-w-0">
+            <h3 id={titleId} className="truncate text-sm font-semibold text-foreground">
+              Finish {matchName}
+            </h3>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Best of {maxSets} · first to {setsToWin} set{setsToWin === 1 ? '' : 's'} ·{' '}
+              {pointsPerSet} pts{deuceEnabled ? ` (deuce, cap ${maxPoints})` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className="ml-2 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-muted-foreground"
+            aria-label="Close score dialog"
+          >
+            <X aria-hidden="true" className="h-4 w-4" />
+          </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          {/* Score Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-1 px-2 font-medium text-gray-700">Player</th>
-                  {Array.from({ length: maxSets }, (_, i) => (
-                    <th key={i} className="text-center py-1 px-2 font-medium text-gray-700 w-16">
-                      Set {i + 1}
-                    </th>
-                  ))}
-                  <th className="text-center py-1 px-2 font-medium text-gray-700 w-12">Won</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Side A */}
-                <tr className="border-b">
-                  <td className="py-2 px-2 font-medium text-gray-800 truncate max-w-[120px]" title={sideAName}>
-                    {sideAName || 'Side A'}
-                  </td>
-                  {sets.map((set, i) => {
-                    const isComplete = setWinners[i] !== null;
-                    const isWinner = setWinners[i] === 'A';
-                    const isDisabled = matchWinner !== null && i >= setsWonA + setsWonB;
-                    return (
-                      <td key={i} className="py-1 px-1 text-center">
-                        <input
-                          type="number"
-                          value={set.sideA || ''}
-                          onChange={(e) => updateSet(i, 'sideA', parseInt(e.target.value) || 0)}
-                          disabled={isDisabled}
-                          className={`w-12 px-1 py-1 text-center border rounded text-sm ${
-                            isWinner ? 'bg-green-50 border-green-300 font-bold' :
-                            isComplete ? 'bg-gray-50 border-gray-200' :
-                            'border-gray-300'
-                          } ${isDisabled ? 'opacity-50' : ''}`}
-                          min="0"
-                          max={maxPoints}
-                        />
-                      </td>
-                    );
-                  })}
-                  <td className={`py-1 px-2 text-center font-bold ${setsWonA >= setsToWin ? 'text-green-600' : 'text-gray-700'}`}>
-                    {setsWonA}
-                  </td>
-                </tr>
-                {/* Side B */}
-                <tr>
-                  <td className="py-2 px-2 font-medium text-gray-800 truncate max-w-[120px]" title={sideBName}>
-                    {sideBName || 'Side B'}
-                  </td>
-                  {sets.map((set, i) => {
-                    const isComplete = setWinners[i] !== null;
-                    const isWinner = setWinners[i] === 'B';
-                    const isDisabled = matchWinner !== null && i >= setsWonA + setsWonB;
-                    return (
-                      <td key={i} className="py-1 px-1 text-center">
-                        <input
-                          type="number"
-                          value={set.sideB || ''}
-                          onChange={(e) => updateSet(i, 'sideB', parseInt(e.target.value) || 0)}
-                          disabled={isDisabled}
-                          className={`w-12 px-1 py-1 text-center border rounded text-sm ${
-                            isWinner ? 'bg-green-50 border-green-300 font-bold' :
-                            isComplete ? 'bg-gray-50 border-gray-200' :
-                            'border-gray-300'
-                          } ${isDisabled ? 'opacity-50' : ''}`}
-                          min="0"
-                          max={maxPoints}
-                        />
-                      </td>
-                    );
-                  })}
-                  <td className={`py-1 px-2 text-center font-bold ${setsWonB >= setsToWin ? 'text-green-600' : 'text-gray-700'}`}>
-                    {setsWonB}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+        <form onSubmit={handleSubmit} className="space-y-3 px-4 py-3">
+          {/* Sides header */}
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 text-center">
+            <div
+              className={`truncate rounded px-2 py-1 text-xs font-semibold ${
+                matchWinner === 'A'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-blue-50 text-blue-700'
+              }`}
+              title={sideAName}
+            >
+              {sideAName || 'Side A'}
+              <span className="ml-1 text-[10px] font-mono text-muted-foreground">{setsWonA} set{setsWonA === 1 ? '' : 's'}</span>
+            </div>
+            <div
+              className={`truncate rounded px-2 py-1 text-xs font-semibold ${
+                matchWinner === 'B'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-rose-50 text-rose-700'
+              }`}
+              title={sideBName}
+            >
+              {sideBName || 'Side B'}
+              <span className="ml-1 text-[10px] font-mono text-muted-foreground">{setsWonB} set{setsWonB === 1 ? '' : 's'}</span>
+            </div>
           </div>
 
-          {/* Quick Set Buttons */}
-          <div className="flex flex-wrap gap-2">
-            <span className="text-xs text-gray-500 self-center">Quick:</span>
-            {Array.from({ length: maxSets }, (_, i) => {
-              const isDisabled = matchWinner !== null && i >= setsWonA + setsWonB;
-              if (isDisabled) return null;
+          {/* Per-set rows */}
+          <div className="space-y-1.5">
+            {sets.map((set, i) => {
+              const wonBy = setWinners[i];
+              const matchDecided = matchWinner !== null && i >= setsWonA + setsWonB;
+              const rowClass = matchDecided
+                ? 'opacity-40 pointer-events-none'
+                : wonBy === 'A'
+                  ? 'bg-blue-50/60 border-blue-200'
+                  : wonBy === 'B'
+                    ? 'bg-rose-50/60 border-rose-200'
+                    : 'bg-card border-border';
+              const scoreInput = (side: 'sideA' | 'sideB', isWinning: boolean) => (
+                <input
+                  type="number"
+                  value={set[side] || ''}
+                  onChange={(e) => updateScore(i, side, parseInt(e.target.value) || 0)}
+                  min={0}
+                  max={maxPoints}
+                  disabled={matchDecided}
+                  className={`w-full rounded border px-2 py-1.5 text-center text-base font-mono tabular-nums ${
+                    isWinning
+                      ? 'border-green-400 bg-green-50 font-semibold text-green-800'
+                      : 'border-border bg-card text-foreground'
+                  } focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200`}
+                />
+              );
               return (
-                <div key={i} className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setQuickWinner(i, 'A')}
-                    className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                  >
-                    S{i + 1}:A
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickWinner(i, 'B')}
-                    className="px-2 py-0.5 text-xs bg-pink-100 text-pink-700 rounded hover:bg-pink-200"
-                  >
-                    S{i + 1}:B
-                  </button>
+                <div
+                  key={i}
+                  className={`grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 rounded border px-2 py-1.5 ${rowClass}`}
+                >
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Set {i + 1}
+                  </span>
+                  {scoreInput('sideA', wonBy === 'A')}
+                  <span className="text-xs text-muted-foreground">–</span>
+                  {scoreInput('sideB', wonBy === 'B')}
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setQuickWinner(i, 'A')}
+                      // Gate Quick-winner until the operator has entered
+                      // at least one side's score. Otherwise a single tap
+                      // silently decides the set with A=21, B=0 — a
+                      // real-world gotcha reported by live users.
+                      disabled={matchDecided || (set.sideA === 0 && set.sideB === 0)}
+                      className="rounded border border-blue-200 bg-blue-50 px-1.5 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40"
+                      title={
+                        set.sideA === 0 && set.sideB === 0
+                          ? 'Enter at least one score first'
+                          : `Quick: ${sideAName || 'A'} wins`
+                      }
+                    >
+                      A
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickWinner(i, 'B')}
+                      disabled={matchDecided || (set.sideA === 0 && set.sideB === 0)}
+                      className="rounded border border-rose-200 bg-rose-50 px-1.5 py-1 text-[10px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-40"
+                      title={
+                        set.sideA === 0 && set.sideB === 0
+                          ? 'Enter at least one score first'
+                          : `Quick: ${sideBName || 'B'} wins`
+                      }
+                    >
+                      B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => clearSet(i)}
+                      disabled={matchDecided || (set.sideA === 0 && set.sideB === 0)}
+                      aria-label={`Clear set ${i + 1}`}
+                      className="inline-flex items-center justify-center rounded border border-border bg-muted/40 px-1.5 py-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
+                      title="Clear this set"
+                    >
+                      <X aria-hidden="true" className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Winner Display */}
-          {matchWinner && (
-            <div className={`text-center py-2 rounded font-medium ${
-              matchWinner === 'A' ? 'bg-blue-50 text-blue-700' : 'bg-pink-50 text-pink-700'
-            }`}>
-              Winner: {matchWinner === 'A' ? sideAName : sideBName} ({setsWonA}-{setsWonB})
+          {/* Winner callout */}
+          {matchWinner ? (
+            <div
+              className="flex items-center justify-center gap-3 rounded bg-green-50 px-3 py-2 text-sm text-green-900"
+              role="status"
+            >
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-green-700">
+                Winner
+              </span>
+              <span className="font-semibold">
+                {matchWinner === 'A' ? sideAName || 'Side A' : sideBName || 'Side B'}
+              </span>
+              <span className="rounded bg-card/60 px-2 py-0.5 font-mono text-xs">
+                {setsWonA}–{setsWonB}
+              </span>
+            </div>
+          ) : (
+            <div className="rounded border border-dashed border-border px-3 py-2 text-center text-[11px] text-muted-foreground">
+              Type the losing side's score and the winner auto-fills to {pointsPerSet}. Deuce sets need both scores entered manually. Match decides once someone wins {setsToWin} set{setsToWin === 1 ? '' : 's'}.
             </div>
           )}
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes (Optional)
+            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="score-notes">
+              Notes <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <textarea
+              id="score-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-2 py-1.5 border border-gray-300 rounded-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
-              placeholder="Add any notes about the match..."
               rows={2}
+              className="w-full rounded border border-border px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              placeholder="Retirement, dispute, umpire notes…"
             />
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-2 pt-2">
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={onCancel}
               disabled={isSubmitting}
-              className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-sm text-sm hover:bg-gray-50 disabled:opacity-50 font-medium"
+              className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted/40`}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting || !matchWinner}
-              className="flex-1 px-3 py-1.5 bg-purple-600 text-white rounded-sm text-sm hover:bg-purple-700 disabled:bg-gray-400 font-medium"
+              aria-busy={isSubmitting}
+              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700`}
             >
-              {isSubmitting ? 'Saving...' : 'Save & Finish'}
+              {isSubmitting && <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
+              {isSubmitting ? 'Saving…' : 'Save & Finish'}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

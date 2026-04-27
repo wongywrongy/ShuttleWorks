@@ -138,66 +138,53 @@ export function MatchControlCenterPage() {
     console.log(`Removed player ${playerId} from match ${matchId}`);
   }, [liveOps.matches, updateMatch]);
 
-  // Handle cascading court shift when starting a match
+  // Handle cascading court shift when starting a match.
+  //
+  // We intentionally DO NOT mutate schedule.assignments[starting].slotId.
+  // Instead, the starting match's real runtime position is derived
+  // downstream from `matchState.actualStartTime` (see getRenderSlot in
+  // timeUtils + GanttChart). That lets the block slide smoothly to the
+  // wall-clock slot instead of snapping.
+  //
+  // We DO still shift subsequent scheduled/called matches off the
+  // blocked court-slot window so the paper schedule stops promising
+  // courts that are physically occupied.
   const handleCascadingStart = useCallback((
     matchId: string,
     courtId: number
   ) => {
-    if (!schedule) return;
+    if (!schedule || !liveOps.config) return;
 
-    // Find the assignment for this match
     const startingAssignmentIdx = schedule.assignments.findIndex(a => a.matchId === matchId);
     if (startingAssignmentIdx === -1) return;
 
     const startingAssignment = schedule.assignments[startingAssignmentIdx];
     const duration = startingAssignment.durationSlots;
 
-    // Create a working copy of assignments
+    // Working copy for the cascade of *other* matches.
     const workingAssignments = schedule.assignments.map(a => ({ ...a }));
 
-    // Find the next available slot on the target court
-    // This is right after the last finished/in-progress match on that court
-    let nextAvailableSlot = 0; // Start from beginning
+    // Anchor for the cascade is the current wall-clock slot — that's
+    // where the match is actually about to block the court.
+    const nowSlot = Math.max(0, currentSlot);
 
-    for (const a of workingAssignments) {
-      if (a.matchId === matchId) continue;
-      const state = liveOps.matchStates[a.matchId];
-
-      // Only consider matches on the target court
-      if (a.courtId !== courtId) continue;
-
-      // If match is started or finished, we need to start after it ends
-      if (state?.status === 'started' || state?.status === 'finished') {
-        const matchEnd = a.slotId + a.durationSlots;
-        if (matchEnd > nextAvailableSlot) {
-          nextAvailableSlot = matchEnd;
-        }
-      }
-    }
-
-    // Store original position of the starting match
     const originalSlot = startingAssignment.slotId;
     const originalCourt = startingAssignment.courtId;
 
-    // Move the starting match to the target court and available slot
-    workingAssignments[startingAssignmentIdx] = {
-      ...startingAssignment,
-      slotId: nextAvailableSlot,
-      courtId: courtId,
-    };
-
-    const startSlot = nextAvailableSlot;
-    const endSlot = startSlot + duration;
-
-    // Store original position in match state
+    // Store original position in match state for Undo, but leave the
+    // assignment in schedule.assignments untouched.
     const currentStartState = liveOps.matchStates[matchId];
     setMatchState(matchId, {
       ...currentStartState,
       matchId: matchId,
       status: currentStartState?.status || 'scheduled',
+      actualCourtId: courtId !== originalCourt ? courtId : undefined,
       originalSlotId: originalSlot,
       originalCourtId: originalCourt,
     });
+
+    const startSlot = nowSlot;
+    const endSlot = startSlot + duration;
 
     // Now handle cascading for any conflicts on the target court
     const processedIds = new Set<string>([matchId]);
@@ -257,7 +244,7 @@ export function MatchControlCenterPage() {
     });
 
     console.log(`Started match ${matchId} on court ${courtId} at slot ${startSlot}. Shifted ${shiftsApplied.length} matches.`);
-  }, [schedule, liveOps.matchStates, setSchedule, setMatchState]);
+  }, [schedule, liveOps.config, currentSlot, liveOps.matchStates, setSchedule, setMatchState]);
 
   // Handle undo start - restore match to original position
   const handleUndoStart = useCallback((matchId: string) => {
@@ -336,14 +323,14 @@ export function MatchControlCenterPage() {
   if (!liveTracking.schedule) {
     return (
       <div className="w-full h-[calc(100vh-56px)] flex flex-col px-2 py-1 gap-2">
-        <div className="flex-1 flex flex-col items-center justify-center bg-white rounded border border-gray-200">
-          <div className="text-gray-400 mb-3">
+        <div className="flex-1 flex flex-col items-center justify-center bg-card rounded border border-border">
+          <div className="text-muted-foreground mb-3">
             <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
           </div>
-          <p className="text-sm text-gray-600 mb-1">No schedule generated.</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm text-muted-foreground mb-1">No schedule generated.</p>
+          <p className="text-xs text-muted-foreground">
             Generate a schedule on the{' '}
             <Link to="/schedule" className="text-blue-600 hover:underline">Schedule page</Link>
           </p>
@@ -355,7 +342,7 @@ export function MatchControlCenterPage() {
   if (!liveTracking.config || !liveOps.config || !liveOps.schedule) {
     return (
       <div className="w-full h-[calc(100vh-56px)] flex items-center justify-center">
-        <div className="text-gray-500 text-sm">Loading...</div>
+        <div className="text-muted-foreground text-sm">Loading...</div>
       </div>
     );
   }
@@ -366,11 +353,11 @@ export function MatchControlCenterPage() {
         {/* Main area - Gantt + Matches list */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           {/* Gantt panel */}
-          <div className="bg-white rounded border border-gray-200 flex flex-col overflow-hidden flex-shrink-0">
-            <div className="px-2 py-1.5 border-b border-gray-200 flex items-center justify-between">
+          <div className="bg-card rounded border border-border flex flex-col overflow-hidden flex-shrink-0">
+            <div className="px-2 py-1.5 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-3 text-xs">
-                <span className="font-medium text-gray-700">{stats?.percentage || 0}%</span>
-                <span className="text-gray-500">
+                <span className="font-medium text-foreground">{stats?.percentage || 0}%</span>
+                <span className="text-muted-foreground">
                   {stats?.finished || 0}/{stats?.total || 0} matches
                 </span>
                 {(stats?.inProgress || 0) > 0 && (
@@ -386,7 +373,7 @@ export function MatchControlCenterPage() {
                 <button
                   onClick={liveOps.triggerReoptimize}
                   disabled={liveOps.isReoptimizing}
-                  className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
                 </button>
@@ -402,12 +389,13 @@ export function MatchControlCenterPage() {
                 selectedMatchId={selectedMatchId}
                 onMatchSelect={setSelectedMatchId}
                 impactedMatchIds={selectedAnalysis?.directlyImpacted}
+                trafficLights={trafficLights}
               />
             </div>
           </div>
 
           {/* Matches panel (workflow: In Progress pinned + tabbed Up Next/Finished) */}
-          <div className="flex-1 min-h-0 bg-white rounded border border-gray-200 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 bg-card rounded border border-border flex flex-col overflow-hidden">
             <WorkflowPanel
               matchesByStatus={liveTracking.matchesByStatus}
               matches={liveTracking.matches}
@@ -431,16 +419,16 @@ export function MatchControlCenterPage() {
 
         {/* Collapsible Match Details sidebar */}
         {detailsOpen ? (
-          <div className="w-72 flex-shrink-0 bg-white rounded border border-gray-200 flex flex-col overflow-hidden">
-            <div className="px-2 py-1.5 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="w-72 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
+            <div className="px-2 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Match Details
               </span>
               <button
                 onClick={() => setDetailsOpen(false)}
                 title="Collapse details"
                 aria-label="Collapse details"
-                className="text-gray-400 hover:text-gray-600 text-xs leading-none"
+                className="text-muted-foreground hover:text-muted-foreground text-xs leading-none"
               >
                 ›
               </button>
@@ -460,6 +448,7 @@ export function MatchControlCenterPage() {
               players={players}
               config={liveOps.config}
               currentSlot={currentSlot}
+              onUpdateStatus={liveTracking.updateMatchStatus}
             />
           </div>
         ) : (
@@ -467,7 +456,7 @@ export function MatchControlCenterPage() {
             onClick={() => setDetailsOpen(true)}
             title="Show match details"
             aria-label="Show match details"
-            className="w-6 flex-shrink-0 bg-white rounded border border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 text-xs"
+            className="w-6 flex-shrink-0 bg-card rounded border border-border flex flex-col items-center justify-center text-muted-foreground hover:text-muted-foreground hover:bg-muted/40 text-xs"
           >
             ‹
           </button>
@@ -476,9 +465,9 @@ export function MatchControlCenterPage() {
 
       {liveTracking.isLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded border border-gray-200 p-4">
-            <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mx-auto" />
-            <p className="text-gray-600 mt-2 text-xs">Loading…</p>
+          <div className="bg-card rounded border border-border p-4">
+            <div className="w-6 h-6 border-2 border-border border-t-gray-600 rounded-full animate-spin mx-auto" />
+            <p className="text-muted-foreground mt-2 text-xs">Loading…</p>
           </div>
         </div>
       )}

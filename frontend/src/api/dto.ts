@@ -122,7 +122,15 @@ export interface PlayerDelayEntry {
 export interface MatchStateDTO {
   matchId: string;
   status: 'scheduled' | 'called' | 'started' | 'finished';
+  /** ISO-8601 UTC timestamp, e.g. "2026-04-19T18:05:37.000Z".
+   *  Set the first time a match transitions to `called`. Used to show
+   *  "Called Xm ago" and as an audit point in the match details. */
+  calledAt?: string;
+  /** ISO-8601 UTC timestamp, e.g. "2026-04-19T18:05:37.000Z".
+   *  Parsed via `parseMatchStartMs` on both live-ops and TV readers.
+   *  Legacy "HH:MM" values are tolerated for one release cycle. */
   actualStartTime?: string;
+  /** ISO-8601 UTC timestamp — see `actualStartTime`. */
   actualEndTime?: string;
   actualCourtId?: number; // Override court if different from scheduled
   originalSlotId?: number; // Original scheduled slot before being pushed

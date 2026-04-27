@@ -53,12 +53,12 @@ export function GroupStrip() {
   };
 
   return (
-    <div className="rounded border border-gray-200 bg-white p-2">
+    <div className="rounded border border-border bg-card p-2">
       <div className="mb-1.5 flex items-baseline justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Schools
         </span>
-        <span className="text-[11px] text-gray-400">
+        <span className="text-[11px] text-muted-foreground">
           {groups.length} · {players.length} players
         </span>
       </div>
@@ -69,7 +69,7 @@ export function GroupStrip() {
           return (
             <span
               key={g.id}
-              className="group relative inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs transition-colors hover:border-gray-300"
+              className="group relative inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-0.5 text-xs transition-colors hover:border-border"
               data-testid={`school-chip-${g.id}`}
             >
               {isEditing ? (
@@ -91,17 +91,17 @@ export function GroupStrip() {
                     setEditing(g.id);
                     setEditDraft(g.name);
                   }}
-                  className="text-gray-800"
+                  className="text-foreground"
                   title="Double-click to rename"
                 >
                   {g.name}
                 </button>
               )}
-              <span className="tabular-nums text-gray-400">{count}</span>
+              <span className="tabular-nums text-muted-foreground">{count}</span>
               <button
                 type="button"
                 onClick={() => handleDelete(g)}
-                className="opacity-0 transition-opacity group-hover:opacity-100 text-gray-400 hover:text-red-600"
+                className="opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-red-600"
                 title="Delete school"
                 aria-label={`Delete ${g.name}`}
               >
@@ -124,13 +124,13 @@ export function GroupStrip() {
                 setCreating(false);
               }
             }}
-            className="rounded-full border border-dashed border-blue-400 bg-blue-50 px-2.5 py-0.5 text-xs outline-none w-36 focus:bg-white"
+            className="rounded-full border border-dashed border-blue-400 bg-blue-50 px-2.5 py-0.5 text-xs outline-none w-36 focus:bg-card dark:bg-blue-500/10 dark:text-blue-100"
           />
         ) : (
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 bg-white px-2.5 py-0.5 text-xs text-gray-600 hover:border-blue-400 hover:text-blue-700"
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground hover:border-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
             data-testid="add-school"
           >
             <span aria-hidden>＋</span>Add school

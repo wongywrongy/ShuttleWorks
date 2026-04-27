@@ -72,50 +72,50 @@ export function RosterGroupForm({ group, allGroups, onSave, onCancel }: RosterGr
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-3 rounded shadow-sm">
+    <form onSubmit={handleSubmit} className="bg-card p-3 rounded shadow-sm">
       <h3 className="text-base font-semibold mb-3">{group ? 'Edit Group' : 'Create Group'}</h3>
 
       <div className="space-y-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Group ID *
           </label>
           <input
             type="text"
             value={formData.id}
             onChange={(e) => setFormData({ ...formData, id: e.target.value })}
-            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.id ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.id ? 'border-red-500' : 'border-border'}`}
             disabled={!!group}
           />
           {errors.id && <p className="text-red-500 text-sm mt-1">{errors.id}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Name *
           </label>
           <input
             type="text"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.name ? 'border-red-500' : 'border-border'}`}
           />
           {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Type *
           </label>
           <select
             value={formData.type}
             onChange={(e) => setFormData({ ...formData, type: e.target.value as 'group' | 'roster' })}
-            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.type ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.type ? 'border-red-500' : 'border-border'}`}
           >
             <option value="group">Group (contains other groups)</option>
             <option value="roster">Roster (contains players)</option>
           </select>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             {formData.type === 'group' 
               ? 'Groups can contain other groups or rosters'
               : 'Rosters contain players directly'}
@@ -124,7 +124,7 @@ export function RosterGroupForm({ group, allGroups, onSave, onCancel }: RosterGr
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-foreground mb-2">
             Parent Group
           </label>
           <RosterTreeSelector
@@ -135,13 +135,13 @@ export function RosterGroupForm({ group, allGroups, onSave, onCancel }: RosterGr
             filterType="both"
             searchPlaceholder="Search for parent group..."
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Select a parent group, or leave as root level
           </p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Description (optional)
           </label>
           <textarea
@@ -150,13 +150,13 @@ export function RosterGroupForm({ group, allGroups, onSave, onCancel }: RosterGr
               ...formData,
               metadata: { ...formData.metadata, description: e.target.value },
             })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            className="w-full px-3 py-2 border border-border rounded-md"
             rows={2}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Color (optional)
           </label>
           <input
@@ -166,16 +166,16 @@ export function RosterGroupForm({ group, allGroups, onSave, onCancel }: RosterGr
               ...formData,
               metadata: { ...formData.metadata, color: e.target.value },
             })}
-            className="w-full h-10 border border-gray-300 rounded-md"
+            className="w-full h-10 border border-border rounded-md"
           />
-          <p className="text-xs text-gray-500 mt-1">Used for visual organization in the tree</p>
+          <p className="text-xs text-muted-foreground mt-1">Used for visual organization in the tree</p>
         </div>
 
         <div className="flex gap-2 justify-end">
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-sm text-sm hover:bg-gray-300"
+            className="px-3 py-1.5 bg-muted text-foreground rounded-sm text-sm hover:bg-accent hover:text-accent-foreground"
           >
             Cancel
           </button>

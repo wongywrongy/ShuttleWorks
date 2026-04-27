@@ -10,6 +10,7 @@
  *   else around the new anchor.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, X as XIcon } from 'lucide-react';
 import {
   DndContext,
   MouseSensor,
@@ -271,10 +272,10 @@ export function DragGantt({
   return (
     <div
       data-testid="drag-gantt"
-      className="relative rounded border border-gray-200 bg-white overflow-hidden"
+      className="relative rounded border border-border bg-card overflow-hidden"
     >
-      <div className="border-b border-gray-100 px-3 py-1.5 text-xs text-gray-500 flex items-center gap-2">
-        <svg aria-hidden className="h-3 w-3 text-gray-400" viewBox="0 0 16 16" fill="none">
+      <div className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-2">
+        <svg aria-hidden className="h-3 w-3 text-muted-foreground" viewBox="0 0 16 16" fill="none">
           <path d="M4 8h8M8 4v8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
         Drag a match to any cell — infeasible targets glow red. Drop pins the match and re-solves the rest.
@@ -284,10 +285,10 @@ export function DragGantt({
         <div className="overflow-x-auto">
           <div style={{ width: gridWidth }}>
             {/* Time header */}
-            <div className="flex border-b border-gray-200">
+            <div className="flex border-b border-border">
               <div
                 style={{ width: COURT_LABEL_WIDTH }}
-                className="flex-shrink-0 bg-gray-50 text-xs text-gray-400 text-center py-1"
+                className="flex-shrink-0 bg-card text-xs text-muted-foreground text-center py-1"
               >
                 Time
               </div>
@@ -296,8 +297,8 @@ export function DragGantt({
                   key={slot}
                   style={{ width: SLOT_WIDTH }}
                   className={[
-                    'flex-shrink-0 border-l border-gray-100 bg-gray-50 text-center text-[10px] py-1',
-                    slot === currentSlot ? 'text-blue-700 font-semibold' : 'text-gray-400',
+                    'flex-shrink-0 border-l border-border bg-card text-center text-[10px] py-1',
+                    slot === currentSlot ? 'text-blue-700 font-semibold' : 'text-muted-foreground',
                   ].join(' ')}
                 >
                   {i % 2 === 0 ? formatSlotTime(slot, config) : ''}
@@ -309,12 +310,12 @@ export function DragGantt({
             {courts.map((courtId) => (
               <div
                 key={courtId}
-                className="relative flex border-b border-gray-100"
+                className="relative flex border-b border-border"
                 style={{ height: ROW_HEIGHT }}
               >
                 <div
                   style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
-                  className="flex-shrink-0 flex items-center justify-center bg-gray-50 text-xs font-medium text-gray-600"
+                  className="flex-shrink-0 flex items-center justify-center bg-card text-xs font-medium text-muted-foreground"
                 >
                   Court {courtId}
                 </div>
@@ -374,29 +375,31 @@ export function DragGantt({
 
         {/* Live hover status */}
         <div
-          className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-3 py-1.5 text-[11px]"
+          className="flex items-center justify-between border-t border-border bg-muted/40 px-3 py-1.5 text-[11px]"
           data-testid="drag-gantt-status"
         >
           {activeAssignment && hoverCell && validation ? (
             validation.feasible ? (
-              <span className="text-emerald-700">
-                ✓ Feasible — drop to pin at Court {hoverCell.courtId}, {formatSlotTime(hoverCell.slotId, config)}
+              <span className="inline-flex items-center gap-1 text-emerald-700">
+                <Check aria-hidden="true" className="h-3.5 w-3.5" />
+                Feasible — drop to pin at Court {hoverCell.courtId}, {formatSlotTime(hoverCell.slotId, config)}
               </span>
             ) : (
-              <span className="text-red-700">
-                ✗ Infeasible ({validation.conflicts.length} conflict{validation.conflicts.length === 1 ? '' : 's'}):{' '}
+              <span className="inline-flex items-center gap-1 text-red-700">
+                <XIcon aria-hidden="true" className="h-3.5 w-3.5" />
+                Infeasible ({validation.conflicts.length} conflict{validation.conflicts.length === 1 ? '' : 's'}):{' '}
                 {validation.conflicts[0]?.description}
               </span>
             )
           ) : (
-            <span className="text-gray-500">
+            <span className="text-muted-foreground">
               {schedule.assignments.length} matches scheduled across {config.courtCount} court
               {config.courtCount === 1 ? '' : 's'}.
             </span>
           )}
           {pendingPin ? (
             <span className="text-blue-700" data-testid="drag-gantt-pin">
-              Pin in flight: {pendingPin.matchId.slice(0, 6)} → Court {pendingPin.courtId},{' '}
+              Pin in flight: {pendingPin.matchId.slice(0, 6)} to Court {pendingPin.courtId},{' '}
               {formatSlotTime(pendingPin.slotId, config)}
             </span>
           ) : null}
@@ -438,9 +441,9 @@ function DropCell({
       // `key` on the animated child forces the animation to restart on every
       // new drop (because nonce changes).
       className={[
-        'relative flex-shrink-0 border-l border-gray-100 transition-colors duration-150',
+        'relative flex-shrink-0 border-l border-border transition-colors duration-150',
         isCurrent ? 'bg-blue-50/30' : '',
-        isOver ? 'bg-gray-100/80' : '',
+        isOver ? 'bg-muted/80' : '',
         hovered ? 'motion-safe:animate-cell-pulse' : '',
         infeasible ? 'ring-2 ring-inset ring-red-400 bg-red-50/50' : '',
         feasible ? 'ring-2 ring-inset ring-emerald-400 bg-emerald-50/50' : '',
@@ -528,8 +531,8 @@ function MatchBlock({
         'group rounded border text-left px-2 py-0.5 shadow-sm backdrop-blur-sm',
         'motion-safe:animate-block-in',
         isSelected
-          ? 'bg-blue-50 border-blue-500 text-blue-900'
-          : 'bg-white/95 border-gray-300 text-gray-800 hover:border-gray-400 hover:shadow-md',
+          ? 'bg-blue-50 border-blue-500 text-blue-900 dark:bg-blue-500/15 dark:text-blue-100 dark:border-blue-500/50'
+          : 'bg-card/95 border-border text-foreground hover:border-muted-foreground hover:shadow-md',
         isPinned && !pinActive ? 'ring-2 ring-inset ring-amber-400 border-dashed' : '',
         readOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing',
       ].join(' ')}
@@ -545,7 +548,7 @@ function MatchBlock({
       <span className="relative text-[11px] font-semibold leading-tight block truncate">
         {matchLabel(match)}
       </span>
-      <span className="relative text-[10px] leading-tight block truncate text-gray-500">
+      <span className="relative text-[10px] leading-tight block truncate text-muted-foreground">
         {match.sideA.length}v{match.sideB.length}
         {match.sideC && match.sideC.length ? `v${match.sideC.length}` : ''}
       </span>

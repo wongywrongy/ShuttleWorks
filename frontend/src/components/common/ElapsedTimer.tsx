@@ -1,36 +1,36 @@
 /**
- * Elapsed Timer Component
- * Displays elapsed time since a given start time, updating every second
+ * Elapsed timer — reads an ISO-8601 UTC timestamp and updates every
+ * second. Falls back to legacy HH:MM via parseMatchStartMs for one
+ * release cycle (a console.warn flags legacy values for cleanup).
  */
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { parseMatchStartMs } from '../../utils/timeUtils';
 
 interface ElapsedTimerProps {
-  startTime: string | undefined;
+  startTime: string | null | undefined;
   className?: string;
+}
+
+function format(ms: number): string {
+  const secs = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 export function ElapsedTimer({ startTime, className = 'tabular-nums' }: ElapsedTimerProps) {
   const [elapsed, setElapsed] = useState('0:00');
 
   useEffect(() => {
-    if (!startTime) {
+    const startMs = parseMatchStartMs(startTime);
+    if (startMs === null) {
       setElapsed('0:00');
       return;
     }
 
-    const calculateElapsed = () => {
-      const [hours, minutes] = startTime.split(':').map(Number);
-      const start = new Date();
-      start.setHours(hours, minutes, 0, 0);
-      const now = new Date();
-      const diffMs = now.getTime() - start.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffSecs = Math.floor((diffMs % 60000) / 1000);
-      return `${diffMins}:${diffSecs.toString().padStart(2, '0')}`;
-    };
-
-    setElapsed(calculateElapsed());
-    const interval = setInterval(() => setElapsed(calculateElapsed()), 1000);
+    const tick = () => setElapsed(format(Date.now() - startMs));
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [startTime]);
 

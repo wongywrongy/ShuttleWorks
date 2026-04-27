@@ -7,21 +7,27 @@
  * for everything else — so screen readers announce them without the user
  * needing to focus the stack.
  */
-import { useEffect } from 'react';
+import { useEffect, type ComponentType } from 'react';
+import { AlertTriangle, CheckCircle2, Info, X, XCircle, type LucideProps } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import type { Toast as ToastEntry, ToastLevel } from '../store/appStore';
+import { INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET } from '../lib/utils';
 
-const LEVEL_STYLES: Record<ToastLevel, { bg: string; border: string; text: string; icon: string }> = {
-  info:    { bg: 'bg-blue-50',    border: 'border-blue-300',   text: 'text-blue-900',   icon: 'ℹ' },
-  success: { bg: 'bg-green-50',   border: 'border-green-300',  text: 'text-green-900',  icon: '✓' },
-  warn:    { bg: 'bg-yellow-50',  border: 'border-yellow-300', text: 'text-yellow-900', icon: '!' },
-  error:   { bg: 'bg-red-50',     border: 'border-red-300',    text: 'text-red-900',    icon: '✕' },
+const LEVEL_STYLES: Record<
+  ToastLevel,
+  { bg: string; border: string; text: string; Icon: ComponentType<LucideProps> }
+> = {
+  info:    { bg: 'bg-blue-50',    border: 'border-blue-300',   text: 'text-blue-900',   Icon: Info },
+  success: { bg: 'bg-green-50',   border: 'border-green-300',  text: 'text-green-900',  Icon: CheckCircle2 },
+  warn:    { bg: 'bg-yellow-50',  border: 'border-yellow-300', text: 'text-yellow-900', Icon: AlertTriangle },
+  error:   { bg: 'bg-red-50',     border: 'border-red-300',    text: 'text-red-900',    Icon: XCircle },
 };
 
 function Item({ toast }: { toast: ToastEntry }) {
   const dismiss = useAppStore((s) => s.dismissToast);
   const styles = LEVEL_STYLES[toast.level];
   const role = toast.level === 'error' ? 'alert' : 'status';
+  const { Icon } = styles;
 
   // Auto-dismiss timer (null means sticky — typically errors).
   useEffect(() => {
@@ -35,9 +41,9 @@ function Item({ toast }: { toast: ToastEntry }) {
       role={role}
       aria-live={role === 'alert' ? 'assertive' : 'polite'}
       data-testid={`toast-${toast.level}`}
-      className={`flex min-w-[16rem] max-w-md items-start gap-2 rounded border ${styles.bg} ${styles.border} ${styles.text} px-3 py-2 shadow-sm`}
+      className={`flex min-w-[16rem] max-w-md items-start gap-2 rounded-lg border ${styles.bg} ${styles.border} ${styles.text} px-3 py-2 shadow-sm`}
     >
-      <span aria-hidden="true" className="font-bold leading-5">{styles.icon}</span>
+      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="min-w-0 flex-1 text-xs leading-snug">
         <div>{toast.message}</div>
         {toast.detail && (
@@ -51,7 +57,7 @@ function Item({ toast }: { toast: ToastEntry }) {
             toast.onAction?.();
             dismiss(toast.id);
           }}
-          className="rounded border border-current bg-white/40 px-2 py-0.5 text-[11px] font-medium hover:bg-white/70"
+          className={`${INTERACTIVE_BASE} rounded border border-current bg-card px-2 py-0.5 text-[11px] font-semibold hover:bg-card/90`}
         >
           {toast.actionLabel}
         </button>
@@ -60,9 +66,9 @@ function Item({ toast }: { toast: ToastEntry }) {
         type="button"
         onClick={() => dismiss(toast.id)}
         aria-label="Dismiss"
-        className="text-xs leading-5 opacity-60 hover:opacity-100"
+        className={`${INTERACTIVE_BASE_QUIET} flex h-6 w-6 items-center justify-center rounded opacity-60 hover:opacity-100 hover:bg-black/5`}
       >
-        ×
+        <X aria-hidden="true" className="h-4 w-4" />
       </button>
     </div>
   );

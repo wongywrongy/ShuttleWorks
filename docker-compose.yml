@@ -20,7 +20,7 @@ services:
       - /tmp
     healthcheck:
       # Deep health: verifies data dir writable + CP-SAT solver imports.
-      test: ["CMD", "python", "-c", "import urllib.request,sys,json; r=urllib.request.urlopen('http://localhost:8000/health/deep'); sys.exit(0 if json.load(r).get('status')=='healthy' else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys,json; r=urllib.request.urlopen('http://localhost:8000/health/deep', timeout=5); sys.exit(0 if json.load(r).get('status')=='healthy' else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3

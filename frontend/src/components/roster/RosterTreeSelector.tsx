@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import React from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { RosterGroupDTO } from '../../api/dto';
 
 interface RosterTreeSelectorProps {
@@ -71,7 +72,7 @@ export function RosterTreeSelector({
     return (
       <div key={group.id}>
         <div
-          className={`flex items-center py-1 px-2 rounded cursor-pointer hover:bg-gray-100 ${
+          className={`flex items-center py-1 px-2 rounded cursor-pointer hover:bg-muted ${
             isSelected ? 'bg-blue-100 border border-blue-300' : ''
           }`}
           style={{ paddingLeft: `${indent + 8}px` }}
@@ -83,14 +84,20 @@ export function RosterTreeSelector({
                 e.stopPropagation();
                 toggleExpand(group.id);
               }}
-              className="mr-2 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700"
+              aria-label={isExpanded ? 'Collapse' : 'Expand'}
+              aria-expanded={isExpanded}
+              className="mr-2 w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground"
             >
-              {isExpanded ? '▼' : '▶'}
+              {isExpanded ? (
+                <ChevronDown aria-hidden="true" className="h-3 w-3" />
+              ) : (
+                <ChevronRight aria-hidden="true" className="h-3 w-3" />
+              )}
             </button>
           )}
           {!hasChildren && <span className="mr-2 w-4" />}
           <span className={`text-sm flex items-center gap-2 ${group.type === 'group' ? 'font-semibold' : ''}`}>
-            <span className={`w-2 h-2 rounded-full ${group.type === 'group' ? 'bg-gray-400' : 'bg-blue-400'}`} />
+            <span className={`w-2 h-2 rounded-full ${group.type === 'group' ? 'bg-muted-foreground/60' : 'bg-blue-400'}`} />
             {group.name}
           </span>
         </div>
@@ -104,31 +111,31 @@ export function RosterTreeSelector({
   };
 
   return (
-    <div className="border border-gray-300 rounded-md bg-white max-h-96 overflow-y-auto">
+    <div className="border border-border rounded-md bg-card max-h-96 overflow-y-auto">
       {searchPlaceholder && (
-        <div className="p-2 border-b border-gray-200">
+        <div className="p-2 border-b border-border">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full px-3 py-1 border border-gray-300 rounded text-sm"
+            className="w-full px-3 py-1 border border-border rounded text-sm"
           />
         </div>
       )}
       <div className="p-2">
         {allowNone && (
           <div
-            className={`py-1 px-2 rounded cursor-pointer hover:bg-gray-100 ${
+            className={`py-1 px-2 rounded cursor-pointer hover:bg-muted ${
               selectedId === null ? 'bg-blue-100 border border-blue-300' : ''
             }`}
             onClick={() => onSelect(null)}
           >
-            <span className="text-sm text-gray-500">(None / Root Level)</span>
+            <span className="text-sm text-muted-foreground">(None / Root Level)</span>
           </div>
         )}
         {filteredRootGroups.length === 0 ? (
-          <div className="py-4 text-center text-sm text-gray-500">
+          <div className="py-4 text-center text-sm text-muted-foreground">
             {searchTerm ? 'No groups found' : 'No groups available'}
           </div>
         ) : (

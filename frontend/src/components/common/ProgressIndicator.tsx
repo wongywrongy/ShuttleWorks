@@ -49,7 +49,7 @@ export function ProgressIndicator({
         {status === 'error' && (
           <div className="h-5 w-5 bg-red-500 rounded-full" />
         )}
-        <span className="font-medium text-gray-900">
+        <span className="font-medium text-foreground">
           {status === 'solving' && 'Optimizing Schedule...'}
           {status === 'complete' && 'Optimization Complete'}
           {status === 'error' && 'Optimization Failed'}
@@ -59,27 +59,27 @@ export function ProgressIndicator({
       {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
         <div>
-          <div className="text-gray-500 text-xs">Elapsed Time</div>
-          <div className="font-semibold text-gray-900">{formatTime(displayElapsed)}</div>
+          <div className="text-muted-foreground text-xs">Elapsed Time</div>
+          <div className="font-semibold text-foreground">{formatTime(displayElapsed)}</div>
         </div>
 
         {solutionCount !== undefined && solutionCount > 0 && (
           <div>
-            <div className="text-gray-500 text-xs">Solutions Found</div>
-            <div className="font-semibold text-gray-900">{solutionCount}</div>
+            <div className="text-muted-foreground text-xs">Solutions Found</div>
+            <div className="font-semibold text-foreground">{solutionCount}</div>
           </div>
         )}
 
         {currentObjective !== undefined && (
           <div>
-            <div className="text-gray-500 text-xs">Current Score</div>
-            <div className="font-semibold text-gray-900">{Math.round(currentObjective)}</div>
+            <div className="text-muted-foreground text-xs">Current Score</div>
+            <div className="font-semibold text-foreground">{Math.round(currentObjective)}</div>
           </div>
         )}
 
         {gap !== null && gap > 0 && (
           <div>
-            <div className="text-gray-500 text-xs">Gap to Optimal</div>
+            <div className="text-muted-foreground text-xs">Gap to Optimal</div>
             <div className="font-semibold text-blue-600">{gap.toFixed(1)}%</div>
           </div>
         )}
@@ -88,13 +88,13 @@ export function ProgressIndicator({
       {/* Progress Bar */}
       {status === 'solving' && gap !== null && gap > 0 && (
         <div className="space-y-1">
-          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-600 transition-all duration-300"
               style={{ width: `${Math.min(100 - gap, 100)}%` }}
             ></div>
           </div>
-          <div className="text-xs text-gray-500 text-center">
+          <div className="text-xs text-muted-foreground text-center">
             {(100 - gap).toFixed(1)}% toward optimal
           </div>
         </div>
@@ -102,10 +102,10 @@ export function ProgressIndicator({
 
       {status === 'solving' && (gap === null || gap === 0) && (
         <div className="space-y-1">
-          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div className="h-full bg-blue-600 animate-pulse w-full"></div>
           </div>
-          <div className="text-xs text-gray-500 text-center">
+          <div className="text-xs text-muted-foreground text-center">
             Finding optimal solution...
           </div>
         </div>

@@ -1,7 +1,14 @@
 """Pydantic schemas for API requests/responses - simplified for school sparring."""
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Annotated, List, Literal, Optional, Dict, Any
+from pydantic import BaseModel, Field, StringConstraints
 from enum import Enum
+
+
+# Reusable constrained types
+HHMMTime = Annotated[
+    str,
+    StringConstraints(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$"),
+]
 
 
 # Enums
@@ -19,41 +26,49 @@ class ScheduleView(str, Enum):
 
 # Tournament Configuration
 class BreakWindow(BaseModel):
-    start: str  # HH:mm format
-    end: str  # HH:mm format
+    start: HHMMTime  # HH:mm format, 00:00–23:59
+    end: HHMMTime
 
 
 class TournamentConfig(BaseModel):
-    intervalMinutes: int
-    dayStart: str  # HH:mm format
-    dayEnd: str  # HH:mm format
+    intervalMinutes: int = Field(..., gt=0, le=240)
+    dayStart: HHMMTime
+    dayEnd: HHMMTime
     tournamentDate: Optional[str] = None  # ISO date string: "2026-02-15"
-    breaks: List[BreakWindow]
-    courtCount: int
-    defaultRestMinutes: int
-    freezeHorizonSlots: int
+    breaks: List[BreakWindow] = Field(default_factory=list)
+    courtCount: int = Field(..., ge=1, le=64)
+    defaultRestMinutes: int = Field(..., ge=0, le=240)
+    freezeHorizonSlots: int = Field(..., ge=0, le=1000)
     rankCounts: Dict[str, int] = Field(default_factory=dict)  # {"MS": 3, "WS": 3, "MD": 2, "WD": 4, "XD": 2}
     enableCourtUtilization: Optional[bool] = True
-    courtUtilizationPenalty: Optional[float] = 50.0
+    courtUtilizationPenalty: Optional[float] = Field(50.0, ge=0)
     # Game proximity constraint
     enableGameProximity: Optional[bool] = False
-    minGameSpacingSlots: Optional[int] = None
-    maxGameSpacingSlots: Optional[int] = None
-    gameProximityPenalty: Optional[float] = 5.0
+    minGameSpacingSlots: Optional[int] = Field(None, ge=0)
+    maxGameSpacingSlots: Optional[int] = Field(None, ge=0)
+    gameProximityPenalty: Optional[float] = Field(5.0, ge=0)
     # Compact schedule
     enableCompactSchedule: Optional[bool] = False
-    compactScheduleMode: Optional[str] = "minimize_makespan"
-    compactSchedulePenalty: Optional[float] = 100.0
-    targetFinishSlot: Optional[int] = None
+    compactScheduleMode: Optional[Literal["minimize_makespan", "no_gaps", "finish_by_time"]] = (
+        "minimize_makespan"
+    )
+    compactSchedulePenalty: Optional[float] = Field(100.0, ge=0)
+    targetFinishSlot: Optional[int] = Field(None, ge=0)
     # Player overlap
     allowPlayerOverlap: Optional[bool] = False
-    playerOverlapPenalty: Optional[float] = 50.0
+    playerOverlapPenalty: Optional[float] = Field(50.0, ge=0)
+    # Scoring format — UI metadata, not a solver input. Declared here so
+    # Pydantic's serializer preserves the fields across PUT round-trips.
+    scoringFormat: Optional[Literal["simple", "badminton"]] = None
+    setsToWin: Optional[int] = Field(None, ge=1, le=3)
+    pointsPerSet: Optional[int] = Field(None, ge=11, le=30)
+    deuceEnabled: Optional[bool] = None
 
 
 # Availability
 class AvailabilityWindow(BaseModel):
-    start: str  # HH:mm format
-    end: str  # HH:mm format
+    start: HHMMTime
+    end: HHMMTime
 
 
 # Roster Group (for school grouping)

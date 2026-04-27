@@ -1,5 +1,7 @@
 """Stateless schedule API endpoint - directly uses scheduler_core engine."""
-from fastapi import APIRouter, HTTPException
+import logging
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Tuple, AsyncGenerator
@@ -35,6 +37,14 @@ except ImportError as e:
     )
 
 router = APIRouter(prefix="", tags=["schedule"])
+
+log = logging.getLogger("scheduler.schedule")
+
+# Upper bound on the progress queue: the solver emits one event per new
+# solution and per phase transition. 512 is generous for a 30 s solve,
+# and bounds memory if a client stops draining (see the SSE
+# disconnect handling in ``event_generator`` below).
+_SSE_QUEUE_MAX = 512
 
 
 class GenerateScheduleRequest(BaseModel):
@@ -98,14 +108,12 @@ async def generate_schedule(request: GenerateScheduleRequest):
         return _convert_result_to_dto(result)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Schedule generation failed: {str(e)}"
-        )
+        log.exception("schedule generation failed")
+        raise HTTPException(status_code=500, detail="schedule generation failed")
 
 
 @router.post("/schedule/stream")
-async def generate_schedule_stream(request: GenerateScheduleRequest):
+async def generate_schedule_stream(request: GenerateScheduleRequest, http_request: Request):
     """
     Generate schedule with real-time progress updates via Server-Sent Events.
 
@@ -124,27 +132,54 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
     (on optimal final status).
     """
     async def event_generator() -> AsyncGenerator[str, None]:
-        """Generate Server-Sent Events for progress updates."""
-        progress_queue: asyncio.Queue = asyncio.Queue()
+        """Generate Server-Sent Events for progress updates.
+
+        Safety properties:
+          - The progress queue is bounded (``_SSE_QUEUE_MAX``) so a
+            slow/absent consumer can't grow memory without bound.
+          - Each iteration polls ``http_request.is_disconnected()`` with
+            a 1 s timeout so a closed browser tab is noticed within
+            ~1 s. On disconnect we set ``cancel_event`` and return.
+          - The solver worker checks ``cancel_event`` before emitting
+            new events so dropped events don't accumulate after the
+            client is gone.
+        """
+        progress_queue: asyncio.Queue = asyncio.Queue(maxsize=_SSE_QUEUE_MAX)
+        cancel_event = asyncio.Event()
         result_holder: dict = {}
         error_holder: dict = {}
         state = {"phase": None, "solutions": 0}
 
-        # Get the running event loop BEFORE starting the thread
         loop = asyncio.get_running_loop()
 
-        def emit(event: dict) -> None:
-            loop.call_soon_threadsafe(progress_queue.put_nowait, event)
+        def emit(event: dict, *, critical: bool = False) -> None:
+            """Enqueue an event from the worker thread.
+
+            Critical events (phase/model_built/done) bypass the bounded
+            queue's backpressure — we'd rather grow by a few entries
+            than drop a terminator. Non-critical events (per-solution
+            ``progress``) are dropped when the queue is full.
+            """
+            if cancel_event.is_set():
+                return
+            if critical:
+                loop.call_soon_threadsafe(progress_queue.put_nowait, event)
+                return
+            try:
+                loop.call_soon_threadsafe(progress_queue.put_nowait, event)
+            except asyncio.QueueFull:
+                # Drop this progress event rather than block the worker
+                # or leak memory. The client still gets terminators.
+                pass
 
         def set_phase(phase: str) -> None:
             if state["phase"] != phase:
                 state["phase"] = phase
-                emit({"type": "phase", "phase": phase})
+                emit({"type": "phase", "phase": phase}, critical=True)
 
         def progress_callback(progress_data: dict):
-            """Called by solver when a new solution is found (from worker thread)."""
+            """Called by solver when a new solution is found (worker thread)."""
             state["solutions"] += 1
-            # First solution means solver has exited presolve into active search.
             if state["solutions"] == 1:
                 set_phase("search")
             emit({"type": "progress", **progress_data})
@@ -152,7 +187,6 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
         def solve_in_thread():
             """Run solver in thread pool to avoid blocking event loop."""
             try:
-                # Convert to scheduler_core format
                 schedule_config = _convert_to_schedule_config(request.config)
                 players = _convert_players(request.players, request.config)
                 matches = _convert_matches(request.matches)
@@ -163,8 +197,8 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
                     solver_options=SolverOptions(
                         time_limit_seconds=30,
                         num_workers=4,
-                        log_progress=False
-                    )
+                        log_progress=False,
+                    ),
                 )
                 scheduler.add_players(players)
                 scheduler.add_matches(matches)
@@ -172,50 +206,66 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
                 scheduler.build()
 
                 stats = scheduler._compute_model_stats()
-                emit({
-                    "type": "model_built",
-                    "numMatches": stats["num_matches"],
-                    "numPlayers": stats["num_players"],
-                    "numIntervals": stats["num_intervals"],
-                    "numNoOverlap": stats["num_no_overlap"],
-                    "numVariables": stats["num_variables"],
-                    "multiMatchPlayers": stats["multi_match_players"],
-                    "totalSlots": stats["total_slots"],
-                    "courtCount": stats["court_count"],
-                })
+                emit(
+                    {
+                        "type": "model_built",
+                        "numMatches": stats["num_matches"],
+                        "numPlayers": stats["num_players"],
+                        "numIntervals": stats["num_intervals"],
+                        "numNoOverlap": stats["num_no_overlap"],
+                        "numVariables": stats["num_variables"],
+                        "multiMatchPlayers": stats["multi_match_players"],
+                        "totalSlots": stats["total_slots"],
+                        "courtCount": stats["court_count"],
+                    },
+                    critical=True,
+                )
                 set_phase("presolve")
 
                 result = scheduler.solve(progress_callback=progress_callback)
-                result_holder['result'] = result
+                result_holder["result"] = result
 
             except Exception as e:
-                error_holder['error'] = str(e)
+                log.exception("SSE solver worker failed")
+                error_holder["error"] = str(e)
 
-            # Signal completion (thread-safe)
-            emit({"type": "done"})
+            emit({"type": "done"}, critical=True)
 
-        # Start solver in background thread
-        loop.run_in_executor(None, solve_in_thread)
+        executor_future = loop.run_in_executor(None, solve_in_thread)
 
-        # Stream progress events
-        while True:
-            event = await progress_queue.get()
+        try:
+            while True:
+                # Poll for disconnect with a 1 s timeout on queue.get.
+                try:
+                    event = await asyncio.wait_for(progress_queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    if await http_request.is_disconnected():
+                        log.info("SSE client disconnected; cancelling solver")
+                        cancel_event.set()
+                        return
+                    continue
 
-            if event['type'] == 'done':
-                if 'error' in error_holder:
-                    yield f"data: {json.dumps({'type': 'error', 'message': error_holder['error']})}\n\n"
-                elif 'result' in result_holder:
-                    result = result_holder['result']
-                    # If solver reported OPTIMAL, that's a proved-optimal final — emit proving phase.
-                    if getattr(result.status, "value", None) == "optimal":
-                        yield f"data: {json.dumps({'type': 'phase', 'phase': 'proving'})}\n\n"
-                    result_dto = _convert_result_to_dto(result)
-                    yield f"data: {json.dumps({'type': 'complete', 'result': result_dto.model_dump()})}\n\n"
-                yield f"data: {json.dumps({'type': 'done'})}\n\n"
-                break
-
-            else:
-                yield f"data: {json.dumps(event)}\n\n"
+                if event["type"] == "done":
+                    if "error" in error_holder:
+                        # Server-side log has the detail (see solve_in_thread);
+                        # client gets a generic message.
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'solver failed'})}\n\n"
+                    elif "result" in result_holder:
+                        result = result_holder["result"]
+                        if getattr(result.status, "value", None) == "optimal":
+                            yield f"data: {json.dumps({'type': 'phase', 'phase': 'proving'})}\n\n"
+                        result_dto = _convert_result_to_dto(result)
+                        yield f"data: {json.dumps({'type': 'complete', 'result': result_dto.model_dump()})}\n\n"
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                    break
+                else:
+                    yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            cancel_event.set()
+            # Best-effort cancellation of the executor future; the solver
+            # itself can't be preempted mid-solve (OR-Tools is C++), so
+            # the worker runs to completion but its emits become no-ops.
+            executor_future.cancel()
 
     return StreamingResponse(
         event_generator(),
@@ -224,7 +274,7 @@ async def generate_schedule_stream(request: GenerateScheduleRequest):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Disable nginx buffering
-        }
+        },
     )
 
 
@@ -424,8 +474,19 @@ def _convert_result_to_dto(result) -> ScheduleDTO:
 
 
 def _time_to_minutes(time: str) -> int:
-    """Convert HH:mm to minutes since midnight."""
-    hours, minutes = map(int, time.split(':'))
+    """Convert HH:mm to minutes since midnight.
+
+    Pydantic's HHMMTime validator on TournamentConfig already guarantees
+    shape, but this is called with user-authored BreakWindow strings and
+    the occasional test fixture — keep a defensive guard so a malformed
+    value becomes a 422 rather than an unhandled 500.
+    """
+    try:
+        hours, minutes = map(int, time.split(":"))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail=f"invalid time string: {time!r}")
+    if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+        raise HTTPException(status_code=422, detail=f"time out of range: {time!r}")
     return hours * 60 + minutes
 
 

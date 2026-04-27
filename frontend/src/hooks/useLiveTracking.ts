@@ -1,13 +1,17 @@
 /**
- * Hook for live tracking page logic
- * Manages match state fetching, updating, and grouping for the live tracking interface
+ * Hook for live tracking page logic.
  *
- * Match State Machine:
- *   scheduled → called → started → finished
- *       ↓         ↓         ↓          ↓
- *    (delay)   (undo)    (undo)     (undo)
- *       ↓         ↓         ↓          ↓
- *   scheduled  scheduled  called    started
+ * Manages match-state fetching, updating, and grouping for the live
+ * tracking interface.
+ *
+ * Match state machine (happy path reads left-to-right):
+ *
+ *   scheduled -> called -> started -> finished
+ *
+ * Every forward transition has an undo edge to the prior state, plus
+ * an ad-hoc "delay" edge that leaves a match in `scheduled` with a
+ * reason attached. See VALID_TRANSITIONS below for the authoritative
+ * table.
  */
 import { useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/appStore';
@@ -19,10 +23,10 @@ import type { MatchStateDTO } from '../api/dto';
  * Key = current status, Value = array of valid next statuses
  */
 const VALID_TRANSITIONS: Record<MatchStateDTO['status'], MatchStateDTO['status'][]> = {
-  scheduled: ['called', 'scheduled'], // can call or delay (stays scheduled)
-  called: ['started', 'scheduled'],    // can start or undo to scheduled
-  started: ['finished', 'called'],     // can finish or undo to called
-  finished: ['started'],               // can only undo to started
+  scheduled: ['called', 'scheduled', 'finished'], // call, stay, or record score after-the-fact
+  called: ['started', 'scheduled', 'finished'],   // start, undo, or record score after-the-fact
+  started: ['finished', 'called'],                // finish or undo to called
+  finished: ['started', 'finished'],              // undo to started OR edit score (stays finished)
 };
 
 /**
@@ -150,15 +154,14 @@ export function useLiveTracking() {
 
       // Validate state transition
       if (!isValidTransition(currentStatus, status)) {
-        console.warn(`Invalid state transition: ${currentStatus} → ${status} for match ${matchId}`);
+        console.warn(`Invalid state transition: ${currentStatus} to ${status} for match ${matchId}`);
         throw new Error(`Invalid state transition: cannot go from '${currentStatus}' to '${status}'`);
       }
 
-      const now = new Date().toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
+      // ISO-8601 UTC — parsed by parseMatchStartMs on every reader.
+      // Do NOT switch to a locale-dependent format: ElapsedTimer and the
+      // TV PublicDisplayPage both assume a canonical timestamp shape.
+      const now = new Date().toISOString();
 
       const newState: MatchStateDTO = {
         ...currentState,
@@ -167,7 +170,13 @@ export function useLiveTracking() {
         ...additionalData,
       };
 
-      // Set timestamps based on status transitions
+      // Set timestamps based on status transitions. Each is stamped
+      // on the FIRST transition only; if the operator undoes and
+      // re-fires, the original timestamp stays so "Called Xm ago" is
+      // an audit field, not a derived one that resets.
+      if (status === 'called' && !currentState.calledAt) {
+        newState.calledAt = now;
+      }
       if (status === 'started' && !currentState.actualStartTime) {
         newState.actualStartTime = now;
       }
@@ -178,12 +187,36 @@ export function useLiveTracking() {
       // Update local state immediately for responsive UI
       setMatchState(matchId, newState);
 
-      // Sync to backend
+      // Sync to backend. On failure, surface a sticky error toast with
+      // a Retry action so the operator knows the change didn't land
+      // (and can replay it). Silent failures were hiding real data-loss
+      // events in prior builds.
       try {
         await apiClient.updateMatchState(matchId, newState);
       } catch (apiError) {
         console.error('Failed to sync match status to backend:', apiError);
-        // Don't revert - local state is still valid for this session
+        const detail = apiError instanceof Error ? apiError.message : 'Network error';
+        try {
+          useAppStore.getState().pushToast({
+            level: 'error',
+            message: `Match ${matchId.slice(0, 8)}… did not save`,
+            detail,
+            actionLabel: 'Retry',
+            onAction: () => {
+              // Replay the same transition; the hook will re-push a toast
+              // on another failure, capped to one-per-match by id.
+              void (async () => {
+                try {
+                  await apiClient.updateMatchState(matchId, newState);
+                } catch {
+                  /* a second failure will be caught by the Retry loop */
+                }
+              })();
+            },
+          });
+        } catch {
+          /* toast store unavailable — never block the UI on telemetry */
+        }
       }
     } catch (error) {
       console.error('Failed to update match status:', error);
@@ -202,11 +235,7 @@ export function useLiveTracking() {
         status: 'finished',
         score,
         notes,
-        actualEndTime: new Date().toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }),
+        actualEndTime: new Date().toISOString(),
       });
       setMatchState(matchId, updated);
     } catch (error) {

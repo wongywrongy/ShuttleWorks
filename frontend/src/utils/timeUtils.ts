@@ -198,19 +198,111 @@ export function timeToSlot(time: string, config: TournamentConfig): number {
 export const slotToTime = formatSlotTime;
 
 /**
+ * Parse a match's actualStartTime / actualEndTime into an epoch ms value.
+ *
+ * The canonical format written by useLiveTracking is ISO-8601 UTC
+ * (e.g. ``2026-04-19T18:05:37.000Z``) so the primary path is
+ * ``Date.parse``. A one-release fallback handles legacy ``HH:MM`` values
+ * from pre-ISO tournaments: assume "today in the browser's local time
+ * zone" and warn once so the drift is visible. The fallback can be
+ * removed after a deploy cycle.
+ */
+export function parseMatchStartMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const asIso = Date.parse(value);
+  if (!Number.isNaN(asIso)) return asIso;
+
+  const m = /^(\d{2}):(\d{2})$/.exec(value.trim());
+  if (m) {
+    const hh = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[parseMatchStartMs] legacy HH:MM timestamp detected (%s); assuming today local — upgrade writer to ISO',
+        value,
+      );
+      const d = new Date();
+      d.setHours(hh, mm, 0, 0);
+      return d.getTime();
+    }
+  }
+  return null;
+}
+
+/**
+ * Compute the slot + duration a match should be rendered at on the
+ * Gantt grid, given its paper assignment and its live matchState.
+ *
+ * The paper slot (``assignment.slotId``) is what the solver scheduled.
+ * That's the right render position for matches that have not yet been
+ * called or started — the operator is looking at the plan. Once a
+ * match starts, the right position is where it is actually being
+ * played on the clock; and once it finishes, the right duration is
+ * how long it actually ran. This is the "live play head" behaviour.
+ *
+ * Falls back to the paper assignment whenever the relevant timestamp
+ * is missing or unparseable, so a corrupt field can never leave a
+ * block without a position.
+ */
+export function getRenderSlot(
+  assignment: { slotId: number; durationSlots: number },
+  matchState: MatchStateDTO | undefined | null,
+  config: TournamentConfig,
+): { slotId: number; durationSlots: number } {
+  const status = matchState?.status;
+
+  if (status === 'finished' && matchState?.actualStartTime && matchState?.actualEndTime) {
+    const startMs = parseMatchStartMs(matchState.actualStartTime);
+    const endMs = parseMatchStartMs(matchState.actualEndTime);
+    if (startMs !== null && endMs !== null && endMs >= startMs) {
+      const startSlot = _msToSlot(startMs, config);
+      const minutes = (endMs - startMs) / 60_000;
+      const duration = Math.max(1, Math.round(minutes / config.intervalMinutes));
+      return { slotId: startSlot, durationSlots: duration };
+    }
+  }
+
+  if (status === 'started' && matchState?.actualStartTime) {
+    const startMs = parseMatchStartMs(matchState.actualStartTime);
+    if (startMs !== null) {
+      return {
+        slotId: _msToSlot(startMs, config),
+        durationSlots: assignment.durationSlots,
+      };
+    }
+  }
+
+  return { slotId: assignment.slotId, durationSlots: assignment.durationSlots };
+}
+
+/** Convert an epoch-ms timestamp to a schedule slot index using the
+ *  config's day start + interval. Handles overnight schedules. */
+function _msToSlot(ms: number, config: TournamentConfig): number {
+  const d = new Date(ms);
+  const minutesOfDay = d.getHours() * 60 + d.getMinutes();
+  const startMinutes = timeToMinutes(config.dayStart);
+  const endMinutes = timeToMinutes(config.dayEnd);
+  const isOvernight = endMinutes <= startMinutes;
+  let effective = minutesOfDay;
+  if (isOvernight && effective < startMinutes) effective += 24 * 60;
+  return Math.max(0, Math.floor((effective - startMinutes) / config.intervalMinutes));
+}
+
+/**
  * Get status badge color
  */
 export function getStatusColor(status: MatchStateDTO['status']): string {
   switch (status) {
     case 'scheduled':
-      return 'bg-gray-200 text-gray-700';
+      return 'bg-muted text-foreground';
     case 'called':
-      return 'bg-blue-200 text-blue-800';
+      return 'bg-blue-200 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200';
     case 'started':
-      return 'bg-green-200 text-green-800';
+      return 'bg-green-200 text-green-800 dark:bg-green-500/20 dark:text-green-200';
     case 'finished':
-      return 'bg-purple-200 text-purple-800';
+      return 'bg-purple-200 text-purple-800 dark:bg-purple-500/20 dark:text-purple-200';
     default:
-      return 'bg-gray-200 text-gray-700';
+      return 'bg-muted text-foreground';
   }
 }

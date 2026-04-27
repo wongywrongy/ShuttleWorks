@@ -24,7 +24,7 @@ export function MatchBulkActionsToolbar({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-blue-500 shadow-lg animate-slide-up">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t-2 border-blue-500 shadow-lg animate-slide-up">
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           {/* Selection Count */}
@@ -42,7 +42,7 @@ export function MatchBulkActionsToolbar({
                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <span className="font-semibold text-gray-900">
+            <span className="font-semibold text-foreground">
               {selectedCount} match{selectedCount !== 1 ? 'es' : ''} selected
             </span>
           </div>
@@ -73,7 +73,7 @@ export function MatchBulkActionsToolbar({
             {/* Clear Selection */}
             <button
               onClick={onClearSelection}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-muted text-foreground text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
               Clear Selection
             </button>

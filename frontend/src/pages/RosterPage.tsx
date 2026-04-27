@@ -204,8 +204,8 @@ export function RosterPage() {
       />
 
       {loading ? (
-        <div className="flex items-center justify-center h-48 bg-white rounded border border-gray-200">
-          <div className="text-gray-500 text-sm">Loading players...</div>
+        <div className="flex items-center justify-center h-48 bg-card rounded border border-border">
+          <div className="text-muted-foreground text-sm">Loading players...</div>
         </div>
       ) : (
         <PlayerListView

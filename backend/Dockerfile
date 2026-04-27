@@ -32,7 +32,7 @@ RUN useradd --create-home --uid 1001 app \
 # Healthcheck hits /health/deep so we catch "backend is up but can't
 # persist or can't import the solver" failure modes, not just liveness.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/health/deep'); sys.exit(0 if __import__('json').load(r).get('status')=='healthy' else 1)" || exit 1
+    CMD python -c "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/health/deep', timeout=5); sys.exit(0 if __import__('json').load(r).get('status')=='healthy' else 1)" || exit 1
 
 USER app
 

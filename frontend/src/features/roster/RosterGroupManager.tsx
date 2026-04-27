@@ -106,18 +106,18 @@ export function RosterGroupManager({
         <div className="flex gap-2">
           <button
             onClick={expandAll}
-            className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+            className="px-3 py-1 text-sm bg-muted text-foreground rounded hover:bg-accent hover:text-accent-foreground"
           >
             Expand All
           </button>
           <button
             onClick={collapseAll}
-            className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+            className="px-3 py-1 text-sm bg-muted text-foreground rounded hover:bg-accent hover:text-accent-foreground"
           >
             Collapse All
           </button>
         </div>
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-muted-foreground">
           {groups.length} group{groups.length !== 1 ? 's' : ''}, {players.length} player{players.length !== 1 ? 's' : ''}
         </div>
       </div>
@@ -147,18 +147,18 @@ export function RosterGroupManager({
             onClick={() => setContextMenu(null)}
           />
           <div
-            className="fixed z-50 bg-white border border-gray-300 rounded-lg shadow-lg py-1 min-w-[150px]"
+            className="fixed z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[150px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <button
               onClick={handleEdit}
-              className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+              className="w-full text-left px-4 py-2 text-sm hover:bg-muted"
             >
               Edit
             </button>
             <button
               onClick={handleDelete}
-              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-muted"
             >
               Delete
             </button>

@@ -114,26 +114,26 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-3 rounded shadow-sm">
+    <form onSubmit={handleSubmit} className="bg-card p-3 rounded shadow-sm">
       <h3 className="text-base font-semibold mb-3">{match ? 'Edit Match' : 'Add Match'}</h3>
 
       <div className="space-y-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Match ID *
           </label>
           <input
             type="text"
             value={formData.id}
             onChange={(e) => setFormData({ ...formData, id: e.target.value })}
-            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.id ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.id ? 'border-red-500' : 'border-border'}`}
             disabled={!!match}
           />
           {errors.id && <p className="text-red-500 text-sm mt-1">{errors.id}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Match Type
           </label>
           <select
@@ -146,7 +146,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                 sideC: newType === 'tri' ? (formData.sideC || []) : undefined,
               });
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            className="w-full px-3 py-2 border border-border rounded-md"
           >
             <option value="dual">Dual Meet (2 schools)</option>
             <option value="tri">Tri-Meet (3 schools)</option>
@@ -154,21 +154,21 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Event/Rank (optional)
           </label>
           <input
             type="text"
             value={formData.eventRank || ''}
             onChange={(e) => setFormData({ ...formData, eventRank: e.target.value || null })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            className="w-full px-3 py-2 border border-border rounded-md"
             placeholder="MS1, WS1, MD1, etc."
           />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Side A (School A) *
             </label>
             <div className="mb-2">
@@ -183,7 +183,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                     setSelectedSideA([]);
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md mb-2"
+                className="w-full px-3 py-2 border border-border rounded-md mb-2"
               >
                 <option value="">Select school or choose players individually</option>
                 {groups.map((group) => (
@@ -193,7 +193,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                 ))}
               </select>
             </div>
-            <div className="border border-gray-300 rounded-sm p-2 max-h-32 overflow-y-auto">
+            <div className="border border-border rounded-sm p-2 max-h-32 overflow-y-auto">
               {players.map((player) => (
                 <label key={player.id} className="flex items-center space-x-2 py-1">
                   <input
@@ -208,7 +208,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                   <span className="text-sm">
                     {player.name} ({player.id})
                     {player.groupId && (
-                      <span className="text-xs text-gray-500 ml-1">
+                      <span className="text-xs text-muted-foreground ml-1">
                         [{groups.find(g => g.id === player.groupId)?.name}]
                       </span>
                     )}
@@ -220,7 +220,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Side B (School B) *
             </label>
             <div className="mb-2">
@@ -235,7 +235,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                     setSelectedSideB([]);
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md mb-2"
+                className="w-full px-3 py-2 border border-border rounded-md mb-2"
               >
                 <option value="">Select school or choose players individually</option>
                 {groups.map((group) => (
@@ -245,7 +245,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                 ))}
               </select>
             </div>
-            <div className="border border-gray-300 rounded-sm p-2 max-h-32 overflow-y-auto">
+            <div className="border border-border rounded-sm p-2 max-h-32 overflow-y-auto">
               {players.map((player) => (
                 <label key={player.id} className="flex items-center space-x-2 py-1">
                   <input
@@ -260,7 +260,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                   <span className="text-sm">
                     {player.name} ({player.id})
                     {player.groupId && (
-                      <span className="text-xs text-gray-500 ml-1">
+                      <span className="text-xs text-muted-foreground ml-1">
                         [{groups.find(g => g.id === player.groupId)?.name}]
                       </span>
                     )}
@@ -273,7 +273,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
 
           {formData.matchType === 'tri' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Side C (School C) *
               </label>
               <div className="mb-2">
@@ -289,7 +289,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                       setSelectedSideC([]);
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md mb-2"
+                  className="w-full px-3 py-2 border border-border rounded-md mb-2"
                 >
                   <option value="">Select school or choose players individually</option>
                   {groups.map((group) => (
@@ -299,7 +299,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                   ))}
                 </select>
               </div>
-              <div className="border border-gray-300 rounded-sm p-2 max-h-32 overflow-y-auto">
+              <div className="border border-border rounded-sm p-2 max-h-32 overflow-y-auto">
                 {players.map((player) => (
                   <label key={player.id} className="flex items-center space-x-2 py-1">
                     <input
@@ -316,7 +316,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                     <span className="text-sm">
                       {player.name} ({player.id})
                       {player.groupId && (
-                        <span className="text-xs text-gray-500 ml-1">
+                        <span className="text-xs text-muted-foreground ml-1">
                           [{groups.find(g => g.id === player.groupId)?.name}]
                         </span>
                       )}
@@ -329,21 +329,21 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Duration Slots *
           </label>
           <input
             type="number"
             value={formData.durationSlots}
             onChange={(e) => setFormData({ ...formData, durationSlots: parseInt(e.target.value) || 1 })}
-            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.durationSlots ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-2 py-1.5 border rounded-sm text-sm ${errors.durationSlots ? 'border-red-500' : 'border-border'}`}
             min="1"
           />
           {errors.durationSlots && <p className="text-red-500 text-sm mt-1">{errors.durationSlots}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Preferred Court (optional)
           </label>
           <input
@@ -355,13 +355,13 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                 preferredCourt: e.target.value ? parseInt(e.target.value) : null,
               })
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            className="w-full px-3 py-2 border border-border rounded-md"
             min="1"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Tags (e.g., finals, featured)
           </label>
           <div className="flex gap-2 mb-2">
@@ -375,13 +375,13 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
                   addTag();
                 }
               }}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+              className="flex-1 px-3 py-2 border border-border rounded-md"
               placeholder="Enter tag and press Enter"
             />
             <button
               type="button"
               onClick={addTag}
-              className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-sm text-sm hover:bg-gray-300"
+              className="px-3 py-1.5 bg-muted text-foreground rounded-sm text-sm hover:bg-accent hover:text-accent-foreground"
             >
               Add
             </button>
@@ -409,7 +409,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-sm text-sm hover:bg-gray-300"
+            className="px-3 py-1.5 bg-muted text-foreground rounded-sm text-sm hover:bg-accent hover:text-accent-foreground"
           >
             Cancel
           </button>

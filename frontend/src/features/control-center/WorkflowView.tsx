@@ -82,12 +82,12 @@ export function WorkflowView({
       <div className="flex flex-col min-h-0">
         <div className="flex items-center gap-1 mb-1 flex-shrink-0">
           <span className="w-2 h-2 rounded-full bg-green-500" />
-          <span className="text-xs font-semibold text-gray-700">In Progress</span>
-          <span className="text-xs text-gray-400">({matchesByStatus.started.length})</span>
+          <span className="text-xs font-semibold text-foreground">In Progress</span>
+          <span className="text-xs text-muted-foreground">({matchesByStatus.started.length})</span>
         </div>
         <div className="flex-1 overflow-y-auto space-y-1 pr-1">
           {startedSorted.length === 0 ? (
-            <div className="bg-gray-50 rounded p-2 text-center text-gray-400 text-xs">
+            <div className="bg-muted/40 rounded p-2 text-center text-muted-foreground text-xs">
               None
             </div>
           ) : (
@@ -113,12 +113,12 @@ export function WorkflowView({
       <div className="flex flex-col min-h-0">
         <div className="flex items-center gap-1 mb-1 flex-shrink-0">
           <span className="w-2 h-2 rounded-full bg-blue-500" />
-          <span className="text-xs font-semibold text-gray-700">Up Next</span>
-          <span className="text-xs text-gray-400">({upNextCount})</span>
+          <span className="text-xs font-semibold text-foreground">Up Next</span>
+          <span className="text-xs text-muted-foreground">({upNextCount})</span>
         </div>
         <div className="flex-1 overflow-y-auto space-y-1 pr-1">
           {upNextSorted.length === 0 ? (
-            <div className="bg-gray-50 rounded p-2 text-center text-gray-400 text-xs">
+            <div className="bg-muted/40 rounded p-2 text-center text-muted-foreground text-xs">
               None
             </div>
           ) : (
@@ -145,12 +145,12 @@ export function WorkflowView({
       <div className="flex flex-col min-h-0">
         <div className="flex items-center gap-1 mb-1 flex-shrink-0">
           <span className="w-2 h-2 rounded-full bg-purple-500" />
-          <span className="text-xs font-semibold text-gray-700">Finished</span>
-          <span className="text-xs text-gray-400">({matchesByStatus.finished.length})</span>
+          <span className="text-xs font-semibold text-foreground">Finished</span>
+          <span className="text-xs text-muted-foreground">({matchesByStatus.finished.length})</span>
         </div>
         <div className="flex-1 overflow-y-auto space-y-1 pr-1">
           {finishedSorted.length === 0 ? (
-            <div className="bg-gray-50 rounded p-2 text-center text-gray-400 text-xs">
+            <div className="bg-muted/40 rounded p-2 text-center text-muted-foreground text-xs">
               None
             </div>
           ) : (

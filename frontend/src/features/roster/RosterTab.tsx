@@ -12,6 +12,7 @@
  *   RosterSpreadsheet (detail view — availability, rest, notes)
  */
 import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import {
   DndContext,
   MouseSensor,
@@ -113,7 +114,7 @@ export function RosterTab() {
           onClick={() => void exportRosterXlsx(players, groups, config)}
           disabled={!canExportRoster}
           data-testid="export-roster"
-          className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           ⤓ Export roster XLSX
         </button>
@@ -124,10 +125,10 @@ export function RosterTab() {
         <DndContext sensors={sensors} onDragEnd={onDragEnd}>
           {/* Horizontal school selector */}
           <div
-            className="flex flex-wrap items-center gap-1 rounded border border-gray-200 bg-white px-3 py-2"
+            className="flex flex-wrap items-center gap-1 rounded border border-border bg-card px-3 py-2"
             data-testid="school-picker"
           >
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mr-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mr-2">
               Viewing
             </span>
             {schoolTabs.map((s) => {
@@ -142,12 +143,12 @@ export function RosterTab() {
                     'rounded-full px-3 py-0.5 text-xs font-medium transition-colors',
                     isActive
                       ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                      : 'bg-muted text-foreground hover:bg-muted/70',
                   ].join(' ')}
                 >
                   {s.name}
                   <span
-                    className={`ml-1.5 tabular-nums ${isActive ? 'text-blue-100' : 'text-gray-400'}`}
+                    className={`ml-1.5 tabular-nums ${isActive ? 'text-blue-100' : 'text-muted-foreground'}`}
                   >
                     {s.count}
                   </span>
@@ -164,26 +165,30 @@ export function RosterTab() {
           ) : null}
         </DndContext>
       ) : (
-        <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-500">
+        <div className="rounded border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
           Add a school above to start rostering.
         </div>
       )}
 
       {/* Optional: detail view for fine-grained per-player constraints.
           Collapsed by default to keep the grid front-and-centre. */}
-      <div className="rounded border border-gray-200 bg-white">
+      <div className="rounded border border-border bg-card">
         <button
           type="button"
           onClick={() => setDetailsOpen((v) => !v)}
           aria-expanded={detailsOpen}
           data-testid="roster-details-toggle"
-          className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600 hover:bg-gray-50"
+          className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/50"
         >
           <span>Player details ({players.length}) — availability, rest, notes</span>
-          <span className="text-gray-400">{detailsOpen ? '▴' : '▾'}</span>
+          {detailsOpen ? (
+            <ChevronUp aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
         </button>
         {detailsOpen ? (
-          <div className="border-t border-gray-100">
+          <div className="border-t border-border/60">
             <RosterSpreadsheet />
           </div>
         ) : null}

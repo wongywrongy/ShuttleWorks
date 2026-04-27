@@ -52,3 +52,18 @@ e2e/                    Playwright specs + fixtures
 docker-compose.yml      nginx frontend → backend
 Makefile                make targets
 ```
+
+## Architecture docs
+
+For working in the codebase, start here:
+
+- [`BACKEND.md`](./BACKEND.md) — FastAPI request lifecycle, route map,
+  how to add an endpoint or constraint.
+- [`FRONTEND.md`](./FRONTEND.md) — shell + tabs, Zustand store split,
+  data flow, theme system, how to add a tab.
+- [`src/scheduler_core/README.md`](./src/scheduler_core/README.md) —
+  CP-SAT model: variables, hard constraints, soft penalties.
+
+Each major directory under `frontend/src/` has its own `README.md`
+covering the local conventions (`features/`, `hooks/`, `store/`,
+`api/`, `utils/`, `components/`).

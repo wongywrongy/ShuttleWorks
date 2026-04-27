@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useTournamentState } from '../hooks/useTournamentState';
+import { useAppliedTheme } from '../hooks/useAppliedTheme';
 import { TabBar } from './TabBar';
 import { SolverHud } from '../components/SolverHud';
 import { UnsavedBanner } from '../components/UnsavedBanner';
@@ -29,12 +30,14 @@ const PublicDisplayPage = lazy(() =>
 );
 
 const FALLBACK = (
-  <div className="flex h-full items-center justify-center text-sm text-gray-500">Loading…</div>
+  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>
 );
 
 export function AppShell() {
   // Hydrate from server-side tournament.json on mount + debounced PUTs on change.
   useTournamentState();
+  // Apply the user's theme preference to <html> (adds/removes `.dark`).
+  useAppliedTheme();
   const activeTab = useAppStore((s) => s.activeTab);
   const pushToast = useAppStore((s) => s.pushToast);
 
@@ -70,7 +73,7 @@ export function AppShell() {
   }, [pushToast]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <TabBar />
       <div className="px-2 pt-1">
         <UnsavedBanner />
@@ -83,13 +86,13 @@ export function AppShell() {
           {activeTab === 'schedule' ? <SchedulePage /> : null}
           {activeTab === 'live' ? <MatchControlCenterPage /> : null}
           {activeTab === 'tv' ? (
-            <div className="p-4 text-sm text-gray-600">
+            <div className="p-4 text-sm text-muted-foreground">
               This tab is a preview of the public display.
               {' '}
               <a href="/display" className="text-blue-600 underline">
                 Open fullscreen TV view
               </a>
-              <div className="mt-4 rounded border bg-white">
+              <div className="mt-4 rounded border bg-card">
                 <PublicDisplayPage />
               </div>
             </div>

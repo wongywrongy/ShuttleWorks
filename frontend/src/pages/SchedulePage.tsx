@@ -13,6 +13,8 @@ import { StaleBanner } from '../features/schedule/StaleBanner';
 import { computeConstraintViolations } from '../utils/constraintChecker';
 import { formatSlotTime } from '../utils/timeUtils';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Download } from 'lucide-react';
+import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig } from '../api/dto';
 
 type TableView = 'time' | 'court';
@@ -86,7 +88,7 @@ function MatchesTable({
   }, [assignments]);
 
   if (assignments.length === 0) {
-    return <div className="text-xs text-gray-400 italic p-2">No matches scheduled yet</div>;
+    return <div className="text-xs text-muted-foreground italic p-2">No matches scheduled yet</div>;
   }
 
   return (
@@ -97,8 +99,8 @@ function MatchesTable({
           onClick={() => onViewChange('time')}
           className={`px-2 py-0.5 text-xs rounded ${
             view === 'time'
-              ? 'bg-gray-700 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
           }`}
         >
           By Time
@@ -107,8 +109,8 @@ function MatchesTable({
           onClick={() => onViewChange('court')}
           className={`px-2 py-0.5 text-xs rounded ${
             view === 'court'
-              ? 'bg-gray-700 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
           }`}
         >
           By Court
@@ -119,24 +121,24 @@ function MatchesTable({
       <div className="flex-1 overflow-auto">
         {view === 'time' ? (
           <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-gray-100">
+            <thead className="sticky top-0 bg-muted">
               <tr>
-                <th className="text-left px-2 py-1 font-medium text-gray-600 w-14">Time</th>
-                <th className="text-left px-2 py-1 font-medium text-gray-600 w-8">Ct</th>
-                <th className="text-left px-2 py-1 font-medium text-gray-600 w-12">Match</th>
-                <th className="text-left px-2 py-1 font-medium text-gray-600">Players</th>
+                <th className="text-left px-2 py-1 font-semibold text-muted-foreground w-14">Time</th>
+                <th className="text-left px-2 py-1 font-semibold text-muted-foreground w-8">Ct</th>
+                <th className="text-left px-2 py-1 font-semibold text-muted-foreground w-12">Match</th>
+                <th className="text-left px-2 py-1 font-semibold text-muted-foreground">Players</th>
               </tr>
             </thead>
             <tbody>
               {byTime.flatMap(({ slotId: _slotId, time, assignments: slotAssignments }) =>
                 slotAssignments.map((a, idx) => (
-                  <tr key={a.matchId} className={`hover:bg-gray-50 ${idx === 0 ? 'border-t-2 border-gray-300' : 'border-t border-gray-100'}`}>
-                    <td className="px-2 py-1 text-gray-500 font-mono whitespace-nowrap">
+                  <tr key={a.matchId} className={`hover:bg-muted/50 ${idx === 0 ? 'border-t-2 border-border' : 'border-t border-border/60'}`}>
+                    <td className="px-2 py-1 text-muted-foreground font-mono whitespace-nowrap">
                       {idx === 0 ? time : ''}
                     </td>
-                    <td className="px-2 py-1 text-gray-500">C{a.courtId}</td>
-                    <td className="px-2 py-1 font-medium text-gray-700">{getMatchLabel(a.matchId)}</td>
-                    <td className="px-2 py-1 text-gray-600 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
+                    <td className="px-2 py-1 text-muted-foreground">C{a.courtId}</td>
+                    <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
+                    <td className="px-2 py-1 text-foreground/80 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
                       {getPlayerNames(a.matchId)}
                     </td>
                   </tr>
@@ -146,24 +148,24 @@ function MatchesTable({
           </table>
         ) : (
           <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-gray-100">
+            <thead className="sticky top-0 bg-muted">
               <tr>
-                <th className="text-left px-2 py-1 font-medium text-gray-600 w-12">Court</th>
-                <th className="text-left px-2 py-1 font-medium text-gray-600 w-14">Time</th>
-                <th className="text-left px-2 py-1 font-medium text-gray-600 w-12">Match</th>
-                <th className="text-left px-2 py-1 font-medium text-gray-600">Players</th>
+                <th className="text-left px-2 py-1 font-semibold text-muted-foreground w-12">Court</th>
+                <th className="text-left px-2 py-1 font-semibold text-muted-foreground w-14">Time</th>
+                <th className="text-left px-2 py-1 font-semibold text-muted-foreground w-12">Match</th>
+                <th className="text-left px-2 py-1 font-semibold text-muted-foreground">Players</th>
               </tr>
             </thead>
             <tbody>
               {byCourt.flatMap(({ courtId, assignments: courtAssignments }) =>
                 courtAssignments.map((a, idx) => (
-                  <tr key={a.matchId} className={`hover:bg-gray-50 ${idx === 0 ? 'border-t-2 border-gray-300' : 'border-t border-gray-100'}`}>
-                    <td className="px-2 py-1 text-gray-600 font-medium">
+                  <tr key={a.matchId} className={`hover:bg-muted/50 ${idx === 0 ? 'border-t-2 border-border' : 'border-t border-border/60'}`}>
+                    <td className="px-2 py-1 text-foreground font-medium">
                       {idx === 0 ? `C${courtId}` : ''}
                     </td>
-                    <td className="px-2 py-1 text-gray-500 font-mono">{formatSlotTime(a.slotId, config)}</td>
-                    <td className="px-2 py-1 font-medium text-gray-700">{getMatchLabel(a.matchId)}</td>
-                    <td className="px-2 py-1 text-gray-600 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
+                    <td className="px-2 py-1 text-muted-foreground font-mono">{formatSlotTime(a.slotId, config)}</td>
+                    <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
+                    <td className="px-2 py-1 text-foreground/80 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
                       {getPlayerNames(a.matchId)}
                     </td>
                   </tr>
@@ -257,7 +259,7 @@ export function SchedulePage() {
   if (configLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading tournament configuration...</div>
+        <div className="text-muted-foreground">Loading tournament configuration...</div>
       </div>
     );
   }
@@ -298,26 +300,26 @@ export function SchedulePage() {
       <StaleBanner />
       {/* Alerts */}
       {needsConfig && (
-        <div className="p-2 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded text-xs flex-shrink-0">
+        <div className="p-2 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded text-xs flex-shrink-0 dark:bg-yellow-500/10 dark:border-yellow-500/30 dark:text-yellow-200">
           <span className="font-medium">Config needed:</span>{' '}
-          <Link to="/setup" className="underline hover:text-yellow-900">Tournament Setup</Link>
+          <Link to="/setup" className="underline hover:text-yellow-900 dark:hover:text-yellow-100">Tournament Setup</Link>
         </div>
       )}
 
       {error && (
-        <div className="p-2 bg-red-50 border border-red-200 text-red-700 rounded text-xs flex-shrink-0">
+        <div className="p-2 bg-red-50 border border-red-200 text-red-700 rounded text-xs flex-shrink-0 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-200">
           {error}
         </div>
       )}
 
       {schedule?.status === 'infeasible' && (
-        <div className="p-2 bg-red-50 border border-red-200 rounded text-xs flex-shrink-0">
-          <span className="font-medium text-red-800">Infeasible:</span>{' '}
-          <span className="text-red-700">{schedule.infeasibleReasons?.length || 0} constraint violations.</span>
+        <div className="p-2 bg-red-50 border border-red-200 rounded text-xs flex-shrink-0 dark:bg-red-500/10 dark:border-red-500/30">
+          <span className="font-medium text-red-800 dark:text-red-200">Infeasible:</span>{' '}
+          <span className="text-red-700 dark:text-red-300">{schedule.infeasibleReasons?.length || 0} constraint violations.</span>
           {schedule.infeasibleReasons && schedule.infeasibleReasons.length > 0 && (
             <details className="mt-1">
-              <summary className="cursor-pointer text-red-600 hover:text-red-800">View details</summary>
-              <ul className="mt-1 pl-3 text-red-600 max-h-24 overflow-y-auto">
+              <summary className="cursor-pointer text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200">View details</summary>
+              <ul className="mt-1 pl-3 text-red-600 max-h-24 overflow-y-auto dark:text-red-300">
                 {schedule.infeasibleReasons.slice(0, 10).map((reason, i) => (
                   <li key={i}>{reason}</li>
                 ))}
@@ -336,9 +338,9 @@ export function SchedulePage() {
           {/* Main area - Grid + Matches list */}
           <div className="flex-1 min-w-0 flex flex-col gap-2">
             {/* Grid container */}
-            <div className="bg-white rounded border border-gray-200 flex flex-col overflow-hidden">
+            <div className="bg-card rounded border border-border flex flex-col overflow-hidden">
               {/* Header with metrics and actions */}
-              <div className="px-2 py-1.5 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+              <div className="px-2 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
                 <LiveMetricsBar
                   elapsed={elapsed}
                   solutionCount={solutionCount}
@@ -352,9 +354,15 @@ export function SchedulePage() {
                     onClick={() => void exportScheduleXlsx(schedule, matches, players, config)}
                     disabled={!schedule || schedule.assignments.length === 0}
                     data-testid="export-schedule"
-                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    title={
+                      !schedule || schedule.assignments.length === 0
+                        ? 'Generate a schedule first'
+                        : 'Download schedule as XLSX'
+                    }
+                    className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
                   >
-                    ⤓ Export XLSX
+                    <Download aria-hidden="true" className="h-4 w-4" />
+                    Export XLSX
                   </button>
                   <ScheduleActions
                     onGenerate={handleGenerate}
@@ -389,10 +397,10 @@ export function SchedulePage() {
             </div>
 
             {/* Matches table - below grid */}
-            <div className="flex-1 min-h-0 bg-white rounded border border-gray-200 flex flex-col overflow-hidden">
-              <div className="px-2 py-1.5 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Matches</span>
-                <span className="text-xs text-gray-400">{displayAssignments.length}/{matches.length}</span>
+            <div className="flex-1 min-h-0 bg-card rounded border border-border flex flex-col overflow-hidden">
+              <div className="px-2 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Matches</span>
+                <span className="text-xs text-muted-foreground">{displayAssignments.length}/{matches.length}</span>
               </div>
               <div className="flex-1 min-h-0 p-2">
                 <MatchesTable
@@ -408,9 +416,9 @@ export function SchedulePage() {
           </div>
 
           {/* Log - sidebar */}
-          <div className="w-72 flex-shrink-0 bg-white rounded border border-gray-200 flex flex-col overflow-hidden">
-            <div className="px-2 py-1.5 border-b border-gray-200 flex-shrink-0">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Log</span>
+          <div className="w-72 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
+            <div className="px-2 py-1.5 border-b border-border flex-shrink-0">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Log</span>
             </div>
             <div className="flex-1 min-h-0 p-2 overflow-auto">
               <SolverProgressLog
@@ -426,19 +434,19 @@ export function SchedulePage() {
         </div>
       ) : isOptimizing && !hasLiveProgress ? (
         /* Starting optimization spinner */
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 bg-white rounded border border-gray-200">
-          <div className="w-8 h-8 border-3 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-          <div className="text-gray-500 text-sm">Starting optimization...</div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 bg-card rounded border border-border">
+          <div className="w-8 h-8 border-[3px] border-border border-t-primary rounded-full animate-spin"></div>
+          <div className="text-muted-foreground text-sm">Starting optimization...</div>
         </div>
       ) : (
         /* Empty state */
-        <div className="flex-1 flex flex-col items-center justify-center bg-white rounded border border-gray-200">
-          <div className="text-gray-400 mb-3">
+        <div className="flex-1 flex flex-col items-center justify-center bg-card rounded border border-border">
+          <div className="text-muted-foreground mb-3">
             <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
-          <p className="text-sm text-gray-600 mb-3">
+          <p className="text-sm text-muted-foreground mb-3">
             {needsConfig ? 'Configure tournament first.' : 'No schedule generated.'}
           </p>
           <ScheduleActions

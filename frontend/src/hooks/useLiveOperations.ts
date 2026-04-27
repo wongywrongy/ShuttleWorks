@@ -1,6 +1,22 @@
 /**
- * Hook for live operations - manages actual times, impact analysis, and re-optimization
- * Used for real-time tournament management where matches may run longer than scheduled
+ * Hook for live operations during a running tournament.
+ *
+ * Two responsibilities:
+ *
+ *  1. **Drag-target validation** — given a ``ProposedMove`` (matchId,
+ *     target slotId, target courtId), call ``/schedule/validate`` and
+ *     surface hard-rule violations *without* re-running the solver.
+ *     Used by ``DragGantt`` to flash the drop zone red/green during a
+ *     drag.
+ *  2. **Impact analysis** — when a match overruns its scheduled
+ *     duration, compute which downstream matches share players or
+ *     courts and therefore need to slide. Returned as ``ImpactAnalysis``
+ *     entries so the UI can show "X matches affected, suggest
+ *     re-optimize" before the operator commits.
+ *
+ *  Cascade detection is intentionally shallow (one hop) — deeper
+ *  analysis hits the solver itself via re-optimisation rather than
+ *  approximating it in the client.
  */
 import { useCallback, useMemo, useState } from 'react';
 import { useAppStore } from '../store/appStore';

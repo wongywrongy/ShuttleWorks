@@ -136,9 +136,9 @@ export function SolverProgressLog({
       case 'stats':
         return 'text-blue-600 font-medium';
       case 'progress':
-        return 'text-gray-500 italic';
+        return 'text-muted-foreground italic';
       default:
-        return 'text-gray-600';
+        return 'text-muted-foreground';
     }
   };
 
@@ -148,11 +148,11 @@ export function SolverProgressLog({
       className="h-full overflow-y-auto text-xs font-mono space-y-0.5"
     >
       {logs.length === 0 ? (
-        <div className="text-gray-400 italic">Waiting for solver...</div>
+        <div className="text-muted-foreground italic">Waiting for solver...</div>
       ) : (
         logs.map((entry) => (
           <div key={entry.id} className="flex gap-1.5">
-            <span className="text-gray-400 flex-shrink-0 text-[10px]">
+            <span className="text-muted-foreground flex-shrink-0 text-[10px]">
               {new Date(entry.timestamp).toLocaleTimeString('en-US', {
                 hour12: false,
                 hour: '2-digit',

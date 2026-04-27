@@ -16,7 +16,6 @@ import type {
   SolverPhaseEvent,
   ProposedMove,
   ValidationResponseDTO,
-  MatchGenerationRule,
   TournamentStateDTO,
   BackupListDTO,
   BackupCreatedDTO,
@@ -152,6 +151,18 @@ class ApiClient {
       };
 
       let reconnectToastId: string | null = null;
+      let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
+      // The caller's AbortSignal should also tear down the reader so an
+      // external cancel (e.g. the user starts a new solve mid-stream)
+      // doesn't leak a dangling reader / listener.
+      const onExternalAbort = () => {
+        if (activeReader) {
+          void activeReader.cancel().catch(() => {});
+          activeReader = null;
+        }
+      };
+      abortSignal?.addEventListener('abort', onExternalAbort, { once: true });
 
       startFetch()
         .then(async (response) => {
@@ -165,6 +176,7 @@ class ApiClient {
           }
           const reader = response.body?.getReader();
           if (!reader) throw new Error('Response body is not readable');
+          activeReader = reader;
 
           const decoder = new TextDecoder();
           let buffer = '';
@@ -224,6 +236,12 @@ class ApiClient {
           if (err.name === 'AbortError') {
             reject(err);
             return;
+          }
+          // Tear down the reader on any non-abort error so we never leak
+          // a half-drained stream into the next attempt.
+          if (activeReader) {
+            void activeReader.cancel().catch(() => {});
+            activeReader = null;
           }
           // Mid-stream failure: surface a Retry affordance so the user can
           // rerun the solve after fixing the network/backend. We deliberately
@@ -396,13 +414,6 @@ class ApiClient {
     return response.data;
   }
 
-  /**
-   * Generate matches from a rule (placeholder - not yet implemented on backend)
-   * @throws Error - Feature not yet implemented
-   */
-  async generateMatchesFromRule(_tournamentId: string, _rule: MatchGenerationRule): Promise<MatchDTO[]> {
-    throw new Error('Auto-match generation is not yet implemented. Please create matches manually.');
-  }
 }
 
 export const apiClient = new ApiClient();

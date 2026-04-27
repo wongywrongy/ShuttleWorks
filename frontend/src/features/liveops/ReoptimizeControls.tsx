@@ -47,7 +47,7 @@ export function ReoptimizeControls({
         disabled={isReoptimizing || !hasImpactedMatches}
         className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
           isReoptimizing || !hasImpactedMatches
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            ? 'bg-muted text-muted-foreground cursor-not-allowed'
             : 'bg-blue-600 text-white hover:bg-blue-700'
         }`}
       >

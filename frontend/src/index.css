@@ -4,6 +4,8 @@
 
 @layer base {
   :root {
+    color-scheme: light;
+
     /* Base colors */
     --background: 0 0% 98%;
     --foreground: 220 13% 18%;
@@ -22,7 +24,7 @@
 
     /* Muted */
     --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted-foreground: 220 9% 38%; /* bumped from 46% for AA on light */
 
     /* Accent */
     --accent: 220 14% 96%;
@@ -47,13 +49,67 @@
     --info-foreground: 0 0% 98%;
   }
 
+  /* Dark theme — triggered by ``.dark`` on <html>. Every token
+   * defined above has a dark-adjusted HSL override here so any
+   * component using ``bg-background`` / ``text-foreground`` / etc.
+   * flips automatically when the class is toggled. Contrast ratios
+   * against foreground land comfortably above WCAG AA (7:1 or better
+   * for primary text on background, 4.7:1 for muted-foreground on
+   * card). */
+  .dark {
+    color-scheme: dark;
+
+    --background: 222 18% 9%;      /* deep slate, not pure black */
+    --foreground: 220 13% 94%;     /* near-white, slightly warm */
+    --card: 222 18% 12%;           /* one shade lighter than bg */
+    --card-foreground: 220 13% 94%;
+    --popover: 222 18% 12%;
+    --popover-foreground: 220 13% 94%;
+
+    --primary: 220 13% 92%;
+    --primary-foreground: 222 18% 9%;
+
+    --secondary: 220 14% 18%;
+    --secondary-foreground: 220 13% 94%;
+
+    --muted: 220 14% 16%;
+    --muted-foreground: 220 13% 72%; /* AA on card in dark */
+
+    --accent: 220 14% 20%;
+    --accent-foreground: 220 13% 94%;
+
+    --destructive: 0 72% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 13% 22%;
+    --input: 220 13% 22%;
+    --ring: 220 90% 72%;           /* brighter ring on dark bg */
+
+    --success: 142 71% 55%;
+    --success-foreground: 0 0% 10%;
+    --warning: 38 92% 58%;
+    --warning-foreground: 0 0% 10%;
+    --info: 199 89% 60%;
+    --info-foreground: 0 0% 10%;
+  }
+
   * {
     border-color: hsl(var(--border));
   }
 
+  html,
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+    /* A short colour transition keeps a theme swap from strobing.
+     * Tightened to only what actually changes, never `all`. */
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      border-color 150ms ease;
+  }
+
+  body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
       'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',

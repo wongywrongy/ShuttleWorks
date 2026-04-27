@@ -33,11 +33,11 @@ export function TournamentStatusBar() {
 
   // Determine schedule status
   const getScheduleStatus = () => {
-    if (!schedule) return { text: 'Not generated', color: 'text-gray-500' };
+    if (!schedule) return { text: 'Not generated', color: 'text-muted-foreground' };
     if (schedule.status === 'optimal') return { text: 'Optimal', color: 'text-green-600' };
     if (schedule.status === 'feasible') return { text: 'Feasible', color: 'text-blue-600' };
     if (schedule.status === 'infeasible') return { text: 'Infeasible', color: 'text-red-600' };
-    return { text: 'Unknown', color: 'text-gray-500' };
+    return { text: 'Unknown', color: 'text-muted-foreground' };
   };
 
   const scheduleStatus = getScheduleStatus();
@@ -90,18 +90,18 @@ export function TournamentStatusBar() {
         <div className="flex flex-wrap items-center gap-4 text-sm">
           {/* Tournament Config */}
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-700">CONFIG:</span>
-            <span className="text-gray-600">
+            <span className="font-semibold text-foreground">CONFIG:</span>
+            <span className="text-muted-foreground">
               {config.dayStart}-{config.dayEnd} | {config.courtCount} courts | {config.intervalMinutes}min slots
             </span>
           </div>
 
-          <div className="hidden sm:block h-4 w-px bg-gray-300" />
+          <div className="hidden sm:block h-4 w-px bg-border" />
 
           {/* Schools & Players */}
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-700">ROSTER:</span>
-            <span className="text-gray-600">
+            <span className="font-semibold text-foreground">ROSTER:</span>
+            <span className="text-muted-foreground">
               {totalSchools} {totalSchools === 1 ? 'school' : 'schools'}, {totalPlayers} {totalPlayers === 1 ? 'player' : 'players'}
               {coverage.total > 0 && (
                 <span className={`ml-1 ${coveragePercent >= 80 ? 'text-green-600' : coveragePercent >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
@@ -111,22 +111,22 @@ export function TournamentStatusBar() {
             </span>
           </div>
 
-          <div className="hidden sm:block h-4 w-px bg-gray-300" />
+          <div className="hidden sm:block h-4 w-px bg-border" />
 
           {/* Matches */}
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-700">MATCHES:</span>
-            <span className="text-gray-600">
+            <span className="font-semibold text-foreground">MATCHES:</span>
+            <span className="text-muted-foreground">
               {totalMatches} {totalMatches === 1 ? 'match' : 'matches'}
             </span>
           </div>
 
-          <div className="hidden sm:block h-4 w-px bg-gray-300" />
+          <div className="hidden sm:block h-4 w-px bg-border" />
 
           {/* Schedule Status */}
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-700">SCHEDULE:</span>
-            <span className="text-gray-600">
+            <span className="font-semibold text-foreground">SCHEDULE:</span>
+            <span className="text-muted-foreground">
               <span className={`font-medium ${scheduleStatus.color}`}>{scheduleStatus.text}</span>
             </span>
           </div>
@@ -134,7 +134,7 @@ export function TournamentStatusBar() {
           {/* Warnings */}
           {warnings.length > 0 && (
             <>
-              <div className="hidden sm:block h-4 w-px bg-gray-300" />
+              <div className="hidden sm:block h-4 w-px bg-border" />
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-yellow-600">WARNINGS:</span>
                 <span className="text-yellow-700 font-medium">

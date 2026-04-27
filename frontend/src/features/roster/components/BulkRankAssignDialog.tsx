@@ -137,10 +137,10 @@ export function BulkRankAssignDialog({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded bg-white p-4 text-left align-middle shadow transition-all">
+              <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded bg-card p-4 text-left align-middle shadow transition-all">
                 <Dialog.Title
                   as="h3"
-                  className="text-lg font-medium leading-6 text-gray-900"
+                  className="text-lg font-medium leading-6 text-foreground"
                 >
                   Assign Ranks to {selectedPlayerIds.length} Player{selectedPlayerIds.length !== 1 ? 's' : ''}
                 </Dialog.Title>
@@ -148,7 +148,7 @@ export function BulkRankAssignDialog({
                 <div className="mt-3">
                   {/* Mode Selection */}
                   <RadioGroup value={mode} onChange={setMode}>
-                    <RadioGroup.Label className="text-sm font-medium text-gray-700">
+                    <RadioGroup.Label className="text-sm font-medium text-foreground">
                       Mode:
                     </RadioGroup.Label>
                     <div className="mt-2 grid grid-cols-3 gap-2">
@@ -158,8 +158,8 @@ export function BulkRankAssignDialog({
                           value={m.value}
                           className={({ active, checked }) =>
                             `${active ? 'ring-2 ring-blue-500 ring-offset-2' : ''}
-                            ${checked ? 'bg-blue-600 text-white' : 'bg-white text-gray-900'}
-                            relative flex cursor-pointer rounded-sm border border-gray-300 px-2 py-1.5 shadow-sm focus:outline-none`
+                            ${checked ? 'bg-blue-600 text-white' : 'bg-card text-foreground'}
+                            relative flex cursor-pointer rounded-sm border border-border px-2 py-1.5 shadow-sm focus:outline-none`
                           }
                         >
                           {({ checked }) => (
@@ -168,13 +168,13 @@ export function BulkRankAssignDialog({
                                 <div className="text-sm">
                                   <RadioGroup.Label
                                     as="p"
-                                    className={`font-medium ${checked ? 'text-white' : 'text-gray-900'}`}
+                                    className={`font-medium ${checked ? 'text-white' : 'text-foreground'}`}
                                   >
                                     {m.label}
                                   </RadioGroup.Label>
                                   <RadioGroup.Description
                                     as="span"
-                                    className={`inline text-xs ${checked ? 'text-blue-100' : 'text-gray-500'}`}
+                                    className={`inline text-xs ${checked ? 'text-blue-100' : 'text-muted-foreground'}`}
                                   >
                                     {m.description}
                                   </RadioGroup.Description>
@@ -204,7 +204,7 @@ export function BulkRankAssignDialog({
 
                   {/* Rank Selection */}
                   <div className="mt-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">
                       Select Ranks:
                     </label>
                     <div className="max-h-96 overflow-y-auto">
@@ -217,7 +217,7 @@ export function BulkRankAssignDialog({
                       />
                     </div>
                     {selectedRanks.length > 0 && (
-                      <p className="mt-2 text-sm text-gray-600">
+                      <p className="mt-2 text-sm text-muted-foreground">
                         {selectedRanks.length} rank{selectedRanks.length !== 1 ? 's' : ''} selected: {selectedRanks.join(', ')}
                       </p>
                     )}
@@ -227,7 +227,7 @@ export function BulkRankAssignDialog({
                 <div className="mt-4 flex gap-2 justify-end">
                   <button
                     type="button"
-                    className="inline-flex justify-center rounded-sm border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="inline-flex justify-center rounded-sm border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onClick={onClose}
                   >
                     Cancel

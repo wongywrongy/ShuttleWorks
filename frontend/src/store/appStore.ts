@@ -1,6 +1,19 @@
 /**
- * Main application store using Zustand
- * Manages all app state with localStorage persistence
+ * Tournament-scoped application store.
+ *
+ * Persisted to the server-side snapshot at ``/tournament-state`` via
+ * ``useTournamentState`` (debounced PUTs); the ``partialize`` block
+ * below is the authoritative allowlist of fields that ride along with
+ * import/export. Ephemeral fields (``solverHud``, ``pendingPin``,
+ * ``lastValidation``, ``isGenerating``, ``toasts``, …) are intentionally
+ * excluded so a refresh doesn't surface stale solver state.
+ *
+ * Per-device preferences (currently just theme) live in a separate
+ * store, ``preferencesStore.ts``, with its own localStorage key so a
+ * tournament import never wipes them.
+ *
+ * For the slice map and conventions, see
+ * ``frontend/src/store/README.md``.
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -283,7 +296,32 @@ export const useAppStore = create<AppState>()(
       // Edits no longer nuke the schedule — they mark it stale. The stored
       // schedule remains visible (with a "stale" banner) until the user
       // explicitly re-solves or dismisses.
-      setConfig: (config) => set({ config, scheduleIsStale: true }),
+      //
+      // Scoring-only fields (scoringFormat, setsToWin, pointsPerSet,
+      // deuceEnabled) don't affect the solver — changing them should not
+      // flag the schedule as stale. Only diff across scheduling-relevant
+      // fields before toggling the stale bit.
+      setConfig: (config) =>
+        set((state) => {
+          const prev = state.config;
+          if (!prev) return { config, scheduleIsStale: state.scheduleIsStale };
+          const SCORING_ONLY_KEYS: Array<keyof TournamentConfig> = [
+            'scoringFormat',
+            'setsToWin',
+            'pointsPerSet',
+            'deuceEnabled',
+          ];
+          const changedKeys = (Object.keys(config) as Array<keyof TournamentConfig>).filter(
+            (k) => JSON.stringify(config[k]) !== JSON.stringify(prev[k]),
+          );
+          const schedulingFieldsChanged = changedKeys.some(
+            (k) => !SCORING_ONLY_KEYS.includes(k),
+          );
+          return {
+            config,
+            scheduleIsStale: schedulingFieldsChanged ? true : state.scheduleIsStale,
+          };
+        }),
 
       // Group actions
       addGroup: (group) =>

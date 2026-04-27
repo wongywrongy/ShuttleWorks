@@ -1,5 +1,7 @@
 import { useAppStore, type AppTab } from '../store/appStore';
 import { AppStatusPopover } from '../components/AppStatusPopover';
+import { ThemeToggle } from '../components/ThemeToggle';
+import { INTERACTIVE_BASE } from '../lib/utils';
 
 type TabDef = { id: AppTab; label: string; hint?: string };
 
@@ -26,10 +28,10 @@ export function TabBar() {
   return (
     <nav
       aria-label="Tournament scheduler tabs"
-      className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white px-4 h-12"
+      className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-card px-4 h-12"
     >
       <div className="flex items-center gap-1">
-        <span className="mr-3 text-sm font-semibold text-gray-900">
+        <span className="mr-3 text-sm font-semibold text-card-foreground">
           Tournament Scheduler
         </span>
         {TABS.map((tab) => {
@@ -42,14 +44,25 @@ export function TabBar() {
               disabled={isDisabled}
               onClick={() => setActiveTab(tab.id)}
               aria-current={isActive ? 'page' : undefined}
+              aria-disabled={isDisabled || undefined}
+              title={
+                isDisabled
+                  ? tab.id === 'matches'
+                    ? 'Add players first'
+                    : tab.id === 'schedule' || tab.id === 'live'
+                      ? 'Create matches first'
+                      : undefined
+                  : undefined
+              }
               data-testid={`tab-${tab.id}`}
               className={[
-                'rounded px-3 py-1.5 text-sm font-medium transition-colors',
+                INTERACTIVE_BASE,
+                'rounded px-3 py-1.5 text-sm font-medium',
                 isActive
-                  ? 'bg-blue-100 text-blue-700'
+                  ? 'bg-blue-100 text-blue-700 shadow-inner dark:bg-blue-500/15 dark:text-blue-300'
                   : isDisabled
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                    ? 'text-muted-foreground/50'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
               ].join(' ')}
             >
               {tab.label}
@@ -57,7 +70,10 @@ export function TabBar() {
           );
         })}
       </div>
-      <AppStatusPopover />
+      <div className="flex items-center gap-2">
+        <ThemeToggle />
+        <AppStatusPopover />
+      </div>
     </nav>
   );
 }

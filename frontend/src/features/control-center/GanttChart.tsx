@@ -4,7 +4,8 @@
  * Delayed matches get a yellow ring to stand out
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
-import { calculateTotalSlots, formatSlotTime } from '../../utils/timeUtils';
+import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../utils/timeUtils';
+import type { TrafficLightResult } from '../../utils/trafficLight';
 import type {
   ScheduleDTO,
   MatchDTO,
@@ -22,32 +23,45 @@ interface GanttChartProps {
   selectedMatchId?: string | null;
   onMatchSelect: (matchId: string) => void;
   impactedMatchIds?: string[];
+  /** Per-match traffic-light result so the grid can surface conflicts
+   *  (player resting / blocked) as a visible ring on still-actionable
+   *  blocks. The rows/cards already surface this, but operators working
+   *  from the Gantt view were missing it.
+   */
+  trafficLights?: Map<string, TrafficLightResult>;
 }
 
-const SLOT_WIDTH = 48;
+// Slot width chosen so that even when a court has TWO overlapping
+// matches sharing the slot (each block getting SLOT_WIDTH/2 under the
+// sub-lane packing rule), every block still gets enough horizontal
+// room to show a 4-character event code like "MS17" without clipping.
+// 96 ÷ 2 = 48 px per half-block, which matches the pre-overlap
+// single-block width and is proven to fit a 4-char code comfortably
+// at text-[11px].
+const SLOT_WIDTH = 96;
 const ROW_HEIGHT = 32;
 
 // Status-based colors - intuitive and distinct
 const STATUS_STYLES = {
   scheduled: {
-    bg: 'bg-gray-100',
-    border: 'border-gray-300',
-    text: 'text-gray-600',
+    bg: 'bg-muted dark:bg-gray-500/15',
+    border: 'border-border dark:border-gray-500/40',
+    text: 'text-muted-foreground dark:text-gray-100',
   },
   called: {
-    bg: 'bg-blue-100',
-    border: 'border-blue-400',
-    text: 'text-blue-700',
+    bg: 'bg-blue-100 dark:bg-blue-500/15',
+    border: 'border-blue-400 dark:border-blue-500/40',
+    text: 'text-blue-700 dark:text-blue-200',
   },
   started: {
-    bg: 'bg-green-200',
-    border: 'border-green-500',
-    text: 'text-green-800',
+    bg: 'bg-green-200 dark:bg-emerald-500/15',
+    border: 'border-green-500 dark:border-emerald-500/40',
+    text: 'text-green-800 dark:text-emerald-200',
   },
   finished: {
-    bg: 'bg-gray-50',
-    border: 'border-gray-200',
-    text: 'text-gray-400',
+    bg: 'bg-muted/40 dark:bg-gray-500/10',
+    border: 'border-border dark:border-gray-500/30',
+    text: 'text-muted-foreground dark:text-muted-foreground',
   },
 };
 
@@ -66,6 +80,7 @@ export function GanttChart({
   selectedMatchId,
   onMatchSelect,
   impactedMatchIds = [],
+  trafficLights,
 }: GanttChartProps) {
   const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
   const impactedSet = useMemo(() => new Set(impactedMatchIds), [impactedMatchIds]);
@@ -107,12 +122,66 @@ export function GanttChart({
       courtList.push(assignment);
       byCourtMap.set(effectiveCourtId, courtList);
     }
-    // Sort by time
+    // Sort by the *rendered* slot so a later-starting match renders
+    // after earlier ones on the same court.
     byCourtMap.forEach((assignments) => {
-      assignments.sort((a, b) => a.slotId - b.slotId);
+      assignments.sort((a, b) => {
+        const ra = getRenderSlot(a, matchStates[a.matchId], config);
+        const rb = getRenderSlot(b, matchStates[b.matchId], config);
+        return ra.slotId - rb.slotId || a.slotId - b.slotId;
+      });
     });
     return byCourtMap;
-  }, [schedule.assignments, config.courtCount, matchStates]);
+  }, [schedule.assignments, config, config.courtCount, matchStates]);
+
+  // Horizontal sub-lane packing. When matches on the same court
+  // overlap in time (e.g. a late-starting match drifts into the next
+  // scheduled slot), we keep the court row at its normal 32 px height
+  // and split the overlap window *horizontally* — each overlapping
+  // block gets 1/N of the slot width and sits side-by-side. No lane
+  // is hidden; labels truncate a bit under overlap but every match is
+  // reachable.
+  //
+  // Each block's ``groupSize`` is the max number of blocks that were
+  // simultaneously active on this court at any point during the
+  // block's lifetime. A 1-block group keeps full width; a 2-block
+  // group halves; a 3-block group thirds. The block's ``lane`` is the
+  // lowest unused horizontal lane at the moment it was placed.
+  const packing = useMemo(() => {
+    const laneByMatchId = new Map<string, number>();
+    const groupSizeByMatchId = new Map<string, number>();
+    courtAssignments.forEach((assignments) => {
+      let active: { matchId: string; lane: number; end: number }[] = [];
+      for (const a of assignments) {
+        const r = getRenderSlot(a, matchStates[a.matchId], config);
+        const start = r.slotId;
+        const end = start + r.durationSlots;
+
+        // Prune ended blocks so their lane indices free up. Their
+        // group-size stamps have already been updated in prior
+        // iterations (see the "max-concurrent" bump below).
+        active = active.filter((x) => x.end > start);
+
+        // Lowest unused lane index for the new block.
+        const used = new Set(active.map((x) => x.lane));
+        let lane = 0;
+        while (used.has(lane)) lane++;
+        laneByMatchId.set(a.matchId, lane);
+
+        active.push({ matchId: a.matchId, lane, end });
+
+        // Stamp the CURRENT group size onto every still-active block.
+        // By `max`, a block that was once part of a 3-block group
+        // keeps size=3 even after two of its neighbours finish.
+        const size = active.length;
+        for (const x of active) {
+          const prior = groupSizeByMatchId.get(x.matchId) ?? 1;
+          if (size > prior) groupSizeByMatchId.set(x.matchId, size);
+        }
+      }
+    });
+    return { laneByMatchId, groupSizeByMatchId };
+  }, [courtAssignments, matchStates, config]);
 
   // Track state changes for animation
   useEffect(() => {
@@ -167,13 +236,13 @@ export function GanttChart({
       <div className="overflow-x-auto">
         <div className="min-w-max">
           {/* Time header */}
-          <div className="flex border-b border-gray-200">
-            <div className="w-10 flex-shrink-0 px-1 py-0.5 bg-gray-50 text-xs text-gray-500" />
+          <div className="flex border-b border-border">
+            <div className="w-10 flex-shrink-0 px-1 py-0.5 bg-card text-xs text-muted-foreground" />
             {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
               <div
                 key={slot}
                 style={{ width: SLOT_WIDTH }}
-                className={`flex-shrink-0 px-0.5 py-0.5 text-center text-[10px] border-l border-gray-100 bg-gray-50 text-gray-400 ${
+                className={`flex-shrink-0 px-0.5 py-0.5 text-center text-[10px] border-l border-border bg-card text-muted-foreground ${
                   slot === currentSlot ? 'bg-blue-50 text-blue-600 font-medium' : ''
                 }`}
               >
@@ -184,8 +253,8 @@ export function GanttChart({
 
           {/* Court rows */}
           {courts.map(courtId => (
-            <div key={courtId} className="flex border-b border-gray-100">
-              <div className="w-10 flex-shrink-0 px-1 bg-gray-50 text-xs font-medium text-gray-600 flex items-center">
+            <div key={courtId} className="flex border-b border-border">
+              <div className="w-10 flex-shrink-0 px-1 bg-card text-xs font-medium text-muted-foreground flex items-center">
                 C{courtId}
               </div>
               <div className="flex-1 relative" style={{ height: ROW_HEIGHT }}>
@@ -195,7 +264,7 @@ export function GanttChart({
                     <div
                       key={slot}
                       style={{ width: SLOT_WIDTH }}
-                      className={`flex-shrink-0 border-l border-gray-100 ${
+                      className={`flex-shrink-0 border-l border-border ${
                         slot === currentSlot ? 'bg-blue-50/30' : ''
                       }`}
                     />
@@ -214,22 +283,53 @@ export function GanttChart({
                   const isInProgress = status === 'started';
 
                   const isImpacted = impactedSet.has(assignment.matchId);
+                  const traffic = trafficLights?.get(assignment.matchId);
+                  // Conflict rings are only meaningful while the match
+                  // is still actionable (scheduled / called). Once
+                  // started or finished, the traffic light is moot.
+                  const conflictActionable =
+                    traffic && (status === 'scheduled' || status === 'called');
+                  const isBlocked = conflictActionable && traffic.status === 'red';
+                  const isResting = conflictActionable && traffic.status === 'yellow';
 
-                  // Determine which inset ring to show (priority: selected > impacted > postponed > late)
+                  // Ring priority: selected > blocked conflict > impacted
+                  // > postponed > resting > late. Conflict-red outranks
+                  // impacted because a player physically can't be on the
+                  // court — harder constraint than a soft impact.
                   let ringClass = '';
                   if (isSelected) {
                     ringClass = 'ring-2 ring-inset ring-blue-500';
+                  } else if (isBlocked) {
+                    ringClass = 'ring-2 ring-inset ring-red-500';
                   } else if (isImpacted) {
                     ringClass = 'ring-2 ring-inset ring-purple-500';
                   } else if (isPostponed) {
                     ringClass = 'ring-2 ring-inset ring-red-400';
+                  } else if (isResting) {
+                    ringClass = 'ring-2 ring-inset ring-amber-400';
                   } else if (isLate) {
                     ringClass = 'ring-2 ring-inset ring-yellow-400';
                   }
 
-                  // Calculate position
-                  const left = (assignment.slotId - minSlot) * SLOT_WIDTH;
-                  const width = Math.max(48, assignment.durationSlots * SLOT_WIDTH - 2);
+                  // Live render position: started/finished blocks use
+                  // actualStartTime / actualEndTime; scheduled/called
+                  // stay at the paper slot. Any change to the render
+                  // slot animates via the existing transition-all.
+                  const render = getRenderSlot(
+                    assignment,
+                    matchStates[assignment.matchId],
+                    config,
+                  );
+                  const baseLeft = (render.slotId - minSlot) * SLOT_WIDTH;
+                  const baseWidth = Math.max(48, render.durationSlots * SLOT_WIDTH - 2);
+                  // If this block shares its time window with others on
+                  // the same court, shrink width + offset horizontally
+                  // so every block stays visible without making the row
+                  // taller. Non-overlapping blocks keep full width.
+                  const groupSize = packing.groupSizeByMatchId.get(assignment.matchId) ?? 1;
+                  const lane = packing.laneByMatchId.get(assignment.matchId) ?? 0;
+                  const width = groupSize > 1 ? baseWidth / groupSize : baseWidth;
+                  const left = groupSize > 1 ? baseLeft + lane * width : baseLeft;
 
                   return (
                     <div
@@ -243,18 +343,32 @@ export function GanttChart({
                         ${isInProgress ? 'shadow-sm' : ''}
                         hover:brightness-95`}
                       style={{ left, width, height: ROW_HEIGHT - 4 }}
-                      title={match ? getMatchLabel(match) : '?'}
+                      title={
+                        (match ? getMatchLabel(match) : '?') +
+                        (traffic?.reason && conflictActionable
+                          ? ` — ${traffic.reason}`
+                          : '')
+                      }
                     >
-                      <div className="px-1.5 h-full flex items-center gap-1 overflow-hidden">
-                        {/* Pulsing dot for in-progress */}
-                        {isInProgress && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-                        )}
-                        {/* Checkmark for finished */}
-                        {status === 'finished' && (
-                          <span className="text-gray-400 text-[10px] flex-shrink-0">✓</span>
-                        )}
-                        <span className={`text-[11px] font-medium truncate ${styles.text}`}>
+                      <div
+                        className={`h-full flex items-center justify-center overflow-hidden ${
+                          groupSize > 1 ? 'px-0' : 'px-1'
+                        }`}
+                      >
+                        {/* Status carried entirely by block fill +
+                            border + any inset conflict ring; no extra
+                            glyphs. Overlap blocks drop the font a tick
+                            and tighten letter-spacing so a 4-char code
+                            like MS17 clears the ~44 px available at
+                            half-width. No ellipsis on overflow — we
+                            clip to show as many characters as fit. */}
+                        <span
+                          className={`font-semibold whitespace-nowrap overflow-hidden tabular-nums ${styles.text} ${
+                            groupSize > 1
+                              ? 'text-[9px] tracking-tighter'
+                              : 'text-[11px]'
+                          }`}
+                        >
                           {match ? getMatchLabel(match) : '?'}
                         </span>
                       </div>

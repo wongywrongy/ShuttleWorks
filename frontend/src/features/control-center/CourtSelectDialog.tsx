@@ -2,7 +2,10 @@
  * Court Selection Dialog
  * Shown when starting a match to confirm/change the court
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { Modal } from '../../components/common/Modal';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 
 interface CourtSelectDialogProps {
   matchName: string;
@@ -23,22 +26,27 @@ export function CourtSelectDialog({
   onCancel,
   isSubmitting = false,
 }: CourtSelectDialogProps) {
+  const titleId = useId();
   const [selectedCourt, setSelectedCourt] = useState(scheduledCourt);
 
   const isOccupied = occupiedCourts.includes(selectedCourt);
   const courts = Array.from({ length: courtCount }, (_, i) => i + 1);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-64">
-        {/* Header */}
-        <div className="px-3 py-2 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900">Start {matchName}</h3>
-        </div>
+    <Modal
+      onClose={onCancel}
+      titleId={titleId}
+      locked={isSubmitting}
+      panelClassName="w-64 rounded-lg bg-card shadow-xl focus:outline-none"
+    >
+      {/* Header */}
+      <div className="px-3 py-2 border-b border-border">
+        <h3 id={titleId} className="text-sm font-semibold text-foreground">Start {matchName}</h3>
+      </div>
 
         {/* Court Selection */}
         <div className="p-3">
-          <div className="text-xs text-gray-500 mb-2">Select court:</div>
+          <div className="text-xs text-muted-foreground mb-2">Select court:</div>
 
           <div className="grid grid-cols-4 gap-1 mb-3">
             {courts.map((court) => {
@@ -54,7 +62,7 @@ export function CourtSelectDialog({
                       ? 'bg-green-600 text-white border-green-600'
                       : courtOccupied
                         ? 'bg-yellow-50 text-yellow-700 border-yellow-300 hover:bg-yellow-100'
-                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                        : 'bg-muted/40 text-foreground border-border hover:bg-muted'
                   }`}
                 >
                   {court}
@@ -72,7 +80,7 @@ export function CourtSelectDialog({
 
           {/* Different from scheduled */}
           {selectedCourt !== scheduledCourt && (
-            <div className="text-[10px] text-gray-500 mb-3">
+            <div className="text-[10px] text-muted-foreground mb-3">
               Originally scheduled: Court {scheduledCourt}
             </div>
           )}
@@ -82,20 +90,21 @@ export function CourtSelectDialog({
             <button
               onClick={onCancel}
               disabled={isSubmitting}
-              className="flex-1 px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50"
+              className={`${INTERACTIVE_BASE} flex-1 rounded bg-muted px-3 py-1.5 text-sm text-foreground hover:bg-muted`}
             >
               Cancel
             </button>
             <button
               onClick={() => onConfirm(selectedCourt)}
               disabled={isSubmitting}
-              className="flex-1 px-3 py-1.5 text-sm text-white bg-green-600 rounded hover:bg-green-700 disabled:bg-gray-300 font-medium"
+              aria-busy={isSubmitting}
+              className={`${INTERACTIVE_BASE} inline-flex flex-1 items-center justify-center gap-1.5 rounded bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700`}
             >
-              {isSubmitting ? 'Starting...' : 'Start'}
+              {isSubmitting && <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
+              {isSubmitting ? 'Starting…' : 'Start'}
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

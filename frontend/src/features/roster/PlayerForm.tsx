@@ -163,63 +163,63 @@ export function PlayerForm({ player, onSave, onCancel }: PlayerFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-3 rounded shadow-sm">
+    <form onSubmit={handleSubmit} className="bg-card p-3 rounded shadow-sm">
       <h3 className="text-base font-semibold mb-2">
         {player ? 'Edit Player' : 'Add Player'}
       </h3>
 
       <div className="space-y-2">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Name *
           </label>
           <input
             type="text"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className={`w-full px-2 py-1 border rounded-sm text-sm ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-2 py-1 border rounded-sm text-sm ${errors.name ? 'border-red-500' : 'border-border'}`}
           />
           {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Minimum Rest Minutes (optional)
           </label>
           <input
             type="number"
             value={formData.minRestMinutes ?? ''}
             onChange={(e) => setFormData({ ...formData, minRestMinutes: e.target.value === '' ? null : parseInt(e.target.value) || 0 })}
-            className={`w-full px-2 py-1 border rounded-sm text-sm ${errors.minRestMinutes ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-2 py-1 border rounded-sm text-sm ${errors.minRestMinutes ? 'border-red-500' : 'border-border'}`}
             min="0"
             placeholder="Uses tournament default if empty"
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Leave empty to use tournament's default rest time. Override only if this player needs different rest requirements.
           </p>
           {errors.minRestMinutes && <p className="text-red-500 text-sm mt-1">{errors.minRestMinutes}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Notes
           </label>
           <textarea
             value={formData.notes || ''}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            className="w-full px-2 py-1 border border-gray-300 rounded-sm text-sm"
+            className="w-full px-2 py-1 border border-border rounded-sm text-sm"
             rows={3}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             School *
           </label>
           <select
             value={formData.groupId}
             onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
-            className={`w-full px-2 py-1 border rounded-sm text-sm ${errors.groupId ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-2 py-1 border rounded-sm text-sm ${errors.groupId ? 'border-red-500' : 'border-border'}`}
           >
             {groups.length === 0 && <option value="">No schools available - create one first</option>}
             {groups.map((group) => (
@@ -229,16 +229,16 @@ export function PlayerForm({ player, onSave, onCancel }: PlayerFormProps) {
             ))}
           </select>
           {errors.groupId && <p className="text-red-500 text-sm mt-1">{errors.groupId}</p>}
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Select which school this player belongs to. Create schools first if none are available.
           </p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-foreground mb-2">
             Events/Ranks (optional)
           </label>
-          <p className="text-xs text-gray-500 mb-3">
+          <p className="text-xs text-muted-foreground mb-3">
             Select all ranks that apply to this player. Click category headers to expand/collapse. <strong>Each rank can only be assigned to one player per school.</strong>
           </p>
           {Object.keys(groupedRanks).length === 0 ? (
@@ -262,23 +262,23 @@ export function PlayerForm({ player, onSave, onCancel }: PlayerFormProps) {
         <div>
           <div className="flex justify-between items-center mb-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-foreground">
                 Availability Windows
               </label>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Leave empty for always available. Format: HH:mm (24-hour format)
               </p>
             </div>
             <button
               type="button"
               onClick={addAvailabilityWindow}
-              className="text-xs px-2 py-0.5 bg-gray-200 text-gray-700 rounded-sm hover:bg-gray-300"
+              className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-sm hover:bg-accent hover:text-accent-foreground"
             >
               Add Window
             </button>
           </div>
           {availabilityWindows.length === 0 && (
-            <div className="mb-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600">
+            <div className="mb-2 p-2 bg-muted/40 border border-border rounded text-xs text-muted-foreground">
               No availability windows set. Player will be available all day.
             </div>
           )}
@@ -289,17 +289,17 @@ export function PlayerForm({ player, onSave, onCancel }: PlayerFormProps) {
                   type="text"
                   value={window.start}
                   onChange={(e) => updateAvailabilityWindow(index, 'start', e.target.value)}
-                  className={`flex-1 px-2 py-1 border rounded-sm text-sm ${errors[`avail_${index}_start`] ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`flex-1 px-2 py-1 border rounded-sm text-sm ${errors[`avail_${index}_start`] ? 'border-red-500' : 'border-border'}`}
                   placeholder="09:00"
                   pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
                   title="Time in HH:mm format (e.g., 09:00)"
                 />
-                <span className="text-gray-500 font-medium">to</span>
+                <span className="text-muted-foreground font-medium">to</span>
                 <input
                   type="text"
                   value={window.end}
                   onChange={(e) => updateAvailabilityWindow(index, 'end', e.target.value)}
-                  className={`flex-1 px-2 py-1 border rounded-sm text-sm ${errors[`avail_${index}_end`] ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`flex-1 px-2 py-1 border rounded-sm text-sm ${errors[`avail_${index}_end`] ? 'border-red-500' : 'border-border'}`}
                   placeholder="18:00"
                   pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
                   title="Time in HH:mm format (e.g., 18:00)"
@@ -316,7 +316,7 @@ export function PlayerForm({ player, onSave, onCancel }: PlayerFormProps) {
             ))}
           </div>
           {availabilityWindows.length > 0 && (
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-muted-foreground">
               <strong>Example:</strong> 09:00 to 12:00 and 14:00 to 18:00 means player is available in the morning and afternoon, but not during lunch break.
             </p>
           )}
@@ -326,7 +326,7 @@ export function PlayerForm({ player, onSave, onCancel }: PlayerFormProps) {
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-sm text-sm hover:bg-gray-300"
+            className="px-3 py-1.5 bg-muted text-foreground rounded-sm text-sm hover:bg-accent hover:text-accent-foreground"
           >
             Cancel
           </button>

@@ -42,7 +42,7 @@ export function ScheduleDiagnosticsBar({ schedule }: ScheduleDiagnosticsBarProps
       case 'infeasible':
         return 'bg-red-100 text-red-800';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-muted text-foreground';
     }
   };
 
@@ -64,16 +64,16 @@ export function ScheduleDiagnosticsBar({ schedule }: ScheduleDiagnosticsBarProps
   const unscheduledCount = schedule.unscheduledMatches.length;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
       {/* Compact Bar */}
       <button
         onClick={toggleExpanded}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/40 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
       >
         <div className="flex items-center gap-4 flex-1">
           {/* Status Badge */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-500 uppercase">Status:</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase">Status:</span>
             <span
               className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
                 schedule.status
@@ -87,8 +87,8 @@ export function ScheduleDiagnosticsBar({ schedule }: ScheduleDiagnosticsBarProps
           {/* Objective Score */}
           {schedule.objectiveScore !== null && (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-500 uppercase">Score:</span>
-              <span className="text-sm font-semibold text-gray-900">
+              <span className="text-xs font-medium text-muted-foreground uppercase">Score:</span>
+              <span className="text-sm font-semibold text-foreground">
                 {schedule.objectiveScore.toFixed(2)}
               </span>
             </div>
@@ -96,7 +96,7 @@ export function ScheduleDiagnosticsBar({ schedule }: ScheduleDiagnosticsBarProps
 
           {/* Unscheduled Count */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-500 uppercase">Unscheduled:</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase">Unscheduled:</span>
             <span
               className={`text-sm font-semibold ${
                 unscheduledCount > 0 ? 'text-red-600' : 'text-green-600'
@@ -109,7 +109,7 @@ export function ScheduleDiagnosticsBar({ schedule }: ScheduleDiagnosticsBarProps
 
         {/* Expand/Collapse Icon */}
         <svg
-          className={`w-5 h-5 text-gray-400 transition-transform ${
+          className={`w-5 h-5 text-muted-foreground transition-transform ${
             isExpanded ? 'rotate-180' : ''
           }`}
           fill="none"
@@ -122,7 +122,7 @@ export function ScheduleDiagnosticsBar({ schedule }: ScheduleDiagnosticsBarProps
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="border-t border-gray-200">
+        <div className="border-t border-border">
           <ScheduleDiagnostics schedule={schedule} />
         </div>
       )}

@@ -86,28 +86,28 @@ export function LiveMetricsBar({
   return (
     <div className="flex items-center gap-3 text-sm">
         <div className="flex items-center gap-1">
-          <span className="text-gray-500">Time:</span>
-          <span className="font-mono font-medium text-gray-800 tabular-nums">{formatTime(elapsed)}</span>
+          <span className="text-muted-foreground">Time:</span>
+          <span className="font-mono font-medium text-foreground tabular-nums">{formatTime(elapsed)}</span>
         </div>
 
         <div className={`flex items-center gap-1 transition-all duration-300 ${showPulse ? 'scale-105' : ''}`}>
-          <span className="text-gray-500">Solutions:</span>
-          <span className={`font-mono font-medium tabular-nums ${showPulse ? 'text-green-600' : 'text-gray-800'}`}>
+          <span className="text-muted-foreground">Solutions:</span>
+          <span className={`font-mono font-medium tabular-nums ${showPulse ? 'text-green-600' : 'text-foreground'}`}>
             <AnimatedNumber value={solutionCount} formatFn={(n) => Math.round(n).toString()} />
           </span>
         </div>
 
         <div className="flex items-center gap-1">
-          <span className="text-gray-500">Score:</span>
-          <span className="font-mono font-medium text-gray-800 tabular-nums">
+          <span className="text-muted-foreground">Score:</span>
+          <span className="font-mono font-medium text-foreground tabular-nums">
             <AnimatedNumber value={objectiveScore} formatFn={(n) => Math.round(n).toString()} />
           </span>
         </div>
 
         {gap !== null && (
           <div className="flex items-center gap-1">
-            <span className="text-gray-500">Gap:</span>
-            <span className="font-mono font-medium text-gray-800 tabular-nums">
+            <span className="text-muted-foreground">Gap:</span>
+            <span className="font-mono font-medium text-foreground tabular-nums">
               <AnimatedNumber value={gap} formatFn={(n) => `${n.toFixed(1)}%`} />
             </span>
           </div>

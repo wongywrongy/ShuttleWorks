@@ -16,7 +16,7 @@ function App() {
           <Route
             path="/display"
             element={
-              <Suspense fallback={<div className="p-4 text-sm text-gray-500">Loading…</div>}>
+              <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading…</div>}>
                 <PublicDisplayPage />
               </Suspense>
             }

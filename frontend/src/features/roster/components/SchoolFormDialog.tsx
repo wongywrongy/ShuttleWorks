@@ -73,15 +73,15 @@ export function SchoolFormDialog({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded bg-white p-4 shadow-xl transition-all">
-                <Dialog.Title as="h3" className="text-sm font-medium text-gray-900 mb-4">
+              <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded bg-card p-4 shadow-xl transition-all">
+                <Dialog.Title as="h3" className="text-sm font-medium text-foreground mb-4">
                   {school ? 'Edit School' : 'Add School'}
                 </Dialog.Title>
 
                 <form onSubmit={handleSubmit}>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-foreground mb-1">
                         School Name
                       </label>
                       <input
@@ -89,13 +89,13 @@ export function SchoolFormDialog({
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Enter school name"
-                        className="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:border-gray-400"
+                        className="w-full px-3 py-2 border border-border rounded text-sm focus:outline-none focus:border-muted-foreground/40"
                         autoFocus
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-foreground mb-2">
                         Color
                       </label>
                       <div className="flex items-center gap-1.5">
@@ -105,7 +105,7 @@ export function SchoolFormDialog({
                             type="button"
                             onClick={() => setColor(c)}
                             className={`w-6 h-6 rounded-full border-2 transition-all ${
-                              color === c ? 'border-gray-800 scale-110' : 'border-transparent hover:border-gray-300'
+                              color === c ? 'border-foreground scale-110' : 'border-transparent hover:border-border'
                             }`}
                             style={{ backgroundColor: c }}
                           />
@@ -133,14 +133,14 @@ export function SchoolFormDialog({
                       <button
                         type="button"
                         onClick={onClose}
-                        className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                        className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={!name.trim()}
-                        className="px-4 py-1.5 bg-gray-800 text-white rounded text-sm hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {school ? 'Save' : 'Add'}
                       </button>

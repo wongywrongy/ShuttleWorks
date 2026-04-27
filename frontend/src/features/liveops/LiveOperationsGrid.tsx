@@ -3,6 +3,7 @@
  * Displays schedule with actual vs planned times, progress, and re-optimize controls
  */
 import { useMemo } from 'react';
+import { Check } from 'lucide-react';
 import { calculateTotalSlots, formatSlotTime } from '../../utils/timeUtils';
 import { calculateScheduleProgress } from '../../utils/scheduleProgress';
 import type {
@@ -48,7 +49,7 @@ function getStatusColor(status?: MatchStateDTO['status']): string {
     case 'called': return 'bg-blue-100 border-blue-300';
     case 'started': return 'bg-green-100 border-green-300';
     case 'finished': return 'bg-purple-100 border-purple-300';
-    default: return 'bg-gray-100 border-gray-300'; // scheduled or undefined
+    default: return 'bg-muted border-border'; // scheduled or undefined
   }
 }
 
@@ -118,25 +119,25 @@ export function LiveOperationsGrid({
   const hasImpacts = overrunMatches.length > 0 || impactedMatches.length > 0 || delayedCount > 0;
 
   return (
-    <div className="bg-white rounded border border-gray-200 overflow-hidden">
+    <div className="bg-card rounded border border-border overflow-hidden">
       {/* Header with progress, stats, legend, and reoptimize */}
-      <div className="px-2 py-1 border-b border-gray-200 bg-gray-50 flex items-center gap-3 text-xs">
+      <div className="px-2 py-1 border-b border-border bg-muted/40 flex items-center gap-3 text-xs">
         {/* Progress bar */}
         {stats && (
           <>
             <div className="flex items-center gap-1.5">
-              <div className="w-20 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+              <div className="w-20 bg-muted rounded-full h-1.5 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-blue-500 to-purple-600 h-full rounded-full transition-all"
                   style={{ width: `${stats.percentage}%` }}
                 />
               </div>
-              <span className="text-gray-600 font-medium">{stats.percentage}%</span>
+              <span className="text-muted-foreground font-medium">{stats.percentage}%</span>
             </div>
-            <span className="text-gray-400">|</span>
-            <span className="text-gray-500">
+            <span className="text-muted-foreground">|</span>
+            <span className="text-muted-foreground">
               <span className="text-green-600 font-medium">{stats.finished}</span>
-              <span className="text-gray-400">/</span>
+              <span className="text-muted-foreground">/</span>
               {stats.total}
             </span>
             {stats.inProgress > 0 && (
@@ -148,7 +149,7 @@ export function LiveOperationsGrid({
         {/* Running Behind Indicator */}
         {scheduleProgress.overdueCount > 0 && (
           <>
-            <span className="text-gray-300">|</span>
+            <span className="text-muted-foreground/60">|</span>
             <span
               className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
                 scheduleProgress.status === 'significantly_behind'
@@ -171,24 +172,24 @@ export function LiveOperationsGrid({
         <div className="flex-1" />
 
         {/* Legend */}
-        <span className="flex items-center gap-1 text-gray-500">
+        <span className="flex items-center gap-1 text-muted-foreground">
           <span className="w-2 h-2 rounded-full bg-green-500" />Ready
         </span>
-        <span className="flex items-center gap-1 text-gray-500">
+        <span className="flex items-center gap-1 text-muted-foreground">
           <span className="w-2 h-2 rounded-full bg-yellow-500" />Resting
         </span>
-        <span className="flex items-center gap-1 text-gray-500">
+        <span className="flex items-center gap-1 text-muted-foreground">
           <span className="w-2 h-2 rounded-full bg-red-500" />Blocked
         </span>
-        <span className="text-gray-300">|</span>
-        <span className="flex items-center gap-1 text-gray-500">
-          <span className="w-2 h-2 rounded ring-2 ring-yellow-500 bg-gray-100" />Late
+        <span className="text-muted-foreground/60">|</span>
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <span className="w-2 h-2 rounded ring-2 ring-yellow-500 bg-muted" />Late
         </span>
-        <span className="flex items-center gap-1 text-gray-500">
-          <span className="w-2 h-2 rounded ring-2 ring-blue-500 bg-gray-100" />Selected
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <span className="w-2 h-2 rounded ring-2 ring-blue-500 bg-muted" />Selected
         </span>
-        <span className="flex items-center gap-1 text-gray-500">
-          <span className="w-2 h-2 rounded ring-2 ring-red-500 bg-gray-100" />Impacted
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <span className="w-2 h-2 rounded ring-2 ring-red-500 bg-muted" />Impacted
         </span>
 
         {/* Re-optimize button */}
@@ -198,7 +199,7 @@ export function LiveOperationsGrid({
             disabled={isReoptimizing || !hasImpacts}
             className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
               isReoptimizing || !hasImpacts
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
           >
@@ -211,14 +212,14 @@ export function LiveOperationsGrid({
       <div className="overflow-x-auto">
         <div className="min-w-max">
           {/* Time header */}
-          <div className="flex border-b border-gray-200">
-            <div className="w-12 flex-shrink-0 px-1 py-0.5 bg-gray-50 text-xs text-gray-500" />
+          <div className="flex border-b border-border">
+            <div className="w-12 flex-shrink-0 px-1 py-0.5 bg-muted/40 text-xs text-muted-foreground" />
             {slotLabels.map((label, i) => (
               <div
                 key={i}
                 style={{ width: SLOT_WIDTH }}
-                className={`flex-shrink-0 px-0.5 py-0.5 text-center text-xs border-l border-gray-100 ${
-                  i === currentSlot ? 'bg-blue-100 font-medium text-blue-700' : 'bg-gray-50 text-gray-400'
+                className={`flex-shrink-0 px-0.5 py-0.5 text-center text-xs border-l border-border/60 ${
+                  i === currentSlot ? 'bg-blue-100 font-medium text-blue-700' : 'bg-muted/40 text-muted-foreground'
                 }`}
               >
                 {i % 2 === 0 ? label : ''}
@@ -228,8 +229,8 @@ export function LiveOperationsGrid({
 
           {/* Court rows */}
           {Array.from({ length: config.courtCount }, (_, i) => i + 1).map((courtId) => (
-            <div key={courtId} className="flex border-b border-gray-100">
-              <div className="w-12 flex-shrink-0 px-1 bg-gray-50 text-xs font-medium text-gray-600 flex items-center">
+            <div key={courtId} className="flex border-b border-border/60">
+              <div className="w-12 flex-shrink-0 px-1 bg-muted/40 text-xs font-medium text-muted-foreground flex items-center">
                 C{courtId}
               </div>
               <div className="flex-1 relative" style={{ height: ROW_HEIGHT }}>
@@ -238,7 +239,7 @@ export function LiveOperationsGrid({
                     <div
                       key={i}
                       style={{ width: SLOT_WIDTH }}
-                      className={`flex-shrink-0 border-l border-gray-100 ${
+                      className={`flex-shrink-0 border-l border-border/60 ${
                         i === currentSlot ? 'bg-blue-50' : ''
                       }`}
                     />
@@ -273,8 +274,18 @@ export function LiveOperationsGrid({
 
                   // Status icon for started/finished
                   let statusIcon = null;
-                  if (state?.status === 'finished') statusIcon = <span className="text-green-600">✓</span>;
-                  else if (state?.status === 'started') statusIcon = <span className="text-blue-600 animate-pulse">●</span>;
+                  if (state?.status === 'finished') {
+                    statusIcon = (
+                      <Check aria-label="Finished" className="h-3.5 w-3.5 text-green-600" />
+                    );
+                  } else if (state?.status === 'started') {
+                    statusIcon = (
+                      <span
+                        aria-label="In progress"
+                        className="h-2 w-2 rounded-full bg-blue-600 animate-pulse"
+                      />
+                    );
+                  }
 
                   // Traffic light indicator for scheduled/called matches
                   let trafficLightDot = null;

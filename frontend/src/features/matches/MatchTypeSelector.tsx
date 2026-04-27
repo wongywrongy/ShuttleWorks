@@ -31,7 +31,7 @@ export function MatchTypeSelector({ selectedType, onSelect }: MatchTypeSelectorP
 
   return (
     <div className="mb-6">
-      <label className="block text-sm font-medium text-gray-700 mb-3">
+      <label className="block text-sm font-medium text-foreground mb-3">
         Match Type
       </label>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -43,11 +43,11 @@ export function MatchTypeSelector({ selectedType, onSelect }: MatchTypeSelectorP
             className={`p-4 rounded-lg border-2 text-left transition-all ${
               selectedType === type.value
                 ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300 bg-white'
+                : 'border-border hover:border-border bg-card'
             }`}
           >
             <div className="font-semibold text-sm mb-1">{type.label}</div>
-            <div className="text-xs text-gray-600">{type.description}</div>
+            <div className="text-xs text-muted-foreground">{type.description}</div>
           </button>
         ))}
       </div>

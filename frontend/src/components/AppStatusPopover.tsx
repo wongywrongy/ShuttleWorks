@@ -9,8 +9,10 @@
  * terminal on tournament day.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useAppStore } from '../store/appStore';
+import { INTERACTIVE_BASE } from '../lib/utils';
 
 interface DeepHealth {
   status: 'healthy' | 'degraded';
@@ -107,10 +109,10 @@ export function AppStatusPopover() {
 
   const chipLabel = isGenerating ? 'Solving' : health?.status === 'degraded' ? 'Degraded' : 'Idle';
   const chipTone = isGenerating
-    ? 'bg-amber-50 text-amber-700'
+    ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
     : health?.status === 'degraded'
-      ? 'bg-red-50 text-red-700'
-      : 'bg-emerald-50 text-emerald-700';
+      ? 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+      : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300';
   const chipDot = isGenerating
     ? 'bg-amber-500 animate-pulse'
     : health?.status === 'degraded'
@@ -125,7 +127,7 @@ export function AppStatusPopover() {
         data-testid="app-status-chip"
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs ${chipTone} hover:brightness-95`}
+        className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs ${chipTone} hover:brightness-95`}
       >
         <span className={`h-1.5 w-1.5 rounded-full ${chipDot}`} />
         {chipLabel}
@@ -136,14 +138,14 @@ export function AppStatusPopover() {
           role="dialog"
           aria-label="App status"
           data-testid="app-status-popover"
-          className="absolute right-0 top-full z-30 mt-1 w-72 rounded border border-gray-200 bg-white p-3 text-xs shadow-lg"
+          className="absolute right-0 top-full z-30 mt-1 w-72 rounded border border-border bg-popover p-3 text-xs text-popover-foreground shadow-lg"
         >
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-semibold text-gray-700">App status</span>
+            <span className="font-semibold text-popover-foreground">App status</span>
             <button
               type="button"
               onClick={() => void refreshHealth()}
-              className="rounded border border-gray-300 px-2 py-0.5 text-[10px] text-gray-600 hover:bg-gray-50"
+              className={`${INTERACTIVE_BASE} rounded border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-accent-foreground`}
               aria-label="Refresh health"
             >
               Refresh
@@ -151,12 +153,12 @@ export function AppStatusPopover() {
           </div>
 
           {healthError && (
-            <div className="mb-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-red-700">
+            <div className="mb-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-red-700 dark:bg-red-500/10 dark:text-red-200 dark:border-red-500/30">
               {healthError}
             </div>
           )}
 
-          <dl className="space-y-1 text-gray-600">
+          <dl className="space-y-1 text-muted-foreground">
             <Row label="Backend">
               {health ? (
                 <span className={health.status === 'healthy' ? 'text-emerald-700' : 'text-red-700'}>
@@ -165,7 +167,7 @@ export function AppStatusPopover() {
               ) : healthError ? (
                 <span className="text-red-700">unreachable</span>
               ) : (
-                <span className="text-gray-400">checking…</span>
+                <span className="text-muted-foreground">checking…</span>
               )}
             </Row>
             <Row label="Schema">{health ? `v${health.schemaVersion}` : '—'}</Row>
@@ -198,7 +200,8 @@ export function AppStatusPopover() {
               onClick={handleBackupNow}
               disabled={backingUp}
               data-testid="app-status-backup"
-              className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              aria-busy={backingUp}
+              className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-0.5 text-[11px] text-card-foreground hover:bg-accent hover:text-accent-foreground`}
             >
               {backingUp ? 'Backing up…' : 'Back up now'}
             </button>
@@ -208,13 +211,14 @@ export function AppStatusPopover() {
                 setActiveTab('setup');
                 setOpen(false);
               }}
-              className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50"
+              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[11px] text-card-foreground hover:bg-accent hover:text-accent-foreground`}
             >
-              Manage backups →
+              Manage backups
+              <ChevronRight aria-hidden="true" className="h-3 w-3" />
             </button>
           </div>
 
-          <p className="mt-2 text-[10px] text-gray-400">
+          <p className="mt-2 text-[10px] text-muted-foreground">
             To quit, close the launcher terminal window or run the Stop script.
           </p>
         </div>
@@ -226,8 +230,8 @@ export function AppStatusPopover() {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <dt className="text-gray-500">{label}</dt>
-      <dd className="font-medium text-gray-700">{children}</dd>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium text-foreground">{children}</dd>
     </div>
   );
 }

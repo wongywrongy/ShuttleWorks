@@ -1,10 +1,12 @@
 /**
- * Traffic Light System for Match Calling
+ * Traffic-light system for match calling.
  *
- * Determines if a match can be called based on player availability:
- * - 🟢 Green (Callable): All players free and rested
- * - 🟡 Yellow (Almost Ready): Player in active match or rest cooldown
- * - 🔴 Red (Blocked): Player actively playing on another court
+ * Determines whether a match can be called based on player availability:
+ * - GREEN (callable): all players free and rested past minimum rest window.
+ * - YELLOW (almost ready): a player is in an active match or still in
+ *   the rest cooldown; the director can call anyway, with a warning.
+ * - RED (blocked): a player is actively playing on another court and
+ *   physically cannot be on this one — hard block.
  */
 import type {
   MatchDTO,
