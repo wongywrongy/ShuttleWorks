@@ -92,7 +92,7 @@ export function AppShell() {
               <a href="/display" className="text-blue-600 underline">
                 Open fullscreen TV view
               </a>
-              <div className="mt-4 rounded border bg-white">
+              <div className="mt-4 rounded border bg-card">
                 <PublicDisplayPage />
               </div>
             </div>

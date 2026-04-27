@@ -37,7 +37,7 @@ export function RosterImportDialog({ isOpen, onClose, onImport }: RosterImportDi
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded shadow p-4 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-card rounded shadow p-4 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-base font-semibold">Import Roster from CSV</h3>
           <button
@@ -56,15 +56,15 @@ export function RosterImportDialog({ isOpen, onClose, onImport }: RosterImportDi
             <p><strong>Two Formats Supported:</strong></p>
             
             <p className="mt-2 font-semibold">1. Flat Format:</p>
-            <code className="block bg-white p-2 rounded font-mono text-xs">
+            <code className="block bg-card p-2 rounded font-mono text-xs">
               id,name,minRestMinutes,notes,availability
             </code>
             
             <p className="mt-2 font-semibold">2. Hierarchical Format:</p>
-            <code className="block bg-white p-2 rounded font-mono text-xs">
+            <code className="block bg-card p-2 rounded font-mono text-xs">
               groupPath,id,name,minRestMinutes,notes,availability
             </code>
-            <p className="ml-2 text-xs">groupPath format: <code className="bg-white px-1 rounded">parent:child</code> or <code className="bg-white px-1 rounded">division:team</code></p>
+            <p className="ml-2 text-xs">groupPath format: <code className="bg-card px-1 rounded">parent:child</code> or <code className="bg-card px-1 rounded">division:team</code></p>
             
             <p className="mt-3"><strong>Fields:</strong></p>
             <ul className="list-disc list-inside space-y-1 ml-2 text-xs">
@@ -77,7 +77,7 @@ export function RosterImportDialog({ isOpen, onClose, onImport }: RosterImportDi
             </ul>
 
             <p className="mt-3"><strong>Examples:</strong></p>
-            <div className="bg-white p-2 rounded font-mono text-xs space-y-1">
+            <div className="bg-card p-2 rounded font-mono text-xs space-y-1">
               <div className="text-muted-foreground"># Flat format:</div>
               <div>player1,John Doe,30,Team captain,09:00-12:00;14:00-18:00</div>
               <div className="text-muted-foreground mt-2"># Hierarchical format:</div>

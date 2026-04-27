@@ -4,7 +4,7 @@ Update actuals, lock/freeze near-term schedule, reschedule remaining units.
 Handle overruns, no-shows, court outage.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List, Optional, Set
 
 from scheduler_core.domain.models import ScheduleConfig, ScheduleResult
@@ -128,19 +128,15 @@ def handle_court_outage(
     config: ScheduleConfig,
     excluded_court_ids: Set[int],
 ) -> ScheduleConfig:
-    """Return a config with reduced court set. Callers reschedule affected units."""
+    """Return a config with reduced court set. Callers reschedule affected units.
+
+    Uses ``dataclasses.replace`` so every field on ``ScheduleConfig`` is
+    preserved — including newer knobs like ``enable_court_utilization``,
+    ``enable_game_proximity``, ``enable_compact_schedule``,
+    ``allow_player_overlap``, etc. An earlier implementation hand-listed
+    fields to copy and silently dropped any field added later, which
+    quietly reset them to dataclass defaults.
+    """
     available = [c for c in range(1, config.court_count + 1) if c not in excluded_court_ids]
-    new_count = len(available)
-    return ScheduleConfig(
-        total_slots=config.total_slots,
-        court_count=max(1, new_count),
-        interval_minutes=config.interval_minutes,
-        default_rest_slots=config.default_rest_slots,
-        freeze_horizon_slots=config.freeze_horizon_slots,
-        current_slot=config.current_slot,
-        soft_rest_enabled=config.soft_rest_enabled,
-        rest_slack_penalty=config.rest_slack_penalty,
-        disruption_penalty=config.disruption_penalty,
-        late_finish_penalty=config.late_finish_penalty,
-        court_change_penalty=config.court_change_penalty,
-    )
+    new_count = max(1, len(available))
+    return replace(config, court_count=new_count)

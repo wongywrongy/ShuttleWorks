@@ -87,7 +87,7 @@ export function RankCheckboxGrid({
                           ? 'bg-blue-600 text-white border-blue-600'
                           : isTaken
                           ? 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-400'
-                          : 'bg-white text-foreground border-border hover:border-blue-400'
+                          : 'bg-card text-foreground border-border hover:border-blue-400'
                       }`}
                       title={rank.assignedTo ? `Assigned to ${rank.assignedTo}` : undefined}
                     >

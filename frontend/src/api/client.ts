@@ -16,7 +16,6 @@ import type {
   SolverPhaseEvent,
   ProposedMove,
   ValidationResponseDTO,
-  MatchGenerationRule,
   TournamentStateDTO,
   BackupListDTO,
   BackupCreatedDTO,
@@ -415,13 +414,6 @@ class ApiClient {
     return response.data;
   }
 
-  /**
-   * Generate matches from a rule (placeholder - not yet implemented on backend)
-   * @throws Error - Feature not yet implemented
-   */
-  async generateMatchesFromRule(_tournamentId: string, _rule: MatchGenerationRule): Promise<MatchDTO[]> {
-    throw new Error('Auto-match generation is not yet implemented. Please create matches manually.');
-  }
 }
 
 export const apiClient = new ApiClient();

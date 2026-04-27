@@ -63,7 +63,7 @@ export function MatchScoreDialog({
       onClose={onCancel}
       titleId={titleId}
       locked={isSubmitting}
-      panelClassName="w-72 rounded-lg bg-white shadow-xl focus:outline-none"
+      panelClassName="w-72 rounded-lg bg-card shadow-xl focus:outline-none"
     >
       {/* Header */}
       <div className="px-3 py-2 border-b border-border">

@@ -119,7 +119,7 @@ export function MatchesPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-48 bg-white rounded border border-border">
+        <div className="flex items-center justify-center h-48 bg-card rounded border border-border">
           <div className="text-muted-foreground text-sm">Loading matches...</div>
         </div>
       ) : (

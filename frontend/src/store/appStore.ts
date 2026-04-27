@@ -1,6 +1,19 @@
 /**
- * Main application store using Zustand
- * Manages all app state with localStorage persistence
+ * Tournament-scoped application store.
+ *
+ * Persisted to the server-side snapshot at ``/tournament-state`` via
+ * ``useTournamentState`` (debounced PUTs); the ``partialize`` block
+ * below is the authoritative allowlist of fields that ride along with
+ * import/export. Ephemeral fields (``solverHud``, ``pendingPin``,
+ * ``lastValidation``, ``isGenerating``, ``toasts``, …) are intentionally
+ * excluded so a refresh doesn't surface stale solver state.
+ *
+ * Per-device preferences (currently just theme) live in a separate
+ * store, ``preferencesStore.ts``, with its own localStorage key so a
+ * tournament import never wipes them.
+ *
+ * For the slice map and conventions, see
+ * ``frontend/src/store/README.md``.
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';

@@ -72,7 +72,7 @@ export function RosterGroupForm({ group, allGroups, onSave, onCancel }: RosterGr
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-3 rounded shadow-sm">
+    <form onSubmit={handleSubmit} className="bg-card p-3 rounded shadow-sm">
       <h3 className="text-base font-semibold mb-3">{group ? 'Edit Group' : 'Create Group'}</h3>
 
       <div className="space-y-3">

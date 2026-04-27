@@ -155,7 +155,7 @@ export function RankBadgeEditor({
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-lg bg-white p-6 shadow-xl transition-all">
+                <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-lg bg-card p-6 shadow-xl transition-all">
                   <Dialog.Title as="h3" className="text-lg font-semibold text-foreground mb-4">
                     Select Ranks/Events
                   </Dialog.Title>

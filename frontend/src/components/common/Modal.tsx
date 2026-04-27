@@ -100,7 +100,7 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
         className={
           panelClassName ??
-          `w-full ${widthClass} rounded-lg bg-white shadow-xl focus:outline-none`
+          `w-full ${widthClass} rounded-lg bg-card shadow-xl focus:outline-none`
         }
       >
         {children}

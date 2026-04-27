@@ -104,7 +104,7 @@ export function MatchesList({
 
   if (matches.length === 0) {
     return (
-      <div className="p-8 bg-white rounded border border-border text-center">
+      <div className="p-8 bg-card rounded border border-border text-center">
         <div className="text-muted-foreground mb-3">
           <svg className="mx-auto h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -149,7 +149,7 @@ export function MatchesList({
   }
 
   return (
-    <div className="bg-white rounded border border-border overflow-visible">
+    <div className="bg-card rounded border border-border overflow-visible">
       {/* Search Bar */}
       <div className="px-2 py-1.5 border-b border-border">
         <div className="relative">
@@ -318,7 +318,7 @@ export function MatchesList({
                     </svg>
                   </Menu.Button>
 
-                  <Menu.Items className="absolute right-0 z-10 mt-1 w-40 origin-top-right rounded bg-white shadow-sm ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  <Menu.Items className="absolute right-0 z-10 mt-1 w-40 origin-top-right rounded bg-card shadow-sm ring-1 ring-black ring-opacity-5 focus:outline-none">
                     <div className="py-1">
                       <Menu.Item>
                         {({ active }) => (

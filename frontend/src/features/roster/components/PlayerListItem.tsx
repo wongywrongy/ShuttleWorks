@@ -95,7 +95,7 @@ export function PlayerListItem({
             </svg>
           </Menu.Button>
 
-          <Menu.Items className="absolute right-0 z-10 mt-1 w-32 origin-top-right rounded bg-white shadow-sm ring-1 ring-black ring-opacity-5 focus:outline-none">
+          <Menu.Items className="absolute right-0 z-10 mt-1 w-32 origin-top-right rounded bg-card shadow-sm ring-1 ring-black ring-opacity-5 focus:outline-none">
             <div className="py-0.5">
               <Menu.Item>
                 {({ active }) => (

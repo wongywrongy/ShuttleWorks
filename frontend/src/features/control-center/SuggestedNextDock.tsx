@@ -63,7 +63,7 @@ export function SuggestedNextDock({
   };
 
   return (
-    <div className="flex-shrink-0 bg-white rounded border border-border px-3 py-2 flex items-center gap-3">
+    <div className="flex-shrink-0 bg-card rounded border border-border px-3 py-2 flex items-center gap-3">
       {/* Label with pulsing dot */}
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Suggested</span>

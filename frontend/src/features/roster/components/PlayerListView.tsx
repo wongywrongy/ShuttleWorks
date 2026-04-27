@@ -121,7 +121,7 @@ export function PlayerListView({
 
   if (players.length === 0) {
     return (
-      <div className="p-8 bg-white rounded border border-border text-center">
+      <div className="p-8 bg-card rounded border border-border text-center">
         <div className="text-muted-foreground mb-3">
           <svg className="mx-auto h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -164,7 +164,7 @@ export function PlayerListView({
   const someSelected = selection.selectedCount > 0 && !allSelected;
 
   return (
-    <div className="bg-white rounded border border-border overflow-visible">
+    <div className="bg-card rounded border border-border overflow-visible">
       {/* Search Bar */}
       <div className="px-2 py-1.5 border-b border-border">
         <div className="relative">

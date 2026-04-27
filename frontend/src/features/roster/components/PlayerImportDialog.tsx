@@ -157,7 +157,7 @@ export function PlayerImportDialog({ isOpen, onClose, onImport, existingGroups }
         <div className="fixed inset-0 transition-opacity bg-foreground/50" onClick={handleClose} />
 
         {/* Dialog */}
-        <div className="inline-block w-full max-w-4xl p-4 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow rounded">
+        <div className="inline-block w-full max-w-4xl p-4 my-8 overflow-hidden text-left align-middle transition-all transform bg-card shadow rounded">
           <h3 className="text-base font-semibold text-foreground mb-3">Import Players from Spreadsheet</h3>
 
           <div className="space-y-3">
@@ -168,7 +168,7 @@ export function PlayerImportDialog({ isOpen, onClose, onImport, existingGroups }
                 <li><strong>From Google Sheets/Excel:</strong> Copy the columns (Name, School) and paste directly</li>
                 <li><strong>From CSV file:</strong> Use comma-separated format (Name,School)</li>
               </ol>
-              <pre className="text-blue-800 font-mono text-xs mt-2 bg-white p-2 rounded">
+              <pre className="text-blue-800 font-mono text-xs mt-2 bg-card p-2 rounded">
 {`Name	School
 John Doe	School A
 Jane Smith	School B
@@ -260,7 +260,7 @@ Mike Johnson	School A`}
                   Preview: {preview.length} players to import
                 </h4>
                 <div className="border border-border rounded-sm overflow-hidden max-h-48 overflow-y-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
+                  <table className="min-w-full divide-y divide-border">
                     <thead className="bg-muted/40">
                       <tr>
                         <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Name</th>
@@ -268,7 +268,7 @@ Mike Johnson	School A`}
                         <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-card divide-y divide-border">
                       {preview.map((player, idx) => {
                         const schoolExists = existingGroups.some(g =>
                           g.name.toLowerCase() === player.schoolName.toLowerCase()

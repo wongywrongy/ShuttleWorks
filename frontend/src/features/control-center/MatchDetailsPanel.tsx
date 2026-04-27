@@ -509,8 +509,16 @@ export function MatchDetailsPanel({
             return (
               <div
                 key={matchId}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelectMatch?.(matchId)}
-                className="px-2 py-1.5 bg-muted/40 border border-border rounded mb-1 cursor-pointer hover:border-muted-foreground/40"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectMatch?.(matchId);
+                  }
+                }}
+                className="px-2 py-1.5 bg-muted/40 border border-border rounded mb-1 cursor-pointer hover:border-muted-foreground/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-medium text-foreground">{eventLabel}</span>

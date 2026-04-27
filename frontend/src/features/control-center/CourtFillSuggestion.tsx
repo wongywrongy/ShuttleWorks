@@ -61,7 +61,7 @@ export function CourtFillSuggestion({
           <button
             onClick={() => onSkip(court.courtId)}
             disabled={isLoading}
-            className="px-3 py-1.5 bg-white text-muted-foreground text-sm border border-border rounded hover:bg-muted/40 disabled:bg-muted disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-1.5 bg-card text-muted-foreground text-sm border border-border rounded hover:bg-muted/40 disabled:bg-muted disabled:cursor-not-allowed transition-colors"
           >
             Skip
           </button>

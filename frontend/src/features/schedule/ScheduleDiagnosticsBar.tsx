@@ -64,7 +64,7 @@ export function ScheduleDiagnosticsBar({ schedule }: ScheduleDiagnosticsBarProps
   const unscheduledCount = schedule.unscheduledMatches.length;
 
   return (
-    <div className="bg-white border border-border rounded-lg overflow-hidden">
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
       {/* Compact Bar */}
       <button
         onClick={toggleExpanded}

@@ -46,7 +46,7 @@ export function ViolationSummaryPanel({
   };
 
   return (
-    <div className="bg-white border border-border rounded-lg p-4 w-56 text-sm">
+    <div className="bg-card border border-border rounded-lg p-4 w-56 text-sm">
       <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
         <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
         Solver Status

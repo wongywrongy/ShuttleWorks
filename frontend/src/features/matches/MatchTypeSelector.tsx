@@ -43,7 +43,7 @@ export function MatchTypeSelector({ selectedType, onSelect }: MatchTypeSelectorP
             className={`p-4 rounded-lg border-2 text-left transition-all ${
               selectedType === type.value
                 ? 'border-blue-500 bg-blue-50'
-                : 'border-border hover:border-border bg-white'
+                : 'border-border hover:border-border bg-card'
             }`}
           >
             <div className="font-semibold text-sm mb-1">{type.label}</div>

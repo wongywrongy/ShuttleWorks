@@ -39,7 +39,7 @@ export function ImpactAnalysisPanel({
   const actualEndTime = slotToTime(analysis.actualEndSlot);
 
   return (
-    <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-xl border-l border-border z-50 flex flex-col">
+    <div className="fixed inset-y-0 right-0 w-80 bg-card shadow-xl border-l border-border z-50 flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <h3 className="font-semibold text-foreground">

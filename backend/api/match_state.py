@@ -16,6 +16,7 @@ write never takes a tournament offline.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -36,6 +37,15 @@ log = logging.getLogger("scheduler.match_state")
 # Import payload cap. Anything larger is almost certainly not a
 # legitimate match_states.json — cap at 20 MB to bound memory.
 MAX_IMPORT_BYTES = 20 * 1024 * 1024
+
+# Serialise read-modify-write cycles. Every mutating endpoint reads the
+# current state from disk, mutates it in memory, then writes it back —
+# without this lock, two concurrent PUTs on different match IDs would
+# race and one update would be lost (last writer wins on the full
+# dict). Single-process FastAPI + a single uvicorn worker means an
+# asyncio.Lock is sufficient; if we ever scale to multiple workers,
+# replace with a file-system lock or move state into a real DB.
+_state_lock = asyncio.Lock()
 
 
 def _data_dir() -> Path:
@@ -193,31 +203,34 @@ async def get_match_state(match_id: str):
 @router.put("/{match_id}", response_model=MatchStateDTO)
 async def update_match_state(match_id: str, update: MatchStateDTO):
     """Update a match state in the file."""
-    state = _read_state_file()
-    update.updatedAt = _now_iso()
-    update.matchId = match_id
-    state.matchStates[match_id] = update
-    _write_state_file(state)
+    async with _state_lock:
+        state = _read_state_file()
+        update.updatedAt = _now_iso()
+        update.matchId = match_id
+        state.matchStates[match_id] = update
+        _write_state_file(state)
     return update
 
 
 @router.delete("/{match_id}")
 async def delete_match_state(match_id: str):
     """Remove a match state from the file (reset to default)."""
-    state = _read_state_file()
-    if match_id in state.matchStates:
-        del state.matchStates[match_id]
-        _write_state_file(state)
+    async with _state_lock:
+        state = _read_state_file()
+        if match_id in state.matchStates:
+            del state.matchStates[match_id]
+            _write_state_file(state)
     return {"message": f"Match state for {match_id} deleted successfully"}
 
 
 @router.post("/reset")
 async def reset_all_match_states():
     """Clear all match states (empty the file)."""
-    state = TournamentStateFile(
-        matchStates={}, lastUpdated=_now_iso(), version="1.0"
-    )
-    _write_state_file(state)
+    async with _state_lock:
+        state = TournamentStateFile(
+            matchStates={}, lastUpdated=_now_iso(), version="1.0"
+        )
+        _write_state_file(state)
     return {"message": "All match states reset successfully"}
 
 
@@ -270,7 +283,8 @@ async def import_match_states(request: Request, file: UploadFile = File(...)):
         log.warning("match-state import validation failed: %s", e)
         raise HTTPException(status_code=400, detail="payload does not match schema")
 
-    _write_state_file(state)
+    async with _state_lock:
+        _write_state_file(state)
     return {
         "message": "Tournament state imported successfully",
         "matchCount": len(state.matchStates),
@@ -288,13 +302,14 @@ async def import_match_states_bulk(match_states: Dict[str, MatchStateDTO]):
     if not match_states:
         return {"message": "No match states to import", "importedCount": 0}
 
-    state = _read_state_file()
-    for match_id, match_state in match_states.items():
-        match_state.matchId = match_id
-        match_state.updatedAt = _now_iso()
-        state.matchStates[match_id] = match_state
+    async with _state_lock:
+        state = _read_state_file()
+        for match_id, match_state in match_states.items():
+            match_state.matchId = match_id
+            match_state.updatedAt = _now_iso()
+            state.matchStates[match_id] = match_state
 
-    _write_state_file(state)
+        _write_state_file(state)
     return {
         "message": "Match states imported successfully",
         "importedCount": len(match_states),

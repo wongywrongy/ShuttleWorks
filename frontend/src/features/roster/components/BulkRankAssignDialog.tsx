@@ -137,7 +137,7 @@ export function BulkRankAssignDialog({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded bg-white p-4 text-left align-middle shadow transition-all">
+              <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded bg-card p-4 text-left align-middle shadow transition-all">
                 <Dialog.Title
                   as="h3"
                   className="text-lg font-medium leading-6 text-foreground"
@@ -158,7 +158,7 @@ export function BulkRankAssignDialog({
                           value={m.value}
                           className={({ active, checked }) =>
                             `${active ? 'ring-2 ring-blue-500 ring-offset-2' : ''}
-                            ${checked ? 'bg-blue-600 text-white' : 'bg-white text-foreground'}
+                            ${checked ? 'bg-blue-600 text-white' : 'bg-card text-foreground'}
                             relative flex cursor-pointer rounded-sm border border-border px-2 py-1.5 shadow-sm focus:outline-none`
                           }
                         >
@@ -227,7 +227,7 @@ export function BulkRankAssignDialog({
                 <div className="mt-4 flex gap-2 justify-end">
                   <button
                     type="button"
-                    className="inline-flex justify-center rounded-sm border border-border bg-white px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="inline-flex justify-center rounded-sm border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onClick={onClose}
                   >
                     Cancel

@@ -68,7 +68,7 @@ export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardPro
   };
 
   return (
-    <div className="bg-white rounded shadow-sm border border-border overflow-hidden mb-4">
+    <div className="bg-card rounded shadow-sm border border-border overflow-hidden mb-4">
       <div className="px-3 py-1.5 border-b border-border flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Rank Coverage</h3>
         <div className="flex gap-3 text-xs text-muted-foreground">
@@ -79,7 +79,7 @@ export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardPro
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full divide-y divide-border">
           <thead className="bg-muted/40">
             <tr>
               <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider sticky left-0 bg-muted/40">
@@ -101,7 +101,7 @@ export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardPro
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-card divide-y divide-border">
             {groups.map(school => {
               const schoolTotal = getSchoolTotal(school.id);
               const totalPercent = schoolTotal.expected > 0
@@ -110,7 +110,7 @@ export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardPro
 
               return (
                 <tr key={school.id} className="hover:bg-muted/40">
-                  <td className="px-3 py-2 text-sm font-medium text-foreground sticky left-0 bg-white">
+                  <td className="px-3 py-2 text-sm font-medium text-foreground sticky left-0 bg-card">
                     <button
                       onClick={() => onEditSchool?.(school)}
                       className="hover:text-muted-foreground transition-colors"

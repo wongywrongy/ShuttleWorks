@@ -323,7 +323,7 @@ export function MatchControlCenterPage() {
   if (!liveTracking.schedule) {
     return (
       <div className="w-full h-[calc(100vh-56px)] flex flex-col px-2 py-1 gap-2">
-        <div className="flex-1 flex flex-col items-center justify-center bg-white rounded border border-border">
+        <div className="flex-1 flex flex-col items-center justify-center bg-card rounded border border-border">
           <div className="text-muted-foreground mb-3">
             <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -353,7 +353,7 @@ export function MatchControlCenterPage() {
         {/* Main area - Gantt + Matches list */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           {/* Gantt panel */}
-          <div className="bg-white rounded border border-border flex flex-col overflow-hidden flex-shrink-0">
+          <div className="bg-card rounded border border-border flex flex-col overflow-hidden flex-shrink-0">
             <div className="px-2 py-1.5 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-3 text-xs">
                 <span className="font-medium text-foreground">{stats?.percentage || 0}%</span>
@@ -373,7 +373,7 @@ export function MatchControlCenterPage() {
                 <button
                   onClick={liveOps.triggerReoptimize}
                   disabled={liveOps.isReoptimizing}
-                  className="rounded border border-border bg-white px-3 py-1 text-xs text-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
                 </button>
@@ -395,7 +395,7 @@ export function MatchControlCenterPage() {
           </div>
 
           {/* Matches panel (workflow: In Progress pinned + tabbed Up Next/Finished) */}
-          <div className="flex-1 min-h-0 bg-white rounded border border-border flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 bg-card rounded border border-border flex flex-col overflow-hidden">
             <WorkflowPanel
               matchesByStatus={liveTracking.matchesByStatus}
               matches={liveTracking.matches}
@@ -419,7 +419,7 @@ export function MatchControlCenterPage() {
 
         {/* Collapsible Match Details sidebar */}
         {detailsOpen ? (
-          <div className="w-72 flex-shrink-0 bg-white rounded border border-border flex flex-col overflow-hidden">
+          <div className="w-72 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
             <div className="px-2 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Match Details
@@ -456,7 +456,7 @@ export function MatchControlCenterPage() {
             onClick={() => setDetailsOpen(true)}
             title="Show match details"
             aria-label="Show match details"
-            className="w-6 flex-shrink-0 bg-white rounded border border-border flex flex-col items-center justify-center text-muted-foreground hover:text-muted-foreground hover:bg-muted/40 text-xs"
+            className="w-6 flex-shrink-0 bg-card rounded border border-border flex flex-col items-center justify-center text-muted-foreground hover:text-muted-foreground hover:bg-muted/40 text-xs"
           >
             ‹
           </button>
@@ -465,7 +465,7 @@ export function MatchControlCenterPage() {
 
       {liveTracking.isLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded border border-border p-4">
+          <div className="bg-card rounded border border-border p-4">
             <div className="w-6 h-6 border-2 border-border border-t-gray-600 rounded-full animate-spin mx-auto" />
             <p className="text-muted-foreground mt-2 text-xs">Loading…</p>
           </div>

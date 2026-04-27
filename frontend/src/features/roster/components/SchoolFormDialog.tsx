@@ -73,7 +73,7 @@ export function SchoolFormDialog({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded bg-white p-4 shadow-xl transition-all">
+              <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded bg-card p-4 shadow-xl transition-all">
                 <Dialog.Title as="h3" className="text-sm font-medium text-foreground mb-4">
                   {school ? 'Edit School' : 'Add School'}
                 </Dialog.Title>

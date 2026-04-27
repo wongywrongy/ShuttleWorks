@@ -120,15 +120,15 @@ export function RosterTree({
 
   if (rootGroups.length === 0 && players.filter(p => !p.groupId).length === 0) {
     return (
-      <div className="p-8 bg-white rounded-lg shadow text-center text-muted-foreground">
+      <div className="p-8 bg-card rounded-lg shadow text-center text-muted-foreground">
         No groups or players. Create a group or add players to get started.
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="divide-y divide-gray-200">
+    <div className="bg-card rounded-lg shadow overflow-hidden">
+      <div className="divide-y divide-border">
         {rootGroups.map(group => renderGroup(group))}
         {/* Show ungrouped players at root level */}
         {players.filter(p => !p.groupId).map(player => (

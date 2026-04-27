@@ -1,6 +1,21 @@
 /**
- * Schedule hook - calls stateless API with data from Zustand store
- * Uses global state for generation progress to persist across tab switches
+ * Schedule generation hook.
+ *
+ * Owns the round-trip with ``/schedule/stream`` (Server-Sent Events).
+ * Reads the current tournament from ``appStore`` (config + players +
+ * matches), opens an SSE stream, feeds each ``solver_progress`` /
+ * ``solver_phase`` / ``solver_model_built`` event into the solver-HUD
+ * slice, and writes the final ``ScheduleDTO`` into ``appStore.schedule``
+ * when the stream completes.
+ *
+ * Generation flags (``isGenerating``, ``generationProgress``,
+ * ``generationError``) live on the global store rather than local state
+ * so they survive tab switches — a user can hop to Roster mid-solve and
+ * back to Schedule without losing the run.
+ *
+ * An ``AbortController`` is held in a ref so a second ``generate()``
+ * call (or an unmount) cleanly cancels the in-flight stream; the API
+ * client treats ``ERR_CANCELED`` as silent (no toast).
  */
 import { useCallback, useState, useRef } from 'react';
 import { useAppStore } from '../store/appStore';

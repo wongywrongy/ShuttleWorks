@@ -163,7 +163,7 @@ export function LiveTimelineGrid({
   }
 
   return (
-    <div className="bg-white rounded border border-border overflow-hidden">
+    <div className="bg-card rounded border border-border overflow-hidden">
       {/* Header with legend and status */}
       <div className="px-2 py-1 border-b border-border bg-muted/40 flex items-center gap-3 text-xs">
         {/* Legend */}

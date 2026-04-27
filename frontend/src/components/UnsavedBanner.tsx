@@ -66,8 +66,8 @@ export function UnsavedBanner() {
         data-testid="unsaved-save-now"
         className={`rounded border px-2 py-0.5 text-xs ${
           isError
-            ? 'border-red-400 bg-white text-red-700 hover:bg-red-100'
-            : 'border-yellow-400 bg-white text-yellow-700 hover:bg-yellow-100'
+            ? 'border-red-400 bg-card text-red-700 hover:bg-red-100'
+            : 'border-yellow-400 bg-card text-yellow-700 hover:bg-yellow-100'
         } disabled:opacity-50`}
       >
         {saving ? 'Saving…' : 'Save now'}

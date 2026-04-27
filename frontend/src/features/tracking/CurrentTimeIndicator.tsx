@@ -34,7 +34,7 @@ export function CurrentTimeIndicator({ lastSynced }: CurrentTimeIndicatorProps) 
 
   if (!config) {
     return (
-      <div className="bg-white rounded shadow-sm p-3">
+      <div className="bg-card rounded shadow-sm p-3">
         <div className="text-sm text-muted-foreground">No tournament configuration</div>
       </div>
     );
@@ -53,7 +53,7 @@ export function CurrentTimeIndicator({ lastSynced }: CurrentTimeIndicatorProps) 
     });
 
     return (
-      <div className="bg-white rounded shadow-sm p-3 flex items-center justify-between">
+      <div className="bg-card rounded shadow-sm p-3 flex items-center justify-between">
         <div>
           <div className="text-sm text-muted-foreground">Current Time</div>
           <div className="text-2xl font-mono font-bold text-blue-600">{timeStr}</div>

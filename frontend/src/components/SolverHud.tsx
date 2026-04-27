@@ -73,7 +73,7 @@ export function SolverHud() {
   const showHud = isGenerating || hud.solutionCount > 0 || hud.phase !== null;
   if (!showHud) {
     return (
-      <footer className="sticky bottom-0 z-10 flex items-center justify-between border-t border-border bg-white px-4 py-2 text-xs text-muted-foreground">
+      <footer className="sticky bottom-0 z-10 flex items-center justify-between border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-border" aria-hidden />
           Solver idle — click Generate to begin.
@@ -86,7 +86,7 @@ export function SolverHud() {
     <footer
       data-testid="solver-hud"
       className={[
-        'relative sticky bottom-0 z-10 flex items-center gap-4 border-t border-border bg-white px-4 py-2 text-xs text-foreground overflow-hidden',
+        'relative sticky bottom-0 z-10 flex items-center gap-4 border-t border-border bg-card px-4 py-2 text-xs text-foreground overflow-hidden',
       ].join(' ')}
     >
       {/* Scanline — only during active solve */}
@@ -194,7 +194,7 @@ function CancelButton() {
       type="button"
       onClick={cancelGeneration}
       data-testid="solver-hud-cancel"
-      className="rounded border border-border bg-white px-2 py-1 text-xs text-foreground hover:bg-muted/40 transition-colors"
+      className="rounded border border-border bg-card px-2 py-1 text-xs text-foreground hover:bg-muted/40 transition-colors"
     >
       Cancel
     </button>

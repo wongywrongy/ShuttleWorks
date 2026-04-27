@@ -111,7 +111,7 @@ export function RosterTreeSelector({
   };
 
   return (
-    <div className="border border-border rounded-md bg-white max-h-96 overflow-y-auto">
+    <div className="border border-border rounded-md bg-card max-h-96 overflow-y-auto">
       {searchPlaceholder && (
         <div className="p-2 border-b border-border">
           <input

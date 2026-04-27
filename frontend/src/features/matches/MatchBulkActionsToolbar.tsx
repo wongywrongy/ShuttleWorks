@@ -24,7 +24,7 @@ export function MatchBulkActionsToolbar({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-blue-500 shadow-lg animate-slide-up">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t-2 border-blue-500 shadow-lg animate-slide-up">
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           {/* Selection Count */}

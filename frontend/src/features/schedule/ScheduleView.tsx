@@ -39,7 +39,7 @@ export function ScheduleView({ schedule, view, config }: ScheduleViewProps) {
     const slots = Array.from(bySlot.keys()).sort((a, b) => a - b);
 
     return (
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-border">
         {slots.map((slotId) => {
           const slotAssignments = bySlot.get(slotId)!;
           const firstAssignment = slotAssignments[0];
@@ -81,7 +81,7 @@ export function ScheduleView({ schedule, view, config }: ScheduleViewProps) {
     const courts = Array.from(byCourt.keys()).sort((a, b) => a - b);
 
     return (
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-border">
         {courts.map((courtId) => {
           const courtAssignments = byCourt.get(courtId)!.sort((a, b) => a.slotId - b.slotId);
 

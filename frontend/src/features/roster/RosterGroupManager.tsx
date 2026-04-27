@@ -147,7 +147,7 @@ export function RosterGroupManager({
             onClick={() => setContextMenu(null)}
           />
           <div
-            className="fixed z-50 bg-white border border-border rounded-lg shadow-lg py-1 min-w-[150px]"
+            className="fixed z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[150px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <button

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRosterGroups } from '../../hooks/useRosterGroups';
-import { apiClient } from '../../api/client';
+import { useAppStore } from '../../store/appStore';
+import { generateMatches } from '../../utils/matchGenerator';
 import { RosterTreeSelector } from '../../components/roster/RosterTreeSelector';
 import type { MatchGenerationRule, MatchDTO } from '../../api/dto';
 
@@ -11,6 +12,7 @@ interface AutoMatchGeneratorProps {
 
 export function AutoMatchGenerator({ onGenerate, onCancel }: AutoMatchGeneratorProps) {
   const { groups } = useRosterGroups();
+  const players = useAppStore((s) => s.players);
   const [rule, setRule] = useState<MatchGenerationRule>({
     type: 'all_vs_all',
     rosterAId: '',
@@ -34,7 +36,13 @@ export function AutoMatchGenerator({ onGenerate, onCancel }: AutoMatchGeneratorP
     try {
       setGenerating(true);
       setErrors({});
-      const matches = await apiClient.generateMatchesFromRule('default', rule);
+      const matches = generateMatches(rule, groups, players);
+      if (matches.length === 0) {
+        setErrors({
+          preview:
+            'No matches could be generated with these settings. Try a different roster, lower players-per-side, or relax the constraints.',
+        });
+      }
       setPreviewMatches(matches);
     } catch (err) {
       setErrors({ preview: err instanceof Error ? err.message : 'Failed to generate preview' });
@@ -52,7 +60,7 @@ export function AutoMatchGenerator({ onGenerate, onCancel }: AutoMatchGeneratorP
   };
 
   return (
-    <div className="bg-white p-3 rounded shadow-sm">
+    <div className="bg-card p-3 rounded shadow-sm">
       <h3 className="text-base font-semibold mb-3">Auto-Generate Matches</h3>
 
       <div className="space-y-3">

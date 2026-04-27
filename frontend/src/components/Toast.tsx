@@ -57,7 +57,7 @@ function Item({ toast }: { toast: ToastEntry }) {
             toast.onAction?.();
             dismiss(toast.id);
           }}
-          className={`${INTERACTIVE_BASE} rounded border border-current bg-white px-2 py-0.5 text-[11px] font-semibold hover:bg-white/90`}
+          className={`${INTERACTIVE_BASE} rounded border border-current bg-card px-2 py-0.5 text-[11px] font-semibold hover:bg-card/90`}
         >
           {toast.actionLabel}
         </button>

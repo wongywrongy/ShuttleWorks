@@ -119,7 +119,7 @@ export function LiveOperationsGrid({
   const hasImpacts = overrunMatches.length > 0 || impactedMatches.length > 0 || delayedCount > 0;
 
   return (
-    <div className="bg-white rounded border border-border overflow-hidden">
+    <div className="bg-card rounded border border-border overflow-hidden">
       {/* Header with progress, stats, legend, and reoptimize */}
       <div className="px-2 py-1 border-b border-border bg-muted/40 flex items-center gap-3 text-xs">
         {/* Progress bar */}

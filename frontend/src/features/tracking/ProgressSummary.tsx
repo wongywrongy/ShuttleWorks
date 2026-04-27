@@ -18,7 +18,7 @@ export function ProgressSummary({
   percentage
 }: ProgressSummaryProps) {
   return (
-    <div className="bg-white rounded shadow-sm p-3">
+    <div className="bg-card rounded shadow-sm p-3">
       <h2 className="text-lg font-bold mb-2">Tournament Progress</h2>
 
       {/* Progress Bar */}

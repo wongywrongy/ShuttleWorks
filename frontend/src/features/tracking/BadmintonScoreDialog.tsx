@@ -134,7 +134,7 @@ export function BadmintonScoreDialog({
       titleId={titleId}
       locked={isSubmitting}
       widthClass="max-w-xl"
-      panelClassName="w-full max-w-xl rounded-lg bg-white shadow-xl focus:outline-none"
+      panelClassName="w-full max-w-xl rounded-lg bg-card shadow-xl focus:outline-none"
     >
         {/* Header */}
         <div className="flex items-start justify-between rounded-t-lg border-b border-border bg-muted/40 px-4 py-3">
@@ -196,7 +196,7 @@ export function BadmintonScoreDialog({
                   ? 'bg-blue-50/60 border-blue-200'
                   : wonBy === 'B'
                     ? 'bg-rose-50/60 border-rose-200'
-                    : 'bg-white border-border';
+                    : 'bg-card border-border';
               const scoreInput = (side: 'sideA' | 'sideB', isWinning: boolean) => (
                 <input
                   type="number"
@@ -208,7 +208,7 @@ export function BadmintonScoreDialog({
                   className={`w-full rounded border px-2 py-1.5 text-center text-base font-mono tabular-nums ${
                     isWinning
                       ? 'border-green-400 bg-green-50 font-semibold text-green-800'
-                      : 'border-border bg-white text-foreground'
+                      : 'border-border bg-card text-foreground'
                   } focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200`}
                 />
               );
@@ -282,7 +282,7 @@ export function BadmintonScoreDialog({
               <span className="font-semibold">
                 {matchWinner === 'A' ? sideAName || 'Side A' : sideBName || 'Side B'}
               </span>
-              <span className="rounded bg-white/60 px-2 py-0.5 font-mono text-xs">
+              <span className="rounded bg-card/60 px-2 py-0.5 font-mono text-xs">
                 {setsWonA}–{setsWonB}
               </span>
             </div>
@@ -313,7 +313,7 @@ export function BadmintonScoreDialog({
               type="button"
               onClick={onCancel}
               disabled={isSubmitting}
-              className={`${INTERACTIVE_BASE} rounded border border-border bg-white px-3 py-1.5 text-sm text-foreground hover:bg-muted/40`}
+              className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted/40`}
             >
               Cancel
             </button>

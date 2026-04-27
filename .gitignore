@@ -31,7 +31,13 @@ htmlcov/
 .docker/
 
 # Documentation
-*.md
+# Block scratch markdown at the repo ROOT only (e.g., prompt dumps, snapshot
+# pastes from manual MCP runs). Subdirectory README.md / *.md files are
+# tracked normally so feature-folder docs stay in version control.
+/*.md
+!/README.md
+!/BACKEND.md
+!/FRONTEND.md
 
 # Old app folders (legacy)
 apps/

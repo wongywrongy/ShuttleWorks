@@ -169,7 +169,7 @@ export function EditMatchDialog({
       onClose={onClose}
       titleId={titleId}
       locked={isSubmitting}
-      panelClassName="w-96 max-w-[90vw] max-h-[90vh] overflow-auto rounded-lg bg-white p-4 shadow-xl focus:outline-none"
+      panelClassName="w-96 max-w-[90vw] max-h-[90vh] overflow-auto rounded-lg bg-card p-4 shadow-xl focus:outline-none"
     >
       <div className="flex justify-between items-center mb-3">
         <h3 id={titleId} className="text-sm font-semibold text-foreground">Edit {matchName}</h3>

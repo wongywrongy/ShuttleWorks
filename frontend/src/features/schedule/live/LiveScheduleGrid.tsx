@@ -57,7 +57,7 @@ export function LiveScheduleGrid({
   );
 
   return (
-    <div className="bg-white rounded border border-border">
+    <div className="bg-card rounded border border-border">
       {/* Header with metrics and actions */}
       <div className="px-3 py-2 border-b border-border flex items-center justify-between">
         <LiveMetricsBar

@@ -86,7 +86,7 @@ export function FileManagementButtons({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
+    <div className="bg-card rounded-lg shadow p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold text-foreground">File Management</h3>
         <button
@@ -149,7 +149,7 @@ export function FileManagementButtons({
       <div className="mt-4 p-3 bg-blue-50 rounded-md text-xs text-foreground">
         <p className="font-medium text-blue-900 mb-1">Portable State File</p>
         <p>
-          The tournament state is saved in <code className="bg-white px-1 py-0.5 rounded">tournament_state.json</code>.
+          The tournament state is saved in <code className="bg-card px-1 py-0.5 rounded">tournament_state.json</code>.
           You can copy this file to a USB drive, email it, or store it in the cloud to move your tournament progress between computers.
         </p>
       </div>

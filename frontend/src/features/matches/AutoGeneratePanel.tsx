@@ -98,7 +98,7 @@ export function AutoGeneratePanel() {
   };
 
   return (
-    <div className="rounded border border-border bg-white p-3">
+    <div className="rounded border border-border bg-card p-3">
       <div className="mb-2 flex items-baseline justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Auto-generate
@@ -153,7 +153,7 @@ export function AutoGeneratePanel() {
           <button
             type="button"
             onClick={() => setConfirm(false)}
-            className="rounded border border-border bg-white px-3 py-1.5 text-sm text-foreground hover:bg-muted/40"
+            className="rounded border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted/40"
           >
             Cancel
           </button>

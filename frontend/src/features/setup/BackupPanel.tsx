@@ -182,7 +182,7 @@ export function BackupPanel() {
 
   return (
     <div
-      className="rounded border border-border bg-white p-3"
+      className="rounded border border-border bg-card p-3"
       data-testid="backup-panel"
     >
       <div className="flex items-center justify-between">
@@ -198,7 +198,7 @@ export function BackupPanel() {
           disabled={busyAction !== null}
           data-testid="backup-create"
           aria-busy={busyAction === 'create'}
-          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-white px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
+          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
         >
           {busyAction === 'create' && (
             <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
@@ -221,7 +221,7 @@ export function BackupPanel() {
             No backups yet — one will appear the next time you save.
           </div>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border">
             {entries.map((e) => (
               <li
                 key={e.filename}
@@ -253,7 +253,7 @@ export function BackupPanel() {
                       type="button"
                       onClick={() => setConfirmRestore(null)}
                       disabled={busyAction !== null}
-                      className={`${INTERACTIVE_BASE} rounded border border-border bg-white px-2 py-0.5 text-foreground hover:bg-muted/40`}
+                      className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-0.5 text-foreground hover:bg-muted/40`}
                     >
                       Cancel
                     </button>
@@ -264,7 +264,7 @@ export function BackupPanel() {
                     onClick={() => setConfirmRestore(e.filename)}
                     disabled={busyAction !== null}
                     data-testid={`backup-restore-${e.filename}`}
-                    className={`${INTERACTIVE_BASE} rounded border border-border bg-white px-2 py-0.5 text-foreground hover:bg-muted/40`}
+                    className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-0.5 text-foreground hover:bg-muted/40`}
                   >
                     Restore
                   </button>
@@ -288,7 +288,7 @@ export function BackupPanel() {
             onClick={() => fileInputRef.current?.click()}
             disabled={busyAction !== null}
             data-testid="schedule-import-open"
-            className={`${INTERACTIVE_BASE} rounded border border-border bg-white px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
+            className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
           >
             Recover from XLSX…
           </button>

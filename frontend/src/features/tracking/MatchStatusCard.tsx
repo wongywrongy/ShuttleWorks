@@ -185,12 +185,12 @@ export function MatchStatusCard({
       <div
         className={`rounded border p-1.5 transition-colors text-xs ${
           selected
-            ? 'border-blue-500 ring-2 ring-blue-200 bg-white'
+            ? 'border-blue-500 ring-2 ring-blue-200 bg-card'
             : isDelayed
               ? 'border-yellow-400 bg-yellow-50'
               : dimmed
-                ? 'border-border/60 opacity-50 bg-white'
-                : 'border-border hover:border-border bg-white'
+                ? 'border-border/60 opacity-50 bg-card'
+                : 'border-border hover:border-border bg-card'
         } ${onSelect && !dimmed ? 'cursor-pointer' : ''}`}
         onClick={handleCardClick}
       >

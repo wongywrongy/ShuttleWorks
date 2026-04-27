@@ -114,7 +114,7 @@ export function MatchForm({ match, onSave, onCancel }: MatchFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-3 rounded shadow-sm">
+    <form onSubmit={handleSubmit} className="bg-card p-3 rounded shadow-sm">
       <h3 className="text-base font-semibold mb-3">{match ? 'Edit Match' : 'Add Match'}</h3>
 
       <div className="space-y-3">

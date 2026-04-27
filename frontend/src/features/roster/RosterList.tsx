@@ -9,15 +9,15 @@ interface RosterListProps {
 export function RosterList({ players, onEdit, onDelete }: RosterListProps) {
   if (players.length === 0) {
     return (
-      <div className="p-8 bg-white rounded-lg shadow text-center text-muted-foreground">
+      <div className="p-8 bg-card rounded-lg shadow text-center text-muted-foreground">
         No players in roster. Add players to get started.
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="bg-card rounded-lg shadow overflow-hidden">
+      <table className="min-w-full divide-y divide-border">
         <thead className="bg-muted/40">
           <tr>
             <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -40,7 +40,7 @@ export function RosterList({ players, onEdit, onDelete }: RosterListProps) {
             </th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="bg-card divide-y divide-border">
           {players.map((player) => (
             <tr key={player.id}>
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">

@@ -60,7 +60,7 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
 
   return (
     <div
-      className="rounded border border-border bg-white overflow-hidden"
+      className="rounded border border-border bg-card overflow-hidden"
       data-testid="player-pool"
     >
       <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
@@ -97,7 +97,7 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
                     setDraft('');
                     setExpanded(false);
                   }}
-                  className="rounded border border-border bg-white px-2 py-0.5 text-foreground hover:bg-muted/40"
+                  className="rounded border border-border bg-card px-2 py-0.5 text-foreground hover:bg-muted/40"
                 >
                   Cancel
                 </button>

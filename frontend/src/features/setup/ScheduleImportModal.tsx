@@ -34,7 +34,7 @@ function WarningTable({ warnings }: { warnings: ImportWarning[] }) {
             <th className="px-2 py-1 font-medium">Reason</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border">
           {warnings.map((w, i) => (
             <tr key={i} data-testid={`schedule-import-warning-${i}`}>
               <td className="px-2 py-1 text-muted-foreground">{w.row}</td>
@@ -93,7 +93,7 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
       onClose={onCancel}
       titleId={titleId}
       locked={busy}
-      panelClassName="w-full max-w-lg rounded-lg bg-white p-4 shadow-xl focus:outline-none"
+      panelClassName="w-full max-w-lg rounded-lg bg-card p-4 shadow-xl focus:outline-none"
     >
       <div data-testid="schedule-import-modal">
         <h2 id={titleId} className="text-sm font-semibold text-foreground">{title}</h2>
@@ -108,7 +108,7 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className={`${INTERACTIVE_BASE} rounded border border-border bg-white px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
+            className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
           >
             Cancel
           </button>

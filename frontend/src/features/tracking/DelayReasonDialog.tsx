@@ -47,7 +47,7 @@ export function DelayReasonDialog({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl p-4 w-80 max-w-[90vw]">
+      <div className="bg-card rounded-lg shadow-xl p-4 w-80 max-w-[90vw]">
         <h3 className="text-lg font-semibold text-foreground mb-1">Delay Match</h3>
         <p className="text-sm text-muted-foreground mb-3">{matchName}</p>
 

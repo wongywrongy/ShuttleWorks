@@ -53,7 +53,7 @@ export function GroupStrip() {
   };
 
   return (
-    <div className="rounded border border-border bg-white p-2">
+    <div className="rounded border border-border bg-card p-2">
       <div className="mb-1.5 flex items-baseline justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Schools
@@ -124,13 +124,13 @@ export function GroupStrip() {
                 setCreating(false);
               }
             }}
-            className="rounded-full border border-dashed border-blue-400 bg-blue-50 px-2.5 py-0.5 text-xs outline-none w-36 focus:bg-white"
+            className="rounded-full border border-dashed border-blue-400 bg-blue-50 px-2.5 py-0.5 text-xs outline-none w-36 focus:bg-card dark:bg-blue-500/10 dark:text-blue-100"
           />
         ) : (
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-white px-2.5 py-0.5 text-xs text-muted-foreground hover:border-blue-400 hover:text-blue-700"
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground hover:border-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
             data-testid="add-school"
           >
             <span aria-hidden>＋</span>Add school

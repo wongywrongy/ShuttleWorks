@@ -114,7 +114,7 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
   };
 
   return (
-    <div className="bg-white p-4 rounded shadow max-w-7xl mx-auto">
+    <div className="bg-card p-4 rounded shadow max-w-7xl mx-auto">
       <h3 className="text-base font-semibold mb-3">
         Visual Match Generator - {matchType === 'tri' ? 'Tri-Meet' : 'Dual Meet'}
       </h3>
@@ -140,7 +140,7 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
                 className={`p-3 rounded border-2 transition-all ${
                   isSelected
                     ? 'border-blue-600 bg-blue-50'
-                    : 'border-border bg-white hover:border-blue-400'
+                    : 'border-border bg-card hover:border-blue-400'
                 }`}
               >
                 <div className="font-medium text-foreground">{school.name}</div>
@@ -176,7 +176,7 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
           </h4>
           <div className="border border-border rounded-sm overflow-hidden">
             <div className="max-h-64 overflow-y-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-border">
                 <thead className="bg-muted/40 sticky top-0">
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Rank</th>
@@ -193,7 +193,7 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
                     )}
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-card divide-y divide-border">
                   {previewMatches.map((match, idx) => {
                     const isDoublesRank = match.rank.startsWith('MD') || match.rank.startsWith('WD') || match.rank.startsWith('XD');
                     const hasIncompleteA = isDoublesRank && match.playersA.length === 1;
