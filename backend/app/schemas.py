@@ -83,11 +83,14 @@ class TournamentConfig(BaseModel):
     # Roster position-grid event-column order + visibility (UI-only).
     eventOrder: Optional[List[str]] = None
     eventVisible: Optional[Dict[str, bool]] = None
-    # Reproducible-run mode: single-worker solve with fixed seed so
-    # the same input always produces the same schedule. ~3× slower
-    # than parallel mode; opt-in.
+    # ---- Engine settings ------------------------------------------
     deterministic: Optional[bool] = None
     randomSeed: Optional[int] = None
+    # Solver wall-clock cap; higher = closer to optimal at the cost
+    # of operator wait time. Default 30s (DEFAULT_SOLVER_OPTIONS).
+    solverTimeLimitSeconds: Optional[float] = Field(None, gt=0, le=300)
+    # Top-N near-optimal alternatives the solver keeps. Default 5.
+    candidatePoolSize: Optional[int] = Field(None, ge=1, le=20)
 
 
 # Availability

@@ -44,8 +44,10 @@ def diagnose_infeasibility(
                     f"Player {player.name} needs {slots_needed} slots "
                     f"but only available for {available_slots}"
                 )
-    
-    if not reasons:
-        reasons.append("Could not determine specific cause - constraints may be too restrictive")
-    
+
+    # No generic placeholder when we couldn't pinpoint a cause —
+    # the frontend renders an actionable empty state in that case
+    # ("try adding courts, reducing rest, etc."), which is more
+    # useful than telling the operator "constraints may be too
+    # restrictive".
     return reasons

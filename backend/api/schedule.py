@@ -30,8 +30,7 @@ except ImportError as e:
     )
 
 from adapters.badminton import (
-    CANDIDATE_POOL_SIZE,
-    DEFAULT_SOLVER_OPTIONS,
+    candidate_pool_size_for,
     prepare_solver_input,
     result_to_dto,
     solver_options_for,
@@ -93,7 +92,7 @@ async def generate_schedule(request: GenerateScheduleRequest):
         )
         result = CPSATBackend(
             solver_options=solver_request.solver_options,
-            candidate_pool_size=CANDIDATE_POOL_SIZE,
+            candidate_pool_size=candidate_pool_size_for(request.config),
         ).solve(solver_request)
         return result_to_dto(result)
 
@@ -207,7 +206,7 @@ async def generate_schedule_stream(request: GenerateScheduleRequest, http_reques
 
                 result = scheduler.solve(
                     progress_callback=progress_callback,
-                    candidate_pool_size=CANDIDATE_POOL_SIZE,
+                    candidate_pool_size=candidate_pool_size_for(request.config),
                 )
                 result_holder["result"] = result
 

@@ -499,18 +499,25 @@ export function SchedulePage() {
       )}
 
       {schedule?.status === 'infeasible' && (
-        <div className="p-2 bg-red-50 border border-red-200 rounded text-xs flex-shrink-0 dark:bg-red-500/10 dark:border-red-500/30">
-          <span className="font-medium text-red-800 dark:text-red-200">Infeasible:</span>{' '}
-          <span className="text-red-700 dark:text-red-300">{schedule.infeasibleReasons?.length || 0} constraint violations.</span>
+        <div className="p-3 bg-red-50 border border-red-200 rounded text-xs flex-shrink-0 dark:bg-red-500/10 dark:border-red-500/30">
+          <div className="font-medium text-red-800 dark:text-red-200 mb-1">
+            Couldn't generate a feasible schedule
+          </div>
+          <div className="text-red-700 dark:text-red-300">
+            Try adding courts, reducing default rest time, extending the day,
+            or relaxing player availability windows in Setup.
+          </div>
           {schedule.infeasibleReasons && schedule.infeasibleReasons.length > 0 && (
-            <details className="mt-1">
-              <summary className="cursor-pointer text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200">View details</summary>
-              <ul className="mt-1 pl-3 text-red-600 max-h-24 overflow-y-auto dark:text-red-300">
+            <details className="mt-2">
+              <summary className="cursor-pointer text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200">
+                Details ({schedule.infeasibleReasons.length})
+              </summary>
+              <ul className="mt-1 pl-3 text-red-600 max-h-24 overflow-y-auto dark:text-red-300 list-disc">
                 {schedule.infeasibleReasons.slice(0, 10).map((reason, i) => (
                   <li key={i}>{reason}</li>
                 ))}
                 {schedule.infeasibleReasons.length > 10 && (
-                  <li>...and {schedule.infeasibleReasons.length - 10} more</li>
+                  <li>…and {schedule.infeasibleReasons.length - 10} more</li>
                 )}
               </ul>
             </details>

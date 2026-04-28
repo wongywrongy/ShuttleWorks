@@ -88,14 +88,22 @@ export interface TournamentConfig {
   // sequence. Hidden columns are stored as ``false`` per rank.
   eventOrder?: string[];
   eventVisible?: Record<string, boolean>;
-  // ---- Reproducible-run mode -------------------------------------
-  // When ``true`` the solver runs single-threaded with a fixed seed
-  // so the same input produces a byte-identical schedule across
-  // runs. Useful for dispute resolution and regression testing;
-  // costs ~3× wall time. Default off.
+  // ---- Engine settings -------------------------------------------
+  // Reproducible-run mode: solver runs single-threaded with a fixed
+  // seed so the same input produces a byte-identical schedule across
+  // runs. ~3× slower than parallel mode; default off.
   deterministic?: boolean;
-  // The seed used in deterministic mode. Defaults to 42 when unset.
+  // Seed used in deterministic mode. Default 42 when unset.
   randomSeed?: number;
+  // Solver wall-clock cap. The CP-SAT solver returns the best
+  // feasible schedule found within this window. Higher = closer to
+  // optimal at the cost of operator wait time. Default 30 s.
+  solverTimeLimitSeconds?: number;
+  // How many near-optimal alternative schedules the solver keeps
+  // alongside the chosen one. Operator can swap to a candidate in a
+  // click when reality (overrun, withdrawal, court closure) makes
+  // the chosen plan no longer fit — no re-solve needed. Default 5.
+  candidatePoolSize?: number;
 }
 
 export interface BreakWindow {

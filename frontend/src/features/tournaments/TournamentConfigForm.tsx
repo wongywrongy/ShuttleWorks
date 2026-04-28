@@ -33,6 +33,8 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
     playerOverlapPenalty: config.playerOverlapPenalty ?? 50.0,
     deterministic: config.deterministic ?? false,
     randomSeed: config.randomSeed ?? 42,
+    solverTimeLimitSeconds: config.solverTimeLimitSeconds ?? 30,
+    candidatePoolSize: config.candidatePoolSize ?? 5,
     // Badminton is the app's domain; default to per-set scoring so the
     // Live-page Finish dialog asks for game scores instead of a single
     // sideA/sideB aggregate.
@@ -553,6 +555,92 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
           </CardContent>
         </Card>
 
+        {/* ENGINE — solver tuning + reproducibility */}
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm">Engine</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0">
+            <div className="space-y-3">
+              {/* Reproducible run */}
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
+                <input
+                  type="checkbox"
+                  id="deterministic"
+                  checked={formData.deterministic ?? false}
+                  onChange={(e) => setFormData({ ...formData, deterministic: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-input"
+                />
+                <div className="flex-1">
+                  <Label htmlFor="deterministic" className="cursor-pointer">
+                    Reproducible run
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Single-worker mode with a fixed seed — same input always produces the same schedule. ~3× slower.
+                  </p>
+                  {formData.deterministic && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Label className="text-xs">Seed</Label>
+                      <Input
+                        type="number"
+                        value={formData.randomSeed ?? 42}
+                        onChange={(e) => setFormData({ ...formData, randomSeed: parseInt(e.target.value || '42', 10) })}
+                        className="h-8 w-24"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Solver time limit */}
+              <div className="p-3 bg-muted/50 rounded-md">
+                <Label htmlFor="solverTimeLimitSeconds">Solver time limit</Label>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                  Maximum wall-clock seconds the solver may spend. Higher = closer to optimal at the cost of operator wait time.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    id="solverTimeLimitSeconds"
+                    value={formData.solverTimeLimitSeconds ?? 30}
+                    onChange={(e) => setFormData({ ...formData, solverTimeLimitSeconds: parseInt(e.target.value, 10) })}
+                    className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
+                    min={5}
+                    max={120}
+                    step={5}
+                  />
+                  <span className="text-xs font-medium w-12 tabular-nums text-right">
+                    {formData.solverTimeLimitSeconds ?? 30}s
+                  </span>
+                </div>
+              </div>
+
+              {/* Candidate pool size */}
+              <div className="p-3 bg-muted/50 rounded-md">
+                <Label htmlFor="candidatePoolSize">Candidate alternatives</Label>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                  Top-N near-optimal alternative schedules to keep alongside the chosen one. Operator can swap to one in a click during play.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    id="candidatePoolSize"
+                    value={formData.candidatePoolSize ?? 5}
+                    onChange={(e) => setFormData({ ...formData, candidatePoolSize: parseInt(e.target.value, 10) })}
+                    className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
+                    min={1}
+                    max={20}
+                    step={1}
+                  />
+                  <span className="text-xs font-medium w-8 tabular-nums text-right">
+                    {formData.candidatePoolSize ?? 5}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* ADVANCED OPTIMIZATION (Collapsible) */}
         <Card>
           <button
@@ -574,36 +662,6 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
           {showAdvanced && (
             <CardContent className="px-4 pb-4 pt-0 border-t">
               <div className="space-y-3 pt-3">
-                {/* Reproducible run */}
-                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
-                  <input
-                    type="checkbox"
-                    id="deterministic"
-                    checked={formData.deterministic ?? false}
-                    onChange={(e) => setFormData({ ...formData, deterministic: e.target.checked })}
-                    className="mt-0.5 h-4 w-4 rounded border-input"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="deterministic" className="cursor-pointer">
-                      Reproducible run
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Single-worker mode with a fixed seed — same input always produces the same schedule. ~3× slower.
-                    </p>
-                    {formData.deterministic && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <Label className="text-xs">Seed</Label>
-                        <Input
-                          type="number"
-                          value={formData.randomSeed ?? 42}
-                          onChange={(e) => setFormData({ ...formData, randomSeed: parseInt(e.target.value || '42', 10) })}
-                          className="h-8 w-24"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
                 {/* Court Utilization */}
                 <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
                   <input

@@ -94,21 +94,40 @@ def _time_to_slot(time: str, day_start: str, interval_minutes: int) -> int:
 
 
 def solver_options_for(config: TournamentConfig) -> SolverOptions:
-    """Pick solver options honouring the config's reproducible-run flags.
+    """Pick solver options honouring the config's engine settings.
 
-    Deterministic mode forces single-worker (CP-SAT only guarantees
-    byte-identical output across runs under one search worker). Same
-    input + same seed + deterministic produces identical schedules.
+    - ``solverTimeLimitSeconds`` overrides the default 30 s cap.
+    - ``deterministic`` forces single-worker mode (CP-SAT only
+      guarantees byte-identical output under one search worker).
+    - ``randomSeed`` sets the deterministic seed (default 42).
     """
+    time_limit = (
+        config.solverTimeLimitSeconds
+        if config.solverTimeLimitSeconds is not None
+        else DEFAULT_SOLVER_OPTIONS.time_limit_seconds
+    )
     if config.deterministic:
         return SolverOptions(
-            time_limit_seconds=DEFAULT_SOLVER_OPTIONS.time_limit_seconds,
+            time_limit_seconds=time_limit,
             num_workers=1,
             random_seed=config.randomSeed if config.randomSeed is not None else 42,
             log_progress=False,
             deterministic=True,
         )
-    return DEFAULT_SOLVER_OPTIONS
+    return SolverOptions(
+        time_limit_seconds=time_limit,
+        num_workers=DEFAULT_SOLVER_OPTIONS.num_workers,
+        random_seed=DEFAULT_SOLVER_OPTIONS.random_seed,
+        log_progress=False,
+        deterministic=False,
+    )
+
+
+def candidate_pool_size_for(config: TournamentConfig) -> int:
+    """Resolve the candidate-pool size, honouring the operator override."""
+    if config.candidatePoolSize is not None and config.candidatePoolSize >= 1:
+        return config.candidatePoolSize
+    return CANDIDATE_POOL_SIZE
 
 
 def schedule_config_from_dto(config: TournamentConfig) -> ScheduleConfig:
@@ -305,6 +324,7 @@ def result_to_dto(result) -> ScheduleDTO:
 __all__ = [
     "CANDIDATE_POOL_SIZE",
     "DEFAULT_SOLVER_OPTIONS",
+    "candidate_pool_size_for",
     "matches_from_dto",
     "players_from_dto",
     "prepare_solver_input",
