@@ -22,7 +22,8 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
-import { formatSlotTime, parseMatchStartMs } from '../utils/timeUtils';
+import { formatSlotTime } from '../lib/time';
+import { formatElapsed } from '../lib/timeFormatters';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment } from '../api/dto';
 
@@ -39,32 +40,6 @@ const TOURNAMENT_POLL_MS = 10_000;
 const RECONNECTING_AFTER_MS = 25_000;
 // After this long with no success we admit we're offline.
 const OFFLINE_AFTER_MS = 60_000;
-
-/**
- * Render a started timestamp as a human elapsed clock for the public
- * display. Matches the behaviour of ``components/common/ElapsedTimer.tsx``:
- *
- *   < 1 h    →  ``M:SS``
- *   < 24 h   →  ``H:MM:SS``
- *   ≥ 24 h   →  ``Xd Hh``  (stale data — operator should resolve)
- */
-function formatElapsed(startIso: string | undefined | null): string | null {
-  const started = parseMatchStartMs(startIso);
-  if (started === null) return null;
-  const secs = Math.max(0, Math.floor((Date.now() - started) / 1000));
-  const days = Math.floor(secs / 86400);
-  if (days >= 1) {
-    const hours = Math.floor((secs % 86400) / 3600);
-    return `${days}d ${hours}h`;
-  }
-  const hours = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  if (hours >= 1) {
-    return `${hours}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  }
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
 
 /** Safe parse for the ``tournamentDate`` config field. Returns null on
  *  any malformed / missing input so we don't render "Invalid Date". */
@@ -349,11 +324,25 @@ export function PublicDisplayPage() {
 
   // ===== Rendering =====================================================
 
+  // ── Theme resolution ──────────────────────────────────────────
+  // ``tvTheme`` lets the venue lock the public display to dark or
+  // light independently of the operator's app theme. ``auto`` (or
+  // unset) follows the app's current theme — read from the
+  // ``.dark`` class that ``useAppliedTheme`` attaches to <html>.
+  const tvTheme = config?.tvTheme ?? 'dark';
+  const isDark = useMemo(() => {
+    if (tvTheme === 'dark') return true;
+    if (tvTheme === 'light') return false;
+    if (typeof document === 'undefined') return true;
+    return document.documentElement.classList.contains('dark');
+  }, [tvTheme, now]);
+  const themeClass = isDark ? 'dark' : '';
+
   if (!schedule || !config) {
     return (
       <div
         ref={rootRef}
-        className="min-h-screen bg-slate-950 text-white flex items-center justify-center"
+        className={`${themeClass} min-h-screen bg-background text-foreground flex items-center justify-center`}
       >
         <div className="absolute right-4 top-4 flex items-center gap-3">
           <LiveStatusPill status={liveStatus} error={syncError} />
@@ -361,7 +350,7 @@ export function PublicDisplayPage() {
         </div>
         <div className="text-center">
           <div className="text-6xl font-bold tracking-tight">Tournament Display</div>
-          <div className="mt-3 text-2xl text-slate-400">
+          <div className="mt-3 text-2xl text-muted-foreground">
             {liveStatus === 'live'
               ? 'No schedule generated yet'
               : 'Waiting for connection to the server…'}
@@ -380,8 +369,8 @@ export function PublicDisplayPage() {
       INTERACTIVE_BASE,
       'rounded-lg px-4 py-2 text-lg font-semibold',
       view === mode
-        ? 'bg-blue-600 text-white shadow-inner'
-        : 'bg-slate-800 text-slate-300 hover:bg-slate-700',
+        ? 'bg-primary text-primary-foreground shadow-inner'
+        : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground',
     ].join(' ');
 
   // The director picks how courts render: tall strips, multi-column
@@ -397,67 +386,66 @@ export function PublicDisplayPage() {
   const tvAccent = (config.tvAccent && /^#?[0-9a-fA-F]{6}$/.test(config.tvAccent.replace(/^#/, '')))
     ? (config.tvAccent.startsWith('#') ? config.tvAccent : `#${config.tvAccent}`)
     : '#10b981';
-  // Background tone — picks a deep base. ``navy`` matches the rest
-  // of the app; ``black`` is OLED pure; ``midnight`` is deep blue;
-  // ``slate`` is neutral cool gray.
+  // Background tone — only meaningful in dark mode. Light mode falls
+  // through to the app's ``bg-background`` token.
   const tvBgTone = config.tvBgTone ?? 'navy';
-  const TV_BG: Record<string, string> = {
-    navy: 'bg-slate-950',
-    black: 'bg-black',
-    midnight: 'bg-[#0a0e2a]',
-    slate: 'bg-slate-900',
-  };
-  const TV_HEADER_BG: Record<string, string> = {
-    navy: 'bg-slate-950/90',
-    black: 'bg-black/90',
-    midnight: 'bg-[#0a0e2a]/90',
-    slate: 'bg-slate-900/90',
-  };
-  // Grid columns: explicit override (1-4), else auto.
+  const TV_BG_DARK = {
+    navy:     { bg: 'bg-slate-950',     header: 'bg-slate-950/90'     },
+    black:    { bg: 'bg-black',         header: 'bg-black/90'         },
+    midnight: { bg: 'bg-[#0a0e2a]',     header: 'bg-[#0a0e2a]/90'     },
+    slate:    { bg: 'bg-slate-900',     header: 'bg-slate-900/90'     },
+  } as const;
+  const tvBgClass = isDark ? TV_BG_DARK[tvBgTone].bg : 'bg-background';
+  const tvHeaderBgClass = isDark ? TV_BG_DARK[tvBgTone].header : 'bg-background/90';
+  // Grid columns / card size / score visibility.
   const tvGridColumns = config.tvGridColumns ?? null;
-  // Card size — controls vertical density of strip + grid cards.
   const tvCardSize = config.tvCardSize ?? 'auto';
   const tvShowScores = config.tvShowScores !== false;
-  // Public-display design rule: every court card is the same size,
-  // regardless of state or content. Resolve a concrete pixel height
-  // per ``tvCardSize`` mode so the audience can locate "Court 4" by
-  // counting rows; long names truncate, per-set breakdowns become
-  // tooltips. ``auto`` adapts to fullscreen vs admin preview.
+  // Card size → height + matching type scale. Big cards get big text
+  // so the audience can read every name from across a gym.
   const cardHeightPx =
     tvCardSize === 'compact' ? 72 :
     tvCardSize === 'comfortable' ? 128 :
     tvCardSize === 'large' ? 176 :
     isFullscreen ? 128 : 96;
-  // Type scale tracks the card height so big cards get big text.
-  const courtNumSize =
-    cardHeightPx >= 160 ? 'text-7xl' :
-    cardHeightPx >= 120 ? 'text-6xl' :
-    cardHeightPx >= 96 ? 'text-5xl' :
-    'text-3xl';
-  const eventCodeSize =
-    cardHeightPx >= 160 ? 'text-4xl' :
-    cardHeightPx >= 120 ? 'text-3xl' :
-    cardHeightPx >= 96 ? 'text-2xl' :
-    'text-base';
-  const playerSize =
-    cardHeightPx >= 160 ? 'text-4xl' :
-    cardHeightPx >= 120 ? 'text-3xl' :
-    cardHeightPx >= 96 ? 'text-2xl' :
-    'text-base';
-  const cardPadX = cardHeightPx >= 120 ? 'px-6' : 'px-4';
+  const sizeTier = cardHeightPx >= 160 ? 'xl' : cardHeightPx >= 120 ? 'lg' : cardHeightPx >= 96 ? 'md' : 'sm';
+  const SIZES = {
+    sm: { courtNum: 'text-3xl', eventCode: 'text-base', player: 'text-base', padX: 'px-4' },
+    md: { courtNum: 'text-5xl', eventCode: 'text-2xl', player: 'text-2xl', padX: 'px-4' },
+    lg: { courtNum: 'text-6xl', eventCode: 'text-3xl', player: 'text-3xl', padX: 'px-6' },
+    xl: { courtNum: 'text-7xl', eventCode: 'text-4xl', player: 'text-4xl', padX: 'px-6' },
+  } as const;
+  const { courtNum: courtNumSize, eventCode: eventCodeSize, player: playerSize, padX: cardPadX } = SIZES[sizeTier];
+
+  // Border colour for one court row/card from its play status.
+  // Active uses the operator's brand accent; called fixes amber so
+  // it never collides; idle uses a muted CSS variable that adapts.
+  const borderColorFor = (status: 'active' | 'called' | 'empty') =>
+    status === 'active' ? tvAccent : status === 'called' ? '#fbbf24' : 'var(--muted-foreground)';
+
+  // Grid columns. Tailwind safelist won't pick up dynamic class
+  // names so we keep the literal strings; lookup beats a 4-deep
+  // ternary at the callsite.
+  const GRID_COLS: Record<number, string> = {
+    1: 'grid-cols-1',
+    2: 'grid-cols-1 md:grid-cols-2',
+    3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
+    4: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
+  };
+  const gridColsClass = (tvGridColumns && GRID_COLS[tvGridColumns]) || GRID_COLS[2];
 
   return (
     <div
       ref={rootRef}
-      className={`min-h-screen ${TV_BG[tvBgTone]} text-white selection:bg-blue-500/30`}
+      className={`${themeClass} min-h-screen ${tvBgClass} text-foreground selection:bg-primary/30`}
     >
       {/* ---------- Header ------------------------------------------------ */}
-      <div className={`sticky top-0 z-10 border-b border-slate-800 ${TV_HEADER_BG[tvBgTone]} px-6 py-4 backdrop-blur`}>
+      <div className={`sticky top-0 z-10 border-b border-border ${tvHeaderBgClass} px-6 py-4 backdrop-blur`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-4 min-w-0">
             <div className="text-3xl font-bold tracking-tight">Tournament Status</div>
             {formatTournamentDate(config.tournamentDate) && (
-              <div className="text-base text-slate-400 whitespace-nowrap">
+              <div className="text-base text-muted-foreground whitespace-nowrap">
                 {formatTournamentDate(config.tournamentDate)}
               </div>
             )}
@@ -483,10 +471,7 @@ export function PublicDisplayPage() {
                 Standings
               </button>
             </div>
-            {/* Mode picker has moved into the Public-display settings
-             *  card on the TV admin tab so the chrome the audience
-             *  sees is just nav + clock + fullscreen. */}
-            <div className="tabular-nums text-2xl text-slate-300">{currentTime}</div>
+            <div className="tabular-nums text-2xl text-muted-foreground">{currentTime}</div>
             <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
           </div>
         </div>
@@ -508,51 +493,41 @@ export function PublicDisplayPage() {
           // number anchor for one-line scannability. Full-span: no
           // max-width cap so the audience uses every pixel; rows are
           // constant-height for predictability.
-          <div className="flex w-full flex-col divide-y divide-slate-800 rounded border border-slate-800 bg-slate-900/40">
+          <div className="flex w-full flex-col divide-y divide-border rounded border border-border bg-card/40">
             {courtMatches.map(({ courtId, match, state, status, nextMatch, nextStartTime }) => {
               const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
               const aggregate = state?.score ? `${state.score.sideA}–${state.score.sideB}` : null;
               const sideA = match ? formatPlayers(match.sideA) : '';
               const sideB = match ? formatPlayers(match.sideB) : '';
-              // Active uses the configured accent (inline style on
-              // the left border); called keeps amber; idle stays
-              // slate. Inline style is the cleanest path for an
-              // arbitrary hex without polluting Tailwind safelists.
-              const borderColor =
-                status === 'active'
-                  ? tvAccent
-                  : status === 'called'
-                    ? '#fbbf24' /* amber-400 */
-                    : 'rgba(71,85,105,0.7)' /* slate-700ish */;
               return (
                 <div
                   key={courtId}
-                  className={`grid items-center gap-3 border-l-4 px-4 text-base text-slate-100 grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem]`}
-                  style={{ borderLeftColor: borderColor, height: 56 }}
+                  className={`grid items-center gap-3 border-l-4 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem]`}
+                  style={{ borderLeftColor: borderColorFor(status), height: 56 }}
                 >
                   <span className="tabular-nums text-2xl font-bold">{courtId}</span>
-                  <span className="tabular-nums text-base font-semibold text-slate-300">
+                  <span className="tabular-nums text-base font-semibold text-muted-foreground">
                     {match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
                   </span>
                   <span className="truncate">
                     {match ? (
                       <>
                         <span className="font-medium">{sideA}</span>
-                        <span className="px-2 text-slate-500">vs</span>
+                        <span className="px-2 text-muted-foreground">vs</span>
                         <span className="font-medium">{sideB}</span>
                       </>
                     ) : nextMatch ? (
-                      <span className="text-slate-400">
+                      <span className="text-muted-foreground">
                         Next {nextStartTime ? `· ${nextStartTime}` : ''} · {formatPlayers(nextMatch.sideA)} vs {formatPlayers(nextMatch.sideB)}
                       </span>
                     ) : (
-                      <span className="text-slate-500">Available</span>
+                      <span className="text-muted-foreground">Available</span>
                     )}
                   </span>
                   <span className="tabular-nums text-right font-semibold">
                     {tvShowScores ? (aggregate ?? '') : ''}
                   </span>
-                  <span className="tabular-nums text-right text-slate-300">
+                  <span className="tabular-nums text-right text-muted-foreground">
                     {elapsed ?? ''}
                   </span>
                 </div>
@@ -571,45 +546,19 @@ export function PublicDisplayPage() {
           //   • Grid uses the operator's ``tvGridColumns`` override
           //     when set; otherwise auto-fits.
           <div
-            className={[
-              'w-full',
-              tvDisplayMode === 'grid'
-                ? `grid gap-3 ${
-                    tvGridColumns === 1
-                      ? 'grid-cols-1'
-                      : tvGridColumns === 2
-                        ? 'grid-cols-1 md:grid-cols-2'
-                        : tvGridColumns === 3
-                          ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
-                          : tvGridColumns === 4
-                            ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-                            : 'grid-cols-1 md:grid-cols-2'
-                  }`
-                : 'flex flex-col gap-2',
-            ].join(' ')}
-            style={
-              tvDisplayMode === 'grid'
-                ? { gridAutoRows: `${cardHeightPx}px` }
-                : undefined
-            }
+            className={`w-full ${tvDisplayMode === 'grid' ? `grid gap-3 ${gridColsClass}` : 'flex flex-col gap-2'}`}
+            style={tvDisplayMode === 'grid' ? { gridAutoRows: `${cardHeightPx}px` } : undefined}
           >
             {courtMatches.map(({ courtId, match, state, status, nextMatch, nextStartTime }) => {
               const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
-              // Active card: subtle gradient + accent-colored left
-              // border via inline style (the accent is a runtime hex
-              // not in the Tailwind safelist). Called keeps amber.
-              const cardBgClass =
-                status === 'active'
-                  ? 'bg-gradient-to-r from-slate-900/40 to-slate-900/60'
-                  : status === 'called'
-                    ? 'bg-gradient-to-r from-amber-950/60 to-slate-900/60'
-                    : 'bg-slate-900/40';
-              const cardBorderColor =
-                status === 'active'
-                  ? tvAccent
-                  : status === 'called'
-                    ? '#fbbf24'
-                    : 'rgba(71,85,105,0.7)';
+              // Active / called cards get a subtle tint over the
+              // standard ``bg-card`` so live matches still stand out
+              // in both themes.
+              const cardBgClass = status === 'active'
+                ? 'bg-card/80'
+                : status === 'called'
+                  ? 'bg-amber-100/60 dark:bg-amber-950/40'
+                  : 'bg-card/60';
               const aggregate = state?.score
                 ? `${state.score.sideA}–${state.score.sideB}`
                 : null;
@@ -619,15 +568,15 @@ export function PublicDisplayPage() {
               return (
                 <div
                   key={courtId}
-                  className={`overflow-hidden rounded-xl border-l-4 border-y border-r border-y-slate-800 border-r-slate-800 shadow-lg ${cardBgClass}`}
-                  style={{ borderLeftColor: cardBorderColor, height: cardHeightPx }}
+                  className={`overflow-hidden rounded-xl border-l-4 border-y border-r border-border shadow-lg ${cardBgClass}`}
+                  style={{ borderLeftColor: borderColorFor(status), height: cardHeightPx }}
                 >
                   <div
                     className={`grid h-full items-center gap-3 ${cardPadX} grid-cols-[auto_auto_1fr_auto_auto]`}
                   >
                     {/* Court number — anchor of the strip */}
                     <div className="flex items-baseline gap-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         Court
                       </span>
                       <span
@@ -639,62 +588,49 @@ export function PublicDisplayPage() {
 
                     {/* Event code */}
                     <div
-                      className={`min-w-[3.5rem] ${eventCodeSize} font-bold text-slate-200 tabular-nums`}
+                      className={`min-w-[3.5rem] ${eventCodeSize} font-bold text-foreground tabular-nums`}
                     >
                       {match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
                     </div>
 
                     {/* Players (grows). Always rendered on their own
-                        lines so long doubles names never truncate —
-                        there's plenty of horizontal room in the single-
-                        column layout, and an operator watching the
-                        scoreboard from across a gym must be able to
-                        read every name in full. */}
+                        lines so long doubles names never truncate. */}
                     <div
-                      className={`min-w-0 ${playerSize} leading-tight text-slate-100`}
+                      className={`min-w-0 ${playerSize} leading-tight text-foreground`}
                     >
                       {match ? (
-                        // Constant-height card means we can't let
-                        // doubles names wrap unbounded. Truncate per
-                        // line with title attr for the full text.
                         <div className="flex flex-col gap-0.5 min-w-0">
                           <span className="block truncate font-medium" title={sideA}>{sideA}</span>
                           <span
-                            className={`${isFullscreen ? 'text-sm' : 'text-xs'} uppercase tracking-widest text-slate-500`}
+                            className={`${isFullscreen ? 'text-sm' : 'text-xs'} uppercase tracking-widest text-muted-foreground`}
                           >
                             vs
                           </span>
                           <span className="block truncate font-medium" title={sideB}>{sideB}</span>
                         </div>
                       ) : nextMatch ? (
-                        // Empty court but next match is on the books —
-                        // show a "Next up" preview so the audience can
-                        // plan. Less visually loud than an active row
-                        // (muted colors + a leading "Next" label) so the
-                        // operator's eye still locks onto live matches
-                        // first.
-                        <div className="flex flex-col gap-0.5 text-slate-300">
+                        <div className="flex flex-col gap-0.5 text-muted-foreground">
                           <span
-                            className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.18em] text-slate-500`}
+                            className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.18em]`}
                           >
                             Next up{nextStartTime ? ` · ${nextStartTime}` : ''}
                           </span>
-                          <span className={`${isFullscreen ? 'text-2xl' : 'text-base'} font-medium`}>
-                            {formatPlayers(nextMatch.sideA)} <span className="text-slate-500">vs</span> {formatPlayers(nextMatch.sideB)}
+                          <span className={`${isFullscreen ? 'text-2xl' : 'text-base'} font-medium text-foreground`}>
+                            {formatPlayers(nextMatch.sideA)} <span className="text-muted-foreground">vs</span> {formatPlayers(nextMatch.sideB)}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-slate-500">Available</span>
+                        <span className="text-muted-foreground">Available</span>
                       )}
                     </div>
 
-                    {/* Status pill — accent-colored when active */}
+                    {/* Status pill */}
                     <div>
                       {status === 'active' && (
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-full ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider`}
                           style={{
-                            backgroundColor: `${tvAccent}33` /* ~20% alpha */,
+                            backgroundColor: `${tvAccent}33`,
                             color: tvAccent,
                           }}
                         >
@@ -707,38 +643,36 @@ export function PublicDisplayPage() {
                       )}
                       {status === 'called' && (
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-amber-300`}
+                          className={`inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300`}
                         >
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400 animate-pulse" />
                           Calling
                         </span>
                       )}
                     </div>
 
-                    {/* Score + elapsed (tabular so vertical alignment stays steady) */}
+                    {/* Score + elapsed */}
                     <div className={`flex items-baseline gap-3 tabular-nums ${isFullscreen ? 'text-2xl' : 'text-lg'}`}>
                       {tvShowScores && aggregate && (
-                        <span className="font-semibold text-slate-100">{aggregate}</span>
+                        <span className="font-semibold text-foreground">{aggregate}</span>
                       )}
                       {elapsed && (
-                        <span className="text-slate-300 min-w-[4.5rem] text-right">
+                        <span className="text-muted-foreground min-w-[4.5rem] text-right">
                           {elapsed}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Per-set breakdown lives inside the strip so the
-                      card doesn't change geometry between sets and a
-                      long badminton match doesn't push neighbours. */}
+                  {/* Per-set breakdown */}
                   {tvShowScores && status === 'active' && state?.sets && state.sets.length > 0 && (
                     <div
-                      className={`border-t border-slate-800/60 px-4 ${isFullscreen ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} flex flex-wrap gap-1.5 font-mono`}
+                      className={`border-t border-border px-4 ${isFullscreen ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} flex flex-wrap gap-1.5 font-mono`}
                     >
                       {state.sets.map((s, i) => (
                         <span
                           key={i}
-                          className={`rounded bg-slate-800 ${isFullscreen ? 'px-2.5 py-1' : 'px-1.5 py-0.5'} tabular-nums text-slate-200`}
+                          className={`rounded bg-muted ${isFullscreen ? 'px-2.5 py-1' : 'px-1.5 py-0.5'} tabular-nums text-foreground`}
                           title={`Set ${i + 1}`}
                         >
                           {s.sideA}–{s.sideB}
@@ -755,11 +689,11 @@ export function PublicDisplayPage() {
         {/* ---------- Schedule view -------------------------------------- */}
         {view === 'schedule' && (
           <div className="mx-auto max-w-4xl">
-            <div className="mb-4 text-xl font-semibold uppercase tracking-widest text-slate-400">
+            <div className="mb-4 text-xl font-semibold uppercase tracking-widest text-muted-foreground">
               Up Next
             </div>
             {upcomingMatches.length === 0 ? (
-              <div className="py-12 text-center text-xl text-slate-500">
+              <div className="py-12 text-center text-xl text-muted-foreground">
                 No upcoming matches
               </div>
             ) : (
@@ -767,20 +701,20 @@ export function PublicDisplayPage() {
                 {upcomingMatches.map(({ assignment, match }) => (
                   <div
                     key={assignment.matchId}
-                    className="flex items-center gap-5 rounded-xl border border-slate-800 bg-slate-900/60 px-5 py-4"
+                    className="flex items-center gap-5 rounded-xl border border-border bg-card/60 px-5 py-4"
                   >
-                    <div className="w-20 text-xl font-bold text-slate-100">
+                    <div className="w-20 text-xl font-bold text-foreground">
                       {match?.eventRank || `M${match?.matchNumber || '?'}`}
                     </div>
-                    <div className="w-14 text-lg font-semibold text-blue-400">
+                    <div className="w-14 text-lg font-semibold text-blue-600 dark:text-blue-400">
                       C{assignment.courtId}
                     </div>
-                    <div className="w-24 tabular-nums text-lg text-slate-300">
+                    <div className="w-24 tabular-nums text-lg text-muted-foreground">
                       {formatSlotTime(assignment.slotId, config)}
                     </div>
-                    <div className="flex-1 text-xl text-slate-100">
+                    <div className="flex-1 text-xl text-foreground">
                       <span>{formatPlayers(match?.sideA)}</span>
-                      <span className="mx-3 text-sm uppercase tracking-widest text-slate-500">
+                      <span className="mx-3 text-sm uppercase tracking-widest text-muted-foreground">
                         vs
                       </span>
                       <span>{formatPlayers(match?.sideB)}</span>
@@ -795,11 +729,11 @@ export function PublicDisplayPage() {
         {/* ---------- Standings view ------------------------------------- */}
         {view === 'standings' && (
           <div className="mx-auto max-w-2xl">
-            <div className="mb-4 text-xl font-semibold uppercase tracking-widest text-slate-400">
+            <div className="mb-4 text-xl font-semibold uppercase tracking-widest text-muted-foreground">
               Team Standings
             </div>
             {standings.length === 0 ? (
-              <div className="py-12 text-center text-xl text-slate-500">
+              <div className="py-12 text-center text-xl text-muted-foreground">
                 No matches completed yet
               </div>
             ) : (
@@ -810,17 +744,17 @@ export function PublicDisplayPage() {
                     className={`flex items-center gap-5 rounded-xl border px-5 py-4 ${
                       index === 0
                         ? 'border-yellow-500/60 bg-yellow-500/10'
-                        : 'border-slate-800 bg-slate-900/60'
+                        : 'border-border bg-card/60'
                     }`}
                   >
-                    <div className="w-14 text-4xl font-black tabular-nums text-slate-400">
+                    <div className="w-14 text-4xl font-black tabular-nums text-muted-foreground">
                       {index + 1}
                     </div>
                     <div className="flex-1 truncate text-3xl font-bold">{team.groupName}</div>
                     <div className="flex items-baseline gap-3 text-xl tabular-nums">
-                      <span className="text-emerald-400">{team.wins}W</span>
-                      <span className="text-slate-600">–</span>
-                      <span className="text-rose-400">{team.losses}L</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">{team.wins}W</span>
+                      <span className="text-muted-foreground">–</span>
+                      <span className="text-rose-600 dark:text-rose-400">{team.losses}L</span>
                     </div>
                   </div>
                 ))}
@@ -831,9 +765,9 @@ export function PublicDisplayPage() {
       </div>
 
       {/* ---------- Progress footer ------------------------------------- */}
-      <div className={`fixed inset-x-0 bottom-0 border-t border-slate-800 ${TV_HEADER_BG[tvBgTone]} px-6 py-3 backdrop-blur`}>
+      <div className={`fixed inset-x-0 bottom-0 border-t border-border ${tvHeaderBgClass} px-6 py-3 backdrop-blur`}>
         <div className="flex items-center justify-between text-base">
-          <div className="text-slate-400">
+          <div className="text-muted-foreground">
             {finishedCount} / {totalCount} matches complete · {progressPct}%
           </div>
           <div className="flex items-center gap-5">
@@ -847,13 +781,13 @@ export function PublicDisplayPage() {
               />
               {matchesByStatus.started.length} active
             </span>
-            <span className="inline-flex items-center gap-2 text-amber-300">
-              <span className="h-2 w-2 rounded-full bg-amber-400" />
+            <span className="inline-flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <span className="h-2 w-2 rounded-full bg-amber-500 dark:bg-amber-400" />
               {matchesByStatus.called.length} called
             </span>
           </div>
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
           <div
             className="h-full rounded-full transition-all duration-500"
             style={{ width: `${progressPct}%`, backgroundColor: tvAccent }}
@@ -879,7 +813,7 @@ function FullscreenButton({
       onClick={onToggle}
       data-testid="tv-fullscreen-toggle"
       title={`${isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} (F)`}
-      className={`${INTERACTIVE_BASE} inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 ${className}`}
+      className={`${INTERACTIVE_BASE} inline-flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground ${className}`}
       aria-pressed={isFullscreen}
     >
       {isFullscreen ? (
@@ -905,16 +839,16 @@ function LiveStatusPill({
 }) {
   const styles =
     status === 'live'
-      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
       : status === 'reconnecting'
-        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-        : 'border-red-500/40 bg-red-500/10 text-red-300';
+        ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+        : 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300';
   const dot =
     status === 'live'
-      ? 'bg-emerald-400 animate-pulse'
+      ? 'bg-emerald-500 dark:bg-emerald-400 animate-pulse'
       : status === 'reconnecting'
-        ? 'bg-amber-400 animate-pulse'
-        : 'bg-red-400';
+        ? 'bg-amber-500 dark:bg-amber-400 animate-pulse'
+        : 'bg-red-500 dark:bg-red-400';
   const label =
     status === 'live' ? 'Live' : status === 'reconnecting' ? 'Reconnecting…' : 'Offline';
   return (

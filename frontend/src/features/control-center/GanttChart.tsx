@@ -4,7 +4,8 @@
  * Delayed matches get a yellow ring to stand out
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
-import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../utils/timeUtils';
+import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../lib/time';
+import { indexById } from '../../store/selectors';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import type {
   ScheduleDTO,
@@ -41,9 +42,7 @@ interface GanttChartProps {
 // Sized to match the schedule-tab DragGantt so a director's eye doesn't
 // have to recalibrate when switching between Schedule and Live. Both
 // grids use 80×40 with a dotted grid background.
-const SLOT_WIDTH = 80;
-const ROW_HEIGHT = 40;
-const COURT_LABEL_WIDTH = 56;
+import { SLOT_WIDTH, ROW_HEIGHT, COURT_LABEL_WIDTH } from '../schedule/ganttGeometry';
 
 // Status-based colors. Drives the Gantt block styling per match state.
 // Wired to the semantic ``status-*`` tokens in src/index.css so light /
@@ -92,7 +91,7 @@ export function GanttChart({
   impactedMatchIds = [],
   trafficLights,
 }: GanttChartProps) {
-  const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
+  const matchMap = useMemo(() => indexById(matches), [matches]);
   const impactedSet = useMemo(() => new Set(impactedMatchIds), [impactedMatchIds]);
   const totalSlots = calculateTotalSlots(config);
 
@@ -375,17 +374,14 @@ export function GanttChart({
                       }
                     >
                       <div
-                        className={`h-full flex items-center justify-center overflow-hidden ${
-                          groupSize > 1 ? 'px-0' : 'px-1'
+                        className={`h-full flex flex-col justify-center overflow-hidden leading-tight ${
+                          groupSize > 1 ? 'px-0 items-center' : 'px-2 items-start'
                         }`}
                       >
-                        {/* Status carried entirely by block fill +
-                            border + any inset conflict ring; no extra
-                            glyphs. Overlap blocks drop the font a tick
-                            and tighten letter-spacing so a 4-char code
-                            like MS17 clears the ~44 px available at
-                            half-width. No ellipsis on overflow — we
-                            clip to show as many characters as fit. */}
+                        {/* Two-line label matches features/schedule/DragGantt:
+                            top = match code, bottom = format like "1v1".
+                            Overlap blocks drop the font a tick so a 4-char
+                            code clears the ~44 px available at half-width. */}
                         <span
                           className={`font-semibold whitespace-nowrap overflow-hidden tabular-nums ${styles.text} ${
                             groupSize > 1
@@ -395,6 +391,12 @@ export function GanttChart({
                         >
                           {match ? getMatchLabel(match) : '?'}
                         </span>
+                        {match && groupSize === 1 && (
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden">
+                            {(match.sideA?.length ?? 0)}v{(match.sideB?.length ?? 0)}
+                            {match.sideC && match.sideC.length ? `v${match.sideC.length}` : ''}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );

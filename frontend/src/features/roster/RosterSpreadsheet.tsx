@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp } from 'lucide-react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
+import { INPUT_CELL_STYLE } from '../../lib/utils';
 import type { AvailabilityWindow, PlayerDTO, TournamentConfig } from '../../api/dto';
 
 function expandRanks(rankCounts: TournamentConfig['rankCounts']): string[] {
@@ -215,14 +216,14 @@ function PlayerRow({
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
           }}
           placeholder="Player name"
-          className="w-full rounded border border-transparent bg-transparent px-2 py-1 text-sm outline-none transition-colors focus:border-blue-400 focus:bg-card"
+          className={INPUT_CELL_STYLE}
         />
       </td>
       <td className="px-2 py-1">
         <select
           value={player.groupId}
           onChange={(e) => onUpdate(player.id, { groupId: e.target.value })}
-          className="w-full rounded border border-transparent bg-transparent px-2 py-1 text-sm outline-none transition-colors focus:border-blue-400 focus:bg-card"
+          className={INPUT_CELL_STYLE}
         >
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
@@ -320,7 +321,7 @@ function PlayerRow({
           onChange={(e) => setRestDraft(e.target.value)}
           onBlur={commitRest}
           placeholder="default"
-          className="w-full rounded border border-transparent bg-transparent px-2 py-1 text-sm tabular-nums outline-none transition-colors focus:border-blue-400 focus:bg-card"
+          className={`${INPUT_CELL_STYLE} tabular-nums`}
         />
       </td>
       <td className="px-2 py-1">
@@ -332,7 +333,7 @@ function PlayerRow({
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
           }}
           placeholder="—"
-          className="w-full rounded border border-transparent bg-transparent px-2 py-1 text-sm outline-none transition-colors focus:border-blue-400 focus:bg-card"
+          className={INPUT_CELL_STYLE}
         />
       </td>
       <td className="px-2 py-1 text-right">

@@ -3,15 +3,18 @@ import { useSchedule } from '../hooks/useSchedule';
 import { useTournament } from '../hooks/useTournament';
 import { useAppStore } from '../store/appStore';
 import { useSmoothedAssignments } from '../hooks/useSmoothedAssignments';
+import { useTrafficLights } from '../hooks/useTrafficLights';
 import { ScheduleActions } from '../features/schedule/ScheduleActions';
 import { DragGantt } from '../features/schedule/DragGantt';
 import { LiveTimelineGrid } from '../features/schedule/live/LiveTimelineGrid';
 import { SolverProgressLog } from '../features/schedule/live/SolverProgressLog';
 import { LiveMetricsBar } from '../features/schedule/live/LiveMetricsBar';
+import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { StaleBanner } from '../features/schedule/StaleBanner';
 import { computeConstraintViolations } from '../utils/constraintChecker';
-import { formatSlotTime } from '../utils/timeUtils';
+import { formatSlotTime } from '../lib/time';
+import { useCurrentSlot } from '../hooks/useCurrentSlot';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { INTERACTIVE_BASE } from '../lib/utils';
@@ -32,6 +35,8 @@ function MatchesTable({
   config,
   view,
   onViewChange,
+  selectedMatchId,
+  onSelectMatch,
 }: {
   assignments: ScheduleAssignment[];
   matches: MatchDTO[];
@@ -40,6 +45,8 @@ function MatchesTable({
   config: TournamentConfig;
   view: TableView;
   onViewChange: (view: TableView) => void;
+  selectedMatchId?: string | null;
+  onSelectMatch?: (matchId: string) => void;
 }) {
   const matchMap = useMemo(() => new Map(matches.map(m => [m.id, m])), [matches]);
   const playerMap = useMemo(() => new Map(players.map(p => [p.id, p])), [players]);
@@ -213,21 +220,30 @@ function MatchesTable({
             </thead>
             <tbody>
               {byTime.flatMap(({ slotId: _slotId, time, assignments: slotAssignments }) =>
-                slotAssignments.map((a, idx) => (
-                  <tr key={a.matchId} className={`hover:bg-muted/50 ${idx === 0 ? 'border-t-2 border-border' : 'border-t border-border/60'}`}>
-                    <td className="px-2 py-1 text-muted-foreground font-mono whitespace-nowrap">
-                      {idx === 0 ? time : ''}
-                    </td>
-                    <td className="px-2 py-1 text-muted-foreground">C{a.courtId}</td>
-                    <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
-                    <td className="px-2 py-1 text-foreground/80 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
-                      <span className="inline-flex items-center gap-1.5">
-                        {renderSchoolDot(a.matchId)}
-                        <span className="truncate">{getPlayerNames(a.matchId)}</span>
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                slotAssignments.map((a, idx) => {
+                  const isSelected = selectedMatchId === a.matchId;
+                  return (
+                    <tr
+                      key={a.matchId}
+                      onClick={() => onSelectMatch?.(a.matchId)}
+                      className={`${onSelectMatch ? 'cursor-pointer' : ''} ${
+                        isSelected ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-muted/50'
+                      } ${idx === 0 ? 'border-t-2 border-border' : 'border-t border-border/60'}`}
+                    >
+                      <td className="px-2 py-1 text-muted-foreground font-mono whitespace-nowrap">
+                        {idx === 0 ? time : ''}
+                      </td>
+                      <td className="px-2 py-1 text-muted-foreground">C{a.courtId}</td>
+                      <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
+                      <td className="px-2 py-1 text-foreground/80 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
+                        <span className="inline-flex items-center gap-1.5">
+                          {renderSchoolDot(a.matchId)}
+                          <span className="truncate">{getPlayerNames(a.matchId)}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -243,21 +259,30 @@ function MatchesTable({
             </thead>
             <tbody>
               {byCourt.flatMap(({ courtId, assignments: courtAssignments }) =>
-                courtAssignments.map((a, idx) => (
-                  <tr key={a.matchId} className={`hover:bg-muted/50 ${idx === 0 ? 'border-t-2 border-border' : 'border-t border-border/60'}`}>
-                    <td className="px-2 py-1 text-foreground font-medium">
-                      {idx === 0 ? `C${courtId}` : ''}
-                    </td>
-                    <td className="px-2 py-1 text-muted-foreground font-mono">{formatSlotTime(a.slotId, config)}</td>
-                    <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
-                    <td className="px-2 py-1 text-foreground/80 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
-                      <span className="inline-flex items-center gap-1.5">
-                        {renderSchoolDot(a.matchId)}
-                        <span className="truncate">{getPlayerNames(a.matchId)}</span>
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                courtAssignments.map((a, idx) => {
+                  const isSelected = selectedMatchId === a.matchId;
+                  return (
+                    <tr
+                      key={a.matchId}
+                      onClick={() => onSelectMatch?.(a.matchId)}
+                      className={`${onSelectMatch ? 'cursor-pointer' : ''} ${
+                        isSelected ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-muted/50'
+                      } ${idx === 0 ? 'border-t-2 border-border' : 'border-t border-border/60'}`}
+                    >
+                      <td className="px-2 py-1 text-foreground font-medium">
+                        {idx === 0 ? `C${courtId}` : ''}
+                      </td>
+                      <td className="px-2 py-1 text-muted-foreground font-mono">{formatSlotTime(a.slotId, config)}</td>
+                      <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
+                      <td className="px-2 py-1 text-foreground/80 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
+                        <span className="inline-flex items-center gap-1.5">
+                          {renderSchoolDot(a.matchId)}
+                          <span className="truncate">{getPlayerNames(a.matchId)}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -272,6 +297,7 @@ export function SchedulePage() {
   const players = useAppStore((state) => state.players);
   const matches = useAppStore((state) => state.matches);
   const groups = useAppStore((state) => state.groups);
+  const matchStates = useAppStore((state) => state.matchStates);
   const scheduleStats = useAppStore((state) => state.scheduleStats);
   const addSolverLog = useAppStore((state) => state.addSolverLog);
   const {
@@ -310,8 +336,37 @@ export function SchedulePage() {
   // Table view state
   const [tableView, setTableView] = useState<TableView>('time');
 
+  // Match selection. The right sidebar shows match details by default;
+  // the solver log only surfaces while a generation is running, and
+  // collapses back to details once the run finishes — so the rail
+  // never sits empty.
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [sidebarTab, setSidebarTab] = useState<'log' | 'details'>('details');
+
+  // Wall-clock slot for traffic-light + rest-time computation.
+  // Refreshed every minute via the shared ``useCurrentSlot`` hook so the
+  // panel stays in sync with the live tab.
+  const currentSlot = useCurrentSlot();
+
   // Use global loading state - persists across tab switches
   const isOptimizing = loading;
+
+  // Auto-flip the sidebar tab as solver state changes:
+  //   • starts solving → switch to Log so progress is visible immediately
+  //   • finishes solving → switch back to Details (log is no longer
+  //     needed; details is the natural inspect-and-tweak surface)
+  // Selecting a match while idle still snaps to Details. Manual taps
+  // on the toggle (when shown) override either default.
+  useEffect(() => {
+    if (isOptimizing) {
+      setSidebarTab('log');
+    } else {
+      setSidebarTab('details');
+    }
+  }, [isOptimizing]);
+  useEffect(() => {
+    if (selectedMatchId && !isOptimizing) setSidebarTab('details');
+  }, [selectedMatchId, isOptimizing]);
 
   // Two-click inline guard replaces the old window.confirm() dialog:
   // first click when a schedule exists flips the button into "Confirm replace"
@@ -377,6 +432,38 @@ export function SchedulePage() {
     () => config ? computeConstraintViolations(displayAssignments, matches, players, config) : [],
     [displayAssignments, matches, players, config]
   );
+
+  // Player-name lookup for the details panel.
+  const playerNames = useMemo(
+    () => new Map(players.map((p) => [p.id, p.name])),
+    [players],
+  );
+
+  // Traffic lights drive the Ready/Resting/Blocked badge in the
+  // details panel. Computed against the persisted schedule (not the
+  // smoothed live view) so the result is stable while idle.
+  const trafficLights = useTrafficLights(
+    schedule ?? null,
+    matches,
+    matchStates,
+    players,
+    config ?? null,
+    currentSlot,
+  );
+
+  // Selected-match derivations.
+  const selectedMatch = selectedMatchId
+    ? matches.find((m) => m.id === selectedMatchId)
+    : undefined;
+  const selectedAssignment = selectedMatchId && schedule
+    ? schedule.assignments.find((a) => a.matchId === selectedMatchId)
+    : undefined;
+  const selectedMatchState = selectedMatchId ? matchStates[selectedMatchId] : undefined;
+  const selectedTrafficLight = selectedMatchId
+    ? trafficLights.get(selectedMatchId)
+    : undefined;
+
+  const slotToTime = (slot: number) => (config ? formatSlotTime(slot, config) : '00:00');
 
   const status = isOptimizing ? 'solving' : 'complete';
   const elapsed = hasLiveProgress ? generationProgress.elapsed_ms : (scheduleStats?.elapsed || 0);
@@ -472,6 +559,8 @@ export function SchedulePage() {
                     matches={matches}
                     config={config}
                     readOnly={isOptimizing}
+                    selectedMatchId={selectedMatchId}
+                    onMatchSelect={setSelectedMatchId}
                   />
                 ) : (
                   <LiveTimelineGrid
@@ -500,25 +589,78 @@ export function SchedulePage() {
                   config={config}
                   view={tableView}
                   onViewChange={setTableView}
+                  selectedMatchId={selectedMatchId}
+                  onSelectMatch={setSelectedMatchId}
                 />
               </div>
             </div>
           </div>
 
-          {/* Log - sidebar */}
+          {/* Match details sidebar.
+              Log is offered as a tab only while a solver run is active
+              — once it ends, the toggle disappears and the rail is
+              dedicated to match details. */}
           <div className="w-72 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
-            <div className="px-2 py-1.5 border-b border-border flex-shrink-0">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Log</span>
+            <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex items-center gap-1">
+              {isOptimizing ? (
+                <>
+                  <button
+                    onClick={() => setSidebarTab('log')}
+                    className={`px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded ${
+                      sidebarTab === 'log'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    Log
+                  </button>
+                  <button
+                    onClick={() => setSidebarTab('details')}
+                    className={`px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded ${
+                      sidebarTab === 'details'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    Details
+                  </button>
+                </>
+              ) : (
+                <span className="px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Details
+                </span>
+              )}
             </div>
-            <div className="flex-1 min-h-0 p-2 overflow-auto">
-              <SolverProgressLog
-                solutionCount={solutionCount}
-                objectiveScore={objectiveScore}
-                matchCount={displayAssignments.length}
-                totalMatches={matches.length}
-                status={status}
-                violations={violations}
-              />
+            <div className="flex-1 min-h-0 overflow-auto">
+              {isOptimizing && sidebarTab === 'log' ? (
+                <div className="p-2">
+                  <SolverProgressLog
+                    solutionCount={solutionCount}
+                    objectiveScore={objectiveScore}
+                    matchCount={displayAssignments.length}
+                    totalMatches={matches.length}
+                    status={status}
+                    violations={violations}
+                  />
+                </div>
+              ) : (
+                <MatchDetailsPanel
+                  assignment={selectedAssignment}
+                  match={selectedMatch}
+                  matchState={selectedMatchState}
+                  matches={matches}
+                  trafficLight={selectedTrafficLight}
+                  playerNames={playerNames}
+                  slotToTime={slotToTime}
+                  onSelectMatch={setSelectedMatchId}
+                  schedule={schedule}
+                  matchStates={matchStates}
+                  players={players}
+                  groups={groups}
+                  config={config}
+                  currentSlot={currentSlot}
+                />
+              )}
             </div>
           </div>
         </div>

@@ -7,7 +7,6 @@ import { TabBar } from './TabBar';
 import { SolverHud } from '../components/SolverHud';
 import { UnsavedBanner } from '../components/UnsavedBanner';
 import { ToastStack } from '../components/Toast';
-import { PublicDisplaySettings } from '../features/tournaments/PublicDisplaySettings';
 
 // Tabs are wired to the existing pages during Step 4. Each tab is replaced with
 // a dedicated Tab component in Step 5 (inline authoring). Using lazy() keeps
@@ -91,17 +90,24 @@ export function AppShell() {
           {activeTab === 'live' ? <MatchControlCenterPage /> : null}
           {activeTab === 'tv' ? (
             <div className="p-4 text-sm text-muted-foreground">
-              This tab is a preview of the public display.
-              {' '}
+              This tab is a preview of the public display.{' '}
               <a href="/display" className="text-blue-600 underline">
                 Open fullscreen TV view
               </a>
-              {/* Director-only TV settings: lives on the TV tab so the
-                  configuration sits beside the preview that reflects it.
-                  Hidden on the standalone /display window. */}
-              <div className="mt-3">
-                <PublicDisplaySettings />
-              </div>
+              {' · '}
+              <button
+                type="button"
+                onClick={() => {
+                  // Jump to Settings → Display where the controls live.
+                  useAppStore.setState({ activeTab: 'setup' });
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('section', 'display');
+                  window.history.replaceState({}, '', url.toString());
+                }}
+                className="text-blue-600 underline"
+              >
+                Display settings
+              </button>
               <div className="mt-4 rounded border bg-card">
                 <PublicDisplayPage />
               </div>

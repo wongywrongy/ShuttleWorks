@@ -4,7 +4,7 @@
  * release cycle (a console.warn flags legacy values for cleanup).
  */
 import { useEffect, useState } from 'react';
-import { parseMatchStartMs } from '../../utils/timeUtils';
+import { parseMatchStartMs } from '../../lib/time';
 
 interface ElapsedTimerProps {
   startTime: string | null | undefined;

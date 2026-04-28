@@ -13,6 +13,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { Download } from 'lucide-react';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useLiveOperations } from '../hooks/useLiveOperations';
 import { useTrafficLights } from '../hooks/useTrafficLights';
@@ -20,18 +21,37 @@ import { useAppStore } from '../store/appStore';
 import { GanttChart } from '../features/control-center/GanttChart';
 import { WorkflowPanel } from '../features/control-center/WorkflowPanel';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
+import { exportScheduleXlsx } from '../features/exports/xlsxExports';
+import { INTERACTIVE_BASE } from '../lib/utils';
 
 export function MatchControlCenterPage() {
   const liveTracking = useLiveTracking();
   const liveOps = useLiveOperations();
   const players = useAppStore((state) => state.players);
+  const groups = useAppStore((state) => state.groups);
   const schedule = useAppStore((state) => state.schedule);
   const setSchedule = useAppStore((state) => state.setSchedule);
   const setMatchState = useAppStore((state) => state.setMatchState);
 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [currentSlot, setCurrentSlot] = useState(0);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  // Open by default to mirror the Schedule tab — the right rail
+  // shouldn't sit empty while the operator is still picking matches.
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  // Lifted from MatchDetailsPanel so the WorkflowPanel rows can pop
+  // the score editor directly: clicking Score on a started row
+  // selects the match AND flips the rail to its score mode.
+  const [panelMode, setPanelMode] = useState<'idle' | 'score' | 'roster'>('idle');
+  const requestScore = useCallback((matchId: string) => {
+    setSelectedMatchId(matchId);
+    setDetailsOpen(true);
+    setPanelMode('score');
+  }, []);
+  // Reset to idle whenever the user picks a different match — the
+  // editor that was open belonged to the previous match.
+  useEffect(() => {
+    setPanelMode('idle');
+  }, [selectedMatchId]);
 
   // Update current slot every minute
   useEffect(() => {
@@ -371,9 +391,28 @@ export function MatchControlCenterPage() {
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
+                  onClick={() => void exportScheduleXlsx(
+                    liveOps.schedule,
+                    liveOps.matches,
+                    players,
+                    liveOps.config!,
+                  )}
+                  disabled={!liveOps.schedule || liveOps.schedule.assignments.length === 0}
+                  title={
+                    !liveOps.schedule || liveOps.schedule.assignments.length === 0
+                      ? 'No schedule to export'
+                      : 'Download schedule as XLSX'
+                  }
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  Export XLSX
+                </button>
+                <button
                   onClick={liveOps.triggerReoptimize}
                   disabled={liveOps.isReoptimizing}
-                  className="rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
                 </button>
@@ -413,6 +452,7 @@ export function MatchControlCenterPage() {
               onRemovePlayer={handleRemovePlayer}
               onCascadingStart={handleCascadingStart}
               onUndoStart={handleUndoStart}
+              onRequestScore={requestScore}
             />
           </div>
         </div>
@@ -446,9 +486,17 @@ export function MatchControlCenterPage() {
               schedule={liveOps.schedule}
               matchStates={liveOps.matchStates}
               players={players}
+              groups={groups}
               config={liveOps.config}
               currentSlot={currentSlot}
               onUpdateStatus={liveTracking.updateMatchStatus}
+              onConfirmPlayer={liveTracking.confirmPlayer}
+              onSubstitute={handleSubstitute}
+              onRemovePlayer={handleRemovePlayer}
+              onCascadingStart={handleCascadingStart}
+              onUndoStart={handleUndoStart}
+              mode={panelMode}
+              onModeChange={setPanelMode}
             />
           </div>
         ) : (

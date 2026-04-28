@@ -186,12 +186,7 @@ export function BackupPanel() {
       data-testid="backup-panel"
     >
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Backups</h3>
-          <p className="text-xs text-muted-foreground">
-            Auto-saved before every write. Last 10 kept.
-          </p>
-        </div>
+        <h3 className="text-sm font-semibold text-foreground">Backups</h3>
         <button
           type="button"
           onClick={handleCreate}

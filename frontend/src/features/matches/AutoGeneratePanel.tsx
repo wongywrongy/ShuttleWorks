@@ -9,6 +9,7 @@
 import { useMemo, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
+import { Hint } from '../../components/Hint';
 import type { MatchDTO } from '../../api/dto';
 
 function expandRanks(counts: Record<string, number> | undefined): string[] {
@@ -107,18 +108,17 @@ export function AutoGeneratePanel() {
           {ranks.length} ranks × {groups.length} schools
         </span>
       </div>
-      <p className="mb-2 text-xs text-muted-foreground">
+      <Hint id="matches.auto-generate" className="mb-2">
         One match per rank × pair of schools. Singles use one player per
-        side, doubles use the paired players (both whose ranks include the
-        rank) per side.
-        {preview.length > 0 ? (
-          <>
-            {' '}Will produce{' '}
-            <span className="font-semibold text-foreground">{preview.length}</span>{' '}
-            match{preview.length === 1 ? '' : 'es'}.
-          </>
-        ) : null}
-      </p>
+        side; doubles use the paired players per side.
+      </Hint>
+      {preview.length > 0 && (
+        <p className="mb-2 text-xs text-muted-foreground">
+          Will produce{' '}
+          <span className="font-semibold text-foreground">{preview.length}</span>{' '}
+          match{preview.length === 1 ? '' : 'es'}.
+        </p>
+      )}
       {incompletePairs.length > 0 ? (
         <p className="mb-2 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
           <strong>Skipping incomplete doubles:</strong>{' '}

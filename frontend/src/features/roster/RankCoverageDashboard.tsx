@@ -14,7 +14,9 @@ interface RankCoverageDashboardProps {
  * - Coverage totals per school
  */
 export function RankCoverageDashboard({ onEditSchool }: RankCoverageDashboardProps) {
-  const { config, groups, players } = useAppStore();
+  const config = useAppStore((s) => s.config);
+  const groups = useAppStore((s) => s.groups);
+  const players = useAppStore((s) => s.players);
 
   if (!config?.rankCounts || groups.length === 0) {
     return null;

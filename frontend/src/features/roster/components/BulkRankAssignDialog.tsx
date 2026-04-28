@@ -33,7 +33,8 @@ export function BulkRankAssignDialog({
   onClose,
   onConfirm,
 }: BulkRankAssignDialogProps) {
-  const { players, config } = useAppStore();
+  const players = useAppStore((s) => s.players);
+  const config = useAppStore((s) => s.config);
   const [selectedRanks, setSelectedRanks] = useState<string[]>([]);
   const [mode, setMode] = useState<'add' | 'set' | 'remove'>('add');
 

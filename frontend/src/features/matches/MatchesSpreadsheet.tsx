@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
+import { usePlayerMap } from '../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../api/dto';
 import { InlineSearch, type FilterChipGroup } from '../../components/InlineSearch';
 import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
@@ -36,7 +37,7 @@ export function MatchesSpreadsheet() {
   const [schoolFilter, , toggleSchool] = useSearchParamSet('school');
   const [typeFilter, , toggleType] = useSearchParamSet('type');
 
-  const playerById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
+  const playerById = usePlayerMap();
   const groupIndex = useMemo(() => buildGroupIndex(groups), [groups]);
 
   const filteredMatches = useMemo(() => {
@@ -77,31 +78,10 @@ export function MatchesSpreadsheet() {
     });
   }, [matches, searchQuery, eventFilter, schoolFilter, typeFilter, playerById]);
 
-  // Minimal chip set — School + Type only. Event chips removed; the
-  // free-text query covers prefix matching.
-  const schoolOptions = useMemo(
-    () => groups.map((g) => ({ id: g.id, label: g.name })),
-    [groups],
-  );
-
+  // Search bar is text-only — Event / School / Type chips removed for
+  // minimal chrome. Free-text matches event codes, player names, and
+  // match types directly.
   const filterGroups: FilterChipGroup[] = [];
-  if (schoolOptions.length > 1) {
-    filterGroups.push({
-      label: 'School',
-      options: schoolOptions,
-      active: schoolFilter,
-      onToggle: toggleSchool,
-    });
-  }
-  filterGroups.push({
-    label: 'Type',
-    options: [
-      { id: 'dual', label: 'Dual' },
-      { id: 'tri', label: 'Tri' },
-    ],
-    active: typeFilter,
-    onToggle: toggleType,
-  });
 
   const clearAllFilters = () => {
     setSearchQuery('');

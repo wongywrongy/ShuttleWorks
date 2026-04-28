@@ -23,7 +23,7 @@ import { useAppStore } from '../store/appStore';
 import { apiClient } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
 import { getMatchPlayerIds as getPlayerIdsFromMatch } from '../utils/trafficLight';
-import { timeToSlot, slotToTime } from '../utils/timeUtils';
+import { timeToSlot, slotToTime } from '../lib/time';
 
 export interface ImpactAnalysis {
   matchId: string;

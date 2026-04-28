@@ -88,7 +88,7 @@ export function PublicDisplaySettings() {
               onChange={(id) => update({ tvDisplayMode: id })}
             />
           </Row>
-          <Row label="Grid cols" hint="Force a column count for constant card width.">
+          <Row label="Grid cols">
             <ChipRow
               ariaLabel="Grid columns"
               value={gridCols ?? 'auto'}
@@ -116,7 +116,7 @@ export function PublicDisplaySettings() {
 
         {/* ── Brand ──────────────────────────────────────────────── */}
         <Group title="Brand">
-          <Row label="Accent" hint="Drives the LIVE border, pill, and progress bar.">
+          <Row label="Accent">
             <div className="flex flex-wrap items-center gap-1.5">
               {ACCENT_PRESETS.map((p) => {
                 const isActive = accent === p.hex.toLowerCase();
@@ -163,7 +163,36 @@ export function PublicDisplaySettings() {
               />
             </div>
           </Row>
-          <Row label="Background">
+          <Row label="Theme">
+            <div role="radiogroup" aria-label="TV theme" className="flex flex-wrap items-center gap-1.5">
+              {[
+                { id: 'auto' as const, label: 'Auto' },
+                { id: 'dark' as const, label: 'Dark' },
+                { id: 'light' as const, label: 'Light' },
+              ].map((t) => {
+                const isActive = (config.tvTheme ?? 'dark') === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={isActive}
+                    onClick={() => update({ tvTheme: t.id })}
+                    className={[
+                      INTERACTIVE_BASE,
+                      'rounded border px-2 py-0.5 text-2xs font-medium',
+                      isActive
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    ].join(' ')}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          </Row>
+          <Row label="Background" hint="Only used when theme is dark.">
             <div role="radiogroup" aria-label="Background tone" className="flex flex-wrap items-center gap-1.5">
               {BG_TONES.map((t) => {
                 const isActive = bgTone === t.id;
@@ -198,7 +227,7 @@ export function PublicDisplaySettings() {
 
         {/* ── Content ────────────────────────────────────────────── */}
         <Group title="Content">
-          <Row label="Show scores" hint="Hide if the venue prefers private scoring during play.">
+          <Row label="Show scores">
             <Switch
               checked={showScores}
               onChange={(next) => update({ tvShowScores: next })}

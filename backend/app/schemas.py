@@ -31,6 +31,14 @@ class BreakWindow(BaseModel):
 
 
 class TournamentConfig(BaseModel):
+    # Human-readable tournament name. Drives backup filenames and the
+    # public-display headline. Optional — UI falls back to defaults
+    # when unset.
+    tournamentName: Optional[str] = None
+    # Per-tournament meet mode (``dual`` = School A vs B, ``tri`` =
+    # three-way). The auto-match generator and rendering surfaces
+    # branch on this value.
+    meetMode: Optional[Literal["dual", "tri"]] = None
     intervalMinutes: int = Field(..., gt=0, le=240)
     dayStart: HHMMTime
     dayEnd: HHMMTime
@@ -67,6 +75,7 @@ class TournamentConfig(BaseModel):
     tvDisplayMode: Optional[Literal["strip", "grid", "list"]] = None
     # Public-display branding + layout knobs (all UI-only).
     tvAccent: Optional[str] = None  # hex "#RRGGBB"
+    tvTheme: Optional[Literal["auto", "dark", "light"]] = None
     tvBgTone: Optional[Literal["navy", "black", "midnight", "slate"]] = None
     tvGridColumns: Optional[int] = Field(None, ge=1, le=4)
     tvCardSize: Optional[Literal["auto", "compact", "comfortable", "large"]] = None

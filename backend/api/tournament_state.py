@@ -9,12 +9,14 @@ and surfaces ``recoveredFromBackup: true`` in the payload so the UI can
 notify the operator.
 """
 import logging
-import os
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Response
+
+from app.error_codes import ErrorCode, http_error
+from app.paths import data_dir, ensure_data_dir
+from app.time_utils import now_iso
 from pydantic import BaseModel
 
 from app.schemas import TournamentStateDTO
@@ -26,16 +28,8 @@ log = logging.getLogger("scheduler.tournament_state")
 CURRENT_SCHEMA_VERSION = 1
 
 
-def _data_dir() -> Path:
-    return Path(os.environ.get("BACKEND_DATA_DIR", "/app/data"))
-
-
 def _state_path() -> Path:
-    return _data_dir() / "tournament.json"
-
-
-def _ensure_dir() -> None:
-    _data_dir().mkdir(parents=True, exist_ok=True)
+    return data_dir() / "tournament.json"
 
 
 def _migrate(raw: dict) -> dict:
@@ -47,13 +41,12 @@ def _migrate(raw: dict) -> dict:
     """
     version = int(raw.get("version") or 1)
     if version > CURRENT_SCHEMA_VERSION:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"state file schema version {version} is newer than this "
-                f"app's {CURRENT_SCHEMA_VERSION}; upgrade the app or "
-                f"restore an older backup"
-            ),
+        raise http_error(
+            409,
+            ErrorCode.STATE_TOO_NEW,
+            f"state file schema version {version} is newer than this "
+            f"app's {CURRENT_SCHEMA_VERSION}; upgrade the app or "
+            f"restore an older backup",
         )
     # No migration needed at v1 — added here for future upgrades.
     raw["version"] = CURRENT_SCHEMA_VERSION
@@ -69,17 +62,19 @@ def _read_with_recovery(path: Path) -> tuple[dict, Optional[str]]:
     recovery of older snapshots.
     """
     try:
-        return _backups.read_with_recovery(_data_dir(), path)
+        return _backups.read_with_recovery(data_dir(), path)
     except FileNotFoundError:
-        raise HTTPException(
-            status_code=500,
-            detail="tournament state is missing and no backup exists; reset via Setup",
+        raise http_error(
+            500,
+            ErrorCode.STATE_MISSING,
+            "tournament state is missing and no backup exists; reset via Setup",
         )
     except ValueError as e:
         log.error("tournament-state recovery failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="tournament state unreadable; reset via Setup",
+        raise http_error(
+            500,
+            ErrorCode.STATE_CORRUPT,
+            "tournament state unreadable; reset via Setup",
         )
 
 
@@ -99,7 +94,7 @@ async def get_tournament_state():
         raise
     except OSError as e:
         log.error("tournament-state read failed: %s", e)
-        raise HTTPException(status_code=500, detail="could not read tournament state")
+        raise http_error(500, ErrorCode.STATE_CORRUPT, "could not read tournament state")
 
     data = _migrate(data)
     if recovered_from is not None:
@@ -116,18 +111,22 @@ async def put_tournament_state(state: TournamentStateDTO):
     always recoverable. The server stamps ``updatedAt`` so two tabs can
     agree on ordering.
     """
-    _ensure_dir()
+    ensure_data_dir()
     stamped = state.model_copy(
         update={
-            "updatedAt": datetime.now(timezone.utc).isoformat(),
+            "updatedAt": now_iso(),
             "version": CURRENT_SCHEMA_VERSION,
         }
     )
     path = _state_path()
 
     # Rotate a backup of the *previous* live file (if any) before stomping it.
+    # The new state's tournament name is threaded through so the backup
+    # filename reads as ``tournament-<slug>-<date>.json`` instead of a
+    # bare timestamp.
+    tournament_name = (stamped.config.tournamentName if stamped.config else None)
     try:
-        _backups.create_backup(_data_dir(), path)
+        _backups.create_backup(data_dir(), path, tournament_name)
     except OSError as e:
         # Backups are best-effort — don't block saving because of them.
         log.warning("backup rotation failed: %s", e)
@@ -136,7 +135,7 @@ async def put_tournament_state(state: TournamentStateDTO):
         _backups.atomic_write_json(path, stamped.model_dump())
     except OSError as e:
         log.error("tournament-state write failed: %s", e)
-        raise HTTPException(status_code=500, detail="could not persist tournament state")
+        raise http_error(500, ErrorCode.STATE_WRITE_FAILED, "could not persist tournament state")
     return stamped
 
 
@@ -161,7 +160,7 @@ class BackupCreatedDTO(BaseModel):
 @router.get("/state/backups", response_model=BackupListDTO)
 async def list_tournament_backups() -> BackupListDTO:
     """Return the rolling-backup list, newest first."""
-    entries = _backups.list_backups(_data_dir(), _state_path().stem)
+    entries = _backups.list_backups(data_dir(), _state_path().stem)
     return BackupListDTO(backups=[BackupEntryDTO(**e) for e in entries])
 
 
@@ -171,7 +170,7 @@ async def create_tournament_backup() -> BackupCreatedDTO:
     path = _state_path()
     if not path.exists():
         return BackupCreatedDTO(created=False, filename=None)
-    created = _backups.create_backup(_data_dir(), path)
+    created = _backups.create_backup(data_dir(), path)
     return BackupCreatedDTO(
         created=created is not None,
         filename=created.name if created else None,
@@ -183,10 +182,10 @@ async def restore_tournament_backup(filename: str):
     """Replace the live file with the chosen backup, atomically."""
     path = _state_path()
     try:
-        _backups.restore_backup(_data_dir(), path, filename)
+        _backups.restore_backup(data_dir(), path, filename)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"backup not found: {filename}")
+        raise http_error(404, ErrorCode.BACKUP_NOT_FOUND, f"backup not found: {filename}")
     except OSError as e:
-        raise HTTPException(status_code=500, detail=f"restore failed: {e}")
+        raise http_error(500, ErrorCode.BACKUP_RESTORE_FAILED, f"restore failed: {e}")
     # Return the newly-current state so the client can rehydrate in one round trip.
     return await get_tournament_state()

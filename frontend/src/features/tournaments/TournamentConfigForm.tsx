@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { isValidTime } from '../../lib/time';
 import { SetupGuide } from './SetupGuide';
+import { Hint } from '../../components/Hint';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -144,13 +145,71 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold">Tournament Configuration</h3>
-          <Button type="button" variant="outline" size="sm" onClick={() => setShowGuide(true)}>
-            Setup Guide
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="flex items-baseline justify-between border-b border-border/60 pb-1.5">
+          <h3 className="text-sm font-semibold text-foreground">
+            Tournament configuration
+          </h3>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowGuide(true)}
+            className="h-7 text-2xs text-muted-foreground hover:text-foreground"
+          >
+            Setup guide
           </Button>
         </div>
+
+        {/* IDENTITY — tournament name + meet mode. Top of the form so
+            the rest of the page (matches, schedule chrome, backups)
+            can reference the chosen name. */}
+        <Card>
+          <CardContent className="px-4 py-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
+              <div className="space-y-1">
+                <Label htmlFor="tournamentName" className="text-xs">
+                  Tournament name
+                </Label>
+                <Input
+                  id="tournamentName"
+                  type="text"
+                  value={formData.tournamentName ?? ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, tournamentName: e.target.value })
+                  }
+                  placeholder="Spring Open 2026"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Meet type</Label>
+                <div role="radiogroup" aria-label="Meet type" className="inline-flex items-center rounded-md border border-border bg-background p-0.5">
+                  {(['dual', 'tri'] as const).map((mode) => {
+                    const active = (formData.meetMode ?? 'dual') === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setFormData({ ...formData, meetMode: mode })}
+                        className={[
+                          'rounded px-3 py-1 text-xs font-medium capitalize transition-colors',
+                          active
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                        ].join(' ')}
+                      >
+                        {mode}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* SCHEDULE & VENUE */}
         <Card>
@@ -217,46 +276,67 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
 
             <Separator className="my-3" />
 
-            {/* Breaks */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label className="text-xs">Breaks</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addBreak} className="h-7 text-xs">
-                  + Add Break
-                </Button>
+            {/* Breaks — one row per window with clear Start → End labels.
+                Empty state collapses into the inline add affordance so
+                the section's vertical footprint matches its content. */}
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <Label className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Breaks
+                </Label>
+                {breakWindows.length > 0 && (
+                  <span className="text-2xs text-muted-foreground tabular-nums">
+                    {breakWindows.length}
+                  </span>
+                )}
               </div>
-              {breakWindows.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {breakWindows.map((breakWindow, index) => (
-                    <div key={index} className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md">
-                      <Input
-                        type="time"
-                        value={breakWindow.start}
-                        onChange={(e) => updateBreak(index, 'start', e.target.value)}
-                        className="h-7 w-24 text-xs"
-                      />
-                      <span className="text-muted-foreground text-xs">-</span>
-                      <Input
-                        type="time"
-                        value={breakWindow.end}
-                        onChange={(e) => updateBreak(index, 'end', e.target.value)}
-                        className="h-7 w-24 text-xs"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeBreak(index)}
-                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+              {breakWindows.length > 0 && (
+                <div className="space-y-1.5">
+                  {breakWindows.map((breakWindow, index) => {
+                    const startInvalid = errors[`break_${index}_start`];
+                    const endInvalid = errors[`break_${index}_end`];
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 rounded border border-border bg-background px-2 py-1.5"
                       >
-                        ×
-                      </Button>
-                    </div>
-                  ))}
+                        <Input
+                          type="time"
+                          aria-label={`Break ${index + 1} start`}
+                          value={breakWindow.start}
+                          onChange={(e) => updateBreak(index, 'start', e.target.value)}
+                          className={`h-8 w-28 tabular-nums ${startInvalid ? 'border-destructive' : ''}`}
+                        />
+                        <span aria-hidden="true" className="text-muted-foreground select-none">→</span>
+                        <Input
+                          type="time"
+                          aria-label={`Break ${index + 1} end`}
+                          value={breakWindow.end}
+                          onChange={(e) => updateBreak(index, 'end', e.target.value)}
+                          className={`h-8 w-28 tabular-nums ${endInvalid ? 'border-destructive' : ''}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeBreak(index)}
+                          aria-label={`Remove break ${index + 1}`}
+                          className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">No breaks configured</p>
               )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addBreak}
+                className="h-8 w-full justify-center border-dashed text-xs text-muted-foreground hover:bg-accent"
+              >
+                + Add break{breakWindows.length === 0 ? ' (e.g. lunch 12:00–13:00)' : ''}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -279,7 +359,6 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                   max={180}
                   className={`h-9 ${errors.defaultRestMinutes ? 'border-destructive' : ''}`}
                 />
-                <p className="text-[10px] text-muted-foreground">Players can override in profile</p>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="freeze" className="text-xs">Freeze Horizon (slots)</Label>
@@ -394,7 +473,9 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
             <CardTitle className="text-sm">Event Categories</CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 pt-0">
-            <p className="text-xs text-muted-foreground mb-3">Positions per school (e.g., 3 creates MS1, MS2, MS3)</p>
+            <Hint id="setup.event-categories" className="mb-3">
+              Positions per school — e.g., 3 creates MS1, MS2, MS3.
+            </Hint>
             <div className="grid grid-cols-5 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="ms" className="text-xs">Men's Singles</Label>

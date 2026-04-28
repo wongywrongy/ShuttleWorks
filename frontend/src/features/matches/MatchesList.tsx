@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { MatchDTO } from '../../api/dto';
 import { usePlayerNames } from '../../hooks/usePlayerNames';
 import { useAppStore } from '../../store/appStore';
+import { usePlayerMap } from '../../store/selectors';
 import { InlineSearch, type FilterChipGroup } from '../../components/InlineSearch';
 import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
 import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
@@ -39,10 +40,9 @@ export function MatchesList({
   const [schoolFilter, , toggleSchool] = useSearchParamSet('school');
   const [typeFilter, , toggleType] = useSearchParamSet('type');
   const { getPlayerNames } = usePlayerNames();
-  const players = useAppStore((s) => s.players);
   const groups = useAppStore((s) => s.groups);
   const groupIndex = useMemo(() => buildGroupIndex(groups), [groups]);
-  const playerById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
+  const playerById = usePlayerMap();
 
   // Map an array of player IDs → the dominant school accent for that
   // side (first matched player wins). Memoised by id-array reference;
@@ -152,32 +152,10 @@ export function MatchesList({
     });
   }, [sortedMatches, searchQuery, eventFilter, schoolFilter, typeFilter, getPlayerNames, playerById]);
 
-  // School + Type chips only — Event chips were dropped to keep the
-  // search bar minimal (event prefix is also matched by the free-text
-  // query, so the chip set was redundant). Court is N/A here.
-  const schoolOptions = useMemo(
-    () => groups.map((g) => ({ id: g.id, label: g.name })),
-    [groups],
-  );
-
+  // Search bar is text-only — School + Type chips were removed per
+  // the minimal-bar directive. Free-text matches event codes,
+  // player names, and match types so chips don't add information.
   const filterGroups: FilterChipGroup[] = [];
-  if (schoolOptions.length > 1) {
-    filterGroups.push({
-      label: 'School',
-      options: schoolOptions,
-      active: schoolFilter,
-      onToggle: toggleSchool,
-    });
-  }
-  filterGroups.push({
-    label: 'Type',
-    options: [
-      { id: 'dual', label: 'Dual' },
-      { id: 'tri', label: 'Tri' },
-    ],
-    active: typeFilter,
-    onToggle: toggleType,
-  });
 
   const clearAllFilters = () => {
     setSearchQuery('');

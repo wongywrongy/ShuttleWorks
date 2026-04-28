@@ -170,7 +170,7 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
             Position grid
           </span>
           <span className="text-[11px] text-muted-foreground">
-            {school?.name ?? '—'} · click a cell or drag a player onto it
+            {school?.name ?? '—'}
           </span>
         </div>
         <div className="flex items-center gap-3">

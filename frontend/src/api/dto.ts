@@ -5,6 +5,22 @@
 
 // Tournament Configuration
 export interface TournamentConfig {
+  // Human-readable name. Used as a slug in backup filenames and as
+  // the headline on the public TV display. Optional — when unset,
+  // chrome falls back to "Tournament" / "tournament-<timestamp>".
+  tournamentName?: string;
+  // Per-tournament meet mode.
+  //
+  //   ``dual`` — exactly two schools play each other. The default.
+  //   ``tri``  — three schools, full round-robin: every pair (A-B,
+  //              A-C, B-C) plays each event TWICE so combined results
+  //              decide the meet. Every individual match is still A
+  //              vs B (one side per side, like dual) — there is no
+  //              such thing as a "1v1v1" match in badminton.
+  //
+  // The auto-match generator branches on this; rendering surfaces
+  // do not (matches always render as A vs B regardless of mode).
+  meetMode?: 'dual' | 'tri';
   intervalMinutes: number;
   dayStart: string; // HH:mm format
   dayEnd: string; // HH:mm format
@@ -45,9 +61,16 @@ export interface TournamentConfig {
   // the LIVE border, the LIVE pill, and the progress bar. Defaults to
   // emerald (``#10b981``) when unset.
   tvAccent?: string;
-  // Background tone for the public display. ``navy`` is the default,
-  // matching the rest of the app's slate-950. ``black`` is OLED-pure,
-  // ``midnight`` is a deep blue, ``slate`` is neutral cool gray.
+  // Theme for the public display. ``auto`` follows the operator's
+  // app theme. ``dark`` / ``light`` force the TV to that scheme so a
+  // venue with a sun-lit screen can run light while the operator's
+  // laptop stays dark, or vice versa. Defaults to ``dark`` (the
+  // legacy behaviour pre-light-theme support).
+  tvTheme?: 'auto' | 'dark' | 'light';
+  // Background tone for the public display when running in dark mode.
+  // ``navy`` is the default; ``black`` is OLED-pure; ``midnight`` is
+  // deep blue; ``slate`` is neutral cool gray. Ignored in light mode
+  // (light always uses the app surface tokens for consistency).
   tvBgTone?: 'navy' | 'black' | 'midnight' | 'slate';
   // Force a specific column count for grid mode. ``null`` / unset =
   // auto (1-2 columns based on viewport).

@@ -4,6 +4,19 @@ import os
 import sys
 from pathlib import Path
 
+
+def _detail_msg(r) -> str:
+    """Pull the human message out of an HTTPException response.
+
+    Backend errors now return ``{detail: {code, message}}`` (typed),
+    but legacy routes may still send a bare-string ``detail``. Normalise
+    both forms so tests don't have to branch.
+    """
+    detail = r.json().get("detail", "")
+    if isinstance(detail, dict):
+        return str(detail.get("message", ""))
+    return str(detail)
+
 # pytest prepends `src/` to sys.path as its rootdir, which makes the router's
 # `from app.schemas import TournamentStateDTO` resolve to `src/app/schemas.py`
 # (the legacy standalone module with no TournamentStateDTO). Force the
@@ -102,7 +115,7 @@ def test_corrupt_file_with_no_backup_returns_500(client, tmp_path):
     assert r.status_code == 500
     # Generic user-facing message; stack traces and file paths are
     # deliberately NOT leaked — they go to the server log instead.
-    detail = r.json().get("detail", "").lower()
+    detail = _detail_msg(r).lower()
     assert "unreadable" in detail or "reset via setup" in detail
 
 
@@ -209,7 +222,7 @@ def test_migration_too_new_version_rejects(client, tmp_path):
     }))
     r = client.get("/tournament/state")
     assert r.status_code == 409
-    assert "newer" in r.json().get("detail", "").lower()
+    assert "newer" in _detail_msg(r).lower()
 
 
 def test_recovery_skips_corrupt_newest_backup(client, tmp_path):

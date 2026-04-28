@@ -12,15 +12,7 @@ from app.schemas import (
     ScheduleAssignment, SoftViolation, SolverStatus,
     PreviousAssignmentDTO, ProposedMoveDTO, ValidationResponseDTO,
 )
-import sys
-import os
-
-# Add project root to path to import scheduler_core
-backend_dir = os.path.dirname(os.path.dirname(__file__))
-project_root = os.path.dirname(backend_dir)
-scheduler_core_path = os.path.join(project_root, 'src')
-if scheduler_core_path not in sys.path:
-    sys.path.insert(0, scheduler_core_path)
+import app.scheduler_core_path  # noqa: F401  -- side effect: sys.path setup
 
 # Import directly from scheduler_core domain models and engine
 try:
@@ -45,6 +37,31 @@ log = logging.getLogger("scheduler.schedule")
 # and bounds memory if a client stops draining (see the SSE
 # disconnect handling in ``event_generator`` below).
 _SSE_QUEUE_MAX = 512
+
+# Default tuning for both sync and streaming endpoints. 30 s is a
+# tournament-day-friendly upper bound; 4 workers keeps the box
+# responsive while letting CP-SAT explore in parallel.
+DEFAULT_SOLVER_OPTIONS = SolverOptions(
+    time_limit_seconds=30,
+    num_workers=4,
+    log_progress=False,
+)
+
+
+def _prepare_solver_input(request: "GenerateScheduleRequest"):
+    """Convert a request DTO into the solver's domain objects.
+
+    Returns ``(schedule_config, players, matches, previous_assignments)``
+    in the shape ``ScheduleRequest`` and ``CPSATScheduler`` consume. Both
+    the sync and streaming handlers used to inline the same four
+    ``_convert_*`` calls — this collapses that to one line per call site.
+    """
+    return (
+        _convert_to_schedule_config(request.config),
+        _convert_players(request.players, request.config),
+        _convert_matches(request.matches),
+        _convert_previous_assignments(request.previousAssignments),
+    )
 
 
 class GenerateScheduleRequest(BaseModel):
@@ -81,33 +98,18 @@ async def generate_schedule(request: GenerateScheduleRequest):
         Optimized schedule with match assignments
     """
     try:
-        # Convert to scheduler_core format
-        schedule_config = _convert_to_schedule_config(request.config)
-        players = _convert_players(request.players, request.config)
-        matches = _convert_matches(request.matches)
-        previous_assignments = _convert_previous_assignments(request.previousAssignments)
-
-        # Create schedule request for solver
+        schedule_config, players, matches, previous_assignments = _prepare_solver_input(request)
         solver_request = ScheduleRequest(
             config=schedule_config,
             players=players,
             matches=matches,
             previous_assignments=previous_assignments,
-            solver_options=SolverOptions(
-                time_limit_seconds=30,
-                num_workers=4,
-                log_progress=False
-            )
+            solver_options=DEFAULT_SOLVER_OPTIONS,
         )
-
-        # Call CP-SAT solver directly
-        backend = CPSATBackend(solver_options=solver_request.solver_options)
-        result = backend.solve(solver_request)
-
-        # Convert result to ScheduleDTO and return
+        result = CPSATBackend(solver_options=solver_request.solver_options).solve(solver_request)
         return _convert_result_to_dto(result)
 
-    except Exception as e:
+    except Exception:
         log.exception("schedule generation failed")
         raise HTTPException(status_code=500, detail="schedule generation failed")
 
@@ -187,18 +189,11 @@ async def generate_schedule_stream(request: GenerateScheduleRequest, http_reques
         def solve_in_thread():
             """Run solver in thread pool to avoid blocking event loop."""
             try:
-                schedule_config = _convert_to_schedule_config(request.config)
-                players = _convert_players(request.players, request.config)
-                matches = _convert_matches(request.matches)
-                previous_assignments = _convert_previous_assignments(request.previousAssignments)
+                schedule_config, players, matches, previous_assignments = _prepare_solver_input(request)
 
                 scheduler = CPSATScheduler(
                     config=schedule_config,
-                    solver_options=SolverOptions(
-                        time_limit_seconds=30,
-                        num_workers=4,
-                        log_progress=False,
-                    ),
+                    solver_options=DEFAULT_SOLVER_OPTIONS,
                 )
                 scheduler.add_players(players)
                 scheduler.add_matches(matches)

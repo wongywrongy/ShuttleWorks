@@ -128,10 +128,9 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
             type="button"
             onClick={() => setExpanded(true)}
             data-testid="bulk-import-toggle"
-            className="flex w-full items-center justify-between rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+            className="flex w-full items-center justify-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
           >
-            <span>＋ Bulk-import players</span>
-            <span className="text-[10px] text-muted-foreground">paste a list</span>
+            ＋ Bulk-import players
           </button>
         )}
       </div>
@@ -142,11 +141,6 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
             query={query}
             onQueryChange={setQuery}
             placeholder={`Filter ${allInSchool.length} player${allInSchool.length === 1 ? '' : 's'}…`}
-            resultCount={
-              query
-                ? { shown: pool.length, total: allInSchool.length }
-                : undefined
-            }
           />
         </div>
       )}
@@ -155,7 +149,6 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
         {allInSchool.length === 0 ? (
           <div className="py-6 text-center text-xs text-muted-foreground">
             No players yet.
-            <br />Use the bulk import above.
           </div>
         ) : pool.length === 0 ? (
           <div className="py-6 text-center text-xs text-muted-foreground">

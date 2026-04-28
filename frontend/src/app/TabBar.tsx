@@ -1,7 +1,5 @@
 import { useAppStore, type AppTab } from '../store/appStore';
 import { AppStatusPopover } from '../components/AppStatusPopover';
-import { ThemeToggle } from '../components/ThemeToggle';
-import { DensityToggle } from '../components/DensityToggle';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
 type TabDef = { id: AppTab; label: string; hint?: string };
@@ -71,9 +69,9 @@ export function TabBar() {
           );
         })}
       </div>
+      {/* Header chrome stays minimal: just the live status. Theme +
+          density toggles live in Setup → Appearance. */}
       <div className="flex items-center gap-2">
-        <DensityToggle />
-        <ThemeToggle />
         <AppStatusPopover />
       </div>
     </nav>

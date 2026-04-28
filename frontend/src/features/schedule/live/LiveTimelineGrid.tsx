@@ -3,7 +3,8 @@
  * Compact design consistent with LiveOperationsGrid
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
-import { calculateTotalSlots, formatSlotTime } from '../../../utils/timeUtils';
+import { calculateTotalSlots, formatSlotTime } from '../../../lib/time';
+import { indexById } from '../../../store/selectors';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig } from '../../../api/dto';
 
 interface LiveTimelineGridProps {
@@ -40,8 +41,8 @@ export function LiveTimelineGrid({
   const prevAssignmentsRef = useRef<string[]>([]);
 
   // Build lookup maps
-  const matchMap = useMemo(() => new Map(matches.map(m => [m.id, m])), [matches]);
-  const playerMap = useMemo(() => new Map(players.map(p => [p.id, p])), [players]);
+  const matchMap = useMemo(() => indexById(matches), [matches]);
+  const playerMap = useMemo(() => indexById(players), [players]);
 
   // Calculate time slots (handles overnight schedules)
   const totalSlots = useMemo(() => calculateTotalSlots(config), [config]);

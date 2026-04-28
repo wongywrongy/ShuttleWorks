@@ -18,6 +18,7 @@
 // ExcelJS is large (~400 kB min). Loaded lazily inside exportScheduleXlsx so
 // it never enters the initial bundle.
 import type ExcelJSNs from 'exceljs';
+import { indexById } from '../../store/selectors';
 type ExcelJSType = typeof ExcelJSNs;
 
 import type {
@@ -136,8 +137,8 @@ export async function exportScheduleXlsx(
     (a, b) => a.slotId - b.slotId || a.courtId - b.courtId,
   );
 
-  const matchById = new Map(matches.map((m) => [m.id, m]));
-  const playerById = new Map(players.map((p) => [p.id, p]));
+  const matchById = indexById(matches);
+  const playerById = indexById(players);
 
   const WARMUP_ROWS = 6;
   // Warm-up clock time = 30 min before the first match (or day start if empty).
@@ -488,7 +489,7 @@ export async function exportMatchesXlsx(
   const colCount = 7;
   applyHeaderRow(sheet, colCount);
 
-  const playerById = new Map(players.map((p) => [p.id, p]));
+  const playerById = indexById(players);
   const schoolById = new Map(groups.map((g) => [g.id, g.name]));
 
   // Group by event prefix in the canonical order. Matches with unknown or
