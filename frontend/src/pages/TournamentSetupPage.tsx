@@ -5,7 +5,7 @@
  * provides the layout; nothing else.
  */
 import { useState } from 'react';
-import { Sliders, Palette, Monitor, Database, Sparkles } from 'lucide-react';
+import { Sliders, Palette, Monitor, Database, Sparkles, Cpu } from 'lucide-react';
 import { useTournament } from '../hooks/useTournament';
 import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
@@ -15,6 +15,7 @@ import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicato
 import { PublicDisplaySettings } from '../features/tournaments/PublicDisplaySettings';
 import { SettingsShell, type SettingsSectionDef } from '../features/settings/SettingsShell';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
+import { EngineSettings } from '../features/settings/EngineSettings';
 import { DemoLoader } from '../features/settings/DemoLoader';
 import type { TournamentConfig } from '../api/dto';
 
@@ -77,6 +78,13 @@ export function TournamentSetupPage() {
           saving={saving}
         />
       ),
+    },
+    {
+      id: 'engine',
+      label: 'Engine',
+      icon: Cpu,
+      description: 'Solver tuning + reproducibility — how schedules are produced.',
+      render: () => <EngineSettings />,
     },
     {
       id: 'display',
