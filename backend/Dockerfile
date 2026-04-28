@@ -20,6 +20,7 @@ COPY src/adapters ./src/adapters
 # Copy backend application code
 COPY backend/app/ ./app/
 COPY backend/api/ ./api/
+COPY backend/adapters/ ./adapters/
 COPY backend/services/ ./services/
 
 # Create a non-root user and a data dir it owns. The volume mount target
