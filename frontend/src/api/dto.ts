@@ -5,6 +5,22 @@
 
 // Tournament Configuration
 export interface TournamentConfig {
+  // Human-readable name. Used as a slug in backup filenames and as
+  // the headline on the public TV display. Optional — when unset,
+  // chrome falls back to "Tournament" / "tournament-<timestamp>".
+  tournamentName?: string;
+  // Per-tournament meet mode.
+  //
+  //   ``dual`` — exactly two schools play each other. The default.
+  //   ``tri``  — three schools, full round-robin: every pair (A-B,
+  //              A-C, B-C) plays each event TWICE so combined results
+  //              decide the meet. Every individual match is still A
+  //              vs B (one side per side, like dual) — there is no
+  //              such thing as a "1v1v1" match in badminton.
+  //
+  // The auto-match generator branches on this; rendering surfaces
+  // do not (matches always render as A vs B regardless of mode).
+  meetMode?: 'dual' | 'tri';
   intervalMinutes: number;
   dayStart: string; // HH:mm format
   dayEnd: string; // HH:mm format
@@ -34,6 +50,60 @@ export interface TournamentConfig {
   setsToWin?: number; // 1 (best of 1), 2 (best of 3), or 3 (best of 5)
   pointsPerSet?: number; // 11, 15, or 21
   deuceEnabled?: boolean; // Win by 2 in deuce (up to 30 for 21-point sets)
+  // ---- Public TV display ------------------------------------------
+  // How the public ``/display`` page renders the courts view.
+  //
+  //   strip — one tall row per court (default; best 3-6 courts, 1080p).
+  //   grid  — 2-column responsive grid (best 8-16 courts).
+  //   list  — dense one-line rows (best 16+ courts, side display).
+  tvDisplayMode?: 'strip' | 'grid' | 'list';
+  // Brand accent for the public display — hex (``#RRGGBB``). Drives
+  // the LIVE border, the LIVE pill, and the progress bar. Defaults to
+  // emerald (``#10b981``) when unset.
+  tvAccent?: string;
+  // Theme for the public display. ``auto`` follows the operator's
+  // app theme. ``dark`` / ``light`` force the TV to that scheme so a
+  // venue with a sun-lit screen can run light while the operator's
+  // laptop stays dark, or vice versa. Defaults to ``dark`` (the
+  // legacy behaviour pre-light-theme support).
+  tvTheme?: 'auto' | 'dark' | 'light';
+  // Background tone for the public display when running in dark mode.
+  // ``navy`` is the default; ``black`` is OLED-pure; ``midnight`` is
+  // deep blue; ``slate`` is neutral cool gray. Ignored in light mode
+  // (light always uses the app surface tokens for consistency).
+  tvBgTone?: 'navy' | 'black' | 'midnight' | 'slate';
+  // Force a specific column count for grid mode. ``null`` / unset =
+  // auto (1-2 columns based on viewport).
+  tvGridColumns?: 1 | 2 | 3 | 4 | null;
+  // Card size — overrides the auto-sizing strip/grid layouts.
+  // ``auto`` keeps the current behaviour; ``compact`` shrinks padding;
+  // ``comfortable`` is the default tall card; ``large`` expands for
+  // big-room viewing.
+  tvCardSize?: 'auto' | 'compact' | 'comfortable' | 'large';
+  // Whether to show the live score on the public display. Off when
+  // the venue prefers to keep scores private until the match ends.
+  tvShowScores?: boolean;
+  // Optional event-column ordering and visibility for the Roster
+  // position grid. Defaults to the canonical MD / WD / XD / WS / MS
+  // sequence. Hidden columns are stored as ``false`` per rank.
+  eventOrder?: string[];
+  eventVisible?: Record<string, boolean>;
+  // ---- Engine settings -------------------------------------------
+  // Reproducible-run mode: solver runs single-threaded with a fixed
+  // seed so the same input produces a byte-identical schedule across
+  // runs. ~3× slower than parallel mode; default off.
+  deterministic?: boolean;
+  // Seed used in deterministic mode. Default 42 when unset.
+  randomSeed?: number;
+  // Solver wall-clock cap. The CP-SAT solver returns the best
+  // feasible schedule found within this window. Higher = closer to
+  // optimal at the cost of operator wait time. Default 30 s.
+  solverTimeLimitSeconds?: number;
+  // How many near-optimal alternative schedules the solver keeps
+  // alongside the chosen one. Operator can swap to a candidate in a
+  // click when reality (overrun, withdrawal, court closure) makes
+  // the chosen plan no longer fit — no re-solve needed. Default 5.
+  candidatePoolSize?: number;
 }
 
 export interface BreakWindow {
@@ -77,6 +147,13 @@ export interface TournamentConfigDTO {
 export type ScheduleView = 'timeslot' | 'court';
 
 // Schedule
+export interface ScheduleCandidate {
+  solutionId: string;
+  assignments: ScheduleAssignment[];
+  objectiveScore: number;
+  foundAtSeconds: number;
+}
+
 export interface ScheduleDTO {
   assignments: ScheduleAssignment[];
   unscheduledMatches: string[];
@@ -84,6 +161,17 @@ export interface ScheduleDTO {
   objectiveScore: number | null;
   infeasibleReasons: string[];
   status: 'optimal' | 'feasible' | 'infeasible' | 'unknown';
+  /** Random seed the solver used. Pair with the Reproducible-run
+   *  toggle to regenerate a byte-identical schedule. */
+  solverSeed?: number;
+  /** Top-N near-optimal alternatives the solver found while
+   *  improving. ``assignments`` above mirrors
+   *  ``candidates[activeCandidateIndex].assignments`` when set;
+   *  callers should read via ``getActiveAssignments(schedule)`` to
+   *  honour the active selection without crashing on legacy
+   *  schedules where these fields are missing. */
+  candidates?: ScheduleCandidate[];
+  activeCandidateIndex?: number;
 }
 
 export interface ScheduleAssignment {

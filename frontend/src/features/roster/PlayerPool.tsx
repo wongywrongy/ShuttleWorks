@@ -14,6 +14,7 @@ import { useMemo, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
 import { DraggablePlayerChip } from './PositionGrid';
+import { InlineSearch } from '../../components/InlineSearch';
 
 function parseNames(input: string): string[] {
   return input
@@ -30,8 +31,11 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
 
   const [draft, setDraft] = useState('');
   const [expanded, setExpanded] = useState(false);
+  // Local-only search (not URL-backed — the pool is per-school side-bar
+  // chrome, not a primary surface). Resets when the school changes.
+  const [query, setQuery] = useState('');
 
-  const pool = useMemo(
+  const allInSchool = useMemo(
     () =>
       players
         .filter((p) => p.groupId === schoolId)
@@ -39,6 +43,12 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
         .sort((a, b) => a.name.localeCompare(b.name)),
     [players, schoolId],
   );
+
+  const pool = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return allInSchool;
+    return allInSchool.filter((p) => p.name.toLowerCase().includes(q));
+  }, [allInSchool, query]);
 
   const school = groups.find((g) => g.id === schoolId);
 
@@ -118,19 +128,31 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
             type="button"
             onClick={() => setExpanded(true)}
             data-testid="bulk-import-toggle"
-            className="flex w-full items-center justify-between rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+            className="flex w-full items-center justify-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
           >
-            <span>＋ Bulk-import players</span>
-            <span className="text-[10px] text-muted-foreground">paste a list</span>
+            ＋ Bulk-import players
           </button>
         )}
       </div>
 
+      {allInSchool.length > 0 && (
+        <div className="border-b border-border/60 px-3 py-2">
+          <InlineSearch
+            query={query}
+            onQueryChange={setQuery}
+            placeholder={`Filter ${allInSchool.length} player${allInSchool.length === 1 ? '' : 's'}…`}
+          />
+        </div>
+      )}
+
       <div className="max-h-[32rem] overflow-y-auto p-2">
-        {pool.length === 0 ? (
+        {allInSchool.length === 0 ? (
           <div className="py-6 text-center text-xs text-muted-foreground">
             No players yet.
-            <br />Use the bulk import above.
+          </div>
+        ) : pool.length === 0 ? (
+          <div className="py-6 text-center text-xs text-muted-foreground">
+            No players match <span className="font-mono text-foreground">{query}</span>.
           </div>
         ) : (
           <ul className="space-y-1">

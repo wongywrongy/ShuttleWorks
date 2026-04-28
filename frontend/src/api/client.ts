@@ -32,6 +32,47 @@ interface GenerateScheduleRequest {
   previousAssignments?: any[];
 }
 
+export type DisruptionType = 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
+
+export interface Disruption {
+  type: DisruptionType;
+  playerId?: string;
+  courtId?: number;
+  matchId?: string;
+  extraMinutes?: number;
+}
+
+export interface RepairRequest {
+  originalSchedule: ScheduleDTO;
+  config: TournamentConfig;
+  players: PlayerDTO[];
+  matches: MatchDTO[];
+  matchStates: Record<string, MatchStateDTO>;
+  disruption: Disruption;
+  nowIso?: string;
+}
+
+export interface RepairResponse {
+  schedule: ScheduleDTO;
+  repairedMatchIds: string[];
+}
+
+export interface WarmRestartRequest {
+  originalSchedule: ScheduleDTO;
+  config: TournamentConfig;
+  players: PlayerDTO[];
+  matches: MatchDTO[];
+  matchStates: Record<string, MatchStateDTO>;
+  /** 10 = Conservative (default), 5 = Balanced, 1 = Aggressive. */
+  stayCloseWeight?: number;
+  nowIso?: string;
+}
+
+export interface WarmRestartResponse {
+  schedule: ScheduleDTO;
+  movedMatchIds: string[];
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -58,17 +99,38 @@ class ApiClient {
           error.response?.headers?.['x-request-id'] ??
           error.response?.headers?.['X-Request-ID'];
 
+        // Backend errors now ship a structured ``detail`` of the form
+        // ``{ code: 'STATE_CORRUPT', message: '...' }``. We extract the
+        // code as the toast title and the message as the body. Older
+        // routes that still pass a bare string ``detail`` keep working
+        // — the code falls back to nothing and the string becomes the
+        // message.
+        let code: string | undefined;
         let message: string;
         if (error.response) {
-          message =
-            error.response.data?.detail ||
-            error.response.data?.message ||
-            `Server error ${error.response.status}`;
+          const detail = error.response.data?.detail;
+          if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
+            code = typeof detail.code === 'string' ? detail.code : undefined;
+            message = detail.message;
+          } else if (typeof detail === 'string') {
+            message = detail;
+          } else {
+            message =
+              error.response.data?.message ||
+              `Server error ${error.response.status}`;
+          }
         } else if (error.request) {
           message = 'No response from server. Is the backend running?';
         } else {
           message = error.message || 'An unexpected error occurred';
         }
+
+        // Compose a single ``detail`` line containing the code (named,
+        // not bytes) and the request id if known. The body of the toast
+        // is the human message.
+        const detailParts: string[] = [];
+        if (code) detailParts.push(code);
+        if (requestId) detailParts.push(`request ${requestId.slice(0, 8)}`);
 
         // Surface the failure exactly once, at the edge, so every hook /
         // component gets consistent UI without needing to handle it.
@@ -76,15 +138,19 @@ class ApiClient {
           useAppStore.getState().pushToast({
             level: 'error',
             message,
-            detail: requestId ? `request ${requestId.slice(0, 8)}` : undefined,
+            detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
           });
         } catch {
           // The store may not be ready during very-early-lifecycle calls —
           // fall through to the thrown error below.
         }
 
-        const err = new Error(message) as Error & { requestId?: string };
+        const err = new Error(message) as Error & {
+          requestId?: string;
+          code?: string;
+        };
         if (requestId) err.requestId = requestId;
+        if (code) err.code = code;
         throw err;
       }
     );
@@ -96,6 +162,31 @@ class ApiClient {
    */
   async generateSchedule(request: GenerateScheduleRequest): Promise<ScheduleDTO> {
     const response = await this.client.post<ScheduleDTO>('/schedule', request);
+    return response.data;
+  }
+
+  /**
+   * Repair the schedule after a disruption (overrun, withdrawal,
+   * court closure, cancellation). Re-solves only the affected slice;
+   * everything else stays pinned. Solve time < 5 s for typical
+   * tournaments.
+   */
+  async repairSchedule(request: RepairRequest): Promise<RepairResponse> {
+    const response = await this.client.post<RepairResponse>('/schedule/repair', request);
+    return response.data;
+  }
+
+  /**
+   * Full re-solve seeded by the existing schedule with a stay-close
+   * objective. Finished + in-progress matches stay where they are;
+   * future matches may move under a per-match move penalty
+   * (Conservative=10 / Balanced=5 / Aggressive=1).
+   */
+  async warmRestartSchedule(request: WarmRestartRequest): Promise<WarmRestartResponse> {
+    const response = await this.client.post<WarmRestartResponse>(
+      '/schedule/warm-restart',
+      request,
+    );
     return response.data;
   }
 

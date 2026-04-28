@@ -19,12 +19,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
+
+from app.error_codes import ErrorCode, http_error
+from app.paths import data_dir, ensure_data_dir
+from app.time_utils import now_iso
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -48,16 +50,8 @@ MAX_IMPORT_BYTES = 20 * 1024 * 1024
 _state_lock = asyncio.Lock()
 
 
-def _data_dir() -> Path:
-    return Path(os.environ.get("BACKEND_DATA_DIR", "/app/data"))
-
-
 def _state_path() -> Path:
-    return _data_dir() / "match_states.json"
-
-
-def _ensure_dir() -> None:
-    _data_dir().mkdir(parents=True, exist_ok=True)
+    return data_dir() / "match_states.json"
 
 
 # DTOs
@@ -107,10 +101,6 @@ class TournamentStateFile(BaseModel):
     version: str = "1.0"
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
 def _read_state_file() -> TournamentStateFile:
     """Load the match-state file, auto-recovering from backup on corruption.
 
@@ -121,22 +111,23 @@ def _read_state_file() -> TournamentStateFile:
         # Check for a viable backup — the live file may have been deleted
         # but a snapshot could still carry the previous tournament day's
         # state.
-        if _backups.latest_backup(_data_dir(), path.stem) is None:
+        if _backups.latest_backup(data_dir(), path.stem) is None:
             return TournamentStateFile(
-                matchStates={}, lastUpdated=_now_iso(), version="1.0"
+                matchStates={}, lastUpdated=now_iso(), version="1.0"
             )
 
     try:
-        data, recovered_from = _backups.read_with_recovery(_data_dir(), path)
+        data, recovered_from = _backups.read_with_recovery(data_dir(), path)
     except FileNotFoundError:
         return TournamentStateFile(
-            matchStates={}, lastUpdated=_now_iso(), version="1.0"
+            matchStates={}, lastUpdated=now_iso(), version="1.0"
         )
     except ValueError as e:
         log.error("match-state recovery failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="match state unreadable; reset via Setup",
+        raise http_error(
+            500,
+            ErrorCode.MATCH_STATE_UNREADABLE,
+            "match state unreadable; reset via Setup",
         )
 
     if recovered_from is not None:
@@ -145,9 +136,10 @@ def _read_state_file() -> TournamentStateFile:
         return TournamentStateFile(**data)
     except Exception as e:
         log.error("match-state schema mismatch after recovery: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="match state schema mismatch; reset via Setup",
+        raise http_error(
+            500,
+            ErrorCode.STATE_SCHEMA_MISMATCH,
+            "match state schema mismatch; reset via Setup",
         )
 
 
@@ -161,22 +153,24 @@ def _write_state_file(state: TournamentStateFile) -> None:
     rotation happens AFTER the successful replace so the previous
     state only disappears once the new one is durable.
     """
-    _ensure_dir()
-    state.lastUpdated = _now_iso()
+    ensure_data_dir()
+    state.lastUpdated = now_iso()
     path = _state_path()
 
     try:
         _backups.atomic_write_json(path, state.model_dump())
     except OSError as e:
         log.error("match-state write failed: %s", e)
-        raise HTTPException(
-            status_code=500, detail="could not persist match state"
+        raise http_error(
+            500,
+            ErrorCode.MATCH_STATE_WRITE_FAILED,
+            "could not persist match state",
         )
 
     # Rotate a snapshot of the freshly-written live file. Best-effort —
     # a failure here doesn't invalidate the save.
     try:
-        _backups.create_backup(_data_dir(), path)
+        _backups.create_backup(data_dir(), path)
     except OSError as e:
         log.warning("match-state backup rotation failed: %s", e)
 
@@ -205,7 +199,7 @@ async def update_match_state(match_id: str, update: MatchStateDTO):
     """Update a match state in the file."""
     async with _state_lock:
         state = _read_state_file()
-        update.updatedAt = _now_iso()
+        update.updatedAt = now_iso()
         update.matchId = match_id
         state.matchStates[match_id] = update
         _write_state_file(state)
@@ -228,7 +222,7 @@ async def reset_all_match_states():
     """Clear all match states (empty the file)."""
     async with _state_lock:
         state = TournamentStateFile(
-            matchStates={}, lastUpdated=_now_iso(), version="1.0"
+            matchStates={}, lastUpdated=now_iso(), version="1.0"
         )
         _write_state_file(state)
     return {"message": "All match states reset successfully"}
@@ -240,7 +234,7 @@ async def export_match_states():
     path = _state_path()
     if not path.exists():
         state = TournamentStateFile(
-            matchStates={}, lastUpdated=_now_iso(), version="1.0"
+            matchStates={}, lastUpdated=now_iso(), version="1.0"
         )
         _write_state_file(state)
     return FileResponse(
@@ -258,30 +252,32 @@ async def import_match_states(request: Request, file: UploadFile = File(...)):
     - Validates the payload against TournamentStateFile before persisting.
     """
     if not (file.filename or "").endswith(".json"):
-        raise HTTPException(status_code=400, detail="file must be a .json file")
+        raise http_error(400, ErrorCode.UPLOAD_WRONG_TYPE, "file must be a .json file")
 
     # Enforce a Content-Length cap when the header is set so we never
     # drain an attacker's multi-GB upload into memory.
     declared_length = request.headers.get("content-length")
     if declared_length and declared_length.isdigit():
         if int(declared_length) > MAX_IMPORT_BYTES:
-            raise HTTPException(status_code=413, detail="upload too large")
+            raise http_error(413, ErrorCode.UPLOAD_TOO_LARGE, "upload too large")
 
     # Read with an explicit cap even when Content-Length is missing.
     content = await file.read(MAX_IMPORT_BYTES + 1)
     if len(content) > MAX_IMPORT_BYTES:
-        raise HTTPException(status_code=413, detail="upload too large")
+        raise http_error(413, ErrorCode.UPLOAD_TOO_LARGE, "upload too large")
 
     try:
         data = json.loads(content.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError):
-        raise HTTPException(status_code=400, detail="invalid JSON file")
+        raise http_error(400, ErrorCode.UPLOAD_INVALID_JSON, "invalid JSON file")
 
     try:
         state = TournamentStateFile(**data)
     except Exception as e:
         log.warning("match-state import validation failed: %s", e)
-        raise HTTPException(status_code=400, detail="payload does not match schema")
+        raise http_error(
+            400, ErrorCode.UPLOAD_SCHEMA_MISMATCH, "payload does not match schema"
+        )
 
     async with _state_lock:
         _write_state_file(state)
@@ -306,7 +302,7 @@ async def import_match_states_bulk(match_states: Dict[str, MatchStateDTO]):
         state = _read_state_file()
         for match_id, match_state in match_states.items():
             match_state.matchId = match_id
-            match_state.updatedAt = _now_iso()
+            match_state.updatedAt = now_iso()
             state.matchStates[match_id] = match_state
 
         _write_state_file(state)

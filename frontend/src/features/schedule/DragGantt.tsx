@@ -26,8 +26,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { apiClient } from '../../api/client';
 import { useAppStore } from '../../store/appStore';
+import { indexById } from '../../store/selectors';
+import { Hint } from '../../components/Hint';
 import { useSchedule } from '../../hooks/useSchedule';
-import { calculateTotalSlots, formatSlotTime } from '../../utils/timeUtils';
+import { calculateTotalSlots, formatSlotTime } from '../../lib/time';
 import type {
   MatchDTO,
   ScheduleAssignment,
@@ -36,9 +38,7 @@ import type {
   ValidationResponseDTO,
 } from '../../api/dto';
 
-const SLOT_WIDTH = 56;
-const ROW_HEIGHT = 40;
-const COURT_LABEL_WIDTH = 56;
+import { SLOT_WIDTH, ROW_HEIGHT, COURT_LABEL_WIDTH } from './ganttGeometry';
 const VALIDATE_DEBOUNCE_MS = 80;
 
 interface DragGanttProps {
@@ -86,7 +86,7 @@ export function DragGantt({
   const { pinAndResolve } = useSchedule();
   const isGenerating = useAppStore((s) => s.isGenerating);
 
-  const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
+  const matchMap = useMemo(() => indexById(matches), [matches]);
   const totalSlots = calculateTotalSlots(config);
 
   // Visible range: clip to the active assignments plus a little padding.
@@ -274,32 +274,31 @@ export function DragGantt({
       data-testid="drag-gantt"
       className="relative rounded border border-border bg-card overflow-hidden"
     >
-      <div className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-2">
-        <svg aria-hidden className="h-3 w-3 text-muted-foreground" viewBox="0 0 16 16" fill="none">
-          <path d="M4 8h8M8 4v8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
+      <Hint id="schedule.drag-instructions" className="m-2">
         Drag a match to any cell — infeasible targets glow red. Drop pins the match and re-solves the rest.
-      </div>
+      </Hint>
 
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
         <div className="overflow-x-auto">
           <div style={{ width: gridWidth }}>
-            {/* Time header */}
-            <div className="flex border-b border-border">
+            {/* Time header — chrome matches features/control-center/GanttChart
+                so the Schedule and Live grids are visually identical. */}
+            <div className="flex border-b border-border bg-muted/40">
               <div
                 style={{ width: COURT_LABEL_WIDTH }}
-                className="flex-shrink-0 bg-card text-xs text-muted-foreground text-center py-1"
+                className="flex-shrink-0 px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
               >
-                Time
+                Court
               </div>
               {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
                 <div
                   key={slot}
                   style={{ width: SLOT_WIDTH }}
-                  className={[
-                    'flex-shrink-0 border-l border-border bg-card text-center text-[10px] py-1',
-                    slot === currentSlot ? 'text-blue-700 font-semibold' : 'text-muted-foreground',
-                  ].join(' ')}
+                  className={`flex-shrink-0 border-l border-border px-1 py-1 text-center text-2xs tabular-nums ${
+                    slot === currentSlot
+                      ? 'bg-blue-100/70 font-semibold text-blue-700 dark:bg-blue-500/20 dark:text-blue-200'
+                      : 'text-muted-foreground'
+                  }`}
                 >
                   {i % 2 === 0 ? formatSlotTime(slot, config) : ''}
                 </div>
@@ -310,14 +309,14 @@ export function DragGantt({
             {courts.map((courtId) => (
               <div
                 key={courtId}
-                className="relative flex border-b border-border"
+                className="relative flex border-b border-border/60"
                 style={{ height: ROW_HEIGHT }}
               >
                 <div
                   style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
-                  className="flex-shrink-0 flex items-center justify-center bg-card text-xs font-medium text-muted-foreground"
+                  className="flex-shrink-0 flex items-center bg-muted/30 px-2 text-xs font-semibold tabular-nums text-foreground"
                 >
-                  Court {courtId}
+                  C{courtId}
                 </div>
 
                 {/* Drop target cells (one per slot column) */}

@@ -3,6 +3,12 @@ import { Menu } from '@headlessui/react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { MatchDTO } from '../../api/dto';
 import { usePlayerNames } from '../../hooks/usePlayerNames';
+import { useAppStore } from '../../store/appStore';
+import { usePlayerMap } from '../../store/selectors';
+import { InlineSearch, type FilterChipGroup } from '../../components/InlineSearch';
+import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
+import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
+import { SchoolDot } from '../../components/SchoolDot';
 
 interface MatchesListProps {
   matches: MatchDTO[];
@@ -26,8 +32,26 @@ export function MatchesList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<'eventRank' | 'type'>('eventRank');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [searchQuery, setSearchQuery] = useState('');
+  // URL-backed search + filter state. ``q`` for free-text, ``event``
+  // for the rank-prefix chip set (MS / WS / MD / WD / XD), ``school``
+  // for school-id chip set, ``type`` for dual/tri.
+  const [searchQuery, setSearchQuery] = useSearchParamState('q', '');
+  const [eventFilter, , toggleEvent] = useSearchParamSet('event');
+  const [schoolFilter, , toggleSchool] = useSearchParamSet('school');
+  const [typeFilter, , toggleType] = useSearchParamSet('type');
   const { getPlayerNames } = usePlayerNames();
+  const groups = useAppStore((s) => s.groups);
+  const groupIndex = useMemo(() => buildGroupIndex(groups), [groups]);
+  const playerById = usePlayerMap();
+
+  // Map an array of player IDs → the dominant school accent for that
+  // side (first matched player wins). Memoised by id-array reference;
+  // for tournament-sized rosters this is cheap and re-renders fine.
+  const accentForSide = (ids: string[] | undefined) => {
+    if (!ids || ids.length === 0) return null;
+    const p = playerById.get(ids[0]);
+    return p ? getPlayerSchoolAccent(p, groupIndex) : null;
+  };
 
   // Notify parent when selection changes
   useEffect(() => {
@@ -82,22 +106,63 @@ export function MatchesList({
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
-  // Filter matches by search query
+  // Filter matches: free-text query + event-rank + school + type chips.
+  // Each chip group ANDs against the others; within a group the chips
+  // OR (if ``MS`` and ``WS`` are both lit, show MS-* OR WS-*).
   const filteredMatches = useMemo(() => {
-    if (!searchQuery.trim()) return sortedMatches;
-    const query = searchQuery.toLowerCase().trim();
-    return sortedMatches.filter(match => {
-      if (match.eventRank?.toLowerCase().includes(query)) return true;
-      if (match.matchType?.toLowerCase().includes(query)) return true;
-      const sideANames = getPlayerNames(match.sideA);
-      const sideBNames = getPlayerNames(match.sideB);
-      const sideCNames = match.sideC ? getPlayerNames(match.sideC) : [];
-      if (sideANames.some(n => n.toLowerCase().includes(query))) return true;
-      if (sideBNames.some(n => n.toLowerCase().includes(query))) return true;
-      if (sideCNames.some(n => n.toLowerCase().includes(query))) return true;
-      return false;
+    const q = searchQuery.toLowerCase().trim();
+    const eventActive = eventFilter.size > 0;
+    const schoolActive = schoolFilter.size > 0;
+    const typeActive = typeFilter.size > 0;
+
+    const playerGroupId = (id: string): string | undefined =>
+      playerById.get(id)?.groupId;
+
+    return sortedMatches.filter((match) => {
+      if (q) {
+        const sideANames = getPlayerNames(match.sideA);
+        const sideBNames = getPlayerNames(match.sideB);
+        const sideCNames = match.sideC ? getPlayerNames(match.sideC) : [];
+        const matchesQ =
+          (match.eventRank?.toLowerCase().includes(q) ?? false) ||
+          (match.matchType?.toLowerCase().includes(q) ?? false) ||
+          sideANames.some((n) => n.toLowerCase().includes(q)) ||
+          sideBNames.some((n) => n.toLowerCase().includes(q)) ||
+          sideCNames.some((n) => n.toLowerCase().includes(q));
+        if (!matchesQ) return false;
+      }
+
+      if (eventActive) {
+        const prefix = (match.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
+        if (!eventFilter.has(prefix)) return false;
+      }
+
+      if (schoolActive) {
+        const allIds = [...match.sideA, ...match.sideB, ...(match.sideC ?? [])];
+        const groupIds = new Set(allIds.map(playerGroupId).filter(Boolean) as string[]);
+        const intersects = Array.from(schoolFilter).some((id) => groupIds.has(id));
+        if (!intersects) return false;
+      }
+
+      if (typeActive) {
+        if (!typeFilter.has(match.matchType ?? 'dual')) return false;
+      }
+
+      return true;
     });
-  }, [sortedMatches, searchQuery, getPlayerNames]);
+  }, [sortedMatches, searchQuery, eventFilter, schoolFilter, typeFilter, getPlayerNames, playerById]);
+
+  // Search bar is text-only — School + Type chips were removed per
+  // the minimal-bar directive. Free-text matches event codes,
+  // player names, and match types so chips don't add information.
+  const filterGroups: FilterChipGroup[] = [];
+
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    eventFilter.forEach((id) => toggleEvent(id));
+    schoolFilter.forEach((id) => toggleSchool(id));
+    typeFilter.forEach((id) => toggleType(id));
+  };
 
   const allSelected = matches.length > 0 && selectedIds.size === matches.length;
   const someSelected = selectedIds.size > 0 && !allSelected;
@@ -150,41 +215,25 @@ export function MatchesList({
 
   return (
     <div className="bg-card rounded border border-border overflow-visible">
-      {/* Search Bar */}
+      {/* Inline search + filter row — same pattern as Roster + Schedule.
+          No result-count chrome and no event/court chips per the
+          minimal-bar directive: free-text matches event codes too, so
+          the chip set was redundant. */}
       <div className="px-2 py-1.5 border-b border-border">
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search event, player..."
-            className="w-full px-2 py-1 pl-7 text-xs border border-border rounded focus:outline-none focus:border-muted-foreground/40"
-          />
-          <svg
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <InlineSearch
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          placeholder="Search event or player…"
+          filters={filterGroups}
+          showClear
+          onClearAll={clearAllFilters}
+        />
       </div>
 
       {/* No results state */}
       {filteredMatches.length === 0 && matches.length > 0 && (
-        <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-          No matches found for "{searchQuery}"
+        <div className="px-2 py-6 text-center text-xs text-muted-foreground">
+          No matches match these filters.
         </div>
       )}
 
@@ -296,14 +345,39 @@ export function MatchesList({
               <td className="px-2 py-1 text-muted-foreground">
                 {match.matchType === 'tri' ? 'Tri' : 'Dual'}
               </td>
+              {/* Sides A / B / C — each gets a single school dot
+                  before the names. The dot reads as the side's school
+                  identity; we don't repeat per-player because in a
+                  dual/tri the whole side belongs to one school. */}
               <td className="px-2 py-1 text-muted-foreground truncate max-w-32" title={getPlayerNames(match.sideA).join(' & ')}>
-                {match.sideA.length > 0 ? getPlayerNames(match.sideA).join(' & ') : '-'}
+                <span className="inline-flex items-center gap-1.5">
+                  {accentForSide(match.sideA) && (
+                    <SchoolDot accent={accentForSide(match.sideA)!} size="sm" />
+                  )}
+                  <span className="truncate">
+                    {match.sideA.length > 0 ? getPlayerNames(match.sideA).join(' & ') : '-'}
+                  </span>
+                </span>
               </td>
               <td className="px-2 py-1 text-muted-foreground truncate max-w-32" title={getPlayerNames(match.sideB).join(' & ')}>
-                {match.sideB.length > 0 ? getPlayerNames(match.sideB).join(' & ') : '-'}
+                <span className="inline-flex items-center gap-1.5">
+                  {accentForSide(match.sideB) && (
+                    <SchoolDot accent={accentForSide(match.sideB)!} size="sm" />
+                  )}
+                  <span className="truncate">
+                    {match.sideB.length > 0 ? getPlayerNames(match.sideB).join(' & ') : '-'}
+                  </span>
+                </span>
               </td>
               <td className="px-2 py-1 text-muted-foreground truncate max-w-32" title={match.sideC ? getPlayerNames(match.sideC).join(' & ') : ''}>
-                {match.sideC && match.sideC.length > 0 ? getPlayerNames(match.sideC).join(' & ') : '-'}
+                <span className="inline-flex items-center gap-1.5">
+                  {match.sideC && accentForSide(match.sideC) && (
+                    <SchoolDot accent={accentForSide(match.sideC)!} size="sm" />
+                  )}
+                  <span className="truncate">
+                    {match.sideC && match.sideC.length > 0 ? getPlayerNames(match.sideC).join(' & ') : '-'}
+                  </span>
+                </span>
               </td>
               <td className="px-2 py-1 text-right">
                 <Menu as="div" className="relative inline-block text-left">

@@ -7,7 +7,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
+import { usePlayerMap } from '../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../api/dto';
+import { InlineSearch, type FilterChipGroup } from '../../components/InlineSearch';
+import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
+import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
+import { SchoolDot } from '../../components/SchoolDot';
 
 function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
   const school = groups.find((g) => g.id === p.groupId)?.name ?? '?';
@@ -24,6 +29,66 @@ export function MatchesSpreadsheet() {
 
   const [newId, setNewId] = useState<string | null>(null);
   const newRowRef = useRef<HTMLInputElement | null>(null);
+
+  // URL-backed filter state — same trio as MatchesList so a Match-tab
+  // filter survives a tab switch and back.
+  const [searchQuery, setSearchQuery] = useSearchParamState('q', '');
+  const [eventFilter, , toggleEvent] = useSearchParamSet('event');
+  const [schoolFilter, , toggleSchool] = useSearchParamSet('school');
+  const [typeFilter, , toggleType] = useSearchParamSet('type');
+
+  const playerById = usePlayerMap();
+  const groupIndex = useMemo(() => buildGroupIndex(groups), [groups]);
+
+  const filteredMatches = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const eventActive = eventFilter.size > 0;
+    const schoolActive = schoolFilter.size > 0;
+    const typeActive = typeFilter.size > 0;
+    if (!q && !eventActive && !schoolActive && !typeActive) return matches;
+
+    const playerName = (id: string) => playerById.get(id)?.name?.toLowerCase() ?? '';
+    const playerGroup = (id: string) => playerById.get(id)?.groupId;
+
+    return matches.filter((m) => {
+      if (q) {
+        const hits =
+          (m.eventRank?.toLowerCase().includes(q) ?? false) ||
+          m.sideA.some((id) => playerName(id).includes(q)) ||
+          m.sideB.some((id) => playerName(id).includes(q)) ||
+          (m.sideC?.some((id) => playerName(id).includes(q)) ?? false);
+        if (!hits) return false;
+      }
+      if (eventActive) {
+        const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
+        if (!eventFilter.has(prefix)) return false;
+      }
+      if (schoolActive) {
+        const groupIds = new Set(
+          [...m.sideA, ...m.sideB, ...(m.sideC ?? [])]
+            .map(playerGroup)
+            .filter(Boolean) as string[],
+        );
+        if (!Array.from(schoolFilter).some((id) => groupIds.has(id))) return false;
+      }
+      if (typeActive) {
+        if (!typeFilter.has(m.matchType ?? 'dual')) return false;
+      }
+      return true;
+    });
+  }, [matches, searchQuery, eventFilter, schoolFilter, typeFilter, playerById]);
+
+  // Search bar is text-only — Event / School / Type chips removed for
+  // minimal chrome. Free-text matches event codes, player names, and
+  // match types directly.
+  const filterGroups: FilterChipGroup[] = [];
+
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    eventFilter.forEach((id) => toggleEvent(id));
+    schoolFilter.forEach((id) => toggleSchool(id));
+    typeFilter.forEach((id) => toggleType(id));
+  };
 
   const addEmptyRow = () => {
     const id = uuid();
@@ -63,9 +128,26 @@ export function MatchesSpreadsheet() {
         </button>
       </div>
 
+      {matches.length > 0 && (
+        <div className="border-b border-border/60 px-3 py-2">
+          <InlineSearch
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            placeholder="Search event or player…"
+            filters={filterGroups}
+            showClear
+            onClearAll={clearAllFilters}
+          />
+        </div>
+      )}
+
       {matches.length === 0 ? (
         <div className="py-10 text-center text-sm text-muted-foreground">
           No matches yet. Add one manually or use auto-generate above.
+        </div>
+      ) : filteredMatches.length === 0 ? (
+        <div className="py-10 text-center text-sm text-muted-foreground">
+          No matches match these filters.
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -81,13 +163,14 @@ export function MatchesSpreadsheet() {
               </tr>
             </thead>
             <tbody>
-              {matches.map((m, i) => (
+              {filteredMatches.map((m) => (
                 <MatchRow
                   key={m.id}
                   match={m}
-                  index={i}
+                  index={matches.indexOf(m)}
                   players={players}
                   groups={groups}
+                  groupIndex={groupIndex}
                   onUpdate={updateMatch}
                   onDelete={deleteMatch}
                   firstInputRef={newId === m.id ? newRowRef : undefined}
@@ -106,6 +189,7 @@ function MatchRow({
   index,
   players,
   groups,
+  groupIndex,
   onUpdate,
   onDelete,
   firstInputRef,
@@ -114,6 +198,7 @@ function MatchRow({
   index: number;
   players: PlayerDTO[];
   groups: RosterGroupDTO[];
+  groupIndex: Map<string, RosterGroupDTO>;
   onUpdate: (id: string, patch: Partial<MatchDTO>) => void;
   onDelete: (id: string) => void;
   firstInputRef?: React.RefObject<HTMLInputElement | null>;
@@ -163,6 +248,7 @@ function MatchRow({
           onChange={(ids) => onUpdate(match.id, { sideA: ids })}
           players={players}
           groups={groups}
+          groupIndex={groupIndex}
         />
       </td>
       <td className="px-2 py-1">
@@ -172,6 +258,7 @@ function MatchRow({
           onChange={(ids) => onUpdate(match.id, { sideB: ids })}
           players={players}
           groups={groups}
+          groupIndex={groupIndex}
         />
       </td>
       <td className="px-2 py-1">
@@ -205,12 +292,14 @@ function PlayerMultiPicker({
   onChange,
   players,
   groups,
+  groupIndex,
 }: {
   label: string;
   selected: string[];
   onChange: (ids: string[]) => void;
   players: PlayerDTO[];
   groups: RosterGroupDTO[];
+  groupIndex: Map<string, RosterGroupDTO>;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -278,25 +367,29 @@ function PlayerMultiPicker({
             {label}…
           </span>
         ) : (
-          selectedPlayers.map((p) => (
-            <span
-              key={p.id}
-              className="inline-flex items-center gap-1 rounded border border-border bg-muted/50 px-1.5 py-0 text-[11px]"
-            >
-              {p.name || '—'}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggle(p.id);
-                }}
-                className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
-                aria-label={`Remove ${p.name}`}
+          selectedPlayers.map((p) => {
+            const accent = getPlayerSchoolAccent(p, groupIndex);
+            return (
+              <span
+                key={p.id}
+                className="inline-flex items-center gap-1 rounded border border-border bg-muted/50 px-1.5 py-0 text-[11px]"
               >
-                ×
-              </button>
-            </span>
-          ))
+                {accent.name && <SchoolDot accent={accent} size="sm" />}
+                {p.name || '—'}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggle(p.id);
+                  }}
+                  className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                  aria-label={`Remove ${p.name}`}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })
         )}
         <button
           type="button"

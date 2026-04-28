@@ -39,3 +39,12 @@ export const INTERACTIVE_BASE_QUIET =
   "active:opacity-80 " +
   "disabled:cursor-not-allowed disabled:opacity-60 " +
   "select-none"
+
+/**
+ * Spreadsheet-cell input chrome: borderless until focus, then highlights
+ * the focused cell with the system ring token + card fill. Used by the
+ * inline roster + matches editors. Append cell-specific classes (e.g.
+ * ``tabular-nums``) after this constant.
+ */
+export const INPUT_CELL_STYLE =
+  "w-full rounded border border-transparent bg-transparent px-2 py-1 text-sm outline-none transition-colors focus:border-ring focus:bg-card"

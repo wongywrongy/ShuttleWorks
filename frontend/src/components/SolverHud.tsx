@@ -72,6 +72,11 @@ export function SolverHud() {
   const phaseStyle = hud.phase ? PHASES[hud.phase] : null;
   const showHud = isGenerating || hud.solutionCount > 0 || hud.phase !== null;
   if (!showHud) {
+    // The "Solver idle — click Generate to begin." hint is only useful on
+    // the surface where the operator would actually click Generate
+    // (Schedule). Showing it on Roster / Matches / Live / Setup is just
+    // chrome that floats over real content. Hide entirely off-Schedule.
+    if (activeTab !== 'schedule') return null;
     return (
       <footer className="sticky bottom-0 z-10 flex items-center justify-between border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">

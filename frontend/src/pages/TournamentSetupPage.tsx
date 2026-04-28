@@ -1,11 +1,22 @@
+/**
+ * Setup tab — settings shell with section-rail navigation.
+ *
+ * Each section pane owns its own controls + save flow. The shell
+ * provides the layout; nothing else.
+ */
 import { useState } from 'react';
+import { Sliders, Palette, Monitor, Database, Sparkles, Cpu } from 'lucide-react';
 import { useTournament } from '../hooks/useTournament';
 import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
 import { TournamentFileManagement } from '../features/tournaments/TournamentFileManagement';
 import { BackupPanel } from '../features/setup/BackupPanel';
 import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicator';
-import { ThemeToggle } from '../components/ThemeToggle';
+import { PublicDisplaySettings } from '../features/tournaments/PublicDisplaySettings';
+import { SettingsShell, type SettingsSectionDef } from '../features/settings/SettingsShell';
+import { AppearanceSettings } from '../features/settings/AppearanceSettings';
+import { EngineSettings } from '../features/settings/EngineSettings';
+import { DemoLoader } from '../features/settings/DemoLoader';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {
@@ -30,8 +41,8 @@ export function TournamentSetupPage() {
   // Show default config if tournament doesn't exist (404 error)
   const defaultConfig: TournamentConfig = {
     intervalMinutes: 30,
-    dayStart: "09:00",
-    dayEnd: "18:00",
+    dayStart: '09:00',
+    dayEnd: '18:00',
     breaks: [],
     courtCount: 4,
     defaultRestMinutes: 30,
@@ -40,72 +51,100 @@ export function TournamentSetupPage() {
   };
 
   const displayConfig = config || defaultConfig;
-  const isNewTournament = !config && error && error.includes("not found");
+  const isNewTournament = !config && error && error.includes('not found');
 
   if (loading && !config && !error) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Loading tournament configuration...</div>
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-muted-foreground">Loading tournament configuration…</div>
       </div>
     );
   }
 
+  // Section definitions wired to the SettingsShell. Order is intentional:
+  // Tournament first (the heaviest config; usually why people opened
+  // Settings), then Display (also config-shaped), then per-device
+  // Appearance, then Data ops, then Demos.
+  const sections: SettingsSectionDef[] = [
+    {
+      id: 'tournament',
+      label: 'Tournament',
+      icon: Sliders,
+      description: 'Schedule, scoring, events, and optimisation knobs.',
+      render: () => (
+        <TournamentConfigForm
+          config={displayConfig}
+          onSave={handleSave}
+          saving={saving}
+        />
+      ),
+    },
+    {
+      id: 'engine',
+      label: 'Engine',
+      icon: Cpu,
+      description: 'Solver tuning + reproducibility — how schedules are produced.',
+      render: () => <EngineSettings />,
+    },
+    {
+      id: 'display',
+      label: 'Public display',
+      icon: Monitor,
+      description: 'Layout, brand, and content of the venue TV.',
+      render: () => <PublicDisplaySettings />,
+    },
+    {
+      id: 'appearance',
+      label: 'Appearance',
+      icon: Palette,
+      description: 'Per-device theme and density. Not part of tournament export.',
+      render: () => <AppearanceSettings />,
+    },
+    {
+      id: 'data',
+      label: 'Tournament data',
+      icon: Database,
+      description: 'Export, import, and rolling backups.',
+      render: () => (
+        <div className="space-y-3">
+          <TournamentFileManagement />
+          <BackupPanel />
+        </div>
+      ),
+    },
+    {
+      id: 'demos',
+      label: 'Demos',
+      icon: Sparkles,
+      hint: 'soon',
+      description: 'Pre-baked sample tournaments to explore the app.',
+      render: () => <DemoLoader />,
+    },
+  ];
+
   return (
-    <div className="max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold mb-3">Tournament Setup</h2>
-
-      {/* Lock indicator */}
-      {isLocked && (
-        <ScheduleLockIndicator showUnlockHint className="mb-3" />
-      )}
-
+    <div className="mx-auto max-w-6xl space-y-3 px-4 py-4">
+      {/* Page-level alerts stay above the shell so they apply to every
+          section. The shell itself never shows them. */}
+      {isLocked && <ScheduleLockIndicator showUnlockHint />}
       {isNewTournament && (
-        <div className="mb-2 p-2 bg-blue-100 border border-blue-400 text-blue-700 rounded-sm text-sm">
-          <p className="font-semibold">New Tournament</p>
-          <p>Configure your tournament settings below. The tournament will be created when you save.</p>
+        <div className="rounded border border-status-started/40 bg-status-started-bg px-3 py-2 text-xs text-status-started">
+          <span className="font-semibold">New tournament — </span>
+          configure settings below. Saved on first save.
         </div>
       )}
-
       {error && !isNewTournament && (
-        <div className="mb-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded-sm text-sm">
+        <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </div>
       )}
-
       {saveError && (
-        <div className="mb-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded-sm text-sm">
+        <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {saveError}
         </div>
       )}
 
-      <section
-        aria-labelledby="appearance-heading"
-        className="mb-3 rounded-md border border-border bg-card p-4"
-      >
-        <h3 id="appearance-heading" className="text-sm font-semibold text-card-foreground">
-          Appearance
-        </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Per-device theme. Not included in tournament export.
-        </p>
-        <div className="mt-3">
-          <ThemeToggle size="md" />
-        </div>
-      </section>
-
-      <TournamentConfigForm
-        config={displayConfig}
-        onSave={handleSave}
-        saving={saving}
-      />
-
-      <div className="mt-3">
-        <TournamentFileManagement />
-      </div>
-
-      <div className="mt-3">
-        <BackupPanel />
-      </div>
+      <SettingsShell sections={sections} defaultSectionId="tournament" />
     </div>
   );
 }

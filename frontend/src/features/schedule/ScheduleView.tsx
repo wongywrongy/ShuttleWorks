@@ -43,12 +43,7 @@ export function ScheduleView({ schedule, view, config }: ScheduleViewProps) {
         {slots.map((slotId) => {
           const slotAssignments = bySlot.get(slotId)!;
           const firstAssignment = slotAssignments[0];
-          const timeRange = formatSlotRange(
-            slotId,
-            firstAssignment.durationSlots,
-            config.dayStart,
-            config.intervalMinutes
-          );
+          const timeRange = formatSlotRange(slotId, firstAssignment.durationSlots, config);
 
           return (
             <div key={slotId} className="px-3 py-2">
@@ -90,12 +85,7 @@ export function ScheduleView({ schedule, view, config }: ScheduleViewProps) {
               <div className="font-medium text-foreground text-sm mb-1">Court {courtId}</div>
               <div className="space-y-1">
                 {courtAssignments.map((assignment) => {
-                  const timeRange = formatSlotRange(
-                    assignment.slotId,
-                    assignment.durationSlots,
-                    config.dayStart,
-                    config.intervalMinutes
-                  );
+                  const timeRange = formatSlotRange(assignment.slotId, assignment.durationSlots, config);
                   return (
                     <div key={`${assignment.matchId}-${assignment.slotId}`} className="text-sm">
                       <span className="text-foreground">{timeRange}</span>

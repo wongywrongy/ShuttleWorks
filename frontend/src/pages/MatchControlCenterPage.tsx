@@ -13,6 +13,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { Download, ChevronLeft, ChevronRight, ClipboardList } from 'lucide-react';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useLiveOperations } from '../hooks/useLiveOperations';
 import { useTrafficLights } from '../hooks/useTrafficLights';
@@ -20,18 +21,46 @@ import { useAppStore } from '../store/appStore';
 import { GanttChart } from '../features/control-center/GanttChart';
 import { WorkflowPanel } from '../features/control-center/WorkflowPanel';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
+import { DisruptionDialog } from '../features/control-center/DisruptionDialog';
+import { exportScheduleXlsx } from '../features/exports/xlsxExports';
+import { INTERACTIVE_BASE } from '../lib/utils';
 
 export function MatchControlCenterPage() {
   const liveTracking = useLiveTracking();
   const liveOps = useLiveOperations();
   const players = useAppStore((state) => state.players);
+  const groups = useAppStore((state) => state.groups);
   const schedule = useAppStore((state) => state.schedule);
   const setSchedule = useAppStore((state) => state.setSchedule);
   const setMatchState = useAppStore((state) => state.setMatchState);
 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [currentSlot, setCurrentSlot] = useState(0);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  // Open by default to mirror the Schedule tab — the right rail
+  // shouldn't sit empty while the operator is still picking matches.
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  // Disruption dialog state, mirrored from the Schedule page so live
+  // ops can also trigger repair from a started match.
+  const [disruptionOpen, setDisruptionOpen] = useState(false);
+  const [disruptionPrefill, setDisruptionPrefill] = useState<{
+    type?: 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
+    matchId?: string;
+    courtId?: number;
+  }>({});
+  // Lifted from MatchDetailsPanel so the WorkflowPanel rows can pop
+  // the score editor directly: clicking Score on a started row
+  // selects the match AND flips the rail to its score mode.
+  const [panelMode, setPanelMode] = useState<'idle' | 'score' | 'roster'>('idle');
+  const requestScore = useCallback((matchId: string) => {
+    setSelectedMatchId(matchId);
+    setDetailsOpen(true);
+    setPanelMode('score');
+  }, []);
+  // Reset to idle whenever the user picks a different match — the
+  // editor that was open belonged to the previous match.
+  useEffect(() => {
+    setPanelMode('idle');
+  }, [selectedMatchId]);
 
   // Update current slot every minute
   useEffect(() => {
@@ -322,17 +351,13 @@ export function MatchControlCenterPage() {
   // No schedule state
   if (!liveTracking.schedule) {
     return (
-      <div className="w-full h-[calc(100vh-56px)] flex flex-col px-2 py-1 gap-2">
-        <div className="flex-1 flex flex-col items-center justify-center bg-card rounded border border-border">
-          <div className="text-muted-foreground mb-3">
-            <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          </div>
-          <p className="text-sm text-muted-foreground mb-1">No schedule generated.</p>
+      <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-card rounded-lg border border-dashed border-border">
+          <ClipboardList aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
+          <p className="text-sm text-muted-foreground">No schedule generated.</p>
           <p className="text-xs text-muted-foreground">
             Generate a schedule on the{' '}
-            <Link to="/schedule" className="text-blue-600 hover:underline">Schedule page</Link>
+            <Link to="/schedule" className="font-medium text-primary hover:underline">Schedule page</Link>
           </p>
         </div>
       </div>
@@ -341,14 +366,14 @@ export function MatchControlCenterPage() {
 
   if (!liveTracking.config || !liveOps.config || !liveOps.schedule) {
     return (
-      <div className="w-full h-[calc(100vh-56px)] flex items-center justify-center">
-        <div className="text-muted-foreground text-sm">Loading...</div>
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="text-muted-foreground text-sm">Loading…</div>
       </div>
     );
   }
 
   return (
-    <div className="w-full h-[calc(100vh-56px)] flex flex-col px-2 py-1 gap-2">
+    <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
       <div className="flex-1 min-h-0 flex gap-2">
         {/* Main area - Gantt + Matches list */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
@@ -361,19 +386,38 @@ export function MatchControlCenterPage() {
                   {stats?.finished || 0}/{stats?.total || 0} matches
                 </span>
                 {(stats?.inProgress || 0) > 0 && (
-                  <span className="text-green-600">{stats.inProgress} active</span>
+                  <span className="font-medium text-status-live">{stats.inProgress} active</span>
                 )}
                 {delayedCount > 0 && (
-                  <span className="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                  <span className="rounded border border-status-warning/40 bg-status-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-status-warning">
                     {delayedCount} late
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
+                  onClick={() => void exportScheduleXlsx(
+                    liveOps.schedule,
+                    liveOps.matches,
+                    players,
+                    liveOps.config!,
+                  )}
+                  disabled={!liveOps.schedule || liveOps.schedule.assignments.length === 0}
+                  title={
+                    !liveOps.schedule || liveOps.schedule.assignments.length === 0
+                      ? 'No schedule to export'
+                      : 'Download schedule as XLSX'
+                  }
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  Export XLSX
+                </button>
+                <button
                   onClick={liveOps.triggerReoptimize}
                   disabled={liveOps.isReoptimizing}
-                  className="rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
                 </button>
@@ -413,6 +457,7 @@ export function MatchControlCenterPage() {
               onRemovePlayer={handleRemovePlayer}
               onCascadingStart={handleCascadingStart}
               onUndoStart={handleUndoStart}
+              onRequestScore={requestScore}
             />
           </div>
         </div>
@@ -421,16 +466,17 @@ export function MatchControlCenterPage() {
         {detailsOpen ? (
           <div className="w-72 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
             <div className="px-2 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Match Details
               </span>
               <button
+                type="button"
                 onClick={() => setDetailsOpen(false)}
                 title="Collapse details"
                 aria-label="Collapse details"
-                className="text-muted-foreground hover:text-muted-foreground text-xs leading-none"
+                className={`${INTERACTIVE_BASE} flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground`}
               >
-                ›
+                <ChevronRight aria-hidden="true" className="h-4 w-4" />
               </button>
             </div>
             <MatchDetailsPanel
@@ -446,31 +492,63 @@ export function MatchControlCenterPage() {
               schedule={liveOps.schedule}
               matchStates={liveOps.matchStates}
               players={players}
+              groups={groups}
               config={liveOps.config}
               currentSlot={currentSlot}
               onUpdateStatus={liveTracking.updateMatchStatus}
+              onConfirmPlayer={liveTracking.confirmPlayer}
+              onSubstitute={handleSubstitute}
+              onRemovePlayer={handleRemovePlayer}
+              onCascadingStart={handleCascadingStart}
+              onUndoStart={handleUndoStart}
+              mode={panelMode}
+              onModeChange={setPanelMode}
+              onRequestDisruption={(type, matchId) => {
+                const courtId =
+                  type === 'court_closed' && selectedAssignment
+                    ? selectedAssignment.courtId
+                    : undefined;
+                setDisruptionPrefill({
+                  type,
+                  matchId: type === 'court_closed' ? undefined : matchId,
+                  courtId,
+                });
+                setDisruptionOpen(true);
+              }}
             />
           </div>
         ) : (
           <button
+            type="button"
             onClick={() => setDetailsOpen(true)}
             title="Show match details"
             aria-label="Show match details"
-            className="w-6 flex-shrink-0 bg-card rounded border border-border flex flex-col items-center justify-center text-muted-foreground hover:text-muted-foreground hover:bg-muted/40 text-xs"
+            className={`${INTERACTIVE_BASE} w-6 flex-shrink-0 bg-card rounded border border-border flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground`}
           >
-            ‹
+            <ChevronLeft aria-hidden="true" className="h-4 w-4" />
           </button>
         )}
       </div>
 
       {liveTracking.isLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-card rounded border border-border p-4">
-            <div className="w-6 h-6 border-2 border-border border-t-gray-600 rounded-full animate-spin mx-auto" />
-            <p className="text-muted-foreground mt-2 text-xs">Loading…</p>
-          </div>
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-14 left-1/2 z-40 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
+        >
+          <span className="inline-flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full border-2 border-border border-t-primary animate-spin" aria-hidden />
+            Loading…
+          </span>
         </div>
       )}
+      <DisruptionDialog
+        isOpen={disruptionOpen}
+        onClose={() => setDisruptionOpen(false)}
+        initialType={disruptionPrefill.type}
+        initialMatchId={disruptionPrefill.matchId}
+        initialCourtId={disruptionPrefill.courtId}
+      />
     </div>
   );
 }

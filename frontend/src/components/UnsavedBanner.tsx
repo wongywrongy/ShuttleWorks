@@ -48,13 +48,14 @@ export function UnsavedBanner() {
   return (
     <div
       data-testid="unsaved-banner"
-      className={`flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs ${
+      role={isError ? 'alert' : 'status'}
+      className={`flex items-center justify-between gap-2 rounded border px-3 py-1.5 text-xs ${
         isError
-          ? 'border-red-300 bg-red-50 text-red-800'
-          : 'border-yellow-300 bg-yellow-50 text-yellow-800'
+          ? 'border-destructive/40 bg-destructive/10 text-destructive'
+          : 'border-status-warning/40 bg-status-warning-bg text-status-warning'
       }`}
     >
-      <span>
+      <span className="font-medium">
         {isError
           ? `Couldn't save to the server${lastSaveError ? ` — ${lastSaveError}` : '.'}`
           : 'You have unsaved changes.'}
@@ -64,11 +65,7 @@ export function UnsavedBanner() {
         onClick={handleSave}
         disabled={saving}
         data-testid="unsaved-save-now"
-        className={`rounded border px-2 py-0.5 text-xs ${
-          isError
-            ? 'border-red-400 bg-card text-red-700 hover:bg-red-100'
-            : 'border-yellow-400 bg-card text-yellow-700 hover:bg-yellow-100'
-        } disabled:opacity-50`}
+        className="rounded border border-current/40 bg-card px-2.5 py-0.5 text-xs font-semibold hover:bg-card/80 disabled:opacity-50"
       >
         {saving ? 'Saving…' : 'Save now'}
       </button>

@@ -8,6 +8,7 @@ import type {
   TournamentConfig,
   ConstraintViolation,
 } from '../api/dto';
+import { indexById } from '../store/selectors';
 
 /**
  * Compute constraint violations from current schedule assignments
@@ -20,8 +21,8 @@ export function computeConstraintViolations(
 ): ConstraintViolation[] {
   const violations: ConstraintViolation[] = [];
 
-  const matchMap = new Map(matches.map(m => [m.id, m]));
-  const playerMap = new Map(players.map(p => [p.id, p]));
+  const matchMap = indexById(matches);
+  const playerMap = indexById(players);
 
   // Check 1: Player overlap (same player in overlapping time slots)
   violations.push(...checkPlayerOverlap(assignments, matchMap));

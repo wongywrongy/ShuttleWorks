@@ -31,6 +31,14 @@ class BreakWindow(BaseModel):
 
 
 class TournamentConfig(BaseModel):
+    # Human-readable tournament name. Drives backup filenames and the
+    # public-display headline. Optional — UI falls back to defaults
+    # when unset.
+    tournamentName: Optional[str] = None
+    # Per-tournament meet mode (``dual`` = School A vs B, ``tri`` =
+    # three-way). The auto-match generator and rendering surfaces
+    # branch on this value.
+    meetMode: Optional[Literal["dual", "tri"]] = None
     intervalMinutes: int = Field(..., gt=0, le=240)
     dayStart: HHMMTime
     dayEnd: HHMMTime
@@ -63,6 +71,26 @@ class TournamentConfig(BaseModel):
     setsToWin: Optional[int] = Field(None, ge=1, le=3)
     pointsPerSet: Optional[int] = Field(None, ge=11, le=30)
     deuceEnabled: Optional[bool] = None
+    # Public TV display mode (UI-only metadata; preserved across PUT).
+    tvDisplayMode: Optional[Literal["strip", "grid", "list"]] = None
+    # Public-display branding + layout knobs (all UI-only).
+    tvAccent: Optional[str] = None  # hex "#RRGGBB"
+    tvTheme: Optional[Literal["auto", "dark", "light"]] = None
+    tvBgTone: Optional[Literal["navy", "black", "midnight", "slate"]] = None
+    tvGridColumns: Optional[int] = Field(None, ge=1, le=4)
+    tvCardSize: Optional[Literal["auto", "compact", "comfortable", "large"]] = None
+    tvShowScores: Optional[bool] = None
+    # Roster position-grid event-column order + visibility (UI-only).
+    eventOrder: Optional[List[str]] = None
+    eventVisible: Optional[Dict[str, bool]] = None
+    # ---- Engine settings ------------------------------------------
+    deterministic: Optional[bool] = None
+    randomSeed: Optional[int] = None
+    # Solver wall-clock cap; higher = closer to optimal at the cost
+    # of operator wait time. Default 30s (DEFAULT_SOLVER_OPTIONS).
+    solverTimeLimitSeconds: Optional[float] = Field(None, gt=0, le=300)
+    # Top-N near-optimal alternatives the solver keeps. Default 5.
+    candidatePoolSize: Optional[int] = Field(None, ge=1, le=20)
 
 
 # Availability
@@ -156,6 +184,21 @@ class SoftViolation(BaseModel):
     penaltyIncurred: float
 
 
+class ScheduleCandidate(BaseModel):
+    """One alternative schedule the solver found while improving.
+
+    The pool is captured during the initial solve; operator can swap
+    the active candidate without a re-solve. ``solutionId`` is a stable
+    id for React keys; ``objectiveScore`` lets the UI show how each
+    candidate ranks; ``foundAtSeconds`` is wall-clock seconds since
+    solve start (lower = solver's earlier guess, often more disrupted).
+    """
+    solutionId: str
+    assignments: List[ScheduleAssignment] = Field(default_factory=list)
+    objectiveScore: float = 0.0
+    foundAtSeconds: float = 0.0
+
+
 class ScheduleDTO(BaseModel):
     assignments: List[ScheduleAssignment] = Field(default_factory=list)
     unscheduledMatches: List[str] = Field(default_factory=list)
@@ -163,6 +206,14 @@ class ScheduleDTO(BaseModel):
     objectiveScore: Optional[float] = None
     infeasibleReasons: List[str] = Field(default_factory=list)
     status: SolverStatus
+    # The seed the solver actually used. Pair with ``deterministic`` to
+    # reproduce a schedule byte-for-byte from the same input.
+    solverSeed: Optional[int] = None
+    # Top-N near-optimal alternatives. ``assignments`` above always
+    # equals ``candidates[activeCandidateIndex].assignments`` when the
+    # pool is non-empty; older clients ignore both fields.
+    candidates: List[ScheduleCandidate] = Field(default_factory=list)
+    activeCandidateIndex: Optional[int] = None
 
 
 # Match State (for Match Desk)

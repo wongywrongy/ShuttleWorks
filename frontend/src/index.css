@@ -47,6 +47,54 @@
     --warning-foreground: 0 0% 98%;
     --info: 199 89% 48%;
     --info-foreground: 0 0% 98%;
+
+    /* ----- Status semantic tokens (live ops) -------------------------
+     * Match-state status colors. Backgrounds are tinted (10-15% alpha
+     * over the surface). Text/border picks up the saturated value.
+     * Light theme: hue + 90-95% lightness for bg, hue + 30-40% for fg.
+     * Used by the Live grid, Schedule blocks, MATCHES list pills, and
+     * Match Control Center workflow chips.
+     */
+    --status-live: 142 71% 38%;        /* emerald  — match in progress */
+    --status-live-bg: 142 71% 92%;
+    --status-called: 38 92% 42%;       /* amber    — called to court */
+    --status-called-bg: 38 92% 92%;
+    --status-started: 199 89% 38%;     /* sky      — operator started clock */
+    --status-started-bg: 199 89% 93%;
+    --status-blocked: 0 72% 45%;       /* red      — hard rule conflict */
+    --status-blocked-bg: 0 72% 95%;
+    --status-warning: 38 92% 42%;      /* amber    — soft violation */
+    --status-warning-bg: 38 92% 92%;
+    --status-idle: 220 9% 46%;         /* slate    — scheduled, not yet active */
+    --status-idle-bg: 220 14% 92%;
+    --status-done: 220 13% 50%;        /* slate    — finished */
+    --status-done-bg: 220 14% 94%;
+
+    /* ----- Density tokens --------------------------------------------
+     * Default = comfortable. ``[data-density="compact"]`` overrides the
+     * row height + cell padding for power-user-density tables. Toggle
+     * lives in Setup → Appearance, alongside the theme switcher.
+     */
+    --density-row-h: 36px;
+    --density-cell-py: 8px;
+    --density-cell-px: 12px;
+    --density-gap: 16px;
+    --density-section-gap: 24px;
+    --density-badge-h: 22px;
+  }
+
+  /* Compact density — affects spacing only. Font sizes do NOT shrink
+   * (legibility on a packed live-ops screen wins over raw rows-per-
+   * inch). Implementation note: any component that wants to follow the
+   * density preference reads from the CSS vars above, OR uses the
+   * Tailwind ``compact:`` variant defined in tailwind.config.js. */
+  [data-density="compact"] {
+    --density-row-h: 28px;
+    --density-cell-py: 4px;
+    --density-cell-px: 8px;
+    --density-gap: 12px;
+    --density-section-gap: 16px;
+    --density-badge-h: 18px;
   }
 
   /* Dark theme — triggered by ``.dark`` on <html>. Every token
@@ -91,6 +139,25 @@
     --warning-foreground: 0 0% 10%;
     --info: 199 89% 60%;
     --info-foreground: 0 0% 10%;
+
+    /* Status tokens — desaturate text/foreground a touch and use a
+     * very low alpha tint for backgrounds so cards stay legible on
+     * dark surfaces. Backgrounds are HSL-as-RGB with 12-18% alpha when
+     * applied via the ``bg-status-*`` utilities (see tailwind config). */
+    --status-live: 142 71% 60%;
+    --status-live-bg: 142 71% 25%;
+    --status-called: 38 92% 65%;
+    --status-called-bg: 38 92% 25%;
+    --status-started: 199 89% 65%;
+    --status-started-bg: 199 89% 25%;
+    --status-blocked: 0 72% 65%;
+    --status-blocked-bg: 0 72% 25%;
+    --status-warning: 38 92% 65%;
+    --status-warning-bg: 38 92% 25%;
+    --status-idle: 220 13% 65%;
+    --status-idle-bg: 220 14% 22%;
+    --status-done: 220 13% 55%;
+    --status-done-bg: 220 14% 18%;
   }
 
   * {
@@ -111,19 +178,34 @@
 
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
+    /* Inter Variable + system fallback. The variable font handles every
+     * weight from 100-900 + roman/italic, so we don't need to load
+     * separate weight files. ``cv11`` opens up the single-storey ``a``
+     * for slightly cleaner data display. */
+    font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+      'Roboto', 'Helvetica Neue', sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-size: 14px;
     line-height: 1.5;
   }
-}
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  /* Tabular numerics globally on data-heavy elements. Using
+   * ``font-variant-numeric: tabular-nums`` keeps digit columns from
+   * jittering as values change — essential for live timers and scores.
+   * Apply explicitly via ``.tabular-nums`` (Tailwind) or this default
+   * for ``code``/``time``/``[data-numeric]`` elements. */
+  code,
+  kbd,
+  pre,
+  samp,
+  time,
+  [data-numeric] {
+    font-family: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular,
+      Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @keyframes slide-up {

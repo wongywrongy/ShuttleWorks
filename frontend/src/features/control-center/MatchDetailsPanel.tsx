@@ -2,39 +2,25 @@
  * Match Details Panel - Shows selected match details
  */
 import { useMemo, useState } from 'react';
-import { ChevronRight, Pencil } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
-import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, SetScore, TournamentConfig } from '../../api/dto';
+import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import { getMatchLabel } from '../../utils/matchUtils';
 import { getMatchPlayerIds } from '../../utils/trafficLight';
 import { ElapsedTimer } from '../../components/common/ElapsedTimer';
-import { parseMatchStartMs, timeToSlot } from '../../utils/timeUtils';
+import { timeToSlot } from '../../lib/time';
+import { formatIsoClock, formatDuration } from '../../lib/timeFormatters';
+import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
+import { SchoolDot } from '../../components/SchoolDot';
+import { ScoreEditor } from './ScoreEditor';
+import { StatusPill } from '../../components/StatusPill';
+import { indexById } from '../../store/selectors';
 
-/** Render an ISO-8601 timestamp as the operator's local HH:mm clock.
- *  Falls back to "—" on unparseable input rather than leaking "Invalid Date". */
-function formatIsoClock(iso: string | null | undefined): string {
-  const ms = parseMatchStartMs(iso);
-  if (ms === null) return '—';
-  const d = new Date(ms);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-/** Format the gap between two ISO timestamps as Xm / Xh Ym.
- *  Zero / negative / unparseable gaps become "0m" — never a negative. */
-function formatDuration(aIso: string, bIso: string): string {
-  const aMs = parseMatchStartMs(aIso);
-  const bMs = parseMatchStartMs(bIso);
-  if (aMs === null || bMs === null) return '0m';
-  const mins = Math.max(0, Math.round((bMs - aMs) / 60_000));
-  if (mins < 60) return `${mins}m`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
-import { BadmintonScoreDialog } from '../tracking/BadmintonScoreDialog';
-import { MatchScoreDialog } from '../tracking/MatchScoreDialog';
+// Map traffic-light status → pill tone + label for the Ready / Resting
+// / Blocked badge on scheduled matches.
+const LIGHT_LABEL = { green: 'Ready', yellow: 'Resting', red: 'Blocked' } as const;
 
 interface MatchDetailsPanelProps {
   assignment?: ScheduleAssignment;
@@ -49,6 +35,7 @@ interface MatchDetailsPanelProps {
   schedule?: ScheduleDTO | null;
   matchStates?: Record<string, MatchStateDTO>;
   players?: PlayerDTO[];
+  groups?: RosterGroupDTO[];
   config?: TournamentConfig | null;
   currentSlot?: number;
   onUpdateStatus?: (
@@ -56,6 +43,23 @@ interface MatchDetailsPanelProps {
     status: MatchStateDTO['status'],
     additionalData?: Partial<MatchStateDTO>,
   ) => Promise<void>;
+  onConfirmPlayer?: (matchId: string, playerId: string, confirmed: boolean) => Promise<void>;
+  onSubstitute?: (matchId: string, oldPlayerId: string, newPlayerId: string) => void;
+  onRemovePlayer?: (matchId: string, playerId: string) => void;
+  onCascadingStart?: (matchId: string, courtId: number) => void;
+  onUndoStart?: (matchId: string) => void;
+  /** Optional parent-controlled mode override. When provided the
+   *  panel renders that editor mode and ignores its internal state —
+   *  lets the WorkflowPanel rows pop the score editor directly. */
+  mode?: 'idle' | 'score' | 'roster';
+  onModeChange?: (mode: 'idle' | 'score' | 'roster') => void;
+  /** Open the disruption-repair dialog with type+matchId pre-filled.
+   *  Lets the per-match shortcuts (Cancel / Mark overrun) call into
+   *  the page-level dialog without each row owning the modal state. */
+  onRequestDisruption?: (
+    type: 'cancellation' | 'overrun' | 'court_closed',
+    matchId: string,
+  ) => void;
 }
 
 /**
@@ -118,14 +122,45 @@ export function MatchDetailsPanel({
   onSelectMatch,
   schedule,
   matchStates,
-  players: _players,
+  players,
+  groups,
   config,
   currentSlot,
   onUpdateStatus,
+  onConfirmPlayer,
+  onSubstitute,
+  onRemovePlayer,
+  onCascadingStart,
+  onUndoStart,
+  mode: modeProp,
+  onModeChange,
+  onRequestDisruption,
 }: MatchDetailsPanelProps) {
-  const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
-  const [showEditScore, setShowEditScore] = useState(false);
-  const [savingScore, setSavingScore] = useState(false);
+  const matchMap = useMemo(() => indexById(matches), [matches]);
+  // ``mode`` toggles the panel between its default read mode and the
+  // inline score editor. Roster edits (substitute / remove player)
+  // live directly on the player rows now and don't need a mode of
+  // their own. Mode can be either controlled (via the parent) or
+  // self-managed.
+  const [internalMode, setInternalMode] = useState<'idle' | 'score' | 'roster'>('idle');
+  const mode = modeProp ?? internalMode;
+  const setMode = (next: 'idle' | 'score' | 'roster') => {
+    if (onModeChange) onModeChange(next);
+    else setInternalMode(next);
+  };
+  const [updating, setUpdating] = useState(false);
+  // Which player row, if any, is currently expanded into a substitute
+  // picker. ``null`` = no row expanded. The picker drops down below
+  // the player row so the rest of the panel stays in place.
+  const [subPickingFor, setSubPickingFor] = useState<string | null>(null);
+
+  // Look up each player by id so we can resolve their school for the
+  // accent dot. groups are optional — when missing we just skip the dot.
+  const playerMap = useMemo(() => indexById(players ?? []), [players]);
+  const groupIndex = useMemo(
+    () => buildGroupIndex(groups ?? []),
+    [groups],
+  );
 
   // Calculate rest times for all players in the match
   const playerRestTimes = useMemo(() => {
@@ -169,6 +204,88 @@ export function MatchDetailsPanel({
   const displayCourtId = actualCourtId ?? assignment.courtId;
   const courtChanged = actualCourtId !== undefined && actualCourtId !== assignment.courtId;
 
+  // School summary — `<dot> School A vs <dot> School B`. Resolves the
+  // first player on each side; the dual-meet invariant guarantees one
+  // school per side. Skipped silently if either side lacks a known group.
+  const sideASchool = match.sideA?.[0]
+    ? getPlayerSchoolAccent(playerMap.get(match.sideA[0]), groupIndex)
+    : null;
+  const sideBSchool = match.sideB?.[0]
+    ? getPlayerSchoolAccent(playerMap.get(match.sideB[0]), groupIndex)
+    : null;
+  const showSchools = !!(sideASchool?.name && sideBSchool?.name);
+
+  // ─── Lifecycle handlers ──────────────────────────────────────────
+  // Mirror the WorkflowPanel handlers verbatim so the panel and the
+  // workflow rows behave identically — anything that works in one
+  // place works in the other. Each handler is a no-op when the
+  // matching callback prop wasn't provided (read-only schedule view).
+  const handleCall = async () => {
+    if (!onUpdateStatus) return;
+    setUpdating(true);
+    try {
+      await onUpdateStatus(match.id, 'called', { delayed: false });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleStart = async () => {
+    if (!onUpdateStatus) return;
+    setUpdating(true);
+    try {
+      onCascadingStart?.(match.id, displayCourtId);
+      await onUpdateStatus(match.id, 'started');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handlePostpone = async () => {
+    if (!onUpdateStatus) return;
+    setUpdating(true);
+    try {
+      const isPostponed = matchState?.postponed || false;
+      await onUpdateStatus(match.id, 'scheduled', { postponed: !isPostponed });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleResetCalled = async () => {
+    if (!onUpdateStatus) return;
+    setUpdating(true);
+    try {
+      onUndoStart?.(match.id);
+      await onUpdateStatus(match.id, 'called', { actualStartTime: undefined });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleConfirmPlayer = async (playerId: string) => {
+    if (!onConfirmPlayer) return;
+    const isCurrentlyConfirmed = matchState?.playerConfirmations?.[playerId] || false;
+    setUpdating(true);
+    try {
+      await onConfirmPlayer(match.id, playerId, !isCurrentlyConfirmed);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Buttons fall back to a shared style — same chrome the Schedule
+  // header uses so the panel feels like an extension of the page.
+  const actionBtn =
+    `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded border border-border ` +
+    `bg-card px-2 py-1 text-[11px] font-medium text-card-foreground ` +
+    `hover:bg-accent hover:text-accent-foreground ` +
+    `disabled:cursor-not-allowed disabled:opacity-50`;
+  const primaryActionBtn =
+    `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded ` +
+    `bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground ` +
+    `hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50`;
+
   return (
     <div className="h-full overflow-auto p-2">
       {/* Header */}
@@ -179,33 +296,23 @@ export function MatchDetailsPanel({
         <div className="text-[10px] text-muted-foreground">
           C{displayCourtId}{courtChanged && ` (sched: C${assignment.courtId})`} · {scheduledTime}
         </div>
+        {showSchools && (
+          <div className="mt-1 flex items-center gap-1 text-[11px] text-foreground">
+            <SchoolDot accent={sideASchool!} size="sm" />
+            <span className="truncate">{sideASchool!.name}</span>
+            <span className="text-muted-foreground">vs</span>
+            <SchoolDot accent={sideBSchool!} size="sm" />
+            <span className="truncate">{sideBSchool!.name}</span>
+          </div>
+        )}
       </div>
 
       {/* Status badge */}
       {status === 'scheduled' && (
-        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded mb-3 text-[10px] font-medium ${
-          light === 'green'
-            ? 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300'
-            : light === 'yellow'
-              ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-200'
-              : 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200'
-        }`}>
-          <span className={`w-1 h-1 rounded-full ${
-            light === 'green' ? 'bg-green-500' : light === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
-          }`} />
-          {light === 'green' ? 'Ready' : light === 'yellow' ? 'Resting' : 'Blocked'}
-        </div>
+        <StatusPill tone={light} dot className="mb-3">{LIGHT_LABEL[light]}</StatusPill>
       )}
-      {status === 'called' && (
-        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded mb-3 text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
-          Called
-        </div>
-      )}
-      {status === 'started' && (
-        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded mb-3 text-[10px] font-medium bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300">
-          In Progress
-        </div>
-      )}
+      {status === 'called' && <StatusPill tone="blue" className="mb-3">Called</StatusPill>}
+      {status === 'started' && <StatusPill tone="green" className="mb-3">In Progress</StatusPill>}
       {status === 'finished' && (() => {
         const score = matchState?.score;
         const sets = matchState?.sets ?? [];
@@ -225,15 +332,14 @@ export function MatchDetailsPanel({
               <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Done
               </span>
-              {onUpdateStatus && (
+              {onUpdateStatus && mode === 'idle' && (
                 <button
                   type="button"
-                  onClick={() => setShowEditScore(true)}
+                  onClick={() => setMode('score')}
                   className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/15`}
                   title="Edit score"
                   aria-label="Edit score"
                 >
-                  <Pencil aria-hidden="true" className="h-3 w-3" />
                   Edit score
                 </button>
               )}
@@ -294,67 +400,6 @@ export function MatchDetailsPanel({
         );
       })()}
 
-      {showEditScore && onUpdateStatus && match && (() => {
-        const sideAName = (match.sideA || []).map((id) => playerNames.get(id) || id).join(' & ');
-        const sideBName = (match.sideB || []).map((id) => playerNames.get(id) || id).join(' & ');
-        const useBadminton = config?.scoringFormat === 'badminton';
-        const setsToWin = config?.setsToWin ?? 2;
-        const pointsPerSet = config?.pointsPerSet ?? 21;
-        const deuceEnabled = config?.deuceEnabled ?? true;
-        const label = getMatchLabel(match);
-
-        const handleBadmintonSubmit = async (sets: SetScore[], _winner: 'A' | 'B', notes: string) => {
-          if (!onUpdateStatus) return;
-          setSavingScore(true);
-          try {
-            const setsWonA = sets.filter((s) => s.sideA > s.sideB).length;
-            const setsWonB = sets.filter((s) => s.sideB > s.sideA).length;
-            await onUpdateStatus(match.id, 'finished', {
-              sets,
-              score: { sideA: setsWonA, sideB: setsWonB },
-              notes,
-            });
-            setShowEditScore(false);
-          } finally {
-            setSavingScore(false);
-          }
-        };
-
-        const handleSimpleSubmit = async (score: { sideA: number; sideB: number }, notes: string) => {
-          if (!onUpdateStatus) return;
-          setSavingScore(true);
-          try {
-            await onUpdateStatus(match.id, 'finished', { score, notes });
-            setShowEditScore(false);
-          } finally {
-            setSavingScore(false);
-          }
-        };
-
-        return useBadminton ? (
-          <BadmintonScoreDialog
-            matchName={label}
-            sideAName={sideAName}
-            sideBName={sideBName}
-            setsToWin={setsToWin}
-            pointsPerSet={pointsPerSet}
-            deuceEnabled={deuceEnabled}
-            onSubmit={handleBadmintonSubmit}
-            onCancel={() => setShowEditScore(false)}
-            isSubmitting={savingScore}
-          />
-        ) : (
-          <MatchScoreDialog
-            matchName={label}
-            sideAName={sideAName}
-            sideBName={sideBName}
-            onSubmit={handleSimpleSubmit}
-            onCancel={() => setShowEditScore(false)}
-            isSubmitting={savingScore}
-          />
-        );
-      })()}
-
       {/* Reason for yellow/red */}
       {status === 'scheduled' && trafficLight?.reason && light !== 'green' && (
         <div className={`px-2 py-1.5 rounded text-[10px] mb-3 ${
@@ -365,6 +410,111 @@ export function MatchDetailsPanel({
           {trafficLight.reason}
         </div>
       )}
+
+      {/* Lifecycle actions — same Call/Start/Score/Roster surface that
+          the WorkflowPanel rows expose, but text-only. Score and
+          Roster editors render inline below this row instead of
+          popping a modal — keeps every interaction in the rail. */}
+      {onUpdateStatus && mode === 'idle' && (
+        <div className="mb-3">
+          <div className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
+            Actions
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {status === 'scheduled' && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCall}
+                  disabled={updating || light === 'red'}
+                  className={primaryActionBtn}
+                  title={light === 'red' ? trafficLight?.reason ?? 'Blocked' : 'Call match — players head to court'}
+                >
+                  Call
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePostpone}
+                  disabled={updating}
+                  className={actionBtn}
+                  title={matchState?.postponed ? 'Restore match' : 'Postpone match'}
+                >
+                  {matchState?.postponed ? 'Restore' : 'Postpone'}
+                </button>
+              </>
+            )}
+            {status === 'called' && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleStart}
+                  disabled={updating}
+                  className={primaryActionBtn}
+                  title="Start match — court is now in play"
+                >
+                  Start
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('score')}
+                  disabled={updating}
+                  className={actionBtn}
+                  title="Skip ahead — record final score"
+                >
+                  Score
+                </button>
+              </>
+            )}
+            {status === 'started' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMode('score')}
+                  disabled={updating}
+                  className={primaryActionBtn}
+                  title="Record final score"
+                >
+                  Score
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetCalled}
+                  disabled={updating}
+                  className={actionBtn}
+                  title="Step back to Called"
+                >
+                  Undo start
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Inline score editor — renders in place of the Actions row
+          while ``mode === 'score'``. Format-aware: simple = two
+          numbers, badminton = per-set rows with a per-match override
+          for sets-to-win / points / deuce. */}
+      {mode === 'score' && onUpdateStatus && (
+        <ScoreEditor
+          match={match}
+          matchState={matchState}
+          config={config ?? null}
+          playerNames={playerNames}
+          onSubmit={async ({ score, sets, notes }) => {
+            setUpdating(true);
+            try {
+              await onUpdateStatus(match.id, 'finished', { score, sets, notes });
+              setMode('idle');
+            } finally {
+              setUpdating(false);
+            }
+          }}
+          onCancel={() => setMode('idle')}
+          isSubmitting={updating}
+        />
+      )}
+
 
       {/* Players */}
       <div className="mb-3">
@@ -387,33 +537,115 @@ export function MatchDetailsPanel({
               : winner && winner !== side
                 ? 'text-muted-foreground line-through decoration-1'
                 : 'text-foreground';
+          const showCheckIn = status === 'called' && !!onConfirmPlayer;
+          // Substitute / remove are available on every row whenever
+          // the parent wired the callbacks AND the match isn't yet
+          // finished. No need for a separate edit mode.
+          const canSub = !!onSubstitute && status !== 'finished';
+          const canRemove = !!onRemovePlayer && status !== 'finished';
+          const inMatchIds = new Set([...(match.sideA ?? []), ...(match.sideB ?? [])]);
+          const subCandidates = (players ?? []).filter(
+            (p) => !inMatchIds.has(p.id) && p.status !== 'withdrawn',
+          );
+
           const renderRow = (playerId: string, side: 'A' | 'B', key: number) => {
             const name = playerNames.get(playerId) || playerId;
             const restInfo = playerRestTimes.get(playerId);
+            const accent = getPlayerSchoolAccent(playerMap.get(playerId), groupIndex);
+            const confirmed = matchState?.playerConfirmations?.[playerId] || false;
+            const isPicking = subPickingFor === playerId;
             return (
-              <div key={key} className="flex items-center justify-between gap-1">
-                <span className={`${sideClass(side)} inline-flex items-center gap-1`}>
-                  {winner === side && (
-                    <span className="rounded bg-blue-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
-                      Won
-                    </span>
-                  )}
-                  <span>{name}</span>
-                </span>
-                {restInfo ? (
-                  <span
-                    className="text-[9px] text-foreground"
-                    title={`Since ${restInfo.lastMatchLabel || 'last match'}`}
-                  >
-                    {restInfo.restMinutes >= 60
-                      ? `${Math.floor(restInfo.restMinutes / 60)}h${
-                          restInfo.restMinutes % 60 > 0 ? ` ${restInfo.restMinutes % 60}m` : ''
-                        }`
-                      : `${restInfo.restMinutes}m`}{' '}
-                    rest
+              <div key={key} className="space-y-0.5">
+                <div className="flex items-center justify-between gap-1">
+                  <span className={`${sideClass(side)} inline-flex items-center gap-1.5 min-w-0`}>
+                    {winner === side && (
+                      <span className="rounded bg-blue-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
+                        Won
+                      </span>
+                    )}
+                    {accent.name && <SchoolDot accent={accent} size="sm" />}
+                    <span className="truncate">{name}</span>
                   </span>
-                ) : (
-                  <span className="text-[9px] text-muted-foreground">1st match</span>
+                  <span className="inline-flex items-center gap-1">
+                    {showCheckIn && (
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmPlayer(playerId)}
+                        disabled={updating}
+                        title={confirmed ? 'Mark as not checked in' : 'Check in'}
+                        aria-label={confirmed ? 'Mark as not checked in' : 'Check in'}
+                        className={`inline-flex items-center justify-center rounded h-4 w-4 text-[10px] ${
+                          confirmed
+                            ? 'bg-green-600 text-white'
+                            : 'border border-border bg-card text-muted-foreground hover:bg-accent'
+                        }`}
+                      >
+                        {confirmed ? <Check aria-hidden="true" className="h-2.5 w-2.5" /> : null}
+                      </button>
+                    )}
+                    {restInfo ? (
+                      <span
+                        className="text-[9px] text-foreground"
+                        title={`Since ${restInfo.lastMatchLabel || 'last match'}`}
+                      >
+                        {restInfo.restMinutes >= 60
+                          ? `${Math.floor(restInfo.restMinutes / 60)}h${
+                              restInfo.restMinutes % 60 > 0 ? ` ${restInfo.restMinutes % 60}m` : ''
+                            }`
+                          : `${restInfo.restMinutes}m`}{' '}
+                        rest
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-muted-foreground">1st</span>
+                    )}
+                    {canSub && (
+                      <button
+                        type="button"
+                        onClick={() => setSubPickingFor(isPicking ? null : playerId)}
+                        className={`rounded border border-border bg-card px-1 text-[9px] font-medium ${
+                          isPicking
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        }`}
+                        title="Substitute player"
+                        aria-label={`Substitute ${name}`}
+                        aria-expanded={isPicking}
+                      >
+                        Sub
+                      </button>
+                    )}
+                    {canRemove && (
+                      <button
+                        type="button"
+                        onClick={() => onRemovePlayer?.(match.id, playerId)}
+                        className="rounded border border-red-300 bg-red-50 px-1 text-[9px] text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
+                        title="Remove player from match"
+                        aria-label={`Remove ${name}`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                </div>
+                {isPicking && (
+                  <div className="ml-3 max-h-32 overflow-y-auto rounded border border-border bg-card text-[11px]">
+                    {subCandidates.length === 0 && (
+                      <div className="px-1.5 py-1 text-[10px] text-muted-foreground">No available players.</div>
+                    )}
+                    {subCandidates.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          onSubstitute?.(match.id, playerId, p.id);
+                          setSubPickingFor(null);
+                        }}
+                        className="block w-full truncate px-1.5 py-0.5 text-left text-foreground hover:bg-accent"
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             );
@@ -489,55 +721,97 @@ export function MatchDetailsPanel({
         </div>
       )}
 
-      {/* Impacted Matches */}
+      {/* Impacted Matches — single-line per row to fit a long list
+          in the rail. Each row is ``<event> · <shared player>``. */}
       {analysis && analysis.directlyImpacted.length > 0 && (
         <div>
-          <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+          <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
             Impacted ({analysis.directlyImpacted.length})
           </div>
-          {analysis.directlyImpacted.map((matchId) => {
-            const impactedMatch = matchMap.get(matchId);
-            const currentPlayerIds = new Set(allPlayerIds);
-            const impactedPlayerIds = [
-              ...(impactedMatch?.sideA || []),
-              ...(impactedMatch?.sideB || []),
-            ];
-            const sharedPlayerIds = impactedPlayerIds.filter(id => currentPlayerIds.has(id));
-            const sharedPlayerNames = sharedPlayerIds.map(id => playerNames.get(id) || id);
-            const eventLabel = impactedMatch?.eventRank || getMatchLabel(impactedMatch, matchId);
+          <div className="divide-y divide-border rounded border border-border bg-card">
+            {analysis.directlyImpacted.map((matchId) => {
+              const impactedMatch = matchMap.get(matchId);
+              const currentPlayerIds = new Set(allPlayerIds);
+              const impactedPlayerIds = [
+                ...(impactedMatch?.sideA || []),
+                ...(impactedMatch?.sideB || []),
+              ];
+              const sharedPlayerIds = impactedPlayerIds.filter((id) => currentPlayerIds.has(id));
+              const sharedPlayerNames = sharedPlayerIds.map((id) => playerNames.get(id) || id);
+              const eventLabel = impactedMatch?.eventRank || getMatchLabel(impactedMatch, matchId);
 
-            return (
-              <div
-                key={matchId}
-                role="button"
-                tabIndex={0}
-                onClick={() => onSelectMatch?.(matchId)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onSelectMatch?.(matchId);
-                  }
-                }}
-                className="px-2 py-1.5 bg-muted/40 border border-border rounded mb-1 cursor-pointer hover:border-muted-foreground/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-medium text-foreground">{eventLabel}</span>
-                  <ChevronRight aria-hidden="true" className="h-3 w-3 text-muted-foreground" />
+              return (
+                <div
+                  key={matchId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelectMatch?.(matchId)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectMatch?.(matchId);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 cursor-pointer hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  title={sharedPlayerNames.join(', ')}
+                >
+                  <span className="text-[11px] font-medium text-foreground tabular-nums w-12 flex-shrink-0">
+                    {eventLabel}
+                  </span>
+                  <span className="flex-1 truncate text-[10px] text-muted-foreground">
+                    {sharedPlayerNames.join(', ') || '—'}
+                  </span>
+                  <ChevronRight aria-hidden="true" className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 </div>
-                {sharedPlayerNames.length > 0 && (
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
-                    {sharedPlayerNames.map((name, i) => (
-                      <span key={i}>
-                        {name} plays{i < sharedPlayerNames.length - 1 ? ', ' : ''}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Disruption shortcuts — pre-fill the page-level repair dialog
+          with this match's id so the operator doesn't have to find it
+          again in a long match list. Only shown when the parent wires
+          ``onRequestDisruption`` (Schedule page) and the match isn't
+          already finished. */}
+      {onRequestDisruption && match && status !== 'finished' && (
+        <div className="px-3 py-2 border-t border-border/60 bg-muted/30">
+          <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+            Disruption
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {status === 'started' && (
+              <button
+                type="button"
+                onClick={() => onRequestDisruption('overrun', match.id)}
+                className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-2xs text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                title="Mark as overrunning — slide successors back"
+              >
+                Mark overrun
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onRequestDisruption('cancellation', match.id)}
+              className="rounded border border-red-300 bg-red-50 px-2 py-0.5 text-2xs text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"
+              title="Cancel and free the slot for a later match"
+            >
+              Cancel
+            </button>
+            {assignment && (
+              <button
+                type="button"
+                onClick={() => onRequestDisruption('court_closed', match.id)}
+                className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-accent"
+                title={`Close court ${assignment.courtId} and re-route its matches`}
+              >
+                Close court {assignment.courtId}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
+

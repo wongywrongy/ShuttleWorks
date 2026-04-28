@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { isValidTime } from '../../lib/time';
 import { SetupGuide } from './SetupGuide';
+import { Hint } from '../../components/Hint';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +31,14 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
     targetFinishSlot: config.targetFinishSlot ?? null,
     allowPlayerOverlap: config.allowPlayerOverlap ?? false,
     playerOverlapPenalty: config.playerOverlapPenalty ?? 50.0,
+    // Engine fields (deterministic, randomSeed, solverTimeLimitSeconds,
+    // candidatePoolSize) are owned by the Engine settings pane —
+    // copied through formData so saving the Tournament form doesn't
+    // wipe them out, but never edited from this UI.
+    deterministic: config.deterministic ?? false,
+    randomSeed: config.randomSeed ?? 42,
+    solverTimeLimitSeconds: config.solverTimeLimitSeconds ?? 30,
+    candidatePoolSize: config.candidatePoolSize ?? 5,
     // Badminton is the app's domain; default to per-set scoring so the
     // Live-page Finish dialog asks for game scores instead of a single
     // sideA/sideB aggregate.
@@ -41,7 +50,6 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [breakWindows, setBreakWindows] = useState<BreakWindow[]>(config.breaks || []);
   const [showGuide, setShowGuide] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Baseline ref tracks the LAST config prop we accepted from the parent.
   // When a new config arrives (hydration lands, another tab saved, etc.)
@@ -144,13 +152,71 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold">Tournament Configuration</h3>
-          <Button type="button" variant="outline" size="sm" onClick={() => setShowGuide(true)}>
-            Setup Guide
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="flex items-baseline justify-between border-b border-border/60 pb-1.5">
+          <h3 className="text-sm font-semibold text-foreground">
+            Tournament configuration
+          </h3>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowGuide(true)}
+            className="h-7 text-2xs text-muted-foreground hover:text-foreground"
+          >
+            Setup guide
           </Button>
         </div>
+
+        {/* IDENTITY — tournament name + meet mode. Top of the form so
+            the rest of the page (matches, schedule chrome, backups)
+            can reference the chosen name. */}
+        <Card>
+          <CardContent className="px-4 py-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
+              <div className="space-y-1">
+                <Label htmlFor="tournamentName" className="text-xs">
+                  Tournament name
+                </Label>
+                <Input
+                  id="tournamentName"
+                  type="text"
+                  value={formData.tournamentName ?? ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, tournamentName: e.target.value })
+                  }
+                  placeholder="Spring Open 2026"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Meet type</Label>
+                <div role="radiogroup" aria-label="Meet type" className="inline-flex items-center rounded-md border border-border bg-background p-0.5">
+                  {(['dual', 'tri'] as const).map((mode) => {
+                    const active = (formData.meetMode ?? 'dual') === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setFormData({ ...formData, meetMode: mode })}
+                        className={[
+                          'rounded px-3 py-1 text-xs font-medium capitalize transition-colors',
+                          active
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                        ].join(' ')}
+                      >
+                        {mode}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* SCHEDULE & VENUE */}
         <Card>
@@ -217,46 +283,67 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
 
             <Separator className="my-3" />
 
-            {/* Breaks */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label className="text-xs">Breaks</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addBreak} className="h-7 text-xs">
-                  + Add Break
-                </Button>
+            {/* Breaks — one row per window with clear Start → End labels.
+                Empty state collapses into the inline add affordance so
+                the section's vertical footprint matches its content. */}
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <Label className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Breaks
+                </Label>
+                {breakWindows.length > 0 && (
+                  <span className="text-2xs text-muted-foreground tabular-nums">
+                    {breakWindows.length}
+                  </span>
+                )}
               </div>
-              {breakWindows.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {breakWindows.map((breakWindow, index) => (
-                    <div key={index} className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md">
-                      <Input
-                        type="time"
-                        value={breakWindow.start}
-                        onChange={(e) => updateBreak(index, 'start', e.target.value)}
-                        className="h-7 w-24 text-xs"
-                      />
-                      <span className="text-muted-foreground text-xs">-</span>
-                      <Input
-                        type="time"
-                        value={breakWindow.end}
-                        onChange={(e) => updateBreak(index, 'end', e.target.value)}
-                        className="h-7 w-24 text-xs"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeBreak(index)}
-                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+              {breakWindows.length > 0 && (
+                <div className="space-y-1.5">
+                  {breakWindows.map((breakWindow, index) => {
+                    const startInvalid = errors[`break_${index}_start`];
+                    const endInvalid = errors[`break_${index}_end`];
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 rounded border border-border bg-background px-2 py-1.5"
                       >
-                        ×
-                      </Button>
-                    </div>
-                  ))}
+                        <Input
+                          type="time"
+                          aria-label={`Break ${index + 1} start`}
+                          value={breakWindow.start}
+                          onChange={(e) => updateBreak(index, 'start', e.target.value)}
+                          className={`h-8 w-28 tabular-nums ${startInvalid ? 'border-destructive' : ''}`}
+                        />
+                        <span aria-hidden="true" className="text-muted-foreground select-none">→</span>
+                        <Input
+                          type="time"
+                          aria-label={`Break ${index + 1} end`}
+                          value={breakWindow.end}
+                          onChange={(e) => updateBreak(index, 'end', e.target.value)}
+                          className={`h-8 w-28 tabular-nums ${endInvalid ? 'border-destructive' : ''}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeBreak(index)}
+                          aria-label={`Remove break ${index + 1}`}
+                          className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">No breaks configured</p>
               )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addBreak}
+                className="h-8 w-full justify-center border-dashed text-xs text-muted-foreground hover:bg-accent"
+              >
+                + Add break{breakWindows.length === 0 ? ' (e.g. lunch 12:00–13:00)' : ''}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -279,7 +366,6 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                   max={180}
                   className={`h-9 ${errors.defaultRestMinutes ? 'border-destructive' : ''}`}
                 />
-                <p className="text-[10px] text-muted-foreground">Players can override in profile</p>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="freeze" className="text-xs">Freeze Horizon (slots)</Label>
@@ -394,7 +480,9 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
             <CardTitle className="text-sm">Event Categories</CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 pt-0">
-            <p className="text-xs text-muted-foreground mb-3">Positions per school (e.g., 3 creates MS1, MS2, MS3)</p>
+            <Hint id="setup.event-categories" className="mb-3">
+              Positions per school — e.g., 3 creates MS1, MS2, MS3.
+            </Hint>
             <div className="grid grid-cols-5 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="ms" className="text-xs">Men's Singles</Label>
@@ -470,265 +558,14 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
           </CardContent>
         </Card>
 
-        {/* ADVANCED OPTIMIZATION (Collapsible) */}
-        <Card>
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-accent/50 rounded-t-lg"
-          >
-            <span className="text-sm font-medium">Advanced Optimization</span>
-            <svg
-              className={`w-4 h-4 text-muted-foreground transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {showAdvanced && (
-            <CardContent className="px-4 pb-4 pt-0 border-t">
-              <div className="space-y-3 pt-3">
-                {/* Court Utilization */}
-                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
-                  <input
-                    type="checkbox"
-                    id="enableCourtUtilization"
-                    checked={formData.enableCourtUtilization ?? true}
-                    onChange={(e) => setFormData({ ...formData, enableCourtUtilization: e.target.checked })}
-                    className="mt-0.5 h-4 w-4 rounded border-input"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="enableCourtUtilization" className="cursor-pointer">
-                      Maximize Court Utilization
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Penalize idle courts. Higher = fewer empty courts, tighter schedule
-                    </p>
-
-                    {formData.enableCourtUtilization && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground">0=off</span>
-                        <input
-                          type="range"
-                          value={formData.courtUtilizationPenalty ?? 50}
-                          onChange={(e) => setFormData({ ...formData, courtUtilizationPenalty: parseFloat(e.target.value) })}
-                          className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
-                          min="0"
-                          max="100"
-                          step="10"
-                        />
-                        <span className="text-xs font-medium w-8">{formData.courtUtilizationPenalty ?? 50}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Game Spacing */}
-                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
-                  <input
-                    type="checkbox"
-                    id="enableGameProximity"
-                    checked={formData.enableGameProximity ?? false}
-                    onChange={(e) => setFormData({ ...formData, enableGameProximity: e.target.checked })}
-                    className="mt-0.5 h-4 w-4 rounded border-input"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="enableGameProximity" className="cursor-pointer">
-                      Game Spacing Constraint
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Control time between a player's matches. Higher penalty = stricter enforcement
-                    </p>
-
-                    {formData.enableGameProximity && (
-                      <div className="mt-2 space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-xs">Min slots between games</Label>
-                            <Input
-                              type="number"
-                              value={formData.minGameSpacingSlots ?? ''}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                minGameSpacingSlots: e.target.value ? parseInt(e.target.value) : null
-                              })}
-                              min={0}
-                              placeholder="e.g., 2"
-                              className="h-8"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Max slots between games</Label>
-                            <Input
-                              type="number"
-                              value={formData.maxGameSpacingSlots ?? ''}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                maxGameSpacingSlots: e.target.value ? parseInt(e.target.value) : null
-                              })}
-                              min={0}
-                              placeholder="e.g., 6"
-                              className="h-8"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground">0=off</span>
-                          <input
-                            type="range"
-                            value={formData.gameProximityPenalty ?? 5}
-                            onChange={(e) => setFormData({ ...formData, gameProximityPenalty: parseFloat(e.target.value) })}
-                            className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
-                            min="0"
-                            max="20"
-                            step="1"
-                          />
-                          <span className="text-xs font-medium w-6">{formData.gameProximityPenalty ?? 5}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Compact Schedule */}
-                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
-                  <input
-                    type="checkbox"
-                    id="enableCompactSchedule"
-                    checked={formData.enableCompactSchedule ?? false}
-                    onChange={(e) => setFormData({ ...formData, enableCompactSchedule: e.target.checked })}
-                    className="mt-0.5 h-4 w-4 rounded border-input"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="enableCompactSchedule" className="cursor-pointer">
-                      Compact Schedule
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Pack matches tightly. Higher weight = stronger enforcement (may soften other constraints)
-                    </p>
-
-                    {formData.enableCompactSchedule && (
-                      <div className="mt-2 space-y-2">
-                        {/* Mode selector */}
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, compactScheduleMode: 'minimize_makespan' })}
-                            className={`px-2 py-1 text-xs rounded ${
-                              formData.compactScheduleMode === 'minimize_makespan'
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                            }`}
-                          >
-                            Finish Early
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, compactScheduleMode: 'no_gaps' })}
-                            className={`px-2 py-1 text-xs rounded ${
-                              formData.compactScheduleMode === 'no_gaps'
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                            }`}
-                          >
-                            No Gaps
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, compactScheduleMode: 'finish_by_time' })}
-                            className={`px-2 py-1 text-xs rounded ${
-                              formData.compactScheduleMode === 'finish_by_time'
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                            }`}
-                          >
-                            Finish By
-                          </button>
-                        </div>
-
-                        {/* Target finish slot for finish_by_time mode */}
-                        {formData.compactScheduleMode === 'finish_by_time' && (
-                          <div>
-                            <Label className="text-xs">Target finish slot</Label>
-                            <Input
-                              type="number"
-                              value={formData.targetFinishSlot ?? ''}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                targetFinishSlot: e.target.value ? parseInt(e.target.value) : null
-                              })}
-                              min={1}
-                              placeholder="e.g., 10"
-                              className="h-8"
-                            />
-                          </div>
-                        )}
-
-                        {/* Weight slider */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground">0=off</span>
-                          <input
-                            type="range"
-                            value={formData.compactSchedulePenalty ?? 100}
-                            onChange={(e) => setFormData({ ...formData, compactSchedulePenalty: parseFloat(e.target.value) })}
-                            className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
-                            min="0"
-                            max="200"
-                            step="10"
-                          />
-                          <span className="text-xs font-medium w-8">{formData.compactSchedulePenalty ?? 100}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Allow Player Overlap */}
-                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
-                  <input
-                    type="checkbox"
-                    id="allowPlayerOverlap"
-                    checked={formData.allowPlayerOverlap ?? false}
-                    onChange={(e) => setFormData({ ...formData, allowPlayerOverlap: e.target.checked })}
-                    className="mt-0.5 h-4 w-4 rounded border-input"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="allowPlayerOverlap" className="cursor-pointer">
-                      Allow Player Overlap
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Permit same player in multiple matches at once (soft constraint). Higher penalty = stronger avoidance
-                    </p>
-
-                    {formData.allowPlayerOverlap && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground">0=allow freely</span>
-                        <input
-                          type="range"
-                          value={formData.playerOverlapPenalty ?? 50}
-                          onChange={(e) => setFormData({ ...formData, playerOverlapPenalty: parseFloat(e.target.value) })}
-                          className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
-                          min="0"
-                          max="100"
-                          step="10"
-                        />
-                        <span className="text-xs font-medium w-8">{formData.playerOverlapPenalty ?? 50}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          )}
-        </Card>
-
-        {/* Submit Button */}
-        <Button type="submit" disabled={saving} className="w-full">
-          {saving ? 'Saving...' : 'Save Configuration'}
-        </Button>
+        {/* Submit row — right-aligned per enterprise dashboard convention.
+         * Full-width primary CTAs read as marketing-page CTAs; this is a
+         * config form. Sized to its content with comfortable padding. */}
+        <div className="flex items-center justify-end gap-2">
+          <Button type="submit" disabled={saving} size="default">
+            {saving ? 'Saving…' : 'Save configuration'}
+          </Button>
+        </div>
       </form>
       <SetupGuide isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </>

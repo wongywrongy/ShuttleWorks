@@ -9,8 +9,6 @@ Target latency: <50 ms for tournaments up to 40 matches.
 """
 from __future__ import annotations
 
-import os
-import sys
 from typing import List
 
 from app.schemas import (
@@ -24,12 +22,7 @@ from app.schemas import (
     ValidationResponseDTO,
 )
 
-# scheduler_core imports mirror the pattern used in backend/api/schedule.py.
-_backend_dir = os.path.dirname(os.path.dirname(__file__))
-_project_root = os.path.dirname(_backend_dir)
-_scheduler_core_path = os.path.join(_project_root, "src")
-if _scheduler_core_path not in sys.path:
-    sys.path.insert(0, _scheduler_core_path)
+import app.scheduler_core_path  # noqa: F401  -- side effect: sys.path setup
 
 from scheduler_core.domain.models import Assignment as CoreAssignment  # noqa: E402
 from scheduler_core.engine.validation import Conflict, find_conflicts  # noqa: E402

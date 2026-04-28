@@ -16,7 +16,7 @@ import type {
   ScheduleAssignment,
   TournamentConfig,
 } from '../api/dto';
-import { timeToSlot } from './timeUtils';
+import { timeToSlot } from '../lib/time';
 
 export type TrafficLight = 'green' | 'yellow' | 'red';
 

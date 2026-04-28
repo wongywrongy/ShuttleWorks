@@ -4,6 +4,19 @@ import json
 import sys
 from pathlib import Path
 
+
+def _detail_msg(r) -> str:
+    """Pull the human message out of an HTTPException response.
+
+    Backend errors now return ``{detail: {code, message}}`` (typed),
+    but legacy routes may still send a bare-string ``detail``. Normalise
+    both forms so tests don't have to branch.
+    """
+    detail = r.json().get("detail", "")
+    if isinstance(detail, dict):
+        return str(detail.get("message", ""))
+    return str(detail)
+
 # Same backend-path shuffle as test_tournament_state — pytest prepends
 # ``src/`` which shadows the production ``app`` package in ``backend/``.
 _BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "backend")
@@ -125,7 +138,7 @@ def test_import_upload_rejects_invalid_json(client):
         files={"file": ("bad.json", blob, "application/json")},
     )
     assert r.status_code == 400
-    assert "json" in r.json().get("detail", "").lower()
+    assert "json" in _detail_msg(r).lower()
 
 
 def test_reset_empties_the_file(client):

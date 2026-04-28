@@ -62,6 +62,31 @@ export function GroupStrip() {
           {groups.length} · {players.length} players
         </span>
       </div>
+      {(() => {
+        const groupIds = new Set(groups.map((g) => g.id));
+        const orphanCount = players.filter((p) => !groupIds.has(p.groupId)).length;
+        if (orphanCount === 0) return null;
+        return (
+          <div
+            className="mb-2 flex items-center justify-between rounded border border-status-warning/30 bg-status-warning-bg/40 px-2 py-1 text-xs text-foreground"
+            role="status"
+          >
+            <span className="flex items-center gap-1.5">
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-status-warning"
+                aria-hidden
+              />
+              <span className="tabular-nums font-semibold">{orphanCount}</span>
+              <span className="text-muted-foreground">
+                player{orphanCount === 1 ? '' : 's'} not in any school
+              </span>
+            </span>
+            <span className="text-2xs text-muted-foreground">
+              Edit a player to assign, or import again with a school column
+            </span>
+          </div>
+        );
+      })()}
       <div className="flex flex-wrap items-center gap-1.5" data-testid="group-strip">
         {groups.map((g) => {
           const count = players.filter((p) => p.groupId === g.id).length;

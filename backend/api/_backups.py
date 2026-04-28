@@ -18,12 +18,14 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterator, List, Optional, Tuple
 
 KEEP = 10  # rolling window size per stem
+SLUG_MAX_LEN = 32  # cap slug component so filenames stay reasonable
 
 log = logging.getLogger("scheduler.backups")
 
@@ -46,8 +48,39 @@ def backup_dir(data_dir: Path) -> Path:
 
 
 def _utc_stamp() -> str:
-    # Filename-safe ISO — colons are illegal on Windows.
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%fZ")
+    # ``YYYY-MM-DD-HHMMSS-microseconds`` — the leading 14 digits read
+    # as the human-eye date+time (April 28 2026, 13:59:37); the
+    # trailing block is a uniqueness disambiguator for tight-loop
+    # writes. Was an ISO format with ``T`` and ``Z`` markers that
+    # made backup lists hard to scan.
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S-%f")
+
+
+def _slugify(name: Optional[str]) -> str:
+    """Lowercase + dash slug for a tournament name. Empty input → "".
+
+    Filenames go through this so backup lists are scannable. Capped at
+    ``SLUG_MAX_LEN`` to keep paths short on case-insensitive filesystems.
+    """
+    if not name:
+        return ""
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return slug[:SLUG_MAX_LEN]
+
+
+def _backup_filename(live_path: Path, tournament_name: Optional[str]) -> str:
+    """Compose ``<stem>-<slug>-<timestamp>.json``.
+
+    Slug is omitted when empty so legacy backups (no name) read as
+    ``tournament-2026-04-28-1359.json`` and named ones read as
+    ``tournament-spring-open-2026-04-28-1359.json``. The base stem
+    stays first so pruning + listing can match all backups for a
+    resource by the ``<stem>-`` prefix regardless of tournament name.
+    """
+    stem = live_path.stem
+    slug = _slugify(tournament_name)
+    middle = f"-{slug}" if slug else ""
+    return f"{stem}{middle}-{_utc_stamp()}.json"
 
 
 def _validate_filename(filename: str) -> None:
@@ -72,17 +105,22 @@ def _validate_filename(filename: str) -> None:
         raise FileNotFoundError("invalid backup name")
 
 
-def create_backup(data_dir: Path, live_path: Path) -> Optional[Path]:
+def create_backup(
+    data_dir: Path,
+    live_path: Path,
+    tournament_name: Optional[str] = None,
+) -> Optional[Path]:
     """Copy ``live_path`` into the backup dir, then prune older ones.
 
     Returns the backup path, or ``None`` if the live file doesn't exist.
+    When ``tournament_name`` is set, the slug is woven into the filename
+    so backup lists scan by venue/event rather than just timestamp.
     """
     if not live_path.exists():
         return None
-    stem = live_path.stem  # e.g. "tournament"
-    dst = backup_dir(data_dir) / f"{stem}-{_utc_stamp()}.json"
+    dst = backup_dir(data_dir) / _backup_filename(live_path, tournament_name)
     shutil.copy2(live_path, dst)
-    _prune(data_dir, stem)
+    _prune(data_dir, live_path.stem)
     return dst
 
 

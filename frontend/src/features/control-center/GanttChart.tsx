@@ -4,7 +4,8 @@
  * Delayed matches get a yellow ring to stand out
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
-import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../utils/timeUtils';
+import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../lib/time';
+import { indexById } from '../../store/selectors';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import type {
   ScheduleDTO,
@@ -38,30 +39,38 @@ interface GanttChartProps {
 // 96 ÷ 2 = 48 px per half-block, which matches the pre-overlap
 // single-block width and is proven to fit a 4-char code comfortably
 // at text-[11px].
-const SLOT_WIDTH = 96;
-const ROW_HEIGHT = 32;
+// Sized to match the schedule-tab DragGantt so a director's eye doesn't
+// have to recalibrate when switching between Schedule and Live. Both
+// grids use 80×40 with a dotted grid background.
+import { SLOT_WIDTH, ROW_HEIGHT, COURT_LABEL_WIDTH } from '../schedule/ganttGeometry';
 
-// Status-based colors - intuitive and distinct
+// Status-based colors. Drives the Gantt block styling per match state.
+// Wired to the semantic ``status-*`` tokens in src/index.css so light /
+// dark / contrast pass cleanly together. The palette: idle = slate,
+// called = amber (operator has called the court), live = emerald
+// (match is being played), done = slate-muted (finished). This is the
+// single source of truth — schedule blocks, the live ops grid, the
+// matches list, and the TV preview all read from these classes.
 const STATUS_STYLES = {
   scheduled: {
-    bg: 'bg-muted dark:bg-gray-500/15',
-    border: 'border-border dark:border-gray-500/40',
-    text: 'text-muted-foreground dark:text-gray-100',
+    bg: 'bg-status-idle-bg',
+    border: 'border-status-idle/40',
+    text: 'text-foreground',
   },
   called: {
-    bg: 'bg-blue-100 dark:bg-blue-500/15',
-    border: 'border-blue-400 dark:border-blue-500/40',
-    text: 'text-blue-700 dark:text-blue-200',
+    bg: 'bg-status-called-bg',
+    border: 'border-status-called/60',
+    text: 'text-status-called',
   },
   started: {
-    bg: 'bg-green-200 dark:bg-emerald-500/15',
-    border: 'border-green-500 dark:border-emerald-500/40',
-    text: 'text-green-800 dark:text-emerald-200',
+    bg: 'bg-status-live-bg',
+    border: 'border-status-live/60',
+    text: 'text-status-live',
   },
   finished: {
-    bg: 'bg-muted/40 dark:bg-gray-500/10',
-    border: 'border-border dark:border-gray-500/30',
-    text: 'text-muted-foreground dark:text-muted-foreground',
+    bg: 'bg-status-done-bg',
+    border: 'border-status-done/30',
+    text: 'text-muted-foreground',
   },
 };
 
@@ -82,7 +91,7 @@ export function GanttChart({
   impactedMatchIds = [],
   trafficLights,
 }: GanttChartProps) {
-  const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
+  const matchMap = useMemo(() => indexById(matches), [matches]);
   const impactedSet = useMemo(() => new Set(impactedMatchIds), [impactedMatchIds]);
   const totalSlots = calculateTotalSlots(config);
 
@@ -235,15 +244,23 @@ export function GanttChart({
       {/* Grid */}
       <div className="overflow-x-auto">
         <div className="min-w-max">
-          {/* Time header */}
-          <div className="flex border-b border-border">
-            <div className="w-10 flex-shrink-0 px-1 py-0.5 bg-card text-xs text-muted-foreground" />
+          {/* Time header — matches DragGantt: court label on the left,
+              time labels every other slot. */}
+          <div className="flex border-b border-border bg-muted/40">
+            <div
+              className="flex-shrink-0 px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
+              style={{ width: COURT_LABEL_WIDTH }}
+            >
+              Court
+            </div>
             {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
               <div
                 key={slot}
                 style={{ width: SLOT_WIDTH }}
-                className={`flex-shrink-0 px-0.5 py-0.5 text-center text-[10px] border-l border-border bg-card text-muted-foreground ${
-                  slot === currentSlot ? 'bg-blue-50 text-blue-600 font-medium' : ''
+                className={`flex-shrink-0 border-l border-border px-1 py-1 text-center text-2xs tabular-nums ${
+                  slot === currentSlot
+                    ? 'bg-blue-100/70 font-semibold text-blue-700 dark:bg-blue-500/20 dark:text-blue-200'
+                    : 'text-muted-foreground'
                 }`}
               >
                 {i % 2 === 0 ? slotLabels[slot] : ''}
@@ -253,19 +270,25 @@ export function GanttChart({
 
           {/* Court rows */}
           {courts.map(courtId => (
-            <div key={courtId} className="flex border-b border-border">
-              <div className="w-10 flex-shrink-0 px-1 bg-card text-xs font-medium text-muted-foreground flex items-center">
+            <div key={courtId} className="flex border-b border-border/60">
+              <div
+                className="flex-shrink-0 flex items-center bg-muted/30 px-2 text-xs font-semibold tabular-nums text-foreground"
+                style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+              >
                 C{courtId}
               </div>
-              <div className="flex-1 relative" style={{ height: ROW_HEIGHT }}>
+              <div
+                className="flex-1 relative gantt-grid"
+                style={{ height: ROW_HEIGHT }}
+              >
                 {/* Slot grid lines */}
                 <div className="absolute inset-0 flex">
                   {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map(slot => (
                     <div
                       key={slot}
                       style={{ width: SLOT_WIDTH }}
-                      className={`flex-shrink-0 border-l border-border ${
-                        slot === currentSlot ? 'bg-blue-50/30' : ''
+                      className={`flex-shrink-0 border-l border-border/40 ${
+                        slot === currentSlot ? 'bg-blue-100/40 dark:bg-blue-500/10' : ''
                       }`}
                     />
                   ))}
@@ -351,17 +374,14 @@ export function GanttChart({
                       }
                     >
                       <div
-                        className={`h-full flex items-center justify-center overflow-hidden ${
-                          groupSize > 1 ? 'px-0' : 'px-1'
+                        className={`h-full flex flex-col justify-center overflow-hidden leading-tight ${
+                          groupSize > 1 ? 'px-0 items-center' : 'px-2 items-start'
                         }`}
                       >
-                        {/* Status carried entirely by block fill +
-                            border + any inset conflict ring; no extra
-                            glyphs. Overlap blocks drop the font a tick
-                            and tighten letter-spacing so a 4-char code
-                            like MS17 clears the ~44 px available at
-                            half-width. No ellipsis on overflow — we
-                            clip to show as many characters as fit. */}
+                        {/* Two-line label matches features/schedule/DragGantt:
+                            top = match code, bottom = format like "1v1".
+                            Overlap blocks drop the font a tick so a 4-char
+                            code clears the ~44 px available at half-width. */}
                         <span
                           className={`font-semibold whitespace-nowrap overflow-hidden tabular-nums ${styles.text} ${
                             groupSize > 1
@@ -371,6 +391,12 @@ export function GanttChart({
                         >
                           {match ? getMatchLabel(match) : '?'}
                         </span>
+                        {match && groupSize === 1 && (
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden">
+                            {(match.sideA?.length ?? 0)}v{(match.sideB?.length ?? 0)}
+                            {match.sideC && match.sideC.length ? `v${match.sideC.length}` : ''}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
