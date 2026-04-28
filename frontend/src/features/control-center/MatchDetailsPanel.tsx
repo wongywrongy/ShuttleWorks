@@ -53,6 +53,13 @@ interface MatchDetailsPanelProps {
    *  lets the WorkflowPanel rows pop the score editor directly. */
   mode?: 'idle' | 'score' | 'roster';
   onModeChange?: (mode: 'idle' | 'score' | 'roster') => void;
+  /** Open the disruption-repair dialog with type+matchId pre-filled.
+   *  Lets the per-match shortcuts (Cancel / Mark overrun) call into
+   *  the page-level dialog without each row owning the modal state. */
+  onRequestDisruption?: (
+    type: 'cancellation' | 'overrun' | 'court_closed',
+    matchId: string,
+  ) => void;
 }
 
 /**
@@ -127,6 +134,7 @@ export function MatchDetailsPanel({
   onUndoStart,
   mode: modeProp,
   onModeChange,
+  onRequestDisruption,
 }: MatchDetailsPanelProps) {
   const matchMap = useMemo(() => indexById(matches), [matches]);
   // ``mode`` toggles the panel between its default read mode and the
@@ -757,6 +765,49 @@ export function MatchDetailsPanel({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Disruption shortcuts — pre-fill the page-level repair dialog
+          with this match's id so the operator doesn't have to find it
+          again in a long match list. Only shown when the parent wires
+          ``onRequestDisruption`` (Schedule page) and the match isn't
+          already finished. */}
+      {onRequestDisruption && match && status !== 'finished' && (
+        <div className="px-3 py-2 border-t border-border/60 bg-muted/30">
+          <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+            Disruption
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {status === 'started' && (
+              <button
+                type="button"
+                onClick={() => onRequestDisruption('overrun', match.id)}
+                className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-2xs text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                title="Mark as overrunning — slide successors back"
+              >
+                Mark overrun
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onRequestDisruption('cancellation', match.id)}
+              className="rounded border border-red-300 bg-red-50 px-2 py-0.5 text-2xs text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"
+              title="Cancel and free the slot for a later match"
+            >
+              Cancel
+            </button>
+            {assignment && (
+              <button
+                type="button"
+                onClick={() => onRequestDisruption('court_closed', match.id)}
+                className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-accent"
+                title={`Close court ${assignment.courtId} and re-route its matches`}
+              >
+                Close court {assignment.courtId}
+              </button>
+            )}
           </div>
         </div>
       )}

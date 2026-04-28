@@ -31,14 +31,12 @@ from app.schemas import (  # noqa: E402
 from scheduler_core.domain.models import Assignment  # noqa: E402
 from scheduler_core.engine.repair import RepairSpec, solve_repair  # noqa: E402
 
-# Reuse the converters and the result-to-DTO mapper from the main
-# schedule route — no point re-implementing them.
-from api.schedule import (  # noqa: E402
-    _convert_matches,
-    _convert_players,
-    _convert_result_to_dto,
-    _convert_to_schedule_config,
-    _solver_options_for,
+from adapters.badminton import (  # noqa: E402
+    matches_from_dto,
+    players_from_dto,
+    result_to_dto,
+    schedule_config_from_dto,
+    solver_options_for,
 )
 
 router = APIRouter(prefix="", tags=["schedule"])
@@ -206,10 +204,10 @@ async def repair_schedule(request: RepairRequest) -> RepairResponse:
 
     repair = _slice_for(request, assignments_by_match)
 
-    schedule_config = _convert_to_schedule_config(request.config)
-    players = _convert_players(request.players, request.config)
-    matches = _convert_matches(request.matches)
-    solver_options = _solver_options_for(request.config)
+    schedule_config = schedule_config_from_dto(request.config)
+    players = players_from_dto(request.players, request.config)
+    matches = matches_from_dto(request.matches)
+    solver_options = solver_options_for(request.config)
 
     try:
         result = solve_repair(
@@ -223,7 +221,7 @@ async def repair_schedule(request: RepairRequest) -> RepairResponse:
         log.exception("schedule repair failed")
         raise HTTPException(500, "schedule repair failed")
 
-    new_schedule = _convert_result_to_dto(result)
+    new_schedule = result_to_dto(result)
 
     # Tag the matches that actually moved relative to the previous
     # schedule. Forbidden matches (forfeit / cancellation) don't

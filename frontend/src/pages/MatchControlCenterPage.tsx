@@ -21,6 +21,7 @@ import { useAppStore } from '../store/appStore';
 import { GanttChart } from '../features/control-center/GanttChart';
 import { WorkflowPanel } from '../features/control-center/WorkflowPanel';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
+import { DisruptionDialog } from '../features/control-center/DisruptionDialog';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
@@ -38,6 +39,14 @@ export function MatchControlCenterPage() {
   // Open by default to mirror the Schedule tab — the right rail
   // shouldn't sit empty while the operator is still picking matches.
   const [detailsOpen, setDetailsOpen] = useState(true);
+  // Disruption dialog state, mirrored from the Schedule page so live
+  // ops can also trigger repair from a started match.
+  const [disruptionOpen, setDisruptionOpen] = useState(false);
+  const [disruptionPrefill, setDisruptionPrefill] = useState<{
+    type?: 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
+    matchId?: string;
+    courtId?: number;
+  }>({});
   // Lifted from MatchDetailsPanel so the WorkflowPanel rows can pop
   // the score editor directly: clicking Score on a started row
   // selects the match AND flips the rail to its score mode.
@@ -497,6 +506,18 @@ export function MatchControlCenterPage() {
               onUndoStart={handleUndoStart}
               mode={panelMode}
               onModeChange={setPanelMode}
+              onRequestDisruption={(type, matchId) => {
+                const courtId =
+                  type === 'court_closed' && selectedAssignment
+                    ? selectedAssignment.courtId
+                    : undefined;
+                setDisruptionPrefill({
+                  type,
+                  matchId: type === 'court_closed' ? undefined : matchId,
+                  courtId,
+                });
+                setDisruptionOpen(true);
+              }}
             />
           </div>
         ) : (
@@ -519,6 +540,13 @@ export function MatchControlCenterPage() {
           </div>
         </div>
       )}
+      <DisruptionDialog
+        isOpen={disruptionOpen}
+        onClose={() => setDisruptionOpen(false)}
+        initialType={disruptionPrefill.type}
+        initialMatchId={disruptionPrefill.matchId}
+        initialCourtId={disruptionPrefill.courtId}
+      />
     </div>
   );
 }

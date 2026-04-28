@@ -19,6 +19,7 @@
 // it never enters the initial bundle.
 import type ExcelJSNs from 'exceljs';
 import { indexById } from '../../store/selectors';
+import { getActiveAssignments } from '../../lib/getActiveAssignments';
 type ExcelJSType = typeof ExcelJSNs;
 
 import type {
@@ -133,7 +134,11 @@ export async function exportScheduleXlsx(
   // ---- Warm-up banner ---------------------------------------------------
   // 6 rows spanning the 30 min before the first scheduled match, all sharing
   // the same clock time (e.g., "10:00 AM" when first match is 10:30 AM).
-  const sorted = [...schedule.assignments].sort(
+  // Read via getActiveAssignments so an export reflects whichever
+  // candidate the operator currently has selected (not the cold
+  // "candidate #0" the solver returned originally).
+  const activeAssignments = getActiveAssignments(schedule);
+  const sorted = [...activeAssignments].sort(
     (a, b) => a.slotId - b.slotId || a.courtId - b.courtId,
   );
 

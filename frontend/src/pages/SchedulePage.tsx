@@ -12,6 +12,7 @@ import { LiveMetricsBar } from '../features/schedule/live/LiveMetricsBar';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
 import { DisruptionDialog } from '../features/control-center/DisruptionDialog';
 import { CandidatesPanel } from '../features/schedule/CandidatesPanel';
+import { WarmRestartDialog } from '../features/schedule/WarmRestartDialog';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { StaleBanner } from '../features/schedule/StaleBanner';
 import { computeConstraintViolations } from '../utils/constraintChecker';
@@ -345,6 +346,12 @@ export function SchedulePage() {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<'log' | 'details' | 'candidates'>('details');
   const [disruptionOpen, setDisruptionOpen] = useState(false);
+  const [warmRestartOpen, setWarmRestartOpen] = useState(false);
+  const [disruptionPrefill, setDisruptionPrefill] = useState<{
+    type?: 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
+    matchId?: string;
+    courtId?: number;
+  }>({});
 
   // Wall-clock slot for traffic-light + rest-time computation.
   // Refreshed every minute via the shared ``useCurrentSlot`` hook so the
@@ -653,8 +660,18 @@ export function SchedulePage() {
                     </button>
                   )}
                   <button
-                    onClick={() => setDisruptionOpen(true)}
+                    onClick={() => setWarmRestartOpen(true)}
                     className="ml-auto px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded text-muted-foreground hover:bg-muted"
+                    title="Re-plan from here (full re-solve, stay-close objective)"
+                  >
+                    Re-plan…
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDisruptionPrefill({});
+                      setDisruptionOpen(true);
+                    }}
+                    className="px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded text-muted-foreground hover:bg-muted"
                     title="Repair after a disruption"
                   >
                     Disruption…
@@ -695,6 +712,21 @@ export function SchedulePage() {
                   groups={groups}
                   config={config}
                   currentSlot={currentSlot}
+                  onRequestDisruption={(type, matchId) => {
+                    // Court closure pre-fills the courtId from the
+                    // selected match's assignment so the operator
+                    // doesn't have to look it up.
+                    const courtId =
+                      type === 'court_closed' && selectedAssignment
+                        ? selectedAssignment.courtId
+                        : undefined;
+                    setDisruptionPrefill({
+                      type,
+                      matchId: type === 'court_closed' ? undefined : matchId,
+                      courtId,
+                    });
+                    setDisruptionOpen(true);
+                  }}
                 />
               )}
             </div>
@@ -702,6 +734,13 @@ export function SchedulePage() {
           <DisruptionDialog
             isOpen={disruptionOpen}
             onClose={() => setDisruptionOpen(false)}
+            initialType={disruptionPrefill.type}
+            initialMatchId={disruptionPrefill.matchId}
+            initialCourtId={disruptionPrefill.courtId}
+          />
+          <WarmRestartDialog
+            isOpen={warmRestartOpen}
+            onClose={() => setWarmRestartOpen(false)}
           />
         </div>
       ) : isOptimizing && !hasLiveProgress ? (

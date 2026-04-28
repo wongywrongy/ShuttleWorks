@@ -10,7 +10,7 @@
  * what will move") are a follow-up — the success toast already shows
  * the count.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { DisruptionType } from '../../api/client';
 import { Modal } from '../../components/common/Modal';
@@ -25,6 +25,8 @@ interface Props {
   initialMatchId?: string;
   /** Pre-fill type when the dialog is opened from a court chip etc. */
   initialType?: DisruptionType;
+  /** Pre-fill courtId for ``court_closed``. */
+  initialCourtId?: number;
 }
 
 const TYPE_LABEL: Record<DisruptionType, string> = {
@@ -34,16 +36,31 @@ const TYPE_LABEL: Record<DisruptionType, string> = {
   cancellation: 'Match cancelled',
 };
 
-export function DisruptionDialog({ isOpen, onClose, initialMatchId, initialType }: Props) {
+export function DisruptionDialog({
+  isOpen,
+  onClose,
+  initialMatchId,
+  initialType,
+  initialCourtId,
+}: Props) {
   const players = useAppStore((s) => s.players);
   const config = useAppStore((s) => s.config);
   const matches = useAppStore((s) => s.matches);
 
   const [type, setType] = useState<DisruptionType>(initialType ?? 'court_closed');
   const [playerId, setPlayerId] = useState<string>(players[0]?.id ?? '');
-  const [courtId, setCourtId] = useState<number>(1);
+  const [courtId, setCourtId] = useState<number>(initialCourtId ?? 1);
   const [matchId, setMatchId] = useState<string>(initialMatchId ?? matches[0]?.id ?? '');
   const [extraMinutes, setExtraMinutes] = useState<number>(15);
+
+  // When the parent re-opens with new prefill, sync local state so the
+  // dialog reflects the row that triggered it.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialType) setType(initialType);
+    if (initialMatchId) setMatchId(initialMatchId);
+    if (initialCourtId !== undefined) setCourtId(initialCourtId);
+  }, [isOpen, initialType, initialMatchId, initialCourtId]);
 
   const { repair, status } = useRepair();
   const loading = status === 'loading';
