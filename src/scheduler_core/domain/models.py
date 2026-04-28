@@ -96,6 +96,10 @@ class SolverOptions:
     num_workers: int = 1
     random_seed: int = 42
     log_progress: bool = False
+    # When True, force ``num_workers = 1`` regardless of the value above.
+    # CP-SAT only guarantees deterministic output (same input + same seed
+    # → byte-identical schedule) under a single search worker.
+    deterministic: bool = False
 
 
 @dataclass
@@ -132,6 +136,10 @@ class ScheduleResult:
     unscheduled_matches: List[str] = field(default_factory=list)
     moved_count: int = 0
     locked_count: int = 0
+    # The random seed the solver actually used. Lets the operator (or a
+    # test) reproduce a schedule byte-for-byte by re-running with the
+    # same seed + deterministic mode.
+    solver_seed: Optional[int] = None
 
 
 @dataclass

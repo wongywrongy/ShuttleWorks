@@ -48,6 +48,25 @@ DEFAULT_SOLVER_OPTIONS = SolverOptions(
 )
 
 
+def _solver_options_for(config: TournamentConfig) -> SolverOptions:
+    """Pick solver options honoring the config's reproducible-run flags.
+
+    When ``config.deterministic`` is on, force single-worker mode and
+    use ``config.randomSeed`` (default 42). Otherwise return the
+    multi-worker default. Same input + same seed + deterministic mode
+    produces a byte-identical schedule across runs.
+    """
+    if config.deterministic:
+        return SolverOptions(
+            time_limit_seconds=DEFAULT_SOLVER_OPTIONS.time_limit_seconds,
+            num_workers=1,
+            random_seed=config.randomSeed if config.randomSeed is not None else 42,
+            log_progress=False,
+            deterministic=True,
+        )
+    return DEFAULT_SOLVER_OPTIONS
+
+
 def _prepare_solver_input(request: "GenerateScheduleRequest"):
     """Convert a request DTO into the solver's domain objects.
 
@@ -99,12 +118,13 @@ async def generate_schedule(request: GenerateScheduleRequest):
     """
     try:
         schedule_config, players, matches, previous_assignments = _prepare_solver_input(request)
+        solver_options = _solver_options_for(request.config)
         solver_request = ScheduleRequest(
             config=schedule_config,
             players=players,
             matches=matches,
             previous_assignments=previous_assignments,
-            solver_options=DEFAULT_SOLVER_OPTIONS,
+            solver_options=solver_options,
         )
         result = CPSATBackend(solver_options=solver_request.solver_options).solve(solver_request)
         return _convert_result_to_dto(result)
@@ -193,7 +213,7 @@ async def generate_schedule_stream(request: GenerateScheduleRequest, http_reques
 
                 scheduler = CPSATScheduler(
                     config=schedule_config,
-                    solver_options=DEFAULT_SOLVER_OPTIONS,
+                    solver_options=_solver_options_for(request.config),
                 )
                 scheduler.add_players(players)
                 scheduler.add_matches(matches)
@@ -465,6 +485,7 @@ def _convert_result_to_dto(result) -> ScheduleDTO:
         objectiveScore=result.objective_score,
         infeasibleReasons=result.infeasible_reasons,
         status=status,
+        solverSeed=result.solver_seed,
     )
 
 

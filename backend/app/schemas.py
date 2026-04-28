@@ -83,6 +83,11 @@ class TournamentConfig(BaseModel):
     # Roster position-grid event-column order + visibility (UI-only).
     eventOrder: Optional[List[str]] = None
     eventVisible: Optional[Dict[str, bool]] = None
+    # Reproducible-run mode: single-worker solve with fixed seed so
+    # the same input always produces the same schedule. ~3× slower
+    # than parallel mode; opt-in.
+    deterministic: Optional[bool] = None
+    randomSeed: Optional[int] = None
 
 
 # Availability
@@ -183,6 +188,9 @@ class ScheduleDTO(BaseModel):
     objectiveScore: Optional[float] = None
     infeasibleReasons: List[str] = Field(default_factory=list)
     status: SolverStatus
+    # The seed the solver actually used. Pair with ``deterministic`` to
+    # reproduce a schedule byte-for-byte from the same input.
+    solverSeed: Optional[int] = None
 
 
 # Match State (for Match Desk)

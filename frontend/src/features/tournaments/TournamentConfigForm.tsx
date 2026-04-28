@@ -31,6 +31,8 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
     targetFinishSlot: config.targetFinishSlot ?? null,
     allowPlayerOverlap: config.allowPlayerOverlap ?? false,
     playerOverlapPenalty: config.playerOverlapPenalty ?? 50.0,
+    deterministic: config.deterministic ?? false,
+    randomSeed: config.randomSeed ?? 42,
     // Badminton is the app's domain; default to per-set scoring so the
     // Live-page Finish dialog asks for game scores instead of a single
     // sideA/sideB aggregate.
@@ -572,6 +574,36 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
           {showAdvanced && (
             <CardContent className="px-4 pb-4 pt-0 border-t">
               <div className="space-y-3 pt-3">
+                {/* Reproducible run */}
+                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
+                  <input
+                    type="checkbox"
+                    id="deterministic"
+                    checked={formData.deterministic ?? false}
+                    onChange={(e) => setFormData({ ...formData, deterministic: e.target.checked })}
+                    className="mt-0.5 h-4 w-4 rounded border-input"
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="deterministic" className="cursor-pointer">
+                      Reproducible run
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Single-worker mode with a fixed seed — same input always produces the same schedule. ~3× slower.
+                    </p>
+                    {formData.deterministic && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Label className="text-xs">Seed</Label>
+                        <Input
+                          type="number"
+                          value={formData.randomSeed ?? 42}
+                          onChange={(e) => setFormData({ ...formData, randomSeed: parseInt(e.target.value || '42', 10) })}
+                          className="h-8 w-24"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Court Utilization */}
                 <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
                   <input

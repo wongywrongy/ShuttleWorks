@@ -88,6 +88,14 @@ export interface TournamentConfig {
   // sequence. Hidden columns are stored as ``false`` per rank.
   eventOrder?: string[];
   eventVisible?: Record<string, boolean>;
+  // ---- Reproducible-run mode -------------------------------------
+  // When ``true`` the solver runs single-threaded with a fixed seed
+  // so the same input produces a byte-identical schedule across
+  // runs. Useful for dispute resolution and regression testing;
+  // costs ~3× wall time. Default off.
+  deterministic?: boolean;
+  // The seed used in deterministic mode. Defaults to 42 when unset.
+  randomSeed?: number;
 }
 
 export interface BreakWindow {
@@ -138,6 +146,9 @@ export interface ScheduleDTO {
   objectiveScore: number | null;
   infeasibleReasons: string[];
   status: 'optimal' | 'feasible' | 'infeasible' | 'unknown';
+  /** Random seed the solver used. Pair with the Reproducible-run
+   *  toggle to regenerate a byte-identical schedule. */
+  solverSeed?: number;
 }
 
 export interface ScheduleAssignment {
