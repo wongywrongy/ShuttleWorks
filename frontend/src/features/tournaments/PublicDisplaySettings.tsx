@@ -66,29 +66,41 @@ export function PublicDisplaySettings() {
   return (
     <section
       aria-labelledby="tv-display-heading"
-      className="rounded-md border border-border bg-card"
+      className="rounded-lg border border-border bg-card"
     >
-      <header className="flex items-baseline justify-between border-b border-border/60 px-4 py-2.5">
+      <header className="flex items-baseline justify-between border-b border-border/60 px-5 py-3">
         <h3 id="tv-display-heading" className="text-sm font-semibold text-card-foreground">
           Public display
         </h3>
         <span className="text-2xs text-muted-foreground">
-          per-tournament · live preview below
+          Per-tournament · live preview below
         </span>
       </header>
 
-      <div className="grid grid-cols-1 divide-y divide-border/60 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-        {/* ── Layout ─────────────────────────────────────────────── */}
-        <Group title="Layout">
-          <Row label="Mode">
+      {/* Stacked groups. Cramming Layout/Brand/Content into 3 columns
+          forced the accent picker (10+ controls in one row) to overflow
+          into the toggle next door. Vertical stacks read more clearly
+          on every viewport and leave room for explanatory hints. */}
+      <div className="divide-y divide-border/60">
+        <Group
+          title="Layout"
+          description="How matches are arranged on the venue TV."
+        >
+          <Field
+            label="Display mode"
+            hint="Strip is a single horizontal banner. Grid is a card grid sized to courts. List is a tall vertical roster."
+          >
             <ChipRow
               ariaLabel="Display mode"
               value={mode}
               options={MODES}
               onChange={(id) => update({ tvDisplayMode: id })}
             />
-          </Row>
-          <Row label="Grid cols">
+          </Field>
+          <Field
+            label="Grid columns"
+            hint="Force a fixed column count when in Grid mode. Auto picks the best fit for the screen width."
+          >
             <ChipRow
               ariaLabel="Grid columns"
               value={gridCols ?? 'auto'}
@@ -103,67 +115,83 @@ export function PublicDisplaySettings() {
                 update({ tvGridColumns: id === 'auto' ? null : (id as 1 | 2 | 3 | 4) })
               }
             />
-          </Row>
-          <Row label="Card size">
+          </Field>
+          <Field
+            label="Card size"
+            hint="Compact fits more matches on screen. Large is readable from across the venue."
+          >
             <ChipRow
               ariaLabel="Card size"
               value={cardSize}
               options={CARD_SIZES}
               onChange={(id) => update({ tvCardSize: id })}
             />
-          </Row>
+          </Field>
         </Group>
 
-        {/* ── Brand ──────────────────────────────────────────────── */}
-        <Group title="Brand">
-          <Row label="Accent">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {ACCENT_PRESETS.map((p) => {
-                const isActive = accent === p.hex.toLowerCase();
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={isActive}
-                    aria-label={p.label}
-                    title={`${p.label} · ${p.hex}`}
-                    onClick={() => update({ tvAccent: p.hex })}
-                    className={[
-                      INTERACTIVE_BASE,
-                      'h-5 w-5 rounded-full border-2',
-                      isActive
-                        ? 'border-foreground ring-2 ring-ring ring-offset-2 ring-offset-card'
-                        : 'border-transparent hover:border-border',
-                    ].join(' ')}
-                    style={{ backgroundColor: p.hex }}
-                  />
-                );
-              })}
-              <span className="ml-1 text-2xs text-muted-foreground">|</span>
-              <input
-                type="color"
-                value={accent}
-                onChange={(e) => update({ tvAccent: e.target.value })}
-                aria-label="Custom accent color"
-                title={`Custom · ${accent}`}
-                className="h-6 w-6 cursor-pointer rounded border border-border bg-card p-0.5"
-              />
-              <input
-                type="text"
-                value={accent}
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  if (/^#?[0-9a-fA-F]{6}$/.test(v.replace(/^#/, ''))) {
-                    update({ tvAccent: v.startsWith('#') ? v : `#${v}` });
-                  }
-                }}
-                placeholder="#10b981"
-                className="h-6 w-20 rounded border border-border bg-background px-1.5 font-mono text-2xs uppercase"
-              />
+        <Group
+          title="Brand"
+          description="Colour and theme of the public display."
+        >
+          <Field
+            label="Accent colour"
+            hint="Used for the LIVE badge, court rails, and primary score highlights."
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <div role="radiogroup" aria-label="Accent presets" className="flex flex-wrap items-center gap-1.5">
+                {ACCENT_PRESETS.map((p) => {
+                  const isActive = accent === p.hex.toLowerCase();
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={isActive}
+                      aria-label={p.label}
+                      title={`${p.label} · ${p.hex}`}
+                      onClick={() => update({ tvAccent: p.hex })}
+                      className={[
+                        INTERACTIVE_BASE,
+                        'h-5 w-5 rounded-full border-2',
+                        isActive
+                          ? 'border-foreground ring-2 ring-ring ring-offset-2 ring-offset-card'
+                          : 'border-transparent hover:border-border',
+                      ].join(' ')}
+                      style={{ backgroundColor: p.hex }}
+                    />
+                  );
+                })}
+              </div>
+              <span aria-hidden className="h-4 w-px bg-border" />
+              <div className="inline-flex items-center gap-1">
+                <input
+                  type="color"
+                  value={accent}
+                  onChange={(e) => update({ tvAccent: e.target.value })}
+                  aria-label="Custom accent colour"
+                  title={`Custom · ${accent}`}
+                  className="h-6 w-6 cursor-pointer rounded border border-border bg-card p-0.5"
+                />
+                <input
+                  type="text"
+                  value={accent}
+                  onChange={(e) => {
+                    const v = e.target.value.trim();
+                    if (/^#?[0-9a-fA-F]{6}$/.test(v.replace(/^#/, ''))) {
+                      update({ tvAccent: v.startsWith('#') ? v : `#${v}` });
+                    }
+                  }}
+                  placeholder="#10b981"
+                  aria-label="Custom accent hex"
+                  className="h-6 w-24 rounded border border-border bg-background px-2 font-mono text-2xs uppercase tracking-wider"
+                />
+              </div>
             </div>
-          </Row>
-          <Row label="Theme">
+          </Field>
+          <Field
+            label="Theme"
+            hint="Auto follows the operator's app theme. Dark or Light forces a fixed mode."
+          >
             <div role="radiogroup" aria-label="TV theme" className="flex flex-wrap items-center gap-1.5">
               {[
                 { id: 'auto' as const, label: 'Auto' },
@@ -180,7 +208,7 @@ export function PublicDisplaySettings() {
                     onClick={() => update({ tvTheme: t.id })}
                     className={[
                       INTERACTIVE_BASE,
-                      'rounded border px-2 py-0.5 text-2xs font-medium',
+                      'rounded border px-2.5 py-1 text-xs font-medium',
                       isActive
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
@@ -191,8 +219,16 @@ export function PublicDisplaySettings() {
                 );
               })}
             </div>
-          </Row>
-          <Row label="Background" hint="Only used when theme is dark.">
+          </Field>
+          <Field
+            label="Background tone"
+            hint={
+              (config.tvTheme ?? 'dark') === 'light'
+                ? 'Inactive — only used when the TV theme is Dark.'
+                : 'Pick the dark surface tone that flatters your accent colour.'
+            }
+            disabled={(config.tvTheme ?? 'dark') === 'light'}
+          >
             <div role="radiogroup" aria-label="Background tone" className="flex flex-wrap items-center gap-1.5">
               {BG_TONES.map((t) => {
                 const isActive = bgTone === t.id;
@@ -206,14 +242,14 @@ export function PublicDisplaySettings() {
                     title={t.label}
                     className={[
                       INTERACTIVE_BASE,
-                      'inline-flex items-center gap-1.5 rounded border px-1.5 py-0.5 text-2xs font-medium',
+                      'inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs font-medium',
                       isActive
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                     ].join(' ')}
                   >
                     <span
-                      className="h-2.5 w-2.5 rounded-full border border-border"
+                      className="h-2.5 w-2.5 rounded-full border border-border/60"
                       style={{ backgroundColor: t.swatch }}
                       aria-hidden
                     />
@@ -222,18 +258,23 @@ export function PublicDisplaySettings() {
                 );
               })}
             </div>
-          </Row>
+          </Field>
         </Group>
 
-        {/* ── Content ────────────────────────────────────────────── */}
-        <Group title="Content">
-          <Row label="Show scores">
+        <Group
+          title="Content"
+          description="What data appears on each match card."
+        >
+          <Field
+            label="Show scores"
+            hint="Display set scores alongside player names. Turn off for spectator privacy or before official results are posted."
+          >
             <Switch
               checked={showScores}
               onChange={(next) => update({ tvShowScores: next })}
               label={showScores ? 'On' : 'Off'}
             />
-          </Row>
+          </Field>
         </Group>
       </div>
     </section>
@@ -242,33 +283,60 @@ export function PublicDisplaySettings() {
 
 // ── Layout primitives ─────────────────────────────────────────────
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+function Group({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="px-4 py-3">
-      <div className="mb-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {title}
+    <div className="px-5 py-4">
+      <div className="mb-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {title}
+        </h4>
+        {description && (
+          <p className="mt-0.5 text-xs text-muted-foreground/80">{description}</p>
+        )}
       </div>
-      <div className="space-y-2.5">{children}</div>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }
 
-function Row({
+// Field: label + hint stacked on the left, control aligned right with
+// proper min-w-0 so a wide control wraps under the label on narrow
+// viewports instead of overflowing into a neighbouring column.
+function Field({
   label,
   hint,
+  disabled,
   children,
 }: {
   label: string;
   hint?: string;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <div className="flex-shrink-0">{children}</div>
+    <div
+      className={[
+        'flex flex-wrap items-start justify-between gap-x-6 gap-y-2',
+        disabled ? 'opacity-50' : '',
+      ].join(' ')}
+    >
+      <div className="min-w-0 max-w-md">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        {hint && (
+          <p className="mt-0.5 text-xs text-muted-foreground/80">{hint}</p>
+        )}
       </div>
-      {hint && <p className="mt-0.5 text-2xs text-muted-foreground/70">{hint}</p>}
+      <div className="flex flex-shrink-0 flex-wrap items-center justify-end">
+        {children}
+      </div>
     </div>
   );
 }
