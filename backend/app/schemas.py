@@ -63,6 +63,17 @@ class TournamentConfig(BaseModel):
     setsToWin: Optional[int] = Field(None, ge=1, le=3)
     pointsPerSet: Optional[int] = Field(None, ge=11, le=30)
     deuceEnabled: Optional[bool] = None
+    # Public TV display mode (UI-only metadata; preserved across PUT).
+    tvDisplayMode: Optional[Literal["strip", "grid", "list"]] = None
+    # Public-display branding + layout knobs (all UI-only).
+    tvAccent: Optional[str] = None  # hex "#RRGGBB"
+    tvBgTone: Optional[Literal["navy", "black", "midnight", "slate"]] = None
+    tvGridColumns: Optional[int] = Field(None, ge=1, le=4)
+    tvCardSize: Optional[Literal["auto", "compact", "comfortable", "large"]] = None
+    tvShowScores: Optional[bool] = None
+    # Roster position-grid event-column order + visibility (UI-only).
+    eventOrder: Optional[List[str]] = None
+    eventVisible: Optional[Dict[str, bool]] = None
 
 
 # Availability

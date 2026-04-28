@@ -24,6 +24,7 @@ import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { formatSlotTime, parseMatchStartMs } from '../utils/timeUtils';
 import { INTERACTIVE_BASE } from '../lib/utils';
+import type { ScheduleAssignment } from '../api/dto';
 
 type ViewMode = 'courts' | 'schedule' | 'standings';
 type LiveStatus = 'live' | 'reconnecting' | 'offline';
@@ -39,12 +40,29 @@ const RECONNECTING_AFTER_MS = 25_000;
 // After this long with no success we admit we're offline.
 const OFFLINE_AFTER_MS = 60_000;
 
+/**
+ * Render a started timestamp as a human elapsed clock for the public
+ * display. Matches the behaviour of ``components/common/ElapsedTimer.tsx``:
+ *
+ *   < 1 h    →  ``M:SS``
+ *   < 24 h   →  ``H:MM:SS``
+ *   ≥ 24 h   →  ``Xd Hh``  (stale data — operator should resolve)
+ */
 function formatElapsed(startIso: string | undefined | null): string | null {
   const started = parseMatchStartMs(startIso);
   if (started === null) return null;
   const secs = Math.max(0, Math.floor((Date.now() - started) / 1000));
-  const m = Math.floor(secs / 60);
+  const days = Math.floor(secs / 86400);
+  if (days >= 1) {
+    const hours = Math.floor((secs % 86400) / 3600);
+    return `${days}d ${hours}h`;
+  }
+  const hours = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
   const s = secs % 60;
+  if (hours >= 1) {
+    return `${hours}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
@@ -222,8 +240,29 @@ export function PublicDisplayPage() {
       match: (typeof matches)[number] | null;
       state: (typeof matchStates)[string] | null;
       status: 'active' | 'called' | 'empty';
+      // When ``status === 'empty'``, the next scheduled assignment for
+      // this court (if any). Used by the public TV to render a
+      // "Next: <event> at <time>" preview instead of an inert
+      // "Available" placeholder.
+      nextMatch?: (typeof matches)[number] | null;
+      nextStartTime?: string;
     };
     const courts: Row[] = [];
+
+    // Build a per-court list of *future* scheduled assignments, sorted
+    // by slot ascending. ``schedule.assignments`` is the source of
+    // truth for upcoming play; ``matchStates`` is consulted to skip
+    // anything already finished or in progress.
+    const futureByCourt = new Map<number, ScheduleAssignment[]>();
+    for (let c = 1; c <= config.courtCount; c++) futureByCourt.set(c, []);
+    for (const a of schedule.assignments) {
+      const s = matchStates[a.matchId]?.status;
+      if (s === 'finished' || s === 'started' || s === 'called') continue;
+      const list = futureByCourt.get(a.courtId);
+      if (list) list.push(a);
+    }
+    futureByCourt.forEach((list) => list.sort((x, y) => x.slotId - y.slotId));
+
     for (let courtId = 1; courtId <= config.courtCount; courtId++) {
       const activeId = matchesByCourt.active.get(courtId);
       if (activeId) {
@@ -245,7 +284,15 @@ export function PublicDisplayPage() {
         });
         continue;
       }
-      courts.push({ courtId, match: null, state: null, status: 'empty' });
+      const next = futureByCourt.get(courtId)?.[0] ?? null;
+      courts.push({
+        courtId,
+        match: null,
+        state: null,
+        status: 'empty',
+        nextMatch: next ? matchMap.get(next.matchId) || null : null,
+        nextStartTime: next ? formatSlotTime(next.slotId, config) : undefined,
+      });
     }
     return courts;
   }, [schedule, config, matchesByCourt, matchMap, matchStates]);
@@ -337,13 +384,75 @@ export function PublicDisplayPage() {
         : 'bg-slate-800 text-slate-300 hover:bg-slate-700',
     ].join(' ');
 
+  // The director picks how courts render: tall strips, multi-column
+  // grid, or one-line list. Stored on the tournament config so the
+  // venue's setup stays consistent across reloads. The picker UI lives
+  // in the Public-display settings card (admin TV tab) — never on the
+  // standalone /display window.
+  const tvDisplayMode: 'strip' | 'grid' | 'list' = config.tvDisplayMode ?? 'strip';
+
+  // ---- TV theme + sizing knobs (per-tournament) -----------------------
+  // Accent — hex string driving the LIVE border, LIVE pill, and the
+  // bottom progress bar. Defaults to emerald (#10b981).
+  const tvAccent = (config.tvAccent && /^#?[0-9a-fA-F]{6}$/.test(config.tvAccent.replace(/^#/, '')))
+    ? (config.tvAccent.startsWith('#') ? config.tvAccent : `#${config.tvAccent}`)
+    : '#10b981';
+  // Background tone — picks a deep base. ``navy`` matches the rest
+  // of the app; ``black`` is OLED pure; ``midnight`` is deep blue;
+  // ``slate`` is neutral cool gray.
+  const tvBgTone = config.tvBgTone ?? 'navy';
+  const TV_BG: Record<string, string> = {
+    navy: 'bg-slate-950',
+    black: 'bg-black',
+    midnight: 'bg-[#0a0e2a]',
+    slate: 'bg-slate-900',
+  };
+  const TV_HEADER_BG: Record<string, string> = {
+    navy: 'bg-slate-950/90',
+    black: 'bg-black/90',
+    midnight: 'bg-[#0a0e2a]/90',
+    slate: 'bg-slate-900/90',
+  };
+  // Grid columns: explicit override (1-4), else auto.
+  const tvGridColumns = config.tvGridColumns ?? null;
+  // Card size — controls vertical density of strip + grid cards.
+  const tvCardSize = config.tvCardSize ?? 'auto';
+  const tvShowScores = config.tvShowScores !== false;
+  // Public-display design rule: every court card is the same size,
+  // regardless of state or content. Resolve a concrete pixel height
+  // per ``tvCardSize`` mode so the audience can locate "Court 4" by
+  // counting rows; long names truncate, per-set breakdowns become
+  // tooltips. ``auto`` adapts to fullscreen vs admin preview.
+  const cardHeightPx =
+    tvCardSize === 'compact' ? 72 :
+    tvCardSize === 'comfortable' ? 128 :
+    tvCardSize === 'large' ? 176 :
+    isFullscreen ? 128 : 96;
+  // Type scale tracks the card height so big cards get big text.
+  const courtNumSize =
+    cardHeightPx >= 160 ? 'text-7xl' :
+    cardHeightPx >= 120 ? 'text-6xl' :
+    cardHeightPx >= 96 ? 'text-5xl' :
+    'text-3xl';
+  const eventCodeSize =
+    cardHeightPx >= 160 ? 'text-4xl' :
+    cardHeightPx >= 120 ? 'text-3xl' :
+    cardHeightPx >= 96 ? 'text-2xl' :
+    'text-base';
+  const playerSize =
+    cardHeightPx >= 160 ? 'text-4xl' :
+    cardHeightPx >= 120 ? 'text-3xl' :
+    cardHeightPx >= 96 ? 'text-2xl' :
+    'text-base';
+  const cardPadX = cardHeightPx >= 120 ? 'px-6' : 'px-4';
+
   return (
     <div
       ref={rootRef}
-      className="min-h-screen bg-slate-950 text-white selection:bg-blue-500/30"
+      className={`min-h-screen ${TV_BG[tvBgTone]} text-white selection:bg-blue-500/30`}
     >
       {/* ---------- Header ------------------------------------------------ */}
-      <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/90 px-6 py-4 backdrop-blur">
+      <div className={`sticky top-0 z-10 border-b border-slate-800 ${TV_HEADER_BG[tvBgTone]} px-6 py-4 backdrop-blur`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-4 min-w-0">
             <div className="text-3xl font-bold tracking-tight">Tournament Status</div>
@@ -374,6 +483,9 @@ export function PublicDisplayPage() {
                 Standings
               </button>
             </div>
+            {/* Mode picker has moved into the Public-display settings
+             *  card on the TV admin tab so the chrome the audience
+             *  sees is just nav + clock + fullscreen. */}
             <div className="tabular-nums text-2xl text-slate-300">{currentTime}</div>
             <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
           </div>
@@ -390,27 +502,114 @@ export function PublicDisplayPage() {
          * screens halves the vertical footprint so a 6+ court
          * tournament still fits above the fold on a 1080p TV.
          */}
-        {view === 'courts' && (
-          // Single-column layout in every mode. Each court is its own
-          // rail; the reason we tried two columns earlier was purely
-          // vertical density, but the cost is truncated doubles names.
-          // Fullscreen mode bumps type sizes and lets long names wrap
-          // onto two lines instead of clipping with ellipsis.
+        {view === 'courts' && tvDisplayMode === 'list' && (
+          // Compact list — one short row per court. Best for venues
+          // with 16+ courts on a 1080p TV. Trades the giant court-
+          // number anchor for one-line scannability. Full-span: no
+          // max-width cap so the audience uses every pixel; rows are
+          // constant-height for predictability.
+          <div className="flex w-full flex-col divide-y divide-slate-800 rounded border border-slate-800 bg-slate-900/40">
+            {courtMatches.map(({ courtId, match, state, status, nextMatch, nextStartTime }) => {
+              const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
+              const aggregate = state?.score ? `${state.score.sideA}–${state.score.sideB}` : null;
+              const sideA = match ? formatPlayers(match.sideA) : '';
+              const sideB = match ? formatPlayers(match.sideB) : '';
+              // Active uses the configured accent (inline style on
+              // the left border); called keeps amber; idle stays
+              // slate. Inline style is the cleanest path for an
+              // arbitrary hex without polluting Tailwind safelists.
+              const borderColor =
+                status === 'active'
+                  ? tvAccent
+                  : status === 'called'
+                    ? '#fbbf24' /* amber-400 */
+                    : 'rgba(71,85,105,0.7)' /* slate-700ish */;
+              return (
+                <div
+                  key={courtId}
+                  className={`grid items-center gap-3 border-l-4 px-4 text-base text-slate-100 grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem]`}
+                  style={{ borderLeftColor: borderColor, height: 56 }}
+                >
+                  <span className="tabular-nums text-2xl font-bold">{courtId}</span>
+                  <span className="tabular-nums text-base font-semibold text-slate-300">
+                    {match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
+                  </span>
+                  <span className="truncate">
+                    {match ? (
+                      <>
+                        <span className="font-medium">{sideA}</span>
+                        <span className="px-2 text-slate-500">vs</span>
+                        <span className="font-medium">{sideB}</span>
+                      </>
+                    ) : nextMatch ? (
+                      <span className="text-slate-400">
+                        Next {nextStartTime ? `· ${nextStartTime}` : ''} · {formatPlayers(nextMatch.sideA)} vs {formatPlayers(nextMatch.sideB)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">Available</span>
+                    )}
+                  </span>
+                  <span className="tabular-nums text-right font-semibold">
+                    {tvShowScores ? (aggregate ?? '') : ''}
+                  </span>
+                  <span className="tabular-nums text-right text-slate-300">
+                    {elapsed ?? ''}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {view === 'courts' && tvDisplayMode !== 'list' && (
+          // Strip = single-column, Grid = N-column responsive grid.
+          // Both reuse the same court-card render below; only the
+          // wrapping container differs. Public-display rules:
+          //   • full span (no max-width cap) — venues use big TVs
+          //   • constant cell height via ``grid-auto-rows`` (grid)
+          //     or ``style.height`` on each card (strip)
+          //   • Grid uses the operator's ``tvGridColumns`` override
+          //     when set; otherwise auto-fits.
           <div
-            className={
-              isFullscreen
-                ? 'mx-auto flex max-w-[120rem] flex-col gap-3'
-                : 'mx-auto flex max-w-6xl flex-col gap-2'
+            className={[
+              'w-full',
+              tvDisplayMode === 'grid'
+                ? `grid gap-3 ${
+                    tvGridColumns === 1
+                      ? 'grid-cols-1'
+                      : tvGridColumns === 2
+                        ? 'grid-cols-1 md:grid-cols-2'
+                        : tvGridColumns === 3
+                          ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+                          : tvGridColumns === 4
+                            ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                            : 'grid-cols-1 md:grid-cols-2'
+                  }`
+                : 'flex flex-col gap-2',
+            ].join(' ')}
+            style={
+              tvDisplayMode === 'grid'
+                ? { gridAutoRows: `${cardHeightPx}px` }
+                : undefined
             }
           >
-            {courtMatches.map(({ courtId, match, state, status }) => {
+            {courtMatches.map(({ courtId, match, state, status, nextMatch, nextStartTime }) => {
               const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
-              const accentClass =
+              // Active card: subtle gradient + accent-colored left
+              // border via inline style (the accent is a runtime hex
+              // not in the Tailwind safelist). Called keeps amber.
+              const cardBgClass =
                 status === 'active'
-                  ? 'border-l-emerald-500 bg-gradient-to-r from-emerald-950/60 to-slate-900/60'
+                  ? 'bg-gradient-to-r from-slate-900/40 to-slate-900/60'
                   : status === 'called'
-                    ? 'border-l-amber-400 bg-gradient-to-r from-amber-950/60 to-slate-900/60'
-                    : 'border-l-slate-700 bg-slate-900/40';
+                    ? 'bg-gradient-to-r from-amber-950/60 to-slate-900/60'
+                    : 'bg-slate-900/40';
+              const cardBorderColor =
+                status === 'active'
+                  ? tvAccent
+                  : status === 'called'
+                    ? '#fbbf24'
+                    : 'rgba(71,85,105,0.7)';
               const aggregate = state?.score
                 ? `${state.score.sideA}–${state.score.sideB}`
                 : null;
@@ -420,10 +619,11 @@ export function PublicDisplayPage() {
               return (
                 <div
                   key={courtId}
-                  className={`rounded-xl border-l-4 border-y border-r border-y-slate-800 border-r-slate-800 shadow-lg ${accentClass}`}
+                  className={`overflow-hidden rounded-xl border-l-4 border-y border-r border-y-slate-800 border-r-slate-800 shadow-lg ${cardBgClass}`}
+                  style={{ borderLeftColor: cardBorderColor, height: cardHeightPx }}
                 >
                   <div
-                    className={`grid items-center gap-3 px-4 ${isFullscreen ? 'py-5' : 'py-3'} grid-cols-[auto_auto_1fr_auto_auto]`}
+                    className={`grid h-full items-center gap-3 ${cardPadX} grid-cols-[auto_auto_1fr_auto_auto]`}
                   >
                     {/* Court number — anchor of the strip */}
                     <div className="flex items-baseline gap-2">
@@ -431,7 +631,7 @@ export function PublicDisplayPage() {
                         Court
                       </span>
                       <span
-                        className={`${isFullscreen ? 'text-6xl' : 'text-4xl'} font-black tabular-nums leading-none`}
+                        className={`${courtNumSize} font-black tabular-nums leading-none`}
                       >
                         {courtId}
                       </span>
@@ -439,7 +639,7 @@ export function PublicDisplayPage() {
 
                     {/* Event code */}
                     <div
-                      className={`min-w-[3.5rem] ${isFullscreen ? 'text-3xl' : 'text-xl'} font-bold text-slate-200 tabular-nums`}
+                      className={`min-w-[3.5rem] ${eventCodeSize} font-bold text-slate-200 tabular-nums`}
                     >
                       {match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
                     </div>
@@ -451,30 +651,57 @@ export function PublicDisplayPage() {
                         scoreboard from across a gym must be able to
                         read every name in full. */}
                     <div
-                      className={`min-w-0 ${isFullscreen ? 'text-3xl' : 'text-xl'} leading-tight text-slate-100`}
+                      className={`min-w-0 ${playerSize} leading-tight text-slate-100`}
                     >
                       {match ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-medium">{sideA}</span>
+                        // Constant-height card means we can't let
+                        // doubles names wrap unbounded. Truncate per
+                        // line with title attr for the full text.
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="block truncate font-medium" title={sideA}>{sideA}</span>
                           <span
                             className={`${isFullscreen ? 'text-sm' : 'text-xs'} uppercase tracking-widest text-slate-500`}
                           >
                             vs
                           </span>
-                          <span className="font-medium">{sideB}</span>
+                          <span className="block truncate font-medium" title={sideB}>{sideB}</span>
+                        </div>
+                      ) : nextMatch ? (
+                        // Empty court but next match is on the books —
+                        // show a "Next up" preview so the audience can
+                        // plan. Less visually loud than an active row
+                        // (muted colors + a leading "Next" label) so the
+                        // operator's eye still locks onto live matches
+                        // first.
+                        <div className="flex flex-col gap-0.5 text-slate-300">
+                          <span
+                            className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.18em] text-slate-500`}
+                          >
+                            Next up{nextStartTime ? ` · ${nextStartTime}` : ''}
+                          </span>
+                          <span className={`${isFullscreen ? 'text-2xl' : 'text-base'} font-medium`}>
+                            {formatPlayers(nextMatch.sideA)} <span className="text-slate-500">vs</span> {formatPlayers(nextMatch.sideB)}
+                          </span>
                         </div>
                       ) : (
                         <span className="text-slate-500">Available</span>
                       )}
                     </div>
 
-                    {/* Status pill */}
+                    {/* Status pill — accent-colored when active */}
                     <div>
                       {status === 'active' && (
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-emerald-300`}
+                          className={`inline-flex items-center gap-1.5 rounded-full ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider`}
+                          style={{
+                            backgroundColor: `${tvAccent}33` /* ~20% alpha */,
+                            color: tvAccent,
+                          }}
                         >
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span
+                            className="h-1.5 w-1.5 rounded-full animate-pulse"
+                            style={{ backgroundColor: tvAccent }}
+                          />
                           Live
                         </span>
                       )}
@@ -490,7 +717,7 @@ export function PublicDisplayPage() {
 
                     {/* Score + elapsed (tabular so vertical alignment stays steady) */}
                     <div className={`flex items-baseline gap-3 tabular-nums ${isFullscreen ? 'text-2xl' : 'text-lg'}`}>
-                      {aggregate && (
+                      {tvShowScores && aggregate && (
                         <span className="font-semibold text-slate-100">{aggregate}</span>
                       )}
                       {elapsed && (
@@ -504,7 +731,7 @@ export function PublicDisplayPage() {
                   {/* Per-set breakdown lives inside the strip so the
                       card doesn't change geometry between sets and a
                       long badminton match doesn't push neighbours. */}
-                  {status === 'active' && state?.sets && state.sets.length > 0 && (
+                  {tvShowScores && status === 'active' && state?.sets && state.sets.length > 0 && (
                     <div
                       className={`border-t border-slate-800/60 px-4 ${isFullscreen ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} flex flex-wrap gap-1.5 font-mono`}
                     >
@@ -604,14 +831,20 @@ export function PublicDisplayPage() {
       </div>
 
       {/* ---------- Progress footer ------------------------------------- */}
-      <div className="fixed inset-x-0 bottom-0 border-t border-slate-800 bg-slate-950/95 px-6 py-3 backdrop-blur">
+      <div className={`fixed inset-x-0 bottom-0 border-t border-slate-800 ${TV_HEADER_BG[tvBgTone]} px-6 py-3 backdrop-blur`}>
         <div className="flex items-center justify-between text-base">
           <div className="text-slate-400">
             {finishedCount} / {totalCount} matches complete · {progressPct}%
           </div>
           <div className="flex items-center gap-5">
-            <span className="inline-flex items-center gap-2 text-emerald-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span
+              className="inline-flex items-center gap-2"
+              style={{ color: tvAccent }}
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: tvAccent }}
+              />
               {matchesByStatus.started.length} active
             </span>
             <span className="inline-flex items-center gap-2 text-amber-300">
@@ -622,8 +855,8 @@ export function PublicDisplayPage() {
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
           <div
-            className="h-full rounded-full bg-blue-500 transition-all duration-500"
-            style={{ width: `${progressPct}%` }}
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${progressPct}%`, backgroundColor: tvAccent }}
           />
         </div>
       </div>

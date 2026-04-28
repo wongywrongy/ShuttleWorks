@@ -107,17 +107,22 @@ export function AppStatusPopover() {
     }
   };
 
+  // Status chip — wired to the semantic ``status-*`` tokens. The chip is
+  // the most-monitored badge in the shell; it reads at a glance from
+  // across an operator's desk. Made visibly larger than the previous
+  // text-xs / py-0.5 version so the colour + label register without
+  // squinting.
   const chipLabel = isGenerating ? 'Solving' : health?.status === 'degraded' ? 'Degraded' : 'Idle';
   const chipTone = isGenerating
-    ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+    ? 'bg-status-warning-bg text-status-warning border border-status-warning/40'
     : health?.status === 'degraded'
-      ? 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300'
-      : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300';
+      ? 'bg-status-blocked-bg text-status-blocked border border-status-blocked/40'
+      : 'bg-status-live-bg text-status-live border border-status-live/40';
   const chipDot = isGenerating
-    ? 'bg-amber-500 animate-pulse'
+    ? 'bg-status-warning animate-pulse'
     : health?.status === 'degraded'
-      ? 'bg-red-500'
-      : 'bg-emerald-500';
+      ? 'bg-status-blocked'
+      : 'bg-status-live';
 
   return (
     <div ref={rootRef} className="relative">
@@ -127,9 +132,9 @@ export function AppStatusPopover() {
         data-testid="app-status-chip"
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs ${chipTone} hover:brightness-95`}
+        className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${chipTone} hover:brightness-95`}
       >
-        <span className={`h-1.5 w-1.5 rounded-full ${chipDot}`} />
+        <span className={`h-2 w-2 rounded-full ${chipDot}`} aria-hidden="true" />
         {chipLabel}
       </button>
 

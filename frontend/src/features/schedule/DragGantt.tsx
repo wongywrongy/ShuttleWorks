@@ -36,7 +36,10 @@ import type {
   ValidationResponseDTO,
 } from '../../api/dto';
 
-const SLOT_WIDTH = 56;
+// Synced with features/control-center/GanttChart.tsx so the Schedule
+// and Live grids share the same cell geometry — the operator's eye
+// doesn't have to recalibrate between the two surfaces.
+const SLOT_WIDTH = 80;
 const ROW_HEIGHT = 40;
 const COURT_LABEL_WIDTH = 56;
 const VALIDATE_DEBOUNCE_MS = 80;

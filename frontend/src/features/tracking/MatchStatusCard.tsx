@@ -2,7 +2,7 @@
  * Match Status Card Component - Compact version
  * Displays match details with status and action buttons
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pin } from 'lucide-react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO, SetScore, TournamentConfig, DelayReason } from '../../api/dto';
 import { formatSlotTime } from '../../utils/timeUtils';
@@ -11,6 +11,9 @@ import { MatchScoreDialog } from './MatchScoreDialog';
 import { BadmintonScoreDialog } from './BadmintonScoreDialog';
 import { DelayReasonDialog } from './DelayReasonDialog';
 import { usePlayerNames } from '../../hooks/usePlayerNames';
+import { useAppStore } from '../../store/appStore';
+import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
+import { SchoolDot } from '../../components/SchoolDot';
 
 interface MatchStatusCardProps {
   assignment: ScheduleAssignment;
@@ -41,12 +44,23 @@ export function MatchStatusCard({
   const [showDelayDialog, setShowDelayDialog] = useState(false);
   const [updating, setUpdating] = useState(false);
   const { getPlayerNames } = usePlayerNames();
+  const players = useAppStore((s) => s.players);
+  const groups = useAppStore((s) => s.groups);
+  const groupIndex = useMemo(() => buildGroupIndex(groups), [groups]);
+  const playerById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
 
   if (!match) return null;
 
   const status = matchState?.status || 'scheduled';
   const sideANames = getPlayerNames(match.sideA || []).join(' & ');
   const sideBNames = getPlayerNames(match.sideB || []).join(' & ');
+  // School accent for each side — first player of the side wins.
+  const sideAAccent = match.sideA?.[0]
+    ? getPlayerSchoolAccent(playerById.get(match.sideA[0]) ?? null, groupIndex)
+    : { color: 'transparent', name: '', abbrev: '' };
+  const sideBAccent = match.sideB?.[0]
+    ? getPlayerSchoolAccent(playerById.get(match.sideB[0]) ?? null, groupIndex)
+    : { color: 'transparent', name: '', abbrev: '' };
   const isPinned = matchState?.pinned === true;
 
   // Check if match is delayed: explicitly marked OR time-based
@@ -333,9 +347,18 @@ export function MatchStatusCard({
           </div>
         </div>
 
-        {/* Row 2: Players */}
+        {/* Row 2: Players — each side gets a single school dot before
+             the names so the operator can scan school identity quickly. */}
         <div className="text-muted-foreground truncate mt-0.5">
-          {sideANames || '?'} vs {sideBNames || '?'}
+          <span className="inline-flex items-center gap-1.5 align-baseline">
+            {sideAAccent.name && <SchoolDot accent={sideAAccent} size="sm" />}
+            <span>{sideANames || '?'}</span>
+          </span>
+          <span className="px-1.5 text-muted-foreground/70">vs</span>
+          <span className="inline-flex items-center gap-1.5 align-baseline">
+            {sideBAccent.name && <SchoolDot accent={sideBAccent} size="sm" />}
+            <span>{sideBNames || '?'}</span>
+          </span>
         </div>
       </div>
 

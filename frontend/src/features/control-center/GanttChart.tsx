@@ -38,30 +38,40 @@ interface GanttChartProps {
 // 96 ÷ 2 = 48 px per half-block, which matches the pre-overlap
 // single-block width and is proven to fit a 4-char code comfortably
 // at text-[11px].
-const SLOT_WIDTH = 96;
-const ROW_HEIGHT = 32;
+// Sized to match the schedule-tab DragGantt so a director's eye doesn't
+// have to recalibrate when switching between Schedule and Live. Both
+// grids use 80×40 with a dotted grid background.
+const SLOT_WIDTH = 80;
+const ROW_HEIGHT = 40;
+const COURT_LABEL_WIDTH = 56;
 
-// Status-based colors - intuitive and distinct
+// Status-based colors. Drives the Gantt block styling per match state.
+// Wired to the semantic ``status-*`` tokens in src/index.css so light /
+// dark / contrast pass cleanly together. The palette: idle = slate,
+// called = amber (operator has called the court), live = emerald
+// (match is being played), done = slate-muted (finished). This is the
+// single source of truth — schedule blocks, the live ops grid, the
+// matches list, and the TV preview all read from these classes.
 const STATUS_STYLES = {
   scheduled: {
-    bg: 'bg-muted dark:bg-gray-500/15',
-    border: 'border-border dark:border-gray-500/40',
-    text: 'text-muted-foreground dark:text-gray-100',
+    bg: 'bg-status-idle-bg',
+    border: 'border-status-idle/40',
+    text: 'text-foreground',
   },
   called: {
-    bg: 'bg-blue-100 dark:bg-blue-500/15',
-    border: 'border-blue-400 dark:border-blue-500/40',
-    text: 'text-blue-700 dark:text-blue-200',
+    bg: 'bg-status-called-bg',
+    border: 'border-status-called/60',
+    text: 'text-status-called',
   },
   started: {
-    bg: 'bg-green-200 dark:bg-emerald-500/15',
-    border: 'border-green-500 dark:border-emerald-500/40',
-    text: 'text-green-800 dark:text-emerald-200',
+    bg: 'bg-status-live-bg',
+    border: 'border-status-live/60',
+    text: 'text-status-live',
   },
   finished: {
-    bg: 'bg-muted/40 dark:bg-gray-500/10',
-    border: 'border-border dark:border-gray-500/30',
-    text: 'text-muted-foreground dark:text-muted-foreground',
+    bg: 'bg-status-done-bg',
+    border: 'border-status-done/30',
+    text: 'text-muted-foreground',
   },
 };
 
@@ -235,15 +245,23 @@ export function GanttChart({
       {/* Grid */}
       <div className="overflow-x-auto">
         <div className="min-w-max">
-          {/* Time header */}
-          <div className="flex border-b border-border">
-            <div className="w-10 flex-shrink-0 px-1 py-0.5 bg-card text-xs text-muted-foreground" />
+          {/* Time header — matches DragGantt: court label on the left,
+              time labels every other slot. */}
+          <div className="flex border-b border-border bg-muted/40">
+            <div
+              className="flex-shrink-0 px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
+              style={{ width: COURT_LABEL_WIDTH }}
+            >
+              Court
+            </div>
             {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
               <div
                 key={slot}
                 style={{ width: SLOT_WIDTH }}
-                className={`flex-shrink-0 px-0.5 py-0.5 text-center text-[10px] border-l border-border bg-card text-muted-foreground ${
-                  slot === currentSlot ? 'bg-blue-50 text-blue-600 font-medium' : ''
+                className={`flex-shrink-0 border-l border-border px-1 py-1 text-center text-2xs tabular-nums ${
+                  slot === currentSlot
+                    ? 'bg-blue-100/70 font-semibold text-blue-700 dark:bg-blue-500/20 dark:text-blue-200'
+                    : 'text-muted-foreground'
                 }`}
               >
                 {i % 2 === 0 ? slotLabels[slot] : ''}
@@ -253,19 +271,25 @@ export function GanttChart({
 
           {/* Court rows */}
           {courts.map(courtId => (
-            <div key={courtId} className="flex border-b border-border">
-              <div className="w-10 flex-shrink-0 px-1 bg-card text-xs font-medium text-muted-foreground flex items-center">
+            <div key={courtId} className="flex border-b border-border/60">
+              <div
+                className="flex-shrink-0 flex items-center bg-muted/30 px-2 text-xs font-semibold tabular-nums text-foreground"
+                style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+              >
                 C{courtId}
               </div>
-              <div className="flex-1 relative" style={{ height: ROW_HEIGHT }}>
+              <div
+                className="flex-1 relative gantt-grid"
+                style={{ height: ROW_HEIGHT }}
+              >
                 {/* Slot grid lines */}
                 <div className="absolute inset-0 flex">
                   {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map(slot => (
                     <div
                       key={slot}
                       style={{ width: SLOT_WIDTH }}
-                      className={`flex-shrink-0 border-l border-border ${
-                        slot === currentSlot ? 'bg-blue-50/30' : ''
+                      className={`flex-shrink-0 border-l border-border/40 ${
+                        slot === currentSlot ? 'bg-blue-100/40 dark:bg-blue-500/10' : ''
                       }`}
                     />
                   ))}

@@ -1,4 +1,6 @@
 /** @type {import('tailwindcss').Config} */
+const plugin = require('tailwindcss/plugin');
+
 export default {
   darkMode: ["class"],
   content: [
@@ -7,6 +9,35 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        // Default sans + mono. The variable fonts are registered in
+        // ``main.tsx`` via @fontsource-variable. System fallbacks keep
+        // initial paint sharp before the woff2 lands.
+        sans: [
+          'Inter Variable',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'Roboto',
+          'Helvetica Neue',
+          'sans-serif',
+        ],
+        mono: [
+          'JetBrains Mono Variable',
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'Monaco',
+          'Consolas',
+          'monospace',
+        ],
+      },
+      fontSize: {
+        // 2xs is new — used for overlines, micro-badges, table-header
+        // eyebrows. Everything else matches the strict 11/12/14/16/18/24
+        // scale documented in docs/audit-2026-04-27/PHASE-1-AUDIT.md.
+        '2xs': ['0.6875rem', { lineHeight: '1rem', letterSpacing: '0.02em' }],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -41,6 +72,45 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Status semantic tokens — see src/index.css. Use as
+        // bg-status-live, text-status-live, border-status-live, etc.
+        // The "/bg" suffix is the muted-tinted background variant.
+        status: {
+          live:        "hsl(var(--status-live))",
+          'live-bg':   "hsl(var(--status-live-bg))",
+          called:      "hsl(var(--status-called))",
+          'called-bg': "hsl(var(--status-called-bg))",
+          started:     "hsl(var(--status-started))",
+          'started-bg':"hsl(var(--status-started-bg))",
+          blocked:     "hsl(var(--status-blocked))",
+          'blocked-bg':"hsl(var(--status-blocked-bg))",
+          warning:     "hsl(var(--status-warning))",
+          'warning-bg':"hsl(var(--status-warning-bg))",
+          idle:        "hsl(var(--status-idle))",
+          'idle-bg':   "hsl(var(--status-idle-bg))",
+          done:        "hsl(var(--status-done))",
+          'done-bg':   "hsl(var(--status-done-bg))",
+        },
+      },
+      // Density-aware spacing utilities. Resolve to CSS vars set per
+      // density mode in src/index.css. Use h-row / py-cell / px-cell /
+      // gap-section directly in components to follow the user's
+      // density preference automatically.
+      height: {
+        row: 'var(--density-row-h)',
+        badge: 'var(--density-badge-h)',
+      },
+      minHeight: {
+        row: 'var(--density-row-h)',
+      },
+      padding: {
+        cell: 'var(--density-cell-py) var(--density-cell-px)',
+      },
+      spacing: {
+        cell: 'var(--density-cell-px)',
+        'cell-y': 'var(--density-cell-py)',
+        section: 'var(--density-section-gap)',
+        gap: 'var(--density-gap)',
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -119,5 +189,15 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    // Custom variant: ``compact:py-1`` applies only when
+    // ``[data-density="compact"]`` is on a parent element. Use sparingly —
+    // most density-sensitive sizing should go through the CSS-var-driven
+    // spacing utilities above (h-row, py-cell, px-cell, etc.).
+    plugin(({ addVariant }) => {
+      addVariant('compact', '[data-density="compact"] &');
+      addVariant('comfortable', '[data-density="comfortable"] &, :root:not([data-density]) &');
+    }),
+  ],
 }

@@ -15,6 +15,8 @@ import { BadmintonScoreDialog } from '../tracking/BadmintonScoreDialog';
 import { EditMatchDialog } from './EditMatchDialog';
 import { CourtSelectDialog } from './CourtSelectDialog';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { InlineSearch } from '../../components/InlineSearch';
+import { useSearchParamState } from '../../hooks/useSearchParamState';
 
 // Shared button base used by every action pill on the match card:
 // transition + focus-visible ring + active scale + disabled not-allowed.
@@ -845,14 +847,45 @@ export function WorkflowPanel({
     return [...matchesByStatus.started].sort((a, b) => a.slotId - b.slotId);
   }, [matchesByStatus.started]);
 
+  // Free-text search across event code + player names. Applies to
+  // every list in the panel (In Progress strip + Up Next/Finished
+  // tabs) so the operator can sweep one player through their whole
+  // state machine without losing them as the card moves.
+  const [searchQuery, setSearchQuery] = useSearchParamState('q', '');
+  const filterByQuery = (list: ScheduleAssignment[]) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return list;
+    return list.filter((a) => {
+      const m = matchMap.get(a.matchId);
+      if (!m) return false;
+      if ((m.eventRank ?? '').toLowerCase().includes(q)) return true;
+      const allIds = [...m.sideA, ...m.sideB, ...(m.sideC ?? [])];
+      return allIds.some((id) => (playerNames.get(id) ?? '').toLowerCase().includes(q));
+    });
+  };
+  const startedFiltered = filterByQuery(startedSorted);
+  const upNextFiltered = filterByQuery(upNextSorted);
+  const finishedFiltered = filterByQuery(finishedSorted);
+
   // Single-column stack:
   //   1. In-Progress pinned strip at top (collapses entirely when no active matches)
   //   2. Tabbed Up Next / Finished below, filling remaining height
   // Mirrors the Schedule page's vertical rhythm. 3-column layout retired.
-  const hasActive = startedSorted.length > 0;
+  const hasActive = startedFiltered.length > 0;
 
   return (
     <div className="h-full flex flex-col overflow-hidden min-h-0">
+      {/* Inline search bar — filters In Progress + Up Next + Finished
+          simultaneously by event code or player name. */}
+      <div className="flex-shrink-0 border-b border-border px-2 py-1.5">
+        <InlineSearch
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          placeholder="Search event or player…"
+          showClear
+          onClearAll={() => setSearchQuery('')}
+        />
+      </div>
       {hasActive && (
         <div className="flex-shrink-0 border-b border-border">
           <div className="px-2 py-1.5 flex items-center justify-between border-b border-border/60">
@@ -863,7 +896,7 @@ export function WorkflowPanel({
             <span className="text-[10px] text-muted-foreground">{matchesByStatus.started.length} active</span>
           </div>
           <div className="p-1.5 max-h-44 overflow-auto">
-            {startedSorted.map((assignment) => (
+            {startedFiltered.map((assignment) => (
               <InProgressCard
                 key={assignment.matchId}
                 assignment={assignment}
@@ -893,7 +926,7 @@ export function WorkflowPanel({
                   : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
             >
-              Up Next ({upNextSorted.length})
+              Up Next ({upNextFiltered.length}{searchQuery ? `/${upNextSorted.length}` : ''})
             </button>
             <button
               onClick={() => setActiveTab('finished')}
@@ -903,16 +936,18 @@ export function WorkflowPanel({
                   : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
             >
-              Finished ({finishedSorted.length})
+              Finished ({finishedFiltered.length}{searchQuery ? `/${finishedSorted.length}` : ''})
             </button>
           </div>
         </div>
         <div className="flex-1 overflow-auto p-1.5">
           {activeTab === 'up_next' && (
-            upNextSorted.length === 0 ? (
-              <div className="text-center text-muted-foreground text-[10px] py-4">No matches pending</div>
+            upNextFiltered.length === 0 ? (
+              <div className="text-center text-muted-foreground text-[10px] py-4">
+                {searchQuery && upNextSorted.length > 0 ? 'No match for current search' : 'No matches pending'}
+              </div>
             ) : (
-              upNextSorted.map((assignment) => (
+              upNextFiltered.map((assignment) => (
                 <UpNextCard
                   key={assignment.matchId}
                   assignment={assignment}
@@ -938,10 +973,12 @@ export function WorkflowPanel({
             )
           )}
           {activeTab === 'finished' && (
-            finishedSorted.length === 0 ? (
-              <div className="text-center text-muted-foreground text-xs py-4">No completed matches</div>
+            finishedFiltered.length === 0 ? (
+              <div className="text-center text-muted-foreground text-xs py-4">
+                {searchQuery && finishedSorted.length > 0 ? 'No match for current search' : 'No completed matches'}
+              </div>
             ) : (
-              finishedSorted.map((assignment) => (
+              finishedFiltered.map((assignment) => (
                 <FinishedCard
                   key={assignment.matchId}
                   assignment={assignment}

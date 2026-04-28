@@ -45,11 +45,15 @@ const SLOT_WIDTH = 48;
 const ROW_HEIGHT = 32;
 
 function getStatusColor(status?: MatchStateDTO['status']): string {
+  // Wired to the semantic status tokens from src/index.css. See the
+  // sibling STATUS_STYLES in features/control-center/GanttChart.tsx —
+  // both views render the same scheduled / called / live / done
+  // palette so the operator's mental model carries between tabs.
   switch (status) {
-    case 'called': return 'bg-blue-100 border-blue-300';
-    case 'started': return 'bg-green-100 border-green-300';
-    case 'finished': return 'bg-purple-100 border-purple-300';
-    default: return 'bg-muted border-border'; // scheduled or undefined
+    case 'called':   return 'bg-status-called-bg border-status-called/60';
+    case 'started':  return 'bg-status-live-bg border-status-live/60';
+    case 'finished': return 'bg-status-done-bg border-status-done/30';
+    default:         return 'bg-status-idle-bg border-status-idle/40'; // scheduled or undefined
   }
 }
 

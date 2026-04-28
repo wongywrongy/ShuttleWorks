@@ -15,7 +15,11 @@ import { formatSlotTime } from '../utils/timeUtils';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { INTERACTIVE_BASE } from '../lib/utils';
-import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig } from '../api/dto';
+import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig, RosterGroupDTO } from '../api/dto';
+import { InlineSearch, type FilterChipGroup } from '../components/InlineSearch';
+import { useSearchParamState, useSearchParamSet } from '../hooks/useSearchParamState';
+import { buildGroupIndex, getPlayerSchoolAccent } from '../lib/schoolAccent';
+import { SchoolDot } from '../components/SchoolDot';
 
 type TableView = 'time' | 'court';
 
@@ -24,6 +28,7 @@ function MatchesTable({
   assignments,
   matches,
   players,
+  groups,
   config,
   view,
   onViewChange,
@@ -31,12 +36,70 @@ function MatchesTable({
   assignments: ScheduleAssignment[];
   matches: MatchDTO[];
   players: PlayerDTO[];
+  groups: RosterGroupDTO[];
   config: TournamentConfig;
   view: TableView;
   onViewChange: (view: TableView) => void;
 }) {
   const matchMap = useMemo(() => new Map(matches.map(m => [m.id, m])), [matches]);
   const playerMap = useMemo(() => new Map(players.map(p => [p.id, p])), [players]);
+  const groupIndex = useMemo(() => buildGroupIndex(groups), [groups]);
+
+  // URL-backed search + filter state mirroring Matches tab.
+  const [searchQuery, setSearchQuery] = useSearchParamState('q', '');
+  const [eventFilter, , toggleEvent] = useSearchParamSet('event');
+  const [courtFilter, , toggleCourt] = useSearchParamSet('court');
+
+  const filteredAssignments = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const eventActive = eventFilter.size > 0;
+    const courtActive = courtFilter.size > 0;
+    if (!q && !eventActive && !courtActive) return assignments;
+    return assignments.filter((a) => {
+      const m = matchMap.get(a.matchId);
+      if (q) {
+        const sideA = (m?.sideA ?? []).map((id) => playerMap.get(id)?.name ?? '').join(' ');
+        const sideB = (m?.sideB ?? []).map((id) => playerMap.get(id)?.name ?? '').join(' ');
+        const event = m?.eventRank ?? '';
+        const matchNum = m?.matchNumber ? `M${m.matchNumber}` : '';
+        if (
+          !event.toLowerCase().includes(q) &&
+          !matchNum.toLowerCase().includes(q) &&
+          !sideA.toLowerCase().includes(q) &&
+          !sideB.toLowerCase().includes(q)
+        ) {
+          return false;
+        }
+      }
+      if (eventActive) {
+        const prefix = (m?.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
+        if (!eventFilter.has(prefix)) return false;
+      }
+      if (courtActive && !courtFilter.has(`c${a.courtId}`)) return false;
+      return true;
+    });
+  }, [assignments, searchQuery, eventFilter, courtFilter, matchMap, playerMap]);
+
+  // Minimal — search input only. Event + Court chips removed per the
+  // user's "minimal search" directive. Free-text matches both.
+  const filterGroups: FilterChipGroup[] = [];
+
+  const clearAll = () => {
+    setSearchQuery('');
+    eventFilter.forEach((id) => toggleEvent(id));
+    courtFilter.forEach((id) => toggleCourt(id));
+  };
+
+  // Render the side-A school dot for an assignment (the dominant
+  // school identity for the row).
+  const renderSchoolDot = (matchId: string) => {
+    const m = matchMap.get(matchId);
+    if (!m || !m.sideA?.length) return null;
+    const p = playerMap.get(m.sideA[0]);
+    if (!p) return null;
+    const accent = getPlayerSchoolAccent(p, groupIndex);
+    return accent.name ? <SchoolDot accent={accent} size="sm" /> : null;
+  };
 
   const getMatchLabel = (matchId: string): string => {
     const match = matchMap.get(matchId);
@@ -54,10 +117,11 @@ function MatchesTable({
     return `${sideA} vs ${sideB}`;
   };
 
-  // Group by time slot
+  // Group by time slot — driven by the *filtered* assignments so an
+  // active filter actually narrows what's rendered.
   const byTime = useMemo(() => {
     const groups = new Map<number, ScheduleAssignment[]>();
-    for (const a of assignments) {
+    for (const a of filteredAssignments) {
       const list = groups.get(a.slotId) || [];
       list.push(a);
       groups.set(a.slotId, list);
@@ -69,12 +133,12 @@ function MatchesTable({
         time: formatSlotTime(_slotId, config),
         assignments: items.sort((a, b) => a.courtId - b.courtId),
       }));
-  }, [assignments, config]);
+  }, [filteredAssignments, config]);
 
-  // Group by court
+  // Group by court (filtered).
   const byCourt = useMemo(() => {
     const groups = new Map<number, ScheduleAssignment[]>();
-    for (const a of assignments) {
+    for (const a of filteredAssignments) {
       const list = groups.get(a.courtId) || [];
       list.push(a);
       groups.set(a.courtId, list);
@@ -85,7 +149,7 @@ function MatchesTable({
         courtId,
         assignments: items.sort((a, b) => a.slotId - b.slotId),
       }));
-  }, [assignments]);
+  }, [filteredAssignments]);
 
   if (assignments.length === 0) {
     return <div className="text-xs text-muted-foreground italic p-2">No matches scheduled yet</div>;
@@ -93,32 +157,50 @@ function MatchesTable({
 
   return (
     <div className="flex flex-col h-full">
-      {/* View toggle */}
-      <div className="flex items-center gap-1 mb-2 flex-shrink-0">
-        <button
-          onClick={() => onViewChange('time')}
-          className={`px-2 py-0.5 text-xs rounded ${
-            view === 'time'
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-          }`}
-        >
-          By Time
-        </button>
-        <button
-          onClick={() => onViewChange('court')}
-          className={`px-2 py-0.5 text-xs rounded ${
-            view === 'court'
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-          }`}
-        >
-          By Court
-        </button>
+      {/* View toggle + inline search row */}
+      <div className="mb-2 flex flex-shrink-0 flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onViewChange('time')}
+            className={`px-2 py-0.5 text-xs rounded ${
+              view === 'time'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            }`}
+          >
+            By Time
+          </button>
+          <button
+            onClick={() => onViewChange('court')}
+            className={`px-2 py-0.5 text-xs rounded ${
+              view === 'court'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            }`}
+          >
+            By Court
+          </button>
+        </div>
+        <div className="flex-1 min-w-[16rem]">
+          <InlineSearch
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            placeholder="Search event, player, court…"
+            filters={filterGroups}
+            showClear
+            onClearAll={clearAll}
+          />
+        </div>
       </div>
 
+      {filteredAssignments.length === 0 && (
+        <div className="rounded border border-dashed border-border bg-card p-4 text-center text-xs text-muted-foreground">
+          No assignments match these filters.
+        </div>
+      )}
+
       {/* Table */}
-      <div className="flex-1 overflow-auto">
+      <div className={`flex-1 overflow-auto ${filteredAssignments.length === 0 ? 'hidden' : ''}`}>
         {view === 'time' ? (
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-muted">
@@ -139,7 +221,10 @@ function MatchesTable({
                     <td className="px-2 py-1 text-muted-foreground">C{a.courtId}</td>
                     <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
                     <td className="px-2 py-1 text-foreground/80 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
-                      {getPlayerNames(a.matchId)}
+                      <span className="inline-flex items-center gap-1.5">
+                        {renderSchoolDot(a.matchId)}
+                        <span className="truncate">{getPlayerNames(a.matchId)}</span>
+                      </span>
                     </td>
                   </tr>
                 ))
@@ -166,7 +251,10 @@ function MatchesTable({
                     <td className="px-2 py-1 text-muted-foreground font-mono">{formatSlotTime(a.slotId, config)}</td>
                     <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
                     <td className="px-2 py-1 text-foreground/80 truncate max-w-xs" title={getPlayerNames(a.matchId)}>
-                      {getPlayerNames(a.matchId)}
+                      <span className="inline-flex items-center gap-1.5">
+                        {renderSchoolDot(a.matchId)}
+                        <span className="truncate">{getPlayerNames(a.matchId)}</span>
+                      </span>
                     </td>
                   </tr>
                 ))
@@ -183,6 +271,7 @@ export function SchedulePage() {
   const { config, loading: configLoading, error: configError } = useTournament();
   const players = useAppStore((state) => state.players);
   const matches = useAppStore((state) => state.matches);
+  const groups = useAppStore((state) => state.groups);
   const scheduleStats = useAppStore((state) => state.scheduleStats);
   const addSolverLog = useAppStore((state) => state.addSolverLog);
   const {
@@ -407,6 +496,7 @@ export function SchedulePage() {
                   assignments={displayAssignments}
                   matches={matches}
                   players={players}
+                  groups={groups}
                   config={config}
                   view={tableView}
                   onViewChange={setTableView}

@@ -6,6 +6,7 @@ import { TournamentFileManagement } from '../features/tournaments/TournamentFile
 import { BackupPanel } from '../features/setup/BackupPanel';
 import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicator';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { DensityToggle } from '../components/DensityToggle';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {
@@ -86,10 +87,21 @@ export function TournamentSetupPage() {
           Appearance
         </h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Per-device theme. Not included in tournament export.
+          Per-device preferences. Not included in tournament export.
         </p>
-        <div className="mt-3">
-          <ThemeToggle size="md" />
+        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div>
+            <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Theme
+            </div>
+            <ThemeToggle size="md" />
+          </div>
+          <div>
+            <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Density
+            </div>
+            <DensityToggle size="md" />
+          </div>
         </div>
       </section>
 

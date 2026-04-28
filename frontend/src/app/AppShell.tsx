@@ -2,10 +2,12 @@ import { lazy, Suspense, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useTournamentState } from '../hooks/useTournamentState';
 import { useAppliedTheme } from '../hooks/useAppliedTheme';
+import { useAppliedDensity } from '../hooks/useAppliedDensity';
 import { TabBar } from './TabBar';
 import { SolverHud } from '../components/SolverHud';
 import { UnsavedBanner } from '../components/UnsavedBanner';
 import { ToastStack } from '../components/Toast';
+import { PublicDisplaySettings } from '../features/tournaments/PublicDisplaySettings';
 
 // Tabs are wired to the existing pages during Step 4. Each tab is replaced with
 // a dedicated Tab component in Step 5 (inline authoring). Using lazy() keeps
@@ -38,6 +40,8 @@ export function AppShell() {
   useTournamentState();
   // Apply the user's theme preference to <html> (adds/removes `.dark`).
   useAppliedTheme();
+  // Apply the user's density preference to <html> (sets data-density).
+  useAppliedDensity();
   const activeTab = useAppStore((s) => s.activeTab);
   const pushToast = useAppStore((s) => s.pushToast);
 
@@ -92,6 +96,12 @@ export function AppShell() {
               <a href="/display" className="text-blue-600 underline">
                 Open fullscreen TV view
               </a>
+              {/* Director-only TV settings: lives on the TV tab so the
+                  configuration sits beside the preview that reflects it.
+                  Hidden on the standalone /display window. */}
+              <div className="mt-3">
+                <PublicDisplaySettings />
+              </div>
               <div className="mt-4 rounded border bg-card">
                 <PublicDisplayPage />
               </div>

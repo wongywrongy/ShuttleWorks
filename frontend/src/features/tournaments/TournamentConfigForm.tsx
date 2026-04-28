@@ -725,10 +725,14 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
           )}
         </Card>
 
-        {/* Submit Button */}
-        <Button type="submit" disabled={saving} className="w-full">
-          {saving ? 'Saving...' : 'Save Configuration'}
-        </Button>
+        {/* Submit row — right-aligned per enterprise dashboard convention.
+         * Full-width primary CTAs read as marketing-page CTAs; this is a
+         * config form. Sized to its content with comfortable padding. */}
+        <div className="flex items-center justify-end gap-2">
+          <Button type="submit" disabled={saving} size="default">
+            {saving ? 'Saving…' : 'Save configuration'}
+          </Button>
+        </div>
       </form>
       <SetupGuide isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </>

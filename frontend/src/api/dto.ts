@@ -34,6 +34,37 @@ export interface TournamentConfig {
   setsToWin?: number; // 1 (best of 1), 2 (best of 3), or 3 (best of 5)
   pointsPerSet?: number; // 11, 15, or 21
   deuceEnabled?: boolean; // Win by 2 in deuce (up to 30 for 21-point sets)
+  // ---- Public TV display ------------------------------------------
+  // How the public ``/display`` page renders the courts view.
+  //
+  //   strip — one tall row per court (default; best 3-6 courts, 1080p).
+  //   grid  — 2-column responsive grid (best 8-16 courts).
+  //   list  — dense one-line rows (best 16+ courts, side display).
+  tvDisplayMode?: 'strip' | 'grid' | 'list';
+  // Brand accent for the public display — hex (``#RRGGBB``). Drives
+  // the LIVE border, the LIVE pill, and the progress bar. Defaults to
+  // emerald (``#10b981``) when unset.
+  tvAccent?: string;
+  // Background tone for the public display. ``navy`` is the default,
+  // matching the rest of the app's slate-950. ``black`` is OLED-pure,
+  // ``midnight`` is a deep blue, ``slate`` is neutral cool gray.
+  tvBgTone?: 'navy' | 'black' | 'midnight' | 'slate';
+  // Force a specific column count for grid mode. ``null`` / unset =
+  // auto (1-2 columns based on viewport).
+  tvGridColumns?: 1 | 2 | 3 | 4 | null;
+  // Card size — overrides the auto-sizing strip/grid layouts.
+  // ``auto`` keeps the current behaviour; ``compact`` shrinks padding;
+  // ``comfortable`` is the default tall card; ``large`` expands for
+  // big-room viewing.
+  tvCardSize?: 'auto' | 'compact' | 'comfortable' | 'large';
+  // Whether to show the live score on the public display. Off when
+  // the venue prefers to keep scores private until the match ends.
+  tvShowScores?: boolean;
+  // Optional event-column ordering and visibility for the Roster
+  // position grid. Defaults to the canonical MD / WD / XD / WS / MS
+  // sequence. Hidden columns are stored as ``false`` per rank.
+  eventOrder?: string[];
+  eventVisible?: Record<string, boolean>;
 }
 
 export interface BreakWindow {

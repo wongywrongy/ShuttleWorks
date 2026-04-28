@@ -43,10 +43,8 @@ export function ScheduleActions({
         {generating
           ? 'Generating…'
           : confirming
-            ? 'Click again to replace schedule'
-            : hasSchedule
-              ? 'Generate (replaces schedule)'
-              : 'Generate Schedule'}
+            ? 'Click again to replace'
+            : 'Generate'}
       </button>
       {hasSchedule && (
         <button
