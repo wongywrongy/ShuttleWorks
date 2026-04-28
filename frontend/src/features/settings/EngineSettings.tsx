@@ -24,10 +24,24 @@ import { useTournament } from '../../hooks/useTournament';
 import type { TournamentConfig } from '../../api/dto';
 
 interface EngineFormState {
+  // Solver behaviour
   deterministic: boolean;
   randomSeed: number;
   solverTimeLimitSeconds: number;
   candidatePoolSize: number;
+  // Optimisation goals (objective weights + opt-in soft constraints)
+  enableCourtUtilization: boolean;
+  courtUtilizationPenalty: number;
+  enableGameProximity: boolean;
+  minGameSpacingSlots: number | null;
+  maxGameSpacingSlots: number | null;
+  gameProximityPenalty: number;
+  enableCompactSchedule: boolean;
+  compactScheduleMode: 'minimize_makespan' | 'no_gaps' | 'finish_by_time';
+  compactSchedulePenalty: number;
+  targetFinishSlot: number | null;
+  allowPlayerOverlap: boolean;
+  playerOverlapPenalty: number;
 }
 
 const DEFAULTS: EngineFormState = {
@@ -35,7 +49,41 @@ const DEFAULTS: EngineFormState = {
   randomSeed: 42,
   solverTimeLimitSeconds: 30,
   candidatePoolSize: 5,
+  enableCourtUtilization: true,
+  courtUtilizationPenalty: 50,
+  enableGameProximity: false,
+  minGameSpacingSlots: null,
+  maxGameSpacingSlots: null,
+  gameProximityPenalty: 5,
+  enableCompactSchedule: false,
+  compactScheduleMode: 'minimize_makespan',
+  compactSchedulePenalty: 100,
+  targetFinishSlot: null,
+  allowPlayerOverlap: false,
+  playerOverlapPenalty: 50,
 };
+
+function formStateFromConfig(config: TournamentConfig | null): EngineFormState {
+  if (!config) return DEFAULTS;
+  return {
+    deterministic: config.deterministic ?? DEFAULTS.deterministic,
+    randomSeed: config.randomSeed ?? DEFAULTS.randomSeed,
+    solverTimeLimitSeconds: config.solverTimeLimitSeconds ?? DEFAULTS.solverTimeLimitSeconds,
+    candidatePoolSize: config.candidatePoolSize ?? DEFAULTS.candidatePoolSize,
+    enableCourtUtilization: config.enableCourtUtilization ?? DEFAULTS.enableCourtUtilization,
+    courtUtilizationPenalty: config.courtUtilizationPenalty ?? DEFAULTS.courtUtilizationPenalty,
+    enableGameProximity: config.enableGameProximity ?? DEFAULTS.enableGameProximity,
+    minGameSpacingSlots: config.minGameSpacingSlots ?? null,
+    maxGameSpacingSlots: config.maxGameSpacingSlots ?? null,
+    gameProximityPenalty: config.gameProximityPenalty ?? DEFAULTS.gameProximityPenalty,
+    enableCompactSchedule: config.enableCompactSchedule ?? DEFAULTS.enableCompactSchedule,
+    compactScheduleMode: config.compactScheduleMode ?? DEFAULTS.compactScheduleMode,
+    compactSchedulePenalty: config.compactSchedulePenalty ?? DEFAULTS.compactSchedulePenalty,
+    targetFinishSlot: config.targetFinishSlot ?? null,
+    allowPlayerOverlap: config.allowPlayerOverlap ?? DEFAULTS.allowPlayerOverlap,
+    playerOverlapPenalty: config.playerOverlapPenalty ?? DEFAULTS.playerOverlapPenalty,
+  };
+}
 
 export function EngineSettings() {
   const { config, updateConfig } = useTournament();
@@ -44,26 +92,16 @@ export function EngineSettings() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const [form, setForm] = useState<EngineFormState>({
-    deterministic: config?.deterministic ?? DEFAULTS.deterministic,
-    randomSeed: config?.randomSeed ?? DEFAULTS.randomSeed,
-    solverTimeLimitSeconds: config?.solverTimeLimitSeconds ?? DEFAULTS.solverTimeLimitSeconds,
-    candidatePoolSize: config?.candidatePoolSize ?? DEFAULTS.candidatePoolSize,
-  });
+  const [form, setForm] = useState<EngineFormState>(() => formStateFromConfig(config));
 
   // Adopt incoming config changes that originated outside this pane
-  // (e.g. the tournament form saved). If the user has drifted any
-  // field locally we leave it alone — same convention as
-  // TournamentConfigForm so a save in another section doesn't clobber
-  // pending edits here.
+  // (e.g. the tournament form saved). Wholesale replace — keeping
+  // partial drift logic across 16 fields is more bug-surface than
+  // it's worth. A user editing this pane while another tab saves is
+  // a corner case; if it bites we'll revisit.
   useEffect(() => {
     if (!config) return;
-    setForm((prev) => ({
-      deterministic: prev.deterministic === DEFAULTS.deterministic ? (config.deterministic ?? DEFAULTS.deterministic) : prev.deterministic,
-      randomSeed: prev.randomSeed === DEFAULTS.randomSeed ? (config.randomSeed ?? DEFAULTS.randomSeed) : prev.randomSeed,
-      solverTimeLimitSeconds: prev.solverTimeLimitSeconds === DEFAULTS.solverTimeLimitSeconds ? (config.solverTimeLimitSeconds ?? DEFAULTS.solverTimeLimitSeconds) : prev.solverTimeLimitSeconds,
-      candidatePoolSize: prev.candidatePoolSize === DEFAULTS.candidatePoolSize ? (config.candidatePoolSize ?? DEFAULTS.candidatePoolSize) : prev.candidatePoolSize,
-    }));
+    setForm(formStateFromConfig(config));
   }, [config]);
 
   if (!config) {
@@ -87,6 +125,18 @@ export function EngineSettings() {
         randomSeed: form.randomSeed,
         solverTimeLimitSeconds: form.solverTimeLimitSeconds,
         candidatePoolSize: form.candidatePoolSize,
+        enableCourtUtilization: form.enableCourtUtilization,
+        courtUtilizationPenalty: form.courtUtilizationPenalty,
+        enableGameProximity: form.enableGameProximity,
+        minGameSpacingSlots: form.minGameSpacingSlots,
+        maxGameSpacingSlots: form.maxGameSpacingSlots,
+        gameProximityPenalty: form.gameProximityPenalty,
+        enableCompactSchedule: form.enableCompactSchedule,
+        compactScheduleMode: form.compactScheduleMode,
+        compactSchedulePenalty: form.compactSchedulePenalty,
+        targetFinishSlot: form.targetFinishSlot,
+        allowPlayerOverlap: form.allowPlayerOverlap,
+        playerOverlapPenalty: form.playerOverlapPenalty,
       };
       await updateConfig(next);
       setSaved(true);
@@ -181,6 +231,209 @@ export function EngineSettings() {
               <span className="text-xs font-medium w-8 tabular-nums text-right">
                 {form.candidatePoolSize}
               </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="text-sm">Optimisation goals</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            What the solver tries to optimise alongside feasibility. Each toggle adds a soft penalty to the objective; the slider controls how strongly the solver chases that goal.
+          </p>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 pt-0 space-y-3">
+          {/* Court Utilization */}
+          <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
+            <input
+              type="checkbox"
+              id="enableCourtUtilization"
+              checked={form.enableCourtUtilization}
+              onChange={(e) => setForm({ ...form, enableCourtUtilization: e.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-input"
+            />
+            <div className="flex-1">
+              <Label htmlFor="enableCourtUtilization" className="cursor-pointer">
+                Maximise court utilisation
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Penalise idle courts. Higher = fewer empty courts, tighter schedule.
+              </p>
+              {form.enableCourtUtilization && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground">0=off</span>
+                  <input
+                    type="range"
+                    value={form.courtUtilizationPenalty}
+                    onChange={(e) => setForm({ ...form, courtUtilizationPenalty: parseFloat(e.target.value) })}
+                    className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
+                    min={0}
+                    max={100}
+                    step={10}
+                  />
+                  <span className="text-xs font-medium w-8 tabular-nums text-right">{form.courtUtilizationPenalty}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Game Spacing */}
+          <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
+            <input
+              type="checkbox"
+              id="enableGameProximity"
+              checked={form.enableGameProximity}
+              onChange={(e) => setForm({ ...form, enableGameProximity: e.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-input"
+            />
+            <div className="flex-1">
+              <Label htmlFor="enableGameProximity" className="cursor-pointer">
+                Game spacing
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Control time between a player's matches. Higher penalty = stricter enforcement.
+              </p>
+              {form.enableGameProximity && (
+                <div className="mt-2 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Min slots between</Label>
+                      <Input
+                        type="number"
+                        value={form.minGameSpacingSlots ?? ''}
+                        onChange={(e) => setForm({ ...form, minGameSpacingSlots: e.target.value ? parseInt(e.target.value, 10) : null })}
+                        min={0}
+                        placeholder="e.g., 2"
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Max slots between</Label>
+                      <Input
+                        type="number"
+                        value={form.maxGameSpacingSlots ?? ''}
+                        onChange={(e) => setForm({ ...form, maxGameSpacingSlots: e.target.value ? parseInt(e.target.value, 10) : null })}
+                        min={0}
+                        placeholder="e.g., 6"
+                        className="h-8"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground">0=off</span>
+                    <input
+                      type="range"
+                      value={form.gameProximityPenalty}
+                      onChange={(e) => setForm({ ...form, gameProximityPenalty: parseFloat(e.target.value) })}
+                      className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
+                      min={0}
+                      max={20}
+                      step={1}
+                    />
+                    <span className="text-xs font-medium w-6 tabular-nums text-right">{form.gameProximityPenalty}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Compact Schedule */}
+          <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
+            <input
+              type="checkbox"
+              id="enableCompactSchedule"
+              checked={form.enableCompactSchedule}
+              onChange={(e) => setForm({ ...form, enableCompactSchedule: e.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-input"
+            />
+            <div className="flex-1">
+              <Label htmlFor="enableCompactSchedule" className="cursor-pointer">
+                Compact schedule
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Pack matches tightly. Higher weight = stronger enforcement (may soften other goals).
+              </p>
+              {form.enableCompactSchedule && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex gap-1">
+                    {(['minimize_makespan', 'no_gaps', 'finish_by_time'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setForm({ ...form, compactScheduleMode: mode })}
+                        className={`px-2 py-1 text-xs rounded ${
+                          form.compactScheduleMode === mode
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                        }`}
+                      >
+                        {mode === 'minimize_makespan' ? 'Finish Early' : mode === 'no_gaps' ? 'No Gaps' : 'Finish By'}
+                      </button>
+                    ))}
+                  </div>
+                  {form.compactScheduleMode === 'finish_by_time' && (
+                    <div>
+                      <Label className="text-xs">Target finish slot</Label>
+                      <Input
+                        type="number"
+                        value={form.targetFinishSlot ?? ''}
+                        onChange={(e) => setForm({ ...form, targetFinishSlot: e.target.value ? parseInt(e.target.value, 10) : null })}
+                        min={1}
+                        placeholder="e.g., 10"
+                        className="h-8"
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground">0=off</span>
+                    <input
+                      type="range"
+                      value={form.compactSchedulePenalty}
+                      onChange={(e) => setForm({ ...form, compactSchedulePenalty: parseFloat(e.target.value) })}
+                      className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
+                      min={0}
+                      max={200}
+                      step={10}
+                    />
+                    <span className="text-xs font-medium w-8 tabular-nums text-right">{form.compactSchedulePenalty}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Allow Player Overlap */}
+          <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
+            <input
+              type="checkbox"
+              id="allowPlayerOverlap"
+              checked={form.allowPlayerOverlap}
+              onChange={(e) => setForm({ ...form, allowPlayerOverlap: e.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-input"
+            />
+            <div className="flex-1">
+              <Label htmlFor="allowPlayerOverlap" className="cursor-pointer">
+                Allow player overlap
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Permit a player in two matches at once (soft constraint). Higher penalty = stronger avoidance.
+              </p>
+              {form.allowPlayerOverlap && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground">0=allow freely</span>
+                  <input
+                    type="range"
+                    value={form.playerOverlapPenalty}
+                    onChange={(e) => setForm({ ...form, playerOverlapPenalty: parseFloat(e.target.value) })}
+                    className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
+                    min={0}
+                    max={100}
+                    step={10}
+                  />
+                  <span className="text-xs font-medium w-8 tabular-nums text-right">{form.playerOverlapPenalty}</span>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
