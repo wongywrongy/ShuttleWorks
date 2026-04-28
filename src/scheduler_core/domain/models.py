@@ -125,6 +125,24 @@ class SoftViolation:
 
 
 @dataclass
+class ScheduleSnapshot:
+    """One alternative schedule found mid-solve.
+
+    CP-SAT calls ``on_solution_callback`` for every improving solution
+    while it climbs toward the optimum. The legacy code threw all but
+    the final one away; the candidate collector keeps the top-N here.
+
+    The operator can swap the active schedule to a different snapshot
+    in a click — useful when reality (overrun, withdrawal, court
+    closure) makes the chosen schedule no longer fit.
+    """
+    assignments: List[Assignment] = field(default_factory=list)
+    objective_value: float = 0.0
+    found_at_seconds: float = 0.0
+    solution_id: str = ""
+
+
+@dataclass
 class ScheduleResult:
     """Complete scheduling result."""
     status: SolverStatus
@@ -140,6 +158,10 @@ class ScheduleResult:
     # test) reproduce a schedule byte-for-byte by re-running with the
     # same seed + deterministic mode.
     solver_seed: Optional[int] = None
+    # Top-N near-optimal alternatives the solver found while improving.
+    # ``assignments`` above is always equivalent to ``candidates[0]``
+    # when the pool is non-empty; older callers ignore this field.
+    candidates: List[ScheduleSnapshot] = field(default_factory=list)
 
 
 @dataclass

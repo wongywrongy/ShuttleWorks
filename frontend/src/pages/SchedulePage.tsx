@@ -10,6 +10,8 @@ import { LiveTimelineGrid } from '../features/schedule/live/LiveTimelineGrid';
 import { SolverProgressLog } from '../features/schedule/live/SolverProgressLog';
 import { LiveMetricsBar } from '../features/schedule/live/LiveMetricsBar';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
+import { DisruptionDialog } from '../features/control-center/DisruptionDialog';
+import { CandidatesPanel } from '../features/schedule/CandidatesPanel';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { StaleBanner } from '../features/schedule/StaleBanner';
 import { computeConstraintViolations } from '../utils/constraintChecker';
@@ -341,7 +343,8 @@ export function SchedulePage() {
   // collapses back to details once the run finishes — so the rail
   // never sits empty.
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
-  const [sidebarTab, setSidebarTab] = useState<'log' | 'details'>('details');
+  const [sidebarTab, setSidebarTab] = useState<'log' | 'details' | 'candidates'>('details');
+  const [disruptionOpen, setDisruptionOpen] = useState(false);
 
   // Wall-clock slot for traffic-light + rest-time computation.
   // Refreshed every minute via the shared ``useCurrentSlot`` hook so the
@@ -626,9 +629,37 @@ export function SchedulePage() {
                   </button>
                 </>
               ) : (
-                <span className="px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Details
-                </span>
+                <>
+                  <button
+                    onClick={() => setSidebarTab('details')}
+                    className={`px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded ${
+                      sidebarTab === 'details'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    Details
+                  </button>
+                  {(schedule?.candidates?.length ?? 0) > 0 && (
+                    <button
+                      onClick={() => setSidebarTab('candidates')}
+                      className={`px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded ${
+                        sidebarTab === 'candidates'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      Candidates
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setDisruptionOpen(true)}
+                    className="ml-auto px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded text-muted-foreground hover:bg-muted"
+                    title="Repair after a disruption"
+                  >
+                    Disruption…
+                  </button>
+                </>
               )}
             </div>
             <div className="flex-1 min-h-0 overflow-auto">
@@ -643,6 +674,11 @@ export function SchedulePage() {
                     violations={violations}
                   />
                 </div>
+              ) : sidebarTab === 'candidates' ? (
+                <CandidatesPanel
+                  schedule={schedule}
+                  onSelect={(i) => useAppStore.getState().setActiveCandidateIndex(i)}
+                />
               ) : (
                 <MatchDetailsPanel
                   assignment={selectedAssignment}
@@ -663,6 +699,10 @@ export function SchedulePage() {
               )}
             </div>
           </div>
+          <DisruptionDialog
+            isOpen={disruptionOpen}
+            onClose={() => setDisruptionOpen(false)}
+          />
         </div>
       ) : isOptimizing && !hasLiveProgress ? (
         /* Starting optimization spinner */

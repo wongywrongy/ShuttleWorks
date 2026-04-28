@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from api import schedule, match_state, tournament_state
+from api import schedule, match_state, tournament_state, schedule_repair, schedule_warm_restart
 
 log = logging.getLogger("scheduler.app")
 
@@ -76,6 +76,8 @@ async def request_id_middleware(request: Request, call_next):
 
 # Register API routers
 app.include_router(schedule.router)
+app.include_router(schedule_repair.router)
+app.include_router(schedule_warm_restart.router)
 app.include_router(match_state.router)
 app.include_router(tournament_state.router)
 

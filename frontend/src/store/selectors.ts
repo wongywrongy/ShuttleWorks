@@ -50,9 +50,9 @@ export function useGroupMap(): Map<string, RosterGroupDTO> {
 }
 
 /**
- * Build an assignment-by-matchId index. Schedule may be null or its
- * ``assignments`` array empty; either case yields an empty map. The
- * returned map is stable as long as the source array reference is.
+ * Build an assignment-by-matchId index. ``schedule.assignments`` is
+ * kept in sync with the active candidate by ``setActiveCandidateIndex``,
+ * so reading the array directly is correct.
  */
 export function useAssignmentByMatchId(): Map<string, ScheduleAssignment> {
   const assignments = useAppStore((s) => s.schedule?.assignments);

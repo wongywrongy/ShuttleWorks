@@ -47,6 +47,12 @@ DEFAULT_SOLVER_OPTIONS = SolverOptions(
     log_progress=False,
 )
 
+# How many near-optimal alternatives the candidate collector keeps
+# during the initial solve. Each is one assignment-list-sized payload
+# of memory; 5 is a generous default that fits comfortably in a
+# tournament JSON file.
+CANDIDATE_POOL_SIZE = 5
+
 
 def _solver_options_for(config: TournamentConfig) -> SolverOptions:
     """Pick solver options honoring the config's reproducible-run flags.
@@ -126,7 +132,10 @@ async def generate_schedule(request: GenerateScheduleRequest):
             previous_assignments=previous_assignments,
             solver_options=solver_options,
         )
-        result = CPSATBackend(solver_options=solver_request.solver_options).solve(solver_request)
+        result = CPSATBackend(
+            solver_options=solver_request.solver_options,
+            candidate_pool_size=CANDIDATE_POOL_SIZE,
+        ).solve(solver_request)
         return _convert_result_to_dto(result)
 
     except Exception:
@@ -237,7 +246,10 @@ async def generate_schedule_stream(request: GenerateScheduleRequest, http_reques
                 )
                 set_phase("presolve")
 
-                result = scheduler.solve(progress_callback=progress_callback)
+                result = scheduler.solve(
+                    progress_callback=progress_callback,
+                    candidate_pool_size=CANDIDATE_POOL_SIZE,
+                )
                 result_holder["result"] = result
 
             except Exception as e:
@@ -443,20 +455,21 @@ def _convert_previous_assignments(
     return previous_assignments
 
 
+def _assignment_to_dto(a) -> ScheduleAssignment:
+    return ScheduleAssignment(
+        matchId=a.match_id,
+        slotId=a.slot_id,
+        courtId=a.court_id,
+        durationSlots=a.duration_slots,
+    )
+
+
 def _convert_result_to_dto(result) -> ScheduleDTO:
     """Convert scheduler_core ScheduleResult to API ScheduleDTO."""
-    # Convert assignments
-    assignments = [
-        ScheduleAssignment(
-            matchId=a.match_id,
-            slotId=a.slot_id,
-            courtId=a.court_id,
-            durationSlots=a.duration_slots,
-        )
-        for a in result.assignments
-    ]
+    from app.schemas import ScheduleCandidate
 
-    # Convert soft violations
+    assignments = [_assignment_to_dto(a) for a in result.assignments]
+
     soft_violations = [
         SoftViolation(
             type=v.type,
@@ -468,7 +481,16 @@ def _convert_result_to_dto(result) -> ScheduleDTO:
         for v in result.soft_violations
     ]
 
-    # Map solver status
+    candidates = [
+        ScheduleCandidate(
+            solutionId=snap.solution_id,
+            assignments=[_assignment_to_dto(a) for a in snap.assignments],
+            objectiveScore=snap.objective_value,
+            foundAtSeconds=snap.found_at_seconds,
+        )
+        for snap in (result.candidates or [])
+    ]
+
     status_map = {
         'optimal': SolverStatus.OPTIMAL,
         'feasible': SolverStatus.FEASIBLE,
@@ -486,6 +508,8 @@ def _convert_result_to_dto(result) -> ScheduleDTO:
         infeasibleReasons=result.infeasible_reasons,
         status=status,
         solverSeed=result.solver_seed,
+        candidates=candidates,
+        activeCandidateIndex=0 if candidates else None,
     )
 
 

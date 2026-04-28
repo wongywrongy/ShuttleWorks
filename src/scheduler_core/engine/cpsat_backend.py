@@ -37,7 +37,9 @@ compatibility but does not influence the objective.
 """
 from __future__ import annotations
 
+import heapq
 import time as time_module
+import uuid
 from collections import defaultdict
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
@@ -50,6 +52,7 @@ from scheduler_core.domain.models import (
     PreviousAssignment,
     ScheduleConfig,
     ScheduleResult,
+    ScheduleSnapshot,
     SolverOptions,
     SolverStatus,
 )
@@ -89,6 +92,7 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
         svars: Optional[SchedulingVars] = None,
         matches: Optional[Dict[str, Match]] = None,
         model_stats: Optional[Dict[str, int]] = None,
+        pool_size: int = 0,
     ) -> None:
         super().__init__()
         self.callback_fn = callback_fn
@@ -101,6 +105,16 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
         self.last_gap_checkpoint = 100
         self.time_checkpoints = {5: False, 10: False, 30: False, 60: False}
         self.initial_stats_sent = False
+        # Candidate-pool bookkeeping. ``_pool`` is a max-heap (Python's
+        # heapq is min-heap, so we push ``-objective`` to invert) capped
+        # at ``pool_size`` — pushing a worse solution when full pops
+        # the worst already in the pool. ``_seen`` dedupes identical
+        # assignment lists so the pool isn't filled with copies of the
+        # same schedule under different objective values.
+        self.pool_size = pool_size
+        self._pool: List[Tuple[float, int, ScheduleSnapshot]] = []
+        self._seen: Set[Tuple] = set()
+        self._counter = 0  # tie-breaker so heap comparisons never reach the snapshot
 
     def on_solution_callback(self) -> None:
         self.solution_count += 1
@@ -122,6 +136,7 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
                 )
 
         current_obj = self.ObjectiveValue()
+        self._maybe_capture_candidate(current_obj, current_assignments)
         best_bound = self.BestObjectiveBound()
         gap_percent: Optional[float] = None
         if best_bound != 0:
@@ -198,6 +213,75 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
                 }
             )
 
+    def _maybe_capture_candidate(
+        self, objective_value: float, current_assignments: List[dict]
+    ) -> None:
+        """Push this solution into the candidate pool if it qualifies.
+
+        Heap key is ``-objective_value`` so the heap pops the *worst*
+        candidate when full and we keep the best-N. Identical assignment
+        lists (same matches at same slot/court) are deduped — CP-SAT
+        sometimes calls back with the same primal under different
+        objective bounds.
+        """
+        if self.pool_size <= 0:
+            return
+
+        signature = tuple(
+            sorted(
+                (a["matchId"], a["slotId"], a["courtId"], a["durationSlots"])
+                for a in current_assignments
+            )
+        )
+        if signature in self._seen:
+            return
+
+        snapshot = ScheduleSnapshot(
+            assignments=[
+                Assignment(
+                    match_id=a["matchId"],
+                    slot_id=a["slotId"],
+                    court_id=a["courtId"],
+                    duration_slots=a["durationSlots"],
+                )
+                for a in current_assignments
+            ],
+            objective_value=float(objective_value),
+            found_at_seconds=time_module.perf_counter() - self.start_time,
+            solution_id=str(uuid.uuid4()),
+        )
+
+        self._counter += 1
+        # Negate so heapq's min-heap behaves like a max-heap on objective.
+        entry = (-float(objective_value), self._counter, snapshot)
+        if len(self._pool) < self.pool_size:
+            heapq.heappush(self._pool, entry)
+            self._seen.add(signature)
+        else:
+            # Heap top is the worst (highest objective). Replace it only
+            # if this new solution is better.
+            if entry > self._pool[0]:
+                evicted = heapq.heappushpop(self._pool, entry)
+                # The evicted snapshot's signature comes back into play
+                # if the same primal is found again later.
+                self._seen.discard(self._signature_of(evicted[2]))
+                self._seen.add(signature)
+
+    @staticmethod
+    def _signature_of(snap: ScheduleSnapshot) -> Tuple:
+        return tuple(
+            sorted(
+                (a.match_id, a.slot_id, a.court_id, a.duration_slots)
+                for a in snap.assignments
+            )
+        )
+
+    @property
+    def candidates(self) -> List[ScheduleSnapshot]:
+        """Top-N candidates ordered best-first (lowest objective)."""
+        # Sort the heap copy by ascending objective_value (best first).
+        return [snap for _, _, snap in sorted(self._pool, key=lambda e: -e[0])]
+
 
 class CPSATScheduler:
     """Interval-based CP-SAT scheduler."""
@@ -232,6 +316,11 @@ class CPSATScheduler:
         self.proximity_min_slack: Dict[Tuple[str, str, str], cp_model.IntVar] = {}
         self.proximity_max_slack: Dict[Tuple[str, str, str], cp_model.IntVar] = {}
         self.overlap_slack: List[cp_model.IntVar] = []
+        # Bus for auxiliary objective terms that plugins outside the
+        # core constraint set want to add. The ``StayClose`` plugin
+        # (used by warm-start) appends per-match move-penalty
+        # variables; the ``Objective`` plugin pulls them in.
+        self.extra_objective_terms: List = []
 
         self.infeasible_reasons: List[str] = []
         self.locked_matches: Set[str] = set()
@@ -372,7 +461,11 @@ class CPSATScheduler:
             return "complex"
         return "very complex"
 
-    def solve(self, progress_callback: Optional[Callable[[dict], None]] = None) -> ScheduleResult:
+    def solve(
+        self,
+        progress_callback: Optional[Callable[[dict], None]] = None,
+        candidate_pool_size: int = 0,
+    ) -> ScheduleResult:
         start_time = time_module.perf_counter()
         log_solve_start()
 
@@ -405,12 +498,18 @@ class CPSATScheduler:
         solver.parameters.random_seed = effective_seed
         solver.parameters.log_search_progress = self.solver_options.log_progress
 
-        if progress_callback is not None:
+        # We instantiate the callback whenever EITHER an external
+        # progress callback was supplied OR a candidate pool was
+        # requested — it serves both roles. With neither, the solver
+        # runs uninstrumented (legacy behaviour).
+        callback: Optional[ProgressCallback] = None
+        if progress_callback is not None or candidate_pool_size > 0:
             callback = ProgressCallback(
                 callback_fn=progress_callback,
                 svars=self.svars,
                 matches=self.matches,
                 model_stats=model_stats,
+                pool_size=candidate_pool_size,
             )
             status = solver.Solve(self.model, callback)
         else:
@@ -462,6 +561,7 @@ class CPSATScheduler:
                 moved_count=moved_count,
                 locked_count=len(self.locked_matches),
                 solver_seed=effective_seed,
+                candidates=callback.candidates if callback else [],
             )
 
         infeasible_reasons = diagnose_infeasibility(

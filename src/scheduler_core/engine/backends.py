@@ -34,8 +34,13 @@ class SchedulingBackend(ABC):
 class CPSATBackend(SchedulingBackend):
     """CP-SAT backend. Uses existing CPSATScheduler."""
 
-    def __init__(self, solver_options: Optional[SolverOptions] = None) -> None:
+    def __init__(
+        self,
+        solver_options: Optional[SolverOptions] = None,
+        candidate_pool_size: int = 0,
+    ) -> None:
         self.solver_options = solver_options or SolverOptions()
+        self.candidate_pool_size = candidate_pool_size
 
     def solve(self, request: ScheduleRequest) -> ScheduleResult:
         scheduler = CPSATScheduler(
@@ -46,7 +51,7 @@ class CPSATBackend(SchedulingBackend):
         scheduler.add_matches(request.matches)
         scheduler.set_previous_assignments(request.previous_assignments)
         scheduler.build()
-        return scheduler.solve()
+        return scheduler.solve(candidate_pool_size=self.candidate_pool_size)
 
 
 def _player_ids(m: Match) -> Set[str]:

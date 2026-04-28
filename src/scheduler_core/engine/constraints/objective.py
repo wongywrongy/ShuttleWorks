@@ -155,5 +155,12 @@ class Objective:
             for overlap in ctx.overlap_slack:
                 terms.append(penalty * overlap)
 
+        # Pull in any terms other plugins (e.g. StayClose) appended to
+        # the shared bus. Decoupling like this means the Objective
+        # plugin doesn't have to know which auxiliary plugins are
+        # active — anything that pushes onto extra_objective_terms
+        # gets summed in.
+        terms.extend(getattr(ctx, "extra_objective_terms", []))
+
         if terms:
             ctx.model.Minimize(sum(terms))

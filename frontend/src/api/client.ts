@@ -32,6 +32,47 @@ interface GenerateScheduleRequest {
   previousAssignments?: any[];
 }
 
+export type DisruptionType = 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
+
+export interface Disruption {
+  type: DisruptionType;
+  playerId?: string;
+  courtId?: number;
+  matchId?: string;
+  extraMinutes?: number;
+}
+
+export interface RepairRequest {
+  originalSchedule: ScheduleDTO;
+  config: TournamentConfig;
+  players: PlayerDTO[];
+  matches: MatchDTO[];
+  matchStates: Record<string, MatchStateDTO>;
+  disruption: Disruption;
+  nowIso?: string;
+}
+
+export interface RepairResponse {
+  schedule: ScheduleDTO;
+  repairedMatchIds: string[];
+}
+
+export interface WarmRestartRequest {
+  originalSchedule: ScheduleDTO;
+  config: TournamentConfig;
+  players: PlayerDTO[];
+  matches: MatchDTO[];
+  matchStates: Record<string, MatchStateDTO>;
+  /** 10 = Conservative (default), 5 = Balanced, 1 = Aggressive. */
+  stayCloseWeight?: number;
+  nowIso?: string;
+}
+
+export interface WarmRestartResponse {
+  schedule: ScheduleDTO;
+  movedMatchIds: string[];
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -121,6 +162,31 @@ class ApiClient {
    */
   async generateSchedule(request: GenerateScheduleRequest): Promise<ScheduleDTO> {
     const response = await this.client.post<ScheduleDTO>('/schedule', request);
+    return response.data;
+  }
+
+  /**
+   * Repair the schedule after a disruption (overrun, withdrawal,
+   * court closure, cancellation). Re-solves only the affected slice;
+   * everything else stays pinned. Solve time < 5 s for typical
+   * tournaments.
+   */
+  async repairSchedule(request: RepairRequest): Promise<RepairResponse> {
+    const response = await this.client.post<RepairResponse>('/schedule/repair', request);
+    return response.data;
+  }
+
+  /**
+   * Full re-solve seeded by the existing schedule with a stay-close
+   * objective. Finished + in-progress matches stay where they are;
+   * future matches may move under a per-match move penalty
+   * (Conservative=10 / Balanced=5 / Aggressive=1).
+   */
+  async warmRestartSchedule(request: WarmRestartRequest): Promise<WarmRestartResponse> {
+    const response = await this.client.post<WarmRestartResponse>(
+      '/schedule/warm-restart',
+      request,
+    );
     return response.data;
   }
 

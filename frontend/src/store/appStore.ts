@@ -175,6 +175,10 @@ interface AppState {
   // Schedule — persisted to the server file via useTournamentState.
   schedule: ScheduleDTO | null;
   setSchedule: (schedule: ScheduleDTO | null) => void;
+  // Swap the active candidate within the current schedule. Updates
+  // both ``activeCandidateIndex`` and the top-level ``assignments``
+  // array so existing readers don't need to migrate.
+  setActiveCandidateIndex: (index: number) => void;
 
   // Staleness flag: `true` when the user has edited config/players/matches
   // after a schedule was generated. Cleared on setSchedule(non-null).
@@ -401,6 +405,19 @@ export const useAppStore = create<AppState>()(
         schedule,
         scheduleIsStale: false,
         isScheduleLocked: schedule !== null,
+      }),
+      setActiveCandidateIndex: (index) => set((state) => {
+        const s = state.schedule;
+        if (!s || !s.candidates || index < 0 || index >= s.candidates.length) return {};
+        const cand = s.candidates[index];
+        return {
+          schedule: {
+            ...s,
+            assignments: cand.assignments,
+            activeCandidateIndex: index,
+            objectiveScore: cand.objectiveScore,
+          },
+        };
       }),
       setScheduleStats: (scheduleStats) => set({ scheduleStats }),
       setScheduleStale: (scheduleIsStale) => set({ scheduleIsStale }),

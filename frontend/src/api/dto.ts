@@ -139,6 +139,13 @@ export interface TournamentConfigDTO {
 export type ScheduleView = 'timeslot' | 'court';
 
 // Schedule
+export interface ScheduleCandidate {
+  solutionId: string;
+  assignments: ScheduleAssignment[];
+  objectiveScore: number;
+  foundAtSeconds: number;
+}
+
 export interface ScheduleDTO {
   assignments: ScheduleAssignment[];
   unscheduledMatches: string[];
@@ -149,6 +156,14 @@ export interface ScheduleDTO {
   /** Random seed the solver used. Pair with the Reproducible-run
    *  toggle to regenerate a byte-identical schedule. */
   solverSeed?: number;
+  /** Top-N near-optimal alternatives the solver found while
+   *  improving. ``assignments`` above mirrors
+   *  ``candidates[activeCandidateIndex].assignments`` when set;
+   *  callers should read via ``getActiveAssignments(schedule)`` to
+   *  honour the active selection without crashing on legacy
+   *  schedules where these fields are missing. */
+  candidates?: ScheduleCandidate[];
+  activeCandidateIndex?: number;
 }
 
 export interface ScheduleAssignment {

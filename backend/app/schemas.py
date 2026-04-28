@@ -181,6 +181,21 @@ class SoftViolation(BaseModel):
     penaltyIncurred: float
 
 
+class ScheduleCandidate(BaseModel):
+    """One alternative schedule the solver found while improving.
+
+    The pool is captured during the initial solve; operator can swap
+    the active candidate without a re-solve. ``solutionId`` is a stable
+    id for React keys; ``objectiveScore`` lets the UI show how each
+    candidate ranks; ``foundAtSeconds`` is wall-clock seconds since
+    solve start (lower = solver's earlier guess, often more disrupted).
+    """
+    solutionId: str
+    assignments: List[ScheduleAssignment] = Field(default_factory=list)
+    objectiveScore: float = 0.0
+    foundAtSeconds: float = 0.0
+
+
 class ScheduleDTO(BaseModel):
     assignments: List[ScheduleAssignment] = Field(default_factory=list)
     unscheduledMatches: List[str] = Field(default_factory=list)
@@ -191,6 +206,11 @@ class ScheduleDTO(BaseModel):
     # The seed the solver actually used. Pair with ``deterministic`` to
     # reproduce a schedule byte-for-byte from the same input.
     solverSeed: Optional[int] = None
+    # Top-N near-optimal alternatives. ``assignments`` above always
+    # equals ``candidates[activeCandidateIndex].assignments`` when the
+    # pool is non-empty; older clients ignore both fields.
+    candidates: List[ScheduleCandidate] = Field(default_factory=list)
+    activeCandidateIndex: Optional[int] = None
 
 
 # Match State (for Match Desk)
