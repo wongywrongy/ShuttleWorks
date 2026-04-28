@@ -128,18 +128,18 @@ export function TournamentSetupPage() {
           section. The shell itself never shows them. */}
       {isLocked && <ScheduleLockIndicator showUnlockHint />}
       {isNewTournament && (
-        <div className="rounded border border-blue-300 bg-blue-50 px-3 py-2 text-xs text-blue-900 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-100">
+        <div className="rounded border border-status-started/40 bg-status-started-bg px-3 py-2 text-xs text-status-started">
           <span className="font-semibold">New tournament — </span>
           configure settings below. Saved on first save.
         </div>
       )}
       {error && !isNewTournament && (
-        <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </div>
       )}
       {saveError && (
-        <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {saveError}
         </div>
       )}

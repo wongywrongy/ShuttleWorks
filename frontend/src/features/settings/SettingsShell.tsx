@@ -43,9 +43,11 @@ export function SettingsShell({ sections, defaultSectionId }: SettingsShellProps
   if (!active) return null;
 
   return (
-    <div className="grid h-full min-h-[calc(100vh-3rem)] grid-cols-1 gap-4 lg:grid-cols-[14rem_1fr]">
-      {/* Left rail */}
-      <aside className="lg:sticky lg:top-12 lg:self-start lg:max-h-[calc(100vh-3.5rem)] lg:overflow-y-auto lg:border-r lg:border-border/60 lg:pr-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[15rem_1fr]">
+      {/* Left rail. The parent <main> in AppShell owns scrolling, so the
+          rail uses position:sticky with a top offset that matches the
+          TabBar height (h-12 = 3rem) plus our root padding. */}
+      <aside className="lg:sticky lg:top-2 lg:self-start lg:border-r lg:border-border/60 lg:pr-3">
         <SettingsNav
           sections={sections}
           activeId={active.id}
@@ -56,17 +58,17 @@ export function SettingsShell({ sections, defaultSectionId }: SettingsShellProps
       {/* Right pane */}
       <main
         aria-labelledby={`section-${active.id}-title`}
-        className="min-w-0 pb-12"
+        className="min-w-0"
       >
-        <header className="mb-3 border-b border-border/60 pb-2">
+        <header className="mb-4 border-b border-border/60 pb-3">
           <h2
             id={`section-${active.id}-title`}
-            className="text-base font-semibold text-foreground"
+            className="text-lg font-semibold tracking-tight text-foreground"
           >
             {active.title ?? active.label}
           </h2>
           {active.description && (
-            <p className="mt-0.5 text-2xs text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               {active.description}
             </p>
           )}

@@ -17,10 +17,10 @@ const LEVEL_STYLES: Record<
   ToastLevel,
   { bg: string; border: string; text: string; Icon: ComponentType<LucideProps> }
 > = {
-  info:    { bg: 'bg-blue-50',    border: 'border-blue-300',   text: 'text-blue-900',   Icon: Info },
-  success: { bg: 'bg-green-50',   border: 'border-green-300',  text: 'text-green-900',  Icon: CheckCircle2 },
-  warn:    { bg: 'bg-yellow-50',  border: 'border-yellow-300', text: 'text-yellow-900', Icon: AlertTriangle },
-  error:   { bg: 'bg-red-50',     border: 'border-red-300',    text: 'text-red-900',    Icon: XCircle },
+  info:    { bg: 'bg-status-started-bg', border: 'border-status-started/40', text: 'text-status-started', Icon: Info },
+  success: { bg: 'bg-status-live-bg',    border: 'border-status-live/40',    text: 'text-status-live',    Icon: CheckCircle2 },
+  warn:    { bg: 'bg-status-warning-bg', border: 'border-status-warning/40', text: 'text-status-warning', Icon: AlertTriangle },
+  error:   { bg: 'bg-status-blocked-bg', border: 'border-status-blocked/40', text: 'text-status-blocked', Icon: XCircle },
 };
 
 function Item({ toast }: { toast: ToastEntry }) {
@@ -77,10 +77,12 @@ function Item({ toast }: { toast: ToastEntry }) {
 export function ToastStack() {
   const toasts = useAppStore((s) => s.toasts);
   if (toasts.length === 0) return null;
+  // bottom-14 keeps toasts clear of the SolverHud (which sits at bottom-0
+  // on Schedule). z-50 stays above the HUD's z-10 either way.
   return (
     <div
       data-testid="toast-stack"
-      className="pointer-events-none fixed bottom-4 right-4 z-50 flex flex-col gap-2"
+      className="pointer-events-none fixed bottom-14 right-4 z-50 flex flex-col gap-2"
     >
       {toasts.map((t) => (
         <div key={t.id} className="pointer-events-auto">

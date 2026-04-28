@@ -13,7 +13,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Download } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, ClipboardList } from 'lucide-react';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useLiveOperations } from '../hooks/useLiveOperations';
 import { useTrafficLights } from '../hooks/useTrafficLights';
@@ -351,17 +351,13 @@ export function MatchControlCenterPage() {
   // No schedule state
   if (!liveTracking.schedule) {
     return (
-      <div className="w-full h-[calc(100vh-56px)] flex flex-col px-2 py-1 gap-2">
-        <div className="flex-1 flex flex-col items-center justify-center bg-card rounded border border-border">
-          <div className="text-muted-foreground mb-3">
-            <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          </div>
-          <p className="text-sm text-muted-foreground mb-1">No schedule generated.</p>
+      <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-card rounded-lg border border-dashed border-border">
+          <ClipboardList aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
+          <p className="text-sm text-muted-foreground">No schedule generated.</p>
           <p className="text-xs text-muted-foreground">
             Generate a schedule on the{' '}
-            <Link to="/schedule" className="text-blue-600 hover:underline">Schedule page</Link>
+            <Link to="/schedule" className="font-medium text-primary hover:underline">Schedule page</Link>
           </p>
         </div>
       </div>
@@ -370,14 +366,14 @@ export function MatchControlCenterPage() {
 
   if (!liveTracking.config || !liveOps.config || !liveOps.schedule) {
     return (
-      <div className="w-full h-[calc(100vh-56px)] flex items-center justify-center">
-        <div className="text-muted-foreground text-sm">Loading...</div>
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="text-muted-foreground text-sm">Loading…</div>
       </div>
     );
   }
 
   return (
-    <div className="w-full h-[calc(100vh-56px)] flex flex-col px-2 py-1 gap-2">
+    <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
       <div className="flex-1 min-h-0 flex gap-2">
         {/* Main area - Gantt + Matches list */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
@@ -390,10 +386,10 @@ export function MatchControlCenterPage() {
                   {stats?.finished || 0}/{stats?.total || 0} matches
                 </span>
                 {(stats?.inProgress || 0) > 0 && (
-                  <span className="text-green-600">{stats.inProgress} active</span>
+                  <span className="font-medium text-status-live">{stats.inProgress} active</span>
                 )}
                 {delayedCount > 0 && (
-                  <span className="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                  <span className="rounded border border-status-warning/40 bg-status-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-status-warning">
                     {delayedCount} late
                   </span>
                 )}
@@ -470,16 +466,17 @@ export function MatchControlCenterPage() {
         {detailsOpen ? (
           <div className="w-72 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
             <div className="px-2 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Match Details
               </span>
               <button
+                type="button"
                 onClick={() => setDetailsOpen(false)}
                 title="Collapse details"
                 aria-label="Collapse details"
-                className="text-muted-foreground hover:text-muted-foreground text-xs leading-none"
+                className={`${INTERACTIVE_BASE} flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground`}
               >
-                ›
+                <ChevronRight aria-hidden="true" className="h-4 w-4" />
               </button>
             </div>
             <MatchDetailsPanel
@@ -522,22 +519,27 @@ export function MatchControlCenterPage() {
           </div>
         ) : (
           <button
+            type="button"
             onClick={() => setDetailsOpen(true)}
             title="Show match details"
             aria-label="Show match details"
-            className="w-6 flex-shrink-0 bg-card rounded border border-border flex flex-col items-center justify-center text-muted-foreground hover:text-muted-foreground hover:bg-muted/40 text-xs"
+            className={`${INTERACTIVE_BASE} w-6 flex-shrink-0 bg-card rounded border border-border flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground`}
           >
-            ‹
+            <ChevronLeft aria-hidden="true" className="h-4 w-4" />
           </button>
         )}
       </div>
 
       {liveTracking.isLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-card rounded border border-border p-4">
-            <div className="w-6 h-6 border-2 border-border border-t-gray-600 rounded-full animate-spin mx-auto" />
-            <p className="text-muted-foreground mt-2 text-xs">Loading…</p>
-          </div>
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-14 left-1/2 z-40 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
+        >
+          <span className="inline-flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full border-2 border-border border-t-primary animate-spin" aria-hidden />
+            Loading…
+          </span>
         </div>
       )}
       <DisruptionDialog

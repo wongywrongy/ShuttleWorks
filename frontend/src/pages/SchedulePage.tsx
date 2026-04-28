@@ -19,7 +19,7 @@ import { computeConstraintViolations } from '../utils/constraintChecker';
 import { formatSlotTime } from '../lib/time';
 import { useCurrentSlot } from '../hooks/useCurrentSlot';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, CalendarRange } from 'lucide-react';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig, RosterGroupDTO } from '../api/dto';
 import { InlineSearch, type FilterChipGroup } from '../components/InlineSearch';
@@ -482,37 +482,37 @@ export function SchedulePage() {
   const bestBound = hasLiveProgress ? generationProgress.best_bound : scheduleStats?.bestBound;
 
   return (
-    <div className="w-full h-[calc(100vh-56px)] flex flex-col px-2 py-1 gap-2">
+    <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
       <StaleBanner />
       {/* Alerts */}
       {needsConfig && (
-        <div className="p-2 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded text-xs flex-shrink-0 dark:bg-yellow-500/10 dark:border-yellow-500/30 dark:text-yellow-200">
+        <div className="flex-shrink-0 rounded border border-status-warning/40 bg-status-warning-bg px-3 py-2 text-xs text-status-warning">
           <span className="font-medium">Config needed:</span>{' '}
-          <Link to="/setup" className="underline hover:text-yellow-900 dark:hover:text-yellow-100">Tournament Setup</Link>
+          <Link to="/setup" className="underline">Tournament Setup</Link>
         </div>
       )}
 
       {error && (
-        <div className="p-2 bg-red-50 border border-red-200 text-red-700 rounded text-xs flex-shrink-0 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-200">
+        <div className="flex-shrink-0 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {error}
         </div>
       )}
 
       {schedule?.status === 'infeasible' && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded text-xs flex-shrink-0 dark:bg-red-500/10 dark:border-red-500/30">
-          <div className="font-medium text-red-800 dark:text-red-200 mb-1">
+        <div className="flex-shrink-0 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs">
+          <div className="mb-1 font-semibold text-destructive">
             Couldn't generate a feasible schedule
           </div>
-          <div className="text-red-700 dark:text-red-300">
+          <div className="text-destructive/90">
             Try adding courts, reducing default rest time, extending the day,
             or relaxing player availability windows in Setup.
           </div>
           {schedule.infeasibleReasons && schedule.infeasibleReasons.length > 0 && (
             <details className="mt-2">
-              <summary className="cursor-pointer text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200">
+              <summary className="cursor-pointer text-destructive hover:underline">
                 Details ({schedule.infeasibleReasons.length})
               </summary>
-              <ul className="mt-1 pl-3 text-red-600 max-h-24 overflow-y-auto dark:text-red-300 list-disc">
+              <ul className="mt-1 max-h-24 list-disc overflow-y-auto pl-4 text-destructive/90">
                 {schedule.infeasibleReasons.slice(0, 10).map((reason, i) => (
                   <li key={i}>{reason}</li>
                 ))}
@@ -614,61 +614,33 @@ export function SchedulePage() {
           </div>
 
           {/* Match details sidebar.
-              Log is offered as a tab only while a solver run is active
-              — once it ends, the toggle disappears and the rail is
-              dedicated to match details. */}
+              Tabs (Log/Details/Candidates) sit on the first row.
+              Action buttons (Re-plan / Disruption) get their own row with
+              a divider so operators don't confuse them for tabs. */}
           <div className="w-72 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
-            <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex items-center gap-1">
-              {isOptimizing ? (
-                <>
-                  <button
-                    onClick={() => setSidebarTab('log')}
-                    className={`px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded ${
-                      sidebarTab === 'log'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    Log
-                  </button>
-                  <button
-                    onClick={() => setSidebarTab('details')}
-                    className={`px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded ${
-                      sidebarTab === 'details'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    Details
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setSidebarTab('details')}
-                    className={`px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded ${
-                      sidebarTab === 'details'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    Details
-                  </button>
-                  {(schedule?.candidates?.length ?? 0) > 0 && (
-                    <button
-                      onClick={() => setSidebarTab('candidates')}
-                      className={`px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded ${
-                        sidebarTab === 'candidates'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      Candidates
-                    </button>
-                  )}
+            <div className="border-b border-border flex-shrink-0">
+              <div role="tablist" className="flex items-center gap-1 px-2 py-1.5">
+                {isOptimizing ? (
+                  <>
+                    <SidebarTab active={sidebarTab === 'log'} onClick={() => setSidebarTab('log')}>Log</SidebarTab>
+                    <SidebarTab active={sidebarTab === 'details'} onClick={() => setSidebarTab('details')}>Details</SidebarTab>
+                  </>
+                ) : (
+                  <>
+                    <SidebarTab active={sidebarTab === 'details'} onClick={() => setSidebarTab('details')}>Details</SidebarTab>
+                    {(schedule?.candidates?.length ?? 0) > 0 && (
+                      <SidebarTab active={sidebarTab === 'candidates'} onClick={() => setSidebarTab('candidates')}>
+                        Candidates
+                      </SidebarTab>
+                    )}
+                  </>
+                )}
+              </div>
+              {!isOptimizing && (
+                <div className="flex items-center gap-1 border-t border-border/60 px-2 py-1">
                   <button
                     onClick={() => setWarmRestartOpen(true)}
-                    className="ml-auto px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded text-muted-foreground hover:bg-muted"
+                    className={`${INTERACTIVE_BASE} rounded px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground`}
                     title="Re-plan from here (full re-solve, stay-close objective)"
                   >
                     Re-plan…
@@ -678,12 +650,12 @@ export function SchedulePage() {
                       setDisruptionPrefill({});
                       setDisruptionOpen(true);
                     }}
-                    className="px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded text-muted-foreground hover:bg-muted"
+                    className={`${INTERACTIVE_BASE} rounded px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground`}
                     title="Repair after a disruption"
                   >
                     Disruption…
                   </button>
-                </>
+                </div>
               )}
             </div>
             <div className="flex-1 min-h-0 overflow-auto">
@@ -758,13 +730,9 @@ export function SchedulePage() {
         </div>
       ) : (
         /* Empty state */
-        <div className="flex-1 flex flex-col items-center justify-center bg-card rounded border border-border">
-          <div className="text-muted-foreground mb-3">
-            <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <p className="text-sm text-muted-foreground mb-3">
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-card rounded-lg border border-dashed border-border">
+          <CalendarRange aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
+          <p className="text-sm text-muted-foreground">
             {needsConfig ? 'Configure tournament first.' : 'No schedule generated.'}
           </p>
           <ScheduleActions
@@ -778,5 +746,35 @@ export function SchedulePage() {
         </div>
       )}
     </div>
+  );
+}
+
+// Sidebar tab — visually distinct from action buttons (filled when active,
+// muted when not). Lives on its own row above action buttons.
+function SidebarTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={[
+        INTERACTIVE_BASE,
+        'rounded px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider',
+        active
+          ? 'bg-primary text-primary-foreground shadow-sm'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+      ].join(' ')}
+    >
+      {children}
+    </button>
   );
 }

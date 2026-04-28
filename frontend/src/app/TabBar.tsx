@@ -27,47 +27,57 @@ export function TabBar() {
   return (
     <nav
       aria-label="Tournament scheduler tabs"
-      className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-card px-4 h-12"
+      className="sticky top-0 z-20 flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4"
     >
-      <div className="flex items-center gap-1">
-        <span className="mr-3 text-sm font-semibold text-card-foreground">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="hidden text-sm font-semibold tracking-tight text-card-foreground sm:inline">
           Tournament Scheduler
         </span>
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          const isDisabled = disabledTabs.has(tab.id);
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              disabled={isDisabled}
-              onClick={() => setActiveTab(tab.id)}
-              aria-current={isActive ? 'page' : undefined}
-              aria-disabled={isDisabled || undefined}
-              title={
-                isDisabled
-                  ? tab.id === 'matches'
-                    ? 'Add players first'
-                    : tab.id === 'schedule' || tab.id === 'live'
-                      ? 'Create matches first'
-                      : undefined
-                  : undefined
-              }
-              data-testid={`tab-${tab.id}`}
-              className={[
-                INTERACTIVE_BASE,
-                'rounded px-3 py-1.5 text-sm font-medium',
-                isActive
-                  ? 'bg-blue-100 text-blue-700 shadow-inner dark:bg-blue-500/15 dark:text-blue-300'
-                  : isDisabled
-                    ? 'text-muted-foreground/50'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-              ].join(' ')}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
+        <div role="tablist" aria-label="Sections" className="flex items-center gap-0.5">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const isDisabled = disabledTabs.has(tab.id);
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                disabled={isDisabled}
+                onClick={() => setActiveTab(tab.id)}
+                aria-current={isActive ? 'page' : undefined}
+                aria-selected={isActive}
+                aria-disabled={isDisabled || undefined}
+                title={
+                  isDisabled
+                    ? tab.id === 'matches'
+                      ? 'Add players first'
+                      : tab.id === 'schedule' || tab.id === 'live'
+                        ? 'Create matches first'
+                        : undefined
+                    : undefined
+                }
+                data-testid={`tab-${tab.id}`}
+                className={[
+                  INTERACTIVE_BASE,
+                  'relative rounded-md px-3 py-1.5 text-sm font-medium',
+                  isActive
+                    ? 'bg-primary/10 text-primary dark:bg-primary/15'
+                    : isDisabled
+                      ? 'text-muted-foreground/50'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                ].join(' ')}
+              >
+                {tab.label}
+                {isActive && (
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-2 -bottom-[5px] h-0.5 rounded-full bg-primary"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
       {/* Header chrome stays minimal: just the live status. Theme +
           density toggles live in Setup → Appearance. */}

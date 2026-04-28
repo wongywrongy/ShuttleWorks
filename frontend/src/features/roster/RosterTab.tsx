@@ -12,7 +12,8 @@
  *   RosterSpreadsheet (detail view — availability, rest, notes)
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download } from 'lucide-react';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import {
   DndContext,
   MouseSensor,
@@ -107,18 +108,25 @@ export function RosterTab() {
   const canExportRoster = groups.length > 0 && players.length > 0;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-3 p-3">
-      <div className="flex items-center justify-end">
+    <div className="mx-auto max-w-7xl space-y-4 px-4 py-4">
+      <header className="flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Roster</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Add schools and players, then assign event ranks.
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => void exportRosterXlsx(players, groups, config)}
           disabled={!canExportRoster}
           data-testid="export-roster"
-          className="rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50`}
         >
-          ⤓ Export roster XLSX
+          <Download aria-hidden="true" className="h-4 w-4" />
+          Export XLSX
         </button>
-      </div>
+      </header>
       <GroupStrip />
 
       {groups.length > 0 ? (
@@ -139,16 +147,18 @@ export function RosterTab() {
                   type="button"
                   onClick={() => setActiveSchoolId(s.id)}
                   data-testid={`school-tab-${s.id}`}
+                  aria-pressed={isActive}
                   className={[
-                    'rounded-full px-3 py-0.5 text-xs font-medium transition-colors',
+                    INTERACTIVE_BASE,
+                    'rounded-full px-3 py-1 text-xs font-medium',
                     isActive
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-foreground hover:bg-muted/70',
                   ].join(' ')}
                 >
                   {s.name}
                   <span
-                    className={`ml-1.5 tabular-nums ${isActive ? 'text-blue-100' : 'text-muted-foreground'}`}
+                    className={`ml-1.5 tabular-nums ${isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
                   >
                     {s.count}
                   </span>
