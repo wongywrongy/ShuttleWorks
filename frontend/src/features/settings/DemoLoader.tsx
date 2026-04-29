@@ -2,10 +2,11 @@
  * Demo tournament loader.
  *
  * One-click overwrite of the active tournament with a curated fixture.
- * Two fixtures live under ``./samples`` — a 4-school dual meet and a
- * 3-school tri meet, each with a pre-baked schedule so the operator
- * can poke around without running the solver. Loading shows a confirm
- * step because the action wipes the current tournament.
+ * Two fixtures live under ``./samples`` — a 2-school dual meet (20
+ * players each, 5 events) and a 3-school tri meet (10 players each,
+ * 5 events), each with a pre-baked schedule so the operator can poke
+ * around without running the solver. Loading shows a confirm step
+ * because the action wipes the current tournament.
  */
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
@@ -26,13 +27,52 @@ export function DemoLoader() {
     // ``setGroups`` action on the store. The persistence hook
     // (``useTournamentState``) sees the change as one update and
     // debounces a single PUT.
+    //
+    // Crucially, we ALSO reset every piece of ephemeral / live /
+    // proposal-pipeline state. Without this, leftovers from the
+    // previous tournament leak into the demo:
+    //   • advisories referencing match IDs that no longer exist
+    //   • match-states keyed to deleted matches (live tab shows
+    //     wrong colors)
+    //   • activeProposal from an abandoned dialog re-opens stale
+    //   • scheduleVersion accumulates across tournaments so commit
+    //     concurrency checks misfire
+    //   • isScheduleLocked stays at whatever it was
+    //   • solver HUD / logs / pending-pin from the previous solve
     useAppStore.setState({
+      // New tournament data
       config: fixture.config,
       groups: fixture.groups,
       players: fixture.players,
       matches: fixture.matches,
       schedule: fixture.schedule,
       scheduleIsStale: false,
+      scheduleStats: null,
+      // Demo arrives with a finalized schedule, so the lock should be
+      // engaged from the moment it lands — config edits then prompt
+      // for explicit unlock instead of silently invalidating it.
+      isScheduleLocked: true,
+      // Fresh tournament starts at version 0 with no history.
+      scheduleVersion: 0,
+      scheduleHistory: [],
+      // Drop any in-flight proposal-pipeline / advisory state.
+      activeProposal: null,
+      advisories: [],
+      pendingAdvisoryReview: null,
+      // Drop live-tracking state — match IDs from prior tournament
+      // are gone, and starting from "all scheduled" is correct.
+      matchStates: {},
+      liveState: null,
+      // Drop solver session leftovers.
+      isGenerating: false,
+      generationProgress: null,
+      generationError: null,
+      solverLogs: [],
+      solverHud: { phase: null, solutionCount: 0, elapsedMs: 0 },
+      pendingPin: null,
+      lastValidation: null,
+      // Active tab not changed — the operator clicked Load on the
+      // Setup page, leaving them there is the right default.
     });
     pushToast({
       level: 'success',
@@ -52,7 +92,7 @@ export function DemoLoader() {
         <DemoCard
           kind="dual"
           fixture={DUAL_DEMO}
-          summary="4 schools · 16 players · 24 matches"
+          summary="2 schools · 20 players each · 5 events · 15 matches"
           confirm={pending === 'dual'}
           onArm={() => setPending('dual')}
           onCancel={() => setPending(null)}
@@ -61,7 +101,7 @@ export function DemoLoader() {
         <DemoCard
           kind="tri"
           fixture={TRI_DEMO}
-          summary="3 schools · 18 players · 9 tri matches"
+          summary="3 schools · 10 players each · 5 events · 30 matches"
           confirm={pending === 'tri'}
           onArm={() => setPending('tri')}
           onCancel={() => setPending(null)}

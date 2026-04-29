@@ -41,7 +41,8 @@ import heapq
 import time as time_module
 import uuid
 from collections import defaultdict
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from functools import lru_cache
+from typing import Callable, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from ortools.sat.python import cp_model
 
@@ -283,6 +284,33 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
         return [snap for _, _, snap in sorted(self._pool, key=lambda e: -e[0])]
 
 
+@lru_cache(maxsize=4096)
+def _player_allowed_starts_cached(
+    availability: Tuple[Tuple[int, int], ...],
+    max_start: int,
+    duration: int,
+) -> FrozenSet[int]:
+    """Set of start slots for which a duration-`duration` interval fits
+    inside at least one availability window.
+
+    Memoized at module scope so repeated builds across solves (warm
+    restarts, repairs, director actions) reuse the work. Cache key is
+    the player's availability tuple + the geometry of the slot grid;
+    same player + same grid = same answer, regardless of which match
+    asked. The cache is bounded (4096 entries) so very large
+    tournaments stay memory-safe.
+    """
+    if max_start < 0:
+        return frozenset()
+    out: Set[int] = set()
+    for t in range(max_start + 1):
+        for start, end in availability:
+            if start <= t and t + duration <= end:
+                out.add(t)
+                break
+    return frozenset(out)
+
+
 class CPSATScheduler:
     """Interval-based CP-SAT scheduler."""
 
@@ -366,6 +394,10 @@ class CPSATScheduler:
         Returns ``None`` only when there are no availability constraints *and* no break
         windows (i.e. the match is unconstrained). Returns an empty list when the
         match is infeasible.
+
+        Per-player availability scans are memoized via the module-level
+        LRU cache below — repeated builds for the same tournament reuse
+        the per-(player, duration, max_start) sets without rescanning.
         """
         T = self.config.total_slots
         d = match.duration_slots
@@ -375,24 +407,24 @@ class CPSATScheduler:
 
         breaks = self.config.break_slots
 
-        per_player_allowed: List[Set[int]] = []
+        per_player_allowed: List[FrozenSet[int]] = []
         for player_id in get_player_ids(match):
             player = self.players.get(player_id)
             if not player or not player.availability:
                 continue
-            allowed = set()
-            for t in range(max_start + 1):
-                for start, end in player.availability:
-                    if start <= t and t + d <= end:
-                        allowed.add(t)
-                        break
-            per_player_allowed.append(allowed)
+            per_player_allowed.append(
+                _player_allowed_starts_cached(
+                    tuple(player.availability), max_start, d
+                )
+            )
 
         if not per_player_allowed and not breaks:
             return None
 
         if per_player_allowed:
-            intersection = set.intersection(*per_player_allowed)
+            intersection: Set[int] = set(per_player_allowed[0])
+            for s in per_player_allowed[1:]:
+                intersection &= s
         else:
             intersection = set(range(max_start + 1))
 
@@ -416,6 +448,48 @@ class CPSATScheduler:
 
         self.svars = create_variables(self.model, self.matches, self.config)
         self._num_intervals = len(self.svars.interval) + len(self.svars.court_interval)
+
+        # Court closures — a list of (court_id, from_slot, to_slot)
+        # half-open windows. We forbid each match × court combination
+        # whose interval would overlap the closed window. The legacy
+        # ``closed_court_ids`` list still works as "indefinite/all-day"
+        # closures and is folded into the same window list.
+        windows: List[Tuple[int, int, int]] = list(
+            self.config.closed_court_windows or []
+        )
+        for c in (self.config.closed_court_ids or []):
+            if 1 <= c <= self.config.court_count:
+                windows.append((c, 0, self.config.total_slots))
+        # Drop any entry outside the court range or that doesn't form a
+        # meaningful range. (Adapter has already filtered these but be
+        # defensive — direct callers may construct ScheduleConfig.)
+        windows = [
+            (cid, fs, ts) for (cid, fs, ts) in windows
+            if 1 <= cid <= self.config.court_count and ts > fs
+        ]
+        for match_id, match in self.matches.items():
+            d = match.duration_slots
+            for cid, from_slot, to_slot in windows:
+                # The interval [start, start+d) must NOT overlap
+                # [from_slot, to_slot) when court[m] == cid. The match
+                # avoids the window iff start+d <= from_slot OR
+                # start >= to_slot. Reify one BoolVar per (match, window)
+                # capturing "starts before window" and require, when
+                # the match is on this court, that either condition holds.
+                start = self.svars.start[match_id]
+                is_on = self.svars.is_on_court[(match_id, cid)]
+                before = self.model.NewBoolVar(
+                    f"closed_{match_id}_c{cid}_before_{from_slot}"
+                )
+                after = self.model.NewBoolVar(
+                    f"closed_{match_id}_c{cid}_after_{to_slot}"
+                )
+                self.model.Add(start + d <= from_slot).OnlyEnforceIf(before)
+                self.model.Add(start + d > from_slot).OnlyEnforceIf(before.Not())
+                self.model.Add(start >= to_slot).OnlyEnforceIf(after)
+                self.model.Add(start < to_slot).OnlyEnforceIf(after.Not())
+                # If the match is on this court, at least one must hold.
+                self.model.AddBoolOr([before, after, is_on.Not()])
 
         # Walk the constraint spec list. Each plugin's ``apply(ctx)`` is
         # the lifted body of one of the old ``_add_*`` methods. The

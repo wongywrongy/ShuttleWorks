@@ -30,8 +30,15 @@ export function TabBar() {
       className="sticky top-0 z-20 flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <span className="hidden text-sm font-semibold tracking-tight text-card-foreground sm:inline">
-          Tournament Scheduler
+        {/* Boxed wordmark. The 1px frame *is* the mark — no separate
+            glyph. Sizes match the design system's TabBar lockup
+            (26px tall · 13px Inter SemiBold · 4px radius). */}
+        <span
+          aria-label="ShuttleWorks"
+          title="ShuttleWorks"
+          className="hidden h-[26px] items-center rounded-[4px] border border-foreground px-[9px] text-[13px] font-semibold leading-none tracking-[-0.005em] text-foreground sm:inline-flex"
+        >
+          ShuttleWorks
         </span>
         <div role="tablist" aria-label="Sections" className="flex items-center gap-0.5">
           {TABS.map((tab) => {

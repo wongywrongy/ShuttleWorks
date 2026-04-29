@@ -4,10 +4,12 @@ import { useAppStore } from '../store/appStore';
 import { useTournamentState } from '../hooks/useTournamentState';
 import { useAppliedTheme } from '../hooks/useAppliedTheme';
 import { useAppliedDensity } from '../hooks/useAppliedDensity';
+import { useAdvisories } from '../hooks/useAdvisories';
 import { TabBar } from './TabBar';
 import { SolverHud } from '../components/SolverHud';
 import { UnsavedBanner } from '../components/UnsavedBanner';
 import { ToastStack } from '../components/Toast';
+import { UnlockModalHost } from '../components/common/UnlockModalHost';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
 // Tabs are wired to the existing pages during Step 4. Each tab is replaced with
@@ -43,8 +45,23 @@ export function AppShell() {
   useAppliedTheme();
   // Apply the user's density preference to <html> (sets data-density).
   useAppliedDensity();
+  // Poll /schedule/advisories every 15s and surface warn/critical
+  // advisories as toasts. Single mount covers every page.
+  useAdvisories();
   const activeTab = useAppStore((s) => s.activeTab);
   const pushToast = useAppStore((s) => s.pushToast);
+  const setActiveProposal = useAppStore((s) => s.setActiveProposal);
+
+  // Discard any in-flight proposal when the operator switches tabs.
+  // Otherwise the next visit to the originating tab re-opens the
+  // diff modal with stale data (the schedule may have changed in the
+  // meantime; the operator hasn't agreed to commit those exact moves).
+  // Server-side TTL eviction will clean up the abandoned proposal.
+  useEffect(() => {
+    setActiveProposal(null);
+    // intentionally trigger only on tab change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Catch anything that would otherwise surface only in the devtools console
   // — unhandled promise rejections and top-level runtime errors — and surface
@@ -93,6 +110,7 @@ export function AppShell() {
       </main>
       <SolverHud />
       <ToastStack />
+      <UnlockModalHost />
     </div>
   );
 }

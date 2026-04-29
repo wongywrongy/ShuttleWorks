@@ -30,6 +30,11 @@ import { indexById } from '../../store/selectors';
 import { Hint } from '../../components/Hint';
 import { useSchedule } from '../../hooks/useSchedule';
 import { calculateTotalSlots, formatSlotTime } from '../../lib/time';
+import {
+  getClosedSlotWindows,
+  isCourtFullyClosed,
+  isSlotClosed,
+} from '../../lib/courtClosures';
 import type {
   MatchDTO,
   ScheduleAssignment,
@@ -104,6 +109,10 @@ export function DragGantt({
   const courts = useMemo(
     () => Array.from({ length: config.courtCount }, (_, i) => i + 1),
     [config.courtCount],
+  );
+  const closedWindows = useMemo(
+    () => getClosedSlotWindows(config, totalSlots),
+    [config, totalSlots],
   );
 
   // Group assignments by court for rendering.
@@ -306,23 +315,42 @@ export function DragGantt({
             </div>
 
             {/* Court rows */}
-            {courts.map((courtId) => (
+            {courts.map((courtId) => {
+              const fullyClosed = isCourtFullyClosed(
+                closedWindows,
+                courtId,
+                minSlot,
+                maxSlot,
+              );
+              return (
               <div
                 key={courtId}
-                className="relative flex border-b border-border/60"
+                className={`relative flex border-b border-border/60 ${
+                  fullyClosed ? 'opacity-60' : ''
+                }`}
                 style={{ height: ROW_HEIGHT }}
+                title={fullyClosed ? `Court ${courtId} is closed` : undefined}
               >
                 <div
                   style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
-                  className="flex-shrink-0 flex items-center bg-muted/30 px-2 text-xs font-semibold tabular-nums text-foreground"
+                  className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
+                    fullyClosed
+                      ? 'bg-muted/60 text-muted-foreground line-through'
+                      : 'bg-muted/30 text-foreground'
+                  }`}
                 >
                   C{courtId}
                 </div>
 
-                {/* Drop target cells (one per slot column) */}
+                {/* Drop target cells (one per slot column) — closed
+                    cells reject drops; the rest of the row remains
+                    a valid drop target so a temporary closure only
+                    blocks part of the day. */}
                 <div className="relative gantt-grid" style={{ flex: '1 1 auto' }}>
                   <div className="absolute inset-0 flex">
-                    {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot) => (
+                    {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot) => {
+                      const slotClosed = isSlotClosed(closedWindows, courtId, slot);
+                      return (
                       <DropCell
                         key={slot}
                         courtId={courtId}
@@ -339,10 +367,17 @@ export function DragGantt({
                         dropFx={
                           dropFx?.courtId === courtId && dropFx?.slotId === slot ? dropFx : null
                         }
-                        readOnly={readOnly}
+                        readOnly={readOnly || slotClosed}
+                        closed={slotClosed}
                       />
-                    ))}
+                      );
+                    })}
                   </div>
+                  {fullyClosed && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-2xs uppercase tracking-wider text-muted-foreground/80">
+                      court closed
+                    </div>
+                  )}
 
                   {/* Match blocks for this court */}
                   {(courtAssignments.get(courtId) ?? []).map((a, idx) => {
@@ -368,7 +403,8 @@ export function DragGantt({
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -418,6 +454,7 @@ function DropCell({
   validation,
   dropFx,
   readOnly,
+  closed = false,
 }: {
   courtId: number;
   slotId: number;
@@ -426,10 +463,13 @@ function DropCell({
   validation: ValidationResponseDTO | null;
   dropFx: { type: 'ok' | 'shake'; nonce: number } | null;
   readOnly: boolean;
+  /** When true, the cell falls inside a court-closure window: shaded
+   *  slate, drop disabled, no hover ring. */
+  closed?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: cellId(courtId, slotId), disabled: readOnly });
-  const infeasible = hovered && validation && !validation.feasible;
-  const feasible = hovered && validation && validation.feasible;
+  const infeasible = !closed && hovered && validation && !validation.feasible;
+  const feasible = !closed && hovered && validation && validation.feasible;
   const showOk = dropFx?.type === 'ok';
   const showShake = dropFx?.type === 'shake';
   return (
@@ -437,13 +477,16 @@ function DropCell({
       ref={setNodeRef}
       style={{ width: SLOT_WIDTH }}
       data-testid={`cell-${courtId}-${slotId}`}
-      // `key` on the animated child forces the animation to restart on every
-      // new drop (because nonce changes).
+      title={closed ? `Court ${courtId} closed` : undefined}
       className={[
         'relative flex-shrink-0 border-l border-border transition-colors duration-150',
-        isCurrent ? 'bg-blue-50/30' : '',
-        isOver ? 'bg-muted/80' : '',
-        hovered ? 'motion-safe:animate-cell-pulse' : '',
+        closed
+          ? 'bg-muted/50'
+          : isCurrent
+            ? 'bg-blue-50/30'
+            : '',
+        !closed && isOver ? 'bg-muted/80' : '',
+        !closed && hovered ? 'motion-safe:animate-cell-pulse' : '',
         infeasible ? 'ring-2 ring-inset ring-red-400 bg-red-50/50' : '',
         feasible ? 'ring-2 ring-inset ring-emerald-400 bg-emerald-50/50' : '',
         showShake ? 'motion-safe:animate-shake ring-2 ring-inset ring-red-400 bg-red-100/60' : '',
@@ -546,10 +589,6 @@ function MatchBlock({
       ) : null}
       <span className="relative text-[11px] font-semibold leading-tight block truncate">
         {matchLabel(match)}
-      </span>
-      <span className="relative text-[10px] leading-tight block truncate text-muted-foreground">
-        {match.sideA.length}v{match.sideB.length}
-        {match.sideC && match.sideC.length ? `v${match.sideC.length}` : ''}
       </span>
     </button>
   );

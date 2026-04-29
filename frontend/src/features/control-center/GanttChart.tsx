@@ -5,6 +5,11 @@
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
 import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../lib/time';
+import {
+  getClosedSlotWindows,
+  isCourtFullyClosed,
+  isSlotClosed,
+} from '../../lib/courtClosures';
 import { indexById } from '../../store/selectors';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import type {
@@ -117,6 +122,10 @@ export function GanttChart({
 
   const visibleSlots = maxSlot - minSlot;
   const courts = Array.from({ length: config.courtCount }, (_, i) => i + 1);
+  const closedWindows = useMemo(
+    () => getClosedSlotWindows(config, totalSlots),
+    [config, totalSlots],
+  );
 
   // Group assignments by court (use actualCourtId if match has been moved)
   const courtAssignments = useMemo(() => {
@@ -269,10 +278,31 @@ export function GanttChart({
           </div>
 
           {/* Court rows */}
-          {courts.map(courtId => (
-            <div key={courtId} className="flex border-b border-border/60">
+          {courts.map(courtId => {
+            // A court might be fully closed for the visible window
+            // (whole-day legacy entry, or a windowed closure that
+            // happens to span the whole rendered range) — that's the
+            // grey-the-row case. Otherwise individual cells get greyed.
+            const fullyClosed = isCourtFullyClosed(
+              closedWindows,
+              courtId,
+              minSlot,
+              maxSlot,
+            );
+            return (
+            <div
+              key={courtId}
+              className={`flex border-b border-border/60 ${
+                fullyClosed ? 'opacity-60' : ''
+              }`}
+              title={fullyClosed ? `Court ${courtId} is closed` : undefined}
+            >
               <div
-                className="flex-shrink-0 flex items-center bg-muted/30 px-2 text-xs font-semibold tabular-nums text-foreground"
+                className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
+                  fullyClosed
+                    ? 'bg-muted/60 text-muted-foreground line-through'
+                    : 'bg-muted/30 text-foreground'
+                }`}
                 style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
               >
                 C{courtId}
@@ -281,18 +311,33 @@ export function GanttChart({
                 className="flex-1 relative gantt-grid"
                 style={{ height: ROW_HEIGHT }}
               >
-                {/* Slot grid lines */}
+                {/* Slot grid lines — closed cells get a slate fill so
+                    a temporary closure (12:00–13:00) shows as a band
+                    rather than greying the whole row. */}
                 <div className="absolute inset-0 flex">
-                  {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map(slot => (
-                    <div
-                      key={slot}
-                      style={{ width: SLOT_WIDTH }}
-                      className={`flex-shrink-0 border-l border-border/40 ${
-                        slot === currentSlot ? 'bg-blue-100/40 dark:bg-blue-500/10' : ''
-                      }`}
-                    />
-                  ))}
+                  {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map(slot => {
+                    const slotClosed = isSlotClosed(closedWindows, courtId, slot);
+                    return (
+                      <div
+                        key={slot}
+                        style={{ width: SLOT_WIDTH }}
+                        className={`flex-shrink-0 border-l border-border/40 ${
+                          slotClosed
+                            ? 'bg-muted/50'
+                            : slot === currentSlot
+                              ? 'bg-blue-100/40 dark:bg-blue-500/10'
+                              : ''
+                        }`}
+                        title={slotClosed ? `Court ${courtId} closed` : undefined}
+                      />
+                    );
+                  })}
                 </div>
+                {fullyClosed && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-2xs uppercase tracking-wider text-muted-foreground/80">
+                    closed
+                  </div>
+                )}
 
                 {/* Match blocks */}
                 {(courtAssignments.get(courtId) || []).map(assignment => {
@@ -378,32 +423,26 @@ export function GanttChart({
                           groupSize > 1 ? 'px-0 items-center' : 'px-2 items-start'
                         }`}
                       >
-                        {/* Two-line label matches features/schedule/DragGantt:
-                            top = match code, bottom = format like "1v1".
-                            Overlap blocks drop the font a tick so a 4-char
-                            code clears the ~44 px available at half-width. */}
+                        {/* Single match-code label — the event prefix
+                            (MS/WS/MD/WD/XD) already encodes singles vs
+                            doubles, so no subtitle. Font size is fixed
+                            so overlap and full-width lanes share the
+                            same typographic rhythm; if a code can't fit
+                            it clips via overflow-hidden rather than
+                            scaling. */}
                         <span
-                          className={`font-semibold whitespace-nowrap overflow-hidden tabular-nums ${styles.text} ${
-                            groupSize > 1
-                              ? 'text-[9px] tracking-tighter'
-                              : 'text-[11px]'
-                          }`}
+                          className={`text-[11px] font-semibold whitespace-nowrap overflow-hidden tabular-nums ${styles.text}`}
                         >
                           {match ? getMatchLabel(match) : '?'}
                         </span>
-                        {match && groupSize === 1 && (
-                          <span className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden">
-                            {(match.sideA?.length ?? 0)}v{(match.sideB?.length ?? 0)}
-                            {match.sideC && match.sideC.length ? `v${match.sideC.length}` : ''}
-                          </span>
-                        )}
                       </div>
                     </div>
                   );
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

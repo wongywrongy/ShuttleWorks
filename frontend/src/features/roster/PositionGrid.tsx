@@ -347,17 +347,10 @@ function PositionCell({
           className="block w-full rounded px-2 py-2 text-left hover:bg-card/70 focus:outline-none focus:bg-card"
         >
           <div className="flex flex-col gap-1">
-            {doubles && occupants.length === 2 ? (
-              // Complete doubles pair — one chip, "Name1 & Name2" on one line
-              // (wraps on very long names; never truncates).
-              <span
-                className="group inline-flex flex-wrap items-center gap-x-1 gap-y-0 rounded border border-blue-300 bg-card px-2 py-0.5 text-[11px] font-medium leading-tight shadow-sm dark:border-blue-500/30"
-              >
-                <NamePill player={occupants[0]} accent="blue"  onRemove={removeRank} rank={rank} />
-                <span aria-hidden className="text-muted-foreground">&</span>
-                <NamePill player={occupants[1]} accent="indigo" onRemove={removeRank} rank={rank} />
-              </span>
-            ) : (
+            {/* Doubles cells render each occupant on its own line —
+                one chip per player. Cleaner than joining names with
+                "&" and works the same for 1- and 2-player states. */}
+            {(
               occupants.map((p, i) => (
                 <span
                   key={p.id}
@@ -420,50 +413,6 @@ function PositionCell({
         />
       ) : null}
     </td>
-  );
-}
-
-/**
- * A single partner inside a combined "Name & Name" doubles chip. Each half
- * stays individually removable — hover to reveal the × right next to the
- * name it unassigns — while still reading as one visual unit.
- */
-function NamePill({
-  player,
-  accent,
-  onRemove,
-  rank,
-}: {
-  player: PlayerDTO;
-  accent: 'blue' | 'indigo';
-  onRemove: (playerId: string) => void;
-  rank: string;
-}) {
-  const text = accent === 'blue' ? 'text-blue-900 dark:text-blue-300' : 'text-indigo-900 dark:text-indigo-300';
-  return (
-    <span className={`inline-flex items-center gap-0.5 ${text}`}>
-      <span className="break-words">{player.name || '(unnamed)'}</span>
-      <span
-        role="button"
-        tabIndex={0}
-        data-no-picker="true"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove(player.id);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.stopPropagation();
-            e.preventDefault();
-            onRemove(player.id);
-          }
-        }}
-        aria-label={`Unassign ${player.name} from ${rank}`}
-        className="cursor-pointer text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-600 dark:hover:text-red-300"
-      >
-        ×
-      </span>
-    </span>
   );
 }
 

@@ -1,18 +1,22 @@
 # store/
 
 Two Zustand stores. The split is deliberate: tournament data is
-import/export-portable, theme preference is per-device.
+import/export-portable, UI preferences are per-device.
 
 ## Stores
 
 | Store | File | Persistence | Scope |
 |---|---|---|---|
 | `useAppStore` | `appStore.ts` | server-side `/tournament-state` (debounced PUTs from `useTournamentState`) | the working tournament |
-| `usePreferencesStore` | `preferencesStore.ts` | localStorage key `scheduler-app-preferences` | per-device theme |
+| `usePreferencesStore` | `preferencesStore.ts` | localStorage key `scheduler-app-preferences` | per-device theme + density |
 
-Theme **must not** be wiped when a tournament file is imported; that's
-why it lives in its own store with its own storage key. Don't merge the
-two.
+`selectors.ts` holds memoised lookup-map hooks (e.g. `playerById`,
+`matchById`, `groupById`) that build the map once per source-array
+reference so two components reading the same map share the build.
+
+Theme + density **must not** be wiped when a tournament file is
+imported; that's why they live in their own store with their own
+storage key. Don't merge the two.
 
 ## `useAppStore` slices
 

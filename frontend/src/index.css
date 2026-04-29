@@ -81,6 +81,48 @@
     --density-gap: 16px;
     --density-section-gap: 24px;
     --density-badge-h: 22px;
+
+    /* ----- Type ladder (px) ------------------------------------------
+     * Strict 11/12/14/16/18/24 ladder. ``2xs`` is reserved for overlines,
+     * micro-badges, and table-header eyebrows. Tailwind keeps the same
+     * scale via its ``text-*`` utilities; these vars exist so plain CSS
+     * (preview cards, inline styles) can hit identical values without
+     * duplicating numbers. */
+    --text-2xs:  0.6875rem;   /* 11px — overlines, micro-badges */
+    --text-xs:   0.75rem;     /* 12px */
+    --text-sm:   0.875rem;    /* 14px — body default */
+    --text-base: 1rem;        /* 16px */
+    --text-lg:   1.125rem;    /* 18px */
+    --text-2xl:  1.5rem;      /* 24px — card titles */
+
+    /* ----- Type stacks ------------------------------------------------
+     * Mirrors ``tailwind.config.js`` so plain CSS / preview surfaces can
+     * pick up the same fallback chain Tailwind utilities emit. */
+    --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont,
+      'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+    --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular,
+      Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+    /* ----- Semantic type roles ---------------------------------------
+     * Document-level roles used by the global element defaults below.
+     * Components may still hit the Tailwind utilities directly; these
+     * are the fall-through styles for plain ``<h1>``/``<h2>``/``<p>``. */
+    --h1-size:      1.5rem;     --h1-weight: 600; --h1-tracking: -0.01em;
+    --h2-size:      1.125rem;   --h2-weight: 600; --h2-tracking: -0.005em;
+    --h3-size:      1rem;       --h3-weight: 600;
+    --p-size:       0.875rem;   --p-weight:  400; --p-leading: 1.5;
+    --label-size:   0.75rem;    --label-weight: 500;
+    --eyebrow-size: 0.6875rem;  --eyebrow-weight: 600; --eyebrow-tracking: 0.06em;
+
+    /* ----- Shadows ----------------------------------------------------
+     * Three rungs only: ``sm`` (cards), ``md`` (hover lift), ``lg``
+     * (popovers). Anything beyond this is a special-effect ``box-shadow``
+     * defined inline (e.g. the ``phase-glow`` keyframe). */
+    --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08),
+                 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.10),
+                 0 4px 6px -4px rgba(15, 23, 42, 0.06);
   }
 
   /* Compact density — affects spacing only. Font sizes do NOT shrink
@@ -205,6 +247,17 @@
     font-family: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular,
       Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Eyebrow — small uppercase overline used above section titles, table
+   * column headers, and "label" rows in popovers. Pulls from the
+   * ``--eyebrow-*`` role tokens so the lockup is consistent everywhere. */
+  .eyebrow {
+    font-size: var(--eyebrow-size);
+    font-weight: var(--eyebrow-weight);
+    letter-spacing: var(--eyebrow-tracking);
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
   }
 }
 

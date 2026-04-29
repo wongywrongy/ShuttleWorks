@@ -88,6 +88,20 @@ class ScheduleConfig:
     # during which no match may occupy any slot. Applied as a hard constraint.
     break_slots: List[Tuple[int, int]] = field(default_factory=list)
 
+    # Closed-court windows: list of (court_id, from_slot, to_slot)
+    # where the half-open ``[from_slot, to_slot)`` range is forbidden
+    # on that court. An indefinite/full-day closure is stored as
+    # ``(court_id, 0, total_slots)``. Applied as fixed blocker
+    # intervals on each affected court so the existing court-capacity
+    # NoOverlap mechanism keeps matches out of the closed window.
+    closed_court_windows: List[Tuple[int, int, int]] = field(default_factory=list)
+
+    # Backward-compat alias: the legacy shape was a flat list of court
+    # ids meaning "closed all day". Translated into ``closed_court_windows``
+    # by the adapter. Kept here so existing tests + callers that
+    # construct ``ScheduleConfig`` directly continue to work.
+    closed_court_ids: List[int] = field(default_factory=list)
+
 
 @dataclass
 class SolverOptions:

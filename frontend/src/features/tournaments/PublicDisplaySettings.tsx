@@ -80,8 +80,11 @@ export function PublicDisplaySettings() {
       {/* Stacked groups. Cramming Layout/Brand/Content into 3 columns
           forced the accent picker (10+ controls in one row) to overflow
           into the toggle next door. Vertical stacks read more clearly
-          on every viewport and leave room for explanatory hints. */}
-      <div className="divide-y divide-border/60">
+          on every viewport and leave room for explanatory hints.
+          ``flex flex-col`` is explicit (not relying on default block
+          layout) so a future utility-class change to the parent can't
+          collapse this back into a horizontal grid. */}
+      <div className="flex flex-col divide-y divide-border/60">
         <Group
           title="Layout"
           description="How matches are arranged on the venue TV."
@@ -137,8 +140,18 @@ export function PublicDisplaySettings() {
             label="Accent colour"
             hint="Used for the LIVE badge, court rails, and primary score highlights."
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <div role="radiogroup" aria-label="Accent presets" className="flex flex-wrap items-center gap-1.5">
+            {/* Two-line layout: preset swatches first, custom hex picker
+                below. Stacking guarantees the row's intrinsic width
+                never exceeds the panel column even with 8 swatches +
+                color picker + hex input — the previous one-line layout
+                could overflow into the neighbouring field on narrow
+                viewports. */}
+            <div className="flex flex-col items-end gap-1.5">
+              <div
+                role="radiogroup"
+                aria-label="Accent presets"
+                className="flex flex-wrap items-center justify-end gap-1.5"
+              >
                 {ACCENT_PRESETS.map((p) => {
                   const isActive = accent === p.hex.toLowerCase();
                   return (
@@ -162,8 +175,8 @@ export function PublicDisplaySettings() {
                   );
                 })}
               </div>
-              <span aria-hidden className="h-4 w-px bg-border" />
               <div className="inline-flex items-center gap-1">
+                <span className="text-2xs text-muted-foreground">Custom</span>
                 <input
                   type="color"
                   value={accent}
@@ -229,9 +242,15 @@ export function PublicDisplaySettings() {
             }
             disabled={(config.tvTheme ?? 'dark') === 'light'}
           >
-            <div role="radiogroup" aria-label="Background tone" className="flex flex-wrap items-center gap-1.5">
+            <div
+              role="radiogroup"
+              aria-label="Background tone"
+              aria-disabled={(config.tvTheme ?? 'dark') === 'light'}
+              className="flex flex-wrap items-center gap-1.5"
+            >
               {BG_TONES.map((t) => {
                 const isActive = bgTone === t.id;
+                const isLightTheme = (config.tvTheme ?? 'dark') === 'light';
                 return (
                   <button
                     key={t.id}
@@ -239,13 +258,20 @@ export function PublicDisplaySettings() {
                     role="radio"
                     aria-checked={isActive}
                     onClick={() => update({ tvBgTone: t.id })}
-                    title={t.label}
+                    disabled={isLightTheme}
+                    title={
+                      isLightTheme
+                        ? 'Switch to Dark theme to choose a background tone'
+                        : t.label
+                    }
                     className={[
                       INTERACTIVE_BASE,
                       'inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs font-medium',
-                      isActive
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                      isLightTheme
+                        ? 'cursor-not-allowed opacity-50'
+                        : isActive
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                     ].join(' ')}
                   >
                     <span
@@ -307,9 +333,12 @@ function Group({
   );
 }
 
-// Field: label + hint stacked on the left, control aligned right with
-// proper min-w-0 so a wide control wraps under the label on narrow
-// viewports instead of overflowing into a neighbouring column.
+// Field: label + hint on the left, control on the right. ``min-w-0``
+// is applied at every level so a wide control wraps under the label
+// rather than overflowing into a neighbouring field. The control side
+// drops ``flex-shrink-0`` (the previous default) so it can shrink
+// instead of pushing past the panel edge — the previous setting let
+// the accent picker visually collide with the next field's switch.
 function Field({
   label,
   hint,
@@ -324,17 +353,17 @@ function Field({
   return (
     <div
       className={[
-        'flex flex-wrap items-start justify-between gap-x-6 gap-y-2',
+        'flex w-full flex-wrap items-start justify-between gap-x-6 gap-y-2',
         disabled ? 'opacity-50' : '',
       ].join(' ')}
     >
-      <div className="min-w-0 max-w-md">
+      <div className="min-w-0 max-w-md flex-1">
         <div className="text-sm font-medium text-foreground">{label}</div>
         {hint && (
           <p className="mt-0.5 text-xs text-muted-foreground/80">{hint}</p>
         )}
       </div>
-      <div className="flex flex-shrink-0 flex-wrap items-center justify-end">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
         {children}
       </div>
     </div>

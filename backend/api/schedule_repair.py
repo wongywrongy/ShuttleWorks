@@ -16,6 +16,8 @@ import logging
 from typing import Dict, List, Literal, Optional, Set
 
 from fastapi import APIRouter, HTTPException
+
+from app.error_codes import ErrorCode, http_error
 from pydantic import BaseModel
 
 import app.scheduler_core_path  # noqa: F401
@@ -49,7 +51,9 @@ class Disruption(BaseModel):
     Fields are optional individually but the *combination* is
     determined by ``type``:
       - ``withdrawal``  → ``playerId`` required
-      - ``court_closed`` → ``courtId`` required
+      - ``court_closed`` → ``courtId`` required; ``fromTime`` /
+        ``toTime`` optional (omit both for an indefinite all-day
+        closure, supply both for a temporary window)
       - ``overrun``     → ``matchId`` required, ``extraMinutes`` optional
       - ``cancellation`` → ``matchId`` required
     """
@@ -58,6 +62,11 @@ class Disruption(BaseModel):
     courtId: Optional[int] = None
     matchId: Optional[str] = None
     extraMinutes: Optional[int] = None
+    # Optional time bounds for ``court_closed``. HH:mm in tournament
+    # local time. Either or both may be omitted; see Disruption docstring.
+    fromTime: Optional[str] = None
+    toTime: Optional[str] = None
+    reason: Optional[str] = None
 
 
 class RepairRequest(BaseModel):
@@ -68,6 +77,10 @@ class RepairRequest(BaseModel):
     matchStates: Dict[str, MatchStateDTO] = {}
     disruption: Disruption
     nowIso: Optional[str] = None  # accepted for future "now slot" math
+    # Optional override for the solver's wall-clock budget. The
+    # proposal pipeline uses this to request fast (~3 s) "quick look"
+    # solves vs. the default 5 s for slice-based repair.
+    timeBudgetSec: Optional[float] = None
 
 
 class RepairResponse(BaseModel):
@@ -105,7 +118,7 @@ def _slice_for(
 
     if d.type == "withdrawal":
         if not d.playerId:
-            raise HTTPException(400, "withdrawal disruption requires playerId")
+            raise http_error(400, ErrorCode.DISRUPTION_INVALID, "withdrawal disruption requires playerId")
         # Forfeit every unfinished match the withdrawn player is in.
         # The repair just removes them from the schedule; the operator
         # can re-add later via the matches editor (after substitution).
@@ -117,7 +130,7 @@ def _slice_for(
 
     elif d.type == "court_closed":
         if d.courtId is None:
-            raise HTTPException(400, "court_closed disruption requires courtId")
+            raise http_error(400, ErrorCode.DISRUPTION_INVALID, "court_closed disruption requires courtId")
         forbid_courts.add(d.courtId)
         # Free every unfinished match currently on that court so the
         # solver can re-route them to other courts.
@@ -130,13 +143,13 @@ def _slice_for(
 
     elif d.type == "overrun":
         if not d.matchId:
-            raise HTTPException(400, "overrun disruption requires matchId")
+            raise http_error(400, ErrorCode.DISRUPTION_INVALID, "overrun disruption requires matchId")
         target = matches_by_id.get(d.matchId)
         if target is None:
-            raise HTTPException(400, f"unknown matchId: {d.matchId}")
+            raise http_error(400, ErrorCode.DISRUPTION_INVALID, f"unknown matchId: {d.matchId}")
         target_assignment = assignments_by_match.get(d.matchId)
         if target_assignment is None:
-            raise HTTPException(400, f"matchId {d.matchId} is not in the schedule")
+            raise http_error(400, ErrorCode.DISRUPTION_INVALID, f"matchId {d.matchId} is not in the schedule")
 
         # Successors = unfinished matches involving any of the
         # target's players whose start slot >= target's start slot.
@@ -156,7 +169,7 @@ def _slice_for(
 
     elif d.type == "cancellation":
         if not d.matchId:
-            raise HTTPException(400, "cancellation disruption requires matchId")
+            raise http_error(400, ErrorCode.DISRUPTION_INVALID, "cancellation disruption requires matchId")
         target_assignment = assignments_by_match.get(d.matchId)
         forbid_matches.add(d.matchId)
         # Free a small window so a later match can pull forward into
@@ -195,9 +208,15 @@ def _slice_for(
     )
 
 
-@router.post("/schedule/repair", response_model=RepairResponse)
-async def repair_schedule(request: RepairRequest) -> RepairResponse:
-    """Re-solve the affected slice; everything else stays put."""
+def _run_repair(request: RepairRequest) -> tuple[ScheduleDTO, List[str]]:
+    """Pure solver-call body for the repair endpoint.
+
+    Extracted so internal callers (proposal pipeline, director-action)
+    can invoke the repair without going through FastAPI's response-model
+    Pydantic round-trip — that round-trip can fail under sys.modules
+    churn when ``ScheduleDTO`` ends up with two distinct class
+    identities at validation time.
+    """
     assignments_by_match = {
         a.matchId: a for a in request.originalSchedule.assignments
     }
@@ -207,7 +226,9 @@ async def repair_schedule(request: RepairRequest) -> RepairResponse:
     schedule_config = schedule_config_from_dto(request.config)
     players = players_from_dto(request.players, request.config)
     matches = matches_from_dto(request.matches)
-    solver_options = solver_options_for(request.config)
+    solver_options = solver_options_for(
+        request.config, time_limit_override=request.timeBudgetSec,
+    )
 
     try:
         result = solve_repair(
@@ -219,14 +240,10 @@ async def repair_schedule(request: RepairRequest) -> RepairResponse:
         )
     except Exception:
         log.exception("schedule repair failed")
-        raise HTTPException(500, "schedule repair failed")
+        raise http_error(500, ErrorCode.REPAIR_FAILED, "schedule repair failed")
 
     new_schedule = result_to_dto(result)
 
-    # Tag the matches that actually moved relative to the previous
-    # schedule. Forbidden matches (forfeit / cancellation) don't
-    # appear in the new schedule, so the diff over surviving matches
-    # only shows true position changes.
     repaired_ids: List[str] = []
     new_by_match = {a.matchId: a for a in new_schedule.assignments}
     for match_id, prev in assignments_by_match.items():
@@ -238,5 +255,11 @@ async def repair_schedule(request: RepairRequest) -> RepairResponse:
             continue
         if new.slotId != prev.slotId or new.courtId != prev.courtId:
             repaired_ids.append(match_id)
+    return new_schedule, repaired_ids
 
+
+@router.post("/schedule/repair", response_model=RepairResponse)
+async def repair_schedule(request: RepairRequest) -> RepairResponse:
+    """Re-solve the affected slice; everything else stays put."""
+    new_schedule, repaired_ids = _run_repair(request)
     return RepairResponse(schedule=new_schedule, repairedMatchIds=repaired_ids)

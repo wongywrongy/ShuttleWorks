@@ -25,7 +25,7 @@ from api import _backups
 router = APIRouter(prefix="/tournament", tags=["tournament-state"])
 log = logging.getLogger("scheduler.tournament_state")
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 
 def _state_path() -> Path:
@@ -48,7 +48,22 @@ def _migrate(raw: dict) -> dict:
             f"app's {CURRENT_SCHEMA_VERSION}; upgrade the app or "
             f"restore an older backup",
         )
-    # No migration needed at v1 — added here for future upgrades.
+    # v1 → v2: introduces top-level ``scheduleVersion`` +
+    # ``scheduleHistory`` for the proposal/commit pipeline, and three
+    # nested TournamentConfig fields (``closedCourts``, ``courtClosures``,
+    # ``clockShiftMinutes``) for closures + director time-axis tools.
+    # Pydantic Field defaults would also fill these in at parse time,
+    # but writing them explicitly here means the on-disk file matches
+    # the in-memory shape after migration — easier to debug, easier
+    # to back up, easier to diff.
+    if version < 2:
+        raw.setdefault("scheduleVersion", 0)
+        raw.setdefault("scheduleHistory", [])
+        cfg = raw.get("config")
+        if isinstance(cfg, dict):
+            cfg.setdefault("closedCourts", [])
+            cfg.setdefault("courtClosures", [])
+            cfg.setdefault("clockShiftMinutes", 0)
     raw["version"] = CURRENT_SCHEMA_VERSION
     return raw
 

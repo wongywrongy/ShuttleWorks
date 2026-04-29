@@ -26,7 +26,7 @@ export function TournamentSetupPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSave = async (newConfig: TournamentConfig) => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     try {
       setSaving(true);
       setSaveError(null);
@@ -116,8 +116,7 @@ export function TournamentSetupPage() {
       id: 'demos',
       label: 'Demos',
       icon: Sparkles,
-      hint: 'soon',
-      description: 'Pre-baked sample tournaments to explore the app.',
+      description: 'Pre-baked sample tournaments — dual (20 players × 2 schools) and tri (10 players × 3 schools), 5 events each.',
       render: () => <DemoLoader />,
     },
   ];

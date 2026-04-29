@@ -11,6 +11,7 @@ import { SolverProgressLog } from '../features/schedule/live/SolverProgressLog';
 import { LiveMetricsBar } from '../features/schedule/live/LiveMetricsBar';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
 import { DisruptionDialog } from '../features/control-center/DisruptionDialog';
+import { MoveMatchDialog } from '../features/control-center/MoveMatchDialog';
 import { CandidatesPanel } from '../features/schedule/CandidatesPanel';
 import { WarmRestartDialog } from '../features/schedule/WarmRestartDialog';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
@@ -308,7 +309,6 @@ export function SchedulePage() {
     loading,
     error,
     generateSchedule,
-    reoptimizeSchedule,
     generationProgress,
   } = useSchedule();
 
@@ -352,6 +352,7 @@ export function SchedulePage() {
     matchId?: string;
     courtId?: number;
   }>({});
+  const [moveMatchId, setMoveMatchId] = useState<string | null>(null);
 
   // Wall-clock slot for traffic-light + rest-time computation.
   // Refreshed every minute via the shared ``useCurrentSlot`` hook so the
@@ -399,14 +400,6 @@ export function SchedulePage() {
       await generateSchedule();
     } catch (err) {
       console.error('Generation failed:', err);
-    }
-  };
-
-  const handleReoptimize = async () => {
-    try {
-      await reoptimizeSchedule();
-    } catch (err) {
-      console.error('Reoptimization failed:', err);
     }
   };
 
@@ -559,9 +552,7 @@ export function SchedulePage() {
                   </button>
                   <ScheduleActions
                     onGenerate={handleGenerate}
-                    onReoptimize={handleReoptimize}
                     generating={isOptimizing}
-                    reoptimizing={isOptimizing}
                     hasSchedule={!!schedule}
                     confirmingReplace={confirmingReplace}
                   />
@@ -614,12 +605,17 @@ export function SchedulePage() {
           </div>
 
           {/* Match details sidebar.
-              Tabs (Log/Details/Candidates) sit on the first row.
-              Action buttons (Re-plan / Disruption) get their own row with
-              a divider so operators don't confuse them for tabs. */}
-          <div className="w-72 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
+              Two visually-distinct header strips: a tab row for views
+              (Details / Candidates) and a tools row for dynamic actions
+              (Re-plan / Disruption). The strips are clearly separated so
+              operators don't confuse actions for tabs. */}
+          <div className="w-80 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
             <div className="border-b border-border flex-shrink-0">
-              <div role="tablist" className="flex items-center gap-1 px-2 py-1.5">
+              <div
+                role="tablist"
+                aria-label="Sidebar views"
+                className="flex items-center gap-1 px-2 py-1.5"
+              >
                 {isOptimizing ? (
                   <>
                     <SidebarTab active={sidebarTab === 'log'} onClick={() => setSidebarTab('log')}>Log</SidebarTab>
@@ -637,24 +633,31 @@ export function SchedulePage() {
                 )}
               </div>
               {!isOptimizing && (
-                <div className="flex items-center gap-1 border-t border-border/60 px-2 py-1">
-                  <button
-                    onClick={() => setWarmRestartOpen(true)}
-                    className={`${INTERACTIVE_BASE} rounded px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground`}
-                    title="Re-plan from here (full re-solve, stay-close objective)"
-                  >
-                    Re-plan…
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDisruptionPrefill({});
-                      setDisruptionOpen(true);
-                    }}
-                    className={`${INTERACTIVE_BASE} rounded px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground`}
-                    title="Repair after a disruption"
-                  >
-                    Disruption…
-                  </button>
+                <div className="flex items-center gap-2 border-t border-border bg-muted/40 px-2 py-1.5">
+                  <span className="eyebrow flex-shrink-0" aria-hidden="true">
+                    Dynamic
+                  </span>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setWarmRestartOpen(true)}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center whitespace-nowrap rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      title="Re-plan from here (full re-solve, stay-close objective)"
+                    >
+                      Re-plan…
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDisruptionPrefill({});
+                        setDisruptionOpen(true);
+                      }}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center whitespace-nowrap rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      title="Repair after a disruption"
+                    >
+                      Disruption…
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -706,6 +709,7 @@ export function SchedulePage() {
                     });
                     setDisruptionOpen(true);
                   }}
+                  onRequestMove={(matchId) => setMoveMatchId(matchId)}
                 />
               )}
             </div>
@@ -720,6 +724,11 @@ export function SchedulePage() {
           <WarmRestartDialog
             isOpen={warmRestartOpen}
             onClose={() => setWarmRestartOpen(false)}
+          />
+          <MoveMatchDialog
+            isOpen={moveMatchId !== null}
+            onClose={() => setMoveMatchId(null)}
+            matchId={moveMatchId ?? undefined}
           />
         </div>
       ) : isOptimizing && !hasLiveProgress ? (
@@ -737,9 +746,7 @@ export function SchedulePage() {
           </p>
           <ScheduleActions
             onGenerate={handleGenerate}
-            onReoptimize={handleReoptimize}
             generating={isOptimizing}
-            reoptimizing={isOptimizing}
             hasSchedule={!!schedule}
             confirmingReplace={confirmingReplace}
           />
@@ -750,7 +757,8 @@ export function SchedulePage() {
 }
 
 // Sidebar tab — visually distinct from action buttons (filled when active,
-// muted when not). Lives on its own row above action buttons.
+// muted when not). Lives on its own row above action buttons. Sentence
+// case + nowrap so labels stay readable in the narrow sidebar.
 function SidebarTab({
   active,
   onClick,
@@ -768,7 +776,7 @@ function SidebarTab({
       onClick={onClick}
       className={[
         INTERACTIVE_BASE,
-        'rounded px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider',
+        'whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium',
         active
           ? 'bg-primary text-primary-foreground shadow-sm'
           : 'text-muted-foreground hover:bg-muted hover:text-foreground',

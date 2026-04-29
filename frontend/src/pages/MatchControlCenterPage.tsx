@@ -13,21 +13,29 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, ChevronLeft, ChevronRight, ClipboardList } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, ClipboardList, Settings2 } from 'lucide-react';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useLiveOperations } from '../hooks/useLiveOperations';
 import { useTrafficLights } from '../hooks/useTrafficLights';
+import { useProposals } from '../hooks/useProposals';
 import { useAppStore } from '../store/appStore';
 import { GanttChart } from '../features/control-center/GanttChart';
 import { WorkflowPanel } from '../features/control-center/WorkflowPanel';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
 import { DisruptionDialog } from '../features/control-center/DisruptionDialog';
+import { MoveMatchDialog } from '../features/control-center/MoveMatchDialog';
+import { DirectorToolsPanel } from '../features/director/DirectorToolsPanel';
+import { WarmRestartDialog } from '../features/schedule/WarmRestartDialog';
+import { Modal } from '../components/common/Modal';
+import { AdvisoryBanner } from '../components/status/AdvisoryBanner';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../lib/utils';
+import type { Advisory } from '../api/dto';
 
 export function MatchControlCenterPage() {
   const liveTracking = useLiveTracking();
   const liveOps = useLiveOperations();
+  const { cancel: cancelProposal } = useProposals();
   const players = useAppStore((state) => state.players);
   const groups = useAppStore((state) => state.groups);
   const schedule = useAppStore((state) => state.schedule);
@@ -47,6 +55,9 @@ export function MatchControlCenterPage() {
     matchId?: string;
     courtId?: number;
   }>({});
+  const [directorOpen, setDirectorOpen] = useState(false);
+  const [moveMatchId, setMoveMatchId] = useState<string | null>(null);
+  const [warmRestartOpen, setWarmRestartOpen] = useState(false);
   // Lifted from MatchDetailsPanel so the WorkflowPanel rows can pop
   // the score editor directly: clicking Score on a started row
   // selects the match AND flips the rail to its score mode.
@@ -372,8 +383,48 @@ export function MatchControlCenterPage() {
     );
   }
 
+  // Live-operations advisory dispatcher. Routes every suggestedAction
+  // kind to the matching dialog so the toast's "Review" button and
+  // the AdvisoryBanner's Review button both have somewhere to land.
+  const handleAdvisoryReview = useCallback((advisory: Advisory) => {
+    const action = advisory.suggestedAction;
+    if (!action) return;
+    if (action.kind === 'repair') {
+      const payload = action.payload as Record<string, any>;
+      setDisruptionPrefill({
+        type: payload.type,
+        matchId: payload.matchId,
+        courtId: payload.courtId,
+      });
+      setDisruptionOpen(true);
+    } else if (action.kind === 'warm_restart') {
+      setWarmRestartOpen(true);
+    } else if (
+      action.kind === 'delay_start' ||
+      action.kind === 'insert_blackout' ||
+      action.kind === 'remove_blackout' ||
+      action.kind === 'compress_remaining'
+    ) {
+      // Director-tool actions land in the DirectorToolsPanel modal so
+      // the operator can tweak the suggested values before previewing.
+      setDirectorOpen(true);
+    }
+  }, []);
+
+  // Cross-component intent: the toast's onAction sets
+  // `pendingAdvisoryReview` on the store; this effect picks it up and
+  // dispatches to the same handler the banner's Review button uses.
+  const pendingAdvisoryReview = useAppStore((s) => s.pendingAdvisoryReview);
+  const setPendingAdvisoryReview = useAppStore((s) => s.setPendingAdvisoryReview);
+  useEffect(() => {
+    if (!pendingAdvisoryReview) return;
+    handleAdvisoryReview(pendingAdvisoryReview);
+    setPendingAdvisoryReview(null);
+  }, [pendingAdvisoryReview, handleAdvisoryReview, setPendingAdvisoryReview]);
+
   return (
     <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
+      <AdvisoryBanner onReview={handleAdvisoryReview} />
       <div className="flex-1 min-h-0 flex gap-2">
         {/* Main area - Gantt + Matches list */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
@@ -415,8 +466,19 @@ export function MatchControlCenterPage() {
                   Export XLSX
                 </button>
                 <button
+                  type="button"
+                  onClick={() => setDirectorOpen(true)}
+                  title="Director tools — delays, breaks, blackouts"
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                >
+                  <Settings2 aria-hidden="true" className="h-4 w-4" />
+                  Director
+                </button>
+                <button
+                  type="button"
                   onClick={liveOps.triggerReoptimize}
                   disabled={liveOps.isReoptimizing}
+                  title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan… or Move/postpone…"
                   className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
@@ -515,6 +577,7 @@ export function MatchControlCenterPage() {
                 });
                 setDisruptionOpen(true);
               }}
+              onRequestMove={(matchId) => setMoveMatchId(matchId)}
             />
           </div>
         ) : (
@@ -548,6 +611,46 @@ export function MatchControlCenterPage() {
         initialType={disruptionPrefill.type}
         initialMatchId={disruptionPrefill.matchId}
         initialCourtId={disruptionPrefill.courtId}
+      />
+      <MoveMatchDialog
+        isOpen={moveMatchId !== null}
+        onClose={() => setMoveMatchId(null)}
+        matchId={moveMatchId ?? undefined}
+      />
+      {directorOpen && (
+        <Modal
+          // Closing the modal must also discard any in-flight director
+          // proposal — otherwise the next dialog opens with a stale
+          // preview from the abandoned action.
+          onClose={() => {
+            void cancelProposal();
+            setDirectorOpen(false);
+          }}
+          titleId="director-tools-title"
+          widthClass="max-w-lg"
+        >
+          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+            <h2 id="director-tools-title" className="text-sm font-semibold">
+              Director tools
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                void cancelProposal();
+                setDirectorOpen(false);
+              }}
+              className={`${INTERACTIVE_BASE} rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground`}
+              aria-label="Close director tools"
+            >
+              ×
+            </button>
+          </div>
+          <DirectorToolsPanel />
+        </Modal>
+      )}
+      <WarmRestartDialog
+        isOpen={warmRestartOpen}
+        onClose={() => setWarmRestartOpen(false)}
       />
     </div>
   );

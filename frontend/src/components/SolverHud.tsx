@@ -11,26 +11,31 @@ type PhaseStyle = {
   loop: boolean;         // whether to run infinite glow
 };
 
+// Phase pills route through the semantic ``--status-*`` palette so the
+// HUD reads on the same hue ladder as Gantt blocks, toast borders, and
+// the TabBar app-status chip. ``ring`` is the rgba expansion of the
+// matching token at the saturated lightness — used by the phase-glow
+// keyframe (which can't read CSS custom properties directly).
 const PHASES: Record<NonNullable<SolverPhase>, PhaseStyle> = {
   presolve: {
     label: 'Presolve',
-    ring: 'rgba(245, 158, 11, 0.55)',
-    pill: 'bg-amber-50 text-amber-800 border-amber-300',
-    dot: 'bg-amber-500',
+    ring: 'hsla(38, 92%, 42%, 0.55)',
+    pill: 'bg-status-called-bg text-status-called border-status-called/40',
+    dot: 'bg-status-called',
     loop: true,
   },
   search: {
     label: 'Searching',
-    ring: 'rgba(59, 130, 246, 0.55)',
-    pill: 'bg-blue-50 text-blue-800 border-blue-300',
-    dot: 'bg-blue-500',
+    ring: 'hsla(199, 89%, 38%, 0.55)',
+    pill: 'bg-status-started-bg text-status-started border-status-started/40',
+    dot: 'bg-status-started',
     loop: true,
   },
   proving: {
     label: 'Proving optimal',
-    ring: 'rgba(16, 185, 129, 0.55)',
-    pill: 'bg-emerald-50 text-emerald-800 border-emerald-300',
-    dot: 'bg-emerald-500',
+    ring: 'hsla(142, 71%, 38%, 0.55)',
+    pill: 'bg-status-live-bg text-status-live border-status-live/40',
+    dot: 'bg-status-live',
     loop: false,
   },
 };
@@ -161,7 +166,7 @@ export function SolverHud() {
           <span className="text-muted-foreground">Objective</span>
           <span
             key={objKey}
-            className="tabular-nums font-semibold motion-safe:animate-obj-flash"
+            className="tabular-nums font-semibold text-status-live motion-safe:animate-obj-flash [text-shadow:0_0_12px_hsla(142,71%,45%,0.35)]"
           >
             {Math.round(animatedObjective)}
           </span>

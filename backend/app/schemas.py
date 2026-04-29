@@ -30,6 +30,23 @@ class BreakWindow(BaseModel):
     end: HHMMTime
 
 
+class CourtClosure(BaseModel):
+    """A court closure window. ``fromTime`` / ``toTime`` are HH:mm
+    wall-clock bounds inside the tournament day. Either may be omitted:
+
+    - both omitted → court is closed all day (indefinite)
+    - only ``fromTime`` omitted → closed from start of day to ``toTime``
+    - only ``toTime`` omitted → closed from ``fromTime`` to end of day
+
+    The solver translates the bounds to slot indices via the same
+    rounding ``time_to_slot`` uses for breaks.
+    """
+    courtId: int = Field(..., ge=1, le=64)
+    fromTime: Optional[HHMMTime] = None
+    toTime: Optional[HHMMTime] = None
+    reason: Optional[str] = None
+
+
 class TournamentConfig(BaseModel):
     # Human-readable tournament name. Drives backup filenames and the
     # public-display headline. Optional — UI falls back to defaults
@@ -91,6 +108,25 @@ class TournamentConfig(BaseModel):
     solverTimeLimitSeconds: Optional[float] = Field(None, gt=0, le=300)
     # Top-N near-optimal alternatives the solver keeps. Default 5.
     candidatePoolSize: Optional[int] = Field(None, ge=1, le=20)
+    # Court IDs (1-indexed) that the solver must avoid in every solve
+    # — generate, warm-restart, and repair all read this list. Closures
+    # are persisted by committing a court_closed disruption proposal,
+    # and reopened via the director "Reopen court" action.
+    #
+    # ``closedCourts`` is the legacy "closed all day" shape; new
+    # closures with explicit time bounds go in ``courtClosures``. The
+    # solver merges both — every entry in ``closedCourts`` is treated
+    # as an indefinite all-day closure.
+    closedCourts: List[int] = Field(default_factory=list)
+    courtClosures: List[CourtClosure] = Field(default_factory=list)
+    # ---- Time-axis (director tools) -------------------------------
+    # Wall-clock minutes added to every unstarted match's displayed
+    # start time. Mutated by `POST /schedule/director-action` with
+    # `kind="delay_start"`. The solver still plans on the abstract
+    # slot grid; this offset is purely a display concern, so a delay
+    # of 30 min costs no re-solve. Cleared back to 0 on schedule
+    # reset.
+    clockShiftMinutes: Optional[int] = Field(0, ge=0, le=24 * 60)
 
 
 # Availability
@@ -216,6 +252,138 @@ class ScheduleDTO(BaseModel):
     activeCandidateIndex: Optional[int] = None
 
 
+# ---- Schedule impact (proposal pipeline) ------------------------------
+
+class MatchMove(BaseModel):
+    """One match's slot/court change between committed and proposed schedules."""
+    matchId: str
+    fromSlotId: Optional[int] = None    # None when match was previously unscheduled
+    toSlotId: Optional[int] = None      # None when match becomes unscheduled
+    fromCourtId: Optional[int] = None
+    toCourtId: Optional[int] = None
+    matchNumber: Optional[int] = None   # display ordinal, surfaced for UI
+    eventRank: Optional[str] = None
+
+
+class PlayerImpact(BaseModel):
+    """Aggregate of how a single player's day changes."""
+    playerId: str
+    playerName: Optional[str] = None
+    matchCount: int                     # # of their matches that move
+    earliestSlotDelta: int              # signed slot delta of earliest move (negative = earlier)
+
+
+class SchoolImpact(BaseModel):
+    """Aggregate of how a single roster group's day changes."""
+    groupId: str
+    groupName: Optional[str] = None
+    matchCount: int                     # # of matches involving this school that move
+
+
+class MetricDelta(BaseModel):
+    """Signed differences between proposed and committed schedules.
+
+    Positive = proposed is *worse* on that axis (more violations / higher
+    penalty). UI surfaces these with conventional improvement-is-good
+    coloring: `restViolationsDelta < 0` is green, `> 0` is red.
+    """
+    objectiveDelta: Optional[float] = None      # proposed.objectiveScore - committed.objectiveScore
+    softViolationCountDelta: int = 0
+    restViolationsDelta: int = 0
+    proximityViolationsDelta: int = 0
+    totalPenaltyDelta: float = 0.0
+    unscheduledMatchesDelta: int = 0
+
+
+class Impact(BaseModel):
+    """Pre-commit diff produced by the proposal pipeline.
+
+    Computed once when a proposal is created and stashed alongside it,
+    so reviewing the same proposal later doesn't re-run the diff.
+
+    ``clockShiftMinutesDelta`` is non-zero only for director ``delay_start``
+    proposals — those don't move any matches in slot-space but do shift
+    the displayed wall-clock for every unstarted match.
+    """
+    movedMatches: List[MatchMove] = Field(default_factory=list)
+    affectedPlayers: List[PlayerImpact] = Field(default_factory=list)
+    affectedSchools: List[SchoolImpact] = Field(default_factory=list)
+    metricDelta: MetricDelta = Field(default_factory=MetricDelta)
+    infeasibilityWarnings: List[str] = Field(default_factory=list)
+    clockShiftMinutesDelta: int = 0
+
+
+class ProposalKind(str, Enum):
+    WARM_RESTART = "warm_restart"
+    REPAIR = "repair"
+    MANUAL_EDIT = "manual_edit"
+    DIRECTOR_ACTION = "director_action"
+
+
+class Proposal(BaseModel):
+    """A pending schedule change awaiting operator confirmation.
+
+    Created by `POST /schedule/proposals/...`, kept in memory with a TTL,
+    and applied to the persisted tournament state via the commit endpoint.
+    The `fromScheduleVersion` snapshot is what the optimistic-concurrency
+    check at commit time compares against — if the committed schedule
+    has advanced since proposal creation, the commit is rejected with 409.
+
+    ``proposedConfig`` is non-None only for director-action proposals —
+    those mutate ``TournamentConfig`` (clockShiftMinutes, breaks, ...)
+    in addition to the schedule. Commit applies both atomically.
+    """
+    id: str
+    kind: ProposalKind
+    proposedSchedule: ScheduleDTO
+    proposedConfig: Optional[TournamentConfig] = None
+    impact: Impact
+    summary: Optional[str] = None
+    fromScheduleVersion: int
+    createdAt: str
+    expiresAt: str
+
+
+# ---- Advisories (live operations) -------------------------------------
+
+class SuggestedAction(BaseModel):
+    """A pre-filled action the UI can offer as a one-click resolve."""
+    kind: Literal[
+        "warm_restart",
+        "repair",
+        "delay_start",
+        "insert_blackout",
+        "compress_remaining",
+        "remove_blackout",
+    ]
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
+class Advisory(BaseModel):
+    """A live-operations recommendation surfaced to the operator.
+
+    Produced by `GET /schedule/advisories` from the current match-state +
+    tournament-state snapshot. Stable `id` lets clients dedupe across
+    polling cycles even as `summary` drifts (e.g., overrun gets worse).
+    """
+    id: str
+    kind: Literal[
+        "overrun",
+        "no_show",
+        "running_behind",
+        "infeasibility_risk",
+        "start_delay_detected",
+        "approaching_blackout",
+    ]
+    severity: Literal["info", "warn", "critical"]
+    summary: str
+    detail: Optional[str] = None
+    matchId: Optional[str] = None
+    courtId: Optional[int] = None
+    suggestedAction: Optional[SuggestedAction] = None
+    detectedAt: str                                  # ISO timestamp
+
+
 # Match State (for Match Desk)
 class MatchScore(BaseModel):
     sideA: int
@@ -235,6 +403,21 @@ class HealthResponse(BaseModel):
 
 # ---- Tournament state (whole-document persistence) --------------------
 
+class ScheduleHistoryEntry(BaseModel):
+    """Snapshot of a prior committed schedule, kept for revert + audit.
+
+    Appended whenever a proposal is committed; the entry captures the
+    schedule that was *replaced*, not the new one. Capped at 5 entries
+    server-side (oldest dropped first) so the persisted state file stays
+    bounded.
+    """
+    version: int                                    # the version this entry replaced
+    committedAt: str                                # ISO timestamp of the swap
+    trigger: Optional[str] = None                   # "warm_restart" | "repair" | "manual_edit" | "director_action" | "initial"
+    summary: Optional[str] = None                   # short human-readable impact summary
+    schedule: Optional[ScheduleDTO] = None          # full snapshot so the entry can be restored
+
+
 class TournamentStateDTO(BaseModel):
     """Authoritative persisted state for one tournament.
 
@@ -251,6 +434,12 @@ class TournamentStateDTO(BaseModel):
     schedule: Optional[ScheduleDTO] = None
     scheduleStats: Optional[dict] = None
     scheduleIsStale: bool = False
+    # Versioned-commit support (schema v2). ``scheduleVersion`` increments
+    # on every successful commit through the proposal pipeline; clients
+    # use it for optimistic-concurrency rejection of stale proposals.
+    # ``scheduleHistory`` is the rolling-revert pool, capped at 5.
+    scheduleVersion: int = 0
+    scheduleHistory: List[ScheduleHistoryEntry] = Field(default_factory=list)
 
 
 class SolverOptionsDTO(BaseModel):

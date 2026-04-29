@@ -17,6 +17,8 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
+
+from app.error_codes import ErrorCode, http_error
 from pydantic import BaseModel
 
 import app.scheduler_core_path  # noqa: F401
@@ -51,6 +53,11 @@ class WarmRestartRequest(BaseModel):
     # 10 = Conservative (default), 5 = Balanced, 1 = Aggressive.
     stayCloseWeight: int = 10
     nowIso: Optional[str] = None
+    # Optional override for the solver's wall-clock budget. The
+    # proposal pipeline uses this to request fast (~3 s) "quick look"
+    # solves for advisor-driven recommendations vs. the default
+    # 30 s for operator-initiated replans. Capped at 300 s.
+    timeBudgetSec: Optional[float] = None
 
 
 class WarmRestartResponse(BaseModel):
@@ -58,11 +65,15 @@ class WarmRestartResponse(BaseModel):
     movedMatchIds: List[str]
 
 
-@router.post("/schedule/warm-restart", response_model=WarmRestartResponse)
-async def warm_restart_schedule(request: WarmRestartRequest) -> WarmRestartResponse:
-    """Re-solve the whole problem with a stay-close bias."""
-    # Hard-pin finished and in-progress matches; everything else is
-    # only hinted (free to move under the stay-close penalty).
+def _run_warm_restart(request: WarmRestartRequest) -> tuple[ScheduleDTO, List[str]]:
+    """Pure solver-call body: returns (new schedule, movedMatchIds).
+
+    Extracted from the endpoint so callers (director-action proposals,
+    tests, etc.) can invoke it without going through FastAPI's
+    response-model Pydantic round-trip — that round-trip otherwise
+    fails when sys.modules churn results in `ScheduleDTO` having
+    different class identities at validation time.
+    """
     finished: set[str] = set()
     for m_id, state in request.matchStates.items():
         if state.status in ("finished", "started"):
@@ -80,7 +91,9 @@ async def warm_restart_schedule(request: WarmRestartRequest) -> WarmRestartRespo
     schedule_config = schedule_config_from_dto(request.config)
     players = players_from_dto(request.players, request.config)
     matches = matches_from_dto(request.matches)
-    solver_options = solver_options_for(request.config)
+    solver_options = solver_options_for(
+        request.config, time_limit_override=request.timeBudgetSec,
+    )
 
     try:
         result = solve_warm_start(
@@ -94,7 +107,7 @@ async def warm_restart_schedule(request: WarmRestartRequest) -> WarmRestartRespo
         )
     except Exception:
         log.exception("warm-restart failed")
-        raise HTTPException(500, "warm-restart failed")
+        raise http_error(500, ErrorCode.WARM_RESTART_FAILED, "warm-restart failed")
 
     new_schedule = result_to_dto(result)
 
@@ -106,5 +119,11 @@ async def warm_restart_schedule(request: WarmRestartRequest) -> WarmRestartRespo
             continue
         if new.slotId != ref.slot_id or new.courtId != ref.court_id:
             moved.append(m_id)
+    return new_schedule, moved
 
+
+@router.post("/schedule/warm-restart", response_model=WarmRestartResponse)
+async def warm_restart_schedule(request: WarmRestartRequest) -> WarmRestartResponse:
+    """Re-solve the whole problem with a stay-close bias."""
+    new_schedule, moved = _run_warm_restart(request)
     return WarmRestartResponse(schedule=new_schedule, movedMatchIds=moved)
