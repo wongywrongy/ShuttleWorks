@@ -1,8 +1,8 @@
 # Frontend architecture
 
-Single-page React 19 + Vite app. One shell, one tab bar, lazy-loaded tab
-panels. State is split between two Zustand stores; the larger one is
-persisted to a server-side snapshot via debounced PUTs.
+Single-page React 19 + Vite app. One shell, one tab bar, lazy-loaded
+tab panels. State is split between two Zustand stores; the larger one
+is persisted via debounced PUTs to a server-side snapshot.
 
 ## Top-level shape
 
@@ -12,6 +12,7 @@ frontend/src/
 ├── index.css                 # Tailwind base + theme tokens (:root + .dark)
 ├── App.css                   # legacy file, mostly empty
 ├── app/
+│   ├── App.tsx               # router shell (/display vs admin shell)
 │   ├── AppShell.tsx          # mounts hydration + theme hooks, renders TabBar + active tab
 │   └── TabBar.tsx            # tab nav + ThemeToggle + AppStatusPopover
 ├── pages/                    # one component per top-level surface (Setup, Schedule, MCC, TV)
@@ -20,8 +21,8 @@ frontend/src/
 ├── hooks/                    # data hooks + UI hooks (see frontend/src/hooks/README.md)
 ├── store/                    # Zustand stores (see frontend/src/store/README.md)
 ├── api/                      # axios client + DTO types (see frontend/src/api/README.md)
-├── utils/                    # pure helpers (time, traffic-light, exporters, …)
-├── lib/utils.ts              # cn(), INTERACTIVE_BASE — used everywhere for click feedback
+├── utils/                    # pure helpers (traffic-light, exporters, importers, …)
+├── lib/                      # cross-feature primitives — cn(), INTERACTIVE_BASE, slot math (time.ts), school accents
 ├── styles/                   # token overrides (rare)
 ├── types/                    # ambient TS types
 └── services/                 # service-layer wrappers (small)
@@ -34,10 +35,13 @@ Two stores, one storage key each:
 | Store | File | Storage key | What it holds |
 |---|---|---|---|
 | Tournament | `store/appStore.ts` | (server-side `/tournament-state`) | tournament config, roster, matches, schedule, match states, solver HUD, toasts, lock state |
-| Preferences | `store/preferencesStore.ts` | `scheduler-app-preferences` (localStorage) | per-device theme (`light` / `dark` / `system`) |
+| Preferences | `store/preferencesStore.ts` | `scheduler-app-preferences` (localStorage) | per-device theme + density |
+
+Selectors that span the store live in `store/selectors.ts`.
 
 The split is deliberate: tournament state moves between machines via
-import/export; theme must not. See `store/README.md` for slice details.
+import/export; theme and density must not. See `store/README.md` for
+slice details.
 
 ## Data flow
 
@@ -48,24 +52,27 @@ mount → useTournamentState() hydrates appStore from server snapshot
       → schedule generation: useSchedule() → /schedule/stream (SSE) → store.setSchedule
       → live ops: useLiveTracking() / useLiveOperations() patch matchStates,
         each transition flushed via /match-state PUT immediately (no debounce)
+      → repair flow: useRepair() → /schedule/repair → store.setSchedule (with repairedMatchIds)
 ```
 
-Hooks are the seam. Components never call the API directly — they call a
-hook, the hook calls `apiClient`, the hook updates the store. This keeps
-optimistic updates and rollback in one place.
+Hooks are the seam. Components never call the API directly — they call
+a hook, the hook calls `apiClient`, the hook updates the store. This
+keeps optimistic updates and rollback in one place.
 
-## Theme system
+## Theme & density
 
-- HSL tokens defined in `index.css` under `:root` (light) and `.dark` (dark).
+- HSL theme tokens defined in `index.css` under `:root` (light) and
+  `.dark` (dark).
 - Tailwind reads them via the `darkMode: ["class"]` config; semantic
   utilities like `bg-background`, `text-foreground`, `border-border`,
   `bg-card`, `bg-muted`, `text-muted-foreground` resolve per theme.
-- `useAppliedTheme()` (in `hooks/`) reads the preference, resolves
-  `system` against `prefers-color-scheme`, and toggles `.dark` on
-  `<html>`. Mounted once in `AppShell.tsx`.
-- `<ThemeToggle />` (in `components/`) is a three-state pill (Sun /
-  Monitor / Moon). Rendered in the header and inside the Setup page's
-  Appearance card.
+- `useAppliedTheme()` reads the preference, resolves `system` against
+  `prefers-color-scheme`, and toggles `.dark` on `<html>`. Mounted
+  once in `AppShell.tsx`.
+- `useAppliedDensity()` does the same dance for compact / comfortable
+  density.
+- `<ThemeToggle />` is the three-state pill (Sun / Monitor / Moon)
+  rendered in the header and inside the Setup page.
 - `pages/PublicDisplayPage.tsx` (the TV view) is **intentionally
   dark-only**, audience is gym projection. Don't add a toggle there.
 
@@ -77,11 +84,11 @@ dark mode.
 ## Adding a new tab
 
 1. Add the tab key to `AppTab` in `store/appStore.ts`.
-2. Add a `lazy(() => import(...))` line in `app/AppShell.tsx` and route
-   it inside the `switch (activeTab)` block.
+2. Add a `lazy(() => import(...))` line in `app/AppShell.tsx` and
+   route it inside the `switch (activeTab)` block.
 3. Add a tab button in `app/TabBar.tsx`.
-4. Build the panel under `features/<your-feature>/` (or `pages/` if it's
-   a pure page-level view).
+4. Build the panel under `features/<your-feature>/` (or `pages/` if
+   it's a pure page-level view).
 
 ## Adding a new feature folder
 
@@ -89,8 +96,8 @@ Each `features/<x>/` folder typically contains:
 
 - `<X>Tab.tsx` — top-level panel rendered by `AppShell`.
 - `components/` — feature-private components.
-- `hooks/` (sometimes) — feature-private hooks. Cross-feature hooks live
-  in `frontend/src/hooks/`.
+- `hooks/` (sometimes) — feature-private hooks. Cross-feature hooks
+  live in `frontend/src/hooks/`.
 
 If a hook or component is reused by ≥2 features, hoist it to
 `frontend/src/hooks/` or `frontend/src/components/`.
@@ -99,8 +106,8 @@ If a hook or component is reused by ≥2 features, hoist it to
 
 Every interactive element should compose `INTERACTIVE_BASE` (or
 `INTERACTIVE_BASE_QUIET` for icon-only buttons) from `lib/utils.ts`.
-That is the single source of truth for hover/active/disabled/focus-ring
-behaviour. See the JSDoc in that file for the rationale on each rule.
+That is the single source of truth for hover / active / disabled /
+focus-ring behaviour.
 
 ## Testing
 

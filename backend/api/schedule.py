@@ -6,6 +6,8 @@ This module is a thin route surface around it.
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
+
+from app.error_codes import ErrorCode, http_error
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, AsyncGenerator
@@ -98,7 +100,7 @@ async def generate_schedule(request: GenerateScheduleRequest):
 
     except Exception:
         log.exception("schedule generation failed")
-        raise HTTPException(status_code=500, detail="schedule generation failed")
+        raise http_error(500, ErrorCode.SOLVE_FAILED, "schedule generation failed")
 
 
 @router.post("/schedule/stream")

@@ -1,11 +1,18 @@
 import { Loader2 } from 'lucide-react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
+/**
+ * Schedule toolbar — the single primary action for producing a plan.
+ *
+ * The previous "Re-optimize" sibling button was redundant: it ran the
+ * solver with previous assignments as warm start but did NOT pin
+ * started/finished matches, which made it actively unsafe mid-tournament.
+ * The sidebar's Re-plan… action covers the same warm-start use case
+ * AND auto-pins played matches, so Re-optimize was strictly weaker.
+ */
 interface ScheduleActionsProps {
   onGenerate: () => void;
-  onReoptimize: () => void;
   generating: boolean;
-  reoptimizing: boolean;
   hasSchedule: boolean;
   /** When true, the Generate button enters a "are-you-sure?" inline state. */
   confirmingReplace?: boolean;
@@ -15,9 +22,7 @@ const BTN = `${INTERACTIVE_BASE} inline-flex items-center gap-2 rounded px-3 py-
 
 export function ScheduleActions({
   onGenerate,
-  onReoptimize,
   generating,
-  reoptimizing,
   hasSchedule,
   confirmingReplace = false,
 }: ScheduleActionsProps) {
@@ -46,23 +51,6 @@ export function ScheduleActions({
             ? 'Click again to replace'
             : 'Generate'}
       </button>
-      {hasSchedule && (
-        <button
-          type="button"
-          onClick={onReoptimize}
-          disabled={reoptimizing}
-          aria-busy={reoptimizing}
-          className={[
-            BTN,
-            reoptimizing
-              ? 'bg-muted text-muted-foreground'
-              : 'bg-muted text-foreground hover:bg-accent hover:text-accent-foreground',
-          ].join(' ')}
-        >
-          {reoptimizing && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
-          {reoptimizing ? 'Optimizing…' : 'Re-optimize'}
-        </button>
-      )}
     </div>
   );
 }

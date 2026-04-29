@@ -24,6 +24,7 @@ from app.schemas import (
 
 import app.scheduler_core_path  # noqa: F401  -- side effect: sys.path setup
 
+from adapters.badminton import prepare_solver_input  # noqa: E402
 from scheduler_core.domain.models import Assignment as CoreAssignment  # noqa: E402
 from scheduler_core.engine.validation import Conflict, find_conflicts  # noqa: E402
 
@@ -42,25 +43,20 @@ def validate_move(
     The current assignment for ``proposed_move.matchId`` (if any) is replaced;
     if the match wasn't scheduled yet, the proposed position is added.
     """
-    # Lazy import to avoid circular dependency with schedule.py
-    from api.schedule import (  # noqa: WPS433
-        _convert_matches,
-        _convert_players,
-        _convert_previous_assignments,
-        _convert_to_schedule_config,
+    # Reuse the same DTO → domain conversion the solver uses, so the
+    # validator and the solver agree on every field (rest slots,
+    # availability windows, breaks, closed courts).
+    core_config, core_players_list, core_matches_list, core_previous_list = prepare_solver_input(
+        config,
+        players,
+        matches,
+        [pa.model_dump() for pa in (previous_assignments or [])],
     )
+    core_players = {p.id: p for p in core_players_list}
+    core_matches = {m.id: m for m in core_matches_list}
+    core_previous = {pa.match_id: pa for pa in core_previous_list}
 
-    core_config = _convert_to_schedule_config(config)
-    core_players = {p.id: p for p in _convert_players(players, config)}
-    core_matches = {m.id: m for m in _convert_matches(matches)}
-    core_previous = {
-        pa.match_id: pa
-        for pa in _convert_previous_assignments(
-            [pa.model_dump() for pa in (previous_assignments or [])]
-        )
-    }
-
-    # Apply the proposed move.
+    # Apply the proposed move on top of the current assignments.
     target_match = core_matches.get(proposed_move.matchId)
     duration = target_match.duration_slots if target_match else 1
 
@@ -96,6 +92,9 @@ def validate_move(
             )
         )
 
+    # ``find_conflicts`` checks every hard constraint the solver
+    # enforces — court capacity, player overlap, availability, breaks,
+    # rest, locks, AND court closures (added at validation.py:5c).
     conflicts: List[Conflict] = find_conflicts(
         config=core_config,
         players=core_players,

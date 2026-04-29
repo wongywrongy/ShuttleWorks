@@ -225,6 +225,38 @@ def find_conflicts(
                     )
                 )
 
+    # 5c. Court closures — half-open per-court windows that mirror the
+    # solver's reified blocker constraints. Includes legacy all-day
+    # closures (``closed_court_ids``) which we treat as full-day windows.
+    closure_windows: List[Tuple[int, int, int]] = list(
+        config.closed_court_windows or []
+    )
+    for cid in (config.closed_court_ids or []):
+        if 1 <= cid <= C and T > 0:
+            closure_windows.append((cid, 0, T))
+    for a in assignments:
+        match = matches.get(a.match_id)
+        if not match:
+            continue
+        d = match.duration_slots
+        for cid, fs, ts in closure_windows:
+            if a.court_id != cid:
+                continue
+            if a.slot_id < ts and a.slot_id + d > fs:
+                conflicts.append(
+                    Conflict(
+                        type="court_closed",
+                        match_id=a.match_id,
+                        court_id=cid,
+                        slot_id=a.slot_id,
+                        description=(
+                            f"Match {match.event_code} at slot {a.slot_id} "
+                            f"(duration {d}) overlaps closure on court {cid} "
+                            f"[{fs},{ts})"
+                        ),
+                    )
+                )
+
     # 6. Rest (hard only — soft rest is permitted to produce positive slack).
     by_player: Dict[str, List[Tuple[int, int, str]]] = defaultdict(list)
     for a in assignments:

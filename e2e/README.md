@@ -1,6 +1,8 @@
 # e2e — Playwright smoke tests
 
-End-to-end tests for the tournament scheduler. Runs against the nginx-served Docker build (what actually ships), not the Vite dev server.
+End-to-end tests for the tournament scheduler. Runs against the
+nginx-served Docker build (what actually ships), not the Vite dev
+server.
 
 ## Prerequisites
 
@@ -11,7 +13,7 @@ End-to-end tests for the tournament scheduler. Runs against the nginx-served Doc
 
 ```bash
 # from repo root
-make test-e2e            # normal: docker compose up -d + tests + down
+make test-e2e            # docker compose up -d + tests + down
 make test-e2e-rebuild    # force rebuild of images first
 make test-e2e-dev        # point tests at Vite dev (http://localhost:5173) — requires `make dev` running
 
@@ -35,10 +37,19 @@ npm test
 
 ```
 e2e/
-├── global-setup.ts     # docker-compose up + health probe
-├── global-teardown.ts  # docker-compose down
+├── global-setup.ts       # docker-compose up + health probe
+├── global-teardown.ts    # docker-compose down
 ├── playwright.config.ts
-├── tests/
-│   └── 00-sanity.spec.ts
-└── fixtures/           # canned tournaments (later)
+├── fixtures/             # canned tournaments + helpers
+└── tests/
+    ├── 00-sanity.spec.ts                # shell, tabs, /display, /health
+    ├── 02-inline-roster.spec.ts         # add school + player without dialogs
+    ├── 03-auto-generate-matches.spec.ts # inline auto-gen flow
+    ├── 04-solve-happy-path.spec.ts      # SSE HUD populates from /schedule/stream
+    ├── 05-drag-reschedule.spec.ts       # feasible drop pins + re-solves; conflict shows infeasible
+    ├── 06-persistence.spec.ts           # /tournament-state survives a reload
+    └── 07-schedule-xlsx-import.spec.ts  # disaster-recovery import path
 ```
+
+The numeric prefix is sort-order only; specs are independent and
+Playwright runs them in parallel.

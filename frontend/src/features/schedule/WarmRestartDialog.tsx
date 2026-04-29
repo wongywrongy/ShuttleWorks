@@ -1,19 +1,26 @@
 /**
- * Warm-restart confirmation dialog.
+ * Warm-restart proposal dialog.
  *
- * The escape hatch when targeted repair isn't enough — the operator
- * wants the solver to re-plan from where the tournament currently is.
- * Finished + in-progress matches stay pinned; everything else may
- * move under a per-match move-penalty so the new schedule stays as
- * close to the old one as the constraints allow.
+ * Two-step flow:
+ *   1. Operator picks a stay-close weight (Conservative / Balanced /
+ *      Aggressive). Submit creates a *proposal* — the solver runs but
+ *      the committed schedule does NOT change yet.
+ *   2. The dialog body switches to a `ScheduleDiffView` showing exactly
+ *      what would change. Operator commits ("Commit replan") to apply,
+ *      or cancels to discard.
  *
- * Conservative / Balanced / Aggressive map to weights 10 / 5 / 1
- * (lower weight = solver more willing to move matches).
+ * Replaces the legacy single-step flow that called the solver and
+ * applied the result in one click. The proposal pipeline gives the
+ * operator a chance to see repercussions before the committed state
+ * changes.
  */
 import { useState } from 'react';
 
 import { Modal } from '../../components/common/Modal';
-import { useRepair } from '../../hooks/useRepair';
+import { ScheduleDiffView } from './ScheduleDiffView';
+import { useProposals } from '../../hooks/useProposals';
+import { formatSlotTime } from '../../lib/time';
+import { useAppStore } from '../../store/appStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 interface Props {
@@ -29,19 +36,80 @@ const WEIGHTS: Array<{ id: 'conservative' | 'balanced' | 'aggressive'; label: st
 
 export function WarmRestartDialog({ isOpen, onClose }: Props) {
   const [pick, setPick] = useState<typeof WEIGHTS[number]['id']>('conservative');
-  const { warmRestart, status } = useRepair();
+  const { createWarmRestart, commit, cancel, status } = useProposals();
+  const activeProposal = useAppStore((s) => s.activeProposal);
+  const config = useAppStore((s) => s.config);
   const loading = status === 'loading';
 
   if (!isOpen) return null;
 
-  const submit = async () => {
+  const handlePreview = async () => {
     const w = WEIGHTS.find((x) => x.id === pick)!.weight;
-    const result = await warmRestart(w);
+    await createWarmRestart(w);
+    // The proposal is now in the store; the dialog body will re-render
+    // showing the impact view.
+  };
+
+  const handleCommit = async () => {
+    const result = await commit();
     if (result) onClose();
   };
 
+  const handleCancel = async () => {
+    if (activeProposal) {
+      await cancel();
+    }
+    onClose();
+  };
+
+  // Slot formatter for the diff view's "From / To" columns.
+  const formatSlot = (slotId: number | null | undefined): string => {
+    if (slotId === null || slotId === undefined) return '—';
+    if (!config) return `slot ${slotId}`;
+    return formatSlotTime(slotId, config);
+  };
+
+  // Proposal stage: show diff + commit/cancel.
+  if (activeProposal && activeProposal.kind === 'warm_restart') {
+    return (
+      <Modal onClose={handleCancel} titleId="warm-restart-title" widthClass="max-w-2xl">
+        <div className="p-4 space-y-3">
+          <div>
+            <h2 id="warm-restart-title" className="text-base font-semibold">
+              Review re-plan
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              {activeProposal.summary || 'Review the impact before committing.'}
+            </p>
+          </div>
+
+          <ScheduleDiffView impact={activeProposal.impact} formatSlot={formatSlot} />
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className={`${INTERACTIVE_BASE} rounded border border-border bg-background px-3 py-1.5 text-sm`}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleCommit}
+              disabled={loading}
+              className={`${INTERACTIVE_BASE} rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground`}
+            >
+              {loading ? 'Committing…' : 'Commit replan'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  // Initial stage: pick a weight.
   return (
-    <Modal onClose={onClose} titleId="warm-restart-title" widthClass="max-w-md">
+    <Modal onClose={handleCancel} titleId="warm-restart-title" widthClass="max-w-md">
       <div className="p-4 space-y-4">
         <h2 id="warm-restart-title" className="text-base font-semibold">
           Re-plan from here
@@ -50,7 +118,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
         <p className="text-xs text-muted-foreground">
           Finished and in-progress matches stay where they are. Future matches
           may move; choose how much the solver should prefer keeping the
-          existing schedule.
+          existing schedule. The next step previews exactly what will change.
         </p>
 
         <div className="space-y-1.5">
@@ -74,18 +142,18 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCancel}
             className={`${INTERACTIVE_BASE} rounded border border-border bg-background px-3 py-1.5 text-sm`}
           >
             Cancel
           </button>
           <button
             type="button"
-            onClick={submit}
+            onClick={handlePreview}
             disabled={loading}
             className={`${INTERACTIVE_BASE} rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground`}
           >
-            {loading ? 'Re-planning…' : 'Re-plan'}
+            {loading ? 'Solving…' : 'Preview impact'}
           </button>
         </div>
       </div>

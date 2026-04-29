@@ -27,9 +27,7 @@ interface LiveScheduleGridProps {
   status: 'solving' | 'complete' | 'error';
   totalMatches?: number;
   onGenerate?: () => void;
-  onReoptimize?: () => void;
   generating?: boolean;
-  reoptimizing?: boolean;
   hasSchedule?: boolean;
 }
 
@@ -45,9 +43,7 @@ export function LiveScheduleGrid({
   status,
   totalMatches,
   onGenerate,
-  onReoptimize,
   generating,
-  reoptimizing,
   hasSchedule,
 }: LiveScheduleGridProps) {
   // Compute constraint violations for the log
@@ -70,9 +66,7 @@ export function LiveScheduleGrid({
         {onGenerate && (
           <ScheduleActions
             onGenerate={onGenerate}
-            onReoptimize={onReoptimize!}
             generating={generating || false}
-            reoptimizing={reoptimizing || false}
             hasSchedule={hasSchedule || false}
           />
         )}

@@ -27,6 +27,9 @@ import type {
   LiveScheduleState,
   ScheduleAssignment,
   SolverProgressEvent,
+  Proposal,
+  Advisory,
+  ScheduleHistoryEntry,
 } from '../api/dto';
 
 // Stats from schedule generation (persists across page navigation)
@@ -207,6 +210,46 @@ interface AppState {
   lockSchedule: () => void;
   unlockSchedule: () => void;
 
+  // ---- Two-phase commit pipeline ------------------------------------
+  // Versioned committed schedule + history (server is the authority).
+  // Hydrated from /tournament/state. Used by the proposal pipeline for
+  // optimistic-concurrency checks and by the diff/history UI.
+  scheduleVersion: number;
+  scheduleHistory: ScheduleHistoryEntry[];
+  setScheduleVersion: (version: number) => void;
+  setScheduleHistory: (history: ScheduleHistoryEntry[]) => void;
+
+  // The proposal currently under operator review (one at a time). Set
+  // when the user opens a replan/repair/director dialog; cleared on
+  // commit, cancel, or expiry.
+  activeProposal: Proposal | null;
+  setActiveProposal: (proposal: Proposal | null) => void;
+
+  // Live-operations advisories surfaced by the 15s polling hook.
+  // Newest first. Toast surfacing happens in the hook (not here).
+  advisories: Advisory[];
+  setAdvisories: (advisories: Advisory[]) => void;
+
+  // Cross-component "review this advisory" intent. The toast and the
+  // AdvisoryBanner both write to this slice; the Live page reads it
+  // and dispatches the right dialog (DisruptionDialog for repair,
+  // WarmRestartDialog for warm_restart, DirectorToolsPanel for
+  // delay_start/insert_blackout/etc.). Cleared once the dialog opens.
+  pendingAdvisoryReview: Advisory | null;
+  setPendingAdvisoryReview: (advisory: Advisory | null) => void;
+
+  // ---- Unlock-confirm modal -----------------------------------------
+  // Async lock-guard pipe: ``useLockGuard.confirmUnlock(...)`` sets
+  // this slice with a resolver, and the global ``UnlockModal`` host
+  // (rendered by AppShell) calls the resolver on the operator's
+  // choice. Cleared atomically once the modal closes.
+  unlockModalState: {
+    open: boolean;
+    actionDescription?: string;
+    resolve: (confirmed: boolean) => void;
+  } | null;
+  setUnlockModalState: (state: AppState['unlockModalState']) => void;
+
   // Live Tracking (Match States) - NOT persisted to localStorage, managed via file
   matchStates: Record<string, MatchStateDTO>;
   liveState: LiveScheduleState | null;
@@ -230,6 +273,12 @@ const DEFAULT_CONFIG: TournamentConfig = {
   defaultRestMinutes: 30,
   freezeHorizonSlots: 0,
   rankCounts: { MS: 3, WS: 3, MD: 2, WD: 2, XD: 2 }, // Default: 3 singles each, 2 doubles each per school
+  // Director-tools / closure fields default to empty so a fresh
+  // tournament can never expose `undefined` to consumers that expect
+  // arrays (Gantt closure helpers, persistence diff, etc.).
+  closedCourts: [],
+  courtClosures: [],
+  clockShiftMinutes: 0,
 };
 
 export const useAppStore = create<AppState>()(
@@ -258,6 +307,14 @@ export const useAppStore = create<AppState>()(
       isScheduleLocked: false,
       matchStates: {},
       liveState: null,
+
+      // Two-phase commit slices
+      scheduleVersion: 0,
+      scheduleHistory: [],
+      activeProposal: null,
+      advisories: [],
+      pendingAdvisoryReview: null,
+      unlockModalState: null,
 
       // Shell actions
       setActiveTab: (activeTab) => set({ activeTab }),
@@ -446,6 +503,14 @@ export const useAppStore = create<AppState>()(
         scheduleStats: null,
       }),
 
+      // Two-phase commit pipeline actions
+      setScheduleVersion: (scheduleVersion) => set({ scheduleVersion }),
+      setScheduleHistory: (scheduleHistory) => set({ scheduleHistory }),
+      setActiveProposal: (activeProposal) => set({ activeProposal }),
+      setAdvisories: (advisories) => set({ advisories }),
+      setPendingAdvisoryReview: (pendingAdvisoryReview) => set({ pendingAdvisoryReview }),
+      setUnlockModalState: (unlockModalState) => set({ unlockModalState }),
+
       // Live Tracking (Match States) actions
       setMatchStates: (matchStates) => {
         const now = new Date().toISOString();
@@ -480,7 +545,10 @@ export const useAppStore = create<AppState>()(
           liveState: state.liveState ? { ...state.liveState, lastSynced: time } : null,
         })),
 
-      // Data management
+      // Data management. Same scope as DemoLoader.apply — wipe live /
+      // proposal / advisory / solver state along with the persisted
+      // tournament data, so a "clear" lands you on a genuinely empty
+      // tournament instead of a hybrid with leftover state.
       clearAllData: () =>
         set({
           config: DEFAULT_CONFIG,
@@ -488,6 +556,23 @@ export const useAppStore = create<AppState>()(
           players: [],
           matches: [],
           schedule: null,
+          scheduleStats: null,
+          scheduleIsStale: false,
+          isScheduleLocked: false,
+          scheduleVersion: 0,
+          scheduleHistory: [],
+          activeProposal: null,
+          advisories: [],
+          pendingAdvisoryReview: null,
+          matchStates: {},
+          liveState: null,
+          isGenerating: false,
+          generationProgress: null,
+          generationError: null,
+          solverLogs: [],
+          solverHud: DEFAULT_SOLVER_HUD,
+          pendingPin: null,
+          lastValidation: null,
         }),
 
       exportData: () => {

@@ -99,11 +99,33 @@ export interface TournamentConfig {
   // feasible schedule found within this window. Higher = closer to
   // optimal at the cost of operator wait time. Default 30 s.
   solverTimeLimitSeconds?: number;
+  // Director time-axis: minutes added to every unstarted match's
+  // displayed wall-clock by `delay_start` actions. Solver still plans
+  // on the abstract slot grid; this is purely a display offset.
+  clockShiftMinutes?: number;
+  // Court IDs (1-indexed) closed *all day* — the legacy shape kept
+  // for backward compat with persisted state. New time-bounded
+  // closures go into ``courtClosures`` below.
+  closedCourts?: number[];
+  // Time-bounded court closures. Each entry forbids the named
+  // court inside its half-open ``[fromTime, toTime)`` window. Either
+  // bound omitted means open-ended on that side; both omitted is
+  // equivalent to a legacy ``closedCourts`` entry (full-day).
+  courtClosures?: CourtClosure[];
   // How many near-optimal alternative schedules the solver keeps
   // alongside the chosen one. Operator can swap to a candidate in a
   // click when reality (overrun, withdrawal, court closure) makes
   // the chosen plan no longer fit — no re-solve needed. Default 5.
   candidatePoolSize?: number;
+}
+
+export interface CourtClosure {
+  courtId: number;
+  /** HH:mm; omit for "from start of day". */
+  fromTime?: string;
+  /** HH:mm; omit for "until end of day". */
+  toTime?: string;
+  reason?: string;
 }
 
 export interface BreakWindow {
@@ -400,6 +422,104 @@ export interface TournamentStateDTO {
   scheduleIsStale: boolean;
   /** Set only when the backend auto-restored a corrupted file from backup. */
   recoveredFromBackup?: string;
+  /** Schema v2: monotonic counter bumped on every committed schedule change. */
+  scheduleVersion?: number;
+  /** Schema v2: rolling history of replaced committed schedules (capped server-side at 5). */
+  scheduleHistory?: ScheduleHistoryEntry[];
+}
+
+// ---- Proposal pipeline (two-phase commit) -------------------------------
+
+export interface ScheduleHistoryEntry {
+  version: number;
+  committedAt: string;
+  trigger?: 'warm_restart' | 'repair' | 'manual_edit' | 'director_action' | 'initial' | string | null;
+  summary?: string | null;
+  schedule?: ScheduleDTO | null;
+}
+
+export interface MatchMove {
+  matchId: string;
+  fromSlotId?: number | null;
+  toSlotId?: number | null;
+  fromCourtId?: number | null;
+  toCourtId?: number | null;
+  matchNumber?: number | null;
+  eventRank?: string | null;
+}
+
+export interface PlayerImpact {
+  playerId: string;
+  playerName?: string | null;
+  matchCount: number;
+  earliestSlotDelta: number;
+}
+
+export interface SchoolImpact {
+  groupId: string;
+  groupName?: string | null;
+  matchCount: number;
+}
+
+export interface MetricDelta {
+  objectiveDelta?: number | null;
+  softViolationCountDelta: number;
+  restViolationsDelta: number;
+  proximityViolationsDelta: number;
+  totalPenaltyDelta: number;
+  unscheduledMatchesDelta: number;
+}
+
+export interface Impact {
+  movedMatches: MatchMove[];
+  affectedPlayers: PlayerImpact[];
+  affectedSchools: SchoolImpact[];
+  metricDelta: MetricDelta;
+  infeasibilityWarnings: string[];
+  clockShiftMinutesDelta: number;
+}
+
+export type ProposalKind = 'warm_restart' | 'repair' | 'manual_edit' | 'director_action';
+
+export interface Proposal {
+  id: string;
+  kind: ProposalKind;
+  proposedSchedule: ScheduleDTO;
+  proposedConfig?: TournamentConfig | null;
+  impact: Impact;
+  summary?: string | null;
+  fromScheduleVersion: number;
+  createdAt: string;
+  expiresAt: string;
+}
+
+// ---- Advisories (live operations) --------------------------------------
+
+export type AdvisoryKind =
+  | 'overrun'
+  | 'no_show'
+  | 'running_behind'
+  | 'infeasibility_risk'
+  | 'start_delay_detected'
+  | 'approaching_blackout';
+
+export type AdvisorySeverity = 'info' | 'warn' | 'critical';
+
+export interface SuggestedAction {
+  kind: 'warm_restart' | 'repair' | 'delay_start' | 'insert_blackout' | 'compress_remaining' | 'remove_blackout';
+  payload: Record<string, unknown>;
+}
+
+export interface Advisory {
+  id: string;
+  kind: AdvisoryKind;
+  severity: AdvisorySeverity;
+  summary: string;
+  detail?: string | null;
+  matchId?: string | null;
+  courtId?: number | null;
+  suggestedAction?: SuggestedAction | null;
+  detectedAt: string;
 }
 
 export interface BackupEntryDTO {

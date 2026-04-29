@@ -23,7 +23,7 @@ export function MatchesPage() {
   };
 
   const handleSave = async (match: MatchDTO) => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     try {
       if (editingMatch) {
         await updateMatch(match.id, match);
@@ -43,7 +43,7 @@ export function MatchesPage() {
   };
 
   const handleDelete = async (matchId: string) => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     if (window.confirm('Are you sure you want to delete this match?')) {
       await deleteMatch(matchId);
     }
@@ -55,7 +55,7 @@ export function MatchesPage() {
   };
 
   const handleSaveGeneratedMatches = async (generatedMatches: MatchDTO[]) => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     try {
       for (const match of generatedMatches) {
         await createMatch(match);
@@ -67,7 +67,7 @@ export function MatchesPage() {
   };
 
   const handleBulkDelete = async () => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     const count = selectedMatchIds.length;
     if (window.confirm(`Are you sure you want to delete ${count} match${count !== 1 ? 'es' : ''}?`)) {
       try {

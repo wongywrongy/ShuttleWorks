@@ -19,6 +19,9 @@ import type {
   TournamentStateDTO,
   BackupListDTO,
   BackupCreatedDTO,
+  Advisory,
+  Proposal,
+  ScheduleHistoryEntry,
 } from './dto';
 
 // Use /api proxy in dev, or explicit URL in production
@@ -40,6 +43,12 @@ export interface Disruption {
   courtId?: number;
   matchId?: string;
   extraMinutes?: number;
+  /** Court closure window — only used when type === 'court_closed'.
+   *  Both omitted → indefinite all-day closure; either or both set →
+   *  time-bounded closure that gets stored in config.courtClosures. */
+  fromTime?: string;
+  toTime?: string;
+  reason?: string;
 }
 
 export interface RepairRequest {
@@ -52,9 +61,54 @@ export interface RepairRequest {
   nowIso?: string;
 }
 
-export interface RepairResponse {
-  schedule: ScheduleDTO;
-  repairedMatchIds: string[];
+// Manual-edit (drag-drop) proposal — pins one match to a new slot/court.
+export interface ManualEditProposalRequest {
+  originalSchedule: ScheduleDTO;
+  config: TournamentConfig;
+  players: PlayerDTO[];
+  matches: MatchDTO[];
+  matchStates: Record<string, MatchStateDTO>;
+  matchId: string;
+  pinnedSlotId: number;
+  pinnedCourtId: number;
+}
+
+// Director-action proposal — runtime time-axis + court-state adjustments.
+export type DirectorActionKind =
+  | 'delay_start'
+  | 'insert_blackout'
+  | 'remove_blackout'
+  | 'reopen_court';
+
+export interface DirectorAction {
+  kind: DirectorActionKind;
+  /** delay_start: minutes to bump clockShiftMinutes by. */
+  minutes?: number;
+  /** insert_blackout: HH:mm wall-clock window start. */
+  fromTime?: string;
+  /** insert_blackout: HH:mm wall-clock window end. */
+  toTime?: string;
+  /** insert_blackout: optional human-readable reason ("Lunch", etc.). */
+  reason?: string;
+  /** remove_blackout: index into config.breaks. */
+  blackoutIndex?: number;
+  /** reopen_court: 1-indexed court id to drop from config.closedCourts. */
+  courtId?: number;
+}
+
+export interface DirectorActionRequest {
+  action: DirectorAction;
+  config: TournamentConfig;
+  players: PlayerDTO[];
+  matches: MatchDTO[];
+  originalSchedule: ScheduleDTO;
+  matchStates: Record<string, MatchStateDTO>;
+}
+
+// Commit a proposal → updated tournament state + the history entry it appended.
+export interface CommitProposalResponse {
+  state: TournamentStateDTO;
+  historyEntry: ScheduleHistoryEntry;
 }
 
 export interface WarmRestartRequest {
@@ -66,11 +120,6 @@ export interface WarmRestartRequest {
   /** 10 = Conservative (default), 5 = Balanced, 1 = Aggressive. */
   stayCloseWeight?: number;
   nowIso?: string;
-}
-
-export interface WarmRestartResponse {
-  schedule: ScheduleDTO;
-  movedMatchIds: string[];
 }
 
 class ApiClient {
@@ -165,28 +214,65 @@ class ApiClient {
     return response.data;
   }
 
-  /**
-   * Repair the schedule after a disruption (overrun, withdrawal,
-   * court closure, cancellation). Re-solves only the affected slice;
-   * everything else stays pinned. Solve time < 5 s for typical
-   * tournaments.
-   */
-  async repairSchedule(request: RepairRequest): Promise<RepairResponse> {
-    const response = await this.client.post<RepairResponse>('/schedule/repair', request);
+  // ---- Two-phase commit (proposal pipeline) ----------------------------
+
+  /** Create a warm-restart proposal — same body as warm-restart, but
+   *  the result is stashed server-side for review and not committed
+   *  until ``commitProposal`` is called. */
+  async createWarmRestartProposal(request: WarmRestartRequest): Promise<Proposal> {
+    const response = await this.client.post<Proposal>(
+      '/schedule/proposals/warm-restart',
+      request,
+    );
     return response.data;
   }
 
-  /**
-   * Full re-solve seeded by the existing schedule with a stay-close
-   * objective. Finished + in-progress matches stay where they are;
-   * future matches may move under a per-match move penalty
-   * (Conservative=10 / Balanced=5 / Aggressive=1).
-   */
-  async warmRestartSchedule(request: WarmRestartRequest): Promise<WarmRestartResponse> {
-    const response = await this.client.post<WarmRestartResponse>(
-      '/schedule/warm-restart',
+  /** Create a repair proposal for a given disruption. */
+  async createRepairProposal(request: RepairRequest): Promise<Proposal> {
+    const response = await this.client.post<Proposal>(
+      '/schedule/proposals/repair',
       request,
     );
+    return response.data;
+  }
+
+  /** Manual-edit proposal (drag-drop). Pins one match to a new
+   *  slot/court via warm-restart with a high stay-close weight. */
+  async createManualEditProposal(request: ManualEditProposalRequest): Promise<Proposal> {
+    const response = await this.client.post<Proposal>(
+      '/schedule/proposals/manual-edit',
+      request,
+    );
+    return response.data;
+  }
+
+  /** Director-action proposal: delay_start, insert_blackout, remove_blackout. */
+  async createDirectorActionProposal(request: DirectorActionRequest): Promise<Proposal> {
+    const response = await this.client.post<Proposal>(
+      '/schedule/director-action',
+      request,
+    );
+    return response.data;
+  }
+
+  /** Atomically apply a proposal. 409 if the committed schedule has
+   *  advanced since the proposal was created (operator must re-review). */
+  async commitProposal(id: string): Promise<CommitProposalResponse> {
+    const response = await this.client.post<CommitProposalResponse>(
+      `/schedule/proposals/${id}/commit`,
+    );
+    return response.data;
+  }
+
+  /** Discard a proposal without committing. */
+  async cancelProposal(id: string): Promise<void> {
+    await this.client.delete(`/schedule/proposals/${id}`);
+  }
+
+  /** Live-operations advisories (overruns, no-shows, running-behind, etc.).
+   *  Polled on a 15s cadence by the useAdvisories hook. */
+  async getAdvisories(): Promise<Advisory[]> {
+    const response = await this.client.get<Advisory[]>('/schedule/advisories');
     return response.data;
   }
 
@@ -380,14 +466,6 @@ class ApiClient {
   }
 
   /**
-   * Health check
-   */
-  async health(): Promise<{ status: string; version: string }> {
-    const response = await this.client.get('/health');
-    return response.data;
-  }
-
-  /**
    * Fetch the server-side tournament state.
    * Returns `null` when the server has no state yet (HTTP 204).
    */
@@ -456,13 +534,6 @@ class ApiClient {
       ...update,
     });
     return response.data;
-  }
-
-  /**
-   * Delete a match state from the file (reset to default)
-   */
-  async deleteMatchState(matchId: string): Promise<void> {
-    await this.client.delete(`/match-states/${matchId}`);
   }
 
   /**

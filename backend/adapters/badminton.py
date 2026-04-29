@@ -93,19 +93,27 @@ def _time_to_slot(time: str, day_start: str, interval_minutes: int) -> int:
 # ---- Public API ----------------------------------------------------------
 
 
-def solver_options_for(config: TournamentConfig) -> SolverOptions:
+def solver_options_for(
+    config: TournamentConfig,
+    time_limit_override: float | None = None,
+) -> SolverOptions:
     """Pick solver options honouring the config's engine settings.
 
     - ``solverTimeLimitSeconds`` overrides the default 30 s cap.
+    - ``time_limit_override`` (caller-supplied, in seconds) overrides
+      the config's value too — used by the proposal pipeline so the
+      advisor's quick-look solves get a tight budget while
+      operator-initiated reviews get the full 30 s.
     - ``deterministic`` forces single-worker mode (CP-SAT only
       guarantees byte-identical output under one search worker).
     - ``randomSeed`` sets the deterministic seed (default 42).
     """
-    time_limit = (
-        config.solverTimeLimitSeconds
-        if config.solverTimeLimitSeconds is not None
-        else DEFAULT_SOLVER_OPTIONS.time_limit_seconds
-    )
+    if time_limit_override is not None:
+        time_limit = time_limit_override
+    elif config.solverTimeLimitSeconds is not None:
+        time_limit = config.solverTimeLimitSeconds
+    else:
+        time_limit = DEFAULT_SOLVER_OPTIONS.time_limit_seconds
     if config.deterministic:
         return SolverOptions(
             time_limit_seconds=time_limit,
@@ -172,7 +180,51 @@ def schedule_config_from_dto(config: TournamentConfig) -> ScheduleConfig:
         allow_player_overlap=config.allowPlayerOverlap if config.allowPlayerOverlap is not None else False,
         player_overlap_penalty=config.playerOverlapPenalty if config.playerOverlapPenalty is not None else 50.0,
         break_slots=break_slots,
+        # Defensive copy — only keep court ids that fall inside the
+        # configured court range; ignore stale entries from a previous
+        # tournament with more courts.
+        closed_court_ids=[
+            c for c in (config.closedCourts or []) if 1 <= c <= config.courtCount
+        ],
+        closed_court_windows=_build_closed_court_windows(config, total_slots),
     )
+
+
+def _build_closed_court_windows(
+    config: TournamentConfig, total_slots: int
+) -> List[Tuple[int, int, int]]:
+    """Merge legacy ``closedCourts`` (full-day) and ``courtClosures``
+    (time-bounded) into a single list of ``(court_id, from_slot, to_slot)``
+    half-open windows. Out-of-range courts and inverted/empty windows
+    are dropped so the solver never sees garbage.
+    """
+    out: List[Tuple[int, int, int]] = []
+
+    # Legacy: every entry in ``closedCourts`` is an all-day closure.
+    for c in (config.closedCourts or []):
+        if 1 <= c <= config.courtCount and total_slots > 0:
+            out.append((c, 0, total_slots))
+
+    # Time-bounded closures.
+    for closure in (config.courtClosures or []):
+        if not (1 <= closure.courtId <= config.courtCount):
+            continue
+        from_slot = (
+            _time_to_slot(closure.fromTime, config.dayStart, config.intervalMinutes)
+            if closure.fromTime
+            else 0
+        )
+        to_slot = (
+            _time_to_slot(closure.toTime, config.dayStart, config.intervalMinutes)
+            if closure.toTime
+            else total_slots
+        )
+        from_slot = max(0, min(from_slot, total_slots))
+        to_slot = max(0, min(to_slot, total_slots))
+        if to_slot > from_slot:
+            out.append((closure.courtId, from_slot, to_slot))
+
+    return out
 
 
 def players_from_dto(players: List[PlayerDTO], config: TournamentConfig) -> List[Player]:

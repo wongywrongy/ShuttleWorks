@@ -7,36 +7,42 @@ here; feature-private components live under `../features/<x>/`.
 
 ```
 components/
-├── ui/                # shadcn-style primitives (button, card, input, label, separator)
-├── common/            # reusable but non-primitive widgets
+├── ui/                   # shadcn-style primitives (button, card, input, label, separator)
+├── common/
 │   ├── Modal.tsx
-│   ├── ProgressIndicator.tsx
-│   ├── ElapsedTimer.tsx
-│   └── SafeDisplay.tsx
-├── status/            # status-related shared widgets
-├── roster/            # roster widgets shared across roster + matches features
+│   └── ElapsedTimer.tsx
+├── status/
+│   └── ScheduleLockIndicator.tsx
+├── roster/
+│   └── RosterTreeSelector.tsx
 ├── AppStatusPopover.tsx  # header status popover (last save, backups, etc.)
+├── DensityToggle.tsx     # compact / comfortable density pill
 ├── ErrorBoundary.tsx
+├── Hint.tsx              # dismissible inline tooltip / hint card
+├── InlineSearch.tsx      # search input wired to useSearchParamState
 ├── LoadingSpinner.tsx
-├── SolverHud.tsx      # docked solver HUD shown above the schedule + live tabs
-├── ThemeToggle.tsx    # light / system / dark pill
-├── Toast.tsx          # ToastStack rendered once at the app shell level
-└── UnsavedBanner.tsx  # red banner when /tournament-state PUTs are failing
+├── SchoolDot.tsx         # per-school accent dot (uses lib/schoolAccent.ts)
+├── SolverHud.tsx         # docked solver HUD shown above schedule + live tabs
+├── StatusPill.tsx        # status colour pill (live / called / blocked / done)
+├── ThemeToggle.tsx       # light / system / dark pill
+├── Toast.tsx             # ToastStack rendered once at the app shell level
+└── UnsavedBanner.tsx     # red banner when /tournament-state PUTs are failing
 ```
 
 ## Conventions
 
-- `ui/` follows the shadcn convention: variant + size via class-variance
-  authority, semantic tokens for colour. **Don't hardcode greys**;
-  always use `bg-card`, `text-foreground`, `text-muted-foreground`,
-  `border-border`, etc. The primitives already do this — copy the
-  pattern when adding new ones.
+- `ui/` follows the shadcn convention: variant + size via
+  class-variance authority, semantic tokens for colour. **Don't
+  hardcode greys** — always use `bg-card`, `text-foreground`,
+  `text-muted-foreground`, `border-border`, etc. The primitives
+  already do this; copy the pattern when adding new ones.
 - All clickable components compose `INTERACTIVE_BASE` (or
-  `INTERACTIVE_BASE_QUIET` for icon-only) from `lib/utils.ts`. That is
-  the single source of truth for hover/active/disabled/focus-ring.
+  `INTERACTIVE_BASE_QUIET` for icon-only) from `lib/utils.ts`. Single
+  source of truth for hover / active / disabled / focus-ring.
 - Components in this folder should not import from `../features/`.
-  They may import from `../hooks/`, `../store/`, `../utils/`, `../api/`
-  — though `../api/` should normally be reached through a hook.
+  They may import from `../hooks/`, `../store/`, `../utils/`,
+  `../lib/`, `../api/` — though `../api/` should normally be reached
+  through a hook.
 
 ## Status colour palette (dark-mode aware)
 
@@ -52,4 +58,5 @@ When status colour carries semantic meaning (live / called / blocked):
 ```
 
 Keep the hue, swap the lightness between themes — emerald-on-dark and
-emerald-on-light should both pass WCAG AA at 4.5:1.
+emerald-on-light should both pass WCAG AA at 4.5:1. `StatusPill.tsx`
+encodes this so most callers can just hand it a status string.

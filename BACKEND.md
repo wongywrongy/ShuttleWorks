@@ -1,34 +1,41 @@
 # Backend architecture
 
 A FastAPI app that fronts a CP-SAT solver. Stateless per-request: every
-`POST /schedule` carries the entire problem in the body. Persistence is a
-side-channel for tournament state and match status only.
+`POST /schedule` carries the full problem in the body. Persistence is a
+side-channel for tournament state and live match status only.
 
 ## Layout
 
 ```
 backend/
 ├── app/
-│   ├── main.py        # FastAPI app, CORS, lifespan, request-id middleware
-│   └── schemas.py     # Pydantic DTOs (mirror frontend/src/api/dto.ts)
+│   ├── main.py                  # FastAPI app, CORS, lifespan, request-id middleware
+│   ├── schemas.py               # Pydantic DTOs (mirror frontend/src/api/dto.ts)
+│   ├── error_codes.py           # ErrorCode enum + http_error() helper
+│   ├── paths.py                 # data_dir() / ensure_data_dir() helpers
+│   ├── time_utils.py            # ISO-8601 UTC + slot-math helpers
+│   └── scheduler_core_path.py   # sys.path bootstrap for src/scheduler_core
 ├── api/
-│   ├── schedule.py    # POST /schedule, /schedule/stream (SSE), /schedule/validate
-│   ├── match_state.py # GET/PUT /match-state — live match status (called/started/finished)
-│   ├── tournament_state.py  # GET/PUT /tournament-state — debounced full snapshot
-│   ├── _backups.py    # tournament-state backup helpers
-│   └── _validate.py   # shared validation utilities
+│   ├── schedule.py              # POST /schedule, /schedule/stream (SSE), /schedule/validate
+│   ├── schedule_repair.py       # POST /schedule/repair — targeted disruption repair
+│   ├── schedule_warm_restart.py # POST /schedule/warm-restart — stay-close re-solve
+│   ├── match_state.py           # GET/PUT /match-state — live match status
+│   ├── tournament_state.py      # GET/PUT /tournament-state — debounced full snapshot
+│   ├── _backups.py              # tournament-state backup helpers
+│   └── _validate.py             # shared validation utilities
 ├── services/
-│   └── csv_importer.py     # parse roster/matches CSVs
+│   └── csv_importer.py          # parse roster/matches CSVs
 ├── Dockerfile
 └── requirements.txt
 
 src/scheduler_core/   # the solver itself; see src/scheduler_core/README.md
+src/adapters/         # sport-specific adapters (badminton)
 ```
 
-The HTTP layer lives in `backend/`. The solver engine lives in
-`src/scheduler_core/` and is imported via `sys.path.insert` from the
-schedule route — kept decoupled so the engine can be unit-tested without
-the FastAPI app.
+The HTTP layer lives in `backend/`. The solver engine lives under
+`src/scheduler_core/` and is imported via the `scheduler_core_path`
+shim — kept decoupled so the engine can be unit-tested without the
+FastAPI app booted.
 
 ## Request lifecycle
 
@@ -40,20 +47,23 @@ client → request_id_middleware → router → handler → schemas validation
 
 Every request gets an `X-Request-ID` (honours an inbound header from a
 proxy or the frontend, else mints a uuid4). Errors propagate the ID in
-their JSON body so a user can paste the toast detail into a bug report.
+their JSON body so a user can paste the toast detail into a bug
+report. All `HTTPException`s should go through
+`error_codes.http_error(...)` so the response carries a stable
+`code` the frontend can branch on.
 
 ### `/schedule` (sync)
 
-Body = `{ config, players, matches, previousAssignments? }`. Solver runs
-to its time limit, returns full `ScheduleDTO`. Frontends use this for
-small problems and for re-solves with pinned moves.
+Body = `{ config, players, matches, previousAssignments? }`. Solver
+runs to its time limit, returns the full `ScheduleDTO`. Used for
+small problems and for re-solves seeded with pinned moves.
 
 ### `/schedule/stream` (SSE)
 
 Same body, streams `solver_progress`, `solver_phase`, and
 `solver_model_built` events as they happen. Powers the live HUD.
-Backpressure: events queue up to `_SSE_QUEUE_MAX = 512` per request; if
-the client stops draining we abort the solver to bound memory.
+Backpressure: events queue up to `_SSE_QUEUE_MAX = 512` per request;
+if the client stops draining we abort the solver to bound memory.
 
 ### `/schedule/validate`
 
@@ -61,52 +71,75 @@ Cheap pre-check used during a drag. Takes a `ProposedMove` and reports
 hard-rule violations (court conflict, player double-book, availability
 miss, freeze-horizon trespass) without running the full solver.
 
+### `/schedule/repair`
+
+Targeted disruption repair — withdrawal, court closure, overrun,
+cancellation. Translates the disruption into a slice rule, invokes
+the engine's `solve_repair` warm-started from the current schedule,
+and returns a fresh `ScheduleDTO` whose `repairedMatchIds` tells the
+UI which matches actually moved. Solve target: < 5 s for ≤ 40
+matches.
+
+### `/schedule/warm-restart`
+
+Full re-solve biased to keep the existing schedule intact. Finished /
+in-progress matches are hard-pinned; everything else is hinted at its
+current slot+court with a per-match move penalty. Conservative /
+Balanced / Aggressive map to penalty weights 10 / 5 / 1.
+
 ### `/tournament-state`
 
-GET returns the persisted snapshot from `/data/tournament.json`. PUT
-debounced from the frontend (~1 s) writes it back atomically. This is the
-only mutable shared state on the backend; everything else is per-request.
+GET returns the persisted snapshot from `data/tournament.json`. PUT
+debounced from the frontend (~1 s) writes it back atomically. This is
+the only mutable shared state on the backend; everything else is
+per-request.
 
 ### `/match-state`
 
 Live operator status (`scheduled` / `called` / `started` / `finished`)
-plus actual start/end timestamps. Persisted alongside tournament state
-but written on every transition since these mutations carry user intent
-that must not be debounced away.
+plus actual start/end timestamps. Persisted alongside tournament
+state but written on every transition since the mutations carry user
+intent that must not be debounced away.
 
 ## Adding a new HTTP route
 
-1. Add a Pydantic model to `app/schemas.py` (and its TypeScript twin to
-   `frontend/src/api/dto.ts`).
+1. Add a Pydantic model to `app/schemas.py` (and its TypeScript twin
+   to `frontend/src/api/dto.ts`).
 2. Create the handler under `backend/api/<feature>.py`. Define a
    `router = APIRouter(prefix=..., tags=[...])`.
 3. Register it in `backend/app/main.py` via `app.include_router(...)`.
-4. Add a method on `frontend/src/api/client.ts` and call it from the
+4. Use `error_codes.http_error(...)` for any `HTTPException`.
+5. Add a method on `frontend/src/api/client.ts` and call it from the
    relevant feature hook.
 
 ## Adding a new constraint or objective term
 
-Solver code lives in `src/scheduler_core/engine/cpsat_backend.py`. The
-file's docstring lists every variable and constraint. Add hard
-constraints in the `_build_*` helpers; add soft penalties to the
-objective via `_add_penalty(...)`. Reflect any new knob in
-`SolverOptions` (in `domain/models.py`) and surface it through
-`backend/app/schemas.py`.
+Constraints are plugins under `src/scheduler_core/engine/constraints/`.
+Add a new file that implements the `Constraint` protocol, register
+it via the package's loader, and wire its `ConstraintSpec` (name +
+params) into the relevant `EngineConfig`. See
+`src/scheduler_core/README.md` for the full plugin contract.
 
-See `src/scheduler_core/README.md` for solver-side details.
+For tournament-wide scalars (court count, slot count, intervals,
+breaks) reach for `ScheduleConfig` in `domain/models.py`. For
+per-constraint toggles and weights, add fields to that constraint's
+`params` schema and surface them through `backend/app/schemas.py` +
+the frontend DTOs.
 
 ## Logging
 
-`scheduler.app`, `scheduler.schedule`, `scheduler.match_state`, and
-`scheduler.tournament_state` are the loggers in use. The solver itself
-logs via `scheduler_core._log` so its messages can be silenced in tests
-without quieting the app log.
+`scheduler.app`, `scheduler.schedule`, `scheduler.match_state`,
+`scheduler.tournament_state` are the loggers used in the HTTP layer.
+The solver itself logs via `scheduler_core._log` so its messages can
+be silenced in tests without quieting the app log.
 
 ## Tests
 
 ```
-cd backend && pytest
+cd backend && pytest    # HTTP-layer unit tests
+cd src && pytest        # solver + constraint unit tests
 ```
 
-Backend tests are pure-Python and don't touch HTTP. End-to-end coverage
-lives in `e2e/` (Playwright against the docker-compose stack).
+Backend tests are pure-Python and don't touch HTTP. End-to-end
+coverage lives in `e2e/` (Playwright against the docker-compose
+stack).

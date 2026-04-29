@@ -114,7 +114,7 @@ export function EngineSettings() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     setSaving(true);
     setError(null);
     setSaved(false);

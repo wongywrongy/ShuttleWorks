@@ -4,25 +4,34 @@
  *
  * Pick a ``tone`` (semantic colour) and optionally show a ``dot`` and
  * ``pulse``ing animation. Body text is the children.
+ *
+ * Tones map onto the design system's match-state palette:
+ *   green  → status-live (emerald — match in progress)
+ *   blue   → status-started (sky — operator started clock)
+ *   amber  → status-called (amber — called to court)
+ *   yellow → status-warning (amber — soft violation)
+ *   red    → status-blocked (red — hard rule conflict)
+ * Routing through ``--status-*`` keeps every pill on the same hue ladder
+ * as the Gantt blocks, toast borders, and TabBar app-status chip.
  */
 import type { ReactNode } from 'react';
 
 export type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber';
 
 const TONE_BG: Record<PillTone, string> = {
-  green:  'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300',
-  yellow: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-200',
-  red:    'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200',
-  blue:   'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
-  amber:  'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-200',
+  green:  'bg-status-live-bg text-status-live border border-status-live/40',
+  yellow: 'bg-status-warning-bg text-status-warning border border-status-warning/40',
+  red:    'bg-status-blocked-bg text-status-blocked border border-status-blocked/40',
+  blue:   'bg-status-started-bg text-status-started border border-status-started/40',
+  amber:  'bg-status-called-bg text-status-called border border-status-called/40',
 };
 
 const TONE_DOT: Record<PillTone, string> = {
-  green:  'bg-green-500',
-  yellow: 'bg-yellow-500',
-  red:    'bg-red-500',
-  blue:   'bg-blue-500',
-  amber:  'bg-amber-500',
+  green:  'bg-status-live',
+  yellow: 'bg-status-warning',
+  red:    'bg-status-blocked',
+  blue:   'bg-status-started',
+  amber:  'bg-status-called',
 };
 
 interface Props {
@@ -37,7 +46,7 @@ interface Props {
 export function StatusPill({ tone, dot, pulse, className = '', title, children }: Props) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${TONE_BG[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium ${TONE_BG[tone]} ${className}`}
       title={title}
     >
       {dot && <span className={`h-1 w-1 rounded-full ${TONE_DOT[tone]} ${pulse ? 'animate-pulse' : ''}`} />}

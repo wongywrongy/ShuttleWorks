@@ -51,8 +51,13 @@ export async function forceSaveNow(): Promise<void> {
 }
 
 function snapshot(state: ReturnType<typeof useAppStore.getState>): TournamentStateDTO {
+  // Schema v2 adds ``scheduleVersion`` + ``scheduleHistory`` for the
+  // proposal pipeline. Both MUST be included in every PUT — without
+  // them, Pydantic's default values (0 / []) overwrite the server's
+  // value every time the operator edits a config field, wiping the
+  // proposal-commit audit trail.
   return {
-    version: 1,
+    version: 2,
     config: state.config,
     groups: state.groups,
     players: state.players,
@@ -60,6 +65,8 @@ function snapshot(state: ReturnType<typeof useAppStore.getState>): TournamentSta
     schedule: state.schedule,
     scheduleStats: state.scheduleStats as unknown,
     scheduleIsStale: state.scheduleIsStale,
+    scheduleVersion: state.scheduleVersion,
+    scheduleHistory: state.scheduleHistory,
   };
 }
 
@@ -74,6 +81,14 @@ function hydrate(s: TournamentStateDTO): void {
     schedule: s.schedule ?? null,
     scheduleStats: (s.scheduleStats as never) ?? null,
     scheduleIsStale: s.scheduleIsStale ?? false,
+    // Schema v2 fields — server is the authority, default to clean
+    // values when the file pre-dates the v2 migration.
+    scheduleVersion: s.scheduleVersion ?? 0,
+    scheduleHistory: s.scheduleHistory ?? [],
+    // If the server has a committed schedule, the lock should be on
+    // — otherwise the next config edit silently invalidates it
+    // without prompting the unlock modal.
+    isScheduleLocked: s.schedule != null,
   });
 }
 
@@ -85,7 +100,7 @@ function readLegacyLocalStorage(): TournamentStateDTO | null {
     const legacy = parsed?.state;
     if (!legacy) return null;
     return {
-      version: 1,
+      version: 2,
       config: legacy.config ?? null,
       groups: legacy.groups ?? [],
       players: legacy.players ?? [],
@@ -93,6 +108,8 @@ function readLegacyLocalStorage(): TournamentStateDTO | null {
       schedule: null,
       scheduleStats: null,
       scheduleIsStale: false,
+      scheduleVersion: 0,
+      scheduleHistory: [],
     };
   } catch {
     return null;

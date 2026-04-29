@@ -39,7 +39,7 @@ export function RosterPage() {
   };
 
   const handlePlayerSave = async (player: PlayerDTO) => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     try {
       if (editingPlayer) {
         await updatePlayer(editingPlayer.id, player);
@@ -59,7 +59,7 @@ export function RosterPage() {
   };
 
   const handlePlayerDelete = async (playerId: string) => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     if (confirm('Are you sure you want to delete this player?')) {
       try {
         await deletePlayer(playerId);
@@ -85,7 +85,7 @@ export function RosterPage() {
   };
 
   const handleSchoolSave = async (data: { name: string; color: string }) => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     try {
       if (editingSchool) {
         await updateGroup(editingSchool.id, {
@@ -107,7 +107,7 @@ export function RosterPage() {
   };
 
   const handleSchoolDelete = async () => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     if (editingSchool && confirm('Are you sure you want to delete this school? Players in this school will be ungrouped.')) {
       try {
         await deleteGroup(editingSchool.id);
@@ -125,8 +125,8 @@ export function RosterPage() {
     setShowBulkSchoolDialog(true);
   };
 
-  const handleBulkSchoolConfirm = (clearConflictingRanks: boolean) => {
-    if (!confirmUnlock()) return;
+  const handleBulkSchoolConfirm = async (clearConflictingRanks: boolean) => {
+    if (!(await confirmUnlock())) return;
     if (pendingSchoolId) {
       bulkAssignSchool(selectedPlayerIds, pendingSchoolId, clearConflictingRanks);
       setSelectedPlayerIds([]);
@@ -138,20 +138,20 @@ export function RosterPage() {
     setShowBulkRankDialog(true);
   };
 
-  const handleBulkRankConfirm = (ranks: string[], mode: 'add' | 'set' | 'remove') => {
-    if (!confirmUnlock()) return;
+  const handleBulkRankConfirm = async (ranks: string[], mode: 'add' | 'set' | 'remove') => {
+    if (!(await confirmUnlock())) return;
     bulkAssignRanks(selectedPlayerIds, ranks, mode, true);
     setSelectedPlayerIds([]);
   };
 
-  const handleBulkDelete = () => {
-    if (!confirmUnlock()) return;
+  const handleBulkDelete = async () => {
+    if (!(await confirmUnlock())) return;
     bulkDeletePlayers(selectedPlayerIds);
     setSelectedPlayerIds([]);
   };
 
   const handleImport = async (importedPlayers: PlayerDTO[], newGroups: RosterGroupDTO[]) => {
-    if (!confirmUnlock()) return;
+    if (!(await confirmUnlock())) return;
     try {
       // Create new groups first
       for (const group of newGroups) {

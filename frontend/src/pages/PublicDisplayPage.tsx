@@ -22,6 +22,8 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
+import { useAdvisories } from '../hooks/useAdvisories';
+import { AdvisoryBanner } from '../components/status/AdvisoryBanner';
 import { formatSlotTime } from '../lib/time';
 import { formatElapsed } from '../lib/timeFormatters';
 import { INTERACTIVE_BASE } from '../lib/utils';
@@ -69,6 +71,13 @@ export function PublicDisplayPage() {
   const { schedule, config, matches, matchStates, matchesByStatus } = useLiveTracking();
   const players = useAppStore((state) => state.players);
   const groups = useAppStore((state) => state.groups);
+
+  // Standalone display surfaces critical advisories so spectators
+  // (and any operator watching the TV) know a replan is imminent.
+  // The hook is idempotent — when the page is embedded under
+  // AppShell as the TV preview tab, the AppShell-level mount
+  // already covers it; mounting again here is harmless.
+  useAdvisories();
 
   // -----------------------------------------------------------------
   // Dedicated read-only polling loop.
@@ -439,6 +448,10 @@ export function PublicDisplayPage() {
       ref={rootRef}
       className={`${themeClass} min-h-screen ${tvBgClass} text-foreground selection:bg-primary/30`}
     >
+      {/* Critical-only advisory banner (read-only on TV) */}
+      <div className="px-6 pt-4 empty:hidden">
+        <AdvisoryBanner readOnly />
+      </div>
       {/* ---------- Header ------------------------------------------------ */}
       <div className={`sticky top-0 z-10 border-b border-border ${tvHeaderBgClass} px-6 py-4 backdrop-blur`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -499,18 +512,41 @@ export function PublicDisplayPage() {
               const aggregate = state?.score ? `${state.score.sideA}–${state.score.sideB}` : null;
               const sideA = match ? formatPlayers(match.sideA) : '';
               const sideB = match ? formatPlayers(match.sideB) : '';
+              // Court is "closed *now*" when either:
+              //   (a) it's in the legacy all-day closedCourts list, or
+              //   (b) any time-bounded courtClosures entry covers the
+              //       current wall-clock minute. Spectators only need
+              //       the "now" view; the schedule tab shows future
+              //       windows through normal match rendering.
+              const nowMin = now.getHours() * 60 + now.getMinutes();
+              const minToMin = (hhmm?: string | null) =>
+                hhmm ? Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5)) : null;
+              const isClosed =
+                (config.closedCourts ?? []).includes(courtId) ||
+                (config.courtClosures ?? []).some((c) => {
+                  if (c.courtId !== courtId) return false;
+                  const f = minToMin(c.fromTime) ?? 0;
+                  const t = minToMin(c.toTime) ?? 24 * 60;
+                  return nowMin >= f && nowMin < t;
+                });
               return (
                 <div
                   key={courtId}
-                  className={`grid items-center gap-3 border-l-4 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem]`}
+                  className={`grid items-center gap-3 border-l-4 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${
+                    isClosed ? 'opacity-50' : ''
+                  }`}
                   style={{ borderLeftColor: borderColorFor(status), height: 56 }}
                 >
-                  <span className="tabular-nums text-2xl font-bold">{courtId}</span>
+                  <span className={`tabular-nums text-2xl font-bold ${isClosed ? 'line-through text-muted-foreground' : ''}`}>
+                    {courtId}
+                  </span>
                   <span className="tabular-nums text-base font-semibold text-muted-foreground">
-                    {match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
+                    {isClosed ? '—' : match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
                   </span>
                   <span className="truncate">
-                    {match ? (
+                    {isClosed ? (
+                      <span className="uppercase tracking-wider text-muted-foreground">Court closed</span>
+                    ) : match ? (
                       <>
                         <span className="font-medium">{sideA}</span>
                         <span className="px-2 text-muted-foreground">vs</span>
