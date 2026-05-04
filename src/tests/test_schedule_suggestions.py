@@ -96,3 +96,23 @@ def test_evict_expired_suggestions_keeps_fresh():
     store[sug.id] = sug
     _evict_expired_suggestions(store)
     assert sug.id in store
+
+
+def test_evict_expired_suggestions_at_exact_cutoff_survives():
+    """Boundary semantics must mirror `_evict_expired` for proposals
+    (strict-less-than). A suggestion whose expiresAt equals the cutoff
+    survives one more eviction cycle."""
+    from datetime import datetime, timezone
+
+    app = _make_app()
+    store = _get_suggestion_store(app)
+    cutoff = datetime(2026, 5, 4, 10, 0, 0, tzinfo=timezone.utc)
+    sug = Suggestion(
+        kind="optimize", title="t", metric="m",
+        proposalId="p", fingerprint="f",
+        fromScheduleVersion=0,
+        expiresAt="2026-05-04T10:00:00+00:00",
+    )
+    store[sug.id] = sug
+    _evict_expired_suggestions(store, now=cutoff)
+    assert sug.id in store

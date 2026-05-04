@@ -141,7 +141,7 @@ def _evict_expired_suggestions(
         except ValueError:
             del store[sid]
             continue
-        if expires <= cutoff:
+        if expires < cutoff:
             del store[sid]
 
 
