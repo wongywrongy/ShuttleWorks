@@ -26,6 +26,7 @@ from scheduler_core.domain.models import (
     ScheduleResult,
     SolverOptions,
 )
+from scheduler_core.engine.cancel_token import CancelToken
 from scheduler_core.engine.config import ConstraintSpec, EngineConfig
 from scheduler_core.engine.constraints import stay_close as _stay_close  # noqa: F401  -- side effect: register
 from scheduler_core.engine.cpsat_backend import CPSATScheduler
@@ -40,6 +41,7 @@ def solve_warm_start(
     finished_match_ids: Set[str] = frozenset(),
     stay_close_weight: int = 10,
     solver_options: Optional[SolverOptions] = None,
+    cancel_token: Optional[CancelToken] = None,
 ) -> ScheduleResult:
     """Full re-solve, seeded with ``reference`` and biased to stay close.
 
@@ -110,4 +112,4 @@ def solve_warm_start(
         if m_id in scheduler.svars.court:
             scheduler.model.AddHint(scheduler.svars.court[m_id], ref.court_id)
 
-    return scheduler.solve()
+    return scheduler.solve(cancel_token=cancel_token)
