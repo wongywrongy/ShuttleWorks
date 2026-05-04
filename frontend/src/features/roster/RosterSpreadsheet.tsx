@@ -9,7 +9,7 @@
  * commits on blur. No modals.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp } from 'lucide-react';
+import { CaretUp } from '@phosphor-icons/react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
 import { INPUT_CELL_STYLE } from '../../lib/utils';
@@ -259,7 +259,7 @@ function PlayerRow({
           )}
           <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
             {rankPickerOpen ? (
-              <ChevronUp aria-hidden="true" className="h-3 w-3" />
+              <CaretUp aria-hidden="true" className="h-3 w-3" />
             ) : (
               'edit'
             )}
@@ -296,7 +296,7 @@ function PlayerRow({
           )}
           <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
             {availPickerOpen ? (
-              <ChevronUp aria-hidden="true" className="h-3 w-3" />
+              <CaretUp aria-hidden="true" className="h-3 w-3" />
             ) : (
               'edit'
             )}
@@ -389,7 +389,7 @@ function RankPicker({
     return (
       <div
         ref={ref}
-        className="absolute left-2 top-full z-40 mt-1 w-64 rounded border border-border bg-card p-3 text-xs text-muted-foreground shadow-lg"
+        className="absolute left-2 top-full z-overlay mt-1 w-64 rounded border border-border bg-card p-3 text-xs text-muted-foreground shadow-lg"
       >
         No event ranks configured. Set <strong>Event Categories</strong> in the Setup tab.
       </div>
@@ -406,7 +406,7 @@ function RankPicker({
   return (
     <div
       ref={ref}
-      className="absolute left-2 top-full z-40 mt-1 w-64 rounded border border-border bg-card p-2 shadow-lg"
+      className="absolute left-2 top-full z-overlay mt-1 w-64 rounded border border-border bg-card p-2 shadow-lg"
     >
       <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Assign ranks
@@ -482,7 +482,7 @@ function AvailabilityPicker({
   return (
     <div
       ref={ref}
-      className="absolute left-2 top-full z-40 mt-1 w-80 rounded border border-border bg-card p-3 shadow-lg"
+      className="absolute left-2 top-full z-overlay mt-1 w-80 rounded border border-border bg-card p-3 shadow-lg"
     >
       <div className="mb-1 flex items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

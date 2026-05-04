@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import React from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { CaretDown, CaretRight } from '@phosphor-icons/react';
 import type { RosterGroupDTO } from '../../api/dto';
 
 interface RosterTreeSelectorProps {
@@ -89,9 +89,9 @@ export function RosterTreeSelector({
               className="mr-2 w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground"
             >
               {isExpanded ? (
-                <ChevronDown aria-hidden="true" className="h-3 w-3" />
+                <CaretDown aria-hidden="true" className="h-3 w-3" />
               ) : (
-                <ChevronRight aria-hidden="true" className="h-3 w-3" />
+                <CaretRight aria-hidden="true" className="h-3 w-3" />
               )}
             </button>
           )}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Menu } from '@headlessui/react';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp } from '@phosphor-icons/react';
 import type { MatchDTO } from '../../api/dto';
 import { usePlayerNames } from '../../hooks/usePlayerNames';
 import { useAppStore } from '../../store/appStore';
@@ -392,7 +392,7 @@ export function MatchesList({
                     </svg>
                   </Menu.Button>
 
-                  <Menu.Items className="absolute right-0 z-10 mt-1 w-40 origin-top-right rounded bg-card shadow-sm ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  <Menu.Items className="absolute right-0 z-popover mt-1 w-40 origin-top-right rounded bg-card shadow-sm ring-1 ring-foreground/5 focus:outline-none">
                     <div className="py-1">
                       <Menu.Item>
                         {({ active }) => (

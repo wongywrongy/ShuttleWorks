@@ -7,15 +7,15 @@
  * (``h-row``, ``py-cell``, ``px-cell``, ``gap-section``) reflow
  * automatically.
  */
-import { LayoutPanelTop, Rows3 } from 'lucide-react';
+import { SquaresFour, Rows } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import { usePreferencesStore, type DensityPreference } from '../store/preferencesStore';
 
-type Option = { id: DensityPreference; label: string; Icon: typeof Rows3 };
+type Option = { id: DensityPreference; label: string; Icon: typeof Rows };
 
 const OPTIONS: Option[] = [
-  { id: 'comfortable', label: 'Comfortable', Icon: LayoutPanelTop },
-  { id: 'compact', label: 'Compact', Icon: Rows3 },
+  { id: 'comfortable', label: 'Comfortable', Icon: SquaresFour },
+  { id: 'compact', label: 'Compact', Icon: Rows },
 ];
 
 type Size = 'sm' | 'md';

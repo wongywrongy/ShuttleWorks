@@ -16,7 +16,7 @@
  * is) before committing.
  */
 import { useState } from 'react';
-import { Clock, Coffee, DoorOpen, X } from 'lucide-react';
+import { Clock, Coffee, DoorOpen, X } from '@phosphor-icons/react';
 
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';

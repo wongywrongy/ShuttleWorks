@@ -13,7 +13,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, ChevronLeft, ChevronRight, ClipboardList, Settings2 } from 'lucide-react';
+import { Download, CaretLeft, CaretRight, ClipboardText, GearSix } from '@phosphor-icons/react';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useLiveOperations } from '../hooks/useLiveOperations';
 import { useTrafficLights } from '../hooks/useTrafficLights';
@@ -364,7 +364,7 @@ export function MatchControlCenterPage() {
     return (
       <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
         <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-card rounded-lg border border-dashed border-border">
-          <ClipboardList aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
+          <ClipboardText aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
           <p className="text-sm text-muted-foreground">No schedule generated.</p>
           <p className="text-xs text-muted-foreground">
             Generate a schedule on the{' '}
@@ -471,7 +471,7 @@ export function MatchControlCenterPage() {
                   title="Director tools — delays, breaks, blackouts"
                   className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
                 >
-                  <Settings2 aria-hidden="true" className="h-4 w-4" />
+                  <GearSix aria-hidden="true" className="h-4 w-4" />
                   Director
                 </button>
                 <button
@@ -538,7 +538,7 @@ export function MatchControlCenterPage() {
                 aria-label="Collapse details"
                 className={`${INTERACTIVE_BASE} flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground`}
               >
-                <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                <CaretRight aria-hidden="true" className="h-4 w-4" />
               </button>
             </div>
             <MatchDetailsPanel
@@ -588,7 +588,7 @@ export function MatchControlCenterPage() {
             aria-label="Show match details"
             className={`${INTERACTIVE_BASE} w-6 flex-shrink-0 bg-card rounded border border-border flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground`}
           >
-            <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+            <CaretLeft aria-hidden="true" className="h-4 w-4" />
           </button>
         )}
       </div>
@@ -597,7 +597,7 @@ export function MatchControlCenterPage() {
         <div
           role="status"
           aria-live="polite"
-          className="pointer-events-none fixed bottom-14 left-1/2 z-40 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
+          className="pointer-events-none fixed bottom-14 left-1/2 z-overlay -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
         >
           <span className="inline-flex items-center gap-2">
             <span className="h-3 w-3 rounded-full border-2 border-border border-t-primary animate-spin" aria-hidden />

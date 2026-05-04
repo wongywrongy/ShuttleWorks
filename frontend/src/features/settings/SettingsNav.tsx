@@ -7,13 +7,13 @@
  * before sample tournaments are loaded) can be marked ``hint`` so the
  * row still renders but reads as muted.
  */
-import type { LucideIcon } from 'lucide-react';
+import type { Icon } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 export interface SettingsSection {
   id: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: Icon;
   hint?: string;
 }
 

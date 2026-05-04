@@ -9,7 +9,7 @@
  * The banner is read-only on the public TV display (no CTA, just the
  * heads-up); operators see the CTA on the Live tab.
  */
-import { AlertTriangle, AlertOctagon, Info } from 'lucide-react';
+import { Warning, WarningOctagon, Info } from '@phosphor-icons/react';
 import { useAppStore } from '../../store/appStore';
 import type { Advisory, AdvisorySeverity } from '../../api/dto';
 
@@ -58,7 +58,7 @@ function pickHighestSeverity(advisories: Advisory[], readOnly: boolean): Advisor
 
 function Icon({ severity, className }: { severity: AdvisorySeverity; className: string }) {
   const Component =
-    severity === 'critical' ? AlertOctagon : severity === 'warn' ? AlertTriangle : Info;
+    severity === 'critical' ? WarningOctagon : severity === 'warn' ? Warning : Info;
   return <Component aria-hidden="true" className={className} />;
 }
 

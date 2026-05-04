@@ -6,7 +6,7 @@
  * snapshot on demand, and restores any backup with a confirmation step.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CircleNotch } from '@phosphor-icons/react';
 import { apiClient } from '../../api/client';
 import type { BackupEntryDTO, ScheduleDTO, TournamentStateDTO } from '../../api/dto';
 import { useAppStore } from '../../store/appStore';
@@ -196,7 +196,7 @@ export function BackupPanel() {
           className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
         >
           {busyAction === 'create' && (
-            <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
+            <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />
           )}
           {busyAction === 'create' ? 'Saving…' : 'Back up now'}
         </button>
@@ -240,7 +240,7 @@ export function BackupPanel() {
                       className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700`}
                     >
                       {busyAction === e.filename && (
-                        <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
+                        <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />
                       )}
                       {busyAction === e.filename ? 'Restoring…' : 'Confirm'}
                     </button>

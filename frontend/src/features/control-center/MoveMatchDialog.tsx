@@ -23,7 +23,7 @@
  * `stayCloseWeight=10` so unrelated matches stay put.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, MoveRight } from 'lucide-react';
+import { Clock, ArrowRight } from '@phosphor-icons/react';
 
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
@@ -238,7 +238,7 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
                 : 'text-fg-muted hover:text-fg'
             }`}
           >
-            <MoveRight aria-hidden="true" className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
+            <ArrowRight aria-hidden="true" className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
             Move to…
           </button>
         </div>

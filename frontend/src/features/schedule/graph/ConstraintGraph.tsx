@@ -70,7 +70,7 @@ export function ConstraintGraph({ data, width = 500, height = 350 }: ConstraintG
     const label = graphNode.name.length > 10
       ? graphNode.name.substring(0, 9) + '...'
       : graphNode.name;
-    ctx.font = '9px Inter, system-ui, sans-serif';
+    ctx.font = '9px "Geist Variable", system-ui, sans-serif';
     ctx.fillStyle = '#374151';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';

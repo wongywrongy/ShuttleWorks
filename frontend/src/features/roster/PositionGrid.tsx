@@ -31,7 +31,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDown, Eye, EyeOff, GripVertical, Settings2 } from 'lucide-react';
+import { CaretDown, Eye, EyeSlash, DotsSixVertical, GearSix } from '@phosphor-icons/react';
 import { useAppStore } from '../../store/appStore';
 import type { PlayerDTO } from '../../api/dto';
 import { INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET } from '../../lib/utils';
@@ -482,7 +482,7 @@ function PlayerSearchPicker({
     <div
       ref={ref}
       data-testid={`picker-${schoolId}-${rank}`}
-      className="absolute left-1 right-1 top-full z-40 mt-1 rounded-md border border-border bg-card shadow-xl"
+      className="absolute left-1 right-1 top-full z-overlay mt-1 rounded-md border border-border bg-card shadow-xl"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="border-b border-border/60 px-2 py-1.5">
@@ -579,10 +579,10 @@ export function DraggablePlayerChip({
       style={style}
       data-testid={`pool-chip-${player.id}`}
       className={[
-        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-all',
+        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-brand',
         isDragging
-          ? 'z-30 shadow-lg ring-2 ring-blue-400 cursor-grabbing opacity-90 scale-[1.02]'
-          : 'cursor-grab hover:border-blue-400',
+          ? 'z-popover shadow-lg ring-2 ring-primary cursor-grabbing opacity-90 scale-[1.02]'
+          : 'cursor-grab hover:border-primary',
       ].join(' ')}
     >
       <span aria-hidden className="text-muted-foreground/70">⠿</span>
@@ -656,15 +656,15 @@ function ColumnManager({
           'inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-2xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground',
         ].join(' ')}
       >
-        <Settings2 aria-hidden="true" className="h-3 w-3" />
+        <GearSix aria-hidden="true" className="h-3 w-3" />
         Columns
-        <ChevronDown aria-hidden="true" className="h-3 w-3" />
+        <CaretDown aria-hidden="true" className="h-3 w-3" />
       </button>
       {open && (
         <div
           role="dialog"
           aria-label="Manage columns"
-          className="absolute right-0 top-full z-30 mt-1 w-72 rounded border border-border bg-popover p-2 text-xs text-popover-foreground shadow-lg"
+          className="absolute right-0 top-full z-popover mt-1 w-72 rounded border border-border bg-popover p-2 text-xs text-popover-foreground shadow-lg"
         >
           <div className="mb-1.5 flex items-center justify-between border-b border-border/60 pb-1.5">
             <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -708,7 +708,7 @@ function ColumnManager({
 
 /**
  * One sortable row inside the ColumnManager popover. Drag handle is
- * the GripVertical glyph at the left; ▲/▼ remain as keyboard-friendly
+ * the DotsSixVertical glyph at the left; ▲/▼ remain as keyboard-friendly
  * fallbacks; eye toggle on the right hides/shows the column.
  */
 function SortableEventRow({
@@ -753,7 +753,7 @@ function SortableEventRow({
         aria-label={`Drag ${prefix} to reorder`}
         className={`${INTERACTIVE_BASE_QUIET} cursor-grab active:cursor-grabbing rounded p-0.5 text-muted-foreground/70 hover:text-foreground`}
       >
-        <GripVertical aria-hidden="true" className="h-3 w-3" />
+        <DotsSixVertical aria-hidden="true" className="h-3 w-3" />
       </button>
       <span className="w-7 font-mono text-2xs">{prefix}</span>
       <span className="flex-1 truncate text-2xs text-muted-foreground">
@@ -788,7 +788,7 @@ function SortableEventRow({
         {isVisible ? (
           <Eye aria-hidden="true" className="h-3 w-3" />
         ) : (
-          <EyeOff aria-hidden="true" className="h-3 w-3" />
+          <EyeSlash aria-hidden="true" className="h-3 w-3" />
         )}
       </button>
     </li>

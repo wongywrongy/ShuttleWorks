@@ -12,7 +12,7 @@
  * solves that ran without the collector).
  */
 import { useMemo } from 'react';
-import { Check } from 'lucide-react';
+import { Check } from '@phosphor-icons/react';
 
 import type { ScheduleCandidate, ScheduleDTO } from '../../api/dto';
 import { INTERACTIVE_BASE } from '../../lib/utils';

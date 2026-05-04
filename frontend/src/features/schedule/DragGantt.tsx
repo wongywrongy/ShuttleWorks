@@ -10,7 +10,7 @@
  *   else around the new anchor.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X as XIcon } from 'lucide-react';
+import { Check, X as XIcon } from '@phosphor-icons/react';
 import {
   DndContext,
   MouseSensor,
@@ -544,7 +544,7 @@ function MatchBlock({
   // Disable the transition while dragging so the block follows the pointer.
   const positionTransition = isDragging
     ? 'none'
-    : 'left 420ms cubic-bezier(0.22, 1, 0.36, 1), top 420ms cubic-bezier(0.22, 1, 0.36, 1)';
+    : 'left 420ms var(--ease-brand), top 420ms var(--ease-brand)';
 
   const pinActive = isPinned && isGenerating;
 

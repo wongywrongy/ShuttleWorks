@@ -21,8 +21,8 @@ interface ParsedPlayer {
  *
  * CSV Format:
  * Name,School
- * John Doe,School A
- * Jane Smith,School B
+ * Mei Lin,Crescent Lake HS
+ * Devansh Patel,North Ridge Academy
  */
 export function PlayerImportDialog({ isOpen, onClose, onImport, existingGroups }: PlayerImportDialogProps) {
   const [csvText, setCsvText] = useState('');
@@ -151,8 +151,8 @@ export function PlayerImportDialog({ isOpen, onClose, onImport, existingGroups }
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+    <div className="fixed inset-0 z-modal overflow-y-auto">
+      <div className="flex items-center justify-center min-h-[100dvh] px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         {/* Overlay */}
         <div className="fixed inset-0 transition-opacity bg-foreground/50" onClick={handleClose} />
 
@@ -170,9 +170,9 @@ export function PlayerImportDialog({ isOpen, onClose, onImport, existingGroups }
               </ol>
               <pre className="text-blue-800 font-mono text-xs mt-2 bg-card p-2 rounded">
 {`Name	School
-John Doe	School A
-Jane Smith	School B
-Mike Johnson	School A`}
+Mei Lin	Crescent Lake HS
+Devansh Patel	North Ridge Academy
+Aria Okafor	Bayshore Prep`}
               </pre>
               <ul className="text-blue-700 mt-2 text-xs list-disc list-inside">
                 <li>Automatically detects tabs (from spreadsheets) or commas (from CSV)</li>
@@ -229,7 +229,7 @@ Mike Johnson	School A`}
               <textarea
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
-                placeholder="Copy from spreadsheet and paste here...&#10;&#10;Name	School&#10;John Doe	School A&#10;Jane Smith	School B"
+                placeholder="Copy from spreadsheet and paste here...&#10;&#10;Name	School&#10;Mei Lin	Crescent Lake HS&#10;Devansh Patel	North Ridge Academy"
                 rows={6}
                 className="w-full px-2 py-1.5 border border-border rounded-sm font-mono text-sm"
               />

@@ -4,7 +4,7 @@
  * players / event rank / duration inline.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, CaretDown } from '@phosphor-icons/react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerMap } from '../../store/selectors';
@@ -400,11 +400,11 @@ function PlayerMultiPicker({
           aria-label={open ? 'Close picker' : 'Open picker'}
           className="ml-auto inline-flex items-center justify-center text-muted-foreground hover:text-foreground"
         >
-          <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
+          <CaretDown aria-hidden="true" className="h-3.5 w-3.5" />
         </button>
       </div>
       {open ? (
-        <div className="absolute left-0 top-full z-40 mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+        <div className="absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
           {[...playersByGroup.entries()].map(([groupId, list]) => {
             const g = groups.find((gr) => gr.id === groupId);
             return (

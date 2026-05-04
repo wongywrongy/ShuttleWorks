@@ -5,7 +5,7 @@
  * provides the layout; nothing else.
  */
 import { useState } from 'react';
-import { Sliders, Palette, Monitor, Database, Sparkles, Cpu } from 'lucide-react';
+import { Sliders, Palette, Monitor, Database, Flask, Cpu } from '@phosphor-icons/react';
 import { useTournament } from '../hooks/useTournament';
 import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
@@ -14,6 +14,7 @@ import { BackupPanel } from '../features/setup/BackupPanel';
 import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicator';
 import { PublicDisplaySettings } from '../features/tournaments/PublicDisplaySettings';
 import { SettingsShell, type SettingsSectionDef } from '../features/settings/SettingsShell';
+import { PageHeader } from '../components/PageHeader';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { EngineSettings } from '../features/settings/EngineSettings';
 import { DemoLoader } from '../features/settings/DemoLoader';
@@ -115,7 +116,7 @@ export function TournamentSetupPage() {
     {
       id: 'demos',
       label: 'Demos',
-      icon: Sparkles,
+      icon: Flask,
       description: 'Pre-baked sample tournaments — dual (20 players × 2 schools) and tri (10 players × 3 schools), 5 events each.',
       render: () => <DemoLoader />,
     },
@@ -123,6 +124,11 @@ export function TournamentSetupPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-3 px-4 py-4">
+      <PageHeader
+        eyebrow="Setup"
+        title="Tournament configuration"
+        description="Schedule, scoring, events, engine, and per-device preferences."
+      />
       {/* Page-level alerts stay above the shell so they apply to every
           section. The shell itself never shows them. */}
       {isLocked && <ScheduleLockIndicator showUnlockHint />}

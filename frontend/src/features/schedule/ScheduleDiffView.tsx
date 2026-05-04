@@ -18,7 +18,7 @@
  * mutate state. The host modal handles Cancel + Commit.
  */
 import { useMemo, useState } from 'react';
-import { AlertOctagon, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { WarningOctagon, CaretDown, CaretRight, Users } from '@phosphor-icons/react';
 
 import type {
   Impact,
@@ -250,7 +250,7 @@ export function ScheduleDiffView({
       {impact.infeasibilityWarnings.length > 0 && (
         <div className="rounded border border-red-300 bg-red-50 px-2 py-1.5 text-xs text-red-800" role="alert">
           <div className="flex items-start gap-1.5">
-            <AlertOctagon className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-red-500" aria-hidden="true" />
+            <WarningOctagon className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-red-500" aria-hidden="true" />
             <div className="flex-1">
               <span className="font-semibold">
                 {pluralize(impact.infeasibilityWarnings.length, 'warning')}:
@@ -338,9 +338,9 @@ export function ScheduleDiffView({
         >
           <summary className="cursor-pointer select-none flex items-center gap-1 text-fg-muted hover:text-fg">
             {schoolsOpen ? (
-              <ChevronDown className="h-3 w-3" aria-hidden="true" />
+              <CaretDown className="h-3 w-3" aria-hidden="true" />
             ) : (
-              <ChevronRight className="h-3 w-3" aria-hidden="true" />
+              <CaretRight className="h-3 w-3" aria-hidden="true" />
             )}
             Per-school breakdown ({impact.affectedSchools.length})
           </summary>

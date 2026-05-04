@@ -166,7 +166,7 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
                   onClick={() => deletePlayer(p.id)}
                   title={`Remove ${p.name}`}
                   aria-label={`Remove ${p.name}`}
-                  className="rounded p-1 text-muted-foreground/60 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                  className="rounded p-1 text-muted-foreground/60 opacity-0 transition-[opacity,background-color,color] duration-150 ease-brand hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                 >
                   ×
                 </button>

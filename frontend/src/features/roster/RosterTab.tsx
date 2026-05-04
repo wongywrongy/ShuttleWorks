@@ -12,7 +12,7 @@
  *   RosterSpreadsheet (detail view — availability, rest, notes)
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, Download } from 'lucide-react';
+import { CaretDown, CaretUp, Download } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import {
   DndContext,
@@ -28,6 +28,7 @@ import { GroupStrip } from './GroupStrip';
 import { PlayerPool } from './PlayerPool';
 import { PositionGrid } from './PositionGrid';
 import { RosterSpreadsheet } from './RosterSpreadsheet';
+import { PageHeader } from '../../components/PageHeader';
 
 export function RosterTab() {
   const groups = useAppStore((s) => s.groups);
@@ -109,24 +110,23 @@ export function RosterTab() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 px-4 py-4">
-      <header className="flex items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">Roster</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Add schools and players, then assign event ranks.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void exportRosterXlsx(players, groups, config)}
-          disabled={!canExportRoster}
-          data-testid="export-roster"
-          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50`}
-        >
-          <Download aria-hidden="true" className="h-4 w-4" />
-          Export XLSX
-        </button>
-      </header>
+      <PageHeader
+        eyebrow="Roster"
+        title="Players & schools"
+        description="Add schools and players, then assign event ranks."
+        actions={
+          <button
+            type="button"
+            onClick={() => void exportRosterXlsx(players, groups, config)}
+            disabled={!canExportRoster}
+            data-testid="export-roster"
+            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50`}
+          >
+            <Download aria-hidden="true" className="h-4 w-4" />
+            Export XLSX
+          </button>
+        }
+      />
       <GroupStrip />
 
       {groups.length > 0 ? (
@@ -192,9 +192,9 @@ export function RosterTab() {
         >
           <span>Player details ({players.length}) — availability, rest, notes</span>
           {detailsOpen ? (
-            <ChevronUp aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
+            <CaretUp aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
-            <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
+            <CaretDown aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
           )}
         </button>
         {detailsOpen ? (

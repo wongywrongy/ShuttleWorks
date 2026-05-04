@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp } from '@phosphor-icons/react';
 import { PlayerListItem } from './PlayerListItem';
 import { usePlayerSelection } from '../hooks/usePlayerSelection';
 import type { PlayerDTO, RosterGroupDTO } from '../../../api/dto';

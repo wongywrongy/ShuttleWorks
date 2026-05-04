@@ -9,7 +9,7 @@
  * terminal on tournament day.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { CaretRight } from '@phosphor-icons/react';
 import { apiClient } from '../api/client';
 import { useAppStore } from '../store/appStore';
 import { INTERACTIVE_BASE } from '../lib/utils';
@@ -47,6 +47,20 @@ export function AppStatusPopover() {
   const [healthError, setHealthError] = useState<string | null>(null);
   const [backingUp, setBackingUp] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Solver-finished celebration: when isGenerating flips false after
+  // having been true, replay the ``solution-tick`` keyframe on the chip
+  // by remounting the dot (key bump). Pure cosmetic; no functional
+  // dependency. ``prevGenerating`` lets us detect the rising edge of
+  // "just finished".
+  const prevGenerating = useRef(isGenerating);
+  const [tickKey, setTickKey] = useState(0);
+  useEffect(() => {
+    if (prevGenerating.current && !isGenerating) {
+      setTickKey((k) => k + 1);
+    }
+    prevGenerating.current = isGenerating;
+  }, [isGenerating]);
 
   // Close on outside click / Escape.
   useEffect(() => {
@@ -134,7 +148,11 @@ export function AppStatusPopover() {
         aria-haspopup="dialog"
         className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${chipTone} hover:brightness-95`}
       >
-        <span className={`h-2 w-2 rounded-full ${chipDot}`} aria-hidden="true" />
+        <span
+          key={tickKey}
+          className={`h-2 w-2 rounded-full ${chipDot} ${tickKey > 0 && !isGenerating ? 'motion-safe:animate-solution-tick' : ''}`}
+          aria-hidden="true"
+        />
         {chipLabel}
       </button>
 
@@ -143,7 +161,7 @@ export function AppStatusPopover() {
           role="dialog"
           aria-label="App status"
           data-testid="app-status-popover"
-          className="absolute right-0 top-full z-30 mt-1 w-72 rounded border border-border bg-popover p-3 text-xs text-popover-foreground shadow-lg"
+          className="absolute right-0 top-full z-popover mt-1 w-72 rounded border border-border bg-popover p-3 text-xs text-popover-foreground shadow-lg"
         >
           <div className="mb-2 flex items-center justify-between">
             <span className="font-semibold text-popover-foreground">App status</span>
@@ -219,7 +237,7 @@ export function AppStatusPopover() {
               className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[11px] text-card-foreground hover:bg-accent hover:text-accent-foreground`}
             >
               Manage backups
-              <ChevronRight aria-hidden="true" className="h-3 w-3" />
+              <CaretRight aria-hidden="true" className="h-3 w-3" />
             </button>
           </div>
 

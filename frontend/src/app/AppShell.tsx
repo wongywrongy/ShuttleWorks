@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { ExternalLink, Settings2 } from 'lucide-react';
+import { ArrowSquareOut, GearSix } from '@phosphor-icons/react';
 import { useAppStore } from '../store/appStore';
 import { useTournamentState } from '../hooks/useTournamentState';
 import { useAppliedTheme } from '../hooks/useAppliedTheme';
@@ -10,6 +10,7 @@ import { SolverHud } from '../components/SolverHud';
 import { UnsavedBanner } from '../components/UnsavedBanner';
 import { ToastStack } from '../components/Toast';
 import { UnlockModalHost } from '../components/common/UnlockModalHost';
+import { TabSkeleton } from '../components/TabSkeleton';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
 // Tabs are wired to the existing pages during Step 4. Each tab is replaced with
@@ -34,9 +35,8 @@ const PublicDisplayPage = lazy(() =>
   import('../pages/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
 );
 
-const FALLBACK = (
-  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>
-);
+// FALLBACK is now built per-tab via TabSkeleton so the Suspense
+// shape matches the layout that's about to mount.
 
 export function AppShell() {
   // Hydrate from server-side tournament.json on mount + debounced PUTs on change.
@@ -95,17 +95,47 @@ export function AppShell() {
   }, [pushToast]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground">
+      {/* Operator-surface texture — a barely-perceptible noise overlay
+          (1.8% alpha) lifts the flat ``--background`` away from looking
+          like a default Tailwind tint. Fixed + pointer-events-none keeps
+          it off the GPU's continuous-repaint path; the SVG is inlined as
+          a data URI so it doesn't add a network request. Hidden from
+          reduced-motion users for whom the visual fizz can be
+          distracting. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-hud opacity-[0.018] mix-blend-overlay motion-reduce:hidden"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
+        }}
+      />
+      {/* Skip-link: hidden until focused. Lets keyboard users jump past the
+          TabBar straight into the active pane. The target id (#main) is on
+          the <main> element below. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-modal focus:rounded-md focus:bg-primary focus:px-3 focus:py-1.5 focus:text-sm focus:text-primary-foreground focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      >
+        Skip to content
+      </a>
       <TabBar />
       <UnsavedBannerSlot />
-      <main className="flex-1 min-h-0 overflow-auto">
-        <Suspense fallback={FALLBACK}>
-          {activeTab === 'setup' ? <TournamentSetupPage /> : null}
-          {activeTab === 'roster' ? <RosterTab /> : null}
-          {activeTab === 'matches' ? <MatchesTab /> : null}
-          {activeTab === 'schedule' ? <SchedulePage /> : null}
-          {activeTab === 'live' ? <MatchControlCenterPage /> : null}
-          {activeTab === 'tv' ? <TvPreviewTab /> : null}
+      <main id="main" className="flex-1 min-h-0 overflow-auto">
+        <Suspense fallback={<TabSkeleton tab={activeTab} />}>
+          {/* Re-keying on activeTab forces a remount and re-runs the
+              animate-block-in entry so each tab switch reads as a
+              deliberate arrival, not a flash. The keyframe is GPU-safe
+              (translateY + opacity), gated by prefers-reduced-motion. */}
+          <div key={activeTab} className="h-full animate-block-in">
+            {activeTab === 'setup' ? <TournamentSetupPage /> : null}
+            {activeTab === 'roster' ? <RosterTab /> : null}
+            {activeTab === 'matches' ? <MatchesTab /> : null}
+            {activeTab === 'schedule' ? <SchedulePage /> : null}
+            {activeTab === 'live' ? <MatchControlCenterPage /> : null}
+            {activeTab === 'tv' ? <TvPreviewTab /> : null}
+          </div>
         </Suspense>
       </main>
       <SolverHud />
@@ -152,7 +182,7 @@ function TvPreviewTab() {
             }}
             className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
           >
-            <Settings2 aria-hidden="true" className="h-4 w-4" />
+            <GearSix aria-hidden="true" className="h-4 w-4" />
             Configure display
           </button>
           <a
@@ -161,7 +191,7 @@ function TvPreviewTab() {
             rel="noopener noreferrer"
             className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90`}
           >
-            <ExternalLink aria-hidden="true" className="h-4 w-4" />
+            <ArrowSquareOut aria-hidden="true" className="h-4 w-4" />
             Open fullscreen
           </a>
         </div>

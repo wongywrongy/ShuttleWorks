@@ -27,12 +27,12 @@ export function TabBar() {
   return (
     <nav
       aria-label="Tournament scheduler tabs"
-      className="sticky top-0 z-20 flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4"
+      className="sticky top-0 z-chrome flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4"
     >
       <div className="flex min-w-0 items-center gap-3">
         {/* Boxed wordmark. The 1px frame *is* the mark — no separate
             glyph. Sizes match the design system's TabBar lockup
-            (26px tall · 13px Inter SemiBold · 4px radius). */}
+            (26px tall · 13px Geist SemiBold · 4px radius). */}
         <span
           aria-label="ShuttleWorks"
           title="ShuttleWorks"
@@ -75,12 +75,19 @@ export function TabBar() {
                 ].join(' ')}
               >
                 {tab.label}
-                {isActive && (
-                  <span
-                    aria-hidden
-                    className="absolute inset-x-2 -bottom-[5px] h-0.5 rounded-full bg-primary"
-                  />
-                )}
+                {/* Underline always rendered so the inactive→active
+                    transition can grow the width instead of mounting a
+                    new node. Uses scaleX on a transform-anchored span,
+                    so motion is GPU-safe and follows the shared
+                    ``--ease-brand`` curve. */}
+                <span
+                  aria-hidden
+                  className={[
+                    'absolute inset-x-2 -bottom-[5px] h-0.5 origin-center rounded-full bg-primary',
+                    'transition-transform duration-300 ease-brand',
+                    isActive ? 'scale-x-100' : 'scale-x-0',
+                  ].join(' ')}
+                />
               </button>
             );
           })}

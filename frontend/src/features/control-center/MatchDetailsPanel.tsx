@@ -2,7 +2,7 @@
  * Match Details Panel - Shows selected match details
  */
 import { useMemo, useState } from 'react';
-import { Check, ChevronRight } from 'lucide-react';
+import { Check, CaretRight } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
 import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../api/dto';
@@ -766,7 +766,7 @@ export function MatchDetailsPanel({
                   <span className="flex-1 truncate text-[10px] text-muted-foreground">
                     {sharedPlayerNames.join(', ') || '—'}
                   </span>
-                  <ChevronRight aria-hidden="true" className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                  <CaretRight aria-hidden="true" className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 </div>
               );
             })}

@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { CircleNotch } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 /**
@@ -44,7 +44,7 @@ export function ScheduleActions({
               : 'bg-blue-600 text-white hover:bg-blue-700',
         ].join(' ')}
       >
-        {generating && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
+        {generating && <CircleNotch aria-hidden="true" className="h-4 w-4 animate-spin" />}
         {generating
           ? 'Generating…'
           : confirming

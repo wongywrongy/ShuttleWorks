@@ -49,7 +49,7 @@ export function SchoolFormDialog({
 
   return (
     <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
+      <Dialog as="div" className="relative z-modal" onClose={onClose}>
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -59,7 +59,7 @@ export function SchoolFormDialog({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black bg-opacity-25" />
+          <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm" />
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
@@ -104,7 +104,7 @@ export function SchoolFormDialog({
                             key={c}
                             type="button"
                             onClick={() => setColor(c)}
-                            className={`w-6 h-6 rounded-full border-2 transition-all ${
+                            className={`w-6 h-6 rounded-full border-2 transition-[transform,border-color] duration-150 ease-brand ${
                               color === c ? 'border-foreground scale-110' : 'border-transparent hover:border-border'
                             }`}
                             style={{ backgroundColor: c }}

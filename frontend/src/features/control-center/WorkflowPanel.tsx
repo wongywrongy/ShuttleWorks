@@ -4,7 +4,7 @@
  * Center: Tabbed Up Next / Finished with colored left borders
  */
 import { useState, useMemo } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, CircleNotch } from '@phosphor-icons/react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO, TournamentConfig, PlayerDTO } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import { formatSlotTime } from '../../lib/time';
@@ -156,7 +156,7 @@ function InProgressCard({
           title="Undo to called"
           aria-label="Undo started match"
         >
-          {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+          {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
           Undo
         </button>
       </div>
@@ -430,7 +430,7 @@ function UpNextCard({
                 }
                 aria-label="Call match"
               >
-                {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+                {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
                 Call
               </button>
               <button
@@ -463,7 +463,7 @@ function UpNextCard({
                 }
                 aria-label="Start match"
               >
-                {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+                {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
                 Start
               </button>
               <button
@@ -552,7 +552,7 @@ function FinishedCard({
         title="Undo finish — back to in progress"
         aria-label="Undo finish"
       >
-        {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+        {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
         Undo
       </button>
     </div>

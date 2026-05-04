@@ -47,7 +47,7 @@ export function SchoolBadgeEditor({
         leaveFrom="transform opacity-100 scale-100"
         leaveTo="transform opacity-0 scale-95"
       >
-        <Menu.Items className="absolute left-0 z-10 mt-1 w-40 origin-top-left rounded bg-card shadow-sm ring-1 ring-black ring-opacity-5 focus:outline-none">
+        <Menu.Items className="absolute left-0 z-popover mt-1 w-40 origin-top-left rounded bg-card shadow-sm ring-1 ring-foreground/5 focus:outline-none">
           <div className="py-0.5">
             {schools.length === 0 ? (
               <div className="px-3 py-1.5 text-xs text-muted-foreground">

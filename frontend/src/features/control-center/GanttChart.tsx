@@ -68,7 +68,11 @@ const STATUS_STYLES = {
     text: 'text-status-called',
   },
   started: {
-    bg: 'bg-status-live-bg',
+    // Active matches commit harder than the muted neighbouring states —
+    // a tinted background plus an inset highlight ring lifts them off
+    // the row without changing layout. Restraint is preserved by NOT
+    // raising saturation; commitment lives in the inset stroke.
+    bg: 'bg-status-live-bg shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.5)]',
     border: 'border-status-live/60',
     text: 'text-status-live',
   },
@@ -405,7 +409,7 @@ export function GanttChart({
                       onClick={() => onMatchSelect(assignment.matchId)}
                       className={`absolute top-0.5 rounded border cursor-pointer
                         ${styles.bg} ${styles.border}
-                        transition-all duration-150 ease-out
+                        transition-[transform,box-shadow,filter] duration-150 ease-brand
                         ${isAnimated ? 'scale-105' : ''}
                         ${ringClass}
                         ${isInProgress ? 'shadow-sm' : ''}

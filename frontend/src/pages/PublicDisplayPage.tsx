@@ -18,7 +18,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowsOut, ArrowsIn } from '@phosphor-icons/react';
 import { apiClient } from '../api/client';
 import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
@@ -351,7 +351,7 @@ export function PublicDisplayPage() {
     return (
       <div
         ref={rootRef}
-        className={`${themeClass} min-h-screen bg-background text-foreground flex items-center justify-center`}
+        className={`${themeClass} min-h-[100dvh] bg-background text-foreground flex items-center justify-center`}
       >
         <div className="absolute right-4 top-4 flex items-center gap-3">
           <LiveStatusPill status={liveStatus} error={syncError} />
@@ -418,19 +418,16 @@ export function PublicDisplayPage() {
     tvCardSize === 'large' ? 176 :
     isFullscreen ? 128 : 96;
   const sizeTier = cardHeightPx >= 160 ? 'xl' : cardHeightPx >= 120 ? 'lg' : cardHeightPx >= 96 ? 'md' : 'sm';
+  // tracking-tighter on the giant court-number display — at 5xl-7xl the
+  // default tracking reads as gappy across a gym; tightening pulls the
+  // glyphs back into a single visual mass.
   const SIZES = {
-    sm: { courtNum: 'text-3xl', eventCode: 'text-base', player: 'text-base', padX: 'px-4' },
-    md: { courtNum: 'text-5xl', eventCode: 'text-2xl', player: 'text-2xl', padX: 'px-4' },
-    lg: { courtNum: 'text-6xl', eventCode: 'text-3xl', player: 'text-3xl', padX: 'px-6' },
-    xl: { courtNum: 'text-7xl', eventCode: 'text-4xl', player: 'text-4xl', padX: 'px-6' },
+    sm: { courtNum: 'text-3xl tracking-tight', eventCode: 'text-base', player: 'text-base', padX: 'px-4' },
+    md: { courtNum: 'text-5xl tracking-tighter', eventCode: 'text-2xl', player: 'text-2xl', padX: 'px-4' },
+    lg: { courtNum: 'text-6xl tracking-tighter', eventCode: 'text-3xl', player: 'text-3xl', padX: 'px-6' },
+    xl: { courtNum: 'text-7xl tracking-tighter', eventCode: 'text-4xl', player: 'text-4xl', padX: 'px-6' },
   } as const;
   const { courtNum: courtNumSize, eventCode: eventCodeSize, player: playerSize, padX: cardPadX } = SIZES[sizeTier];
-
-  // Border colour for one court row/card from its play status.
-  // Active uses the operator's brand accent; called fixes amber so
-  // it never collides; idle uses a muted CSS variable that adapts.
-  const borderColorFor = (status: 'active' | 'called' | 'empty') =>
-    status === 'active' ? tvAccent : status === 'called' ? '#fbbf24' : 'var(--muted-foreground)';
 
   // Grid columns. Tailwind safelist won't pick up dynamic class
   // names so we keep the literal strings; lookup beats a 4-deep
@@ -446,14 +443,27 @@ export function PublicDisplayPage() {
   return (
     <div
       ref={rootRef}
-      className={`${themeClass} min-h-screen ${tvBgClass} text-foreground selection:bg-primary/30`}
+      className={`${themeClass} min-h-[100dvh] ${tvBgClass} text-foreground selection:bg-primary/30`}
     >
+      {/* Subtle film-grain overlay — adds a barely-there texture to the
+          full-screen TV surface so the pure flats don't read as
+          sterile. Fixed + pointer-events-none keeps it off the GPU's
+          continuous-repaint path during scroll. Inline data-URL avoids
+          a network request for the 100-byte SVG. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-modal opacity-[0.025] mix-blend-overlay"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
+        }}
+      />
       {/* Critical-only advisory banner (read-only on TV) */}
       <div className="px-6 pt-4 empty:hidden">
         <AdvisoryBanner readOnly />
       </div>
       {/* ---------- Header ------------------------------------------------ */}
-      <div className={`sticky top-0 z-10 border-b border-border ${tvHeaderBgClass} px-6 py-4 backdrop-blur`}>
+      <div className={`sticky top-0 z-hud border-b border-border ${tvHeaderBgClass} px-6 py-4 backdrop-blur`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-4 min-w-0">
             <div className="text-3xl font-bold tracking-tight">Tournament Status</div>
@@ -529,13 +539,22 @@ export function PublicDisplayPage() {
                   const t = minToMin(c.toTime) ?? 24 * 60;
                   return nowMin >= f && nowMin < t;
                 });
+              // Row tint carries status — replaces the banned left-stripe.
+              // Uses the same status tokens as the grid card mode so the
+              // two display modes feel consistent.
+              const rowTintClass =
+                status === 'active'
+                  ? 'bg-status-live-bg/60'
+                  : status === 'called'
+                    ? 'bg-status-called-bg/50'
+                    : '';
               return (
                 <div
                   key={courtId}
-                  className={`grid items-center gap-3 border-l-4 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${
+                  className={`grid items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass} ${
                     isClosed ? 'opacity-50' : ''
                   }`}
-                  style={{ borderLeftColor: borderColorFor(status), height: 56 }}
+                  style={{ height: 56 }}
                 >
                   <span className={`tabular-nums text-2xl font-bold ${isClosed ? 'line-through text-muted-foreground' : ''}`}>
                     {courtId}
@@ -585,15 +604,18 @@ export function PublicDisplayPage() {
             className={`w-full ${tvDisplayMode === 'grid' ? `grid gap-3 ${gridColsClass}` : 'flex flex-col gap-2'}`}
             style={tvDisplayMode === 'grid' ? { gridAutoRows: `${cardHeightPx}px` } : undefined}
           >
-            {courtMatches.map(({ courtId, match, state, status, nextMatch, nextStartTime }) => {
+            {courtMatches.map(({ courtId, match, state, status, nextMatch, nextStartTime }, idx) => {
               const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
-              // Active / called cards get a subtle tint over the
-              // standard ``bg-card`` so live matches still stand out
-              // in both themes.
+              // Active / called cards get a tinted background carrying
+              // the state. Replaces the old left-stripe accent (which
+              // is a banned anti-pattern) with a full-card tint plus an
+              // inset highlight ring on active. Backgrounds map to the
+              // same status tokens used everywhere else, so theming
+              // and dark mode stay consistent.
               const cardBgClass = status === 'active'
-                ? 'bg-card/80'
+                ? 'bg-status-live-bg/80 ring-1 ring-status-live/30 shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.25)]'
                 : status === 'called'
-                  ? 'bg-amber-100/60 dark:bg-amber-950/40'
+                  ? 'bg-status-called-bg/70 ring-1 ring-status-called/25'
                   : 'bg-card/60';
               const aggregate = state?.score
                 ? `${state.score.sideA}–${state.score.sideB}`
@@ -604,8 +626,13 @@ export function PublicDisplayPage() {
               return (
                 <div
                   key={courtId}
-                  className={`overflow-hidden rounded-xl border-l-4 border-y border-r border-border shadow-lg ${cardBgClass}`}
-                  style={{ borderLeftColor: borderColorFor(status), height: cardHeightPx }}
+                  className={`overflow-hidden rounded-xl border border-border shadow-lg animate-block-in ${cardBgClass}`}
+                  style={{
+                    height: cardHeightPx,
+                    // Staggered entry — each tile arrives 60ms after the
+                    // previous so the grid doesn't flash on every poll.
+                    animationDelay: `${idx * 60}ms`,
+                  }}
                 >
                   <div
                     className={`grid h-full items-center gap-3 ${cardPadX} grid-cols-[auto_auto_1fr_auto_auto]`}
@@ -823,10 +850,18 @@ export function PublicDisplayPage() {
             </span>
           </div>
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+        {/* Track stays full-width; the fill animates via transform: scaleX
+            so we never trip a layout reflow on the parent grid each tick. */}
+        <div
+          className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progressPct)}
+        >
           <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${progressPct}%`, backgroundColor: tvAccent }}
+            className="h-full origin-left rounded-full transition-transform duration-500 ease-brand"
+            style={{ transform: `scaleX(${progressPct / 100})`, backgroundColor: tvAccent }}
           />
         </div>
       </div>
@@ -853,9 +888,9 @@ function FullscreenButton({
       aria-pressed={isFullscreen}
     >
       {isFullscreen ? (
-        <Minimize2 aria-hidden="true" className="h-4 w-4" />
+        <ArrowsIn aria-hidden="true" className="h-4 w-4" />
       ) : (
-        <Maximize2 aria-hidden="true" className="h-4 w-4" />
+        <ArrowsOut aria-hidden="true" className="h-4 w-4" />
       )}
       <span>{isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}</span>
     </button>

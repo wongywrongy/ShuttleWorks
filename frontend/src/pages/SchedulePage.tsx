@@ -20,7 +20,7 @@ import { computeConstraintViolations } from '../utils/constraintChecker';
 import { formatSlotTime } from '../lib/time';
 import { useCurrentSlot } from '../hooks/useCurrentSlot';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, CalendarRange } from 'lucide-react';
+import { Download, CalendarBlank } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig, RosterGroupDTO } from '../api/dto';
 import { InlineSearch, type FilterChipGroup } from '../components/InlineSearch';
@@ -740,7 +740,7 @@ export function SchedulePage() {
       ) : (
         /* Empty state */
         <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-card rounded-lg border border-dashed border-border">
-          <CalendarRange aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
+          <CalendarBlank aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
           <p className="text-sm text-muted-foreground">
             {needsConfig ? 'Configure tournament first.' : 'No schedule generated.'}
           </p>
