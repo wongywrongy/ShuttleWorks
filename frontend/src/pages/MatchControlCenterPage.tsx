@@ -60,6 +60,12 @@ export function MatchControlCenterPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('director') === 'closed-courts') {
       setDirectorOpen(true);
+      // Clear the param so a refresh doesn't auto-reopen and the URL
+      // stays clean for copy/share.
+      params.delete('director');
+      const search = params.toString();
+      const newUrl = window.location.pathname + (search ? `?${search}` : '') + window.location.hash;
+      window.history.replaceState({}, '', newUrl);
     }
   }, []);
   const [moveMatchId, setMoveMatchId] = useState<string | null>(null);
@@ -651,7 +657,9 @@ export function MatchControlCenterPage() {
               ×
             </button>
           </div>
-          <DirectorToolsPanel />
+          <div className="overflow-y-auto max-h-[calc(80vh-3rem)]">
+            <DirectorToolsPanel />
+          </div>
         </Modal>
       )}
       <WarmRestartDialog

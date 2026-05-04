@@ -121,6 +121,7 @@ export function DirectorToolsPanel() {
                   type="button"
                   onClick={() => handleReopenCourt(courtId)}
                   disabled={loading}
+                  title="Reopen court — clears every closure for this court"
                   className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
                 >
                   <DoorOpen className="h-3 w-3" aria-hidden="true" />
@@ -144,6 +145,7 @@ export function DirectorToolsPanel() {
                   type="button"
                   onClick={() => handleReopenCourt(closure.courtId)}
                   disabled={loading}
+                  title="Reopen court — clears every closure for this court"
                   className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
                 >
                   <DoorOpen className="h-3 w-3" aria-hidden="true" />
