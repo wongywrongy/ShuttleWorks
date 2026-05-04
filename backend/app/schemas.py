@@ -359,6 +359,8 @@ class Suggestion(BaseModel):
     so the worker can skip stamping a duplicate suggestion.
     """
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    # Order is canonical; the worker's TriggerKind (services/suggestions_worker.py)
+    # mirrors this exactly. Don't re-order without updating both.
     kind: Literal["repair", "optimize", "director", "candidate"]
     title: str
     metric: str

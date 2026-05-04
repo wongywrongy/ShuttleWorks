@@ -19,6 +19,7 @@ for _cached in [k for k in list(sys.modules) if k == "app" or k.startswith("app.
     del sys.modules[_cached]
 
 import pytest
+from pydantic import ValidationError
 
 from app.schemas import Suggestion
 
@@ -41,7 +42,7 @@ def test_suggestion_round_trips():
 
 
 def test_suggestion_rejects_unknown_kind():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Suggestion(
             kind="xyz",  # not in the Literal
             title="x",
