@@ -313,7 +313,7 @@ export function GanttChart({
                   onClick={() => onRequestReopenCourt(courtId)}
                   title={`Court ${courtId} closed — open Reopen panel`}
                   aria-label={`Court ${courtId} is closed. Click to open Reopen panel.`}
-                  className="flex-shrink-0 flex items-center gap-1 px-2 text-xs font-semibold tabular-nums bg-muted/60 text-muted-foreground hover:bg-status-warning-bg hover:text-status-warning transition-colors"
+                  className="flex-shrink-0 flex items-center gap-1 px-2 text-xs font-semibold tabular-nums bg-muted/60 text-muted-foreground hover:bg-status-warning-bg hover:text-status-warning hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
                   style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
                 >
                   <span className="line-through">C{courtId}</span>
