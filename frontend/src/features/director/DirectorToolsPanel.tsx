@@ -96,7 +96,7 @@ export function DirectorToolsPanel() {
       {((config.closedCourts ?? []).length > 0 ||
         (config.courtClosures ?? []).length > 0) && (
         <section className="rounded border border-border p-3">
-          <div className="sticky top-0 z-10 -mx-3 -mt-3 mb-2 flex items-center justify-between border-b border-border bg-card/95 px-3 py-2 backdrop-blur-sm">
+          <div className="sticky top-0 z-10 -mx-3 -mt-3 mb-2 border-b border-border bg-card/95 px-3 py-2 backdrop-blur-sm">
             <div className="flex items-center gap-2">
               <DoorOpen className="h-4 w-4 text-status-warning" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-fg">
@@ -106,6 +106,9 @@ export function DirectorToolsPanel() {
                 {(config.closedCourts ?? []).length + (config.courtClosures ?? []).length}
               </span>
             </div>
+            <p className="mt-0.5 text-2xs text-fg-muted">
+              Reopen clears every closure on that court.
+            </p>
           </div>
           <ul className="mt-2 space-y-1.5">
             {(config.closedCourts ?? []).map((courtId) => (
@@ -122,6 +125,7 @@ export function DirectorToolsPanel() {
                   onClick={() => handleReopenCourt(courtId)}
                   disabled={loading}
                   title="Reopen court — clears every closure for this court"
+                  aria-label={`Reopen Court ${courtId} — clears every closure for this court`}
                   className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
                 >
                   <DoorOpen className="h-3 w-3" aria-hidden="true" />
@@ -146,6 +150,7 @@ export function DirectorToolsPanel() {
                   onClick={() => handleReopenCourt(closure.courtId)}
                   disabled={loading}
                   title="Reopen court — clears every closure for this court"
+                  aria-label={`Reopen Court ${closure.courtId} — clears every closure for this court`}
                   className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
                 >
                   <DoorOpen className="h-3 w-3" aria-hidden="true" />
