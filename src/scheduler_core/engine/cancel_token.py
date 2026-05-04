@@ -5,11 +5,18 @@ because OR-Tools solver callbacks run on its own C++ worker
 threads (when ``num_workers > 1``), which can't reach the
 asyncio event loop the calling coroutine lives in.
 """
+from __future__ import annotations
+
 import threading
 
 
 class CancelToken:
-    """A flip-once flag. ``cancel()`` is idempotent and thread-safe."""
+    """A flip-once flag. ``cancel()`` is idempotent and thread-safe.
+
+    Uses ``__slots__`` to prevent accidental attribute creation on
+    subclasses and to reduce per-instance overhead — speculative
+    solves create a fresh token per attempt.
+    """
 
     __slots__ = ("_event",)
 

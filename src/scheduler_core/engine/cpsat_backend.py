@@ -121,6 +121,11 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
         self._counter = 0  # tie-breaker so heap comparisons never reach the snapshot
 
     def on_solution_callback(self) -> None:
+        # NOTE: Cancellation only fires at solution boundaries — OR-Tools
+        # invokes this callback per-solution, not per-tick. Cold solves
+        # that find no feasible solution before time_limit_seconds will
+        # never poll the token. Callers must still set time_limit_seconds
+        # as a hard backstop.
         # Cooperative cancellation: poll the token first so a cancelled
         # solve aborts at the very next solution callback, giving
         # sub-second latency relative to when cancel() was called.
