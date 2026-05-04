@@ -47,6 +47,7 @@ from app.schemas import (  # noqa: E402
     RosterGroupDTO,
     ScheduleDTO,
     ScheduleHistoryEntry,
+    Suggestion,
     TournamentConfig,
     TournamentStateDTO,
 )
@@ -104,10 +105,51 @@ def _get_lock(app: FastAPI) -> asyncio.Lock:
     return lock
 
 
+_SUGGESTION_STATE_KEY = "suggestions"
+
+
+def _get_suggestion_store(app: FastAPI) -> Dict[str, Suggestion]:
+    """Per-app suggestion dict, mirrors the proposal store layout.
+
+    Suggestions reference proposals by id; the suggestion's TTL is
+    typically shorter than its proposal's so an unapplied suggestion
+    can fall off the inbox while the underlying proposal stays live
+    in case the operator opens a Disruption dialog the same kind.
+    """
+    store = getattr(app.state, _SUGGESTION_STATE_KEY, None)
+    if store is None:
+        store = {}
+        setattr(app.state, _SUGGESTION_STATE_KEY, store)
+    return store
+
+
+def _evict_expired_suggestions(
+    store: Dict[str, Suggestion],
+    now: Optional[datetime] = None,
+) -> None:
+    """Drop suggestions whose ``expiresAt`` is in the past.
+
+    Mirrors `_evict_expired` for proposals. ValueError on parse falls
+    through to deletion (defensive against schema migrations).
+    """
+    cutoff = (now or datetime.now(timezone.utc))
+    for sid, sug in list(store.items()):
+        try:
+            expires = datetime.fromisoformat(
+                sug.expiresAt.replace("Z", "+00:00")
+            )
+        except ValueError:
+            del store[sid]
+            continue
+        if expires <= cutoff:
+            del store[sid]
+
+
 # Public alias for tests that want to clear the store between runs.
 def reset_store(app: FastAPI) -> None:
     setattr(app.state, _STATE_KEY, {})
     setattr(app.state, _LOCK_KEY, asyncio.Lock())
+    setattr(app.state, _SUGGESTION_STATE_KEY, {})
 
 
 # ---------- proposal-store helpers -----------------------------------------

@@ -19,9 +19,14 @@ for _cached in [k for k in list(sys.modules) if k == "app" or k.startswith("app.
     del sys.modules[_cached]
 
 import pytest
+from fastapi import FastAPI
 from pydantic import ValidationError
 
 from app.schemas import Suggestion
+from api.schedule_proposals import (
+    _get_suggestion_store,
+    _evict_expired_suggestions,
+)
 
 
 def test_suggestion_round_trips():
@@ -52,3 +57,42 @@ def test_suggestion_rejects_unknown_kind():
             fromScheduleVersion=0,
             expiresAt="2026-05-04T10:30:00+00:00",
         )
+
+
+def _make_app():
+    return FastAPI()
+
+
+def test_suggestion_store_is_per_app():
+    app1, app2 = _make_app(), _make_app()
+    s1 = _get_suggestion_store(app1)
+    s2 = _get_suggestion_store(app2)
+    assert s1 is not s2
+
+
+def test_evict_expired_suggestions_drops_past_ttl():
+    app = _make_app()
+    store = _get_suggestion_store(app)
+    sug = Suggestion(
+        kind="optimize", title="t", metric="m",
+        proposalId="p", fingerprint="f",
+        fromScheduleVersion=0,
+        expiresAt="2000-01-01T00:00:00+00:00",  # long expired
+    )
+    store[sug.id] = sug
+    _evict_expired_suggestions(store)
+    assert sug.id not in store
+
+
+def test_evict_expired_suggestions_keeps_fresh():
+    app = _make_app()
+    store = _get_suggestion_store(app)
+    sug = Suggestion(
+        kind="optimize", title="t", metric="m",
+        proposalId="p", fingerprint="f",
+        fromScheduleVersion=0,
+        expiresAt="2099-01-01T00:00:00+00:00",
+    )
+    store[sug.id] = sug
+    _evict_expired_suggestions(store)
+    assert sug.id in store
