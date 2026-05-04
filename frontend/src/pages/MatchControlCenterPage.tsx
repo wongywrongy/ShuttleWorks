@@ -508,6 +508,7 @@ export function MatchControlCenterPage() {
                 onMatchSelect={setSelectedMatchId}
                 impactedMatchIds={selectedAnalysis?.directlyImpacted}
                 trafficLights={trafficLights}
+                onRequestReopenCourt={() => setDirectorOpen(true)}
               />
             </div>
           </div>

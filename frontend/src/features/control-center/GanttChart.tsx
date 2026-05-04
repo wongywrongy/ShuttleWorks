@@ -4,6 +4,7 @@
  * Delayed matches get a yellow ring to stand out
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
+import { DoorOpen } from '@phosphor-icons/react';
 import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../lib/time';
 import {
   getClosedSlotWindows,
@@ -35,6 +36,10 @@ interface GanttChartProps {
    *  from the Gantt view were missing it.
    */
   trafficLights?: Map<string, TrafficLightResult>;
+  /** Optional callback invoked when a fully-closed court row is
+   *  clicked. Used to deeplink the director panel; if omitted the
+   *  closed row is rendered as a passive (non-interactive) cell. */
+  onRequestReopenCourt?: (courtId: number) => void;
 }
 
 // Slot width chosen so that even when a court has TWO overlapping
@@ -99,6 +104,7 @@ export function GanttChart({
   onMatchSelect,
   impactedMatchIds = [],
   trafficLights,
+  onRequestReopenCourt,
 }: GanttChartProps) {
   const matchMap = useMemo(() => indexById(matches), [matches]);
   const impactedSet = useMemo(() => new Set(impactedMatchIds), [impactedMatchIds]);
@@ -301,16 +307,30 @@ export function GanttChart({
               }`}
               title={fullyClosed ? `Court ${courtId} is closed` : undefined}
             >
-              <div
-                className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
-                  fullyClosed
-                    ? 'bg-muted/60 text-muted-foreground line-through'
-                    : 'bg-muted/30 text-foreground'
-                }`}
-                style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
-              >
-                C{courtId}
-              </div>
+              {fullyClosed && onRequestReopenCourt ? (
+                <button
+                  type="button"
+                  onClick={() => onRequestReopenCourt(courtId)}
+                  title={`Court ${courtId} closed — open Reopen panel`}
+                  aria-label={`Court ${courtId} is closed. Click to open Reopen panel.`}
+                  className="flex-shrink-0 flex items-center gap-1 px-2 text-xs font-semibold tabular-nums bg-muted/60 text-muted-foreground hover:bg-status-warning-bg hover:text-status-warning transition-colors"
+                  style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+                >
+                  <span className="line-through">C{courtId}</span>
+                  <DoorOpen className="h-3 w-3" aria-hidden="true" />
+                </button>
+              ) : (
+                <div
+                  className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
+                    fullyClosed
+                      ? 'bg-muted/60 text-muted-foreground line-through'
+                      : 'bg-muted/30 text-foreground'
+                  }`}
+                  style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+                >
+                  C{courtId}
+                </div>
+              )}
               <div
                 className="flex-1 relative gantt-grid"
                 style={{ height: ROW_HEIGHT }}
