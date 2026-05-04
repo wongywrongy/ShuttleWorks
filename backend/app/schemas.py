@@ -1,7 +1,9 @@
 """Pydantic schemas for API requests/responses - simplified for school sparring."""
+import uuid
 from typing import Annotated, List, Literal, Optional, Dict, Any
 from pydantic import BaseModel, Field, StringConstraints
 from enum import Enum
+from app.time_utils import now_iso
 
 
 # Reusable constrained types
@@ -342,6 +344,34 @@ class Proposal(BaseModel):
     fromScheduleVersion: int
     createdAt: str
     expiresAt: str
+
+
+class Suggestion(BaseModel):
+    """A pre-computed re-optimization proposal surfaced in the inbox.
+
+    Wraps a (still-live) ``Proposal`` with display copy and a dedup
+    fingerprint. The frontend reads these from
+    ``GET /schedule/suggestions``; ``apply`` commits the underlying
+    proposal; ``dismiss`` cancels it.
+
+    ``fingerprint`` is the worker's idempotency key — re-running the
+    same trigger against the same state yields the same fingerprint,
+    so the worker can skip stamping a duplicate suggestion.
+    """
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    kind: Literal["repair", "optimize", "director", "candidate"]
+    title: str
+    metric: str
+    proposalId: str
+    fingerprint: str
+    fromScheduleVersion: int
+    createdAt: str = Field(default_factory=now_iso)
+    expiresAt: str
+
+
+# Default suggestion TTL. Shorter than proposal TTL (30 min) because
+# suggestions go stale faster (state moves under them).
+SUGGESTION_TTL_MINUTES = 10
 
 
 # ---- Advisories (live operations) -------------------------------------
