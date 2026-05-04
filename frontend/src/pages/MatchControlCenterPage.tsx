@@ -56,6 +56,12 @@ export function MatchControlCenterPage() {
     courtId?: number;
   }>({});
   const [directorOpen, setDirectorOpen] = useState(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('director') === 'closed-courts') {
+      setDirectorOpen(true);
+    }
+  }, []);
   const [moveMatchId, setMoveMatchId] = useState<string | null>(null);
   const [warmRestartOpen, setWarmRestartOpen] = useState(false);
   // Lifted from MatchDetailsPanel so the WorkflowPanel rows can pop
