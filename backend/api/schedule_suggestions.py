@@ -15,7 +15,9 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+
+from app.error_codes import ErrorCode, http_error
 
 import app.scheduler_core_path  # noqa: F401
 from app.schemas import (
@@ -205,3 +207,68 @@ def build_handler(app: FastAPI) -> HandlerFn:
         else:
             log.warning("suggestions: unknown trigger kind: %s", event.kind)
     return handler
+
+
+# ---------- HTTP routes -----------------------------------------------------
+
+
+# Severity tier for sort: repair (most urgent) > director > optimize > candidate.
+_KIND_TIER = {"repair": 0, "director": 1, "optimize": 2, "candidate": 3}
+
+
+@router.get("", response_model=list[Suggestion])
+async def list_suggestions(http_request: Request) -> list[Suggestion]:
+    """Active suggestions, sorted by severity then creation time.
+
+    Drops expired entries before returning. The frontend polls this
+    endpoint every ~8s and rebuilds the rail from the response.
+    """
+    store = _get_suggestion_store(http_request.app)
+    lock = _get_lock(http_request.app)
+    async with lock:
+        _evict_expired_suggestions(store)
+        return sorted(
+            store.values(),
+            key=lambda s: (_KIND_TIER.get(s.kind, 99), s.createdAt),
+        )
+
+
+@router.post("/{suggestion_id}/apply")
+async def apply_suggestion(suggestion_id: str, http_request: Request):
+    """Commit the proposal underlying a suggestion.
+
+    Drops the suggestion before invoking commit so a 409 (stale
+    version) doesn't leave a dead entry in the inbox — the
+    frontend's next poll will reconcile.
+    """
+    from api.schedule_proposals import commit_proposal
+
+    store = _get_suggestion_store(http_request.app)
+    lock = _get_lock(http_request.app)
+    async with lock:
+        _evict_expired_suggestions(store)
+        sug = store.pop(suggestion_id, None)
+    if sug is None:
+        raise http_error(
+            410, ErrorCode.PROPOSAL_EXPIRED,
+            "suggestion expired or not found",
+        )
+    return await commit_proposal(sug.proposalId, http_request)
+
+
+@router.post("/{suggestion_id}/dismiss")
+async def dismiss_suggestion(suggestion_id: str, http_request: Request) -> dict:
+    """Drop a suggestion and cancel its underlying proposal."""
+    store = _get_suggestion_store(http_request.app)
+    proposal_store = _get_store(http_request.app)
+    lock = _get_lock(http_request.app)
+    async with lock:
+        _evict_expired_suggestions(store)
+        sug = store.pop(suggestion_id, None)
+        if sug is None:
+            raise http_error(
+                410, ErrorCode.PROPOSAL_EXPIRED,
+                "suggestion expired or not found",
+            )
+        proposal_store.pop(sug.proposalId, None)
+    return {"dismissed": True}

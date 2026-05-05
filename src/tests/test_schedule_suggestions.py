@@ -116,3 +116,106 @@ def test_evict_expired_suggestions_at_exact_cutoff_survives():
     store[sug.id] = sug
     _evict_expired_suggestions(store, now=cutoff)
     assert sug.id in store
+
+
+# ---------- Endpoint tests (Phase 3.1 / 3.2 / 3.3) -------------------------
+
+from fastapi.testclient import TestClient
+from api.schedule_suggestions import router as suggestions_router
+
+
+def _app_with_suggestions_router():
+    app = FastAPI()
+    app.include_router(suggestions_router)
+    return app
+
+
+def _seed_suggestion(app, **overrides):
+    """Drop a Suggestion directly into the store. Endpoint tests seed
+    pre-built suggestions because the actual stamping path runs the
+    real solver (covered by test_proposal_pipeline_integration)."""
+    defaults = dict(
+        kind="optimize", title="Re-optimize from now",
+        metric="−12 min finish, 7 moves",
+        proposalId="prop-stub",
+        fingerprint="fp-stub",
+        fromScheduleVersion=0,
+        expiresAt="2099-01-01T00:00:00+00:00",
+    )
+    defaults.update(overrides)
+    sug = Suggestion(**defaults)
+    _get_suggestion_store(app)[sug.id] = sug
+    return sug
+
+
+def test_get_suggestions_returns_empty_list():
+    app = _app_with_suggestions_router()
+    with TestClient(app) as c:
+        r = c.get("/schedule/suggestions")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_get_suggestions_returns_active_sorted_by_severity():
+    app = _app_with_suggestions_router()
+    _seed_suggestion(app, kind="optimize", proposalId="p1", fingerprint="f1")
+    _seed_suggestion(app, kind="repair", proposalId="p2", fingerprint="f2")
+    _seed_suggestion(app, kind="director", proposalId="p3", fingerprint="f3")
+    with TestClient(app) as c:
+        r = c.get("/schedule/suggestions")
+    body = r.json()
+    assert r.status_code == 200
+    assert len(body) == 3
+    # Severity tier: repair (0) > director (1) > optimize (2)
+    assert [b["kind"] for b in body] == ["repair", "director", "optimize"]
+
+
+def test_get_suggestions_evicts_expired():
+    app = _app_with_suggestions_router()
+    _seed_suggestion(app, expiresAt="2000-01-01T00:00:00+00:00")
+    with TestClient(app) as c:
+        r = c.get("/schedule/suggestions")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_apply_returns_410_for_unknown_suggestion():
+    app = _app_with_suggestions_router()
+    with TestClient(app) as c:
+        r = c.post("/schedule/suggestions/nonexistent/apply")
+    assert r.status_code == 410
+
+
+def test_dismiss_drops_suggestion_and_returns_dismissed():
+    app = _app_with_suggestions_router()
+    sug = _seed_suggestion(app)
+    store = _get_suggestion_store(app)
+    assert sug.id in store
+    with TestClient(app) as c:
+        r = c.post(f"/schedule/suggestions/{sug.id}/dismiss")
+    assert r.status_code == 200
+    assert r.json() == {"dismissed": True}
+    assert sug.id not in store
+
+
+def test_dismiss_returns_410_for_unknown():
+    app = _app_with_suggestions_router()
+    with TestClient(app) as c:
+        r = c.post("/schedule/suggestions/nonexistent/dismiss")
+    assert r.status_code == 410
+
+
+def test_dismiss_also_drops_underlying_proposal():
+    """Dismiss is destructive — the proposal it referenced is also
+    removed so an orphaned proposal can't be applied later."""
+    from api.schedule_proposals import _get_store
+    app = _app_with_suggestions_router()
+    sug = _seed_suggestion(app, proposalId="prop-to-drop")
+    proposal_store = _get_store(app)
+    # Seed a fake proposal-shaped value (a real Proposal isn't needed
+    # for this test — the dismiss handler only does pop()).
+    proposal_store["prop-to-drop"] = "stub"
+    with TestClient(app) as c:
+        r = c.post(f"/schedule/suggestions/{sug.id}/dismiss")
+    assert r.status_code == 200
+    assert "prop-to-drop" not in proposal_store
