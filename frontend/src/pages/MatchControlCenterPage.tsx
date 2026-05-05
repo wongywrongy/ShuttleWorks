@@ -474,7 +474,7 @@ export function MatchControlCenterPage() {
                       ? 'No schedule to export'
                       : 'Download schedule as XLSX'
                   }
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   <Download aria-hidden="true" className="h-4 w-4" />
                   Export XLSX
@@ -483,7 +483,7 @@ export function MatchControlCenterPage() {
                   type="button"
                   onClick={() => setDirectorOpen(true)}
                   title="Director tools — delays, breaks, blackouts"
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
                 >
                   <GearSix aria-hidden="true" className="h-4 w-4" />
                   Director
@@ -495,16 +495,16 @@ export function MatchControlCenterPage() {
                     setDisruptionOpen(true);
                   }}
                   title="Repair after a disruption (court closed, withdrawal, overrun, cancellation)"
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
                 >
-                  Disruption…
+                  Disruption
                 </button>
                 <button
                   type="button"
                   onClick={liveOps.triggerReoptimize}
                   disabled={liveOps.isReoptimizing}
-                  title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan… or Move/postpone…"
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+                  title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan or Move/postpone."
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
                 </button>

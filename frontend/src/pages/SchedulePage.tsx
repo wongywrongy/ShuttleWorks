@@ -650,18 +650,18 @@ export function SchedulePage() {
                       type="button"
                       onClick={() => setDirectorOpen(true)}
                       title="Director tools — delays, breaks, reopen courts"
-                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 whitespace-nowrap rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
                     >
-                      <GearSix aria-hidden="true" className="h-3.5 w-3.5" />
+                      <GearSix aria-hidden="true" className="h-4 w-4" />
                       Director
                     </button>
                     <button
                       type="button"
                       onClick={() => setWarmRestartOpen(true)}
-                      className={`${INTERACTIVE_BASE} inline-flex items-center whitespace-nowrap rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
                       title="Re-plan from here (full re-solve, stay-close objective)"
                     >
-                      Re-plan…
+                      Re-plan
                     </button>
                     <button
                       type="button"
@@ -669,10 +669,10 @@ export function SchedulePage() {
                         setDisruptionPrefill({});
                         setDisruptionOpen(true);
                       }}
-                      className={`${INTERACTIVE_BASE} inline-flex items-center whitespace-nowrap rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
                       title="Repair after a disruption"
                     >
-                      Disruption…
+                      Disruption
                     </button>
                   </div>
                 </div>
