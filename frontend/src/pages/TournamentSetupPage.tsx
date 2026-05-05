@@ -17,6 +17,7 @@ import { SettingsShell, type SettingsSectionDef } from '../features/settings/Set
 import { PageHeader } from '../components/PageHeader';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { EngineSettings } from '../features/settings/EngineSettings';
+import { Surface } from '../features/settings/SettingsPrimitives';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {
@@ -106,10 +107,10 @@ export function TournamentSetupPage() {
       icon: Database,
       description: 'Export, import, and rolling backups.',
       render: () => (
-        <div className="space-y-3">
+        <Surface>
           <TournamentFileManagement />
           <BackupPanel />
-        </div>
+        </Surface>
       ),
     },
   ];
