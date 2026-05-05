@@ -18,6 +18,7 @@ It's designed for the operator running the day from a laptop in the corner of th
 **Live operations** *(new)*
 - **Proposal pipeline** — every change (replan, repair, drag, director action) shows a full impact diff (who's affected, what moves, time deltas, infeasibility warnings) **before** committing. Optimistic-concurrency-locked, atomic swap, rolling 5-entry audit history.
 - **Advisories** — 15 s polling surfaces overruns, no-shows, running-behind, start-delay, approaching-blackout. Each one carries a one-click action.
+- **Suggestions Inbox** *(new)* — a background re-optimization worker continuously checks for better schedules; matched proposals appear as a one-click "Apply" rail under the advisory bar, so directors don't need to know when to re-plan. Mutations (Undo, Call, Start, Score) never wait on the solver.
 - **Director time-axis tools** — delay tournament start, insert lunch break, close / reopen courts (full-day or time-bounded). All flow through the proposal pipeline.
 - **Move / postpone single match** — everyday counterpart to the heavier replan flow.
 - **Court closures persist** across solves — every generate, replan, and repair routes around closed courts and closed time-windows.
