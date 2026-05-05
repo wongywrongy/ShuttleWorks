@@ -44,3 +44,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo

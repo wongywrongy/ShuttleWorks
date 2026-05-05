@@ -94,9 +94,6 @@ class TournamentDriver:
                         slot_id=assignment.slot_id,
                         court_id=assignment.court_id,
                         duration_slots=assignment.duration_slots,
-                        actual_start_slot=assignment.slot_id,
-                        actual_end_slot=assignment.slot_id
-                        + assignment.duration_slots,
                     )
                 )
 

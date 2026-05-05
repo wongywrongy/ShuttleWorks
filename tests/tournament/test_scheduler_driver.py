@@ -72,7 +72,7 @@ def test_single_elimination_layered_schedule_8_players():
     assert r0.scheduled
     assert set(r0.play_unit_ids) == set(draw.rounds[0])
     r0_max_end = max(
-        a.actual_end_slot for a in state.assignments.values()
+        a.slot_id + a.duration_slots for a in state.assignments.values()
     )
 
     # Record results so R1 becomes ready.
@@ -80,7 +80,8 @@ def test_single_elimination_layered_schedule_8_players():
         pu = state.play_units[pu_id]
         record_result(
             state, draw, pu_id, _top_seed_wins(pu),
-            finished_at_slot=state.assignments[pu_id].actual_end_slot,
+            finished_at_slot=state.assignments[pu_id].slot_id
+            + state.assignments[pu_id].duration_slots,
         )
 
     # Round 1: 2 matches.
@@ -94,7 +95,8 @@ def test_single_elimination_layered_schedule_8_players():
             f"{pu_id} starts at {a.slot_id} but R0 ended at {r0_max_end}"
         )
     r1_max_end = max(
-        state.assignments[pu_id].actual_end_slot
+        state.assignments[pu_id].slot_id
+        + state.assignments[pu_id].duration_slots
         for pu_id in draw.rounds[1]
     )
 
@@ -102,7 +104,8 @@ def test_single_elimination_layered_schedule_8_players():
         pu = state.play_units[pu_id]
         record_result(
             state, draw, pu_id, _top_seed_wins(pu),
-            finished_at_slot=state.assignments[pu_id].actual_end_slot,
+            finished_at_slot=state.assignments[pu_id].slot_id
+            + state.assignments[pu_id].duration_slots,
         )
 
     # Round 2: final.
@@ -131,7 +134,8 @@ def test_no_ready_play_units_returns_empty():
         pu = state.play_units[pu_id]
         record_result(
             state, draw, pu_id, _top_seed_wins(pu),
-            finished_at_slot=state.assignments[pu_id].actual_end_slot,
+            finished_at_slot=state.assignments[pu_id].slot_id
+            + state.assignments[pu_id].duration_slots,
         )
 
     r1 = driver.schedule_next_round()
@@ -141,7 +145,8 @@ def test_no_ready_play_units_returns_empty():
         pu = state.play_units[pu_id]
         record_result(
             state, draw, pu_id, _top_seed_wins(pu),
-            finished_at_slot=state.assignments[pu_id].actual_end_slot,
+            finished_at_slot=state.assignments[pu_id].slot_id
+            + state.assignments[pu_id].duration_slots,
         )
 
     # No more rounds.
