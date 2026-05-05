@@ -270,6 +270,13 @@ class ApiClient {
     await this.client.delete(`/schedule/proposals/${id}`);
   }
 
+  /** Fetch a single proposal by id (used by SuggestionPreview to load the
+   *  impact diff without committing). */
+  async getProposal(id: string): Promise<Proposal> {
+    const response = await this.client.get<Proposal>(`/schedule/proposals/${id}`);
+    return response.data;
+  }
+
   /** Live-operations advisories (overruns, no-shows, running-behind, etc.).
    *  Polled on a 15s cadence by the useAdvisories hook. */
   async getAdvisories(): Promise<Advisory[]> {
