@@ -28,6 +28,7 @@ import { DirectorToolsPanel } from '../features/director/DirectorToolsPanel';
 import { WarmRestartDialog } from '../features/schedule/WarmRestartDialog';
 import { Modal } from '../components/common/Modal';
 import { AdvisoryBanner } from '../components/status/AdvisoryBanner';
+import { SuggestionsRail } from '../features/suggestions/SuggestionsRail';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { Advisory } from '../api/dto';
@@ -437,6 +438,7 @@ export function MatchControlCenterPage() {
   return (
     <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
       <AdvisoryBanner onReview={handleAdvisoryReview} />
+      <SuggestionsRail />
       <div className="flex-1 min-h-0 flex gap-2">
         {/* Main area - Gantt + Matches list */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">

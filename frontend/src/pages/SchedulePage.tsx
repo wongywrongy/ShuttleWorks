@@ -16,6 +16,7 @@ import { CandidatesPanel } from '../features/schedule/CandidatesPanel';
 import { WarmRestartDialog } from '../features/schedule/WarmRestartDialog';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { StaleBanner } from '../features/schedule/StaleBanner';
+import { SuggestionsRail } from '../features/suggestions/SuggestionsRail';
 import { computeConstraintViolations } from '../utils/constraintChecker';
 import { formatSlotTime } from '../lib/time';
 import { useCurrentSlot } from '../hooks/useCurrentSlot';
@@ -477,6 +478,7 @@ export function SchedulePage() {
   return (
     <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
       <StaleBanner />
+      <SuggestionsRail />
       {/* Alerts */}
       {needsConfig && (
         <div className="flex-shrink-0 rounded border border-status-warning/40 bg-status-warning-bg px-3 py-2 text-xs text-status-warning">

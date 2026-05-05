@@ -5,6 +5,7 @@ import { useTournamentState } from '../hooks/useTournamentState';
 import { useAppliedTheme } from '../hooks/useAppliedTheme';
 import { useAppliedDensity } from '../hooks/useAppliedDensity';
 import { useAdvisories } from '../hooks/useAdvisories';
+import { useSuggestions } from '../hooks/useSuggestions';
 import { TabBar } from './TabBar';
 import { SolverHud } from '../components/SolverHud';
 import { UnsavedBanner } from '../components/UnsavedBanner';
@@ -48,6 +49,10 @@ export function AppShell() {
   // Poll /schedule/advisories every 15s and surface warn/critical
   // advisories as toasts. Single mount covers every page.
   useAdvisories();
+  // Poll /schedule/suggestions every 8s and drop into appStore.
+  // The SuggestionsRail (rendered per-page directly under each
+  // AdvisoryBanner) reads from the store.
+  useSuggestions();
   const activeTab = useAppStore((s) => s.activeTab);
   const pushToast = useAppStore((s) => s.pushToast);
   const setActiveProposal = useAppStore((s) => s.setActiveProposal);
