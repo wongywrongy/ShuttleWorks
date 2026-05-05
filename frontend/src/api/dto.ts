@@ -519,7 +519,27 @@ export interface Advisory {
   matchId?: string | null;
   courtId?: number | null;
   suggestedAction?: SuggestedAction | null;
+  /** Set when the worker has stamped a pre-baked Suggestion for this
+   *  advisory; the frontend treats this as "Apply available" instead
+   *  of "Review" — one-click commits the underlying proposal. */
+  suggestionId?: string | null;
   detectedAt: string;
+}
+
+/** Pre-computed re-optimization proposal surfaced in the inbox.
+ *  Wraps a still-live Proposal with display copy + dedup fingerprint.
+ *  The frontend reads these from GET /schedule/suggestions; Apply
+ *  commits the underlying proposal, Dismiss cancels it. */
+export interface Suggestion {
+  id: string;
+  kind: 'repair' | 'optimize' | 'director' | 'candidate';
+  title: string;
+  metric: string;
+  proposalId: string;
+  fingerprint: string;
+  fromScheduleVersion: number;
+  createdAt: string;
+  expiresAt: string;
 }
 
 export interface BackupEntryDTO {
