@@ -1,13 +1,11 @@
 """State helpers for absorbing a Draw into a TournamentState.
 
 `register_draw` copies the draw's participants, event, and play units
-into a TournamentState and auto-walks-over any R1 PlayUnit with a BYE
-side so the dependency chain starts cleanly. Subsequent calls to
+into a TournamentState, then delegates to `advancement.auto_walkover_byes`
+to walk-over any R1 PlayUnit with a BYE side. Subsequent calls to
 `record_result` propagate winners forward.
 """
 from __future__ import annotations
-
-from typing import Optional
 
 from scheduler_core.domain.tournament import (
     PlayUnitId,
@@ -16,7 +14,8 @@ from scheduler_core.domain.tournament import (
     WinnerSide,
 )
 
-from tournament.draw import BYE, Draw
+from tournament.advancement import auto_walkover_byes
+from tournament.draw import Draw
 
 
 def register_draw(state: TournamentState, draw: Draw) -> None:
@@ -33,28 +32,7 @@ def register_draw(state: TournamentState, draw: Draw) -> None:
             raise ValueError(f"PlayUnit {pu_id} already in state")
         state.play_units[pu_id] = pu
 
-    # Walk-over byes (R1 PlayUnits with one or both sides absent).
-    # We make a list copy because record_result may, in principle,
-    # cascade and add results we'd otherwise be iterating over.
-    for pu_id in list(draw.rounds[0]):
-        pu = state.play_units[pu_id]
-        a_empty = not pu.side_a
-        b_empty = not pu.side_b
-        if a_empty and b_empty:
-            # Both sides bye — true no-op. Record a NONE result so the
-            # downstream PlayUnit knows this branch is dead.
-            state.results[pu_id] = Result(
-                winner_side=WinnerSide.NONE,
-                walkover=True,
-            )
-        elif a_empty:
-            from tournament.advancement import record_result as _rr
-            _rr(state, draw, pu_id, WinnerSide.B, finished_at_slot=None,
-                walkover=True)
-        elif b_empty:
-            from tournament.advancement import record_result as _rr
-            _rr(state, draw, pu_id, WinnerSide.A, finished_at_slot=None,
-                walkover=True)
+    auto_walkover_byes(state, draw)
 
 
 def find_ready_play_units(
@@ -85,15 +63,3 @@ def find_ready_play_units(
             continue
         ready.append(pu_id)
     return ready
-
-
-def latest_completed_finish_slot(state: TournamentState) -> Optional[int]:
-    """Return the highest `actual_end_slot` across all assigned PlayUnits."""
-    end_slots = [
-        a.actual_end_slot
-        for a in state.assignments.values()
-        if a.actual_end_slot is not None
-    ]
-    if not end_slots:
-        return None
-    return max(end_slots)

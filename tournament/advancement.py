@@ -95,6 +95,35 @@ def _winner_participant_id(
     return None  # WinnerSide.NONE — double-bye / dead branch
 
 
+def auto_walkover_byes(state: TournamentState, draw: Draw) -> None:
+    """Record walkover results for any R1 PlayUnit that has a BYE side.
+
+    A R1 PlayUnit may have one side absent (the standard case — top
+    seed gets a bye) or both sides absent (a degenerate case for very
+    small fields). The winner of a one-sided bye is the present side;
+    a double-bye produces a NONE result so the downstream PlayUnit
+    knows the branch is dead and gets walked over too.
+    """
+    for pu_id in list(draw.rounds[0]):
+        pu = state.play_units[pu_id]
+        a_empty = not pu.side_a
+        b_empty = not pu.side_b
+        if a_empty and b_empty:
+            state.results[pu_id] = Result(
+                winner_side=WinnerSide.NONE, walkover=True
+            )
+        elif a_empty:
+            record_result(
+                state, draw, pu_id, WinnerSide.B,
+                finished_at_slot=None, walkover=True,
+            )
+        elif b_empty:
+            record_result(
+                state, draw, pu_id, WinnerSide.A,
+                finished_at_slot=None, walkover=True,
+            )
+
+
 def _refresh_play_unit_sides(draw: Draw, play_unit_id: PlayUnitId) -> None:
     """Sync PlayUnit.side_a/side_b with the current BracketSlot map."""
     slot_a, slot_b = draw.slots[play_unit_id]
