@@ -1,4 +1,5 @@
 """Main FastAPI application - stateless scheduler for school sparring."""
+import asyncio
 import logging
 import os
 import uuid
@@ -34,7 +35,11 @@ async def lifespan(app: FastAPI):
     """
     log.info("app_startup version=2.0.0")
 
-    from services.suggestions_worker import SuggestionsWorker
+    from services.suggestions_worker import (
+        SuggestionsWorker,
+        TriggerEvent,
+        TriggerKind,
+    )
     from api.schedule_suggestions import build_handler
 
     worker = SuggestionsWorker(
@@ -45,9 +50,38 @@ async def lifespan(app: FastAPI):
     await worker.start()
     log.info("suggestions_worker started")
 
+    # Periodic 90 s heartbeat: post an OPTIMIZE trigger so the inbox
+    # refreshes even when no commit has happened recently. The worker
+    # dedups by fingerprint, so back-to-back ticks within the cooldown
+    # are no-ops. Cancellation in the finally is required so shutdown
+    # is clean (the task otherwise runs forever).
+    async def _periodic_optimize_tick() -> None:
+        while True:
+            try:
+                await asyncio.sleep(90.0)
+            except asyncio.CancelledError:
+                break
+            try:
+                await worker.post(TriggerEvent(
+                    kind=TriggerKind.PERIODIC,
+                    fingerprint="opt:periodic",
+                ))
+            except Exception:
+                log.exception("periodic optimize tick: post failed")
+
+    periodic_task = asyncio.create_task(
+        _periodic_optimize_tick(), name="periodic-optimize",
+    )
+    log.info("periodic_optimize_tick started")
+
     try:
         yield
     finally:
+        periodic_task.cancel()
+        try:
+            await periodic_task
+        except asyncio.CancelledError:
+            pass
         await worker.stop()
         log.info("suggestions_worker stopped")
         log.info("app_shutdown")
