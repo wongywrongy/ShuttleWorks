@@ -77,7 +77,7 @@ async def test_worker_runs_after_cooldown():
         await asyncio.sleep(0.05)
         await w.drain()
         assert handler.await_count == 1  # second was inside cooldown
-        await asyncio.sleep(0.15)         # cooldown elapses
+        await asyncio.sleep(0.25)         # cooldown elapses (margin for CI drift)
         await w.post(TriggerEvent(kind=TriggerKind.OPTIMIZE, fingerprint="opt:v1"))
         await asyncio.sleep(0.05)
         await w.drain()

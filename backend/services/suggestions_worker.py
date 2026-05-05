@@ -21,7 +21,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Awaitable, Callable, Dict, Optional
+from typing import Awaitable, Callable, Dict, Optional, Tuple
 
 import app.scheduler_core_path  # noqa: F401
 from scheduler_core.engine.cancel_token import CancelToken
@@ -30,8 +30,16 @@ log = logging.getLogger("scheduler.suggestions")
 
 
 class TriggerKind(str, Enum):
-    """Order is canonical; mirrors the Suggestion.kind Literal in
-    backend/app/schemas.py. Don't re-order without updating both."""
+    """Input vocabulary for the worker queue.
+
+    OPTIMIZE and REPAIR correspond to ``Suggestion.kind`` values in
+    ``backend/app/schemas.py`` — those are the kinds an OPTIMIZE or
+    REPAIR trigger can produce. PERIODIC is internal to the worker
+    (the 90s heartbeat from the lifespan) and produces an OPTIMIZE
+    suggestion via the same handler. The Suggestion schema's
+    ``"director"`` and ``"candidate"`` kinds are not currently
+    triggered through the worker queue.
+    """
     OPTIMIZE = "optimize"
     REPAIR = "repair"
     PERIODIC = "periodic"
@@ -85,7 +93,7 @@ class SuggestionsWorker:
         # fingerprint -> monotonic timestamp of last dispatch start
         self._last_run: Dict[str, float] = {}
         # fingerprint -> (asyncio.Task running the handler, CancelToken)
-        self._inflight: Dict[str, tuple[asyncio.Task, CancelToken]] = {}
+        self._inflight: Dict[str, Tuple[asyncio.Task, CancelToken]] = {}
         self._task: Optional[asyncio.Task] = None
         self._stopping = asyncio.Event()
 
@@ -109,9 +117,14 @@ class SuggestionsWorker:
             except (asyncio.CancelledError, Exception):
                 pass
             self._task = None
-        # Await any cancelled handler tasks so they finish unwinding
-        # before we exit.
-        for fp, (task, _token) in list(self._inflight.items()):
+        # The consumer may have started one final dispatch in the tick
+        # between the snapshot above and the consumer's own exit.
+        # Cancel and await each remaining entry to be safe — without
+        # the explicit cancel, a handler that ignores its token could
+        # run to completion past stop().
+        for fp, (task, token) in list(self._inflight.items()):
+            token.cancel()
+            task.cancel()
             try:
                 await task
             except (asyncio.CancelledError, Exception):
@@ -141,6 +154,10 @@ class SuggestionsWorker:
         """Consume the queue; dispatch handlers under cooldown rules."""
         while not self._stopping.is_set():
             try:
+                # 0.5s timeout bounds stop() latency: worst-case from
+                # _stopping.set() to consumer exit is one timeout
+                # tick. Shorter values raise CPU; longer values delay
+                # clean shutdown.
                 event = await asyncio.wait_for(self._queue.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
