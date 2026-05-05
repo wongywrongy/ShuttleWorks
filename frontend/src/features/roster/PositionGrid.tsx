@@ -156,20 +156,20 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
 
   if (events.length === 0) {
     return (
-      <div className="rounded border border-dashed border-border bg-card p-6 text-center text-xs text-muted-foreground">
+      <div className="bg-card px-6 py-10 text-center text-xs text-muted-foreground">
         No events configured. Set <strong>Event Categories</strong> in the Setup tab to enable the roster grid.
       </div>
     );
   }
 
   return (
-    <div className="rounded border border-border bg-card overflow-hidden">
-      <div className="flex items-baseline justify-between border-b border-border bg-muted/40 px-3 py-2">
+    <div className="flex min-w-0 flex-col bg-card">
+      <div className="flex items-baseline justify-between border-b border-border/60 bg-muted/40 px-3 py-2">
         <div className="flex items-baseline gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
+          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Position grid
           </span>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[11px] text-foreground">
             {school?.name ?? '—'}
           </span>
         </div>
@@ -587,9 +587,24 @@ export function DraggablePlayerChip({
     >
       <span aria-hidden className="text-muted-foreground/70">⠿</span>
       <span className="flex-1 truncate">{player.name || '(unnamed)'}</span>
-      <span className="text-[10px] text-muted-foreground tabular-nums">
-        {(player.ranks ?? []).length}
-      </span>
+      {(() => {
+        const eventCount = (player.ranks ?? []).length;
+        const heavy = eventCount >= 4;
+        return (
+          <span
+            className={[
+              'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] tabular-nums',
+              heavy
+                ? 'bg-status-warning-bg text-status-warning ring-1 ring-status-warning/40'
+                : 'text-muted-foreground',
+            ].join(' ')}
+            title={heavy ? `High event load — ${eventCount} events` : `${eventCount} event${eventCount === 1 ? '' : 's'}`}
+            aria-label={heavy ? `High event load: ${eventCount} events` : undefined}
+          >
+            {eventCount}
+          </span>
+        );
+      })()}
     </button>
   );
 }

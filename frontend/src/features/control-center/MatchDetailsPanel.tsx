@@ -359,7 +359,7 @@ export function MatchDetailsPanel({
         const winnerNames = (winnerIds ?? []).map((id) => playerNames.get(id) ?? id).join(' & ');
 
         return (
-          <div className="mb-3 rounded border border-border bg-card px-2 py-2 text-xs text-foreground">
+          <div className="mb-3 rounded bg-muted/40 px-2 py-2 text-xs text-foreground">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Done
@@ -799,7 +799,7 @@ export function MatchDetailsPanel({
           <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
             Impacted ({analysis.directlyImpacted.length})
           </div>
-          <div className="divide-y divide-border rounded border border-border bg-card">
+          <div className="divide-y divide-border/60 rounded bg-muted/40">
             {analysis.directlyImpacted.map((matchId) => {
               const impactedMatch = matchMap.get(matchId);
               const currentPlayerIds = new Set(allPlayerIds);

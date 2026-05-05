@@ -647,7 +647,7 @@ export function WorkflowPanel({
     <div className="h-full flex flex-col overflow-hidden min-h-0">
       {/* Inline search bar — filters In Progress + Up Next + Finished
           simultaneously by event code or player name. */}
-      <div className="flex-shrink-0 border-b border-border px-2 py-1.5">
+      <div className="flex-shrink-0 border-b border-border/60 px-2 py-1.5">
         <InlineSearch
           query={searchQuery}
           onQueryChange={setSearchQuery}
@@ -657,7 +657,7 @@ export function WorkflowPanel({
         />
       </div>
       {hasActive && (
-        <div className="flex-shrink-0 border-b border-border">
+        <div className="flex-shrink-0 border-b border-border/60">
           <div className="px-2 py-1.5 flex items-center justify-between border-b border-border/60">
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -686,7 +686,7 @@ export function WorkflowPanel({
 
       {/* Tabbed Up Next / Finished */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-b border-border flex-shrink-0">
+        <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-b border-border/60 flex-shrink-0">
           <div className="flex items-center gap-1">
             <button
               onClick={() => setActiveTab('up_next')}

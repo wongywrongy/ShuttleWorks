@@ -33,8 +33,13 @@ export function MatchesTab() {
           </button>
         }
       />
-      <AutoGeneratePanel />
-      <MatchesSpreadsheet />
+      {/* One outer surface — auto-generate and the matches table read as
+       *  a single page section, separated only by a hairline divider. */}
+      <div className="rounded border border-border bg-card">
+        <AutoGeneratePanel />
+        <div className="border-t border-border/60" />
+        <MatchesSpreadsheet />
+      </div>
     </div>
   );
 }

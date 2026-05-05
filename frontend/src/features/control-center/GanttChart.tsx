@@ -265,7 +265,7 @@ export function GanttChart({
         <div className="min-w-max">
           {/* Time header — matches DragGantt: court label on the left,
               time labels every other slot. */}
-          <div className="flex border-b border-border bg-muted/40">
+          <div className="flex border-b border-border/60 bg-muted/40">
             <div
               className="flex-shrink-0 px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
               style={{ width: COURT_LABEL_WIDTH }}

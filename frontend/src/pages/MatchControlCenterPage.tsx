@@ -568,7 +568,7 @@ export function MatchControlCenterPage() {
 
         {/* Right column — Match details (vertical hairline as separator) */}
         {detailsOpen ? (
-          <div className="w-72 flex-shrink-0 border-l border-border flex flex-col overflow-hidden">
+          <div className="w-72 flex-shrink-0 border-l border-border/60 flex flex-col overflow-hidden">
             <div className="flex-shrink-0 border-b border-border/60 px-2 py-1.5 flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Match Details
@@ -628,7 +628,7 @@ export function MatchControlCenterPage() {
             onClick={() => setDetailsOpen(true)}
             title="Show match details"
             aria-label="Show match details"
-            className={`${INTERACTIVE_BASE} w-6 flex-shrink-0 border-l border-border flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground`}
+            className={`${INTERACTIVE_BASE} w-6 flex-shrink-0 border-l border-border/60 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground`}
           >
             <CaretLeft aria-hidden="true" className="h-4 w-4" />
           </button>
