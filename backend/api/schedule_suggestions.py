@@ -191,19 +191,143 @@ async def _handle_optimize(
         )
 
 
+def _repair_title(disruption_type: str, payload: dict) -> str:
+    if disruption_type == "court_closed":
+        return f"Repair: court {payload.get('courtId', '?')} closed"
+    if disruption_type == "withdrawal":
+        return f"Repair: player {payload.get('playerId', '?')} withdrew"
+    if disruption_type == "overrun":
+        return f"Repair: match {payload.get('matchId', '?')} overrun"
+    if disruption_type == "cancellation":
+        return f"Repair: match {payload.get('matchId', '?')} cancelled"
+    return f"Repair: {disruption_type}"
+
+
+def _moves_count(old: ScheduleDTO, new: ScheduleDTO) -> int:
+    """Count of matches whose (slot, court) differs between old and new."""
+    new_idx = {a.matchId: (a.slotId, a.courtId) for a in new.assignments}
+    return sum(
+        1 for a in old.assignments
+        if new_idx.get(a.matchId) != (a.slotId, a.courtId)
+    )
+
+
+async def _handle_repair(
+    app: FastAPI, event: TriggerEvent, token: CancelToken,
+) -> None:
+    """Run a repair speculation against persisted state.
+
+    Reads the disruption from the event payload (populated by the
+    advisories endpoint when an advisory's suggestedAction.kind is
+    'repair'). Stamps a kind='repair' Suggestion if the repair
+    completes; unlike OPTIMIZE we don't gate on improvement —
+    repairs respond to a fact (court closed, player out) and the
+    operator wants to see the fix even if the makespan grows.
+    """
+    suggested = event.payload.get("suggestedAction") or {}
+    if suggested.get("kind") != "repair":
+        return  # only repair-kind suggestedActions route here
+    disruption_payload = suggested.get("payload") or {}
+    disruption_type = disruption_payload.get("type")
+    if not disruption_type:
+        log.warning("repair handler: missing disruption.type in %s", event.fingerprint)
+        return
+
+    persisted = _read_persisted_state()
+    if persisted is None or persisted.schedule is None or persisted.config is None:
+        return
+
+    from api.match_state import _read_state_file
+    try:
+        match_states = _read_state_file().matchStates
+    except Exception:
+        log.exception("suggestions: failed to read match_states")
+        match_states = {}
+
+    from api.schedule_repair import RepairRequest, _run_repair_with_cancel, Disruption
+    try:
+        disruption = Disruption(**disruption_payload)
+    except Exception:
+        log.warning("repair handler: malformed disruption %s", disruption_payload)
+        return
+
+    rr = RepairRequest(
+        originalSchedule=persisted.schedule,
+        config=persisted.config,
+        players=persisted.players,
+        matches=persisted.matches,
+        matchStates=match_states,
+        disruption=disruption,
+        timeBudgetSec=6.0,
+    )
+
+    loop = asyncio.get_running_loop()
+
+    def _solve_sync():
+        return _run_repair_with_cancel(rr, cancel_token=token)
+
+    try:
+        new_schedule, _ = await loop.run_in_executor(None, _solve_sync)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("repair speculation failed for %s", event.fingerprint)
+        return
+
+    moves = _moves_count(persisted.schedule, new_schedule)
+    finish_delta = _finish_delta_minutes(
+        persisted.schedule, new_schedule, persisted.config,
+    )
+
+    store = _get_store(app)
+    suggestion_store = _get_suggestion_store(app)
+    lock = _get_lock(app)
+    async with lock:
+        _evict_expired(store)
+        _evict_expired_suggestions(suggestion_store)
+
+        proposal = _build_proposal(
+            store,
+            kind=ProposalKind.REPAIR,
+            proposed_schedule=new_schedule,
+            committed_schedule=persisted.schedule,
+            matches=persisted.matches,
+            players=persisted.players,
+            groups=list(persisted.groups or []),
+            from_version=persisted.scheduleVersion,
+            summary=f"Repair: {disruption_type}",
+        )
+        sug = Suggestion(
+            kind="repair",
+            title=_repair_title(disruption_type, disruption_payload),
+            metric=_format_metric(
+                finish_delta_min=finish_delta, moves=moves,
+            ),
+            proposalId=proposal.id,
+            fingerprint=event.fingerprint,
+            fromScheduleVersion=persisted.scheduleVersion,
+            expiresAt=_expires_at(),
+        )
+        suggestion_store[sug.id] = sug
+        log.info(
+            "suggestions: stamped repair id=%s type=%s moves=%d",
+            sug.id, disruption_type, moves,
+        )
+
+
 def build_handler(app: FastAPI) -> HandlerFn:
     """Factory: returns a handler fn closed over `app` for the worker.
 
-    Phase 3.4 will extend this to dispatch REPAIR triggers to a
-    parallel handler. PERIODIC triggers route to the same OPTIMIZE
-    handler — periodic is a heartbeat that re-checks for
-    improvements.
+    PERIODIC triggers route to the same OPTIMIZE handler — periodic is
+    a heartbeat that re-checks for improvements. REPAIR triggers are
+    driven by the advisories endpoint when an advisory's
+    suggestedAction.kind is 'repair'.
     """
     async def handler(event: TriggerEvent, token: CancelToken) -> None:
         if event.kind in (TriggerKind.OPTIMIZE, TriggerKind.PERIODIC):
             await _handle_optimize(app, event, token)
         elif event.kind == TriggerKind.REPAIR:
-            log.debug("suggestions: REPAIR handler not yet wired (Phase 3.4)")
+            await _handle_repair(app, event, token)
         else:
             log.warning("suggestions: unknown trigger kind: %s", event.kind)
     return handler

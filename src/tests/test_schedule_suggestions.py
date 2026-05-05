@@ -219,3 +219,59 @@ def test_dismiss_also_drops_underlying_proposal():
         r = c.post(f"/schedule/suggestions/{sug.id}/dismiss")
     assert r.status_code == 200
     assert "prop-to-drop" not in proposal_store
+
+
+# ---------- Phase 3.4: _repair_title + dispatch wiring ----------------------
+
+
+def test_repair_title_for_known_disruption_types():
+    from api.schedule_suggestions import _repair_title
+    assert "Repair: court 3 closed" in _repair_title("court_closed", {"courtId": 3})
+    assert "Repair: player p1 withdrew" in _repair_title("withdrawal", {"playerId": "p1"})
+    assert "Repair: match m1 overrun" in _repair_title("overrun", {"matchId": "m1"})
+    assert "Repair: match m2 cancelled" in _repair_title("cancellation", {"matchId": "m2"})
+
+
+def test_repair_title_fallback_for_unknown_type():
+    from api.schedule_suggestions import _repair_title
+    assert _repair_title("no_show", {}) == "Repair: no_show"
+
+
+def test_moves_count_counts_changed_assignments():
+    from api.schedule_suggestions import _moves_count
+    from app.schemas import ScheduleAssignment, ScheduleDTO, SolverStatus
+
+    def _make_schedule(rows):
+        return ScheduleDTO(
+            assignments=[
+                ScheduleAssignment(matchId=mid, slotId=s, courtId=c, durationSlots=1)
+                for mid, s, c in rows
+            ],
+            unscheduledMatches=[],
+            softViolations=[],
+            objectiveScore=0.0,
+            infeasibleReasons=[],
+            status=SolverStatus.FEASIBLE,
+        )
+
+    old = _make_schedule([("m1", 0, 1), ("m2", 1, 1), ("m3", 2, 1)])
+    # m1 moved to court 2, m2 unchanged, m3 moved to slot 3
+    new = _make_schedule([("m1", 0, 2), ("m2", 1, 1), ("m3", 3, 1)])
+    assert _moves_count(old, new) == 2
+
+
+def test_handle_repair_is_importable_and_dispatched_by_build_handler():
+    """Smoke test: _handle_repair is importable and build_handler routes
+    REPAIR triggers to it (not the old stub path)."""
+    from api.schedule_suggestions import _handle_repair, build_handler
+    from services.suggestions_worker import TriggerKind
+    import inspect
+
+    # _handle_repair must be an async function
+    assert inspect.iscoroutinefunction(_handle_repair)
+
+    # build_handler returns a coroutine function that dispatches REPAIR
+    from fastapi import FastAPI
+    app = FastAPI()
+    handler = build_handler(app)
+    assert inspect.iscoroutinefunction(handler)

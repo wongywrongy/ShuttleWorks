@@ -415,6 +415,7 @@ class Advisory(BaseModel):
     matchId: Optional[str] = None
     courtId: Optional[int] = None
     suggestedAction: Optional[SuggestedAction] = None
+    suggestionId: Optional[str] = None  # set when worker has stamped a pre-baked Suggestion for this advisory
     detectedAt: str                                  # ISO timestamp
 
 
