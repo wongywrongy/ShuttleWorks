@@ -606,4 +606,31 @@ async def commit_proposal(proposal_id: str, http_request: Request) -> CommitResp
         # Proposal is consumed — drop from the store so a second commit is
         # not possible without re-creating.
         del store[proposal_id]
+
+        # Drop any suggestions that were built against the pre-commit
+        # version — their proposalId now refers to a stale fork.
+        suggestion_store = _get_suggestion_store(http_request.app)
+        new_version = updated.scheduleVersion
+        stale_sids = [
+            sid for sid, sug in suggestion_store.items()
+            if sug.fromScheduleVersion < new_version
+        ]
+        for sid in stale_sids:
+            del suggestion_store[sid]
+
+    # Fire a fresh OPTIMIZE trigger off-thread so the inbox reflects
+    # the new state. Done outside the lock — the worker has its own
+    # serialization. Best-effort: a missing worker (e.g., test harness
+    # that didn't spawn one) is not an error.
+    worker = getattr(http_request.app.state, "suggestions_worker", None)
+    if worker is not None:
+        from services.suggestions_worker import TriggerEvent, TriggerKind
+        try:
+            await worker.post(TriggerEvent(
+                kind=TriggerKind.OPTIMIZE,
+                fingerprint=f"opt:post-commit:{updated.scheduleVersion}",
+            ))
+        except Exception:
+            log.exception("post-commit OPTIMIZE trigger failed")
+
     return CommitResponse(state=updated, historyEntry=history_entry)
