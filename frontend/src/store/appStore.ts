@@ -554,10 +554,10 @@ export const useAppStore = create<AppState>()(
           liveState: state.liveState ? { ...state.liveState, lastSynced: time } : null,
         })),
 
-      // Data management. Same scope as DemoLoader.apply — wipe live /
-      // proposal / advisory / solver state along with the persisted
-      // tournament data, so a "clear" lands you on a genuinely empty
-      // tournament instead of a hybrid with leftover state.
+      // Data management. Wipe live / proposal / advisory / solver state
+      // along with the persisted tournament data, so a "clear" lands you
+      // on a genuinely empty tournament instead of a hybrid with leftover
+      // state.
       clearAllData: () =>
         set({
           config: DEFAULT_CONFIG,

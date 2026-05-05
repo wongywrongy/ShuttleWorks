@@ -5,7 +5,7 @@
  * provides the layout; nothing else.
  */
 import { useState } from 'react';
-import { Sliders, Palette, Monitor, Database, Flask, Cpu } from '@phosphor-icons/react';
+import { Sliders, Palette, Monitor, Database, Cpu } from '@phosphor-icons/react';
 import { useTournament } from '../hooks/useTournament';
 import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
@@ -17,7 +17,6 @@ import { SettingsShell, type SettingsSectionDef } from '../features/settings/Set
 import { PageHeader } from '../components/PageHeader';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { EngineSettings } from '../features/settings/EngineSettings';
-import { DemoLoader } from '../features/settings/DemoLoader';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {
@@ -65,7 +64,7 @@ export function TournamentSetupPage() {
   // Section definitions wired to the SettingsShell. Order is intentional:
   // Tournament first (the heaviest config; usually why people opened
   // Settings), then Display (also config-shaped), then per-device
-  // Appearance, then Data ops, then Demos.
+  // Appearance, then Data ops.
   const sections: SettingsSectionDef[] = [
     {
       id: 'tournament',
@@ -112,13 +111,6 @@ export function TournamentSetupPage() {
           <BackupPanel />
         </div>
       ),
-    },
-    {
-      id: 'demos',
-      label: 'Demos',
-      icon: Flask,
-      description: 'Pre-baked sample tournaments — dual (20 players × 2 schools) and tri (10 players × 3 schools), 5 events each.',
-      render: () => <DemoLoader />,
     },
   ];
 
