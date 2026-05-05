@@ -4,7 +4,7 @@
  * Clicking "Re-solve" regenerates; "Keep anyway" dismisses the warning without
  * re-solving (user has printed copies and doesn't need a fresh layout).
  */
-import { AlertTriangle } from 'lucide-react';
+import { Warning } from '@phosphor-icons/react';
 import { useAppStore } from '../../store/appStore';
 import { useSchedule } from '../../hooks/useSchedule';
 
@@ -22,7 +22,7 @@ export function StaleBanner() {
       className="flex items-center justify-between gap-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
     >
       <span className="flex items-center gap-2">
-        <AlertTriangle aria-hidden="true" className="h-4 w-4" />
+        <Warning aria-hidden="true" className="h-4 w-4" />
         Schedule is out of date since your last edit.
       </span>
       <div className="flex items-center gap-2">

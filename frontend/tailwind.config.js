@@ -14,7 +14,7 @@ export default {
         // ``main.tsx`` via @fontsource-variable. System fallbacks keep
         // initial paint sharp before the woff2 lands.
         sans: [
-          'Inter Variable',
+          'Geist Variable',
           '-apple-system',
           'BlinkMacSystemFont',
           'Segoe UI',
@@ -116,6 +116,26 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      // Brand easing curve. Used everywhere we want a slightly weighty,
+      // physical decel — buttons, drawer slides, Gantt block reflow.
+      // Promoted from the literal in DragGantt.tsx so the whole app
+      // shares one curve instead of defaulting to the browser ease.
+      transitionTimingFunction: {
+        brand: "cubic-bezier(0.22, 1, 0.36, 1)",
+      },
+      // Semantic z-index scale. ``z-hud`` for sticky operator chrome
+      // (SolverHud, internal sticky headers), ``z-chrome`` for the top
+      // TabBar (must clear the HUD), ``z-popover`` for menu/tooltip
+      // anchors, ``z-overlay`` for floating chips/inline-spreadsheet
+      // popovers above popovers, ``z-modal`` for dialogs/toasts/full
+      // overlays. No arbitrary z-30/z-40/z-50 in component code.
+      zIndex: {
+        hud: '10',
+        chrome: '20',
+        popover: '30',
+        overlay: '40',
+        modal: '50',
       },
       keyframes: {
         "accordion-down": {

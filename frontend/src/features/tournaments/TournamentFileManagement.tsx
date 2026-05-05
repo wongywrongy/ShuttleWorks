@@ -6,8 +6,8 @@ import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { apiClient } from '../../api/client';
 import type { TournamentExportV2, MatchStateDTO } from '../../api/dto';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Section } from '../settings/SettingsPrimitives';
 
 export function TournamentFileManagement() {
   const config = useAppStore((state) => state.config);
@@ -126,70 +126,64 @@ export function TournamentFileManagement() {
   const hasData = config && (players.length > 0 || matches.length > 0);
 
   return (
-    <Card>
-      <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm">File Management</CardTitle>
-      </CardHeader>
-      <CardContent className="px-4 pb-4 pt-0 space-y-3">
-        <p className="text-xs text-muted-foreground">
-          Export/import tournament data including configuration, players, matches, and schedule.
-        </p>
-
-        {message && (
-          <div
-            className={`p-2 rounded-md text-sm ${
-              message.type === 'success'
-                ? 'bg-green-50 border border-green-200 text-green-800'
-                : 'bg-destructive/10 border border-destructive/20 text-destructive'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <Button
-            onClick={handleExport}
-            disabled={!hasData || exporting}
-            size="sm"
-          >
-            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            {exporting ? 'Exporting...' : 'Export'}
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={importing}
-            asChild
-          >
-            <label className="cursor-pointer">
-              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              {importing ? 'Importing...' : 'Import'}
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImport}
-                disabled={importing}
-                className="hidden"
-              />
-            </label>
-          </Button>
+    <Section
+      title="Export & import"
+      description="Save the whole tournament (config, roster, matches, schedule, match states) as a single JSON file, or load one back."
+    >
+      {message && (
+        <div
+          className={`rounded-md p-2 text-sm ${
+            message.type === 'success'
+              ? 'bg-green-50 border border-green-200 text-green-800'
+              : 'bg-destructive/10 border border-destructive/20 text-destructive'
+          }`}
+        >
+          {message.text}
         </div>
+      )}
 
-        {!hasData && (
-          <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      <div className="flex gap-2">
+        <Button
+          onClick={handleExport}
+          disabled={!hasData || exporting}
+          size="sm"
+        >
+          <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          {exporting ? 'Exporting…' : 'Export'}
+        </Button>
+
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={importing}
+          asChild
+        >
+          <label className="cursor-pointer">
+            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            No data to export yet
-          </div>
-        )}
-      </CardContent>
-    </Card>
+            {importing ? 'Importing…' : 'Import'}
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+              disabled={importing}
+              className="hidden"
+            />
+          </label>
+        </Button>
+      </div>
+
+      {!hasData && (
+        <div className="flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          No data to export yet
+        </div>
+      )}
+    </Section>
   );
 }

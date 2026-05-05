@@ -42,7 +42,7 @@ export function BulkActionsToolbar({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t-2 border-blue-500 shadow animate-slide-up">
+    <div className="fixed bottom-0 left-0 right-0 z-modal bg-card border-t-2 border-primary shadow animate-slide-up">
       <div className="max-w-7xl mx-auto px-3 py-2">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           {/* Selection Count */}
@@ -99,7 +99,7 @@ export function BulkActionsToolbar({
                 </svg>
               </Menu.Button>
 
-              <Menu.Items className="absolute bottom-full mb-2 right-0 w-56 origin-bottom-right rounded-md bg-card shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+              <Menu.Items className="absolute bottom-full mb-2 right-0 w-56 origin-bottom-right rounded-md bg-card shadow-lg ring-1 ring-foreground/5 focus:outline-none">
                 <div className="py-1">
                   {schools.length === 0 ? (
                     <div className="px-4 py-2 text-sm text-muted-foreground">

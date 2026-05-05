@@ -7,7 +7,7 @@ export function SetupGuide({ isOpen, onClose }: SetupGuideProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-foreground/40 backdrop-blur-sm flex items-center justify-center z-modal">
       <div className="bg-card rounded shadow p-4 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-lg font-semibold">Tournament Setup Guide</h3>

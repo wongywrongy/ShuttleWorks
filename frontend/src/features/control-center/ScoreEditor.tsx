@@ -7,7 +7,7 @@
  * based on the tournament's scoring format.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { X } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { MatchDTO, MatchStateDTO, SetScore, TournamentConfig } from '../../api/dto';
 

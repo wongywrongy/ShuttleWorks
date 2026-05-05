@@ -4,7 +4,7 @@
  * Center: Tabbed Up Next / Finished with colored left borders
  */
 import { useState, useMemo } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, CircleNotch } from '@phosphor-icons/react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO, TournamentConfig, PlayerDTO } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import { formatSlotTime } from '../../lib/time';
@@ -156,7 +156,7 @@ function InProgressCard({
           title="Undo to called"
           aria-label="Undo started match"
         >
-          {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+          {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
           Undo
         </button>
       </div>
@@ -430,7 +430,7 @@ function UpNextCard({
                 }
                 aria-label="Call match"
               >
-                {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+                {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
                 Call
               </button>
               <button
@@ -463,7 +463,7 @@ function UpNextCard({
                 }
                 aria-label="Start match"
               >
-                {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+                {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
                 Start
               </button>
               <button
@@ -552,7 +552,7 @@ function FinishedCard({
         title="Undo finish — back to in progress"
         aria-label="Undo finish"
       >
-        {updating && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+        {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
         Undo
       </button>
     </div>
@@ -647,7 +647,7 @@ export function WorkflowPanel({
     <div className="h-full flex flex-col overflow-hidden min-h-0">
       {/* Inline search bar — filters In Progress + Up Next + Finished
           simultaneously by event code or player name. */}
-      <div className="flex-shrink-0 border-b border-border px-2 py-1.5">
+      <div className="flex-shrink-0 border-b border-border/60 px-2 py-1.5">
         <InlineSearch
           query={searchQuery}
           onQueryChange={setSearchQuery}
@@ -657,7 +657,7 @@ export function WorkflowPanel({
         />
       </div>
       {hasActive && (
-        <div className="flex-shrink-0 border-b border-border">
+        <div className="flex-shrink-0 border-b border-border/60">
           <div className="px-2 py-1.5 flex items-center justify-between border-b border-border/60">
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -686,7 +686,7 @@ export function WorkflowPanel({
 
       {/* Tabbed Up Next / Finished */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-b border-border flex-shrink-0">
+        <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-b border-border/60 flex-shrink-0">
           <div className="flex items-center gap-1">
             <button
               onClick={() => setActiveTab('up_next')}

@@ -12,7 +12,7 @@
  * messages and validation errors don't belong here.
  */
 import { useEffect, useState } from 'react';
-import { Info, X } from 'lucide-react';
+import { Info, X } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE_QUIET } from '../lib/utils';
 
 const STORAGE_KEY = 'scheduler-dismissed-hints';

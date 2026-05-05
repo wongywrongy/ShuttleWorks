@@ -22,6 +22,7 @@ import type {
   Advisory,
   Proposal,
   ScheduleHistoryEntry,
+  Suggestion,
 } from './dto';
 
 // Use /api proxy in dev, or explicit URL in production
@@ -269,11 +270,42 @@ class ApiClient {
     await this.client.delete(`/schedule/proposals/${id}`);
   }
 
+  /** Fetch a single proposal by id (used by SuggestionPreview to load the
+   *  impact diff without committing). */
+  async getProposal(id: string): Promise<Proposal> {
+    const response = await this.client.get<Proposal>(`/schedule/proposals/${id}`);
+    return response.data;
+  }
+
   /** Live-operations advisories (overruns, no-shows, running-behind, etc.).
    *  Polled on a 15s cadence by the useAdvisories hook. */
   async getAdvisories(): Promise<Advisory[]> {
     const response = await this.client.get<Advisory[]>('/schedule/advisories');
     return response.data;
+  }
+
+  /** Pre-computed re-optimization proposals from the SuggestionsWorker.
+   *  Polled every 8s by the useSuggestions hook; rendered in the
+   *  SuggestionsRail. */
+  async getSuggestions(): Promise<Suggestion[]> {
+    const response = await this.client.get<Suggestion[]>('/schedule/suggestions');
+    return response.data;
+  }
+
+  /** Apply a suggestion — commits the underlying proposal atomically.
+   *  Returns the same shape as proposal commit. 409/410 surface as
+   *  axios errors with response.status set; the rail handles them. */
+  async applySuggestion(id: string): Promise<CommitProposalResponse> {
+    const response = await this.client.post<CommitProposalResponse>(
+      `/schedule/suggestions/${id}/apply`,
+    );
+    return response.data;
+  }
+
+  /** Dismiss a suggestion — drops it from the inbox and cancels the
+   *  underlying proposal so it can't be applied later. */
+  async dismissSuggestion(id: string): Promise<void> {
+    await this.client.post(`/schedule/suggestions/${id}/dismiss`);
   }
 
   /**

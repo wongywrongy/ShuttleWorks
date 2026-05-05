@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { CaretDown, CaretRight } from '@phosphor-icons/react';
 import type { RosterGroupDTO, PlayerDTO } from '../../api/dto';
 
 interface RosterTreeProps {
@@ -67,9 +67,9 @@ export function RosterTree({
               className="mr-2 w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground"
             >
               {isExpanded ? (
-                <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
+                <CaretDown aria-hidden="true" className="h-3.5 w-3.5" />
               ) : (
-                <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
+                <CaretRight aria-hidden="true" className="h-3.5 w-3.5" />
               )}
             </button>
           )}

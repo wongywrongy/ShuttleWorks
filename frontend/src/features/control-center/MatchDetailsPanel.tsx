@@ -2,7 +2,7 @@
  * Match Details Panel - Shows selected match details
  */
 import { useMemo, useState } from 'react';
-import { Check, ChevronRight } from 'lucide-react';
+import { Check, CaretRight } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
 import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../api/dto';
@@ -21,6 +21,28 @@ import { indexById } from '../../store/selectors';
 // Map traffic-light status → pill tone + label for the Ready / Resting
 // / Blocked badge on scheduled matches.
 const LIGHT_LABEL = { green: 'Ready', yellow: 'Resting', red: 'Blocked' } as const;
+
+// Event-rank prefix → full label for the per-player chip's tooltip.
+// The chip shows the abbreviation (MS1, MD2, XD1) — short and scannable
+// in a list. The title expands so a director who hasn't memorised the
+// codes can still read it.
+const RANK_PREFIX_LABELS: Record<string, string> = {
+  MS: "Men's Singles",
+  WS: "Women's Singles",
+  MD: "Men's Doubles",
+  WD: "Women's Doubles",
+  XD: 'Mixed Doubles',
+};
+
+function expandRankLabel(rank: string | null | undefined): string | null {
+  if (!rank) return null;
+  const m = /^([A-Z]{2})(\d*)$/.exec(rank);
+  if (!m) return rank;
+  const [, prefix, number] = m;
+  const label = RANK_PREFIX_LABELS[prefix];
+  if (!label) return rank;
+  return number ? `${label} ${number}` : label;
+}
 
 interface MatchDetailsPanelProps {
   assignment?: ScheduleAssignment;
@@ -158,6 +180,11 @@ export function MatchDetailsPanel({
   // picker. ``null`` = no row expanded. The picker drops down below
   // the player row so the rest of the panel stays in place.
   const [subPickingFor, setSubPickingFor] = useState<string | null>(null);
+  // Two-click confirm for `× Remove player` — fires no dialog, so a
+  // single click is too easy to fat-finger. First click flips the
+  // button into "Click again" red state; second click within 4s
+  // actually removes. Resets if the user clicks anywhere else.
+  const [confirmRemoveFor, setConfirmRemoveFor] = useState<string | null>(null);
 
   // Look up each player by id so we can resolve their school for the
   // accent dot. groups are optional — when missing we just skip the dot.
@@ -332,7 +359,7 @@ export function MatchDetailsPanel({
         const winnerNames = (winnerIds ?? []).map((id) => playerNames.get(id) ?? id).join(' & ');
 
         return (
-          <div className="mb-3 rounded border border-border bg-card px-2 py-2 text-xs text-foreground">
+          <div className="mb-3 rounded bg-muted/40 px-2 py-2 text-xs text-foreground">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Done
@@ -553,6 +580,7 @@ export function MatchDetailsPanel({
             (p) => !inMatchIds.has(p.id) && p.status !== 'withdrawn',
           );
 
+          const rankExpanded = expandRankLabel(match.eventRank);
           const renderRow = (playerId: string, side: 'A' | 'B', key: number) => {
             const name = playerNames.get(playerId) || playerId;
             const restInfo = playerRestTimes.get(playerId);
@@ -569,6 +597,15 @@ export function MatchDetailsPanel({
                       </span>
                     )}
                     {accent.name && <SchoolDot accent={accent} size="sm" />}
+                    {match.eventRank && (
+                      <span
+                        title={rankExpanded ?? match.eventRank}
+                        aria-label={rankExpanded ?? match.eventRank}
+                        className="rounded bg-muted px-1 text-[9px] font-semibold tabular-nums tracking-wide text-muted-foreground"
+                      >
+                        {match.eventRank}
+                      </span>
+                    )}
                     <span className="truncate">{name}</span>
                   </span>
                   <span className="inline-flex items-center gap-1">
@@ -619,37 +656,66 @@ export function MatchDetailsPanel({
                         Sub
                       </button>
                     )}
-                    {canRemove && (
-                      <button
-                        type="button"
-                        onClick={() => onRemovePlayer?.(match.id, playerId)}
-                        className="rounded border border-red-300 bg-red-50 px-1 text-[9px] text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
-                        title="Remove player from match"
-                        aria-label={`Remove ${name}`}
-                      >
-                        ×
-                      </button>
-                    )}
+                    {canRemove && (() => {
+                      const armed = confirmRemoveFor === playerId;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!armed) {
+                              setConfirmRemoveFor(playerId);
+                              window.setTimeout(() => {
+                                setConfirmRemoveFor((cur) => (cur === playerId ? null : cur));
+                              }, 4000);
+                              return;
+                            }
+                            setConfirmRemoveFor(null);
+                            onRemovePlayer?.(match.id, playerId);
+                          }}
+                          className={
+                            armed
+                              ? 'rounded border border-red-500 bg-red-600 px-1 text-[9px] font-semibold text-white motion-safe:animate-pulse'
+                              : 'rounded border border-red-300 bg-red-50 px-1 text-[9px] text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300'
+                          }
+                          title={
+                            armed
+                              ? `Click again to remove ${name} from the match`
+                              : `Remove ${name} from this match (click twice to confirm)`
+                          }
+                          aria-label={armed ? `Confirm remove ${name}` : `Remove ${name}`}
+                        >
+                          {armed ? '× confirm' : '×'}
+                        </button>
+                      );
+                    })()}
                   </span>
                 </div>
                 {isPicking && (
-                  <div className="ml-3 max-h-32 overflow-y-auto rounded border border-border bg-card text-[11px]">
-                    {subCandidates.length === 0 && (
-                      <div className="px-1.5 py-1 text-[10px] text-muted-foreground">No available players.</div>
-                    )}
-                    {subCandidates.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          onSubstitute?.(match.id, playerId, p.id);
-                          setSubPickingFor(null);
-                        }}
-                        className="block w-full truncate px-1.5 py-0.5 text-left text-foreground hover:bg-accent"
-                      >
-                        {p.name}
-                      </button>
-                    ))}
+                  <div className="ml-3 rounded border border-border bg-card text-[11px]">
+                    <div className="border-b border-border/60 px-1.5 py-1 text-[10px] leading-snug text-muted-foreground">
+                      Replaces this player in this match only. The new player
+                      appears on the TV and in live tracking; if they're
+                      already in another scheduled match, a conflict will
+                      surface there.
+                    </div>
+                    <div className="max-h-32 overflow-y-auto">
+                      {subCandidates.length === 0 && (
+                        <div className="px-1.5 py-1 text-[10px] text-muted-foreground">No available players.</div>
+                      )}
+                      {subCandidates.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            onSubstitute?.(match.id, playerId, p.id);
+                            setSubPickingFor(null);
+                          }}
+                          className="block w-full truncate px-1.5 py-0.5 text-left text-foreground hover:bg-accent"
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -733,7 +799,7 @@ export function MatchDetailsPanel({
           <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
             Impacted ({analysis.directlyImpacted.length})
           </div>
-          <div className="divide-y divide-border rounded border border-border bg-card">
+          <div className="divide-y divide-border/60 rounded bg-muted/40">
             {analysis.directlyImpacted.map((matchId) => {
               const impactedMatch = matchMap.get(matchId);
               const currentPlayerIds = new Set(allPlayerIds);
@@ -766,7 +832,7 @@ export function MatchDetailsPanel({
                   <span className="flex-1 truncate text-[10px] text-muted-foreground">
                     {sharedPlayerNames.join(', ') || '—'}
                   </span>
-                  <ChevronRight aria-hidden="true" className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                  <CaretRight aria-hidden="true" className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 </div>
               );
             })}
@@ -777,11 +843,13 @@ export function MatchDetailsPanel({
       {/* Reschedule + Disruption shortcuts — pre-fill the page-level
           dialogs with this match's id so the operator doesn't have to
           find it again. Move/postpone is the lighter, "match is just
-          running late" path; the disruption row is the nuclear option. */}
+          running late" path; the disruption row is the nuclear option.
+          Each button is followed by an inline consequence line so a
+          director sees what will happen before opening the dialog. */}
       {(onRequestDisruption || onRequestMove) && match && status !== 'finished' && (
-        <div className="px-3 py-2 border-t border-border/60 bg-muted/30 space-y-1.5">
+        <div className="px-3 py-2 border-t border-border/60 bg-muted/30 space-y-2">
           {onRequestMove && assignment && (
-            <>
+            <div className="space-y-1">
               <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Reschedule
               </div>
@@ -795,10 +863,13 @@ export function MatchDetailsPanel({
                   Move / postpone…
                 </button>
               </div>
-            </>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Re-anchors this match to a new time or court. Other matches stay put.
+              </p>
+            </div>
           )}
           {onRequestDisruption && (
-            <>
+            <div className="space-y-1">
               <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Disruption
               </div>
@@ -817,9 +888,9 @@ export function MatchDetailsPanel({
                   type="button"
                   onClick={() => onRequestDisruption('cancellation', match.id)}
                   className="rounded border border-red-300 bg-red-50 px-2 py-0.5 text-2xs text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"
-                  title="Cancel and free the slot for a later match"
+                  title="Cancel this match and free its slot for a later one"
                 >
-                  Cancel
+                  Cancel match
                 </button>
                 {assignment && (
                   <button
@@ -832,7 +903,17 @@ export function MatchDetailsPanel({
                   </button>
                 )}
               </div>
-            </>
+              <ul className="space-y-0.5 text-[10px] leading-snug text-muted-foreground">
+                {status === 'started' && (
+                  <li><span className="font-semibold text-amber-700 dark:text-amber-300">Mark overrun</span> — keeps this match playing, slides successors back to absorb the delay.</li>
+                )}
+                <li><span className="font-semibold text-red-700 dark:text-red-300">Cancel</span> — removes this match entirely; frees the slot for later use.</li>
+                {assignment && (
+                  <li><span className="font-semibold text-foreground">Close court {assignment.courtId}</span> — closes the court for the rest of the day; remaining matches on it are re-routed.</li>
+                )}
+                <li className="italic text-muted-foreground/80">Each opens a dialog where you set details before the solver runs.</li>
+              </ul>
+            </div>
           )}
         </div>
       )}

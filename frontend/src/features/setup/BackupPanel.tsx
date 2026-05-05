@@ -6,13 +6,14 @@
  * snapshot on demand, and restores any backup with a confirmation step.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CircleNotch } from '@phosphor-icons/react';
 import { apiClient } from '../../api/client';
 import type { BackupEntryDTO, ScheduleDTO, TournamentStateDTO } from '../../api/dto';
 import { useAppStore } from '../../store/appStore';
 import { parseScheduleXlsx, type ImportResult } from './importScheduleXlsx';
 import { ScheduleImportModal } from './ScheduleImportModal';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { Section } from '../settings/SettingsPrimitives';
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -181,34 +182,32 @@ export function BackupPanel() {
   };
 
   return (
-    <div
-      className="rounded border border-border bg-card p-3"
-      data-testid="backup-panel"
-    >
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">Backups</h3>
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={busyAction !== null}
-          data-testid="backup-create"
-          aria-busy={busyAction === 'create'}
-          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
-        >
-          {busyAction === 'create' && (
-            <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
-          )}
-          {busyAction === 'create' ? 'Saving…' : 'Back up now'}
-        </button>
-      </div>
+    <>
+      <Section
+        title="Backups"
+        description="The backend rolls a snapshot into ./data/backups/ on every save (last 10 kept). Snapshot now or restore any of the existing ones."
+        trailing={
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={busyAction !== null}
+            data-testid="backup-create"
+            aria-busy={busyAction === 'create'}
+            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted/40`}
+          >
+            {busyAction === 'create' && (
+              <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />
+            )}
+            {busyAction === 'create' ? 'Saving…' : 'Back up now'}
+          </button>
+        }
+      >
+        {error && (
+          <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700">
+            {error}
+          </div>
+        )}
 
-      {error && (
-        <div className="mt-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div className="mt-2">
         {loading && entries.length === 0 ? (
           <div className="py-4 text-center text-xs text-muted-foreground">Loading…</div>
         ) : entries.length === 0 ? (
@@ -216,7 +215,7 @@ export function BackupPanel() {
             No backups yet — one will appear the next time you save.
           </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-border/60">
             {entries.map((e) => (
               <li
                 key={e.filename}
@@ -240,7 +239,7 @@ export function BackupPanel() {
                       className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700`}
                     >
                       {busyAction === e.filename && (
-                        <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
+                        <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />
                       )}
                       {busyAction === e.filename ? 'Restoring…' : 'Confirm'}
                     </button>
@@ -268,16 +267,12 @@ export function BackupPanel() {
             ))}
           </ul>
         )}
-      </div>
+      </Section>
 
-      <div className="mt-3 border-t border-border/60 pt-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs font-semibold text-foreground">Recover schedule</div>
-            <p className="text-xs text-muted-foreground">
-              Rebuild schedule assignments from a Schedule XLSX export.
-            </p>
-          </div>
+      <Section
+        title="Recover schedule"
+        description="Rebuild schedule assignments from a Schedule XLSX export — useful when the in-memory schedule is lost but you still have the spreadsheet."
+        trailing={
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -287,7 +282,8 @@ export function BackupPanel() {
           >
             Recover from XLSX…
           </button>
-        </div>
+        }
+      >
         <input
           ref={fileInputRef}
           type="file"
@@ -296,7 +292,7 @@ export function BackupPanel() {
           data-testid="schedule-import-file"
           onChange={handleFileSelected}
         />
-      </div>
+      </Section>
 
       {importResult && (
         <ScheduleImportModal
@@ -306,6 +302,6 @@ export function BackupPanel() {
           onCancel={() => setImportResult(null)}
         />
       )}
-    </div>
+    </>
   );
 }

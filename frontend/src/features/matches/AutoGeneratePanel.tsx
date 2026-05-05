@@ -98,8 +98,21 @@ export function AutoGeneratePanel() {
     setConfirm(false);
   };
 
+  // Visual treatment for Generate button:
+  //   - No existing matches: primary blue (this is a normal create action)
+  //   - Existing matches, pre-confirm: amber-outlined "Replace…" — flags
+  //     the destructive nature without looking like a normal primary
+  //   - Existing matches, confirm: solid red, pulsing — final guard
+  const buttonClass = !canGenerate
+    ? 'cursor-not-allowed bg-muted text-muted-foreground'
+    : confirm && hasExisting
+      ? 'bg-red-600 text-white hover:bg-red-700 motion-safe:animate-pulse'
+      : hasExisting
+        ? 'border border-amber-500 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-100 dark:hover:bg-amber-500/20'
+        : 'bg-blue-600 text-white hover:bg-blue-700';
+
   return (
-    <div className="rounded border border-border bg-card p-3">
+    <div className="p-3">
       <div className="mb-2 flex items-baseline justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Auto-generate
@@ -116,7 +129,14 @@ export function AutoGeneratePanel() {
         <p className="mb-2 text-xs text-muted-foreground">
           Will produce{' '}
           <span className="font-semibold text-foreground">{preview.length}</span>{' '}
-          match{preview.length === 1 ? '' : 'es'}.
+          match{preview.length === 1 ? '' : 'es'}
+          {hasExisting ? (
+            <>
+              {' '}— this <span className="font-semibold text-amber-700 dark:text-amber-300">replaces all {matches.length} existing match{matches.length === 1 ? '' : 'es'}</span>.
+            </>
+          ) : (
+            '.'
+          )}
         </p>
       )}
       {incompletePairs.length > 0 ? (
@@ -132,21 +152,14 @@ export function AutoGeneratePanel() {
           onClick={generate}
           disabled={!canGenerate}
           data-testid="auto-generate-matches"
-          className={[
-            'rounded px-3 py-1.5 text-sm font-medium transition-colors',
-            !canGenerate
-              ? 'cursor-not-allowed bg-muted text-muted-foreground'
-              : confirm && hasExisting
-                ? 'bg-red-600 text-white hover:bg-red-700 motion-safe:animate-pulse'
-                : 'bg-blue-600 text-white hover:bg-blue-700',
-          ].join(' ')}
+          className={['rounded px-3 py-1.5 text-sm font-medium transition-colors', buttonClass].join(' ')}
         >
           {!canGenerate
             ? 'No feasible pairings'
             : confirm && hasExisting
               ? `Click again — will replace ${matches.length} match${matches.length === 1 ? '' : 'es'}`
               : hasExisting
-                ? 'Generate (replaces existing)'
+                ? `Replace ${matches.length} existing match${matches.length === 1 ? '' : 'es'}`
                 : 'Generate matches'}
         </button>
         {confirm ? (

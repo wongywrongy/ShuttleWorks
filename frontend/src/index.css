@@ -98,7 +98,7 @@
     /* ----- Type stacks ------------------------------------------------
      * Mirrors ``tailwind.config.js`` so plain CSS / preview surfaces can
      * pick up the same fallback chain Tailwind utilities emit. */
-    --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont,
+    --font-sans: 'Geist Variable', -apple-system, BlinkMacSystemFont,
       'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
     --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular,
       Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
@@ -118,6 +118,13 @@
      * Three rungs only: ``sm`` (cards), ``md`` (hover lift), ``lg``
      * (popovers). Anything beyond this is a special-effect ``box-shadow``
      * defined inline (e.g. the ``phase-glow`` keyframe). */
+    /* ----- Brand easing -----------------------------------------------
+     * One shared decel curve for the whole app. Tailwind exposes it as
+     * ``ease-brand``; inline-style transitions (e.g. DragGantt's left/top
+     * reflow) read it via ``var(--ease-brand)``. Keeps every interactive
+     * surface on the same physical feel — slightly weighty, settles. */
+    --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
+
     --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
     --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08),
                  0 2px 4px -2px rgba(15, 23, 42, 0.04);
@@ -220,11 +227,12 @@
 
   body {
     margin: 0;
-    /* Inter Variable + system fallback. The variable font handles every
+    /* Geist Variable + system fallback. The variable font handles every
      * weight from 100-900 + roman/italic, so we don't need to load
-     * separate weight files. ``cv11`` opens up the single-storey ``a``
-     * for slightly cleaner data display. */
-    font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+     * separate weight files. ``ss03`` enables the alternate single-storey
+     * ``g`` for cleaner data display; ``cv11`` is preserved as a no-op
+     * for fonts that don't expose it. */
+    font-family: 'Geist Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI',
       'Roboto', 'Helvetica Neue', sans-serif;
     font-feature-settings: 'cv11', 'ss01', 'ss03';
     -webkit-font-smoothing: antialiased;
@@ -258,6 +266,21 @@
     letter-spacing: var(--eyebrow-tracking);
     text-transform: uppercase;
     color: hsl(var(--muted-foreground));
+  }
+
+  /* Avoid orphan words on display-tier text. ``balance`` on headings
+   * spreads the last line so we don't end up with a single word
+   * dangling. ``pretty`` on long-form copy nudges the algorithm to
+   * keep the last 2-3 lines visually even. Both are non-blocking on
+   * older browsers — they no-op rather than break layout. */
+  h1,
+  h2,
+  h3,
+  .eyebrow {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
   }
 }
 

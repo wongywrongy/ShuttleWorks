@@ -30,6 +30,7 @@ import type {
   Proposal,
   Advisory,
   ScheduleHistoryEntry,
+  Suggestion,
 } from '../api/dto';
 
 // Stats from schedule generation (persists across page navigation)
@@ -230,6 +231,12 @@ interface AppState {
   advisories: Advisory[];
   setAdvisories: (advisories: Advisory[]) => void;
 
+  // Pre-computed re-optimization proposals from the SuggestionsWorker
+  // (Phase 2 backend), polled every 8s by useSuggestions and rendered
+  // in the SuggestionsRail under <AdvisoryBanner /> in AppShell.
+  suggestions: Suggestion[];
+  setSuggestions: (suggestions: Suggestion[]) => void;
+
   // Cross-component "review this advisory" intent. The toast and the
   // AdvisoryBanner both write to this slice; the Live page reads it
   // and dispatches the right dialog (DisruptionDialog for repair,
@@ -313,6 +320,7 @@ export const useAppStore = create<AppState>()(
       scheduleHistory: [],
       activeProposal: null,
       advisories: [],
+      suggestions: [],
       pendingAdvisoryReview: null,
       unlockModalState: null,
 
@@ -508,6 +516,7 @@ export const useAppStore = create<AppState>()(
       setScheduleHistory: (scheduleHistory) => set({ scheduleHistory }),
       setActiveProposal: (activeProposal) => set({ activeProposal }),
       setAdvisories: (advisories) => set({ advisories }),
+      setSuggestions: (suggestions) => set({ suggestions }),
       setPendingAdvisoryReview: (pendingAdvisoryReview) => set({ pendingAdvisoryReview }),
       setUnlockModalState: (unlockModalState) => set({ unlockModalState }),
 
@@ -545,10 +554,10 @@ export const useAppStore = create<AppState>()(
           liveState: state.liveState ? { ...state.liveState, lastSynced: time } : null,
         })),
 
-      // Data management. Same scope as DemoLoader.apply — wipe live /
-      // proposal / advisory / solver state along with the persisted
-      // tournament data, so a "clear" lands you on a genuinely empty
-      // tournament instead of a hybrid with leftover state.
+      // Data management. Wipe live / proposal / advisory / solver state
+      // along with the persisted tournament data, so a "clear" lands you
+      // on a genuinely empty tournament instead of a hybrid with leftover
+      // state.
       clearAllData: () =>
         set({
           config: DEFAULT_CONFIG,
@@ -563,6 +572,7 @@ export const useAppStore = create<AppState>()(
           scheduleHistory: [],
           activeProposal: null,
           advisories: [],
+          suggestions: [],
           pendingAdvisoryReview: null,
           matchStates: {},
           liveState: null,

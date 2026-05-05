@@ -11,6 +11,7 @@ has something concrete to report.
 """
 from __future__ import annotations
 
+import asyncio
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -294,3 +295,110 @@ def test_cancelled_proposal_leaves_committed_state_unchanged(client):
     persisted = client.get("/tournament/state").json()
     assert persisted["scheduleVersion"] == 0  # never bumped
     assert persisted["scheduleHistory"] == []  # never appended
+
+
+# ---------- end-to-end: optimize worker stamps suggestion ------------------
+
+
+@pytest.mark.asyncio
+async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
+    monkeypatch, tmp_path, caplog,
+):
+    """End-to-end: post an OPTIMIZE trigger; the handler reads the
+    persisted state, runs a warm-restart, and either stamps a
+    Suggestion (improvement found) or logs a no-improvement skip.
+
+    The handler uses ``stayCloseWeight=5`` which biases against moves
+    even when a packed schedule would be shorter; in practice the
+    solver often settles on a same-makespan reshuffle. Rather than
+    contrive a fixture that reliably beats this bias, the test
+    asserts via caplog that the handler actually executed end-to-end
+    (read state, ran solver, decided whether to stamp). Without the
+    log assertion the test was vacuous: a handler that silently
+    crashed would still let the assertions pass.
+    """
+    import logging
+    # ---- env setup: fresh backend modules against tmp_path ----
+    monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
+    backend_root = str(Path(__file__).resolve().parents[2] / "backend")
+    sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
+    for _cached in [
+        k for k in list(sys.modules)
+        if k == "app" or k.startswith("app.")
+        or k == "services" or k.startswith("services.")
+        or k == "adapters" or k.startswith("adapters.")
+        or k.startswith("api.")
+    ]:
+        del sys.modules[_cached]
+
+    from api import (
+        match_state,
+        schedule_proposals,
+        schedule_warm_restart,
+        tournament_state,
+    )
+    from api.schedule_suggestions import build_handler
+    from services.suggestions_worker import SuggestionsWorker, TriggerEvent, TriggerKind
+
+    # Build an isolated FastAPI app (same pattern as the `client` fixture).
+    app_ = FastAPI()
+    app_.include_router(schedule_warm_restart.router)
+    app_.include_router(schedule_proposals.router)
+    app_.include_router(match_state.router)
+    app_.include_router(tournament_state.router)
+
+    # Seed tournament state via sync TestClient so _read_persisted_state() finds it.
+    seed = _seeded_state()
+    with TestClient(app_) as c:
+        r = c.put("/tournament/state", json=seed)
+        assert r.status_code == 200, r.text
+
+    # Start the worker closed over the same app instance.
+    worker = SuggestionsWorker(
+        handler=build_handler(app_),
+        cooldown_seconds=0,
+    )
+    await worker.start()
+    try:
+        with caplog.at_level(logging.DEBUG, logger="scheduler.suggestions"):
+            await worker.post(TriggerEvent(
+                kind=TriggerKind.OPTIMIZE,
+                fingerprint="opt:test:e2e",
+            ))
+
+            # Give the consumer task a chance to pull the event from
+            # the queue and start the dispatch — without this,
+            # drain() may snapshot _inflight while it's still empty
+            # and return instantly.
+            await asyncio.sleep(0.2)
+            # Real solve — drain awaits the in-flight handler.
+            await worker.drain()
+
+        # The handler MUST have executed and reached its
+        # decision-point (either stamped or skipped). Without this
+        # log assertion, a handler that silently crashed during the
+        # solver call would let the test pass with no suggestion and
+        # no error.
+        log_text = "\n".join(r.getMessage() for r in caplog.records
+                             if r.name == "scheduler.suggestions")
+        assert (
+            "stamped optimize" in log_text
+            or "found no improvement" in log_text
+        ), (
+            "OPTIMIZE handler did not reach its decision branch; "
+            f"caplog: {log_text!r}"
+        )
+
+        # If a suggestion WAS stamped, validate its shape. Reading
+        # via _get_suggestion_store ensures we get the dict the
+        # handler actually populated.
+        from api.schedule_proposals import _get_suggestion_store
+        suggestion_store = _get_suggestion_store(app_)
+        if suggestion_store:
+            sug = next(iter(suggestion_store.values()))
+            assert sug.kind == "optimize"
+            assert sug.proposalId
+            assert sug.fingerprint == "opt:test:e2e"
+            assert "min finish" in sug.metric
+    finally:
+        await worker.stop()

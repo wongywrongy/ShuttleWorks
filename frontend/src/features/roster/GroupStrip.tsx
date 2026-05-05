@@ -53,12 +53,12 @@ export function GroupStrip() {
   };
 
   return (
-    <div className="rounded border border-border bg-card p-2">
+    <div className="px-3 py-2.5">
       <div className="mb-1.5 flex items-baseline justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Schools
         </span>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-[11px] text-muted-foreground tabular-nums">
           {groups.length} · {players.length} players
         </span>
       </div>

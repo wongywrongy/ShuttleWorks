@@ -16,7 +16,7 @@
  * is) before committing.
  */
 import { useState } from 'react';
-import { Clock, Coffee, DoorOpen, X } from 'lucide-react';
+import { Clock, Coffee, DoorOpen, X } from '@phosphor-icons/react';
 
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
@@ -89,6 +89,79 @@ export function DirectorToolsPanel() {
 
   return (
     <div className="space-y-4 p-3">
+      {/* Closed courts — operator reopens by clicking the row. The
+          reopen action runs a warm-restart so matches can flow back
+          onto the freed court. Combines legacy ``closedCourts`` (all
+          day) with time-bounded ``courtClosures`` into one list. */}
+      {((config.closedCourts ?? []).length > 0 ||
+        (config.courtClosures ?? []).length > 0) && (
+        <section className="rounded border border-border p-3">
+          <div className="sticky top-0 z-10 -mx-3 -mt-3 mb-2 border-b border-border bg-card/95 px-3 py-2 backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <DoorOpen className="h-4 w-4 text-status-warning" aria-hidden="true" />
+              <h3 className="text-sm font-semibold text-fg">
+                Closed courts
+              </h3>
+              <span className="rounded bg-status-warning-bg px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-status-warning">
+                {(config.closedCourts ?? []).length + (config.courtClosures ?? []).length}
+              </span>
+            </div>
+            <p className="mt-0.5 text-2xs text-fg-muted">
+              Reopen clears every closure on that court.
+            </p>
+          </div>
+          <ul className="mt-2 space-y-1.5">
+            {(config.closedCourts ?? []).map((courtId) => (
+              <li
+                key={`legacy-${courtId}`}
+                className="flex items-center justify-between rounded bg-bg-subtle px-2 py-1 text-xs"
+              >
+                <span className="text-fg">
+                  Court {courtId}{' '}
+                  <span className="ml-1 text-fg-muted">· all day</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleReopenCourt(courtId)}
+                  disabled={loading}
+                  title="Reopen court — clears every closure for this court"
+                  aria-label={`Reopen Court ${courtId} — clears every closure for this court`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
+                >
+                  <DoorOpen className="h-3 w-3" aria-hidden="true" />
+                  Reopen…
+                </button>
+              </li>
+            ))}
+            {(config.courtClosures ?? []).map((closure, i) => (
+              <li
+                key={`window-${closure.courtId}-${i}`}
+                className="flex items-center justify-between rounded bg-bg-subtle px-2 py-1 text-xs"
+              >
+                <span className="text-fg">
+                  Court {closure.courtId}{' '}
+                  <span className="ml-1 text-fg-muted">
+                    · {closure.fromTime ?? 'start'}–{closure.toTime ?? 'end'}
+                    {closure.reason ? ` · ${closure.reason}` : ''}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleReopenCourt(closure.courtId)}
+                  disabled={loading}
+                  title="Reopen court — clears every closure for this court"
+                  aria-label={`Reopen Court ${closure.courtId} — clears every closure for this court`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
+                >
+                  <DoorOpen className="h-3 w-3" aria-hidden="true" />
+                  Reopen…
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Delay start */}
       <section className="rounded border border-border p-3">
         <div className="flex items-center gap-2">
@@ -205,69 +278,6 @@ export function DirectorToolsPanel() {
                   className={`${INTERACTIVE_BASE} rounded p-0.5 text-fg-muted hover:bg-bg-subtle hover:text-fg`}
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Closed courts — operator reopens by clicking the row. The
-          reopen action runs a warm-restart so matches can flow back
-          onto the freed court. Combines legacy ``closedCourts`` (all
-          day) with time-bounded ``courtClosures`` into one list. */}
-      {((config.closedCourts ?? []).length > 0 ||
-        (config.courtClosures ?? []).length > 0) && (
-        <section className="rounded border border-border p-3">
-          <div className="flex items-center gap-2">
-            <DoorOpen className="h-4 w-4 text-fg-muted" aria-hidden="true" />
-            <h3 className="text-sm font-semibold">Closed courts</h3>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Reopening removes every closure for that court (all-day
-            and time-bounded entries alike).
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            {(config.closedCourts ?? []).map((courtId) => (
-              <li
-                key={`legacy-${courtId}`}
-                className="flex items-center justify-between rounded bg-bg-subtle px-2 py-1 text-xs"
-              >
-                <span className="text-fg">
-                  Court {courtId}{' '}
-                  <span className="ml-1 text-fg-muted">· all day</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleReopenCourt(courtId)}
-                  disabled={loading}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
-                >
-                  <DoorOpen className="h-3 w-3" aria-hidden="true" />
-                  Reopen…
-                </button>
-              </li>
-            ))}
-            {(config.courtClosures ?? []).map((closure, i) => (
-              <li
-                key={`window-${closure.courtId}-${i}`}
-                className="flex items-center justify-between rounded bg-bg-subtle px-2 py-1 text-xs"
-              >
-                <span className="text-fg">
-                  Court {closure.courtId}{' '}
-                  <span className="ml-1 text-fg-muted">
-                    · {closure.fromTime ?? 'start'}–{closure.toTime ?? 'end'}
-                    {closure.reason ? ` · ${closure.reason}` : ''}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleReopenCourt(closure.courtId)}
-                  disabled={loading}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
-                >
-                  <DoorOpen className="h-3 w-3" aria-hidden="true" />
-                  Reopen…
                 </button>
               </li>
             ))}

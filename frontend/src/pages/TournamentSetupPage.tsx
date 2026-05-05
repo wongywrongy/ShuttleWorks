@@ -5,7 +5,7 @@
  * provides the layout; nothing else.
  */
 import { useState } from 'react';
-import { Sliders, Palette, Monitor, Database, Sparkles, Cpu } from 'lucide-react';
+import { Sliders, Palette, Monitor, Database, Cpu } from '@phosphor-icons/react';
 import { useTournament } from '../hooks/useTournament';
 import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
@@ -14,9 +14,10 @@ import { BackupPanel } from '../features/setup/BackupPanel';
 import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicator';
 import { PublicDisplaySettings } from '../features/tournaments/PublicDisplaySettings';
 import { SettingsShell, type SettingsSectionDef } from '../features/settings/SettingsShell';
+import { PageHeader } from '../components/PageHeader';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { EngineSettings } from '../features/settings/EngineSettings';
-import { DemoLoader } from '../features/settings/DemoLoader';
+import { Surface } from '../features/settings/SettingsPrimitives';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {
@@ -64,7 +65,7 @@ export function TournamentSetupPage() {
   // Section definitions wired to the SettingsShell. Order is intentional:
   // Tournament first (the heaviest config; usually why people opened
   // Settings), then Display (also config-shaped), then per-device
-  // Appearance, then Data ops, then Demos.
+  // Appearance, then Data ops.
   const sections: SettingsSectionDef[] = [
     {
       id: 'tournament',
@@ -106,23 +107,21 @@ export function TournamentSetupPage() {
       icon: Database,
       description: 'Export, import, and rolling backups.',
       render: () => (
-        <div className="space-y-3">
+        <Surface>
           <TournamentFileManagement />
           <BackupPanel />
-        </div>
+        </Surface>
       ),
-    },
-    {
-      id: 'demos',
-      label: 'Demos',
-      icon: Sparkles,
-      description: 'Pre-baked sample tournaments — dual (20 players × 2 schools) and tri (10 players × 3 schools), 5 events each.',
-      render: () => <DemoLoader />,
     },
   ];
 
   return (
     <div className="mx-auto max-w-6xl space-y-3 px-4 py-4">
+      <PageHeader
+        eyebrow="Setup"
+        title="Tournament configuration"
+        description="Schedule, scoring, events, engine, and per-device preferences."
+      />
       {/* Page-level alerts stay above the shell so they apply to every
           section. The shell itself never shows them. */}
       {isLocked && <ScheduleLockIndicator showUnlockHint />}

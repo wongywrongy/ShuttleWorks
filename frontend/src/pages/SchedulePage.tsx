@@ -14,13 +14,17 @@ import { DisruptionDialog } from '../features/control-center/DisruptionDialog';
 import { MoveMatchDialog } from '../features/control-center/MoveMatchDialog';
 import { CandidatesPanel } from '../features/schedule/CandidatesPanel';
 import { WarmRestartDialog } from '../features/schedule/WarmRestartDialog';
+import { DirectorToolsPanel } from '../features/director/DirectorToolsPanel';
+import { Modal } from '../components/common/Modal';
+import { useProposals } from '../hooks/useProposals';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { StaleBanner } from '../features/schedule/StaleBanner';
+import { SuggestionsRail } from '../features/suggestions/SuggestionsRail';
 import { computeConstraintViolations } from '../utils/constraintChecker';
 import { formatSlotTime } from '../lib/time';
 import { useCurrentSlot } from '../hooks/useCurrentSlot';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, CalendarRange } from 'lucide-react';
+import { Download, CalendarBlank, GearSix } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig, RosterGroupDTO } from '../api/dto';
 import { InlineSearch, type FilterChipGroup } from '../components/InlineSearch';
@@ -347,6 +351,8 @@ export function SchedulePage() {
   const [sidebarTab, setSidebarTab] = useState<'log' | 'details' | 'candidates'>('details');
   const [disruptionOpen, setDisruptionOpen] = useState(false);
   const [warmRestartOpen, setWarmRestartOpen] = useState(false);
+  const [directorOpen, setDirectorOpen] = useState(false);
+  const { cancel: cancelProposal } = useProposals();
   const [disruptionPrefill, setDisruptionPrefill] = useState<{
     type?: 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
     matchId?: string;
@@ -477,6 +483,7 @@ export function SchedulePage() {
   return (
     <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
       <StaleBanner />
+      <SuggestionsRail />
       {/* Alerts */}
       {needsConfig && (
         <div className="flex-shrink-0 rounded border border-status-warning/40 bg-status-warning-bg px-3 py-2 text-xs text-status-warning">
@@ -518,73 +525,74 @@ export function SchedulePage() {
         </div>
       )}
 
-      {/* Main content */}
+      {/* Main content — single outer shell. Stats/Gantt/Matches stack
+       *  vertically in the left column; the right details panel is a
+       *  column inside the same shell, separated only by a vertical
+       *  hairline. */}
       {showVisualization && displayAssignments.length > 0 && config ? (
-        <div className="flex-1 min-h-0 flex gap-2">
+        <div className="flex-1 min-h-0 flex bg-card rounded border border-border overflow-hidden">
           {/* Main area - Grid + Matches list */}
-          <div className="flex-1 min-w-0 flex flex-col gap-2">
-            {/* Grid container */}
-            <div className="bg-card rounded border border-border flex flex-col overflow-hidden">
-              {/* Header with metrics and actions */}
-              <div className="px-2 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
-                <LiveMetricsBar
-                  elapsed={elapsed}
-                  solutionCount={solutionCount}
-                  objectiveScore={objectiveScore}
-                  bestBound={bestBound}
-                  status={status}
+          <div className="flex-1 min-w-0 flex flex-col">
+            {/* Stats / actions bar */}
+            <div className="px-2 py-1.5 border-b border-border/60 flex items-center justify-between flex-shrink-0">
+              <LiveMetricsBar
+                elapsed={elapsed}
+                solutionCount={solutionCount}
+                objectiveScore={objectiveScore}
+                bestBound={bestBound}
+                status={status}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void exportScheduleXlsx(schedule, matches, players, config)}
+                  disabled={!schedule || schedule.assignments.length === 0}
+                  data-testid="export-schedule"
+                  title={
+                    !schedule || schedule.assignments.length === 0
+                      ? 'Generate a schedule first'
+                      : 'Download schedule as XLSX'
+                  }
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                >
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  Export XLSX
+                </button>
+                <ScheduleActions
+                  onGenerate={handleGenerate}
+                  generating={isOptimizing}
+                  hasSchedule={!!schedule}
+                  confirmingReplace={confirmingReplace}
                 />
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void exportScheduleXlsx(schedule, matches, players, config)}
-                    disabled={!schedule || schedule.assignments.length === 0}
-                    data-testid="export-schedule"
-                    title={
-                      !schedule || schedule.assignments.length === 0
-                        ? 'Generate a schedule first'
-                        : 'Download schedule as XLSX'
-                    }
-                    className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
-                  >
-                    <Download aria-hidden="true" className="h-4 w-4" />
-                    Export XLSX
-                  </button>
-                  <ScheduleActions
-                    onGenerate={handleGenerate}
-                    generating={isOptimizing}
-                    hasSchedule={!!schedule}
-                    confirmingReplace={confirmingReplace}
-                  />
-                </div>
-              </div>
-
-              {/* Drag-to-reschedule Gantt (live solver-aware) */}
-              <div className="p-2 overflow-auto">
-                {schedule && !isOptimizing ? (
-                  <DragGantt
-                    schedule={schedule}
-                    matches={matches}
-                    config={config}
-                    readOnly={isOptimizing}
-                    selectedMatchId={selectedMatchId}
-                    onMatchSelect={setSelectedMatchId}
-                  />
-                ) : (
-                  <LiveTimelineGrid
-                    assignments={displayAssignments}
-                    matches={matches}
-                    players={players}
-                    config={config}
-                    status={status}
-                  />
-                )}
               </div>
             </div>
 
-            {/* Matches table - below grid */}
-            <div className="flex-1 min-h-0 bg-card rounded border border-border flex flex-col overflow-hidden">
-              <div className="px-2 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
+            {/* Gantt section — drag-aware when idle, live grid when solving */}
+            <div className="p-2 overflow-auto border-b border-border/60">
+              {schedule && !isOptimizing ? (
+                <DragGantt
+                  schedule={schedule}
+                  matches={matches}
+                  config={config}
+                  readOnly={isOptimizing}
+                  selectedMatchId={selectedMatchId}
+                  onMatchSelect={setSelectedMatchId}
+                  onRequestReopenCourt={() => setDirectorOpen(true)}
+                />
+              ) : (
+                <LiveTimelineGrid
+                  assignments={displayAssignments}
+                  matches={matches}
+                  players={players}
+                  config={config}
+                  status={status}
+                />
+              )}
+            </div>
+
+            {/* Matches table section */}
+            <div className="flex-1 min-h-0 flex flex-col">
+              <div className="px-2 py-1.5 border-b border-border/60 flex items-center justify-between flex-shrink-0">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Matches</span>
                 <span className="text-xs text-muted-foreground">{displayAssignments.length}/{matches.length}</span>
               </div>
@@ -604,17 +612,16 @@ export function SchedulePage() {
             </div>
           </div>
 
-          {/* Match details sidebar.
-              Two visually-distinct header strips: a tab row for views
-              (Details / Candidates) and a tools row for dynamic actions
-              (Re-plan / Disruption). The strips are clearly separated so
-              operators don't confuse actions for tabs. */}
-          <div className="w-80 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
-            <div className="border-b border-border flex-shrink-0">
+          {/* Match details column — same shell, separated by a single
+           *  vertical hairline. Two stacked header strips: a tab row
+           *  (Log/Details/Candidates) and a dynamic-tools row
+           *  (Director/Re-plan/Disruption). */}
+          <div className="w-80 flex-shrink-0 flex flex-col border-l border-border/60">
+            <div className="border-b border-border/60 flex-shrink-0">
               <div
                 role="tablist"
                 aria-label="Sidebar views"
-                className="flex items-center gap-1 px-2 py-1.5"
+                className="flex flex-wrap items-center gap-1 px-2 py-1.5"
               >
                 {isOptimizing ? (
                   <>
@@ -633,18 +640,27 @@ export function SchedulePage() {
                 )}
               </div>
               {!isOptimizing && (
-                <div className="flex items-center gap-2 border-t border-border bg-muted/40 px-2 py-1.5">
+                <div className="flex flex-wrap items-center gap-2 border-t border-border/60 bg-muted/40 px-2 py-1.5">
                   <span className="eyebrow flex-shrink-0" aria-hidden="true">
                     Dynamic
                   </span>
-                  <div className="ml-auto flex items-center gap-1.5">
+                  <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setDirectorOpen(true)}
+                      title="Director tools — delays, breaks, reopen courts"
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                    >
+                      <GearSix aria-hidden="true" className="h-4 w-4" />
+                      Director
+                    </button>
                     <button
                       type="button"
                       onClick={() => setWarmRestartOpen(true)}
-                      className={`${INTERACTIVE_BASE} inline-flex items-center whitespace-nowrap rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
                       title="Re-plan from here (full re-solve, stay-close objective)"
                     >
-                      Re-plan…
+                      Re-plan
                     </button>
                     <button
                       type="button"
@@ -652,10 +668,10 @@ export function SchedulePage() {
                         setDisruptionPrefill({});
                         setDisruptionOpen(true);
                       }}
-                      className={`${INTERACTIVE_BASE} inline-flex items-center whitespace-nowrap rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
                       title="Repair after a disruption"
                     >
-                      Disruption…
+                      Disruption
                     </button>
                   </div>
                 </div>
@@ -730,6 +746,36 @@ export function SchedulePage() {
             onClose={() => setMoveMatchId(null)}
             matchId={moveMatchId ?? undefined}
           />
+          {directorOpen && (
+            <Modal
+              onClose={() => {
+                void cancelProposal();
+                setDirectorOpen(false);
+              }}
+              titleId="director-tools-title"
+              widthClass="max-w-lg"
+            >
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                <h2 id="director-tools-title" className="text-sm font-semibold">
+                  Director tools
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void cancelProposal();
+                    setDirectorOpen(false);
+                  }}
+                  className={`${INTERACTIVE_BASE} rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground`}
+                  aria-label="Close director tools"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="overflow-y-auto max-h-[calc(80vh-3rem)]">
+                <DirectorToolsPanel />
+              </div>
+            </Modal>
+          )}
         </div>
       ) : isOptimizing && !hasLiveProgress ? (
         /* Starting optimization spinner */
@@ -740,7 +786,7 @@ export function SchedulePage() {
       ) : (
         /* Empty state */
         <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-card rounded-lg border border-dashed border-border">
-          <CalendarRange aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
+          <CalendarBlank aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
           <p className="text-sm text-muted-foreground">
             {needsConfig ? 'Configure tournament first.' : 'No schedule generated.'}
           </p>

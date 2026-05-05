@@ -10,7 +10,7 @@
  *   else around the new anchor.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X as XIcon } from 'lucide-react';
+import { Check, DoorOpen, X as XIcon } from '@phosphor-icons/react';
 import {
   DndContext,
   MouseSensor,
@@ -44,6 +44,7 @@ import type {
 } from '../../api/dto';
 
 import { SLOT_WIDTH, ROW_HEIGHT, COURT_LABEL_WIDTH } from './ganttGeometry';
+import { getEventColor, EVENT_COLORS } from './eventColors';
 const VALIDATE_DEBOUNCE_MS = 80;
 
 interface DragGanttProps {
@@ -54,6 +55,10 @@ interface DragGanttProps {
   onMatchSelect?: (matchId: string) => void;
   currentSlot?: number;
   readOnly?: boolean;
+  /** Optional callback invoked when a fully-closed court row is
+   *  clicked. Used to deeplink the director panel on the Schedule
+   *  tab; if omitted the closed row is rendered as a passive cell. */
+  onRequestReopenCourt?: (courtId: number) => void;
 }
 
 type CellId = `cell:${number}:${number}`; // cell:court:slot
@@ -84,6 +89,7 @@ export function DragGantt({
   onMatchSelect,
   currentSlot,
   readOnly = false,
+  onRequestReopenCourt,
 }: DragGanttProps) {
   const players = useAppStore((s) => s.players);
   const pendingPin = useAppStore((s) => s.pendingPin);
@@ -279,20 +285,28 @@ export function DragGantt({
   const gridWidth = COURT_LABEL_WIDTH + visibleSlots * SLOT_WIDTH;
 
   return (
-    <div
-      data-testid="drag-gantt"
-      className="relative rounded border border-border bg-card overflow-hidden"
-    >
+    <div data-testid="drag-gantt" className="relative">
       <Hint id="schedule.drag-instructions" className="m-2">
         Drag a match to any cell — infeasible targets glow red. Drop pins the match and re-solves the rest.
       </Hint>
+      {/* Event-type legend — same palette the live grid uses, so the
+       *  two views read the same. Skipped on null/empty match list. */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-3 py-1.5 text-2xs text-muted-foreground">
+        <span className="font-semibold uppercase tracking-wider">Events</span>
+        {Object.entries(EVENT_COLORS).map(([key, { bg, border, label }]) => (
+          <span key={key} className="inline-flex items-center gap-1" title={label}>
+            <span className={`inline-block h-2.5 w-2.5 rounded ${bg} border ${border}`} />
+            {key}
+          </span>
+        ))}
+      </div>
 
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
         <div className="overflow-x-auto">
           <div style={{ width: gridWidth }}>
             {/* Time header — chrome matches features/control-center/GanttChart
                 so the Schedule and Live grids are visually identical. */}
-            <div className="flex border-b border-border bg-muted/40">
+            <div className="flex border-b border-border/60 bg-muted/40">
               <div
                 style={{ width: COURT_LABEL_WIDTH }}
                 className="flex-shrink-0 px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
@@ -331,16 +345,30 @@ export function DragGantt({
                 style={{ height: ROW_HEIGHT }}
                 title={fullyClosed ? `Court ${courtId} is closed` : undefined}
               >
-                <div
-                  style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
-                  className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
-                    fullyClosed
-                      ? 'bg-muted/60 text-muted-foreground line-through'
-                      : 'bg-muted/30 text-foreground'
-                  }`}
-                >
-                  C{courtId}
-                </div>
+                {fullyClosed && onRequestReopenCourt ? (
+                  <button
+                    type="button"
+                    onClick={() => onRequestReopenCourt(courtId)}
+                    title={`Court ${courtId} closed — open Reopen panel`}
+                    aria-label={`Court ${courtId} is closed. Click to open Reopen panel.`}
+                    className="flex-shrink-0 flex items-center gap-1 px-2 text-xs font-semibold tabular-nums bg-muted/60 text-muted-foreground hover:bg-status-warning-bg hover:text-status-warning hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
+                    style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+                  >
+                    <span className="line-through">C{courtId}</span>
+                    <DoorOpen className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                ) : (
+                  <div
+                    style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+                    className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
+                      fullyClosed
+                        ? 'bg-muted/60 text-muted-foreground line-through'
+                        : 'bg-muted/30 text-foreground'
+                    }`}
+                  >
+                    C{courtId}
+                  </div>
+                )}
 
                 {/* Drop target cells (one per slot column) — closed
                     cells reject drops; the rest of the row remains
@@ -410,7 +438,7 @@ export function DragGantt({
 
         {/* Live hover status */}
         <div
-          className="flex items-center justify-between border-t border-border bg-muted/40 px-3 py-1.5 text-[11px]"
+          className="flex items-center justify-between border-t border-border/60 bg-muted/40 px-3 py-1.5 text-[11px]"
           data-testid="drag-gantt-status"
         >
           {activeAssignment && hoverCell && validation ? (
@@ -479,7 +507,7 @@ function DropCell({
       data-testid={`cell-${courtId}-${slotId}`}
       title={closed ? `Court ${courtId} closed` : undefined}
       className={[
-        'relative flex-shrink-0 border-l border-border transition-colors duration-150',
+        'relative flex-shrink-0 border-l border-border/30 transition-colors duration-150',
         closed
           ? 'bg-muted/50'
           : isCurrent
@@ -544,9 +572,10 @@ function MatchBlock({
   // Disable the transition while dragging so the block follows the pointer.
   const positionTransition = isDragging
     ? 'none'
-    : 'left 420ms cubic-bezier(0.22, 1, 0.36, 1), top 420ms cubic-bezier(0.22, 1, 0.36, 1)';
+    : 'left 420ms var(--ease-brand), top 420ms var(--ease-brand)';
 
   const pinActive = isPinned && isGenerating;
+  const eventColor = getEventColor(match.eventRank);
 
   return (
     <button
@@ -570,15 +599,15 @@ function MatchBlock({
         animationDelay: `${enterDelayMs}ms`,
       }}
       className={[
-        'group rounded border text-left px-2 py-0.5 shadow-sm backdrop-blur-sm',
+        'group rounded border text-left px-2 py-0.5 shadow-sm',
         'motion-safe:animate-block-in',
         isSelected
-          ? 'bg-blue-50 border-blue-500 text-blue-900 dark:bg-blue-500/15 dark:text-blue-100 dark:border-blue-500/50'
-          : 'bg-card/95 border-border text-foreground hover:border-muted-foreground hover:shadow-md',
+          ? 'bg-blue-50 border-blue-500 text-blue-900 ring-1 ring-blue-400 dark:bg-blue-500/20 dark:text-blue-100 dark:border-blue-400'
+          : `${eventColor.bg} ${eventColor.border} text-foreground hover:shadow-md hover:brightness-95`,
         isPinned && !pinActive ? 'ring-2 ring-inset ring-amber-400 border-dashed' : '',
         readOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing',
       ].join(' ')}
-      title={matchLabel(match)}
+      title={`${matchLabel(match)} · ${eventColor.label}`}
     >
       {/* Marching-ants overlay while the solver is re-solving with this pin */}
       {pinActive ? (

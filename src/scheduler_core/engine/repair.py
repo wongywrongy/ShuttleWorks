@@ -24,6 +24,7 @@ from scheduler_core.domain.models import (
     ScheduleResult,
     SolverOptions,
 )
+from scheduler_core.engine.cancel_token import CancelToken
 from scheduler_core.engine.config import EngineConfig
 from scheduler_core.engine.cpsat_backend import CPSATScheduler
 
@@ -53,6 +54,7 @@ def solve_repair(
     repair: RepairSpec,
     *,
     solver_options: Optional[SolverOptions] = None,
+    cancel_token: Optional[CancelToken] = None,
 ) -> ScheduleResult:
     """Re-solve only the free slice, holding everything else fixed.
 
@@ -129,4 +131,4 @@ def solve_repair(
         for cid in forbid_courts:
             scheduler.model.Add(scheduler.svars.court[match_id] != cid)
 
-    return scheduler.solve()
+    return scheduler.solve(cancel_token=cancel_token)

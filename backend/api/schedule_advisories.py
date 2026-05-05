@@ -21,7 +21,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.schemas import (
     Advisory,
@@ -463,12 +463,17 @@ def collect_advisories(
 
 
 @router.get("/advisories", response_model=List[Advisory])
-async def get_schedule_advisories() -> List[Advisory]:
+async def get_schedule_advisories(http_request: Request) -> List[Advisory]:
     """Return current advisories computed from tournament + match state.
 
     Reads both files via the existing helpers in tournament_state /
     match_state. Returns ``[]`` when nothing actionable is detected (or
     when the tournament hasn't been configured yet).
+
+    Also posts REPAIR triggers to the SuggestionsWorker for any advisory
+    whose suggestedAction.kind is 'repair', and attaches a ``suggestionId``
+    to advisories that already have a pre-baked suggestion stamped by the
+    worker.
     """
     # Late imports to avoid circulars and to allow tests to monkeypatch
     # the file paths via BACKEND_DATA_DIR before the helpers resolve.
@@ -502,4 +507,39 @@ async def get_schedule_advisories() -> List[Advisory]:
         log.warning("advisories: match state unreadable: %s", e)
         match_states_dict = {}
 
-    return collect_advisories(state, match_states_dict)
+    advisories = collect_advisories(state, match_states_dict)
+
+    # Attach suggestionId for advisories whose worker already produced
+    # a pre-baked suggestion. Index the suggestion store once so we
+    # don't run an O(advisories × suggestions) scan.
+    from api.schedule_proposals import _get_suggestion_store
+    suggestion_store = _get_suggestion_store(http_request.app)
+    sug_by_fingerprint = {s.fingerprint: s.id for s in suggestion_store.values()}
+    for a in advisories:
+        sug_id = sug_by_fingerprint.get(f"repair:{a.id}")
+        if sug_id is not None:
+            a.suggestionId = sug_id
+
+    # Post REPAIR triggers for repair-kind advisories that DON'T already
+    # have a stamped suggestion. The worker's per-fingerprint cooldown
+    # (30s) would dedup duplicate posts anyway, but skipping the post
+    # here saves the round-trip and keeps the worker queue cleaner.
+    worker = getattr(http_request.app.state, "suggestions_worker", None)
+    if worker is not None:
+        from services.suggestions_worker import TriggerEvent, TriggerKind
+        for a in advisories:
+            if (
+                a.suggestedAction
+                and a.suggestedAction.kind == "repair"
+                and a.suggestionId is None
+            ):
+                try:
+                    await worker.post(TriggerEvent(
+                        kind=TriggerKind.REPAIR,
+                        fingerprint=f"repair:{a.id}",
+                        payload={"suggestedAction": a.suggestedAction.model_dump()},
+                    ))
+                except Exception:
+                    log.exception("advisories: post REPAIR trigger failed")
+
+    return advisories

@@ -4,7 +4,7 @@
  * players / event rank / duration inline.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, CaretDown } from '@phosphor-icons/react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerMap } from '../../store/selectors';
@@ -13,6 +13,7 @@ import { InlineSearch, type FilterChipGroup } from '../../components/InlineSearc
 import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
 import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
 import { SchoolDot } from '../../components/SchoolDot';
+import { Hint } from '../../components/Hint';
 
 function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
   const school = groups.find((g) => g.id === p.groupId)?.name ?? '?';
@@ -26,6 +27,8 @@ export function MatchesSpreadsheet() {
   const addMatch = useAppStore((s) => s.addMatch);
   const updateMatch = useAppStore((s) => s.updateMatch);
   const deleteMatch = useAppStore((s) => s.deleteMatch);
+  const intervalMinutes = useAppStore((s) => s.config?.intervalMinutes ?? 15);
+  const slotsHelp = `Number of consecutive time slots this match occupies on a court. 1 slot = ${intervalMinutes} min. Increase for matches expected to run long; the solver will reserve the extra slots and keep adjacent slots free on the same court.`;
 
   const [newId, setNewId] = useState<string | null>(null);
   const newRowRef = useRef<HTMLInputElement | null>(null);
@@ -111,7 +114,7 @@ export function MatchesSpreadsheet() {
   }, [newId]);
 
   return (
-    <div className="rounded border border-border bg-card">
+    <div>
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Matches <span className="text-muted-foreground">({matches.length})</span>
@@ -150,35 +153,48 @@ export function MatchesSpreadsheet() {
           No matches match these filters.
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/60 bg-muted text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="w-10 px-2 py-1.5 text-left font-medium">#</th>
-                <th className="px-2 py-1.5 text-left font-medium">Event</th>
-                <th className="px-2 py-1.5 text-left font-medium">Side A</th>
-                <th className="px-2 py-1.5 text-left font-medium">Side B</th>
-                <th className="w-20 px-2 py-1.5 text-left font-medium">Slots</th>
-                <th className="w-10 px-2 py-1.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {filteredMatches.map((m) => (
-                <MatchRow
-                  key={m.id}
-                  match={m}
-                  index={matches.indexOf(m)}
-                  players={players}
-                  groups={groups}
-                  groupIndex={groupIndex}
-                  onUpdate={updateMatch}
-                  onDelete={deleteMatch}
-                  firstInputRef={newId === m.id ? newRowRef : undefined}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="px-3 pt-2">
+            <Hint id="matches.row-semantics" variant="subtle">
+              <strong>Slots</strong> sets how many consecutive time slots a match holds on a
+              court ({intervalMinutes} min each). Row order becomes the printed match #
+              and is the solver's tie-breaker when other costs are equal.
+            </Hint>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/60 bg-muted text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <th className="w-10 px-2 py-1.5 text-left font-medium" title="Display order — printed as the match # in lists and exports.">#</th>
+                  <th className="px-2 py-1.5 text-left font-medium">Event</th>
+                  <th className="px-2 py-1.5 text-left font-medium">Side A</th>
+                  <th className="px-2 py-1.5 text-left font-medium">Side B</th>
+                  <th className="w-20 px-2 py-1.5 text-left font-medium" title={slotsHelp}>
+                    <span className="inline-flex cursor-help items-center gap-1 underline decoration-dotted underline-offset-2">
+                      Slots
+                    </span>
+                  </th>
+                  <th className="w-10 px-2 py-1.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMatches.map((m) => (
+                  <MatchRow
+                    key={m.id}
+                    match={m}
+                    index={matches.indexOf(m)}
+                    players={players}
+                    groups={groups}
+                    groupIndex={groupIndex}
+                    onUpdate={updateMatch}
+                    onDelete={deleteMatch}
+                    firstInputRef={newId === m.id ? newRowRef : undefined}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
@@ -400,11 +416,11 @@ function PlayerMultiPicker({
           aria-label={open ? 'Close picker' : 'Open picker'}
           className="ml-auto inline-flex items-center justify-center text-muted-foreground hover:text-foreground"
         >
-          <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
+          <CaretDown aria-hidden="true" className="h-3.5 w-3.5" />
         </button>
       </div>
       {open ? (
-        <div className="absolute left-0 top-full z-40 mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+        <div className="absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
           {[...playersByGroup.entries()].map(([groupId, list]) => {
             const g = groups.find((gr) => gr.id === groupId);
             return (

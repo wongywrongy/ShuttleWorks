@@ -137,7 +137,7 @@ export function VisualMatchGenerator({ onSaveMatches, onCancel, matchType = 'dua
                 key={school.id}
                 type="button"
                 onClick={() => handleSchoolToggle(school.id)}
-                className={`p-3 rounded border-2 transition-all ${
+                className={`p-3 rounded border-2 transition-colors duration-150 ease-brand ${
                   isSelected
                     ? 'border-blue-600 bg-blue-50'
                     : 'border-border bg-card hover:border-blue-400'

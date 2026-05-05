@@ -9,7 +9,7 @@
  * commits on blur. No modals.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp } from 'lucide-react';
+import { CaretUp } from '@phosphor-icons/react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
 import { INPUT_CELL_STYLE } from '../../lib/utils';
@@ -66,10 +66,10 @@ export function RosterSpreadsheet() {
   }, [newRowId]);
 
   return (
-    <div className="rounded border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Players <span className="text-muted-foreground">({players.length})</span>
+    <div className="bg-card">
+      <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-3 py-2">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Players <span className="tabular-nums">({players.length})</span>
         </span>
         <button
           type="button"
@@ -259,7 +259,7 @@ function PlayerRow({
           )}
           <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
             {rankPickerOpen ? (
-              <ChevronUp aria-hidden="true" className="h-3 w-3" />
+              <CaretUp aria-hidden="true" className="h-3 w-3" />
             ) : (
               'edit'
             )}
@@ -277,31 +277,43 @@ function PlayerRow({
 
       {/* Availability — same click-to-open pattern */}
       <td className="relative px-2 py-1">
-        <button
-          type="button"
-          onClick={() => setAvailPickerOpen((v) => !v)}
-          aria-expanded={availPickerOpen}
-          data-testid={`avail-picker-${player.id}`}
-          className={[
-            'flex min-h-[30px] w-full items-center gap-1 rounded border bg-card px-2 py-1 text-left text-sm transition-colors hover:border-blue-400',
-            availPickerOpen ? 'border-blue-500 ring-2 ring-blue-200' : 'border-border',
-          ].join(' ')}
-        >
-          {(player.availability ?? []).length === 0 ? (
-            <span className="text-xs italic text-muted-foreground">All day (default)</span>
-          ) : (
-            <span className="truncate text-[11px] text-foreground tabular-nums">
-              {formatWindows(player.availability)}
-            </span>
-          )}
-          <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
-            {availPickerOpen ? (
-              <ChevronUp aria-hidden="true" className="h-3 w-3" />
-            ) : (
-              'edit'
-            )}
-          </span>
-        </button>
+        {(() => {
+          const hasCustomAvail = (player.availability ?? []).length > 0;
+          return (
+            <button
+              type="button"
+              onClick={() => setAvailPickerOpen((v) => !v)}
+              aria-expanded={availPickerOpen}
+              data-testid={`avail-picker-${player.id}`}
+              className={[
+                'flex min-h-[30px] w-full items-center gap-1.5 rounded border bg-card px-2 py-1 text-left text-sm transition-colors hover:border-blue-400',
+                availPickerOpen ? 'border-blue-500 ring-2 ring-blue-200' : 'border-border',
+              ].join(' ')}
+            >
+              {hasCustomAvail && (
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 flex-none rounded-full bg-blue-500"
+                  title="Custom availability"
+                />
+              )}
+              {hasCustomAvail ? (
+                <span className="truncate text-[11px] font-medium text-foreground tabular-nums">
+                  {formatWindows(player.availability)}
+                </span>
+              ) : (
+                <span className="text-xs italic text-muted-foreground">All day (default)</span>
+              )}
+              <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                {availPickerOpen ? (
+                  <CaretUp aria-hidden="true" className="h-3 w-3" />
+                ) : (
+                  'edit'
+                )}
+              </span>
+            </button>
+          );
+        })()}
         {availPickerOpen ? (
           <AvailabilityPicker
             config={config}
@@ -313,16 +325,31 @@ function PlayerRow({
       </td>
 
       <td className="px-2 py-1">
-        <input
-          type="number"
-          min={0}
-          step={5}
-          value={restDraft}
-          onChange={(e) => setRestDraft(e.target.value)}
-          onBlur={commitRest}
-          placeholder="default"
-          className={`${INPUT_CELL_STYLE} tabular-nums`}
-        />
+        {(() => {
+          const hasCustomRest = restDraft.trim() !== '';
+          return (
+            <div className="flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className={[
+                  'h-1.5 w-1.5 flex-none rounded-full transition-colors',
+                  hasCustomRest ? 'bg-blue-500' : 'bg-transparent',
+                ].join(' ')}
+                title={hasCustomRest ? 'Custom rest' : undefined}
+              />
+              <input
+                type="number"
+                min={0}
+                step={5}
+                value={restDraft}
+                onChange={(e) => setRestDraft(e.target.value)}
+                onBlur={commitRest}
+                placeholder="default"
+                className={`${INPUT_CELL_STYLE} tabular-nums ${hasCustomRest ? 'font-medium text-foreground' : ''}`}
+              />
+            </div>
+          );
+        })()}
       </td>
       <td className="px-2 py-1">
         <input
@@ -389,7 +416,7 @@ function RankPicker({
     return (
       <div
         ref={ref}
-        className="absolute left-2 top-full z-40 mt-1 w-64 rounded border border-border bg-card p-3 text-xs text-muted-foreground shadow-lg"
+        className="absolute left-2 top-full z-overlay mt-1 w-64 rounded border border-border bg-card p-3 text-xs text-muted-foreground shadow-lg"
       >
         No event ranks configured. Set <strong>Event Categories</strong> in the Setup tab.
       </div>
@@ -406,7 +433,7 @@ function RankPicker({
   return (
     <div
       ref={ref}
-      className="absolute left-2 top-full z-40 mt-1 w-64 rounded border border-border bg-card p-2 shadow-lg"
+      className="absolute left-2 top-full z-overlay mt-1 w-64 rounded border border-border bg-card p-2 shadow-lg"
     >
       <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Assign ranks
@@ -482,7 +509,7 @@ function AvailabilityPicker({
   return (
     <div
       ref={ref}
-      className="absolute left-2 top-full z-40 mt-1 w-80 rounded border border-border bg-card p-3 shadow-lg"
+      className="absolute left-2 top-full z-overlay mt-1 w-80 rounded border border-border bg-card p-3 shadow-lg"
     >
       <div className="mb-1 flex items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

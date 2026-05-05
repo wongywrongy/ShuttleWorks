@@ -4,6 +4,7 @@
  * Delayed matches get a yellow ring to stand out
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
+import { DoorOpen } from '@phosphor-icons/react';
 import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../lib/time';
 import {
   getClosedSlotWindows,
@@ -35,6 +36,10 @@ interface GanttChartProps {
    *  from the Gantt view were missing it.
    */
   trafficLights?: Map<string, TrafficLightResult>;
+  /** Optional callback invoked when a fully-closed court row is
+   *  clicked. Used to deeplink the director panel; if omitted the
+   *  closed row is rendered as a passive (non-interactive) cell. */
+  onRequestReopenCourt?: (courtId: number) => void;
 }
 
 // Slot width chosen so that even when a court has TWO overlapping
@@ -68,7 +73,11 @@ const STATUS_STYLES = {
     text: 'text-status-called',
   },
   started: {
-    bg: 'bg-status-live-bg',
+    // Active matches commit harder than the muted neighbouring states —
+    // a tinted background plus an inset highlight ring lifts them off
+    // the row without changing layout. Restraint is preserved by NOT
+    // raising saturation; commitment lives in the inset stroke.
+    bg: 'bg-status-live-bg shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.5)]',
     border: 'border-status-live/60',
     text: 'text-status-live',
   },
@@ -95,6 +104,7 @@ export function GanttChart({
   onMatchSelect,
   impactedMatchIds = [],
   trafficLights,
+  onRequestReopenCourt,
 }: GanttChartProps) {
   const matchMap = useMemo(() => indexById(matches), [matches]);
   const impactedSet = useMemo(() => new Set(impactedMatchIds), [impactedMatchIds]);
@@ -255,7 +265,7 @@ export function GanttChart({
         <div className="min-w-max">
           {/* Time header — matches DragGantt: court label on the left,
               time labels every other slot. */}
-          <div className="flex border-b border-border bg-muted/40">
+          <div className="flex border-b border-border/60 bg-muted/40">
             <div
               className="flex-shrink-0 px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
               style={{ width: COURT_LABEL_WIDTH }}
@@ -297,31 +307,51 @@ export function GanttChart({
               }`}
               title={fullyClosed ? `Court ${courtId} is closed` : undefined}
             >
-              <div
-                className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
-                  fullyClosed
-                    ? 'bg-muted/60 text-muted-foreground line-through'
-                    : 'bg-muted/30 text-foreground'
-                }`}
-                style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
-              >
-                C{courtId}
-              </div>
+              {fullyClosed && onRequestReopenCourt ? (
+                <button
+                  type="button"
+                  onClick={() => onRequestReopenCourt(courtId)}
+                  title={`Court ${courtId} closed — open Reopen panel`}
+                  aria-label={`Court ${courtId} is closed. Click to open Reopen panel.`}
+                  className="flex-shrink-0 flex items-center gap-1 px-2 text-xs font-semibold tabular-nums bg-muted/60 text-muted-foreground hover:bg-status-warning-bg hover:text-status-warning hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
+                  style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+                >
+                  <span className="line-through">C{courtId}</span>
+                  <DoorOpen className="h-3 w-3" aria-hidden="true" />
+                </button>
+              ) : (
+                <div
+                  className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
+                    fullyClosed
+                      ? 'bg-muted/60 text-muted-foreground line-through'
+                      : 'bg-muted/30 text-foreground'
+                  }`}
+                  style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+                >
+                  C{courtId}
+                </div>
+              )}
               <div
                 className="flex-1 relative gantt-grid"
                 style={{ height: ROW_HEIGHT }}
               >
-                {/* Slot grid lines — closed cells get a slate fill so
-                    a temporary closure (12:00–13:00) shows as a band
-                    rather than greying the whole row. */}
+                {/* Slot grid lines — vertical dividers fire only on the
+                    same cadence as the time-header labels (every other
+                    slot) and at a lighter weight than before. The full
+                    every-cell mesh was visually heavy for no extra
+                    information; the labelled boundaries are enough.
+                    Closed cells still get a slate fill so a temporary
+                    closure (12:00–13:00) shows as a band rather than
+                    greying the whole row. */}
                 <div className="absolute inset-0 flex">
-                  {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map(slot => {
+                  {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => {
                     const slotClosed = isSlotClosed(closedWindows, courtId, slot);
+                    const showDivider = i % 2 === 0;
                     return (
                       <div
                         key={slot}
                         style={{ width: SLOT_WIDTH }}
-                        className={`flex-shrink-0 border-l border-border/40 ${
+                        className={`flex-shrink-0 ${showDivider ? 'border-l border-border/30' : ''} ${
                           slotClosed
                             ? 'bg-muted/50'
                             : slot === currentSlot
@@ -405,7 +435,7 @@ export function GanttChart({
                       onClick={() => onMatchSelect(assignment.matchId)}
                       className={`absolute top-0.5 rounded border cursor-pointer
                         ${styles.bg} ${styles.border}
-                        transition-all duration-150 ease-out
+                        transition-[transform,box-shadow,filter] duration-150 ease-brand
                         ${isAnimated ? 'scale-105' : ''}
                         ${ringClass}
                         ${isInProgress ? 'shadow-sm' : ''}

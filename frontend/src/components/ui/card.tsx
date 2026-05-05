@@ -1,20 +1,42 @@
 import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
-const Card = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "rounded-lg border bg-card text-card-foreground shadow-sm",
-      className
-    )}
-    {...props}
-  />
-))
+// Card variants — the default "frame" matches the historical look so
+// existing call-sites need no change. ``bare`` strips the border + shadow
+// for dense, in-context grouping (Cockpit Mode tables, divide-y rows,
+// inline editors). ``elevated`` lifts the surface for popover-tier
+// emphasis. The taste skill's anti-card-overuse rule pushes us to
+// reserve framed/elevated for cases where elevation actually
+// communicates hierarchy.
+const cardVariants = cva(
+  "rounded-lg text-card-foreground",
+  {
+    variants: {
+      variant: {
+        bare: "bg-transparent",
+        frame: "border bg-card shadow-sm",
+        elevated: "border bg-card shadow-md",
+      },
+    },
+    defaultVariants: { variant: "frame" },
+  }
+)
+
+export interface CardProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof cardVariants> {}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, variant, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(cardVariants({ variant }), className)}
+      {...props}
+    />
+  )
+)
 Card.displayName = "Card"
 
 const CardHeader = React.forwardRef<
@@ -29,6 +51,10 @@ const CardHeader = React.forwardRef<
 ))
 CardHeader.displayName = "CardHeader"
 
+// CardTitle is intentionally NOT display-tier. The loaded taste rules
+// favour controlling hierarchy with weight + colour, not raw scale, on
+// operator-facing surfaces. Marketing pages (PublicDisplay) override via
+// className when they want a louder heading.
 const CardTitle = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -36,7 +62,7 @@ const CardTitle = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
+      "text-base font-semibold leading-tight tracking-tight",
       className
     )}
     {...props}

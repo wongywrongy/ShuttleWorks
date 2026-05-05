@@ -47,6 +47,7 @@ from app.schemas import (  # noqa: E402
     RosterGroupDTO,
     ScheduleDTO,
     ScheduleHistoryEntry,
+    Suggestion,
     TournamentConfig,
     TournamentStateDTO,
 )
@@ -104,10 +105,51 @@ def _get_lock(app: FastAPI) -> asyncio.Lock:
     return lock
 
 
+_SUGGESTION_STATE_KEY = "suggestions"
+
+
+def _get_suggestion_store(app: FastAPI) -> Dict[str, Suggestion]:
+    """Per-app suggestion dict, mirrors the proposal store layout.
+
+    Suggestions reference proposals by id; the suggestion's TTL is
+    typically shorter than its proposal's so an unapplied suggestion
+    can fall off the inbox while the underlying proposal stays live
+    in case the operator opens a Disruption dialog the same kind.
+    """
+    store = getattr(app.state, _SUGGESTION_STATE_KEY, None)
+    if store is None:
+        store = {}
+        setattr(app.state, _SUGGESTION_STATE_KEY, store)
+    return store
+
+
+def _evict_expired_suggestions(
+    store: Dict[str, Suggestion],
+    now: Optional[datetime] = None,
+) -> None:
+    """Drop suggestions whose ``expiresAt`` is in the past.
+
+    Mirrors `_evict_expired` for proposals. ValueError on parse falls
+    through to deletion (defensive against schema migrations).
+    """
+    cutoff = (now or datetime.now(timezone.utc))
+    for sid, sug in list(store.items()):
+        try:
+            expires = datetime.fromisoformat(
+                sug.expiresAt.replace("Z", "+00:00")
+            )
+        except ValueError:
+            del store[sid]
+            continue
+        if expires < cutoff:
+            del store[sid]
+
+
 # Public alias for tests that want to clear the store between runs.
 def reset_store(app: FastAPI) -> None:
     setattr(app.state, _STATE_KEY, {})
     setattr(app.state, _LOCK_KEY, asyncio.Lock())
+    setattr(app.state, _SUGGESTION_STATE_KEY, {})
 
 
 # ---------- proposal-store helpers -----------------------------------------
@@ -564,4 +606,31 @@ async def commit_proposal(proposal_id: str, http_request: Request) -> CommitResp
         # Proposal is consumed — drop from the store so a second commit is
         # not possible without re-creating.
         del store[proposal_id]
+
+        # Drop any suggestions that were built against the pre-commit
+        # version — their proposalId now refers to a stale fork.
+        suggestion_store = _get_suggestion_store(http_request.app)
+        new_version = updated.scheduleVersion
+        stale_sids = [
+            sid for sid, sug in suggestion_store.items()
+            if sug.fromScheduleVersion < new_version
+        ]
+        for sid in stale_sids:
+            del suggestion_store[sid]
+
+    # Fire a fresh OPTIMIZE trigger off-thread so the inbox reflects
+    # the new state. Done outside the lock — the worker has its own
+    # serialization. Best-effort: a missing worker (e.g., test harness
+    # that didn't spawn one) is not an error.
+    worker = getattr(http_request.app.state, "suggestions_worker", None)
+    if worker is not None:
+        from services.suggestions_worker import TriggerEvent, TriggerKind
+        try:
+            await worker.post(TriggerEvent(
+                kind=TriggerKind.OPTIMIZE,
+                fingerprint=f"opt:post-commit:{updated.scheduleVersion}",
+            ))
+        except Exception:
+            log.exception("post-commit OPTIMIZE trigger failed")
+
     return CommitResponse(state=updated, historyEntry=history_entry)

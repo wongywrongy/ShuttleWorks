@@ -24,12 +24,13 @@ from pydantic import BaseModel
 import app.scheduler_core_path  # noqa: F401
 from app.schemas import (  # noqa: E402
     MatchDTO,
-    MatchStateDTO,
     PlayerDTO,
     ScheduleDTO,
     TournamentConfig,
 )
+from api.match_state import MatchStateDTO  # noqa: E402
 from scheduler_core.domain.models import Assignment  # noqa: E402
+from scheduler_core.engine.cancel_token import CancelToken  # noqa: E402
 from scheduler_core.engine.warm_start import solve_warm_start  # noqa: E402
 
 from adapters.badminton import (  # noqa: E402
@@ -127,3 +128,55 @@ async def warm_restart_schedule(request: WarmRestartRequest) -> WarmRestartRespo
     """Re-solve the whole problem with a stay-close bias."""
     new_schedule, moved = _run_warm_restart(request)
     return WarmRestartResponse(schedule=new_schedule, movedMatchIds=moved)
+
+
+def _run_warm_restart_with_cancel(
+    request: WarmRestartRequest,
+    *,
+    cancel_token: CancelToken,
+) -> tuple[ScheduleDTO, List[str]]:
+    """Cancel-aware variant of `_run_warm_restart` for speculative solves.
+
+    Same as `_run_warm_restart` but threads a CancelToken into the
+    solver so a stale speculative solve aborts cleanly when newer
+    state arrives. Used by the SuggestionsWorker's optimize handler.
+    """
+    finished: set[str] = set()
+    for m_id, state in request.matchStates.items():
+        if state.status in ("finished", "started"):
+            finished.add(m_id)
+
+    reference: Dict[str, Assignment] = {}
+    for a in request.originalSchedule.assignments:
+        reference[a.matchId] = Assignment(
+            match_id=a.matchId, slot_id=a.slotId,
+            court_id=a.courtId, duration_slots=a.durationSlots,
+        )
+
+    schedule_config = schedule_config_from_dto(request.config)
+    players = players_from_dto(request.players, request.config)
+    matches = matches_from_dto(request.matches)
+    solver_options = solver_options_for(
+        request.config, time_limit_override=request.timeBudgetSec,
+    )
+
+    result = solve_warm_start(
+        schedule_config,
+        players,
+        matches,
+        reference,
+        finished_match_ids=finished,
+        stay_close_weight=request.stayCloseWeight,
+        solver_options=solver_options,
+        cancel_token=cancel_token,
+    )
+    new_schedule = result_to_dto(result)
+    moved: List[str] = []
+    new_by_match = {a.matchId: a for a in new_schedule.assignments}
+    for m_id, ref in reference.items():
+        new = new_by_match.get(m_id)
+        if new is None:
+            continue
+        if new.slotId != ref.slot_id or new.courtId != ref.court_id:
+            moved.append(m_id)
+    return new_schedule, moved

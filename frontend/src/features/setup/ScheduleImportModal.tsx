@@ -8,7 +8,7 @@
  *     replaces the entire tournament state.
  */
 import { useId } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CircleNotch } from '@phosphor-icons/react';
 import { Modal } from '../../components/common/Modal';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { ImportResult, ImportWarning } from './importScheduleXlsx';
@@ -120,7 +120,7 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
             aria-busy={busy}
             className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700`}
           >
-            {busy && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
+            {busy && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
             {busy ? 'Applying…' : applyLabel}
           </button>
         </div>

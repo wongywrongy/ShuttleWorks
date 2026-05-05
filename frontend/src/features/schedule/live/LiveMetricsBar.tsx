@@ -90,23 +90,29 @@ export function LiveMetricsBar({
           <span className="font-mono font-medium text-foreground tabular-nums">{formatTime(elapsed)}</span>
         </div>
 
-        <div className={`flex items-center gap-1 transition-all duration-300 ${showPulse ? 'scale-105' : ''}`}>
+        <div className={`flex items-center gap-1 transition-transform duration-300 ease-brand ${showPulse ? 'scale-105' : ''}`}>
           <span className="text-muted-foreground">Solutions:</span>
           <span className={`font-mono font-medium tabular-nums ${showPulse ? 'text-green-600' : 'text-foreground'}`}>
             <AnimatedNumber value={solutionCount} formatFn={(n) => Math.round(n).toString()} />
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
-          <span className="text-muted-foreground">Score:</span>
+        <div
+          className="flex cursor-help items-center gap-1"
+          title="Total penalty score — lower is better. Sums rest violations, late finishes, and movement away from any prior schedule."
+        >
+          <span className="underline decoration-dotted underline-offset-2 text-muted-foreground">Score:</span>
           <span className="font-mono font-medium text-foreground tabular-nums">
             <AnimatedNumber value={objectiveScore} formatFn={(n) => Math.round(n).toString()} />
           </span>
         </div>
 
         {gap !== null && (
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">Gap:</span>
+          <div
+            className="flex cursor-help items-center gap-1"
+            title="Optimality gap — distance between the best score found and the solver's proven lower bound. 0% means provably optimal."
+          >
+            <span className="underline decoration-dotted underline-offset-2 text-muted-foreground">Gap:</span>
             <span className="font-mono font-medium text-foreground tabular-nums">
               <AnimatedNumber value={gap} formatFn={(n) => `${n.toFixed(1)}%`} />
             </span>

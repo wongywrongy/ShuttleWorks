@@ -83,7 +83,7 @@ export function SolverHud() {
     // chrome that floats over real content. Hide entirely off-Schedule.
     if (activeTab !== 'schedule') return null;
     return (
-      <footer className="sticky bottom-0 z-10 flex items-center justify-between border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
+      <footer className="sticky bottom-0 z-hud flex items-center justify-between border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-border" aria-hidden />
           Solver idle — click Generate to begin.
@@ -96,7 +96,7 @@ export function SolverHud() {
     <footer
       data-testid="solver-hud"
       className={[
-        'relative sticky bottom-0 z-10 flex items-center gap-4 border-t border-border bg-card px-4 py-2 text-xs text-foreground overflow-hidden',
+        'relative sticky bottom-0 z-hud flex items-center gap-4 border-t border-border bg-card px-4 py-2 text-xs text-foreground overflow-hidden',
       ].join(' ')}
     >
       {/* Scanline — only during active solve */}

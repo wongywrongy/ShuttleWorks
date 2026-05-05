@@ -70,12 +70,12 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
 
   return (
     <div
-      className="rounded border border-border bg-card overflow-hidden"
+      className="flex min-h-0 flex-col bg-card"
       data-testid="player-pool"
     >
       <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
         <div className="flex items-baseline justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Players
           </span>
           <span className="text-[11px] text-muted-foreground tabular-nums">
@@ -166,7 +166,7 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
                   onClick={() => deletePlayer(p.id)}
                   title={`Remove ${p.name}`}
                   aria-label={`Remove ${p.name}`}
-                  className="rounded p-1 text-muted-foreground/60 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                  className="rounded p-1 text-muted-foreground/60 opacity-0 transition-[opacity,background-color,color] duration-150 ease-brand hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                 >
                   ×
                 </button>

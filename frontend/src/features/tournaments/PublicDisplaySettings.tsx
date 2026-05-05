@@ -16,6 +16,7 @@
 import { useAppStore } from '../../store/appStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { TournamentConfig } from '../../api/dto';
+import { Surface, Section, Field } from '../settings/SettingsPrimitives';
 
 const ACCENT_PRESETS: Array<{ id: string; label: string; hex: string }> = [
   { id: 'emerald', label: 'Emerald', hex: '#10b981' },
@@ -64,78 +65,58 @@ export function PublicDisplaySettings() {
   const showScores = config.tvShowScores !== false;
 
   return (
-    <section
-      aria-labelledby="tv-display-heading"
-      className="rounded-lg border border-border bg-card"
-    >
-      <header className="flex items-baseline justify-between border-b border-border/60 px-5 py-3">
-        <h3 id="tv-display-heading" className="text-sm font-semibold text-card-foreground">
-          Public display
-        </h3>
-        <span className="text-2xs text-muted-foreground">
-          Per-tournament · live preview below
-        </span>
-      </header>
-
-      {/* Stacked groups. Cramming Layout/Brand/Content into 3 columns
-          forced the accent picker (10+ controls in one row) to overflow
-          into the toggle next door. Vertical stacks read more clearly
-          on every viewport and leave room for explanatory hints.
-          ``flex flex-col`` is explicit (not relying on default block
-          layout) so a future utility-class change to the parent can't
-          collapse this back into a horizontal grid. */}
-      <div className="flex flex-col divide-y divide-border/60">
-        <Group
-          title="Layout"
-          description="How matches are arranged on the venue TV."
+    <Surface>
+      <Section
+        title="Layout"
+        description="How matches are arranged on the venue TV. Live preview below."
+      >
+        <Field
+          label="Display mode"
+          hint="Strip is a single horizontal banner. Grid is a card grid sized to courts. List is a tall vertical roster."
         >
-          <Field
-            label="Display mode"
-            hint="Strip is a single horizontal banner. Grid is a card grid sized to courts. List is a tall vertical roster."
-          >
-            <ChipRow
-              ariaLabel="Display mode"
-              value={mode}
-              options={MODES}
-              onChange={(id) => update({ tvDisplayMode: id })}
-            />
-          </Field>
-          <Field
-            label="Grid columns"
-            hint="Force a fixed column count when in Grid mode. Auto picks the best fit for the screen width."
-          >
-            <ChipRow
-              ariaLabel="Grid columns"
-              value={gridCols ?? 'auto'}
-              options={[
-                { id: 'auto', label: 'Auto' },
-                { id: 1, label: '1' },
-                { id: 2, label: '2' },
-                { id: 3, label: '3' },
-                { id: 4, label: '4' },
-              ]}
-              onChange={(id) =>
-                update({ tvGridColumns: id === 'auto' ? null : (id as 1 | 2 | 3 | 4) })
-              }
-            />
-          </Field>
-          <Field
-            label="Card size"
-            hint="Compact fits more matches on screen. Large is readable from across the venue."
-          >
-            <ChipRow
-              ariaLabel="Card size"
-              value={cardSize}
-              options={CARD_SIZES}
-              onChange={(id) => update({ tvCardSize: id })}
-            />
-          </Field>
-        </Group>
-
-        <Group
-          title="Brand"
-          description="Colour and theme of the public display."
+          <ChipRow
+            ariaLabel="Display mode"
+            value={mode}
+            options={MODES}
+            onChange={(id) => update({ tvDisplayMode: id })}
+          />
+        </Field>
+        <Field
+          label="Grid columns"
+          hint="Force a fixed column count when in Grid mode. Auto picks the best fit for the screen width."
         >
+          <ChipRow
+            ariaLabel="Grid columns"
+            value={gridCols ?? 'auto'}
+            options={[
+              { id: 'auto', label: 'Auto' },
+              { id: 1, label: '1' },
+              { id: 2, label: '2' },
+              { id: 3, label: '3' },
+              { id: 4, label: '4' },
+            ]}
+            onChange={(id) =>
+              update({ tvGridColumns: id === 'auto' ? null : (id as 1 | 2 | 3 | 4) })
+            }
+          />
+        </Field>
+        <Field
+          label="Card size"
+          hint="Compact fits more matches on screen. Large is readable from across the venue."
+        >
+          <ChipRow
+            ariaLabel="Card size"
+            value={cardSize}
+            options={CARD_SIZES}
+            onChange={(id) => update({ tvCardSize: id })}
+          />
+        </Field>
+      </Section>
+
+      <Section
+        title="Brand"
+        description="Colour and theme of the public display."
+      >
           <Field
             label="Accent colour"
             hint="Used for the LIVE badge, court rails, and primary score highlights."
@@ -285,90 +266,28 @@ export function PublicDisplaySettings() {
               })}
             </div>
           </Field>
-        </Group>
+      </Section>
 
-        <Group
-          title="Content"
-          description="What data appears on each match card."
+      <Section
+        title="Content"
+        description="What data appears on each match card."
+      >
+        <Field
+          label="Show scores"
+          hint="Display set scores alongside player names. Turn off for spectator privacy or before official results are posted."
         >
-          <Field
-            label="Show scores"
-            hint="Display set scores alongside player names. Turn off for spectator privacy or before official results are posted."
-          >
-            <Switch
-              checked={showScores}
-              onChange={(next) => update({ tvShowScores: next })}
-              label={showScores ? 'On' : 'Off'}
-            />
-          </Field>
-        </Group>
-      </div>
-    </section>
+          <Switch
+            checked={showScores}
+            onChange={(next) => update({ tvShowScores: next })}
+            label={showScores ? 'On' : 'Off'}
+          />
+        </Field>
+      </Section>
+    </Surface>
   );
 }
 
 // ── Layout primitives ─────────────────────────────────────────────
-
-function Group({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="px-5 py-4">
-      <div className="mb-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {title}
-        </h4>
-        {description && (
-          <p className="mt-0.5 text-xs text-muted-foreground/80">{description}</p>
-        )}
-      </div>
-      <div className="space-y-3">{children}</div>
-    </div>
-  );
-}
-
-// Field: label + hint on the left, control on the right. ``min-w-0``
-// is applied at every level so a wide control wraps under the label
-// rather than overflowing into a neighbouring field. The control side
-// drops ``flex-shrink-0`` (the previous default) so it can shrink
-// instead of pushing past the panel edge — the previous setting let
-// the accent picker visually collide with the next field's switch.
-function Field({
-  label,
-  hint,
-  disabled,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={[
-        'flex w-full flex-wrap items-start justify-between gap-x-6 gap-y-2',
-        disabled ? 'opacity-50' : '',
-      ].join(' ')}
-    >
-      <div className="min-w-0 max-w-md flex-1">
-        <div className="text-sm font-medium text-foreground">{label}</div>
-        {hint && (
-          <p className="mt-0.5 text-xs text-muted-foreground/80">{hint}</p>
-        )}
-      </div>
-      <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
-        {children}
-      </div>
-    </div>
-  );
-}
 
 interface ChipOption<T extends string | number> {
   id: T;

@@ -5,7 +5,7 @@
  * tournament import/export does not clobber it — theme is a per-device
  * concern, not a per-tournament concern.
  */
-import { Monitor, Moon, Sun } from 'lucide-react';
+import { Monitor, Moon, Sun } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import { usePreferencesStore, type ThemePreference } from '../store/preferencesStore';
 

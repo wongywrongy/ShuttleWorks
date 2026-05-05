@@ -8,18 +8,18 @@
  * needing to focus the stack.
  */
 import { useEffect, type ComponentType } from 'react';
-import { AlertTriangle, CheckCircle2, Info, X, XCircle, type LucideProps } from 'lucide-react';
+import { Warning, CheckCircle, Info, X, XCircle, type IconProps } from '@phosphor-icons/react';
 import { useAppStore } from '../store/appStore';
 import type { Toast as ToastEntry, ToastLevel } from '../store/appStore';
 import { INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET } from '../lib/utils';
 
 const LEVEL_STYLES: Record<
   ToastLevel,
-  { bg: string; border: string; text: string; Icon: ComponentType<LucideProps> }
+  { bg: string; border: string; text: string; Icon: ComponentType<IconProps> }
 > = {
   info:    { bg: 'bg-status-started-bg', border: 'border-status-started/40', text: 'text-status-started', Icon: Info },
-  success: { bg: 'bg-status-live-bg',    border: 'border-status-live/40',    text: 'text-status-live',    Icon: CheckCircle2 },
-  warn:    { bg: 'bg-status-warning-bg', border: 'border-status-warning/40', text: 'text-status-warning', Icon: AlertTriangle },
+  success: { bg: 'bg-status-live-bg',    border: 'border-status-live/40',    text: 'text-status-live',    Icon: CheckCircle },
+  warn:    { bg: 'bg-status-warning-bg', border: 'border-status-warning/40', text: 'text-status-warning', Icon: Warning },
   error:   { bg: 'bg-status-blocked-bg', border: 'border-status-blocked/40', text: 'text-status-blocked', Icon: XCircle },
 };
 
@@ -41,8 +41,13 @@ function Item({ toast }: { toast: ToastEntry }) {
       role={role}
       aria-live={role === 'alert' ? 'assertive' : 'polite'}
       data-testid={`toast-${toast.level}`}
-      className={`flex min-w-[16rem] max-w-md items-start gap-2 rounded-lg border ${styles.bg} ${styles.border} ${styles.text} px-3 py-2 shadow-sm`}
+      className={`relative flex min-w-[16rem] max-w-md items-start gap-2 overflow-hidden rounded-lg border ${styles.bg} ${styles.border} ${styles.text} px-3 py-2 shadow-sm pointer-events-auto`}
     >
+      {/* One-shot sheen on success — the "saved / committed" moment
+          deserves a beat of celebration. Other levels stay quiet. */}
+      {toast.level === 'success' ? (
+        <div className="sheen-overlay motion-reduce:hidden" aria-hidden />
+      ) : null}
       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="min-w-0 flex-1 text-xs leading-snug">
         <div>{toast.message}</div>
@@ -78,11 +83,11 @@ export function ToastStack() {
   const toasts = useAppStore((s) => s.toasts);
   if (toasts.length === 0) return null;
   // bottom-14 keeps toasts clear of the SolverHud (which sits at bottom-0
-  // on Schedule). z-50 stays above the HUD's z-10 either way.
+  // on Schedule). z-modal stays above the HUD's z-hud either way.
   return (
     <div
       data-testid="toast-stack"
-      className="pointer-events-none fixed bottom-14 right-4 z-50 flex flex-col gap-2"
+      className="pointer-events-none fixed bottom-14 right-4 z-modal flex flex-col gap-2"
     >
       {toasts.map((t) => (
         <div key={t.id} className="pointer-events-auto">

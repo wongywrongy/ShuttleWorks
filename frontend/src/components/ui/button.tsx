@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium " +
     "ring-offset-background " +
-    "transition-[background-color,color,box-shadow,transform,opacity] duration-150 " +
+    "transition-[background-color,color,box-shadow,transform,opacity] duration-150 ease-brand " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
     "active:scale-[0.97] " +
     "disabled:pointer-events-none disabled:opacity-50 " +
@@ -27,16 +27,19 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        // xs is tuned for dense toolbars (Schedule top bar, MCC action chips,
-        // any inline-with-table action). Stays touch-target-safe on mobile
-        // because INTERACTIVE_BASE applies a hit-area expansion via padding.
-        xs: "h-7 rounded px-2 text-xs gap-1 [&_svg]:size-3.5",
+        // xs / icon-xs / icon-sm get an invisible 44x44 hit area via a
+        // ::before pseudo-element so the visual chrome stays compact
+        // while touch / pointer targets meet WCAG 2.5.5 (24x24 Level A,
+        // 44x44 Level AAA). The pseudo-element is positioned-absolute,
+        // pointer-events-auto inheritance, and visually hidden — purely
+        // a hit-region extension.
+        xs: "relative h-7 rounded px-2 text-xs gap-1 [&_svg]:size-3.5 before:absolute before:-inset-2 before:content-['']",
         default: "h-10 px-4 py-2",
         sm: "h-9 rounded-md px-3",
         lg: "h-11 rounded-md px-8",
         icon: "h-10 w-10",
-        'icon-sm': "h-8 w-8 [&_svg]:size-4",
-        'icon-xs': "h-7 w-7 [&_svg]:size-3.5",
+        'icon-sm': "relative h-8 w-8 [&_svg]:size-4 before:absolute before:-inset-2 before:content-['']",
+        'icon-xs': "relative h-7 w-7 [&_svg]:size-3.5 before:absolute before:-inset-[10px] before:content-['']",
       },
     },
     defaultVariants: {

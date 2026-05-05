@@ -27,7 +27,7 @@ export default defineConfig({
         manualChunks: {
           // Split vendor chunks
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-tooltip', '@headlessui/react', 'lucide-react'],
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-tooltip', '@headlessui/react', '@phosphor-icons/react'],
           'utils': ['date-fns', 'axios', 'zustand', 'clsx', 'tailwind-merge'],
         },
       },

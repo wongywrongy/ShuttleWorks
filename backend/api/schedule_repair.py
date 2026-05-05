@@ -23,14 +23,15 @@ from pydantic import BaseModel
 import app.scheduler_core_path  # noqa: F401
 from app.schemas import (  # noqa: E402
     MatchDTO,
-    MatchStateDTO,
     PlayerDTO,
     ScheduleAssignment,
     ScheduleDTO,
     TournamentConfig,
 )
+from api.match_state import MatchStateDTO  # noqa: E402
 # These imports rely on the sys.path bootstrap above.
 from scheduler_core.domain.models import Assignment  # noqa: E402
+from scheduler_core.engine.cancel_token import CancelToken  # noqa: E402
 from scheduler_core.engine.repair import RepairSpec, solve_repair  # noqa: E402
 
 from adapters.badminton import (  # noqa: E402
@@ -244,6 +245,47 @@ def _run_repair(request: RepairRequest) -> tuple[ScheduleDTO, List[str]]:
 
     new_schedule = result_to_dto(result)
 
+    repaired_ids: List[str] = []
+    new_by_match = {a.matchId: a for a in new_schedule.assignments}
+    for match_id, prev in assignments_by_match.items():
+        if match_id in repair.forbid_match_ids:
+            repaired_ids.append(match_id)
+            continue
+        new = new_by_match.get(match_id)
+        if new is None:
+            continue
+        if new.slotId != prev.slotId or new.courtId != prev.courtId:
+            repaired_ids.append(match_id)
+    return new_schedule, repaired_ids
+
+
+def _run_repair_with_cancel(
+    request: RepairRequest,
+    *,
+    cancel_token: CancelToken,
+) -> tuple[ScheduleDTO, List[str]]:
+    """Cancel-aware variant of `_run_repair` for speculative solves.
+
+    Same as `_run_repair` but threads a CancelToken into the solver
+    so a stale repair speculation aborts cleanly when newer state
+    arrives. Used by the SuggestionsWorker's repair handler.
+    """
+    assignments_by_match = {
+        a.matchId: a for a in request.originalSchedule.assignments
+    }
+    repair = _slice_for(request, assignments_by_match)
+    schedule_config = schedule_config_from_dto(request.config)
+    players = players_from_dto(request.players, request.config)
+    matches = matches_from_dto(request.matches)
+    solver_options = solver_options_for(
+        request.config, time_limit_override=request.timeBudgetSec,
+    )
+    result = solve_repair(
+        schedule_config, players, matches, repair,
+        solver_options=solver_options,
+        cancel_token=cancel_token,
+    )
+    new_schedule = result_to_dto(result)
     repaired_ids: List[str] = []
     new_by_match = {a.matchId: a for a in new_schedule.assignments}
     for match_id, prev in assignments_by_match.items():

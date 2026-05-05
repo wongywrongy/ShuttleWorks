@@ -2,12 +2,10 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { isValidTime } from '../../lib/time';
 import { SetupGuide } from './SetupGuide';
-import { Hint } from '../../components/Hint';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import { Surface, Section } from '../settings/SettingsPrimitives';
 
 interface TournamentConfigFormProps {
   config: TournamentConfig;
@@ -152,27 +150,27 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="flex items-baseline justify-between border-b border-border/60 pb-1.5">
-          <h3 className="text-sm font-semibold text-foreground">
-            Tournament configuration
-          </h3>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowGuide(true)}
-            className="h-7 text-2xs text-muted-foreground hover:text-foreground"
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Surface>
+          {/* IDENTITY — tournament name + meet mode. Top of the form so
+              the rest of the page (matches, schedule chrome, backups)
+              can reference the chosen name. The Setup-guide button is
+              the section's right-side trailing affordance — it lives
+              here because the guide explains the whole form below. */}
+          <Section
+            title="Identity"
+            trailing={
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowGuide(true)}
+                className="h-7 text-2xs text-muted-foreground hover:text-foreground"
+              >
+                Setup guide
+              </Button>
+            }
           >
-            Setup guide
-          </Button>
-        </div>
-
-        {/* IDENTITY — tournament name + meet mode. Top of the form so
-            the rest of the page (matches, schedule chrome, backups)
-            can reference the chosen name. */}
-        <Card>
-          <CardContent className="px-4 py-3">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
               <div className="space-y-1">
                 <Label htmlFor="tournamentName" className="text-xs">
@@ -215,15 +213,12 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </Section>
 
-        {/* SCHEDULE & VENUE */}
-        <Card>
-          <CardHeader className="py-3 px-4">
-            <CardTitle className="text-sm">Schedule & Venue</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 pt-0">
+          <Section
+            title="Schedule & venue"
+            description='"Slot" is the time unit referenced everywhere else in the app — the freeze horizon, game spacing, breaks, and the Gantt all measure in slots.'
+          >
             <div className="grid grid-cols-5 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="date" className="text-xs">Date</Label>
@@ -281,12 +276,10 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
               </div>
             </div>
 
-            <Separator className="my-3" />
-
-            {/* Breaks — one row per window with clear Start → End labels.
-                Empty state collapses into the inline add affordance so
-                the section's vertical footprint matches its content. */}
-            <div className="space-y-2">
+            {/* Breaks — inline list under the schedule grid. Empty state
+                collapses into a single dashed add button so the section's
+                vertical footprint matches its content. */}
+            <div className="space-y-2 pt-1">
               <div className="flex items-baseline justify-between">
                 <Label className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Breaks
@@ -345,18 +338,17 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                 + Add break{breakWindows.length === 0 ? ' (e.g. lunch 12:00–13:00)' : ''}
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </Section>
 
-        {/* PLAYER SETTINGS */}
-        <Card>
-          <CardHeader className="py-3 px-4">
-            <CardTitle className="text-sm">Player Settings</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 pt-0">
+          <Section
+            title="Players"
+            description="Player welfare rules the solver respects when laying out a schedule."
+          >
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label htmlFor="rest" className="text-xs">Rest Between Matches (min)</Label>
+                <Label htmlFor="rest" className="text-xs">
+                  Rest between matches (min)
+                </Label>
                 <Input
                   id="rest"
                   type="number"
@@ -366,32 +358,18 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                   max={180}
                   className={`h-9 ${errors.defaultRestMinutes ? 'border-destructive' : ''}`}
                 />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="freeze" className="text-xs">Freeze Horizon (slots)</Label>
-                <Input
-                  id="freeze"
-                  type="number"
-                  value={formData.freezeHorizonSlots}
-                  onChange={(e) => setFormData({ ...formData, freezeHorizonSlots: parseInt(e.target.value) || 0 })}
-                  min={0}
-                  max={10}
-                  className={`h-9 ${errors.freezeHorizonSlots ? 'border-destructive' : ''}`}
-                />
-                <p className="text-[10px] text-muted-foreground">Slots protected from live rescheduling</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Minimum recovery between two matches for the same player.
+                </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </Section>
 
-        {/* SCORING FORMAT */}
-        <Card>
-          <CardHeader className="py-3 px-4">
-            <CardTitle className="text-sm">Scoring Format</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 pt-0">
+          <Section
+            title="Scoring"
+            description="Determines what the Live-page Finish dialog asks for and how the TV displays a final."
+          >
             <div className="space-y-3">
-              {/* Format selector */}
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -402,7 +380,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                       : 'bg-background text-foreground border-input hover:bg-accent'
                   }`}
                 >
-                  Simple Score
+                  Simple score
                   <p className="text-[10px] opacity-70 mt-0.5">Just final score (e.g., 2-1)</p>
                 </button>
                 <button
@@ -414,48 +392,44 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                       : 'bg-background text-foreground border-input hover:bg-accent'
                   }`}
                 >
-                  Badminton Sets
+                  Badminton sets
                   <p className="text-[10px] opacity-70 mt-0.5">Set-by-set points (e.g., 21-19, 21-15)</p>
                 </button>
               </div>
 
-              {/* Badminton-specific settings */}
               {formData.scoringFormat === 'badminton' && (
-                <div className="bg-muted/50 rounded-md p-3 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Match Format</Label>
-                      <select
-                        value={formData.setsToWin ?? 2}
-                        onChange={(e) => setFormData({ ...formData, setsToWin: parseInt(e.target.value) })}
-                        className="w-full h-9 px-2 rounded border border-input bg-background text-sm"
-                      >
-                        <option value={1}>Best of 1 (1 set)</option>
-                        <option value={2}>Best of 3 (2 sets to win)</option>
-                        <option value={3}>Best of 5 (3 sets to win)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Points per Set</Label>
-                      <select
-                        value={formData.pointsPerSet ?? 21}
-                        onChange={(e) => setFormData({ ...formData, pointsPerSet: parseInt(e.target.value) })}
-                        className="w-full h-9 px-2 rounded border border-input bg-background text-sm"
-                      >
-                        <option value={11}>11 points (short)</option>
-                        <option value={15}>15 points (medium)</option>
-                        <option value={21}>21 points (standard)</option>
-                      </select>
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Match format</Label>
+                    <select
+                      value={formData.setsToWin ?? 2}
+                      onChange={(e) => setFormData({ ...formData, setsToWin: parseInt(e.target.value) })}
+                      className="w-full h-9 px-2 rounded border border-input bg-background text-sm"
+                    >
+                      <option value={1}>Best of 1 (1 set)</option>
+                      <option value={2}>Best of 3 (2 sets to win)</option>
+                      <option value={3}>Best of 5 (3 sets to win)</option>
+                    </select>
                   </div>
-
-                  <div className="flex items-center gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Points per set</Label>
+                    <select
+                      value={formData.pointsPerSet ?? 21}
+                      onChange={(e) => setFormData({ ...formData, pointsPerSet: parseInt(e.target.value) })}
+                      className="w-full h-9 px-2 rounded border border-input bg-background text-sm"
+                    >
+                      <option value={11}>11 points (short)</option>
+                      <option value={15}>15 points (medium)</option>
+                      <option value={21}>21 points (standard)</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2 flex items-start gap-2">
                     <input
                       type="checkbox"
                       id="deuceEnabled"
                       checked={formData.deuceEnabled ?? true}
                       onChange={(e) => setFormData({ ...formData, deuceEnabled: e.target.checked })}
-                      className="h-4 w-4 rounded border-input"
+                      className="mt-0.5 h-4 w-4 rounded border-input"
                     />
                     <div>
                       <Label htmlFor="deuceEnabled" className="cursor-pointer">
@@ -463,29 +437,23 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                       </Label>
                       <p className="text-[10px] text-muted-foreground">
                         {formData.pointsPerSet === 21
-                          ? 'After 20-20, first to 2-point lead wins (max 30 points)'
-                          : `After ${(formData.pointsPerSet ?? 21) - 1}-${(formData.pointsPerSet ?? 21) - 1}, first to 2-point lead wins`}
+                          ? 'After 20-20, first to 2-point lead wins (max 30 points).'
+                          : `After ${(formData.pointsPerSet ?? 21) - 1}-${(formData.pointsPerSet ?? 21) - 1}, first to 2-point lead wins.`}
                       </p>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </Section>
 
-        {/* EVENT CATEGORIES */}
-        <Card>
-          <CardHeader className="py-3 px-4">
-            <CardTitle className="text-sm">Event Categories</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 pt-0">
-            <Hint id="setup.event-categories" className="mb-3">
-              Positions per school — e.g., 3 creates MS1, MS2, MS3.
-            </Hint>
+          <Section
+            title="Events"
+            description="Positions per school — e.g., 3 creates MS1, MS2, MS3."
+          >
             <div className="grid grid-cols-5 gap-4">
               <div className="space-y-1">
-                <Label htmlFor="ms" className="text-xs">Men's Singles</Label>
+                <Label htmlFor="ms" className="text-xs">Men's singles</Label>
                 <Input
                   id="ms"
                   type="number"
@@ -499,7 +467,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="ws" className="text-xs">Women's Singles</Label>
+                <Label htmlFor="ws" className="text-xs">Women's singles</Label>
                 <Input
                   id="ws"
                   type="number"
@@ -513,7 +481,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="md" className="text-xs">Men's Doubles</Label>
+                <Label htmlFor="md" className="text-xs">Men's doubles</Label>
                 <Input
                   id="md"
                   type="number"
@@ -527,7 +495,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="wd" className="text-xs">Women's Doubles</Label>
+                <Label htmlFor="wd" className="text-xs">Women's doubles</Label>
                 <Input
                   id="wd"
                   type="number"
@@ -541,7 +509,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="xd" className="text-xs">Mixed Doubles</Label>
+                <Label htmlFor="xd" className="text-xs">Mixed doubles</Label>
                 <Input
                   id="xd"
                   type="number"
@@ -555,13 +523,10 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </Section>
+        </Surface>
 
-        {/* Submit row — right-aligned per enterprise dashboard convention.
-         * Full-width primary CTAs read as marketing-page CTAs; this is a
-         * config form. Sized to its content with comfortable padding. */}
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-2 pt-1">
           <Button type="submit" disabled={saving} size="default">
             {saving ? 'Saving…' : 'Save configuration'}
           </Button>

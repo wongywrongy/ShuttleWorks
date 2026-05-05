@@ -6,6 +6,7 @@ import { useMemo, useEffect, useState, useRef } from 'react';
 import { calculateTotalSlots, formatSlotTime } from '../../../lib/time';
 import { indexById } from '../../../store/selectors';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig } from '../../../api/dto';
+import { EVENT_COLORS, DEFAULT_EVENT_COLOR } from '../eventColors';
 
 interface LiveTimelineGridProps {
   assignments: ScheduleAssignment[];
@@ -18,16 +19,7 @@ interface LiveTimelineGridProps {
 const SLOT_WIDTH = 48;
 const ROW_HEIGHT = 32;
 
-// Event type colors - block style consistent with LiveOperationsGrid
-const EVENT_COLORS: Record<string, { bg: string; border: string; label: string }> = {
-  MS: { bg: 'bg-blue-100', border: 'border-blue-300', label: "Men's Singles" },
-  WS: { bg: 'bg-pink-100', border: 'border-pink-300', label: "Women's Singles" },
-  MD: { bg: 'bg-green-100', border: 'border-green-300', label: "Men's Doubles" },
-  WD: { bg: 'bg-purple-100', border: 'border-purple-300', label: "Women's Doubles" },
-  XD: { bg: 'bg-orange-100', border: 'border-orange-300', label: "Mixed Doubles" },
-};
-
-const DEFAULT_COLOR = { bg: 'bg-muted', border: 'border-border', label: 'Unknown' };
+const DEFAULT_COLOR = DEFAULT_EVENT_COLOR;
 
 export function LiveTimelineGrid({
   assignments,
@@ -164,9 +156,9 @@ export function LiveTimelineGrid({
   }
 
   return (
-    <div className="bg-card rounded border border-border overflow-hidden">
+    <div>
       {/* Header with legend and status */}
-      <div className="px-2 py-1 border-b border-border bg-muted/40 flex items-center gap-3 text-xs">
+      <div className="px-2 py-1 border-b border-border/60 bg-muted/40 flex items-center gap-3 text-xs">
         {/* Legend */}
         {Object.entries(EVENT_COLORS).map(([key, { bg, border, label }]) => (
           <span key={key} className="flex items-center gap-1 text-muted-foreground" title={label}>
@@ -196,7 +188,7 @@ export function LiveTimelineGrid({
       <div className="overflow-x-auto">
         <div className="min-w-max">
           {/* Time header */}
-          <div className="flex border-b border-border">
+          <div className="flex border-b border-border/60">
             <div className="w-12 flex-shrink-0 px-1 py-0.5 bg-muted/40 text-xs text-muted-foreground" />
             {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
               <div
@@ -216,13 +208,14 @@ export function LiveTimelineGrid({
                 C{courtId}
               </div>
               <div className="flex-1 relative" style={{ height: ROW_HEIGHT }}>
-                {/* Slot grid lines */}
+                {/* Slot grid lines — match DragGantt's lighter mesh:
+                    every-other slot only, /30 weight. */}
                 <div className="absolute inset-0 flex">
-                  {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map(slot => (
+                  {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
                     <div
                       key={slot}
                       style={{ width: SLOT_WIDTH }}
-                      className="flex-shrink-0 border-l border-border/60"
+                      className={`flex-shrink-0 ${i % 2 === 0 ? 'border-l border-border/30' : ''}`}
                     />
                   ))}
                 </div>
@@ -242,7 +235,7 @@ export function LiveTimelineGrid({
                       key={assignment.matchId}
                       className={`absolute top-0.5 rounded border cursor-default hover:brightness-95
                         ${colors.bg} ${colors.border}
-                        transition-all duration-150 ease-out
+                        transition-[opacity,transform] duration-150 ease-brand
                         ${isAnimated ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
                       style={{ left, width, height: ROW_HEIGHT - 4 }}
                       title={getMatchTooltip(assignment.matchId, assignment)}

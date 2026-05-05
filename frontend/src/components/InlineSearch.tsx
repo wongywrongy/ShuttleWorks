@@ -12,7 +12,7 @@
  * presentational beyond owning its own focus/clear state.
  */
 import { useEffect, useRef } from 'react';
-import { Search, X } from 'lucide-react';
+import { MagnifyingGlass, X } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET } from '../lib/utils';
 
 export interface FilterChipGroup {
@@ -74,7 +74,7 @@ export function InlineSearch({
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
       {/* Search input */}
       <label className="relative inline-flex h-7 min-w-[200px] flex-1 items-center">
-        <Search
+        <MagnifyingGlass
           aria-hidden="true"
           className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground"
         />

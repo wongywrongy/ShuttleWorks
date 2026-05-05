@@ -1,7 +1,9 @@
 """Pydantic schemas for API requests/responses - simplified for school sparring."""
+import uuid
 from typing import Annotated, List, Literal, Optional, Dict, Any
 from pydantic import BaseModel, Field, StringConstraints
 from enum import Enum
+from app.time_utils import now_iso
 
 
 # Reusable constrained types
@@ -344,6 +346,38 @@ class Proposal(BaseModel):
     expiresAt: str
 
 
+class Suggestion(BaseModel):
+    """A pre-computed re-optimization proposal surfaced in the inbox.
+
+    Wraps a (still-live) ``Proposal`` with display copy and a dedup
+    fingerprint. The frontend reads these from
+    ``GET /schedule/suggestions``; ``apply`` commits the underlying
+    proposal; ``dismiss`` cancels it.
+
+    ``fingerprint`` is the worker's idempotency key — re-running the
+    same trigger against the same state yields the same fingerprint,
+    so the worker can skip stamping a duplicate suggestion.
+    """
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    # Output vocabulary for the inbox. The worker's TriggerKind
+    # (services/suggestions_worker.py) overlaps on "optimize" and
+    # "repair"; "director" and "candidate" are surfaced via paths that
+    # don't go through the worker queue.
+    kind: Literal["repair", "optimize", "director", "candidate"]
+    title: str
+    metric: str
+    proposalId: str
+    fingerprint: str
+    fromScheduleVersion: int
+    createdAt: str = Field(default_factory=now_iso)
+    expiresAt: str
+
+
+# Default suggestion TTL. Shorter than proposal TTL (30 min) because
+# suggestions go stale faster (state moves under them).
+SUGGESTION_TTL_MINUTES = 10
+
+
 # ---- Advisories (live operations) -------------------------------------
 
 class SuggestedAction(BaseModel):
@@ -381,6 +415,7 @@ class Advisory(BaseModel):
     matchId: Optional[str] = None
     courtId: Optional[int] = None
     suggestedAction: Optional[SuggestedAction] = None
+    suggestionId: Optional[str] = None  # set when worker has stamped a pre-baked Suggestion for this advisory
     detectedAt: str                                  # ISO timestamp
 
 
@@ -390,9 +425,13 @@ class MatchScore(BaseModel):
     sideB: int
 
 
-class MatchStateDTO(BaseModel):
-    status: str  # 'scheduled' | 'called' | 'started' | 'finished'
-    score: Optional[MatchScore] = None
+# NOTE: The canonical MatchStateDTO lives in api/match_state.py — that
+# module owns persistence and field-validation. Importing it from there
+# everywhere ensures Pydantic's class-identity validation doesn't reject
+# instances flowing across the proposal pipeline (e.g., director-action
+# → warm-restart). A 3-line stub used to live here; it caused 422s on
+# /schedule/director-action when the real instance was passed into a
+# WarmRestartRequest typed against the stub.
 
 
 # Health

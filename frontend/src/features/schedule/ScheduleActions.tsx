@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { CircleNotch } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 /**
@@ -7,7 +7,7 @@ import { INTERACTIVE_BASE } from '../../lib/utils';
  * The previous "Re-optimize" sibling button was redundant: it ran the
  * solver with previous assignments as warm start but did NOT pin
  * started/finished matches, which made it actively unsafe mid-tournament.
- * The sidebar's Re-plan… action covers the same warm-start use case
+ * The sidebar's Re-plan action covers the same warm-start use case
  * AND auto-pins played matches, so Re-optimize was strictly weaker.
  */
 interface ScheduleActionsProps {
@@ -44,7 +44,7 @@ export function ScheduleActions({
               : 'bg-blue-600 text-white hover:bg-blue-700',
         ].join(' ')}
       >
-        {generating && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
+        {generating && <CircleNotch aria-hidden="true" className="h-4 w-4 animate-spin" />}
         {generating
           ? 'Generating…'
           : confirming

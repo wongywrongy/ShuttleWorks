@@ -3,17 +3,16 @@
  *
  * Industry pattern (Linear / Stripe / Notion / GitHub): a persistent
  * left rail of section labels, the active one highlighted. Click → swap
- * the right pane. Sections that aren't yet meaningful (e.g., Demos
- * before sample tournaments are loaded) can be marked ``hint`` so the
- * row still renders but reads as muted.
+ * the right pane. Sections that aren't yet meaningful can be marked
+ * ``hint`` so the row still renders but reads as muted.
  */
-import type { LucideIcon } from 'lucide-react';
+import type { Icon } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 export interface SettingsSection {
   id: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: Icon;
   hint?: string;
 }
 

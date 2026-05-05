@@ -65,6 +65,7 @@ from scheduler_core._log import (
     log_solve_end,
     log_solve_start,
 )
+from scheduler_core.engine.cancel_token import CancelToken
 from scheduler_core.engine.config import EngineConfig
 from scheduler_core.engine.constraints import load as load_constraint
 # Importing each plugin module registers it with the registry.
@@ -94,6 +95,7 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
         matches: Optional[Dict[str, Match]] = None,
         model_stats: Optional[Dict[str, int]] = None,
         pool_size: int = 0,
+        cancel_token: Optional[CancelToken] = None,
     ) -> None:
         super().__init__()
         self.callback_fn = callback_fn
@@ -106,6 +108,7 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
         self.last_gap_checkpoint = 100
         self.time_checkpoints = {5: False, 10: False, 30: False, 60: False}
         self.initial_stats_sent = False
+        self.cancel_token = cancel_token
         # Candidate-pool bookkeeping. ``_pool`` is a max-heap (Python's
         # heapq is min-heap, so we push ``-objective`` to invert) capped
         # at ``pool_size`` — pushing a worse solution when full pops
@@ -118,6 +121,18 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
         self._counter = 0  # tie-breaker so heap comparisons never reach the snapshot
 
     def on_solution_callback(self) -> None:
+        # NOTE: Cancellation only fires at solution boundaries — OR-Tools
+        # invokes this callback per-solution, not per-tick. Cold solves
+        # that find no feasible solution before time_limit_seconds will
+        # never poll the token. Callers must still set time_limit_seconds
+        # as a hard backstop.
+        # Cooperative cancellation: poll the token first so a cancelled
+        # solve aborts at the very next solution callback, giving
+        # sub-second latency relative to when cancel() was called.
+        if self.cancel_token is not None and self.cancel_token.is_cancelled():
+            self.StopSearch()
+            return
+
         self.solution_count += 1
         elapsed_ms = (time_module.perf_counter() - self.start_time) * 1000
         elapsed_sec = elapsed_ms / 1000
@@ -539,6 +554,7 @@ class CPSATScheduler:
         self,
         progress_callback: Optional[Callable[[dict], None]] = None,
         candidate_pool_size: int = 0,
+        cancel_token: Optional[CancelToken] = None,
     ) -> ScheduleResult:
         start_time = time_module.perf_counter()
         log_solve_start()
@@ -573,17 +589,19 @@ class CPSATScheduler:
         solver.parameters.log_search_progress = self.solver_options.log_progress
 
         # We instantiate the callback whenever EITHER an external
-        # progress callback was supplied OR a candidate pool was
-        # requested — it serves both roles. With neither, the solver
-        # runs uninstrumented (legacy behaviour).
+        # progress callback was supplied, a candidate pool was
+        # requested, OR a cancel_token was passed — it serves all
+        # roles. With none of these, the solver runs uninstrumented
+        # (legacy behaviour).
         callback: Optional[ProgressCallback] = None
-        if progress_callback is not None or candidate_pool_size > 0:
+        if progress_callback is not None or candidate_pool_size > 0 or cancel_token is not None:
             callback = ProgressCallback(
                 callback_fn=progress_callback,
                 svars=self.svars,
                 matches=self.matches,
                 model_stats=model_stats,
                 pool_size=candidate_pool_size,
+                cancel_token=cancel_token,
             )
             status = solver.Solve(self.model, callback)
         else:

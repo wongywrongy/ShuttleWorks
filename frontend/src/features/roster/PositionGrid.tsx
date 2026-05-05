@@ -31,7 +31,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDown, Eye, EyeOff, GripVertical, Settings2 } from 'lucide-react';
+import { CaretDown, Eye, EyeSlash, DotsSixVertical, GearSix } from '@phosphor-icons/react';
 import { useAppStore } from '../../store/appStore';
 import type { PlayerDTO } from '../../api/dto';
 import { INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET } from '../../lib/utils';
@@ -156,20 +156,20 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
 
   if (events.length === 0) {
     return (
-      <div className="rounded border border-dashed border-border bg-card p-6 text-center text-xs text-muted-foreground">
+      <div className="bg-card px-6 py-10 text-center text-xs text-muted-foreground">
         No events configured. Set <strong>Event Categories</strong> in the Setup tab to enable the roster grid.
       </div>
     );
   }
 
   return (
-    <div className="rounded border border-border bg-card overflow-hidden">
-      <div className="flex items-baseline justify-between border-b border-border bg-muted/40 px-3 py-2">
+    <div className="flex min-w-0 flex-col bg-card">
+      <div className="flex items-baseline justify-between border-b border-border/60 bg-muted/40 px-3 py-2">
         <div className="flex items-baseline gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
+          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Position grid
           </span>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[11px] text-foreground">
             {school?.name ?? '—'}
           </span>
         </div>
@@ -482,7 +482,7 @@ function PlayerSearchPicker({
     <div
       ref={ref}
       data-testid={`picker-${schoolId}-${rank}`}
-      className="absolute left-1 right-1 top-full z-40 mt-1 rounded-md border border-border bg-card shadow-xl"
+      className="absolute left-1 right-1 top-full z-overlay mt-1 rounded-md border border-border bg-card shadow-xl"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="border-b border-border/60 px-2 py-1.5">
@@ -579,17 +579,32 @@ export function DraggablePlayerChip({
       style={style}
       data-testid={`pool-chip-${player.id}`}
       className={[
-        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-all',
+        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-brand',
         isDragging
-          ? 'z-30 shadow-lg ring-2 ring-blue-400 cursor-grabbing opacity-90 scale-[1.02]'
-          : 'cursor-grab hover:border-blue-400',
+          ? 'z-popover shadow-lg ring-2 ring-primary cursor-grabbing opacity-90 scale-[1.02]'
+          : 'cursor-grab hover:border-primary',
       ].join(' ')}
     >
       <span aria-hidden className="text-muted-foreground/70">⠿</span>
       <span className="flex-1 truncate">{player.name || '(unnamed)'}</span>
-      <span className="text-[10px] text-muted-foreground tabular-nums">
-        {(player.ranks ?? []).length}
-      </span>
+      {(() => {
+        const eventCount = (player.ranks ?? []).length;
+        const heavy = eventCount >= 4;
+        return (
+          <span
+            className={[
+              'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] tabular-nums',
+              heavy
+                ? 'bg-status-warning-bg text-status-warning ring-1 ring-status-warning/40'
+                : 'text-muted-foreground',
+            ].join(' ')}
+            title={heavy ? `High event load — ${eventCount} events` : `${eventCount} event${eventCount === 1 ? '' : 's'}`}
+            aria-label={heavy ? `High event load: ${eventCount} events` : undefined}
+          >
+            {eventCount}
+          </span>
+        );
+      })()}
     </button>
   );
 }
@@ -656,15 +671,15 @@ function ColumnManager({
           'inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-2xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground',
         ].join(' ')}
       >
-        <Settings2 aria-hidden="true" className="h-3 w-3" />
+        <GearSix aria-hidden="true" className="h-3 w-3" />
         Columns
-        <ChevronDown aria-hidden="true" className="h-3 w-3" />
+        <CaretDown aria-hidden="true" className="h-3 w-3" />
       </button>
       {open && (
         <div
           role="dialog"
           aria-label="Manage columns"
-          className="absolute right-0 top-full z-30 mt-1 w-72 rounded border border-border bg-popover p-2 text-xs text-popover-foreground shadow-lg"
+          className="absolute right-0 top-full z-popover mt-1 w-72 rounded border border-border bg-popover p-2 text-xs text-popover-foreground shadow-lg"
         >
           <div className="mb-1.5 flex items-center justify-between border-b border-border/60 pb-1.5">
             <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -708,7 +723,7 @@ function ColumnManager({
 
 /**
  * One sortable row inside the ColumnManager popover. Drag handle is
- * the GripVertical glyph at the left; ▲/▼ remain as keyboard-friendly
+ * the DotsSixVertical glyph at the left; ▲/▼ remain as keyboard-friendly
  * fallbacks; eye toggle on the right hides/shows the column.
  */
 function SortableEventRow({
@@ -753,7 +768,7 @@ function SortableEventRow({
         aria-label={`Drag ${prefix} to reorder`}
         className={`${INTERACTIVE_BASE_QUIET} cursor-grab active:cursor-grabbing rounded p-0.5 text-muted-foreground/70 hover:text-foreground`}
       >
-        <GripVertical aria-hidden="true" className="h-3 w-3" />
+        <DotsSixVertical aria-hidden="true" className="h-3 w-3" />
       </button>
       <span className="w-7 font-mono text-2xs">{prefix}</span>
       <span className="flex-1 truncate text-2xs text-muted-foreground">
@@ -788,7 +803,7 @@ function SortableEventRow({
         {isVisible ? (
           <Eye aria-hidden="true" className="h-3 w-3" />
         ) : (
-          <EyeOff aria-hidden="true" className="h-3 w-3" />
+          <EyeSlash aria-hidden="true" className="h-3 w-3" />
         )}
       </button>
     </li>
