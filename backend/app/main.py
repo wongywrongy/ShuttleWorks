@@ -17,6 +17,7 @@ from api import (
     schedule_advisories,
     schedule_proposals,
     schedule_director,
+    schedule_suggestions,  # <-- added
 )
 
 log = logging.getLogger("scheduler.app")
@@ -26,15 +27,30 @@ log = logging.getLogger("scheduler.app")
 async def lifespan(app: FastAPI):
     """Run startup + graceful shutdown hooks.
 
-    The scheduler is stateless per-request, but tournament_state and
-    match_state flush their writes atomically in-request, so there's
-    nothing to drain here beyond letting uvicorn finish inflight requests
-    (its own timeout_graceful_shutdown handles that). We log shutdown so
-    the user can see a clean exit in the container logs.
+    SuggestionsWorker spawns one asyncio.Task that consumes a
+    queue of speculative-solve triggers. Handler is built in
+    api.schedule_suggestions to keep solver imports out of this
+    top-level module.
     """
     log.info("app_startup version=2.0.0")
-    yield
-    log.info("app_shutdown")
+
+    from services.suggestions_worker import SuggestionsWorker
+    from api.schedule_suggestions import build_handler
+
+    worker = SuggestionsWorker(
+        handler=build_handler(app),
+        cooldown_seconds=30.0,
+    )
+    app.state.suggestions_worker = worker
+    await worker.start()
+    log.info("suggestions_worker started")
+
+    try:
+        yield
+    finally:
+        await worker.stop()
+        log.info("suggestions_worker stopped")
+        log.info("app_shutdown")
 
 
 app = FastAPI(
@@ -90,6 +106,7 @@ app.include_router(schedule_warm_restart.router)
 app.include_router(schedule_advisories.router)
 app.include_router(schedule_proposals.router)
 app.include_router(schedule_director.router)
+app.include_router(schedule_suggestions.router)
 app.include_router(match_state.router)
 app.include_router(tournament_state.router)
 
