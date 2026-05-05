@@ -29,6 +29,7 @@ import { WarmRestartDialog } from '../features/schedule/WarmRestartDialog';
 import { Modal } from '../components/common/Modal';
 import { AdvisoryBanner } from '../components/status/AdvisoryBanner';
 import { SuggestionsRail } from '../features/suggestions/SuggestionsRail';
+import { GanttLegend } from '../features/control-center/GanttLegend';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { Advisory } from '../api/dto';
@@ -439,95 +440,110 @@ export function MatchControlCenterPage() {
     <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
       <AdvisoryBanner onReview={handleAdvisoryReview} />
       <SuggestionsRail />
-      <div className="flex-1 min-h-0 flex gap-2">
-        {/* Main area - Gantt + Matches list */}
-        <div className="flex-1 min-w-0 flex flex-col gap-2">
-          {/* Gantt panel */}
-          <div className="bg-card rounded border border-border flex flex-col overflow-hidden flex-shrink-0">
-            <div className="px-2 py-1.5 border-b border-border flex items-center justify-between">
-              <div className="flex items-center gap-3 text-xs">
-                <span className="font-medium text-foreground">{stats?.percentage || 0}%</span>
-                <span className="text-muted-foreground">
-                  {stats?.finished || 0}/{stats?.total || 0} matches
+      {/* Single unified surface for the live work area. Stats bar /
+          Gantt / legend / search / queue stack vertically in the left
+          column, separated by hairline horizontal dividers; the
+          Match-details column on the right is a sibling separated by a
+          single vertical hairline. No per-region cards. */}
+      <div className="flex-1 min-h-0 bg-card rounded border border-border flex overflow-hidden">
+        {/* Left column */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {/* Section 1 — stats + page-level actions */}
+          <div className="flex-shrink-0 border-b border-border/60 px-2 py-1.5 flex items-center justify-between">
+            <div className="flex items-center gap-3 text-xs">
+              <span
+                className="font-medium text-foreground tabular-nums"
+                title="Share of currently-scheduled matches that are finished. Cancelled or court-closed matches drop out of both sides of the ratio."
+              >
+                {stats?.percentage || 0}%
+              </span>
+              <span className="text-muted-foreground tabular-nums">
+                {stats?.finished || 0}/{stats?.total || 0} matches
+              </span>
+              {(stats?.inProgress || 0) > 0 && (
+                <span className="font-medium text-status-live tabular-nums">{stats.inProgress} active</span>
+              )}
+              {delayedCount > 0 && (
+                <span className="rounded border border-status-warning/40 bg-status-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-status-warning tabular-nums">
+                  {delayedCount} late
                 </span>
-                {(stats?.inProgress || 0) > 0 && (
-                  <span className="font-medium text-status-live">{stats.inProgress} active</span>
-                )}
-                {delayedCount > 0 && (
-                  <span className="rounded border border-status-warning/40 bg-status-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-status-warning">
-                    {delayedCount} late
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void exportScheduleXlsx(
-                    liveOps.schedule,
-                    liveOps.matches,
-                    players,
-                    liveOps.config!,
-                  )}
-                  disabled={!liveOps.schedule || liveOps.schedule.assignments.length === 0}
-                  title={
-                    !liveOps.schedule || liveOps.schedule.assignments.length === 0
-                      ? 'No schedule to export'
-                      : 'Download schedule as XLSX'
-                  }
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
-                >
-                  <Download aria-hidden="true" className="h-4 w-4" />
-                  Export XLSX
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDirectorOpen(true)}
-                  title="Director tools — delays, breaks, blackouts"
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
-                >
-                  <GearSix aria-hidden="true" className="h-4 w-4" />
-                  Director
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDisruptionPrefill({});
-                    setDisruptionOpen(true);
-                  }}
-                  title="Repair after a disruption (court closed, withdrawal, overrun, cancellation)"
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
-                >
-                  Disruption
-                </button>
-                <button
-                  type="button"
-                  onClick={liveOps.triggerReoptimize}
-                  disabled={liveOps.isReoptimizing}
-                  title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan or Move/postpone."
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
-                >
-                  {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
-                </button>
-              </div>
+              )}
             </div>
-            <div className="p-2 overflow-x-auto">
-              <GanttChart
-                schedule={liveOps.schedule}
-                matches={liveOps.matches}
-                matchStates={liveOps.matchStates}
-                config={liveOps.config}
-                currentSlot={currentSlot}
-                selectedMatchId={selectedMatchId}
-                onMatchSelect={setSelectedMatchId}
-                impactedMatchIds={selectedAnalysis?.directlyImpacted}
-                trafficLights={trafficLights}
-                onRequestReopenCourt={() => setDirectorOpen(true)}
-              />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void exportScheduleXlsx(
+                  liveOps.schedule,
+                  liveOps.matches,
+                  players,
+                  liveOps.config!,
+                )}
+                disabled={!liveOps.schedule || liveOps.schedule.assignments.length === 0}
+                title={
+                  !liveOps.schedule || liveOps.schedule.assignments.length === 0
+                    ? 'No schedule to export'
+                    : 'Download schedule as XLSX'
+                }
+                className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                Export XLSX
+              </button>
+              <button
+                type="button"
+                onClick={() => setDirectorOpen(true)}
+                title="Director tools — delays, breaks, blackouts"
+                className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+              >
+                <GearSix aria-hidden="true" className="h-4 w-4" />
+                Director
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDisruptionPrefill({});
+                  setDisruptionOpen(true);
+                }}
+                title="Repair after a disruption (court closed, withdrawal, overrun, cancellation)"
+                className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+              >
+                Disruption
+              </button>
+              <button
+                type="button"
+                onClick={liveOps.triggerReoptimize}
+                disabled={liveOps.isReoptimizing}
+                title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan or Move/postpone."
+                className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
+              </button>
             </div>
           </div>
-
-          {/* Matches panel (workflow: In Progress pinned + tabbed Up Next/Finished) */}
-          <div className="flex-1 min-h-0 bg-card rounded border border-border flex flex-col overflow-hidden">
+          {/* Section 2 — Gantt grid */}
+          <div className="flex-shrink-0 border-b border-border/60 p-2 overflow-x-auto">
+            <GanttChart
+              schedule={liveOps.schedule}
+              matches={liveOps.matches}
+              matchStates={liveOps.matchStates}
+              config={liveOps.config}
+              currentSlot={currentSlot}
+              selectedMatchId={selectedMatchId}
+              onMatchSelect={setSelectedMatchId}
+              impactedMatchIds={selectedAnalysis?.directlyImpacted}
+              trafficLights={trafficLights}
+              onRequestReopenCourt={() => setDirectorOpen(true)}
+            />
+          </div>
+          {/* Section 3 — Gantt color legend (always visible reference) */}
+          <div className="flex-shrink-0 border-b border-border/60 px-2 py-1">
+            <GanttLegend />
+          </div>
+          {/* Section 4 + 5 — search bar (top of WorkflowPanel) and the
+              match queue underneath. WorkflowPanel keeps its own border-b
+              under the search row so the section divider falls in the
+              same place as the others. */}
+          <div className="flex-1 min-h-0 overflow-hidden">
             <WorkflowPanel
               matchesByStatus={liveTracking.matchesByStatus}
               matches={liveTracking.matches}
@@ -550,10 +566,10 @@ export function MatchControlCenterPage() {
           </div>
         </div>
 
-        {/* Collapsible Match Details sidebar */}
+        {/* Right column — Match details (vertical hairline as separator) */}
         {detailsOpen ? (
-          <div className="w-72 flex-shrink-0 bg-card rounded border border-border flex flex-col overflow-hidden">
-            <div className="px-2 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
+          <div className="w-72 flex-shrink-0 border-l border-border flex flex-col overflow-hidden">
+            <div className="flex-shrink-0 border-b border-border/60 px-2 py-1.5 flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Match Details
               </span>
@@ -612,7 +628,7 @@ export function MatchControlCenterPage() {
             onClick={() => setDetailsOpen(true)}
             title="Show match details"
             aria-label="Show match details"
-            className={`${INTERACTIVE_BASE} w-6 flex-shrink-0 bg-card rounded border border-border flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground`}
+            className={`${INTERACTIVE_BASE} w-6 flex-shrink-0 border-l border-border flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground`}
           >
             <CaretLeft aria-hidden="true" className="h-4 w-4" />
           </button>

@@ -322,11 +322,24 @@ export function useLiveTracking() {
     }
   }, [setMatchStates]);
 
-  // Calculate progress stats
+  // Calculate progress stats. Both numerator and denominator are
+  // restricted to the current schedule's assignments — earlier we
+  // counted any matchState with status==='finished' regardless of
+  // whether its match was still scheduled, which let the percentage
+  // exceed 100 after a cancellation/court-closure removed a played
+  // match from the plan.
+  const scheduledAssignments = schedule?.assignments ?? [];
+  const finishedScheduled = scheduledAssignments.filter(
+    (a) => matchStates[a.matchId]?.status === 'finished',
+  ).length;
+  const startedScheduled = scheduledAssignments.filter(
+    (a) => matchStates[a.matchId]?.status === 'started',
+  ).length;
+  const totalScheduled = scheduledAssignments.length;
   const progressStats = {
-    total: schedule?.assignments.length || 0,
-    finished: Object.values(matchStates).filter(s => s.status === 'finished').length,
-    inProgress: Object.values(matchStates).filter(s => s.status === 'started').length,
+    total: totalScheduled,
+    finished: finishedScheduled,
+    inProgress: startedScheduled,
     get remaining() {
       return this.total - this.finished;
     },

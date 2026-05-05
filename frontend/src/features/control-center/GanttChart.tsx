@@ -335,17 +335,23 @@ export function GanttChart({
                 className="flex-1 relative gantt-grid"
                 style={{ height: ROW_HEIGHT }}
               >
-                {/* Slot grid lines — closed cells get a slate fill so
-                    a temporary closure (12:00–13:00) shows as a band
-                    rather than greying the whole row. */}
+                {/* Slot grid lines — vertical dividers fire only on the
+                    same cadence as the time-header labels (every other
+                    slot) and at a lighter weight than before. The full
+                    every-cell mesh was visually heavy for no extra
+                    information; the labelled boundaries are enough.
+                    Closed cells still get a slate fill so a temporary
+                    closure (12:00–13:00) shows as a band rather than
+                    greying the whole row. */}
                 <div className="absolute inset-0 flex">
-                  {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map(slot => {
+                  {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => {
                     const slotClosed = isSlotClosed(closedWindows, courtId, slot);
+                    const showDivider = i % 2 === 0;
                     return (
                       <div
                         key={slot}
                         style={{ width: SLOT_WIDTH }}
-                        className={`flex-shrink-0 border-l border-border/40 ${
+                        className={`flex-shrink-0 ${showDivider ? 'border-l border-border/30' : ''} ${
                           slotClosed
                             ? 'bg-muted/50'
                             : slot === currentSlot
