@@ -26,6 +26,8 @@ export function SuggestionsRail() {
   const setScheduleVersion = useAppStore((s) => s.setScheduleVersion);
   const setScheduleHistory = useAppStore((s) => s.setScheduleHistory);
   const setConfig = useAppStore((s) => s.setConfig);
+  const setScheduleStale = useAppStore((s) => s.setScheduleStale);
+  const setAdvisories = useAppStore((s) => s.setAdvisories);
   const pushToast = useAppStore((s) => s.pushToast);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -47,6 +49,15 @@ export function SuggestionsRail() {
       setScheduleVersion(r.state.scheduleVersion ?? 0);
       setScheduleHistory(r.state.scheduleHistory ?? []);
       if (r.state.config) setConfig(r.state.config);
+      // setConfig flags the schedule as stale whenever scheduling-relevant
+      // fields change (e.g., closedCourts). The schedule we just committed
+      // already accounts for those changes, so override the flag back to
+      // false. Mirrors useProposals.commit.
+      setScheduleStale(false);
+      // Drop now-stale advisories — the committed schedule may have
+      // resolved the conditions that triggered them. The next poll
+      // repopulates from a clean slate. Mirrors useProposals.commit.
+      setAdvisories([]);
       setSuggestions(suggestions.filter((x) => x.id !== s.id));
       pushToast({
         level: 'success',
@@ -54,13 +65,16 @@ export function SuggestionsRail() {
         durationMs: 3000,
       });
     } catch (err: any) {
-      // 409 (stale) and 410 (expired) drop the suggestion locally —
-      // the next poll will confirm.
+      // 409 (stale version) and 410 (suggestion expired before commit)
+      // both indicate "this suggestion is no longer applicable" — drop
+      // locally and surface as an info-level refresh nudge. The next
+      // poll will reconcile.
       const code = err?.response?.status;
+      const benign = code === 409 || code === 410;
       setSuggestions(suggestions.filter((x) => x.id !== s.id));
       pushToast({
-        level: code === 409 ? 'info' : 'error',
-        message: code === 409
+        level: benign ? 'info' : 'error',
+        message: benign
           ? 'Suggestion was stale, refreshing'
           : err?.message ?? 'Apply failed',
         durationMs: 4000,

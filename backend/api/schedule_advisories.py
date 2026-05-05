@@ -509,12 +509,30 @@ async def get_schedule_advisories(http_request: Request) -> List[Advisory]:
 
     advisories = collect_advisories(state, match_states_dict)
 
-    # Post REPAIR triggers for advisories whose suggestedAction.kind == "repair".
+    # Attach suggestionId for advisories whose worker already produced
+    # a pre-baked suggestion. Index the suggestion store once so we
+    # don't run an O(advisories × suggestions) scan.
+    from api.schedule_proposals import _get_suggestion_store
+    suggestion_store = _get_suggestion_store(http_request.app)
+    sug_by_fingerprint = {s.fingerprint: s.id for s in suggestion_store.values()}
+    for a in advisories:
+        sug_id = sug_by_fingerprint.get(f"repair:{a.id}")
+        if sug_id is not None:
+            a.suggestionId = sug_id
+
+    # Post REPAIR triggers for repair-kind advisories that DON'T already
+    # have a stamped suggestion. The worker's per-fingerprint cooldown
+    # (30s) would dedup duplicate posts anyway, but skipping the post
+    # here saves the round-trip and keeps the worker queue cleaner.
     worker = getattr(http_request.app.state, "suggestions_worker", None)
     if worker is not None:
         from services.suggestions_worker import TriggerEvent, TriggerKind
         for a in advisories:
-            if a.suggestedAction and a.suggestedAction.kind == "repair":
+            if (
+                a.suggestedAction
+                and a.suggestedAction.kind == "repair"
+                and a.suggestionId is None
+            ):
                 try:
                     await worker.post(TriggerEvent(
                         kind=TriggerKind.REPAIR,
@@ -523,17 +541,5 @@ async def get_schedule_advisories(http_request: Request) -> List[Advisory]:
                     ))
                 except Exception:
                     log.exception("advisories: post REPAIR trigger failed")
-
-    # Attach suggestionId to advisories that already have a stamped suggestion.
-    from api.schedule_proposals import _get_suggestion_store
-    suggestion_store = _get_suggestion_store(http_request.app)
-    for a in advisories:
-        matching = next(
-            (s for s in suggestion_store.values()
-             if s.fingerprint == f"repair:{a.id}"),
-            None,
-        )
-        if matching is not None:
-            a.suggestionId = matching.id
 
     return advisories
