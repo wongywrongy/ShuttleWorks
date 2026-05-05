@@ -606,17 +606,33 @@ export function PublicDisplayPage() {
           >
             {courtMatches.map(({ courtId, match, state, status, nextMatch, nextStartTime }, idx) => {
               const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
+              // Closed-now check (mirrors the list-view logic above):
+              // either the legacy all-day list or any time-bounded
+              // closure window that covers the current minute.
+              const nowMin = now.getHours() * 60 + now.getMinutes();
+              const minToMin = (hhmm?: string | null) =>
+                hhmm ? Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5)) : null;
+              const isClosed =
+                (config.closedCourts ?? []).includes(courtId) ||
+                (config.courtClosures ?? []).some((c) => {
+                  if (c.courtId !== courtId) return false;
+                  const f = minToMin(c.fromTime) ?? 0;
+                  const t = minToMin(c.toTime) ?? 24 * 60;
+                  return nowMin >= f && nowMin < t;
+                });
               // Active / called cards get a tinted background carrying
               // the state. Replaces the old left-stripe accent (which
               // is a banned anti-pattern) with a full-card tint plus an
               // inset highlight ring on active. Backgrounds map to the
               // same status tokens used everywhere else, so theming
               // and dark mode stay consistent.
-              const cardBgClass = status === 'active'
-                ? 'bg-status-live-bg/80 ring-1 ring-status-live/30 shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.25)]'
-                : status === 'called'
-                  ? 'bg-status-called-bg/70 ring-1 ring-status-called/25'
-                  : 'bg-card/60';
+              const cardBgClass = isClosed
+                ? 'bg-muted/30 opacity-60'
+                : status === 'active'
+                  ? 'bg-status-live-bg/80 ring-1 ring-status-live/30 shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.25)]'
+                  : status === 'called'
+                    ? 'bg-status-called-bg/70 ring-1 ring-status-called/25'
+                    : 'bg-card/60';
               const aggregate = state?.score
                 ? `${state.score.sideA}–${state.score.sideB}`
                 : null;
@@ -661,7 +677,11 @@ export function PublicDisplayPage() {
                     <div
                       className={`min-w-0 ${playerSize} leading-tight text-foreground`}
                     >
-                      {match ? (
+                      {isClosed ? (
+                        <span className="uppercase tracking-wider text-muted-foreground">
+                          Court closed
+                        </span>
+                      ) : match ? (
                         <div className="flex flex-col gap-0.5 min-w-0">
                           <span className="block truncate font-medium" title={sideA}>{sideA}</span>
                           <span

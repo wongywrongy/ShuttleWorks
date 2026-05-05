@@ -490,6 +490,17 @@ export function MatchControlCenterPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    setDisruptionPrefill({});
+                    setDisruptionOpen(true);
+                  }}
+                  title="Repair after a disruption (court closed, withdrawal, overrun, cancellation)"
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                >
+                  Disruption…
+                </button>
+                <button
+                  type="button"
                   onClick={liveOps.triggerReoptimize}
                   disabled={liveOps.isReoptimizing}
                   title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan… or Move/postpone…"

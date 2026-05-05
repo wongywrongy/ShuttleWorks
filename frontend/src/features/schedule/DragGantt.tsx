@@ -10,7 +10,7 @@
  *   else around the new anchor.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X as XIcon } from '@phosphor-icons/react';
+import { Check, DoorOpen, X as XIcon } from '@phosphor-icons/react';
 import {
   DndContext,
   MouseSensor,
@@ -54,6 +54,10 @@ interface DragGanttProps {
   onMatchSelect?: (matchId: string) => void;
   currentSlot?: number;
   readOnly?: boolean;
+  /** Optional callback invoked when a fully-closed court row is
+   *  clicked. Used to deeplink the director panel on the Schedule
+   *  tab; if omitted the closed row is rendered as a passive cell. */
+  onRequestReopenCourt?: (courtId: number) => void;
 }
 
 type CellId = `cell:${number}:${number}`; // cell:court:slot
@@ -84,6 +88,7 @@ export function DragGantt({
   onMatchSelect,
   currentSlot,
   readOnly = false,
+  onRequestReopenCourt,
 }: DragGanttProps) {
   const players = useAppStore((s) => s.players);
   const pendingPin = useAppStore((s) => s.pendingPin);
@@ -331,16 +336,30 @@ export function DragGantt({
                 style={{ height: ROW_HEIGHT }}
                 title={fullyClosed ? `Court ${courtId} is closed` : undefined}
               >
-                <div
-                  style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
-                  className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
-                    fullyClosed
-                      ? 'bg-muted/60 text-muted-foreground line-through'
-                      : 'bg-muted/30 text-foreground'
-                  }`}
-                >
-                  C{courtId}
-                </div>
+                {fullyClosed && onRequestReopenCourt ? (
+                  <button
+                    type="button"
+                    onClick={() => onRequestReopenCourt(courtId)}
+                    title={`Court ${courtId} closed — open Reopen panel`}
+                    aria-label={`Court ${courtId} is closed. Click to open Reopen panel.`}
+                    className="flex-shrink-0 flex items-center gap-1 px-2 text-xs font-semibold tabular-nums bg-muted/60 text-muted-foreground hover:bg-status-warning-bg hover:text-status-warning hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
+                    style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+                  >
+                    <span className="line-through">C{courtId}</span>
+                    <DoorOpen className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                ) : (
+                  <div
+                    style={{ width: COURT_LABEL_WIDTH, height: ROW_HEIGHT }}
+                    className={`flex-shrink-0 flex items-center px-2 text-xs font-semibold tabular-nums ${
+                      fullyClosed
+                        ? 'bg-muted/60 text-muted-foreground line-through'
+                        : 'bg-muted/30 text-foreground'
+                    }`}
+                  >
+                    C{courtId}
+                  </div>
+                )}
 
                 {/* Drop target cells (one per slot column) — closed
                     cells reject drops; the rest of the row remains

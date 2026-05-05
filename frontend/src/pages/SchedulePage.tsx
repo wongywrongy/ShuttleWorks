@@ -14,6 +14,9 @@ import { DisruptionDialog } from '../features/control-center/DisruptionDialog';
 import { MoveMatchDialog } from '../features/control-center/MoveMatchDialog';
 import { CandidatesPanel } from '../features/schedule/CandidatesPanel';
 import { WarmRestartDialog } from '../features/schedule/WarmRestartDialog';
+import { DirectorToolsPanel } from '../features/director/DirectorToolsPanel';
+import { Modal } from '../components/common/Modal';
+import { useProposals } from '../hooks/useProposals';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { StaleBanner } from '../features/schedule/StaleBanner';
 import { SuggestionsRail } from '../features/suggestions/SuggestionsRail';
@@ -21,7 +24,7 @@ import { computeConstraintViolations } from '../utils/constraintChecker';
 import { formatSlotTime } from '../lib/time';
 import { useCurrentSlot } from '../hooks/useCurrentSlot';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, CalendarBlank } from '@phosphor-icons/react';
+import { Download, CalendarBlank, GearSix } from '@phosphor-icons/react';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig, RosterGroupDTO } from '../api/dto';
 import { InlineSearch, type FilterChipGroup } from '../components/InlineSearch';
@@ -348,6 +351,8 @@ export function SchedulePage() {
   const [sidebarTab, setSidebarTab] = useState<'log' | 'details' | 'candidates'>('details');
   const [disruptionOpen, setDisruptionOpen] = useState(false);
   const [warmRestartOpen, setWarmRestartOpen] = useState(false);
+  const [directorOpen, setDirectorOpen] = useState(false);
+  const { cancel: cancelProposal } = useProposals();
   const [disruptionPrefill, setDisruptionPrefill] = useState<{
     type?: 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
     matchId?: string;
@@ -571,6 +576,7 @@ export function SchedulePage() {
                     readOnly={isOptimizing}
                     selectedMatchId={selectedMatchId}
                     onMatchSelect={setSelectedMatchId}
+                    onRequestReopenCourt={() => setDirectorOpen(true)}
                   />
                 ) : (
                   <LiveTimelineGrid
@@ -640,6 +646,15 @@ export function SchedulePage() {
                     Dynamic
                   </span>
                   <div className="ml-auto flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setDirectorOpen(true)}
+                      title="Director tools — delays, breaks, reopen courts"
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 whitespace-nowrap rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                    >
+                      <GearSix aria-hidden="true" className="h-3.5 w-3.5" />
+                      Director
+                    </button>
                     <button
                       type="button"
                       onClick={() => setWarmRestartOpen(true)}
@@ -732,6 +747,36 @@ export function SchedulePage() {
             onClose={() => setMoveMatchId(null)}
             matchId={moveMatchId ?? undefined}
           />
+          {directorOpen && (
+            <Modal
+              onClose={() => {
+                void cancelProposal();
+                setDirectorOpen(false);
+              }}
+              titleId="director-tools-title"
+              widthClass="max-w-lg"
+            >
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                <h2 id="director-tools-title" className="text-sm font-semibold">
+                  Director tools
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void cancelProposal();
+                    setDirectorOpen(false);
+                  }}
+                  className={`${INTERACTIVE_BASE} rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground`}
+                  aria-label="Close director tools"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="overflow-y-auto max-h-[calc(80vh-3rem)]">
+                <DirectorToolsPanel />
+              </div>
+            </Modal>
+          )}
         </div>
       ) : isOptimizing && !hasLiveProgress ? (
         /* Starting optimization spinner */
