@@ -23,12 +23,12 @@ from pydantic import BaseModel
 import app.scheduler_core_path  # noqa: F401
 from app.schemas import (  # noqa: E402
     MatchDTO,
-    MatchStateDTO,
     PlayerDTO,
     ScheduleAssignment,
     ScheduleDTO,
     TournamentConfig,
 )
+from api.match_state import MatchStateDTO  # noqa: E402
 # These imports rely on the sys.path bootstrap above.
 from scheduler_core.domain.models import Assignment  # noqa: E402
 from scheduler_core.engine.cancel_token import CancelToken  # noqa: E402

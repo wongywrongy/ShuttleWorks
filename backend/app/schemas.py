@@ -425,9 +425,13 @@ class MatchScore(BaseModel):
     sideB: int
 
 
-class MatchStateDTO(BaseModel):
-    status: str  # 'scheduled' | 'called' | 'started' | 'finished'
-    score: Optional[MatchScore] = None
+# NOTE: The canonical MatchStateDTO lives in api/match_state.py — that
+# module owns persistence and field-validation. Importing it from there
+# everywhere ensures Pydantic's class-identity validation doesn't reject
+# instances flowing across the proposal pipeline (e.g., director-action
+# → warm-restart). A 3-line stub used to live here; it caused 422s on
+# /schedule/director-action when the real instance was passed into a
+# WarmRestartRequest typed against the stub.
 
 
 # Health
