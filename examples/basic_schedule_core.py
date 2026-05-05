@@ -1,9 +1,9 @@
-"""Basic core usage: SchedulingProblem -> schedule() -> SchedulingResult.
+"""Basic engine usage: SchedulingProblem -> schedule() -> SchedulingResult.
 
-Run from project root:
-  PYTHONPATH=src python examples/basic_schedule_core.py
+Run from the project root:
+    python examples/basic_schedule_core.py
 
-No FastAPI or app schemas required.
+(or after ``pip install -e .``, run from anywhere.)
 """
 from scheduler_core import (
     schedule,

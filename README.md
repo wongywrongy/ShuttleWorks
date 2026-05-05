@@ -1,98 +1,104 @@
-# CP-SAT Tournament Scheduler
+# scheduler-core
 
-A single-day inter-school dual / tri-meet scheduler for badminton (and adjacent racquet sports). Built on Google OR-Tools CP-SAT with an interval-variable formulation, it produces optimal court assignments for tournaments where the same players play multiple events back-to-back.
+A pure-Python CP-SAT tournament scheduling engine, built on Google
+[OR-Tools](https://developers.google.com/optimization). No HTTP, no I/O,
+no framework: a library you call with dataclasses and get a feasible (or
+provably infeasible) plan back.
 
-It's designed for the operator running the day from a laptop in the corner of the gym: drag-to-reschedule, live solver progress, public TV display, and a proposal-review-commit pipeline so the schedule never silently changes.
+The engine was extracted from a tournament-day operator product, so it's
+been hardened on real day-of-event constraints: locks/pins, freeze
+horizons, court closures, mid-event repair, warm-start re-solves, and
+so on. Use it directly in any Python service, queue worker, CLI, or
+notebook.
 
----
-
-## Features
-
-**Scheduling**
-- CP-SAT optimisation across courts, slots, players, rest, and game-spacing constraints
-- Live SSE solver progress with phase / objective / gap streamed to the UI
-- Top-N candidate pool — swap to an alternative without re-solving
-- Drag-to-reschedule Gantt with hover-feasibility validation
-- Inline match / roster / config authoring (no modal-per-edit)
-
-**Live operations** *(new)*
-- **Proposal pipeline** — every change (replan, repair, drag, director action) shows a full impact diff (who's affected, what moves, time deltas, infeasibility warnings) **before** committing. Optimistic-concurrency-locked, atomic swap, rolling 5-entry audit history.
-- **Advisories** — 15 s polling surfaces overruns, no-shows, running-behind, start-delay, approaching-blackout. Each one carries a one-click action.
-- **Suggestions Inbox** *(new)* — a background re-optimization worker continuously checks for better schedules; matched proposals appear as a one-click "Apply" rail under the advisory bar, so directors don't need to know when to re-plan. Mutations (Undo, Call, Start, Score) never wait on the solver.
-- **Director time-axis tools** — delay tournament start, insert lunch break, close / reopen courts (full-day or time-bounded). All flow through the proposal pipeline.
-- **Move / postpone single match** — everyday counterpart to the heavier replan flow.
-- **Court closures persist** across solves — every generate, replan, and repair routes around closed courts and closed time-windows.
-
-**Display**
-- Public TV view (`/display`) with courts / schedule / standings modes, fullscreen, theme-aware
-- Operator Live tab with traffic-light status per match, rest indicators, score editor
-
----
-
-## Quick start
-
-### Production (Docker)
+## Install
 
 ```bash
-make run        # build + start → http://localhost
-make stop
-make logs
+pip install -e .
+# or, from a checkout, run examples/tests directly without installing:
+#   pyproject.toml puts the repo root on sys.path for pytest
 ```
 
-### Development
+Requires Python ≥ 3.11. The only runtime dependency is `ortools` (CP-SAT).
+
+## Quickstart
+
+```python
+from scheduler_core import (
+    schedule,
+    SchedulingProblem,
+    ScheduleConfig,
+    Player,
+    Match,
+    SolverOptions,
+)
+
+problem = SchedulingProblem(
+    config=ScheduleConfig(total_slots=10, court_count=2),
+    players=[
+        Player(id="p1", name="Alice"),
+        Player(id="p2", name="Bob"),
+    ],
+    matches=[
+        Match(id="m1", event_code="MS-1", side_a=["p1"], side_b=["p2"]),
+    ],
+    solver_options=SolverOptions(time_limit_seconds=5.0),
+)
+
+result = schedule(problem)
+print(result.status.value)               # "optimal"
+for a in result.assignments:
+    print(a.match_id, a.slot_id, a.court_id)
+```
+
+A runnable version lives at [`examples/basic_schedule_core.py`](examples/basic_schedule_core.py).
+
+## Public API at a glance
+
+| Symbol | What it is |
+|---|---|
+| `schedule(problem, options=None) -> ScheduleResult` | Canonical entry point |
+| `SchedulingProblem` (alias `ScheduleRequest`) | Input dataclass |
+| `ScheduleConfig` | Slots, courts, penalties, freeze-horizon, etc. |
+| `Player`, `Match`, `PreviousAssignment` | Domain dataclasses |
+| `SolverOptions` | Time limit, workers, log progress |
+| `ScheduleResult` (alias `SchedulingResult`) | Status, assignments, soft violations, infeasible reasons |
+| `SolverStatus` | enum: `optimal` / `feasible` / `infeasible` / `not_solved` |
+| `ValidationError`, `InfeasibleError`, `FrameworkError` | Engine exception types |
+
+Plus a lower-level surface for advanced use: `CPSATBackend` /
+`CPSATScheduler` / `GreedyBackend`, the constraint-plugin assembler
+(`SchedulingProblemBuilder`, `BridgeOptions`, `LiveOpsConfig`), and the
+live-ops helpers (`reschedule`, `update_actuals`, `apply_freeze_horizon`,
+`handle_overrun`, `handle_no_show`, `handle_court_outage`).
+
+Full export list: [`scheduler_core/__init__.py`](scheduler_core/__init__.py).
+Architecture details: [`scheduler_core/README.md`](scheduler_core/README.md).
+Constraint plugins: [`scheduler_core/engine/README.md`](scheduler_core/engine/README.md).
+
+## Use it elsewhere
+
+The engine takes pure dataclasses and returns pure dataclasses — bring
+your own DTO layer at the boundary. See
+[**`USAGE.md`**](USAGE.md) for:
+
+- wrapping the engine in a FastAPI service (~30 lines)
+- queue-worker / CLI patterns
+- mid-event live ops: warm restart, surgical repair, court outage
+- adding a custom soft constraint
+- testing patterns for downstream apps
+
+## Tests
 
 ```bash
-make dev        # backend in Docker, Vite dev server on :5173
+pip install -e ".[dev]"
+pytest
 ```
 
-Vite proxies `/api/*` to the FastAPI container so front and back share an origin in dev too.
+The 54 engine tests cover the model, determinism, candidate collection,
+the warm-start and repair solvers, conflict detection, cancellation, and
+end-to-end smoke. They run in ~6 seconds on a recent laptop.
 
-### Tests
+## License
 
-```bash
-cd src && pytest                   # backend + solver (~170 tests)
-make test-e2e-install              # one-time
-make test-e2e                      # Playwright end-to-end
-```
-
----
-
-## Tech stack
-
-- **Backend** — Python 3.11 · FastAPI · Google OR-Tools (CP-SAT) · SSE for solver progress
-- **Frontend** — React 19 · TypeScript · Vite · Zustand · Tailwind · dnd-kit · Radix
-- **Persistence** — JSON files with atomic writes, SHA-256 integrity, rolling backups
-- **Deployment** — Docker Compose (nginx → FastAPI)
-
----
-
-## Layout
-
-```
-backend/                 FastAPI routes + adapters (HTTP boundary)
-src/scheduler_core/      CP-SAT engine — domain models, constraint plugins, solver
-src/adapters/            Sport-specific adapters (badminton)
-src/tests/               Backend + solver tests
-frontend/src/            React app (shell, tabs, DragGantt, SolverHud, dialogs, TV)
-e2e/                     Playwright specs
-docs/                    Smoke walkthroughs, feature guides
-```
-
----
-
-## Documentation
-
-For working in the code:
-
-- [`BACKEND.md`](./BACKEND.md) — FastAPI routes, request lifecycle, how to add an endpoint or a constraint
-- [`FRONTEND.md`](./FRONTEND.md) — shell + tabs, Zustand store split, data flow, theme system
-- [`src/scheduler_core/README.md`](./src/scheduler_core/README.md) — CP-SAT model: variables, constraint plugins, soft penalties
-- [`docs/proposal-pipeline-smoke.md`](./docs/proposal-pipeline-smoke.md) — manual end-to-end walkthrough of the proposal pipeline + director tools
-
-Each major directory under `frontend/src/` (`features/`, `hooks/`, `store/`, `api/`, `utils/`, `components/`) carries its own `README.md` for local conventions.
-
----
-
-## Status
-
-Works as designed for **a single operator running one tournament from one laptop**. Multi-worker / multi-user / internet-facing deployments need additional work — see the architecture caveats in [`BACKEND.md`](./BACKEND.md).
+MIT.

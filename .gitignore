@@ -4,82 +4,43 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+*.whl
+
+# venvs
 venv/
 env/
 .venv/
-.env
-*.egg-info/
-dist/
-build/
-*.whl
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-.cursor/
-.claude/
-
-# Testing
+# Test / coverage / benchmarks
 .pytest_cache/
 .benchmarks/
 .coverage
+.coverage.*
 htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
 
-# Docker
-.docker/
-
-# Documentation
-# Block scratch markdown at the repo ROOT only (e.g., prompt dumps, snapshot
-# pastes from manual MCP runs). Subdirectory README.md / *.md files are
-# tracked normally so feature-folder docs stay in version control.
-/*.md
-!/README.md
-!/BACKEND.md
-!/FRONTEND.md
-
-# Old app folders (legacy)
-apps/
-
-# OS
+# Editors / OS
+.vscode/
+.idea/
+.cursor/
+.claude/
+.serena/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
 
+# Local credentials / state
+.env
+.env.local
+
 # Logs
 *.log
-
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/build/
-frontend/.vite/
-frontend/.env.local
-frontend/.env.*.local
-
-# Persisted tournament state (Docker volume)
-/data/
-
-# E2E tests
-e2e/node_modules/
-e2e/playwright-report/
-e2e/test-results/
-e2e/blob-report/
-e2e/.playwright/
-
-# Playwright MCP scratch dir — screenshots, page snapshots, console logs,
-# and any downloaded artifacts from browser_navigate / browser_take_screenshot.
-.playwright-mcp/
-
-# Loose debug artifacts dropped at the repo root during manual MCP testing.
-/*.png
-/*.jpg
-/*.jpeg
-/*.gif
-/*.webm
-/schedule_*.csv
-/schedule_*.xlsx
-/roster_*.csv
-/roster_*.xlsx
-/matches_*.csv
-/matches_*.xlsx
