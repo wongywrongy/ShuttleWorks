@@ -302,22 +302,22 @@ def test_cancelled_proposal_leaves_committed_state_unchanged(client):
 
 @pytest.mark.asyncio
 async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
-    monkeypatch, tmp_path,
+    monkeypatch, tmp_path, caplog,
 ):
     """End-to-end: post an OPTIMIZE trigger; the handler reads the
-    persisted state, runs a warm-restart with stayCloseWeight=5,
-    and stamps a Suggestion if the result improves on the live
-    schedule.
+    persisted state, runs a warm-restart, and either stamps a
+    Suggestion (improvement found) or logs a no-improvement skip.
 
-    The seeded state has two matches on one court in sequential slots
-    (slots 0 and 1) with two courts available. The warm-restart with
-    stayCloseWeight=5 should pack both matches into slot 0 on separate
-    courts, reducing the makespan by one slot (30 min).
-
-    Uses a real solve with a tight time budget (6 s). The assertion
-    gracefully handles the case where the solver finds the schedule
-    already-optimal (DONE_WITH_CONCERNS path).
+    The handler uses ``stayCloseWeight=5`` which biases against moves
+    even when a packed schedule would be shorter; in practice the
+    solver often settles on a same-makespan reshuffle. Rather than
+    contrive a fixture that reliably beats this bias, the test
+    asserts via caplog that the handler actually executed end-to-end
+    (read state, ran solver, decided whether to stamp). Without the
+    log assertion the test was vacuous: a handler that silently
+    crashed would still let the assertions pass.
     """
+    import logging
     # ---- env setup: fresh backend modules against tmp_path ----
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
     backend_root = str(Path(__file__).resolve().parents[2] / "backend")
@@ -360,28 +360,44 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
     )
     await worker.start()
     try:
-        await worker.post(TriggerEvent(
-            kind=TriggerKind.OPTIMIZE,
-            fingerprint="opt:test:e2e",
-        ))
+        with caplog.at_level(logging.DEBUG, logger="scheduler.suggestions"):
+            await worker.post(TriggerEvent(
+                kind=TriggerKind.OPTIMIZE,
+                fingerprint="opt:test:e2e",
+            ))
 
-        # Real solve — allow up to 10 s (6 s budget + overhead).
-        suggestion_store = getattr(app_.state, "suggestions", {})
-        for _ in range(100):
-            if suggestion_store:
-                break
-            await asyncio.sleep(0.1)
-        else:
-            # Also wait for in-flight to drain in case we exited via timeout.
+            # Give the consumer task a chance to pull the event from
+            # the queue and start the dispatch — without this,
+            # drain() may snapshot _inflight while it's still empty
+            # and return instantly.
+            await asyncio.sleep(0.2)
+            # Real solve — drain awaits the in-flight handler.
             await worker.drain()
 
-        # If a suggestion was stamped (schedule had slack), assert its shape.
-        # If none was stamped, the schedule was already optimal — both are
-        # valid outcomes; the handler must have completed without error.
+        # The handler MUST have executed and reached its
+        # decision-point (either stamped or skipped). Without this
+        # log assertion, a handler that silently crashed during the
+        # solver call would let the test pass with no suggestion and
+        # no error.
+        log_text = "\n".join(r.getMessage() for r in caplog.records
+                             if r.name == "scheduler.suggestions")
+        assert (
+            "stamped optimize" in log_text
+            or "found no improvement" in log_text
+        ), (
+            "OPTIMIZE handler did not reach its decision branch; "
+            f"caplog: {log_text!r}"
+        )
+
+        # If a suggestion WAS stamped, validate its shape. Reading
+        # via _get_suggestion_store ensures we get the dict the
+        # handler actually populated.
+        from api.schedule_proposals import _get_suggestion_store
+        suggestion_store = _get_suggestion_store(app_)
         if suggestion_store:
             sug = next(iter(suggestion_store.values()))
             assert sug.kind == "optimize"
-            assert sug.proposalId, "stamped suggestion must reference a proposal"
+            assert sug.proposalId
             assert sug.fingerprint == "opt:test:e2e"
             assert "min finish" in sug.metric
     finally:

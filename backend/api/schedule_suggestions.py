@@ -25,7 +25,6 @@ from app.schemas import (
     Suggestion,
     TournamentConfig,
 )
-from app.time_utils import now_iso
 from api.schedule_proposals import (
     _build_proposal,
     _evict_expired,
@@ -89,9 +88,12 @@ async def _handle_optimize(
 ) -> None:
     """Run a warm-restart speculation against persisted state.
 
-    Stamps a Suggestion if the new schedule improves on the live
-    one (earlier finish OR fewer moves required while keeping the
-    same finish time).
+    Stamps a Suggestion only if the new schedule finishes earlier
+    than the live one (operator-confidence rule: never offer
+    zero-value applies). The "fewer moves at same finish" branch is
+    deferred — solver returns earliest-finish-first under the
+    stay-close objective, so we'd need a second solve at higher
+    weight to evaluate it.
     """
     persisted = _read_persisted_state()
     if persisted is None or persisted.schedule is None or persisted.config is None:

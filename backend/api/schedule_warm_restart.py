@@ -30,6 +30,7 @@ from app.schemas import (  # noqa: E402
     TournamentConfig,
 )
 from scheduler_core.domain.models import Assignment  # noqa: E402
+from scheduler_core.engine.cancel_token import CancelToken  # noqa: E402
 from scheduler_core.engine.warm_start import solve_warm_start  # noqa: E402
 
 from adapters.badminton import (  # noqa: E402
@@ -132,7 +133,7 @@ async def warm_restart_schedule(request: WarmRestartRequest) -> WarmRestartRespo
 def _run_warm_restart_with_cancel(
     request: WarmRestartRequest,
     *,
-    cancel_token,
+    cancel_token: CancelToken,
 ) -> tuple[ScheduleDTO, List[str]]:
     """Cancel-aware variant of `_run_warm_restart` for speculative solves.
 
