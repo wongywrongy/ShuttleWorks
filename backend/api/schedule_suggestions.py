@@ -35,6 +35,7 @@ from api.schedule_proposals import (
     _get_store,
     _get_suggestion_store,
     _read_persisted_state,
+    commit_proposal,
 )
 from api.schedule_warm_restart import (
     WarmRestartRequest,
@@ -365,8 +366,6 @@ async def apply_suggestion(suggestion_id: str, http_request: Request):
     version) doesn't leave a dead entry in the inbox — the
     frontend's next poll will reconcile.
     """
-    from api.schedule_proposals import commit_proposal
-
     store = _get_suggestion_store(http_request.app)
     lock = _get_lock(http_request.app)
     async with lock:

@@ -58,7 +58,10 @@ export function SuggestionsRail() {
       // resolved the conditions that triggered them. The next poll
       // repopulates from a clean slate. Mirrors useProposals.commit.
       setAdvisories([]);
-      setSuggestions(suggestions.filter((x) => x.id !== s.id));
+      // Functional updates avoid stale-closure races: a parallel
+      // dismiss/apply on a different row could otherwise resurrect a
+      // just-removed suggestion based on a stale `suggestions` snapshot.
+      setSuggestions(useAppStore.getState().suggestions.filter((x) => x.id !== s.id));
       pushToast({
         level: 'success',
         message: r.historyEntry.summary || 'Applied',
@@ -71,7 +74,7 @@ export function SuggestionsRail() {
       // poll will reconcile.
       const code = err?.response?.status;
       const benign = code === 409 || code === 410;
-      setSuggestions(suggestions.filter((x) => x.id !== s.id));
+      setSuggestions(useAppStore.getState().suggestions.filter((x) => x.id !== s.id));
       pushToast({
         level: benign ? 'info' : 'error',
         message: benign
@@ -85,7 +88,9 @@ export function SuggestionsRail() {
   };
 
   const handleDismiss = async (s: Suggestion) => {
-    setSuggestions(suggestions.filter((x) => x.id !== s.id));
+    // Read fresh state at call time so a parallel apply/dismiss on a
+    // different row doesn't get its drop reverted by a stale snapshot.
+    setSuggestions(useAppStore.getState().suggestions.filter((x) => x.id !== s.id));
     if (expandedId === s.id) setExpandedId(null);
     try {
       await apiClient.dismissSuggestion(s.id);
