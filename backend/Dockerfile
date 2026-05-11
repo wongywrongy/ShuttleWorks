@@ -12,8 +12,10 @@ RUN apt-get update && apt-get install -y \
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy scheduler_core from src (needed for schedule generation)
-COPY src/scheduler_core ./scheduler_core
+# Engine lives at the repo root; the rest of the legacy `src/` namespace
+# (app, adapters) is still mounted under /app/src so backend imports
+# `from app.X` and `from adapters.X` resolve the same way they do locally.
+COPY scheduler_core ./scheduler_core
 COPY src/app ./src/app
 COPY src/adapters ./src/adapters
 

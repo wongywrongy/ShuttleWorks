@@ -28,7 +28,7 @@ try:
 except ImportError as e:
     raise ImportError(
         f"Could not import scheduler_core: {e}. "
-        "Make sure src/scheduler_core is accessible."
+        "Make sure the top-level scheduler_core/ is accessible."
     )
 
 from adapters.badminton import (

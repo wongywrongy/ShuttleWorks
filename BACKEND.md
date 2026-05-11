@@ -14,7 +14,7 @@ backend/
 │   ├── error_codes.py           # ErrorCode enum + http_error() helper
 │   ├── paths.py                 # data_dir() / ensure_data_dir() helpers
 │   ├── time_utils.py            # ISO-8601 UTC + slot-math helpers
-│   └── scheduler_core_path.py   # sys.path bootstrap for src/scheduler_core
+│   └── scheduler_core_path.py   # sys.path bootstrap for scheduler_core
 ├── api/
 │   ├── schedule.py              # POST /schedule, /schedule/stream (SSE), /schedule/validate
 │   ├── schedule_repair.py       # POST /schedule/repair — targeted disruption repair
@@ -28,12 +28,12 @@ backend/
 ├── Dockerfile
 └── requirements.txt
 
-src/scheduler_core/   # the solver itself; see src/scheduler_core/README.md
+scheduler_core/   # the solver itself; see scheduler_core/README.md
 src/adapters/         # sport-specific adapters (badminton)
 ```
 
 The HTTP layer lives in `backend/`. The solver engine lives under
-`src/scheduler_core/` and is imported via the `scheduler_core_path`
+`scheduler_core/` and is imported via the `scheduler_core_path`
 shim — kept decoupled so the engine can be unit-tested without the
 FastAPI app booted.
 
@@ -114,11 +114,11 @@ intent that must not be debounced away.
 
 ## Adding a new constraint or objective term
 
-Constraints are plugins under `src/scheduler_core/engine/constraints/`.
+Constraints are plugins under `scheduler_core/engine/constraints/`.
 Add a new file that implements the `Constraint` protocol, register
 it via the package's loader, and wire its `ConstraintSpec` (name +
 params) into the relevant `EngineConfig`. See
-`src/scheduler_core/README.md` for the full plugin contract.
+`scheduler_core/README.md` for the full plugin contract.
 
 For tournament-wide scalars (court count, slot count, intervals,
 breaks) reach for `ScheduleConfig` in `domain/models.py`. For

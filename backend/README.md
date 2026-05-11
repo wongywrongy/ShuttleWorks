@@ -18,7 +18,7 @@ backend/
 │   ├── error_codes.py          # ErrorCode enum + http_error() helper
 │   ├── paths.py                # data_dir() / ensure_data_dir() helpers
 │   ├── time_utils.py           # ISO-8601 UTC + slot-math helpers
-│   └── scheduler_core_path.py  # sys.path bootstrap for src/scheduler_core
+│   └── scheduler_core_path.py  # sys.path bootstrap for scheduler_core
 ├── api/
 │   ├── schedule.py              # /schedule, /schedule/stream, /schedule/validate
 │   ├── schedule_repair.py       # /schedule/repair
@@ -33,7 +33,7 @@ backend/
 └── requirements.txt
 ```
 
-`src/scheduler_core/` is sibling to `backend/`, not nested under it,
+`scheduler_core/` is sibling to `backend/`, not nested under it,
 because the engine predates the FastAPI wrapper.
 `backend/app/scheduler_core_path.py` does the `sys.path` insertion;
 routes import the engine after that shim runs.
