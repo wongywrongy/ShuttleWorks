@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Same sys.path shuffle the other backend tests use so ``from app.schemas
 # import ...`` resolves to backend/app, not src/app.
-_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "backend")
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[1] / "backend")
 sys.path = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
 for _cached in [k for k in list(sys.modules) if k == "app" or k.startswith("app.")]:
     del sys.modules[_cached]

@@ -4,9 +4,9 @@ Delegates to scheduler_core. Does not import ortools.
 """
 from fastapi import HTTPException
 
-from src.app import __version__
-from src.app.schemas import HealthResponse, ScheduleRequest, ScheduleResponse
-from src.adapters.fastapi.validation import validate_request
+from app import __version__
+from app.schemas import HealthResponse, ScheduleRequest, ScheduleResponse
+from adapters.fastapi.validation import validate_request
 from scheduler_core import schedule_from_api
 from scheduler_core.domain.errors import FrameworkError, InfeasibleError, ValidationError
 

@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "backend")
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[1] / "backend")
 sys.path = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
 for _cached in [
     k for k in list(sys.modules)
@@ -36,7 +36,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[2] / "backend")
+    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
     sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
     for _cached in [
         k for k in list(sys.modules)
@@ -320,7 +320,7 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
     import logging
     # ---- env setup: fresh backend modules against tmp_path ----
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[2] / "backend")
+    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
     sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
     for _cached in [
         k for k in list(sys.modules)

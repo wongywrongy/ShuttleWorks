@@ -6,9 +6,9 @@ This is a thin adapter layer that wraps the scheduler_core library.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.app import __version__
-from src.app.schemas import HealthResponse, ScheduleRequest, ScheduleResponse
-from src.adapters.fastapi.routes import create_schedule, health_check, validate_request_endpoint
+from app import __version__
+from app.schemas import HealthResponse, ScheduleRequest, ScheduleResponse
+from adapters.fastapi.routes import create_schedule, health_check, validate_request_endpoint
 
 app = FastAPI(
     title="Tournament Scheduling API",

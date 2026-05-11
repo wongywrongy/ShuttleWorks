@@ -28,7 +28,7 @@ def _import_fastapi_app():
     fix the path order, then clear cached entries for both so the
     next import goes through the production paths.
     """
-    backend_root = str(Path(__file__).resolve().parents[2] / "backend")
+    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
     sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
     for k in [m for m in list(sys.modules)
               if m in ("app", "adapters")
