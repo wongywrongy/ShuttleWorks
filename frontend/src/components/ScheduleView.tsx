@@ -4,11 +4,12 @@ import type { TournamentDTO } from "../types";
 
 interface Props {
   data: TournamentDTO;
+  eventId: string;
   onChange: (t: TournamentDTO) => void;
   refresh: () => Promise<void>;
 }
 
-export function ScheduleView({ data, refresh }: Props) {
+export function ScheduleView({ data, eventId, refresh }: Props) {
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +26,9 @@ export function ScheduleView({ data, refresh }: Props) {
             `(${r.runtime_ms.toFixed(0)}ms, ${r.status})`
         );
       } else if (r.play_unit_ids.length === 0) {
-        setInfo("No more ready matches — record results to advance the bracket.");
+        setInfo(
+          "No more ready matches — record results to advance the bracket."
+        );
       } else {
         setError(
           `Solver returned ${r.status}: ${r.infeasible_reasons.join("; ")}`
@@ -39,15 +42,26 @@ export function ScheduleView({ data, refresh }: Props) {
     }
   };
 
-  const grid = useMemo(() => buildGrid(data), [data]);
+  const grid = useMemo(() => buildGrid(data, eventId), [data, eventId]);
+  const eventAssignments = data.assignments.filter((a) => {
+    const pu = data.play_units.find((p) => p.id === a.play_unit_id);
+    return pu?.event_id === eventId;
+  });
+  const eventPUCount = data.play_units.filter((p) => p.event_id === eventId)
+    .length;
+  const eventResults = data.results.filter((r) => {
+    const pu = data.play_units.find((p) => p.id === r.play_unit_id);
+    return pu?.event_id === eventId;
+  });
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm text-ink-500">
-          {data.assignments.length} of {data.play_units.length} matches scheduled
-          {data.results.length > 0
-            ? ` · ${data.results.length} results in`
+          {eventAssignments.length} of {eventPUCount} matches scheduled in{" "}
+          {eventId}
+          {eventResults.length > 0
+            ? ` · ${eventResults.length} results in`
             : ""}
         </div>
         <div className="flex gap-2 items-center">
@@ -96,7 +110,6 @@ export function ScheduleView({ data, refresh }: Props) {
                     key={idx}
                     className="border-b border-ink-100 px-1 py-1 align-top"
                     colSpan={cell.span}
-                    style={cell.span > 1 ? {} : {}}
                   >
                     {cell.content}
                   </td>
@@ -110,7 +123,7 @@ export function ScheduleView({ data, refresh }: Props) {
   );
 }
 
-function buildGrid(data: TournamentDTO) {
+function buildGrid(data: TournamentDTO, eventId: string) {
   const nameById = Object.fromEntries(
     data.participants.map((p) => [p.id, p.name])
   );
@@ -120,7 +133,11 @@ function buildGrid(data: TournamentDTO) {
   );
   const interval = data.interval_minutes;
 
-  const maxSlot = data.assignments.reduce(
+  const filteredAssignments = data.assignments.filter(
+    (a) => puById[a.play_unit_id]?.event_id === eventId
+  );
+
+  const maxSlot = filteredAssignments.reduce(
     (m, a) => Math.max(m, a.slot_id + a.duration_slots),
     1
   );
@@ -134,7 +151,7 @@ function buildGrid(data: TournamentDTO) {
     cells: Array<{ span: number; content: React.ReactNode }>;
   }> = [];
   for (let c = 1; c <= data.courts; c++) {
-    const courtAssignments = data.assignments
+    const courtAssignments = filteredAssignments
       .filter((a) => a.court_id === c)
       .sort((a, b) => a.slot_id - b.slot_id);
     const cells: Array<{ span: number; content: React.ReactNode }> = [];

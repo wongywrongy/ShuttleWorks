@@ -3,6 +3,36 @@ export type WinnerSide = "A" | "B" | "none";
 export interface Participant {
   id: string;
   name: string;
+  members?: string[] | null;
+}
+
+export interface ParticipantInput {
+  id: string;
+  name: string;
+  members?: string[];
+  seed?: number;
+}
+
+export interface EventIn {
+  id: string;
+  discipline: string;
+  format: "se" | "rr";
+  participants: ParticipantInput[];
+  seeded_count?: number | null;
+  bracket_size?: number | null;
+  rr_rounds: number;
+  duration_slots: number;
+  randomize?: boolean;
+}
+
+export interface CreateTournamentIn {
+  courts: number;
+  total_slots: number;
+  rest_between_rounds: number;
+  interval_minutes: number;
+  time_limit_seconds: number;
+  start_time?: string | null;
+  events: EventIn[];
 }
 
 export interface BracketSlotDTO {
@@ -41,16 +71,24 @@ export interface ResultDTO {
   finished_at_slot: number | null;
 }
 
-export interface TournamentDTO {
+export interface EventDTO {
+  id: string;
+  discipline: string;
   format: "se" | "rr";
+  bracket_size: number | null;
+  participant_count: number;
+  rounds: string[][];
+}
+
+export interface TournamentDTO {
   courts: number;
   total_slots: number;
-  duration_slots: number;
   rest_between_rounds: number;
   interval_minutes: number;
+  start_time: string | null;
+  events: EventDTO[];
   participants: Participant[];
   play_units: PlayUnitDTO[];
-  rounds: string[][];
   assignments: AssignmentDTO[];
   results: ResultDTO[];
 }
@@ -61,16 +99,4 @@ export interface ScheduleNextOut {
   started_at_current_slot: number;
   runtime_ms: number;
   infeasible_reasons: string[];
-}
-
-export interface CreateTournamentIn {
-  format: "se" | "rr";
-  participants: Participant[];
-  courts: number;
-  total_slots: number;
-  duration_slots: number;
-  rest_between_rounds: number;
-  rr_rounds: number;
-  interval_minutes: number;
-  time_limit_seconds: number;
 }

@@ -5,13 +5,11 @@ import type {
   WinnerSide,
 } from "./types";
 
-const BASE = "";
-
 async function call<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const r = await fetch(BASE + path, {
+  const r = await fetch(path, {
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
     ...init,
   });
@@ -58,4 +56,36 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  importJson: (body: unknown) =>
+    call<TournamentDTO>("/tournament/import", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  importCsv: async (
+    text: string,
+    params: {
+      courts: number;
+      total_slots: number;
+      interval_minutes: number;
+      rest_between_rounds: number;
+      start_time?: string;
+    }
+  ) => {
+    const usp = new URLSearchParams();
+    usp.set("courts", String(params.courts));
+    usp.set("total_slots", String(params.total_slots));
+    usp.set("interval_minutes", String(params.interval_minutes));
+    usp.set("rest_between_rounds", String(params.rest_between_rounds));
+    if (params.start_time) usp.set("start_time", params.start_time);
+    const r = await fetch(`/tournament/import.csv?${usp}`, {
+      method: "POST",
+      headers: { "content-type": "text/csv" },
+      body: text,
+    });
+    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+    return (await r.json()) as TournamentDTO;
+  },
+  exportJsonUrl: () => "/tournament/export.json",
+  exportCsvUrl: () => "/tournament/export.csv",
+  exportIcsUrl: () => "/tournament/export.ics",
 };

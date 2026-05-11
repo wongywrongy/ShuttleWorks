@@ -9,27 +9,40 @@ import type {
 
 interface Props {
   data: TournamentDTO;
+  eventId: string;
   onChange: (t: TournamentDTO) => void;
   refresh: () => Promise<void>;
 }
 
-export function DrawView({ data, onChange }: Props) {
-  if (data.format === "se") {
-    return <BracketView data={data} onChange={onChange} />;
+export function DrawView({ data, eventId, onChange }: Props) {
+  const event = data.events.find((e) => e.id === eventId);
+  if (!event) {
+    return <p className="text-sm text-ink-500">No event selected.</p>;
   }
-  return <RoundRobinView data={data} onChange={onChange} />;
+  if (event.format === "se") {
+    return <BracketView data={data} eventId={eventId} onChange={onChange} />;
+  }
+  return <RoundRobinView data={data} eventId={eventId} onChange={onChange} />;
 }
 
 function BracketView({
   data,
+  eventId,
   onChange,
 }: {
   data: TournamentDTO;
+  eventId: string;
   onChange: (t: TournamentDTO) => void;
 }) {
+  const event = data.events.find((e) => e.id === eventId)!;
   const idMap = useMemo(
-    () => Object.fromEntries(data.play_units.map((p) => [p.id, p])),
-    [data.play_units]
+    () =>
+      Object.fromEntries(
+        data.play_units
+          .filter((p) => p.event_id === eventId)
+          .map((p) => [p.id, p])
+      ),
+    [data.play_units, eventId]
   );
   const resultByPu = useMemo(
     () => Object.fromEntries(data.results.map((r) => [r.play_unit_id, r])),
@@ -47,10 +60,10 @@ function BracketView({
   return (
     <div className="overflow-auto">
       <div className="flex gap-8 min-w-max">
-        {data.rounds.map((round, ri) => (
+        {event.rounds.map((round, ri) => (
           <div key={ri} className="flex flex-col">
             <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wide mb-3">
-              {roundLabel(ri, data.rounds.length)}
+              {roundLabel(ri, event.rounds.length)}
             </h3>
             <div
               className="flex flex-col"
@@ -61,7 +74,8 @@ function BracketView({
                   key={puId}
                   className="w-64"
                   style={{
-                    marginTop: ri === 0 || mi === 0 ? 0 : `${0.5 * 2 ** ri}rem`,
+                    marginTop:
+                      ri === 0 || mi === 0 ? 0 : `${0.5 * 2 ** ri}rem`,
                   }}
                 >
                   <BracketCell
@@ -71,9 +85,9 @@ function BracketView({
                     assignment={assignmentByPu[puId]}
                     onResult={async (winner) => {
                       const a = assignmentByPu[puId];
-                      const finishedAt =
-                        a?.actual_end_slot ??
-                        (a ? a.slot_id + a.duration_slots : null);
+                      const finishedAt = a
+                        ? a.actual_end_slot ?? a.slot_id + a.duration_slots
+                        : null;
                       onChange(
                         await api.recordResult({
                           play_unit_id: puId,
@@ -202,11 +216,14 @@ function roundLabel(roundIndex: number, roundCount: number): string {
 
 function RoundRobinView({
   data,
+  eventId,
   onChange,
 }: {
   data: TournamentDTO;
+  eventId: string;
   onChange: (t: TournamentDTO) => void;
 }) {
+  const event = data.events.find((e) => e.id === eventId)!;
   const nameById = Object.fromEntries(
     data.participants.map((p) => [p.id, p.name])
   );
@@ -216,17 +233,21 @@ function RoundRobinView({
   const assignmentByPu = Object.fromEntries(
     data.assignments.map((a) => [a.play_unit_id, a])
   );
+  const puById = Object.fromEntries(
+    data.play_units.filter((p) => p.event_id === eventId).map((p) => [p.id, p])
+  );
 
   return (
     <div className="space-y-6">
-      {data.rounds.map((round, ri) => (
+      {event.rounds.map((round, ri) => (
         <div key={ri} className="card p-4">
           <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wide mb-3">
             Round {ri + 1}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {round.map((puId) => {
-              const pu = data.play_units.find((p) => p.id === puId)!;
+              const pu = puById[puId];
+              if (!pu) return null;
               const result = resultByPu[puId];
               const assignment = assignmentByPu[puId];
               return (
@@ -238,9 +259,9 @@ function RoundRobinView({
                   assignment={assignment}
                   onResult={async (winner) => {
                     const a = assignment;
-                    const finishedAt =
-                      a?.actual_end_slot ??
-                      (a ? a.slot_id + a.duration_slots : null);
+                    const finishedAt = a
+                      ? a.actual_end_slot ?? a.slot_id + a.duration_slots
+                      : null;
                     onChange(
                       await api.recordResult({
                         play_unit_id: puId,

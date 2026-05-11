@@ -4,23 +4,26 @@ import type { TournamentDTO } from "../types";
 
 interface Props {
   data: TournamentDTO;
+  eventId: string;
   onChange: (t: TournamentDTO) => void;
   refresh: () => Promise<void>;
 }
 
-export function LiveView({ data, onChange }: Props) {
-  const rows = useMemo(() => buildRows(data), [data]);
+export function LiveView({ data, eventId, onChange }: Props) {
+  const rows = useMemo(() => buildRows(data, eventId), [data, eventId]);
 
   return (
     <div className="space-y-4">
       <div className="card p-4">
         <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wide">
-          Live ops
+          Live ops — event {eventId}
         </h3>
         <p className="text-sm text-ink-600 mt-1">
-          Mark matches as started or finished as they happen on court. Recording
-          a result here advances the bracket; click <em>Schedule next round</em>
-          {" "}on the Schedule tab once R{0} feeders are in.
+          Mark matches as started or finished as they happen on court.
+          Recording a result here advances the bracket; click{" "}
+          <em>Schedule next round</em> on the Schedule tab once R0 feeders
+          are in. The solver schedules across all events at once, so
+          cross-event player conflicts are respected automatically.
         </p>
       </div>
 
@@ -173,7 +176,7 @@ interface Row {
   finishSlot: number | null;
 }
 
-function buildRows(data: TournamentDTO): Row[] {
+function buildRows(data: TournamentDTO, eventId: string): Row[] {
   const nameById = Object.fromEntries(
     data.participants.map((p) => [p.id, p.name])
   );
@@ -184,7 +187,9 @@ function buildRows(data: TournamentDTO): Row[] {
     data.assignments.map((a) => [a.play_unit_id, a])
   );
 
-  const rows: Row[] = data.play_units.map((pu) => {
+  const filtered = data.play_units.filter((pu) => pu.event_id === eventId);
+
+  const rows: Row[] = filtered.map((pu) => {
     const r = resultByPu[pu.id];
     const a = assignmentByPu[pu.id];
     let state: RowState = "pending";
@@ -218,7 +223,6 @@ function buildRows(data: TournamentDTO): Row[] {
     };
   });
 
-  // Order: live first, ready next, pending, done.
   const stateRank: Record<RowState, number> = {
     live: 0,
     ready: 1,
