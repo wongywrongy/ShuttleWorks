@@ -15,29 +15,55 @@ Nothing in this prototype touches the BTP dual-meet product on `main` /
 
 ## Quick start
 
-In two terminals (from the worktree root):
+### Docker (recommended)
+
+One command brings up the prod-style stack (nginx + FastAPI):
+
+```bash
+cp .env.example .env       # one-time, can be skipped to use defaults
+make up
+```
+
+Frontend at <http://localhost:5174>, backend at
+<http://localhost:8765>. The compose project name defaults to
+`tournament`, so this stack coexists with the BTP stack
+(project name `btp`, ports 80 / 8000) on the same Docker daemon —
+both can run side-by-side.
+
+For hot reload during dev (source-mounted, Vite HMR, uvicorn --reload):
+
+```bash
+make dev          # foreground; Ctrl-C tears it down
+```
+
+Other targets: `make down`, `make logs`, `make ps`, `make rebuild`,
+`make clean`. `make test` runs the full pytest suite inside the
+backend container.
+
+### Bare-metal (no Docker)
+
+Two terminals from the worktree root:
 
 ```bash
 # Terminal 1 — backend
 python -m venv .venv
 .venv/bin/pip install -e ".[dev,backend]"
-.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8765 --reload
+make bare-backend
 ```
 
 ```bash
 # Terminal 2 — frontend
-cd frontend
-npm install
-npm run dev
+cd frontend && npm install && cd ..
+make bare-frontend
 ```
 
 The UI is at <http://localhost:5173>; the Vite proxy forwards
-`/tournament` and `/healthz` to `127.0.0.1:8765`.
+`/tournament` and `/healthz` to `127.0.0.1:8765` by default. Set
+`VITE_PROXY_TARGET=http://...:1234` to point at a different backend.
 
-> **Port note.** The backend listens on `8765` rather than the more
-> conventional `8000` to avoid colliding with any other locally
-> running service (e.g. a Docker container). If you change it, also
-> update `frontend/vite.config.ts`.
+> **Port note.** The Docker stack uses `5174` (frontend) and `8765`
+> (backend) so it doesn't collide with the BTP product (which uses
+> `80` and `8000`) when both are running.
 
 ## What the UI does
 

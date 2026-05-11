@@ -1,0 +1,16 @@
+# Tournament prototype — frontend DEV image.
+#
+# Used by docker-compose.dev.yml so `make dev` gives you HMR inside a
+# container. The image just installs deps; the compose override mounts
+# the source tree and runs `npm run dev`.
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+# Source is mounted at runtime by the dev compose override.
+EXPOSE 5173
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
