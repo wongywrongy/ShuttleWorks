@@ -90,10 +90,11 @@ make test-e2e-dev                  # run against `make dev` on :5173
 ## Layout
 
 ```
+../../scheduler_core/    CP-SAT engine (shared across products — domain, constraint plugins, solver)
 backend/                 FastAPI routes + adapters (HTTP boundary)
-scheduler_core/          CP-SAT engine — domain models, constraint plugins, solver
-src/adapters/            Sport-specific adapters (badminton)
-src/tests/               Backend + solver tests
+adapters/                Sport-specific adapters (badminton)
+app/                     Legacy DTO schemas / utilities (imported as `app.X`)
+tests/                   Backend + solver tests
 frontend/src/            React app (shell, tabs, DragGantt, SolverHud, dialogs, TV)
 e2e/                     Playwright specs
 docs/                    Smoke walkthroughs, feature guides
@@ -107,7 +108,7 @@ For working in the code:
 
 - [`BACKEND.md`](./BACKEND.md) — FastAPI routes, request lifecycle, how to add an endpoint or a constraint
 - [`FRONTEND.md`](./FRONTEND.md) — shell + tabs, Zustand store split, data flow, theme system
-- [`scheduler_core/README.md`](./scheduler_core/README.md) — CP-SAT model: variables, constraint plugins, soft penalties
+- [`../../scheduler_core/README.md`](../../scheduler_core/README.md) — shared CP-SAT engine (variables, constraint plugins, soft penalties)
 - [`docs/proposal-pipeline-smoke.md`](./docs/proposal-pipeline-smoke.md) — manual end-to-end walkthrough of the proposal pipeline + director tools
 
 Each major directory under `frontend/src/` (`features/`, `hooks/`, `store/`, `api/`, `utils/`, `components/`) carries its own `README.md` for local conventions.

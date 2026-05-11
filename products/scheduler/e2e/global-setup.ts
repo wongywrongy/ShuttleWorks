@@ -47,10 +47,10 @@ export default async function globalSetup(): Promise<void> {
   const upFlags = FORCE_REBUILD ? '-d --build' : '-d';
   // URL.pathname encodes spaces as %20 — use fileURLToPath so `execSync`
   // gets a real decoded filesystem path when the project dir contains a space.
-  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const productRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   console.log(`[e2e] docker-compose up ${upFlags}`);
   execSync(`docker-compose up ${upFlags}`, {
-    cwd: repoRoot,
+    cwd: productRoot,
     stdio: 'inherit',
   });
 

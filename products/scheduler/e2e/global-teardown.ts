@@ -10,10 +10,10 @@ export default async function globalTeardown(): Promise<void> {
     console.log('[e2e] leaving docker stack running');
     return;
   }
-  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const productRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   console.log('[e2e] docker-compose down');
   execSync('docker-compose down', {
-    cwd: repoRoot,
+    cwd: productRoot,
     stdio: 'inherit',
   });
 }

@@ -4,8 +4,10 @@ services:
   # Backend API - FastAPI + CP-SAT solver
   backend:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      # Context = repo root so the Dockerfile can COPY the shared
+      # scheduler_core/ tree at the top level.
+      context: ../..
+      dockerfile: products/scheduler/backend/Dockerfile
     ports:
       - "${BACKEND_HOST_PORT:-8000}:8000"
     environment:

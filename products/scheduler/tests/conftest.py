@@ -1,12 +1,13 @@
 """Shared pytest setup for the backend test suite.
 
-Pytest's rootdir is ``src/`` (per ``pyproject.toml``), which forces
-``src/`` to the front of ``sys.path``. That makes ``from app.schemas
-import ...`` resolve to ``src/app/schemas.py`` (a legacy stub that
-lacks every model added since the v2 API rewrite). Each test file
-used to repeat the same fix-up — shift ``backend/`` to the front of
-``sys.path`` and purge any cached ``app.*`` / ``api.*`` / ``services.*``
-/ ``adapters.*`` modules so the next import resolves correctly.
+Pytest's rootdir is ``products/scheduler/`` (the directory containing
+``pyproject.toml``), which forces it to the front of ``sys.path``.
+That makes ``from app.schemas import ...`` resolve to
+``products/scheduler/app/schemas.py`` (a legacy stub that lacks every
+model added since the v2 API rewrite). Each test file used to repeat
+the same fix-up — shift ``backend/`` to the front of ``sys.path`` and
+purge any cached ``app.*`` / ``api.*`` / ``services.*`` / ``adapters.*``
+modules so the next import resolves correctly.
 
 Centralising both shifts here:
 
@@ -31,10 +32,19 @@ from typing import Iterable
 import pytest
 
 
-# Resolve once. ``src/tests/conftest.py`` lives at parents[0]/tests,
-# parents[1] is the repo root proper.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_BACKEND_ROOT = str(_REPO_ROOT / "backend")
+# Resolve once. ``products/scheduler/tests/conftest.py`` lives at
+# parents[0]=tests, parents[1]=scheduler (product root), parents[2]=products,
+# parents[3]=repo root.
+_PRODUCT_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_BACKEND_ROOT = str(_PRODUCT_ROOT / "backend")
+
+# Repo root needs to be on sys.path so tests can ``from scheduler_core
+# import ...`` directly. Pytest already has the product root (rootdir
+# from pyproject.toml) on the path; we add the repo root once at module
+# load so scheduler_core/ resolves regardless of how the test was kicked off.
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 
 def _pin_backend_root() -> None:
@@ -86,10 +96,11 @@ def backend_env(tmp_path, monkeypatch):
             from api import schedule_proposals  # fresh import
             ...
 
-    Tests that exercise pure scheduler-core code (under ``src/``) and
-    don't touch FastAPI routers should NOT request this fixture —
-    pinning backend/ ahead of src/ would shadow ``adapters.fastapi``
-    and similar src-only modules.
+    Tests that exercise pure scheduler-core code (under
+    ``products/scheduler/{app,adapters}/``) and don't touch FastAPI
+    routers should NOT request this fixture — pinning backend/ ahead
+    of the product root would shadow ``adapters.fastapi`` and similar
+    legacy-namespace modules.
     """
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
     reset_backend_test_env()

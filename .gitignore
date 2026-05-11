@@ -20,6 +20,7 @@ build/
 *.swo
 .cursor/
 .claude/
+.serena/
 
 # Testing
 .pytest_cache/
@@ -36,8 +37,6 @@ htmlcov/
 # tracked normally so feature-folder docs stay in version control.
 /*.md
 !/README.md
-!/BACKEND.md
-!/FRONTEND.md
 
 # Old app folders (legacy)
 apps/
@@ -49,23 +48,23 @@ Thumbs.db
 # Logs
 *.log
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/build/
-frontend/.vite/
-frontend/.env.local
-frontend/.env.*.local
+# Frontend (per-product)
+**/frontend/node_modules/
+**/frontend/dist/
+**/frontend/build/
+**/frontend/.vite/
+**/frontend/.env.local
+**/frontend/.env.*.local
 
-# Persisted tournament state (Docker volume)
-/data/
+# Persisted state (Docker volumes; runtime, not source)
+**/data/
 
-# E2E tests
-e2e/node_modules/
-e2e/playwright-report/
-e2e/test-results/
-e2e/blob-report/
-e2e/.playwright/
+# E2E tests (per-product)
+**/e2e/node_modules/
+**/e2e/playwright-report/
+**/e2e/test-results/
+**/e2e/blob-report/
+**/e2e/.playwright/
 
 # Playwright MCP scratch dir — screenshots, page snapshots, console logs,
 # and any downloaded artifacts from browser_navigate / browser_take_screenshot.
@@ -83,3 +82,7 @@ e2e/.playwright/
 /roster_*.xlsx
 /matches_*.csv
 /matches_*.xlsx
+
+# UI-iteration screenshots — kept locally as visual references but not
+# version-controlled; they age out quickly with frontend changes.
+**/docs/screenshots/

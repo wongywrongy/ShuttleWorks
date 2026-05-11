@@ -8,22 +8,25 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY backend/requirements.txt .
+# Build context is the repo root (set in products/scheduler/docker-compose.yml)
+# so this Dockerfile can COPY the shared engine sibling-to the product tree.
+COPY products/scheduler/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Engine lives at the repo root; the rest of the legacy `src/` namespace
-# (app, adapters) is still mounted under /app/src so backend imports
-# `from app.X` and `from adapters.X` resolve the same way they do locally.
+# Shared engine at the repo root.
 COPY scheduler_core ./scheduler_core
-COPY src/app ./src/app
-COPY src/adapters ./src/adapters
 
-# Copy backend application code
-COPY backend/app/ ./app/
-COPY backend/api/ ./api/
-COPY backend/adapters/ ./adapters/
-COPY backend/services/ ./services/
+# The product carries a legacy `app/` + `adapters/` namespace; we keep
+# them under /app/src/ inside the image so backend imports `from app.X`
+# and `from adapters.X` resolve the same way they do locally.
+COPY products/scheduler/app ./src/app
+COPY products/scheduler/adapters ./src/adapters
+
+# Product backend application code.
+COPY products/scheduler/backend/app/ ./app/
+COPY products/scheduler/backend/api/ ./api/
+COPY products/scheduler/backend/adapters/ ./adapters/
+COPY products/scheduler/backend/services/ ./services/
 
 # Create a non-root user and a data dir it owns. The volume mount target
 # inherits these permissions (bind mount uid is fixed up via `chown` at
