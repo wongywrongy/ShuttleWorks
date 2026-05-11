@@ -59,6 +59,56 @@ def test_byes_walkover_at_register_time():
         assert pu_r0_0.side_a == ["P1"]
 
 
+def test_chain_of_byes_cascades_winner_through_rounds():
+    """3 participants in an 8-bracket: 5 byes. The cascade should
+    advance P1, P2, P3 through any bye-only rounds without losing
+    them to a 'NONE dependency kills the winner' bug."""
+    draw = generate_single_elimination(_ps(3))
+    state = TournamentState()
+    register_draw(state, draw)
+
+    # After auto_walkover_byes + cascade, P1, P2, P3 should each be
+    # somewhere in the bracket — NOT eliminated.
+    surviving_players: set[str] = set()
+    for pu_id, pu in state.play_units.items():
+        if pu_id in state.results:
+            continue
+        for side in (pu.side_a or [], pu.side_b or []):
+            for token in side:
+                if token.startswith("P"):
+                    surviving_players.add(token)
+    assert {"P1", "P2", "P3"} <= surviving_players, (
+        f"lost players: {{'P1','P2','P3'}} - {surviving_players}"
+    )
+
+
+def test_double_bye_then_real_winner_does_not_kill_real_player():
+    """A R1 PlayUnit with one NONE feeder (double bye) and one A
+    feeder (real winner) must NOT be marked NONE — the real winner
+    must advance further."""
+    draw = generate_single_elimination(_ps(5))
+    state = TournamentState()
+    register_draw(state, draw)
+
+    # In a 5-in-8 bracket, three R0 PUs walkover top seeds.
+    # Find any R1+ PU that has a real side_a or side_b set; it
+    # should not be marked NONE.
+    nones = [
+        pu_id for pu_id, r in state.results.items()
+        if r.winner_side == WinnerSide.NONE
+    ]
+    for pu_id in nones:
+        pu = state.play_units[pu_id]
+        # A walked-over PU should have either both sides empty
+        # (double bye) or be a structural dead end downstream.
+        # It must NOT have a real player on either side.
+        for side in (pu.side_a or [], pu.side_b or []):
+            for token in side:
+                assert not token.startswith("P"), (
+                    f"{pu_id} marked NONE but still holds player {token}"
+                )
+
+
 def test_full_bracket_walks_to_one_winner():
     """8-player SE: top seed wins every round; final has exactly one winner."""
     draw = generate_single_elimination(_ps(8))

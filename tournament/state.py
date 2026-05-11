@@ -11,9 +11,7 @@ from __future__ import annotations
 
 from scheduler_core.domain.tournament import (
     PlayUnitId,
-    Result,
     TournamentState,
-    WinnerSide,
 )
 
 from tournament.advancement import auto_walkover_byes
@@ -43,7 +41,9 @@ def find_ready_play_units(state: TournamentState) -> list[PlayUnitId]:
     satisfied, sides non-empty, and not yet assigned or completed.
 
     Iterates the full state, so multi-event tournaments naturally
-    pick up ready PlayUnits from every event.
+    pick up ready PlayUnits from every event. Dead branches and
+    cascading walkovers are handled inside ``record_result`` /
+    ``auto_walkover_byes``, so this function only has to filter.
     """
     ready: list[PlayUnitId] = []
     for pu_id, pu in state.play_units.items():
@@ -52,18 +52,8 @@ def find_ready_play_units(state: TournamentState) -> list[PlayUnitId]:
         if pu_id in state.assignments:
             continue
         if not pu.side_a or not pu.side_b:
-            continue  # awaiting advancement to fill in a side
+            continue  # awaiting advancement / walked over to BYE
         if any(dep not in state.results for dep in pu.dependencies):
-            continue
-        # Skip dead branches: if a feeder result is NONE (double bye),
-        # this PlayUnit can never be played. Mark it walked-over.
-        if pu.dependencies and any(
-            state.results[dep].winner_side == WinnerSide.NONE
-            for dep in pu.dependencies
-        ):
-            state.results[pu_id] = Result(
-                winner_side=WinnerSide.NONE, walkover=True
-            )
             continue
         ready.append(pu_id)
     return ready

@@ -7,8 +7,14 @@ listed it as a dependency gets its corresponding BracketSlot resolved
 
 For multi-event tournaments, callers pass a `draws` dict keyed by
 event id; the function looks up the right Draw via the PlayUnit's
-`event_id`. A single `Draw` is also accepted (treated as a one-event
-mapping) for backward compatibility with the single-event tests.
+`event_id`. A single ``Draw`` is also accepted (treated as a one-event
+mapping) for the single-event tests.
+
+After each recorded result, ``_sweep_walkovers`` cascades through any
+downstream PlayUnit whose remaining side is now a BYE (one feeder
+walked over, the other already absent). A chain of byes — e.g. when
+the field is much smaller than the bracket — resolves in one sweep
+rather than waiting for each subsequent round to be scheduled.
 """
 from __future__ import annotations
 
@@ -43,10 +49,11 @@ def record_result(
     walkover: bool = False,
     score: Optional[dict] = None,
 ) -> List[PlayUnitId]:
-    """Store a Result for `play_unit_id` and propagate the winner forward.
+    """Store a Result for ``play_unit_id`` and propagate the winner forward.
 
     Returns the list of downstream PlayUnit ids whose slots were
-    resolved by this call. Walkovers cascade through chains of byes.
+    resolved by this call. Walkovers cascade through chains of byes
+    automatically — callers don't need to recurse.
     """
     draw_map = _as_draws(draws)
     pu = state.play_units.get(play_unit_id)
@@ -58,60 +65,44 @@ def record_result(
     if play_unit_id in state.results:
         raise ValueError(f"play unit {play_unit_id!r} already has a result")
 
-    state.results[play_unit_id] = Result(
-        winner_side=winner_side,
-        score=score,
+    if winner_side == WinnerSide.A and not pu.side_a:
+        raise ValueError(
+            f"cannot record A win on {play_unit_id!r}: side_a is empty"
+        )
+    if winner_side == WinnerSide.B and not pu.side_b:
+        raise ValueError(
+            f"cannot record B win on {play_unit_id!r}: side_b is empty"
+        )
+
+    resolved = _record_and_propagate(
+        state,
+        draw,
+        play_unit_id,
+        winner_side,
         finished_at_slot=finished_at_slot,
         walkover=walkover,
+        score=score,
     )
-
-    winning_participant_id = _winner_participant_id(
-        draw, play_unit_id, winner_side
-    )
-
-    resolved: List[PlayUnitId] = []
-    for downstream_id, downstream in draw.play_units.items():
-        if play_unit_id not in downstream.dependencies:
-            continue
-        slot_a, slot_b = draw.slots[downstream_id]
-        changed = False
-        if slot_a.feeder_play_unit_id == play_unit_id:
-            new_slot = BracketSlot.of_participant(
-                winning_participant_id or BYE
-            )
-            draw.slots[downstream_id] = (new_slot, slot_b)
-            slot_a = new_slot
-            changed = True
-        if slot_b.feeder_play_unit_id == play_unit_id:
-            new_slot = BracketSlot.of_participant(
-                winning_participant_id or BYE
-            )
-            draw.slots[downstream_id] = (slot_a, new_slot)
-            slot_b = new_slot
-            changed = True
-        if changed:
-            _refresh_play_unit_sides(draw, downstream_id)
-            resolved.append(downstream_id)
-
+    _sweep_walkovers(state, draw_map)
     return resolved
 
 
 def auto_walkover_byes(state: TournamentState, draw: Draw) -> None:
-    """Record walkover results for any R1 PlayUnit that has a BYE side.
+    """Record walkover results for any R0 PlayUnit with a BYE side.
 
-    A R1 PlayUnit may have one side absent (the standard case — top
-    seed gets a bye) or both sides absent (a degenerate case for very
-    small fields). The winner of a one-sided bye is the present side;
-    a double-bye produces a NONE result so the downstream PlayUnit
-    knows the branch is dead and gets walked over too.
+    Goes through R0 only — chains beyond R0 are picked up by the
+    cascade sweep that runs inside every ``record_result`` call.
     """
     for pu_id in list(draw.rounds[0]):
+        if pu_id in state.results:
+            continue
         pu = state.play_units[pu_id]
         a_empty = not pu.side_a
         b_empty = not pu.side_b
         if a_empty and b_empty:
-            state.results[pu_id] = Result(
-                winner_side=WinnerSide.NONE, walkover=True
+            record_result(
+                state, draw, pu_id, WinnerSide.NONE,
+                finished_at_slot=None, walkover=True,
             )
         elif a_empty:
             record_result(
@@ -123,6 +114,95 @@ def auto_walkover_byes(state: TournamentState, draw: Draw) -> None:
                 state, draw, pu_id, WinnerSide.A,
                 finished_at_slot=None, walkover=True,
             )
+
+
+# ---- internals ------------------------------------------------------------
+
+
+def _record_and_propagate(
+    state: TournamentState,
+    draw: Draw,
+    play_unit_id: PlayUnitId,
+    winner_side: WinnerSide,
+    *,
+    finished_at_slot: Optional[int],
+    walkover: bool,
+    score: Optional[dict],
+) -> List[PlayUnitId]:
+    """Store the result and update downstream slots. Does NOT sweep."""
+    state.results[play_unit_id] = Result(
+        winner_side=winner_side,
+        score=score,
+        finished_at_slot=finished_at_slot,
+        walkover=walkover,
+    )
+
+    winner = _winner_participant_id(draw, play_unit_id, winner_side)
+    resolved: List[PlayUnitId] = []
+    for downstream_id, downstream in draw.play_units.items():
+        if play_unit_id not in downstream.dependencies:
+            continue
+        slot_a, slot_b = draw.slots[downstream_id]
+        changed = False
+        if slot_a.feeder_play_unit_id == play_unit_id:
+            new_slot = BracketSlot.of_participant(winner or BYE)
+            draw.slots[downstream_id] = (new_slot, slot_b)
+            slot_a = new_slot
+            changed = True
+        if slot_b.feeder_play_unit_id == play_unit_id:
+            new_slot = BracketSlot.of_participant(winner or BYE)
+            draw.slots[downstream_id] = (slot_a, new_slot)
+            slot_b = new_slot
+            changed = True
+        if changed:
+            _refresh_play_unit_sides(draw, downstream_id)
+            resolved.append(downstream_id)
+    return resolved
+
+
+def _sweep_walkovers(
+    state: TournamentState, draw_map: Dict[str, Draw]
+) -> None:
+    """Cascade walkovers across the whole state until stable.
+
+    A PlayUnit becomes auto-walkover-eligible when all its
+    dependencies are resolved AND at least one of its sides is now
+    empty (one feeder walked over to a BYE, the other already absent).
+    The loop runs until no further PlayUnits are recorded.
+    """
+    changed = True
+    while changed:
+        changed = False
+        for pu_id, pu in state.play_units.items():
+            if pu_id in state.results:
+                continue
+            if pu.dependencies and not all(
+                d in state.results for d in pu.dependencies
+            ):
+                continue
+            a_empty = not pu.side_a
+            b_empty = not pu.side_b
+            if not (a_empty or b_empty):
+                continue
+            draw = draw_map.get(pu.event_id)
+            if draw is None:
+                continue
+            if a_empty and b_empty:
+                w = WinnerSide.NONE
+            elif a_empty:
+                w = WinnerSide.B
+            else:
+                w = WinnerSide.A
+            _record_and_propagate(
+                state,
+                draw,
+                pu_id,
+                w,
+                finished_at_slot=None,
+                walkover=True,
+                score=None,
+            )
+            changed = True
 
 
 def _winner_participant_id(

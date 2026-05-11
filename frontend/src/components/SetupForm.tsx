@@ -85,6 +85,7 @@ export function SetupForm({ disabled, onCreated }: Props) {
         if (names.length < 2) {
           throw new Error(`Event ${ev.id}: need at least 2 participants`);
         }
+        const seenIds = new Set<string>();
         const participants = names.map((line, i) => {
           const seed = i + 1;
           if (line.includes("/")) {
@@ -92,14 +93,31 @@ export function SetupForm({ disabled, onCreated }: Props) {
             if (parts.length < 2) {
               throw new Error(`Event ${ev.id}: malformed pair "${line}"`);
             }
+            // Team id is event-scoped (a doubles pair only exists in
+            // one event). Member ids are GLOBAL slugs — so the same
+            // player name in MS singles and an MD pair becomes the
+            // same engine player id, and cross-event player no-
+            // overlap fires correctly.
+            const teamId = `${ev.id}-T${i + 1}`;
+            const memberIds = parts.map(playerSlug);
             return {
-              id: `${ev.id}-T${i + 1}`,
+              id: teamId,
               name: parts.join(" / "),
-              members: parts.map((p) => `${ev.id}-${p}`),
+              members: memberIds,
               seed,
             };
           }
-          return { id: `${ev.id}-P${i + 1}`, name: line, seed };
+          // Singles: the participant *is* the player. Use a global
+          // slug id so cross-event matches share the player.
+          const id = playerSlug(line);
+          if (seenIds.has(id)) {
+            throw new Error(
+              `Event ${ev.id}: duplicate participant "${line}" (slug ${id}). ` +
+                `Use distinct names — e.g. "Alex M" vs "Alex W".`
+            );
+          }
+          seenIds.add(id);
+          return { id, name: line, seed };
         });
         return {
           id: ev.id,
@@ -414,6 +432,14 @@ function NumInput({
       className="w-28 rounded-md border border-ink-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink-400"
     />
   );
+}
+
+function playerSlug(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `p-${slug || "player"}`;
 }
 
 function defaultStartTime(): string {

@@ -106,7 +106,7 @@ def test_import_csv_endpoint():
     )
     r = client.post(
         "/tournament/import.csv?courts=2&total_slots=20",
-        data=csv_body,
+        content=csv_body,
         headers={"content-type": "text/csv"},
     )
     assert r.status_code == 200, r.text

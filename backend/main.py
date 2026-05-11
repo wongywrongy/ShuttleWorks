@@ -129,15 +129,20 @@ def _build_event_draw(ev: EventIn) -> tuple[Draw, EventMeta]:
     ordered, seeded_count = _seed_order(ev.participants, participants, ev.seeded_count)
 
     if ev.format == "se":
-        draw = generate_single_elimination(
-            ordered,
-            event_id=ev.id,
-            duration_slots=ev.duration_slots,
-            play_unit_id_prefix=ev.id,
-            seeded_count=seeded_count,
-            bracket_size=ev.bracket_size,
-            randomize=ev.randomize,
-        )
+        try:
+            draw = generate_single_elimination(
+                ordered,
+                event_id=ev.id,
+                duration_slots=ev.duration_slots,
+                play_unit_id_prefix=ev.id,
+                seeded_count=seeded_count,
+                bracket_size=ev.bracket_size,
+                randomize=ev.randomize,
+            )
+        except NotImplementedError as e:
+            raise HTTPException(400, str(e))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
         bracket_size = draw.event.parameters.get("bracket_size")
     elif ev.format == "rr":
         draw = generate_round_robin(
@@ -311,7 +316,10 @@ def match_action(body: MatchActionIn) -> TournamentOut:
 
 @app.post("/tournament/import", response_model=TournamentOut)
 def import_matches_json(body: ImportTournamentIn) -> TournamentOut:
-    slot = parse_json_payload(body)
+    try:
+        slot = parse_json_payload(body)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     container.set(slot)
     return serialize_tournament(slot)
 

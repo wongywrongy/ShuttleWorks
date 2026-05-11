@@ -170,6 +170,116 @@ def test_multi_event_no_cross_event_conflicts():
             slot_players.add(token)
 
 
+def test_singles_player_shared_with_doubles_pair_no_double_booking():
+    """A player entered in singles AND as a member of a doubles pair
+    in a separate event must not be on two courts at once.
+
+    Mimics what the frontend will send: singles use a stable player
+    slug id; the doubles team's member ids reuse the same slug.
+    """
+    client = TestClient(app)
+    r = client.post(
+        "/tournament",
+        json={
+            "courts": 2,
+            "total_slots": 30,
+            "events": [
+                {
+                    "id": "MS",
+                    "discipline": "MS",
+                    "format": "rr",
+                    "participants": [
+                        {"id": "p-alice", "name": "Alice"},
+                        {"id": "p-bob", "name": "Bob"},
+                        {"id": "p-carla", "name": "Carla"},
+                        {"id": "p-dani", "name": "Dani"},
+                    ],
+                },
+                {
+                    "id": "MD",
+                    "discipline": "MD",
+                    "format": "rr",
+                    "participants": [
+                        {
+                            "id": "MD-T1",
+                            "name": "Alice / Anna",
+                            "members": ["p-alice", "p-anna"],
+                        },
+                        {
+                            "id": "MD-T2",
+                            "name": "Bob / Brent",
+                            "members": ["p-bob", "p-brent"],
+                        },
+                        {
+                            "id": "MD-T3",
+                            "name": "Carla / Cora",
+                            "members": ["p-carla", "p-cora"],
+                        },
+                    ],
+                },
+            ],
+        },
+    )
+    assert r.status_code == 200, r.text
+    r = client.post("/tournament/schedule-next").json()
+    assert r["status"] in ("optimal", "feasible")
+
+    state = client.get("/tournament").json()
+    pu_by_id = {p["id"]: p for p in state["play_units"]}
+    seen: dict[int, set[str]] = {}
+    for a in state["assignments"]:
+        pu = pu_by_id[a["play_unit_id"]]
+        # Walk the slot range this match occupies.
+        for slot in range(a["slot_id"], a["slot_id"] + a["duration_slots"]):
+            slot_players = seen.setdefault(slot, set())
+            # For singles the side IS the player; for team-pair sides
+            # we have to resolve via the participant map.
+            for token in (pu["side_a"] or []) + (pu["side_b"] or []):
+                if token.startswith("MD-T"):
+                    members = next(
+                        (
+                            p["members"]
+                            for p in state["participants"]
+                            if p["id"] == token
+                        ),
+                        [],
+                    ) or []
+                    for m in members:
+                        assert m not in slot_players, (
+                            f"player {m} double-booked at slot {slot} "
+                            f"(in {pu['id']} and another match)"
+                        )
+                        slot_players.add(m)
+                else:
+                    assert token not in slot_players, (
+                        f"player {token} double-booked at slot {slot}"
+                    )
+                    slot_players.add(token)
+
+
+def test_randomize_true_returns_400_not_500():
+    """randomize=True isn't supported yet — the backend should reject
+    it with 400, not bubble a 500 from NotImplementedError."""
+    client = TestClient(app)
+    r = client.post(
+        "/tournament",
+        json={
+            "courts": 2,
+            "total_slots": 20,
+            "events": [
+                {
+                    "id": "MS",
+                    "format": "se",
+                    "participants": _participants(4),
+                    "randomize": True,
+                }
+            ],
+        },
+    )
+    assert r.status_code == 400, r.text
+    assert "randomize" in r.text.lower()
+
+
 def test_match_action_start_finish_reset():
     client = TestClient(app)
     client.post(
