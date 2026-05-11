@@ -31,13 +31,21 @@ It's designed for the operator running the day from a laptop in the corner of th
 
 ## Quick start
 
+Requires Docker (with Compose v2) and — for dev mode only — Node 20+.
+
 ### Production (Docker)
 
 ```bash
 make run        # build + start → http://localhost
 make stop
 make logs
+make rebuild    # nuclear rebuild when UI changes aren't showing up
 ```
+
+After `make run`:
+- Frontend: <http://localhost>
+- Backend:  <http://localhost:8000>
+- API docs: <http://localhost:8000/docs>
 
 ### Development
 
@@ -47,12 +55,25 @@ make dev        # backend in Docker, Vite dev server on :5173
 
 Vite proxies `/api/*` to the FastAPI container so front and back share an origin in dev too.
 
+### Configuration
+
+Defaults work out of the box. Copy `.env.example` → `.env` only when you need to remap:
+
+| Variable                | Default | Purpose                                                                 |
+| ----------------------- | ------- | ----------------------------------------------------------------------- |
+| `COMPOSE_PROJECT_NAME`  | `btp`   | Namespaces containers/networks/volumes — change to run two stacks side by side. |
+| `FRONTEND_HOST_PORT`    | `80`    | Host port for the nginx frontend.                                       |
+| `BACKEND_HOST_PORT`     | `8000`  | Host port for the FastAPI backend.                                      |
+
+Compose auto-loads `.env` from the repo root; no flags needed.
+
 ### Tests
 
 ```bash
 cd src && pytest                   # backend + solver (~170 tests)
 make test-e2e-install              # one-time
-make test-e2e                      # Playwright end-to-end
+make test-e2e                      # Playwright end-to-end (boots stack, tears down)
+make test-e2e-dev                  # run against `make dev` on :5173
 ```
 
 ---
