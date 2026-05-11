@@ -5,13 +5,14 @@ listed it as a dependency gets its corresponding BracketSlot resolved
 (participant id filled in, feeder pointer cleared) and its `side_a` /
 `side_b` updated on the engine-facing PlayUnit.
 
-Walkovers cascade — recording a walkover on a R1 PlayUnit may resolve
-a R2 slot, which in turn may not yet be ready (waiting on the other
-feeder) but will resolve as soon as that feeder finishes.
+For multi-event tournaments, callers pass a `draws` dict keyed by
+event id; the function looks up the right Draw via the PlayUnit's
+`event_id`. A single `Draw` is also accepted (treated as a one-event
+mapping) for backward compatibility with the single-event tests.
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Mapping, Optional, Union
 
 from scheduler_core.domain.tournament import (
     PlayUnitId,
@@ -23,9 +24,18 @@ from scheduler_core.domain.tournament import (
 from tournament.draw import BYE, BracketSlot, Draw
 
 
+DrawSource = Union[Draw, Mapping[str, Draw]]
+
+
+def _as_draws(source: DrawSource) -> Dict[str, Draw]:
+    if isinstance(source, Draw):
+        return {source.event.id: source}
+    return dict(source)
+
+
 def record_result(
     state: TournamentState,
-    draw: Draw,
+    draws: DrawSource,
     play_unit_id: PlayUnitId,
     winner_side: WinnerSide,
     *,
@@ -36,10 +46,15 @@ def record_result(
     """Store a Result for `play_unit_id` and propagate the winner forward.
 
     Returns the list of downstream PlayUnit ids whose slots were
-    resolved by this call.
+    resolved by this call. Walkovers cascade through chains of byes.
     """
-    if play_unit_id not in draw.play_units:
+    draw_map = _as_draws(draws)
+    pu = state.play_units.get(play_unit_id)
+    if pu is None:
         raise KeyError(f"unknown play unit {play_unit_id!r}")
+    draw = draw_map.get(pu.event_id)
+    if draw is None:
+        raise KeyError(f"no draw registered for event {pu.event_id!r}")
     if play_unit_id in state.results:
         raise ValueError(f"play unit {play_unit_id!r} already has a result")
 
@@ -51,7 +66,7 @@ def record_result(
     )
 
     winning_participant_id = _winner_participant_id(
-        state, draw, play_unit_id, winner_side
+        draw, play_unit_id, winner_side
     )
 
     resolved: List[PlayUnitId] = []
@@ -81,20 +96,6 @@ def record_result(
     return resolved
 
 
-def _winner_participant_id(
-    state: TournamentState,
-    draw: Draw,
-    play_unit_id: PlayUnitId,
-    winner_side: WinnerSide,
-) -> Optional[str]:
-    pu = draw.play_units[play_unit_id]
-    if winner_side == WinnerSide.A:
-        return pu.side_a[0] if pu.side_a else None
-    if winner_side == WinnerSide.B:
-        return pu.side_b[0] if pu.side_b else None
-    return None  # WinnerSide.NONE — double-bye / dead branch
-
-
 def auto_walkover_byes(state: TournamentState, draw: Draw) -> None:
     """Record walkover results for any R1 PlayUnit that has a BYE side.
 
@@ -122,6 +123,19 @@ def auto_walkover_byes(state: TournamentState, draw: Draw) -> None:
                 state, draw, pu_id, WinnerSide.A,
                 finished_at_slot=None, walkover=True,
             )
+
+
+def _winner_participant_id(
+    draw: Draw,
+    play_unit_id: PlayUnitId,
+    winner_side: WinnerSide,
+) -> Optional[str]:
+    pu = draw.play_units[play_unit_id]
+    if winner_side == WinnerSide.A:
+        return pu.side_a[0] if pu.side_a else None
+    if winner_side == WinnerSide.B:
+        return pu.side_b[0] if pu.side_b else None
+    return None  # WinnerSide.NONE — double-bye / dead branch
 
 
 def _refresh_play_unit_sides(draw: Draw, play_unit_id: PlayUnitId) -> None:

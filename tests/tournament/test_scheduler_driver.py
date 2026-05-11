@@ -31,7 +31,6 @@ def test_round_robin_schedules_in_one_pass():
     config = ScheduleConfig(total_slots=20, court_count=2)
     driver = TournamentDriver(
         state=state,
-        draw=draw,
         config=config,
         solver_options=SolverOptions(time_limit_seconds=5.0),
     )
@@ -61,7 +60,6 @@ def test_single_elimination_layered_schedule_8_players():
     config = ScheduleConfig(total_slots=40, court_count=2)
     driver = TournamentDriver(
         state=state,
-        draw=draw,
         config=config,
         solver_options=SolverOptions(time_limit_seconds=5.0),
         rest_between_rounds=1,
@@ -122,7 +120,7 @@ def test_no_ready_play_units_returns_empty():
     register_draw(state, draw)
     config = ScheduleConfig(total_slots=20, court_count=2)
     driver = TournamentDriver(
-        state=state, draw=draw, config=config,
+        state=state, config=config,
         solver_options=SolverOptions(time_limit_seconds=2.0),
     )
 

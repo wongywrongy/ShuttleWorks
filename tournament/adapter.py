@@ -1,4 +1,4 @@
-"""Translate a Draw + state slice into a scheduler_core SchedulingProblem.
+"""Translate a TournamentState slice into a scheduler_core SchedulingProblem.
 
 Each call schedules a single wave of "ready" PlayUnits — those whose
 dependencies have results and whose sides are concrete. Prior rounds
@@ -20,16 +20,12 @@ from scheduler_core.domain.models import (
 from scheduler_core.domain.tournament import (
     Participant,
     ParticipantType,
-    PlayUnit,
     TournamentState,
 )
-
-from tournament.draw import Draw
 
 
 def build_problem(
     state: TournamentState,
-    draw: Draw,
     ready_play_unit_ids: Sequence[str],
     *,
     config: ScheduleConfig,
@@ -37,9 +33,10 @@ def build_problem(
 ) -> ScheduleRequest:
     """Assemble a SchedulingProblem for the engine.
 
-    `config` is taken as-is (caller is responsible for setting
-    `total_slots`, `court_count`, `current_slot`, etc). The adapter
-    just collects matches and players for the ready PlayUnits.
+    All PlayUnit / participant lookups go through `state` — for
+    multi-event tournaments the state already holds everyone across
+    events, so the engine sees one global match + player set per
+    solve and player-no-overlap covers cross-event conflicts.
     """
     if not ready_play_unit_ids:
         raise ValueError("no ready play units to schedule")
@@ -48,14 +45,16 @@ def build_problem(
     referenced_player_ids: set[str] = set()
 
     for pu_id in ready_play_unit_ids:
-        pu = state.play_units.get(pu_id) or draw.play_units[pu_id]
+        pu = state.play_units.get(pu_id)
+        if pu is None:
+            raise KeyError(f"unknown play unit {pu_id!r}")
         if not pu.side_a or not pu.side_b:
             raise ValueError(
                 f"play unit {pu_id!r} has unresolved sides; cannot schedule"
             )
 
-        side_a = _expand_side(pu.side_a, draw.participants)
-        side_b = _expand_side(pu.side_b, draw.participants)
+        side_a = _expand_side(pu.side_a, state.participants)
+        side_b = _expand_side(pu.side_b, state.participants)
         if not side_a or not side_b:
             raise ValueError(
                 f"play unit {pu_id!r} expanded to empty side"
@@ -76,7 +75,7 @@ def build_problem(
     availability_window = (config.current_slot, config.total_slots)
     players = _build_players(
         referenced_player_ids,
-        draw.participants,
+        state.participants,
         availability_window=availability_window,
     )
 
@@ -98,16 +97,11 @@ def _expand_side(
     matching player id (same string).
     Teams: side has one participant id of type TEAM; expanded list
     has every member id.
-    Doubles entered as already-expanded participant ids: each id is
-    treated as a player.
     """
     expanded: List[str] = []
     for pid in side:
         p: Participant | None = participants.get(pid)
         if p is None:
-            # Unknown id — treat as a player id directly (caller
-            # supplied raw ids; we'll create a placeholder Player
-            # below).
             expanded.append(pid)
             continue
         if p.type == ParticipantType.TEAM and p.member_ids:

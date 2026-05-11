@@ -6,10 +6,11 @@ is cleared. No persistence — this is a prototype harness.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from threading import RLock
-from typing import Optional
+from typing import Dict, Optional
 
-from scheduler_core.domain.models import ScheduleConfig, SolverOptions
+from scheduler_core.domain.models import ScheduleConfig
 from scheduler_core.domain.tournament import TournamentState
 
 from tournament.draw import Draw
@@ -17,16 +18,28 @@ from tournament.scheduler import TournamentDriver
 
 
 @dataclass
+class EventMeta:
+    """Per-event metadata held alongside the Draw."""
+
+    id: str
+    discipline: str
+    format: str  # "se" or "rr"
+    duration_slots: int
+    bracket_size: Optional[int] = None
+    participant_count: int = 0
+
+
+@dataclass
 class TournamentSlot:
     """The current tournament + driver."""
 
     state: TournamentState
-    draw: Draw
+    draws: Dict[str, Draw]
     driver: TournamentDriver
     config: ScheduleConfig
-    format: str  # "se" or "rr"
-    duration_slots: int
-    rest_between_rounds: int
+    events: Dict[str, EventMeta] = field(default_factory=dict)
+    rest_between_rounds: int = 1
+    start_time: Optional[datetime] = None
 
 
 class _Container:

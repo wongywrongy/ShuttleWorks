@@ -102,7 +102,6 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     )
     driver = TournamentDriver(
         state=state,
-        draw=draw,
         config=config,
         solver_options=SolverOptions(time_limit_seconds=args.time_limit),
         rest_between_rounds=args.rest,
@@ -231,7 +230,6 @@ def _cmd_plan(args: argparse.Namespace) -> int:
     config = ScheduleConfig(total_slots=total_slots, court_count=courts)
     driver = TournamentDriver(
         state=state,
-        draw=draw,
         config=config,
         rest_between_rounds=rest_between_rounds,
     )

@@ -24,7 +24,7 @@ def test_build_problem_round_robin_has_all_matches():
     register_draw(state, draw)
     config = ScheduleConfig(total_slots=10, court_count=2)
     problem = build_problem(
-        state, draw, list(draw.play_units.keys()), config=config
+        state, list(draw.play_units.keys()), config=config
     )
     assert len(problem.matches) == 6
     assert {p.id for p in problem.players} == {"P1", "P2", "P3", "P4"}
@@ -37,7 +37,7 @@ def test_build_problem_only_includes_ready_play_units():
     register_draw(state, draw)
     config = ScheduleConfig(total_slots=10, court_count=2)
     ready = list(draw.rounds[0])
-    problem = build_problem(state, draw, ready, config=config)
+    problem = build_problem(state, ready, config=config)
     assert len(problem.matches) == 4
     assert {m.id for m in problem.matches} == set(ready)
 
@@ -61,7 +61,7 @@ def test_team_participant_expands_to_member_players():
 
     config = ScheduleConfig(total_slots=10, court_count=2)
     problem = build_problem(
-        state, draw, list(draw.play_units.keys()), config=config
+        state, list(draw.play_units.keys()), config=config
     )
 
     match = problem.matches[0]
@@ -77,4 +77,4 @@ def test_empty_ready_list_raises():
     config = ScheduleConfig(total_slots=10, court_count=2)
     import pytest
     with pytest.raises(ValueError):
-        build_problem(state, draw, [], config=config)
+        build_problem(state, [], config=config)
