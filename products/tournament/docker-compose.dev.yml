@@ -27,6 +27,9 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./tournament:/app/tournament
+      # Tests so `make test` runs the host's latest assertions without
+      # a rebuild between iterations.
+      - ./tests:/app/tests
       # Shared engine lives at the repo root; reach up two levels.
       - ../../scheduler_core:/app/scheduler_core
 

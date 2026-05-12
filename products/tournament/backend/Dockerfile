@@ -20,6 +20,10 @@ COPY products/tournament/pyproject.toml products/tournament/README.md products/t
 COPY scheduler_core/ ./scheduler_core/
 COPY products/tournament/tournament/ ./tournament/
 COPY products/tournament/backend/ ./backend/
+# Tests live alongside the app code so `pytest tests` inside the
+# container resolves to a real directory. The [dev] extra in
+# pyproject.toml installs pytest + httpx for FastAPI TestClient.
+COPY products/tournament/tests/ ./tests/
 
 RUN pip install --no-cache-dir -e ".[backend,dev]"
 
