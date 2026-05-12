@@ -128,7 +128,7 @@ export function PlayerPool({ schoolId }: { schoolId: string }) {
             type="button"
             onClick={() => setExpanded(true)}
             data-testid="bulk-import-toggle"
-            className="flex w-full items-center justify-center rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+            className="flex w-full items-center justify-center rounded-sm border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-accent hover:bg-accent-bg hover:text-accent"
           >
             ＋ Bulk-import players
           </button>
