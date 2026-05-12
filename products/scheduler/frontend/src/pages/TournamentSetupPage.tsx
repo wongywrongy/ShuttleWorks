@@ -9,15 +9,13 @@ import { Sliders, Palette, Monitor, Database, Cpu } from '@phosphor-icons/react'
 import { useTournament } from '../hooks/useTournament';
 import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
-import { TournamentFileManagement } from '../features/tournaments/TournamentFileManagement';
-import { BackupPanel } from '../features/setup/BackupPanel';
 import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicator';
 import { PublicDisplaySettings } from '../features/tournaments/PublicDisplaySettings';
 import { SettingsShell, type SettingsSectionDef } from '../features/settings/SettingsShell';
 import { PageHeader } from '../components/PageHeader';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { EngineSettings } from '../features/settings/EngineSettings';
-import { Surface } from '../features/settings/SettingsPrimitives';
+import { DataSettings } from '../features/settings/DataSettings';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {
@@ -64,14 +62,14 @@ export function TournamentSetupPage() {
 
   // Section definitions wired to the SettingsShell. Order is intentional:
   // Tournament first (the heaviest config; usually why people opened
-  // Settings), then Display (also config-shaped), then per-device
-  // Appearance, then Data ops.
+  // Settings), then Engine, Display, per-device Appearance, then Data
+  // ops. Descriptions intentionally dropped per the rebuild spec —
+  // labels only.
   const sections: SettingsSectionDef[] = [
     {
       id: 'tournament',
       label: 'Tournament',
       icon: Sliders,
-      description: 'Schedule, scoring, events, and optimisation knobs.',
       render: () => (
         <TournamentConfigForm
           config={displayConfig}
@@ -84,34 +82,25 @@ export function TournamentSetupPage() {
       id: 'engine',
       label: 'Engine',
       icon: Cpu,
-      description: 'Solver tuning + reproducibility — how schedules are produced.',
       render: () => <EngineSettings />,
     },
     {
       id: 'display',
       label: 'Public display',
       icon: Monitor,
-      description: 'Layout, brand, and content of the venue TV.',
       render: () => <PublicDisplaySettings />,
     },
     {
       id: 'appearance',
       label: 'Appearance',
       icon: Palette,
-      description: 'Per-device theme and density. Not part of tournament export.',
       render: () => <AppearanceSettings />,
     },
     {
       id: 'data',
       label: 'Tournament data',
       icon: Database,
-      description: 'Export, import, and rolling backups.',
-      render: () => (
-        <Surface>
-          <TournamentFileManagement />
-          <BackupPanel />
-        </Surface>
-      ),
+      render: () => <DataSettings />,
     },
   ];
 
