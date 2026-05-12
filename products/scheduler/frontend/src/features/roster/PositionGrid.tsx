@@ -314,7 +314,7 @@ function PositionCell({
       ].join(' ')}
     >
       {disabled ? (
-        <span className="block px-2 py-1.5 text-[10px] italic opacity-50">—</span>
+        <span className="block px-1 py-1 text-[10px] italic opacity-50">—</span>
       ) : (
         <button
           type="button"
@@ -323,20 +323,22 @@ function PositionCell({
             setPickerOpen((v) => !v);
           }}
           data-testid={`pos-cell-btn-${schoolId}-${rank}`}
-          className="block w-full rounded px-2 py-1.5 text-left hover:bg-card/70 focus:outline-none focus:bg-card"
+          className="block w-full rounded px-1 py-1 text-left hover:bg-card/70 focus:outline-none focus:bg-card"
         >
           <div className="flex flex-col gap-1">
             {/* Names render in one of two shapes:
-                 • 2+ occupants (doubles pair filled) → single bordered
-                   + rounded container; rows stack flush with a hairline
-                   divider between. Border + bg on the container so the
-                   pair reads as one unit.
-                 • 1 occupant → standalone bordered chip. No grouping
-                   to make from a single name (singles event AND
-                   half-filled doubles cells both hit this path).
-                 • 0 occupants → placeholder hint outside this block.
-                The inner row markup (name + ×) is identical in both
-                shapes, shared via the local `renderPlayerRow`. */}
+                 • Doubles cell with 2 occupants → single bordered
+                   container; rows stack flush with a hairline divider.
+                   Border + bg on the container so the pair reads as one
+                   unit (intended team).
+                 • Anything else (singles cell, half-filled doubles, or
+                   data that has multiple occupants on a singles rank)
+                   → each occupant rendered as its own standalone
+                   bordered chip. Singles cells must NEVER group, even
+                   if upstream data accidentally has multiple players
+                   on the same rank — grouping implies "this is a pair"
+                   which is wrong for singles.
+                 • 0 occupants → placeholder hint outside this block. */}
             {(() => {
               const renderPlayerRow = (p: PlayerDTO) => (
                 <div
@@ -367,7 +369,8 @@ function PositionCell({
                 </div>
               );
 
-              if (occupants.length >= 2) {
+              // Doubles + both seats filled = the only path that groups.
+              if (doubles && occupants.length >= 2) {
                 return (
                   <div
                     className={[
@@ -380,12 +383,17 @@ function PositionCell({
                   </div>
                 );
               }
-              if (occupants.length === 1) {
-                return (
-                  <div className="rounded-[6px] border border-border bg-card text-foreground transition-colors duration-fast ease-brand">
-                    {renderPlayerRow(occupants[0])}
+              // Singles cell (any occupant count) OR doubles with one
+              // seat filled → each occupant as a standalone chip.
+              if (occupants.length >= 1) {
+                return occupants.map((p) => (
+                  <div
+                    key={p.id}
+                    className="rounded-[6px] border border-border bg-card text-foreground transition-colors duration-fast ease-brand"
+                  >
+                    {renderPlayerRow(p)}
                   </div>
-                );
+                ));
               }
               return null;
             })()}

@@ -1,19 +1,16 @@
 /**
- * PlayerDetailPanel — docks to the bottom of the Roster right panel
- * when a player is selected from the left list. Slides up from below
- * via CSS transform; never pushes the grid. Always mounted so the
- * slide-out animation runs cleanly; `pointer-events-none` + opacity 0
- * make it inert when not visible.
+ * PlayerDetailPanel — permanent footer rail of the Roster right
+ * panel. Always docked at the bottom of the page as a flex sibling
+ * of the grid; renders an empty-state hint when no player is
+ * selected, and an editable form when one is.
  *
  * Shows the same fields the (now-removed) inline RosterSpreadsheet
  * carried for one player: school, availability summary, min rest, notes,
  * ranks as toggleable pills. All edits flow through `updatePlayer` on
  * the app store.
  *
- * Dismissed by:
- *  • the × close button
- *  • clicking the same player in the left list a second time (handled
- *    in RosterTab — passes `onDismiss`)
+ * The × close button clears the current selection back to the empty
+ * state — it does NOT hide the panel.
  */
 import { useMemo } from 'react';
 import { X } from '@phosphor-icons/react';
@@ -22,7 +19,6 @@ import { useAppStore } from '../../store/appStore';
 
 interface Props {
   player: PlayerDTO | null;
-  visible: boolean;
   onDismiss: () => void;
   groups: RosterGroupDTO[];
   config: TournamentConfig | null;
@@ -30,7 +26,6 @@ interface Props {
 
 export function PlayerDetailPanel({
   player,
-  visible,
   onDismiss,
   groups,
   config,
@@ -48,21 +43,10 @@ export function PlayerDetailPanel({
     return ranks;
   }, [config?.rankCounts]);
 
-  // Always render — slide-out keeps the DOM stable so the transition
-  // runs both directions cleanly. `pointer-events-none` when hidden
-  // so the panel doesn't catch clicks that should hit the grid.
   return (
     <div
       data-testid="player-detail-panel"
-      aria-hidden={!visible}
-      className={[
-        'absolute inset-x-0 bottom-0 z-overlay border-t border-border bg-card text-foreground',
-        'shadow-[0_-4px_0_hsl(var(--rule)/0.04)]',
-        'transition-[transform,opacity] duration-moderate ease-brand',
-        visible
-          ? 'translate-y-0 opacity-100'
-          : 'pointer-events-none translate-y-full opacity-0',
-      ].join(' ')}
+      className="shrink-0 border-t border-border bg-card text-foreground"
     >
       <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-3 py-2">
         <div className="flex items-baseline gap-3">
@@ -73,16 +57,22 @@ export function PlayerDetailPanel({
             <span className="text-sm font-semibold text-foreground">
               {player.name || '(unnamed)'}
             </span>
-          ) : null}
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              No player selected
+            </span>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Close player details"
-          className="rounded-sm p-1 text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
-        >
-          <X aria-hidden="true" className="h-3.5 w-3.5" />
-        </button>
+        {player ? (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Clear player selection"
+            className="rounded-sm p-1 text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
+          >
+            <X aria-hidden="true" className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
       </div>
 
       {player ? (
@@ -203,7 +193,12 @@ export function PlayerDetailPanel({
             </div>
           </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="px-3 py-4 text-xs text-muted-foreground">
+          Select a player from the list on the left to edit their school,
+          availability, rest minimum, notes, and rank assignments.
+        </div>
+      )}
     </div>
   );
 }

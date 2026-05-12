@@ -217,7 +217,7 @@ export function RosterTab() {
         {/* ───── RIGHT PANEL ────────────────────────────────────────── */}
         <main
           data-testid="roster-right-panel"
-          className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
+          className="flex min-w-0 flex-1 flex-col overflow-hidden"
         >
           <PositionGridHeader
             schoolName={activeSchool?.name ?? '—'}
@@ -226,7 +226,7 @@ export function RosterTab() {
             canExport={canExport}
             onExport={() => exportRosterXlsx(players, groups, config)}
           />
-          <div className="flex-1 overflow-auto">
+          <div className="min-h-0 flex-1 overflow-auto">
             {activeSchoolId ? (
               <PositionGrid schoolId={activeSchoolId} />
             ) : (
@@ -237,7 +237,6 @@ export function RosterTab() {
           </div>
           <PlayerDetailPanel
             player={selectedPlayer}
-            visible={selectedPlayer !== null}
             onDismiss={() => setSelectedPlayerId(null)}
             groups={groups}
             config={config}
