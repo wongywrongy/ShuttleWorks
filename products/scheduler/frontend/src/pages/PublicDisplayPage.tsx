@@ -16,10 +16,9 @@
  * stays fresh against the same backend without needing the operator
  * UI to be open.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowsOut, ArrowsIn } from '@phosphor-icons/react';
-import { apiClient } from '../api/client';
 import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useAdvisories } from '../hooks/useAdvisories';
@@ -28,20 +27,10 @@ import { formatSlotTime } from '../lib/time';
 import { formatElapsed } from '../lib/timeFormatters';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment } from '../api/dto';
+import { useDisplaySync, type LiveStatus } from './publicDisplay/useDisplaySync';
+import { useFullscreen } from './publicDisplay/useFullscreen';
 
 type ViewMode = 'courts' | 'schedule' | 'standings';
-type LiveStatus = 'live' | 'reconnecting' | 'offline';
-
-// Poll cadence. 10 s keeps server load negligible but new matches /
-// state changes land in under ~20 s worst case (one 10 s gap + the
-// pre-existing 5 s match-state poll in useLiveTracking).
-const TOURNAMENT_POLL_MS = 10_000;
-// How long we'll tolerate no successful fetch before flipping the
-// status pill to "Reconnecting". Chosen to give the 10 s poll plus
-// one retry room before alarming the operator.
-const RECONNECTING_AFTER_MS = 25_000;
-// After this long with no success we admit we're offline.
-const OFFLINE_AFTER_MS = 60_000;
 
 /** Safe parse for the ``tournamentDate`` config field. Returns null on
  *  any malformed / missing input so we don't render "Invalid Date". */
@@ -61,11 +50,6 @@ export function PublicDisplayPage() {
   const viewParam = searchParams.get('view') as ViewMode | null;
   const [view, setView] = useState<ViewMode>(viewParam || 'courts');
   const [now, setNow] = useState<Date>(() => new Date());
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(() =>
-    typeof document !== 'undefined' ? Boolean(document.fullscreenElement) : false,
-  );
-  const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const { schedule, config, matches, matchStates, matchesByStatus } = useLiveTracking();
@@ -79,121 +63,23 @@ export function PublicDisplayPage() {
   // already covers it; mounting again here is harmless.
   useAdvisories();
 
-  // -----------------------------------------------------------------
-  // Dedicated read-only polling loop.
-  //
-  // The standalone /display route does not mount AppShell, so the
-  // tournament-state hydrator that normally runs there is absent. We
-  // hydrate + refresh here. Writes are intentionally *never* issued
-  // from this page; the TV is a read-only mirror of whatever the
-  // operator is authoring on another tab / device.
-  // -----------------------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
-
-    const pull = async () => {
-      try {
-        const remote = await apiClient.getTournamentState();
-        if (cancelled) return;
-        if (remote) {
-          useAppStore.setState({
-            config: remote.config ?? null,
-            groups: remote.groups ?? [],
-            players: remote.players ?? [],
-            matches: remote.matches ?? [],
-            schedule: remote.schedule ?? null,
-            scheduleStats: (remote.scheduleStats as never) ?? null,
-            scheduleIsStale: remote.scheduleIsStale ?? false,
-          });
-        }
-        setLastSyncMs(Date.now());
-        setSyncError(null);
-      } catch (err) {
-        if (cancelled) return;
-        // Leave the last-known-good state on screen and let the
-        // status pill flip to Reconnecting / Offline based on time
-        // since the last success. A single failed poll is not a
-        // reason to clear the display.
-        setSyncError(err instanceof Error ? err.message : 'Connection lost');
-      }
-    };
-
-    // Kick off immediately so a fresh /display tab doesn't stare at
-    // an empty screen for 10 s waiting for the first interval tick.
-    void pull();
-    const t = window.setInterval(() => void pull(), TOURNAMENT_POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(t);
-    };
-  }, []);
-
   // 1 Hz tick drives both the wall clock and the elapsed timer on active matches.
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(t);
   }, []);
 
-  // Track fullscreen state so the button toggles correctly when the user
-  // presses Esc or exits via the OS.
-  useEffect(() => {
-    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
+  // Read-only polling + liveness derivation. See ./publicDisplay/useDisplaySync.ts.
+  const { liveStatus, syncError } = useDisplaySync(now);
 
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      // Request on the page root so overlay chrome stays hidden. We
-      // surface any error to the console so the operator can look it
-      // up instead of staring at a button that looks broken — the
-      // Fullscreen API can reject quietly on iframes, kiosk browsers,
-      // and insecure contexts.
-      (rootRef.current ?? document.documentElement)
-        .requestFullscreen?.()
-        .catch((err) => {
-          console.warn('[PublicDisplay] fullscreen request denied:', err);
-        });
-    } else {
-      document.exitFullscreen?.().catch((err) => {
-        console.warn('[PublicDisplay] exit fullscreen failed:', err);
-      });
-    }
-  }, []);
-
-  // 'F' keyboard shortcut for fullscreen toggle (ignored when user is typing).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if (e.key === 'f' || e.key === 'F') {
-        e.preventDefault();
-        toggleFullscreen();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [toggleFullscreen]);
+  // Fullscreen toggle + F-key shortcut. See ./publicDisplay/useFullscreen.ts.
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
 
   const currentTime = now.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
   });
-
-  // Derive the liveness status from the last-successful sync rather
-  // than the most recent attempt — that way a single flaky request
-  // doesn't flash "Offline" on a healthy system.
-  const liveStatus: LiveStatus = useMemo(() => {
-    if (lastSyncMs === null) {
-      // Pre-first-sync: be optimistic; a fail would have flipped this.
-      return syncError ? 'reconnecting' : 'live';
-    }
-    const age = now.getTime() - lastSyncMs;
-    if (age >= OFFLINE_AFTER_MS) return 'offline';
-    if (age >= RECONNECTING_AFTER_MS) return 'reconnecting';
-    return 'live';
-  }, [lastSyncMs, now, syncError]);
 
   const playerNames = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
   const groupNames = useMemo(() => new Map(groups.map((g) => [g.id, g.name])), [groups]);
