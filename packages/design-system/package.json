@@ -2,7 +2,7 @@
   "name": "@scheduler/design-system",
   "private": true,
   "version": "0.1.0",
-  "description": "Shared design language for cp-sat-scheduling-engine — tokens, Tailwind preset, base CSS. Implements design/BRAND.md.",
+  "description": "Shared design language for cp-sat-scheduling-engine — tokens, Tailwind preset, base CSS, components, icons. Implements design/BRAND.md.",
   "type": "module",
   "main": "./index.ts",
   "exports": {
@@ -10,7 +10,10 @@
     "./tokens.css": "./tokens.css",
     "./globals.css": "./globals.css",
     "./tailwind-preset": "./tailwind-preset.js",
-    "./DESIGN.md": "./DESIGN.md"
+    "./DESIGN.md": "./DESIGN.md",
+    "./components": "./components/index.ts",
+    "./icons": "./icons/index.tsx",
+    "./lib/utils": "./lib/utils.ts"
   },
   "files": [
     "index.ts",
@@ -19,9 +22,20 @@
     "tailwind-preset.js",
     "DESIGN.md",
     "icons",
-    "components"
+    "components",
+    "lib"
   ],
+  "dependencies": {
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.4.0"
+  },
   "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
     "tailwindcss": "^3.4.0"
   },
   "devDependencies": {

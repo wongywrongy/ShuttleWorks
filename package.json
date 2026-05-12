@@ -8,6 +8,10 @@
     "products/scheduler/frontend",
     "products/tournament/frontend"
   ],
+  "overrides": {
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3"
+  },
   "scripts": {
     "dev:scheduler": "npm run -w products/scheduler/frontend dev",
     "dev:tournament": "npm run -w products/tournament/frontend dev",

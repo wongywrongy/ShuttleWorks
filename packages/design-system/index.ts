@@ -11,6 +11,7 @@
  */
 
 export * from './icons';
-// Phase 4 will add: export * from './components';
+export * from './components';
+export { cn, INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET, INPUT_CELL_STYLE } from './lib/utils';
 
 export const DESIGN_SYSTEM_VERSION = '0.1.0' as const;
