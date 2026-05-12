@@ -1,19 +1,23 @@
 /**
- * Inline matches editor — spreadsheet-style rows replace the old MatchForm
- * dialog. Each row edits School A / School B / Side A players / Side B
- * players / event rank / duration inline.
+ * Flat-row match editor. No <table>, no card wrapper — each match
+ * renders as a flex row with `border-b` only. Column-label row sits
+ * above the match rows with the same `px-5` rhythm.
+ *
+ * Player cells: comma-separated underlined names with a small × in
+ * muted grey after each, no pills. An inline "＋ add" link opens the
+ * picker dropdown for adding more players.
+ *
+ * Search/Add-match/Export live in the page-header row owned by
+ * `MatchesTab` — those affordances do NOT render here. This component
+ * subscribes to the same `?q=` search param as the page header so the
+ * URL is the shared source of truth.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CaretDown } from '@phosphor-icons/react';
-import { v4 as uuid } from 'uuid';
+import { Check } from '@phosphor-icons/react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerMap } from '../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../api/dto';
-import { InlineSearch, type FilterChipGroup } from '../../components/InlineSearch';
 import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
-import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
-import { SchoolDot } from '../../components/SchoolDot';
-import { Hint } from '../../components/Hint';
 
 function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
   const school = groups.find((g) => g.id === p.groupId)?.name ?? '?';
@@ -24,24 +28,19 @@ export function MatchesSpreadsheet() {
   const matches = useAppStore((s) => s.matches);
   const players = useAppStore((s) => s.players);
   const groups = useAppStore((s) => s.groups);
-  const addMatch = useAppStore((s) => s.addMatch);
   const updateMatch = useAppStore((s) => s.updateMatch);
   const deleteMatch = useAppStore((s) => s.deleteMatch);
-  const intervalMinutes = useAppStore((s) => s.config?.intervalMinutes ?? 15);
-  const slotsHelp = `Number of consecutive time slots this match occupies on a court. 1 slot = ${intervalMinutes} min. Increase for matches expected to run long; the solver will reserve the extra slots and keep adjacent slots free on the same court.`;
 
-  const [newId, setNewId] = useState<string | null>(null);
-  const newRowRef = useRef<HTMLInputElement | null>(null);
-
-  // URL-backed filter state — same trio as MatchesList so a Match-tab
-  // filter survives a tab switch and back.
-  const [searchQuery, setSearchQuery] = useSearchParamState('q', '');
-  const [eventFilter, , toggleEvent] = useSearchParamSet('event');
-  const [schoolFilter, , toggleSchool] = useSearchParamSet('school');
-  const [typeFilter, , toggleType] = useSearchParamSet('type');
+  // Subscribes to the same URL-backed search the page header writes to.
+  const [searchQuery] = useSearchParamState('q', '');
+  // Legacy filter params kept for URL backward compatibility — not
+  // currently surfaced in any UI; if the user lands with these set, the
+  // matches list still respects them.
+  const [eventFilter] = useSearchParamSet('event');
+  const [schoolFilter] = useSearchParamSet('school');
+  const [typeFilter] = useSearchParamSet('type');
 
   const playerById = usePlayerMap();
-  const groupIndex = useMemo(() => buildGroupIndex(groups), [groups]);
 
   const filteredMatches = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -50,7 +49,8 @@ export function MatchesSpreadsheet() {
     const typeActive = typeFilter.size > 0;
     if (!q && !eventActive && !schoolActive && !typeActive) return matches;
 
-    const playerName = (id: string) => playerById.get(id)?.name?.toLowerCase() ?? '';
+    const playerName = (id: string) =>
+      playerById.get(id)?.name?.toLowerCase() ?? '';
     const playerGroup = (id: string) => playerById.get(id)?.groupId;
 
     return matches.filter((m) => {
@@ -81,152 +81,91 @@ export function MatchesSpreadsheet() {
     });
   }, [matches, searchQuery, eventFilter, schoolFilter, typeFilter, playerById]);
 
-  // Search bar is text-only — Event / School / Type chips removed for
-  // minimal chrome. Free-text matches event codes, player names, and
-  // match types directly.
-  const filterGroups: FilterChipGroup[] = [];
-
-  const clearAllFilters = () => {
-    setSearchQuery('');
-    eventFilter.forEach((id) => toggleEvent(id));
-    schoolFilter.forEach((id) => toggleSchool(id));
-    typeFilter.forEach((id) => toggleType(id));
-  };
-
-  const addEmptyRow = () => {
-    const id = uuid();
-    addMatch({
-      id,
-      sideA: [],
-      sideB: [],
-      matchType: 'dual',
-      eventRank: '',
-      durationSlots: 1,
-    });
-    setNewId(id);
-  };
-
-  useEffect(() => {
-    if (newId && newRowRef.current) {
-      newRowRef.current.focus();
-      setNewId(null);
-    }
-  }, [newId]);
+  if (matches.length === 0) {
+    return (
+      <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+        No matches yet. Add one manually or use auto-generate above.
+      </div>
+    );
+  }
+  if (filteredMatches.length === 0) {
+    return (
+      <>
+        <ColumnHeaderRow />
+        <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+          No matches match the current search.
+        </div>
+      </>
+    );
+  }
 
   return (
-    <div>
-      <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Matches <span className="text-muted-foreground">({matches.length})</span>
-        </span>
-        <button
-          type="button"
-          onClick={addEmptyRow}
-          disabled={players.length < 2}
-          title={players.length < 2 ? 'Need at least 2 players' : 'Add match row'}
-          data-testid="add-match-row"
-          className="rounded-full border border-dashed border-border px-3 py-0.5 text-xs text-foreground hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          ＋ Add match
-        </button>
-      </div>
+    <>
+      <ColumnHeaderRow />
+      {filteredMatches.map((m) => (
+        <MatchRow
+          key={m.id}
+          match={m}
+          index={matches.indexOf(m)}
+          players={players}
+          groups={groups}
+          onUpdate={updateMatch}
+          onDelete={deleteMatch}
+        />
+      ))}
+    </>
+  );
+}
 
-      {matches.length > 0 && (
-        <div className="border-b border-border/60 px-3 py-2">
-          <InlineSearch
-            query={searchQuery}
-            onQueryChange={setSearchQuery}
-            placeholder="Search event or player…"
-            filters={filterGroups}
-            showClear
-            onClearAll={clearAllFilters}
-          />
-        </div>
-      )}
-
-      {matches.length === 0 ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">
-          No matches yet. Add one manually or use auto-generate above.
-        </div>
-      ) : filteredMatches.length === 0 ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">
-          No matches match these filters.
-        </div>
-      ) : (
-        <>
-          <div className="px-3 pt-2">
-            <Hint id="matches.row-semantics" variant="subtle">
-              <strong>Slots</strong> sets how many consecutive time slots a match holds on a
-              court ({intervalMinutes} min each). Row order becomes the printed match #
-              and is the solver's tie-breaker when other costs are equal.
-            </Hint>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/60 bg-muted text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="w-10 px-2 py-1.5 text-left font-medium" title="Display order — printed as the match # in lists and exports.">#</th>
-                  <th className="px-2 py-1.5 text-left font-medium">Event</th>
-                  <th className="px-2 py-1.5 text-left font-medium">Side A</th>
-                  <th className="px-2 py-1.5 text-left font-medium">Side B</th>
-                  <th className="w-20 px-2 py-1.5 text-left font-medium" title={slotsHelp}>
-                    <span className="inline-flex cursor-help items-center gap-1 underline decoration-dotted underline-offset-2">
-                      Slots
-                    </span>
-                  </th>
-                  <th className="w-10 px-2 py-1.5" />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMatches.map((m) => (
-                  <MatchRow
-                    key={m.id}
-                    match={m}
-                    index={matches.indexOf(m)}
-                    players={players}
-                    groups={groups}
-                    groupIndex={groupIndex}
-                    onUpdate={updateMatch}
-                    onDelete={deleteMatch}
-                    firstInputRef={newId === m.id ? newRowRef : undefined}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+/* =========================================================================
+ * ColumnHeaderRow — `padding: 6px 20px`, border-b only, no background.
+ * ========================================================================= */
+function ColumnHeaderRow() {
+  return (
+    <div className="flex items-center gap-3 border-b border-border px-5 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <span className="w-8">#</span>
+      <span className="w-20">Event</span>
+      <span className="min-w-0 flex-[3]">Side A</span>
+      <span className="min-w-0 flex-[3]">Side B</span>
+      <span className="w-14">Slots</span>
+      <span className="w-8" aria-hidden />
     </div>
   );
 }
 
+/* =========================================================================
+ * MatchRow — `padding: 0 20px`, `min-height: 44px`, border-b only.
+ * ========================================================================= */
 function MatchRow({
   match,
   index,
   players,
   groups,
-  groupIndex,
   onUpdate,
   onDelete,
-  firstInputRef,
 }: {
   match: MatchDTO;
   index: number;
   players: PlayerDTO[];
   groups: RosterGroupDTO[];
-  groupIndex: Map<string, RosterGroupDTO>;
   onUpdate: (id: string, patch: Partial<MatchDTO>) => void;
   onDelete: (id: string) => void;
-  firstInputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   const [eventDraft, setEventDraft] = useState(match.eventRank ?? '');
-  const [durationDraft, setDurationDraft] = useState(String(match.durationSlots ?? 1));
+  const [durationDraft, setDurationDraft] = useState(
+    String(match.durationSlots ?? 1),
+  );
 
   useEffect(() => setEventDraft(match.eventRank ?? ''), [match.eventRank]);
-  useEffect(() => setDurationDraft(String(match.durationSlots ?? 1)), [match.durationSlots]);
+  useEffect(
+    () => setDurationDraft(String(match.durationSlots ?? 1)),
+    [match.durationSlots],
+  );
 
   const commitEvent = () => {
-    if (eventDraft !== (match.eventRank ?? '')) onUpdate(match.id, { eventRank: eventDraft });
+    if (eventDraft !== (match.eventRank ?? '')) {
+      onUpdate(match.id, { eventRank: eventDraft });
+    }
   };
   const commitDuration = () => {
     const d = Math.max(1, Number(durationDraft) || 1);
@@ -234,114 +173,106 @@ function MatchRow({
   };
 
   return (
-    <tr
-      className={[
-        'border-b border-border/60 align-top transition-colors hover:bg-muted/50',
-        index % 2 === 0 ? '' : 'bg-muted/40',
-      ].join(' ')}
+    <div
       data-testid={`match-row-${match.id}`}
+      className="group flex min-h-[44px] items-center gap-3 border-b border-border px-5 transition-colors duration-fast ease-brand hover:bg-muted/30"
     >
-      <td className="px-2 py-1 text-xs text-muted-foreground tabular-nums">
+      <span className="w-8 text-xs text-muted-foreground tabular-nums">
         {match.matchNumber ?? index + 1}
-      </td>
-      <td className="px-2 py-1">
-        <input
-          ref={firstInputRef}
-          value={eventDraft}
-          onChange={(e) => setEventDraft(e.target.value)}
-          onBlur={commitEvent}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-          }}
-          placeholder="MS1, WD2, …"
-          className="w-24 rounded border border-transparent bg-transparent px-2 py-1 text-sm outline-none transition-colors focus:border-blue-400 focus:bg-card"
-        />
-      </td>
-      <td className="px-2 py-1">
-        <PlayerMultiPicker
-          label="Side A"
-          selected={match.sideA ?? []}
-          onChange={(ids) => onUpdate(match.id, { sideA: ids })}
-          players={players}
-          groups={groups}
-          groupIndex={groupIndex}
-        />
-      </td>
-      <td className="px-2 py-1">
-        <PlayerMultiPicker
-          label="Side B"
-          selected={match.sideB ?? []}
-          onChange={(ids) => onUpdate(match.id, { sideB: ids })}
-          players={players}
-          groups={groups}
-          groupIndex={groupIndex}
-        />
-      </td>
-      <td className="px-2 py-1">
-        <input
-          type="number"
-          min={1}
-          value={durationDraft}
-          onChange={(e) => setDurationDraft(e.target.value)}
-          onBlur={commitDuration}
-          className="w-16 rounded border border-transparent bg-transparent px-2 py-1 text-sm tabular-nums outline-none transition-colors focus:border-blue-400 focus:bg-card"
-        />
-      </td>
-      <td className="px-2 py-1 text-right">
-        <button
-          type="button"
-          onClick={() => onDelete(match.id)}
-          className="rounded p-1 text-muted-foreground/70 transition-colors hover:bg-red-50 hover:text-red-600"
-          title="Delete match"
-          aria-label="Delete match"
-        >
-          ×
-        </button>
-      </td>
-    </tr>
+      </span>
+      <input
+        value={eventDraft}
+        onChange={(e) => setEventDraft(e.target.value)}
+        onBlur={commitEvent}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+        placeholder="MS1, WD2…"
+        className="w-20 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-sm outline-none transition-colors duration-fast ease-brand hover:border-border/60 focus:border-accent focus:bg-card"
+      />
+      <PlayerCellEditor
+        side="Side A"
+        selected={match.sideA ?? []}
+        onChange={(ids) => onUpdate(match.id, { sideA: ids })}
+        players={players}
+        groups={groups}
+      />
+      <PlayerCellEditor
+        side="Side B"
+        selected={match.sideB ?? []}
+        onChange={(ids) => onUpdate(match.id, { sideB: ids })}
+        players={players}
+        groups={groups}
+      />
+      <input
+        type="number"
+        min={1}
+        value={durationDraft}
+        onChange={(e) => setDurationDraft(e.target.value)}
+        onBlur={commitDuration}
+        className="w-14 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-sm tabular-nums outline-none transition-colors duration-fast ease-brand hover:border-border/60 focus:border-accent focus:bg-card"
+      />
+      <button
+        type="button"
+        onClick={() => onDelete(match.id)}
+        className="w-8 rounded-sm p-1 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+        title="Delete match"
+        aria-label="Delete match"
+      >
+        ×
+      </button>
+    </div>
   );
 }
 
-function PlayerMultiPicker({
-  label,
+/* =========================================================================
+ * PlayerCellEditor — comma-separated underlined names with inline × per
+ * name. No pills, no wrapping element. "＋ add" link opens the picker
+ * dropdown for adding more players.
+ * ========================================================================= */
+function PlayerCellEditor({
+  side,
   selected,
   onChange,
   players,
   groups,
-  groupIndex,
 }: {
-  label: string;
+  side: string;
   selected: string[];
   onChange: (ids: string[]) => void;
   players: PlayerDTO[];
   groups: RosterGroupDTO[];
-  groupIndex: Map<string, RosterGroupDTO>;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const selectedPlayers = useMemo(
-    () => selected.map((id) => players.find((p) => p.id === id)).filter(Boolean) as PlayerDTO[],
+    () =>
+      selected
+        .map((id) => players.find((p) => p.id === id))
+        .filter(Boolean) as PlayerDTO[],
     [selected, players],
   );
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
+    const click = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const keyHandler = (e: KeyboardEvent) => {
+    const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('keydown', keyHandler);
+    document.addEventListener('mousedown', click);
+    document.addEventListener('keydown', key);
     return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('keydown', keyHandler);
+      document.removeEventListener('mousedown', click);
+      document.removeEventListener('keydown', key);
     };
   }, [open]);
 
   const toggle = (id: string) => {
-    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+    onChange(
+      selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id],
+    );
   };
 
   const playersByGroup = useMemo(() => {
@@ -354,70 +285,54 @@ function PlayerMultiPicker({
   }, [players]);
 
   return (
-    <div ref={ref} className="relative">
-      {/* Combobox container — div (not button) so we can nest remove buttons
-       *  inside chips. Clicking the non-chip area toggles the picker. */}
-      <div
-        role="combobox"
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        tabIndex={0}
-        onClick={(e) => {
-          // Only toggle when the click landed on the container itself, not
-          // on a descendant interactive element (remove ×, etc.).
-          if (e.target === e.currentTarget) setOpen((v) => !v);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setOpen((v) => !v);
-          }
-        }}
-        className="flex min-h-[28px] w-full flex-wrap items-center gap-1 rounded border border-transparent bg-transparent px-2 py-1 text-left text-sm transition-colors hover:border-border focus:border-blue-400 focus:bg-card"
-      >
+    <div ref={ref} className="relative min-w-0 flex-[3]">
+      <div className="flex flex-wrap items-baseline gap-x-1 text-sm leading-relaxed">
         {selectedPlayers.length === 0 ? (
-          <span
+          <button
+            type="button"
             onClick={() => setOpen((v) => !v)}
-            className="cursor-pointer text-xs italic text-muted-foreground"
+            className="text-xs italic text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
           >
-            {label}…
-          </span>
+            {side}…
+          </button>
         ) : (
-          selectedPlayers.map((p) => {
-            const accent = getPlayerSchoolAccent(p, groupIndex);
-            return (
-              <span
-                key={p.id}
-                className="inline-flex items-center gap-1 rounded border border-border bg-muted/50 px-1.5 py-0 text-[11px]"
+          selectedPlayers.map((p, i) => (
+            <span key={p.id} className="inline-flex items-baseline">
+              <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="text-foreground underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                title={`Click to edit ${side}`}
               >
-                {accent.name && <SchoolDot accent={accent} size="sm" />}
                 {p.name || '—'}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggle(p.id);
-                  }}
-                  className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
-                  aria-label={`Remove ${p.name}`}
-                >
-                  ×
-                </button>
-              </span>
-            );
-          })
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggle(p.id);
+                }}
+                aria-label={`Remove ${p.name}`}
+                className="ml-0.5 text-muted-foreground/60 hover:text-destructive"
+              >
+                ×
+              </button>
+              {i < selectedPlayers.length - 1 ? (
+                <span className="text-muted-foreground">,</span>
+              ) : null}
+            </span>
+          ))
         )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen((v) => !v);
-          }}
-          aria-label={open ? 'Close picker' : 'Open picker'}
-          className="ml-auto inline-flex items-center justify-center text-muted-foreground hover:text-foreground"
-        >
-          <CaretDown aria-hidden="true" className="h-3.5 w-3.5" />
-        </button>
+        {selectedPlayers.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-label={`Add player to ${side}`}
+            className="text-xs text-muted-foreground/70 underline decoration-dotted underline-offset-2 hover:text-foreground"
+          >
+            ＋ add
+          </button>
+        ) : null}
       </div>
       {open ? (
         <div className="absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
@@ -437,15 +352,17 @@ function PlayerMultiPicker({
                         type="button"
                         onClick={() => toggle(p.id)}
                         className={[
-                          'flex w-full items-center justify-between rounded px-1.5 py-0.5 text-left text-xs transition-colors',
-                          isOn ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200' : 'text-foreground hover:bg-muted/40 hover:text-foreground',
+                          'flex w-full items-center justify-between rounded px-1.5 py-0.5 text-left text-xs transition-colors duration-fast ease-brand',
+                          isOn
+                            ? 'bg-accent/10 text-accent'
+                            : 'text-foreground hover:bg-muted/40',
                         ].join(' ')}
                       >
                         <span>{playerLabel(p, groups)}</span>
                         {isOn ? (
                           <Check
                             aria-label="Selected"
-                            className="h-3.5 w-3.5 text-blue-500"
+                            className="h-3.5 w-3.5 text-accent"
                           />
                         ) : null}
                       </button>
@@ -456,7 +373,9 @@ function PlayerMultiPicker({
             );
           })}
           {players.length === 0 ? (
-            <div className="px-1 py-2 text-xs text-muted-foreground">No players. Add some in the Roster tab.</div>
+            <div className="px-1 py-2 text-xs text-muted-foreground">
+              No players. Add some in the Roster tab.
+            </div>
           ) : null}
         </div>
       ) : null}

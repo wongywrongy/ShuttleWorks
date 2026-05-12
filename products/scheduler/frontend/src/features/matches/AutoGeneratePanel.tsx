@@ -1,15 +1,16 @@
 /**
- * Inline auto match generator. Produces one match per rank × unordered
- * school pair: for every rank the config defines, pair each pair of schools
- * with the players of that rank.
+ * Inline auto match generator — single-row treatment.
  *
- * Replaces the old AutoMatchGenerator dialog. Shows a preview count before
- * committing so the user knows what they're about to create.
+ * Renders as one full-bleed row: info copy left, Generate button right,
+ * `border-b` only — no card, no radius, no background. The destructive
+ * (replace existing) flow still pre-confirms before destroying state.
+ *
+ * Incomplete-doubles warning, when non-empty, surfaces as a second
+ * full-bleed warning row below the gen row (same hairline treatment).
  */
 import { useMemo, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
-import { Hint } from '../../components/Hint';
 import type { MatchDTO } from '../../api/dto';
 
 function expandRanks(counts: Record<string, number> | undefined): string[] {
@@ -20,7 +21,6 @@ function expandRanks(counts: Record<string, number> | undefined): string[] {
   return out;
 }
 
-/** True when a rank's event is a doubles event (MD/WD/XD) — two players per side. */
 function isDoublesRank(rank: string): boolean {
   const prefix = rank.replace(/\d+$/, '');
   return prefix.endsWith('D');
@@ -35,11 +35,6 @@ export function AutoGeneratePanel() {
 
   const ranks = useMemo(() => expandRanks(config?.rankCounts), [config?.rankCounts]);
 
-  // Preview: one match per rank × unordered pair of schools. Singles events
-  // take one player per side; doubles events take both paired players per
-  // side (the two in that school whose ranks[] include this rank). Skip
-  // ranks where either side doesn't have the right number of eligible
-  // players — an incomplete doubles pair or no singles player at all.
   const preview = useMemo(() => {
     const out: MatchDTO[] = [];
     for (const rank of ranks) {
@@ -68,8 +63,6 @@ export function AutoGeneratePanel() {
     return out;
   }, [ranks, groups, players]);
 
-  // Count how many ranks are skipped because a side has an incomplete pair —
-  // surfaces the common "only rostered 1 MD1 player" mistake.
   const incompletePairs = useMemo(() => {
     const out: string[] = [];
     for (const rank of ranks) {
@@ -85,7 +78,6 @@ export function AutoGeneratePanel() {
   }, [ranks, groups, players]);
 
   const [confirm, setConfirm] = useState(false);
-
   const hasExisting = matches.length > 0;
   const canGenerate = preview.length > 0;
 
@@ -98,89 +90,71 @@ export function AutoGeneratePanel() {
     setConfirm(false);
   };
 
-  // Visual treatment for Generate button:
-  //   - No existing matches: primary blue (this is a normal create action)
-  //   - Existing matches, pre-confirm: amber-outlined "Replace…" — flags
-  //     the destructive nature without looking like a normal primary
-  //   - Existing matches, confirm: solid red, pulsing — final guard
-  const buttonClass = !canGenerate
-    ? 'cursor-not-allowed bg-muted text-muted-foreground'
+  const buttonLabel = !canGenerate
+    ? 'No feasible pairings'
     : confirm && hasExisting
-      ? 'bg-red-600 text-white hover:bg-red-700 motion-safe:animate-pulse'
+      ? `Click again — replaces ${matches.length}`
       : hasExisting
-        ? 'border border-amber-500 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-100 dark:hover:bg-amber-500/20'
-        : 'bg-blue-600 text-white hover:bg-blue-700';
+        ? `Replace ${matches.length} existing`
+        : 'Generate matches';
+
+  const buttonClass = !canGenerate
+    ? 'cursor-not-allowed text-muted-foreground'
+    : confirm && hasExisting
+      ? 'border-destructive bg-destructive/10 text-destructive hover:bg-destructive/15'
+      : hasExisting
+        ? 'border-status-warning/40 text-status-warning hover:bg-status-warning/10'
+        : 'border-border text-foreground hover:bg-muted/40';
+
+  const infoLine = !canGenerate
+    ? ranks.length === 0
+      ? 'No event ranks configured — set them in the Setup tab.'
+      : groups.length < 2
+        ? 'Need at least 2 schools to generate matches.'
+        : 'No feasible pairings with the current roster.'
+    : `Will produce ${preview.length} match${preview.length === 1 ? '' : 'es'} across ${ranks.length} rank${ranks.length === 1 ? '' : 's'} × ${groups.length} school${groups.length === 1 ? '' : 's'}${
+        hasExisting ? ` · replaces all ${matches.length}` : ''
+      }.`;
 
   return (
-    <div className="p-3">
-      <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Auto-generate
-        </span>
-        <span className="text-[11px] text-muted-foreground">
-          {ranks.length} ranks × {groups.length} schools
-        </span>
-      </div>
-      <Hint id="matches.auto-generate" className="mb-2">
-        One match per rank × pair of schools. Singles use one player per
-        side; doubles use the paired players per side.
-      </Hint>
-      {preview.length > 0 && (
-        <p className="mb-2 text-xs text-muted-foreground">
-          Will produce{' '}
-          <span className="font-semibold text-foreground">{preview.length}</span>{' '}
-          match{preview.length === 1 ? '' : 'es'}
-          {hasExisting ? (
-            <>
-              {' '}— this <span className="font-semibold text-amber-700 dark:text-amber-300">replaces all {matches.length} existing match{matches.length === 1 ? '' : 'es'}</span>.
-            </>
-          ) : (
-            '.'
-          )}
-        </p>
-      )}
-      {incompletePairs.length > 0 ? (
-        <p className="mb-2 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
-          <strong>Skipping incomplete doubles:</strong>{' '}
-          {incompletePairs.join(', ')} — assign both partners in the Roster tab
-          to include these events.
-        </p>
-      ) : null}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={generate}
-          disabled={!canGenerate}
-          data-testid="auto-generate-matches"
-          className={['rounded px-3 py-1.5 text-sm font-medium transition-colors', buttonClass].join(' ')}
-        >
-          {!canGenerate
-            ? 'No feasible pairings'
-            : confirm && hasExisting
-              ? `Click again — will replace ${matches.length} match${matches.length === 1 ? '' : 'es'}`
-              : hasExisting
-                ? `Replace ${matches.length} existing match${matches.length === 1 ? '' : 'es'}`
-                : 'Generate matches'}
-        </button>
-        {confirm ? (
+    <>
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-2.5">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Auto-generate
+          </span>
+          <span className="truncate text-xs text-muted-foreground">{infoLine}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {confirm ? (
+            <button
+              type="button"
+              onClick={() => setConfirm(false)}
+              className="text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+            >
+              Cancel
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={() => setConfirm(false)}
-            className="rounded border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted/40"
+            onClick={generate}
+            disabled={!canGenerate}
+            data-testid="auto-generate-matches"
+            className={[
+              'rounded-sm border px-3 py-1 text-xs font-medium transition-colors duration-fast ease-brand disabled:opacity-50',
+              buttonClass,
+            ].join(' ')}
           >
-            Cancel
+            {buttonLabel}
           </button>
-        ) : null}
+        </div>
       </div>
-      {ranks.length === 0 ? (
-        <p className="mt-2 text-xs italic text-amber-600">
-          No event ranks configured — set them in the Setup tab.
-        </p>
-      ) : groups.length < 2 ? (
-        <p className="mt-2 text-xs italic text-amber-600">
-          Need at least 2 schools to generate matches.
-        </p>
+      {incompletePairs.length > 0 ? (
+        <div className="border-b border-border bg-status-warning/5 px-5 py-1.5 text-xs text-status-warning">
+          <span className="font-medium">Skipping incomplete doubles:</span>{' '}
+          {incompletePairs.join(', ')} — assign both partners in the Roster tab.
+        </div>
       ) : null}
-    </div>
+    </>
   );
 }
