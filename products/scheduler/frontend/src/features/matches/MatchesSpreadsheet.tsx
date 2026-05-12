@@ -18,8 +18,9 @@ import { useAppStore } from '../../store/appStore';
 import { usePlayerMap } from '../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
+import { useDisruptions } from '../../hooks/useDisruptions';
 import { EVENT_LABEL, isDoublesRank } from '../roster/positionGrid/helpers';
-import { validateMatch, maxSeverity } from './validateMatch';
+import { maxSeverity, type MatchIssue } from './validateMatch';
 
 function eventTintForPrefix(rank: string | null | undefined): string {
   if (!rank) return '';
@@ -34,6 +35,10 @@ function capacityForRank(rank: string | null | undefined): number {
   if (!rank?.trim()) return 2;
   return isDoublesRank(rank) ? 2 : 1;
 }
+
+/** Stable empty-array reference so MatchRow's useMemo deps don't churn
+ *  when a match has no disruptions. */
+const EMPTY_ISSUES: MatchIssue[] = [];
 
 function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
   const school = groups.find((g) => g.id === p.groupId)?.name ?? '?';
@@ -98,6 +103,7 @@ export function MatchesSpreadsheet() {
   }, [matches, searchQuery, eventFilter, schoolFilter, typeFilter, playerById]);
 
   const config = useAppStore((s) => s.config);
+  const disruptions = useDisruptions();
 
   // Configured event ranks — derived from `config.rankCounts`. These
   // populate the per-row event select so the operator picks from
@@ -142,6 +148,7 @@ export function MatchesSpreadsheet() {
           players={players}
           groups={groups}
           configuredRanks={configuredRanks}
+          issues={disruptions.byMatch.get(m.id) ?? EMPTY_ISSUES}
           onUpdate={updateMatch}
           onDelete={deleteMatch}
         />
@@ -176,6 +183,7 @@ function MatchRow({
   players,
   groups,
   configuredRanks,
+  issues,
   onUpdate,
   onDelete,
 }: {
@@ -186,6 +194,10 @@ function MatchRow({
   /** Ranks defined in `config.rankCounts` — the select populates from
    *  this list. Empty array → degrade to free-text input. */
   configuredRanks: string[];
+  /** Pre-computed disruption issues for this match from the global
+   *  `useDisruptions` feed. Routing through the hook keeps the
+   *  per-row flag and the TabBar badge from drifting out of sync. */
+  issues: MatchIssue[];
   onUpdate: (id: string, patch: Partial<MatchDTO>) => void;
   onDelete: (id: string) => void;
 }) {
@@ -213,13 +225,9 @@ function MatchRow({
     !currentRank || configuredRanks.includes(currentRank);
 
   // Per-row disruption surfacing — partner-switch detection, side-count
-  // mismatches, cross-side conflicts, stale player references. The
-  // left-edge accent stripe + Warning icon flag issues without
-  // demanding modal dialogs; tooltip lists the specific issues.
-  const issues = useMemo(
-    () => validateMatch(match, players),
-    [match, players],
-  );
+  // mismatches, cross-side conflicts, stale player references. Issues
+  // come from the global `useDisruptions` feed (consumed by the parent),
+  // so the per-row Warning icon and the TabBar badge always agree.
   const severity = maxSeverity(issues);
   const sideCapacity = capacityForRank(match.eventRank);
 

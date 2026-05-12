@@ -1,5 +1,6 @@
 import { useAppStore, type AppTab } from '../store/appStore';
 import { AppStatusPopover } from '../components/AppStatusPopover';
+import { useDisruptions } from '../hooks/useDisruptions';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
 type TabDef = { id: AppTab; label: string; hint?: string };
@@ -13,11 +14,19 @@ const TABS: TabDef[] = [
   { id: 'tv', label: 'TV' },
 ];
 
+/** Tabs that surface match-level state — the disruption count badge
+ *  rides along on these so an operator on Schedule / Live can see at a
+ *  glance that there are pending issues without first navigating to
+ *  Matches. The badge counts the SAME disruptions on all three tabs;
+ *  it's a global feed, not a per-tab one. */
+const DISRUPTION_TABS = new Set<AppTab>(['matches', 'schedule', 'live']);
+
 export function TabBar() {
   const activeTab = useAppStore((s) => s.activeTab);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
   const matches = useAppStore((s) => s.matches);
   const players = useAppStore((s) => s.players);
+  const disruptions = useDisruptions();
 
   const disabledTabs = new Set<AppTab>();
   if (players.length === 0) disabledTabs.add('matches');
@@ -79,6 +88,33 @@ export function TabBar() {
                 ].join(' ')}
               >
                 {tab.label}
+                {/* Disruption count badge — same number on Matches,
+                    Schedule, and Live so the operator can see pending
+                    issues without first navigating to Matches. The
+                    badge appears only when disruptions exist; severity
+                    colours the badge bg. */}
+                {DISRUPTION_TABS.has(tab.id) &&
+                disruptions.total > 0 &&
+                !isDisabled ? (
+                  <span
+                    aria-label={`${disruptions.total} disruption${disruptions.total === 1 ? '' : 's'}`}
+                    title={
+                      disruptions.errors > 0 && disruptions.warnings > 0
+                        ? `${disruptions.errors} error${disruptions.errors === 1 ? '' : 's'}, ${disruptions.warnings} warning${disruptions.warnings === 1 ? '' : 's'}`
+                        : disruptions.errors > 0
+                          ? `${disruptions.errors} error${disruptions.errors === 1 ? '' : 's'}`
+                          : `${disruptions.warnings} warning${disruptions.warnings === 1 ? '' : 's'}`
+                    }
+                    className={[
+                      'ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums',
+                      disruptions.severity === 'error'
+                        ? 'bg-destructive text-destructive-foreground'
+                        : 'bg-status-warning/20 text-status-warning',
+                    ].join(' ')}
+                  >
+                    {disruptions.total}
+                  </span>
+                ) : null}
                 {/* Brand-orange underline. Always rendered so the
                     inactive→active transition grows the width via scaleX
                     on a transform-anchored span (GPU-safe), following
