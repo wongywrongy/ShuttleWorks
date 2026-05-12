@@ -70,11 +70,19 @@
     --text-lg:   1.125rem;  /* 18px                                          */
     --text-2xl:  1.5rem;    /* 24px card titles                              */
 
-    /* ----- Type stacks (BRAND.md §2) ------------------------------------- */
+    /* ----- Type stacks (BRAND.md §2) -------------------------------------
+     * The fallback chain matters per product:
+     *   • Scheduler self-hosts @fontsource-variable/geist + jetbrains-mono.
+     *     Both register as `Geist Variable` / `JetBrains Mono Variable`.
+     *   • Tournament currently loads Inter via the rsms.me CDN, which
+     *     registers as `Inter` (NOT `Inter Variable`). The chain must
+     *     include plain `'Inter'` or tournament falls all the way through
+     *     to system-ui — which is exactly the bug Phase 2b(ii.b)
+     *     introduced. Plain `'Inter'` stays in every chain. */
     --font-display: 'Inter', 'Archivo Black', 'Monument Extended',
                     -apple-system, BlinkMacSystemFont, 'Segoe UI',
                     sans-serif;
-    --font-sans:    'Geist Variable', 'Inter Variable',
+    --font-sans:    'Geist Variable', 'Inter Variable', 'Inter',
                     -apple-system, BlinkMacSystemFont, 'Segoe UI',
                     'Roboto', 'Helvetica Neue', sans-serif;
     --font-mono:    'JetBrains Mono Variable', 'JetBrains Mono',
