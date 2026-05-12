@@ -316,48 +316,54 @@ function PositionCell({
           className="block w-full rounded px-2 py-2 text-left hover:bg-card/70 focus:outline-none focus:bg-card"
         >
           <div className="flex flex-col gap-1">
-            {/* Doubles cells render each occupant on its own line —
-                one chip per player. Cleaner than joining names with
-                "&" and works the same for 1- and 2-player states. */}
-            {(
-              occupants.map((p, i) => (
-                <span
-                  key={p.id}
-                  className={[
-                    'group inline-flex items-center justify-between gap-1 rounded border px-2 py-0.5 text-[11px] font-medium leading-tight shadow-sm',
-                    doubles
-                      ? i === 0
-                        ? 'border-blue-300 bg-card text-blue-900 dark:border-blue-500/30 dark:text-blue-300'
-                        : 'border-indigo-300 bg-card text-indigo-900 dark:border-indigo-500/30 dark:text-indigo-300'
-                      : 'border-border bg-card text-foreground',
-                  ].join(' ')}
-                >
-                  <span className="break-words">{p.name || '(unnamed)'}</span>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    data-no-picker="true"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeRank(p.id);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        removeRank(p.id);
-                      }
-                    }}
-                    aria-label={`Unassign ${p.name} from ${rank}`}
-                    className="cursor-pointer opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-red-600 dark:hover:text-red-300"
+            {/* Names render as ONE bordered + rounded container. Each
+                name is a flush row inside; a single hairline divider
+                separates rows in doubles. Singles render the same
+                container with no divider — structurally identical to
+                doubles for 1-name case. Border + bg live on the
+                container so any highlight state (drag hover, focus,
+                event tint) reads as a single unified surface, not as
+                multiple competing chips. */}
+            {occupants.length > 0 ? (
+              <div
+                className={[
+                  'overflow-hidden rounded-[6px] border border-border bg-card text-foreground',
+                  'divide-y divide-border/40',
+                  'transition-colors duration-fast ease-brand',
+                ].join(' ')}
+              >
+                {occupants.map((p) => (
+                  <div
+                    key={p.id}
+                    className="group flex items-center justify-between gap-1 px-2 py-0.5 text-[11px] font-medium leading-tight"
                   >
-                    ×
-                  </span>
-                </span>
-              ))
-            )}
+                    <span className="break-words">{p.name || '(unnamed)'}</span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      data-no-picker="true"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeRank(p.id);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          removeRank(p.id);
+                        }
+                      }}
+                      aria-label={`Unassign ${p.name} from ${rank}`}
+                      className="cursor-pointer text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100 hover:text-destructive"
+                    >
+                      ×
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {doubles && occupants.length === 1 ? (
-              <span className="rounded border border-dashed border-border px-2 py-0.5 text-[10px] italic text-muted-foreground">
+              <span className="rounded-[6px] border border-dashed border-border px-2 py-0.5 text-[10px] italic text-muted-foreground">
                 ＋ add partner
               </span>
             ) : null}
