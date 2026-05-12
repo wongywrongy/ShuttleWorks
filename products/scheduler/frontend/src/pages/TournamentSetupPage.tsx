@@ -134,7 +134,7 @@ export function TournamentSetupPage() {
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="min-h-0 flex-1">
         <SettingsShell sections={sections} defaultSectionId="tournament" />
       </div>
     </div>
