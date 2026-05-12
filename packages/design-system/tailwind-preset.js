@@ -52,7 +52,18 @@ module.exports = {
           DEFAULT: 'hsl(var(--rule))',
           soft:    'hsl(var(--rule-soft))',
         },
-        accent: {
+        /* ---- Brand emphasis (Signal Orange) ----
+         * NOTE: scheduler's existing components use `bg-accent` /
+         * `text-accent-foreground` to mean a slate-gray surface hover, NOT
+         * the brand emphasis. To avoid turning every scheduler hover
+         * orange, the `accent.*` Tailwind classes below are remapped to
+         * the legacy surface gray during migration, and the brand orange
+         * lives under `brand.*` classes for new code.
+         *
+         * Phase 6: rename `bg-accent` → `bg-muted` (or eliminate) across
+         * scheduler, then remap `accent` back to the brand orange to
+         * match BRAND.md naming. */
+        brand: {
           DEFAULT: 'hsl(var(--accent))',
           bg:      'hsl(var(--accent-bg))',
           ink:     'hsl(var(--accent-ink))',
@@ -87,6 +98,13 @@ module.exports = {
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
+        },
+        /* `accent` = LEGACY scheduler surface-hover gray during migration.
+         * Phase 6 strips its references and `accent` is freed up to mean
+         * the brand orange (currently exposed as `brand` above). */
+        accent: {
+          DEFAULT:    'hsl(var(--accent-legacy))',
+          foreground: 'hsl(var(--accent-legacy-foreground))',
         },
 
         // -------- Status palette --------

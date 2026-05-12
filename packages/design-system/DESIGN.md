@@ -64,7 +64,13 @@ Each rule has a **why** and a **what to do instead**.
 
 ### 1.10 Never use `--status-*` colors for non-status emphasis
 - **Why:** They have semantic meaning (live, called, blocked, idle, done). Using `text-status-live` to mean "highlight" creates false signal.
-- **Instead:** `text-accent` for brand emphasis. `text-ink` for primary. `text-ink-muted` for secondary.
+- **Instead:** `text-brand` for brand emphasis (Signal Orange). `text-ink` for primary. `text-ink-muted` for secondary.
+
+### 1.11 Transitional naming — `brand-*` vs `accent-*`
+- **During migration:** the Tailwind `accent-*` classes (`bg-accent`, `text-accent-foreground`) keep their scheduler-legacy meaning of "surface hover gray" so existing components don't suddenly turn orange. The brand emphasis (Signal Orange) is exposed under `brand-*` classes (`bg-brand`, `text-brand`, `bg-brand-bg`, `text-brand-ink`).
+- **The CSS variable `--accent` is the canonical brand orange** per BRAND.md §1; the Tailwind class disagreement is a temporary plumbing detail.
+- **Focus rings**: use `focus:ring-2 focus:ring-ring focus:ring-offset-N` — `--ring` aliases to `--accent` so the ring color IS the brand orange.
+- **Phase 6** renames scheduler's `bg-accent` (≈12 call sites) to `bg-muted`, then remaps the Tailwind `accent` namespace to the brand orange and removes `brand`. After that, BRAND.md naming and code naming align.
 
 ---
 
