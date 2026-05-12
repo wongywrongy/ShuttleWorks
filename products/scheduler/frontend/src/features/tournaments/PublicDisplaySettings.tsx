@@ -118,7 +118,7 @@ export function PublicDisplaySettings() {
   return (
     <form onSubmit={handleSubmit}>
       <SectionHeader>Layout</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
         <Row label="Display mode" control={
           <Seg
             options={DISPLAY_MODE_OPTIONS}
@@ -153,30 +153,28 @@ export function PublicDisplaySettings() {
       </div>
 
       <SectionHeader>Brand</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
-        <Row label="Accent colour" control={
-          <ColorSwatchRow
-            value={formData.tvAccent ?? '#10b981'}
-            onChange={(hex) => set('tvAccent', hex)}
-          />
-        } />
-        <Row label="Theme" control={
-          <Seg
-            options={THEME_OPTIONS}
-            value={formData.tvTheme ?? 'auto'}
-            onChange={(v) => set('tvTheme', v)}
-            ariaLabel="TV theme"
-          />
-        } />
-        <Row label="Background tone" control={
-          <Seg
-            options={BG_TONE_OPTIONS}
-            value={formData.tvBgTone ?? 'navy'}
-            onChange={(v) => set('tvBgTone', v)}
-            ariaLabel="Background tone"
-          />
-        } />
-      </div>
+      <Row label="Accent colour" control={
+        <ColorSwatchRow
+          value={formData.tvAccent ?? '#10b981'}
+          onChange={(hex) => set('tvAccent', hex)}
+        />
+      } />
+      <Row label="Theme" control={
+        <Seg
+          options={THEME_OPTIONS}
+          value={formData.tvTheme ?? 'auto'}
+          onChange={(v) => set('tvTheme', v)}
+          ariaLabel="TV theme"
+        />
+      } />
+      <Row label="Background tone" control={
+        <Seg
+          options={BG_TONE_OPTIONS}
+          value={formData.tvBgTone ?? 'navy'}
+          onChange={(v) => set('tvBgTone', v)}
+          ariaLabel="Background tone"
+        />
+      } last />
 
       {saveError && (
         <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">

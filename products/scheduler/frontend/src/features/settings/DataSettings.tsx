@@ -41,57 +41,55 @@ export function DataSettings() {
   return (
     <div>
       <SectionHeader>Export &amp; import</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+      <Row
+        label="Export"
+        control={
+          <Button type="button" variant="outline" size="sm" onClick={onExport}>
+            Export
+          </Button>
+        }
+      />
+      <Row
+        label="Import"
+        control={
+          <Button type="button" variant="outline" size="sm" onClick={onImport}>
+            Import
+          </Button>
+        }
+      />
+      <Row
+        label="Recover from XLSX"
+        control={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRecoverXlsx}
+          >
+            Recover from XLSX…
+          </Button>
+        }
+        last
+      />
+
+      <SectionHeader>Backups</SectionHeader>
+      {PLACEHOLDER_BACKUPS.map((b, i) => (
         <Row
-          label="Export"
-          control={
-            <Button type="button" variant="outline" size="sm" onClick={onExport}>
-              Export
-            </Button>
-          }
-        />
-        <Row
-          label="Import"
-          control={
-            <Button type="button" variant="outline" size="sm" onClick={onImport}>
-              Import
-            </Button>
-          }
-        />
-        <Row
-          label="Recover from XLSX"
+          key={b.id}
+          label={b.timestamp}
           control={
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={onRecoverXlsx}
+              onClick={() => onRestore(b.id)}
             >
-              Recover from XLSX…
+              Restore
             </Button>
           }
+          last={i === PLACEHOLDER_BACKUPS.length - 1}
         />
-      </div>
-
-      <SectionHeader>Backups</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
-        {PLACEHOLDER_BACKUPS.map((b) => (
-          <Row
-            key={b.id}
-            label={b.timestamp}
-            control={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onRestore(b.id)}
-              >
-                Restore
-              </Button>
-            }
-          />
-        ))}
-      </div>
+      ))}
     </div>
   );
 }

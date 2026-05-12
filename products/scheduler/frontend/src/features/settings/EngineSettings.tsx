@@ -83,7 +83,7 @@ export function EngineSettings() {
   return (
     <form onSubmit={handleSubmit}>
       <SectionHeader>Solver</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
         <Row
           label="Reproducible run"
           control={
@@ -107,76 +107,78 @@ export function EngineSettings() {
             />
           }
         />
-        <Row
-          label="Freeze horizon"
-          control={
-            <NumberWithSuffix
-              value={formData.freezeHorizonSlots ?? 0}
-              onChange={(v) => set('freezeHorizonSlots', v)}
-              suffix="slots"
-              min={0}
-              max={32}
-              ariaLabel="Freeze horizon in slots"
-            />
-          }
-        />
       </div>
 
+      <SectionHeader>Live operations</SectionHeader>
+      <Row
+        label="Freeze horizon"
+        control={
+          <NumberWithSuffix
+            value={formData.freezeHorizonSlots ?? 0}
+            onChange={(v) => set('freezeHorizonSlots', v)}
+            suffix="slots"
+            min={0}
+            max={32}
+            ariaLabel="Freeze horizon in slots"
+          />
+        }
+        last
+      />
+
       <SectionHeader>Optimisation goals</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
-        <Row
-          label="Maximise court utilisation"
-          control={
-            <Toggle
-              value={formData.enableCourtUtilization ?? true}
-              onChange={(v) => set('enableCourtUtilization', v)}
-              ariaLabel="Maximise court utilisation"
-            />
-          }
-        />
-        <Row
-          label="Court utilisation weight"
-          control={
-            <RangeSlider
-              value={Math.round(formData.courtUtilizationPenalty ?? 50)}
-              onChange={(v) => set('courtUtilizationPenalty', v)}
-              min={0}
-              max={100}
-              ariaLabel="Court utilisation weight"
-            />
-          }
-        />
-        <Row
-          label="Game spacing"
-          control={
-            <Toggle
-              value={formData.enableGameProximity ?? false}
-              onChange={(v) => set('enableGameProximity', v)}
-              ariaLabel="Enforce game spacing"
-            />
-          }
-        />
-        <Row
-          label="Compact schedule"
-          control={
-            <Toggle
-              value={formData.enableCompactSchedule ?? false}
-              onChange={(v) => set('enableCompactSchedule', v)}
-              ariaLabel="Compact schedule"
-            />
-          }
-        />
-        <Row
-          label="Allow player overlap"
-          control={
-            <Toggle
-              value={formData.allowPlayerOverlap ?? false}
-              onChange={(v) => set('allowPlayerOverlap', v)}
-              ariaLabel="Allow player overlap"
-            />
-          }
-        />
-      </div>
+      <Row
+        label="Maximise court utilisation"
+        control={
+          <Toggle
+            value={formData.enableCourtUtilization ?? true}
+            onChange={(v) => set('enableCourtUtilization', v)}
+            ariaLabel="Maximise court utilisation"
+          />
+        }
+      />
+      <Row
+        label="Court utilisation weight"
+        control={
+          <RangeSlider
+            value={Math.round(formData.courtUtilizationPenalty ?? 50)}
+            onChange={(v) => set('courtUtilizationPenalty', v)}
+            min={0}
+            max={100}
+            ariaLabel="Court utilisation weight"
+          />
+        }
+      />
+      <Row
+        label="Game spacing"
+        control={
+          <Toggle
+            value={formData.enableGameProximity ?? false}
+            onChange={(v) => set('enableGameProximity', v)}
+            ariaLabel="Enforce game spacing"
+          />
+        }
+      />
+      <Row
+        label="Compact schedule"
+        control={
+          <Toggle
+            value={formData.enableCompactSchedule ?? false}
+            onChange={(v) => set('enableCompactSchedule', v)}
+            ariaLabel="Compact schedule"
+          />
+        }
+      />
+      <Row
+        label="Allow player overlap"
+        control={
+          <Toggle
+            value={formData.allowPlayerOverlap ?? false}
+            onChange={(v) => set('allowPlayerOverlap', v)}
+            ariaLabel="Allow player overlap"
+          />
+        }
+        last
+      />
 
       {saveError && (
         <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">

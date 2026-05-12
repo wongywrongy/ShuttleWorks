@@ -171,7 +171,7 @@ export function TournamentConfigForm({
   return (
     <form onSubmit={handleSubmit}>
       <SectionHeader>Identity</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
         <Row
           label="Tournament name"
           control={
@@ -198,7 +198,7 @@ export function TournamentConfigForm({
       </div>
 
       <SectionHeader>Schedule &amp; venue</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
         <Row label="Date" control={
           <DateInput value={formData.tournamentDate ?? ''} onChange={(v) => set('tournamentDate', v)} ariaLabel="Tournament date" />
         } />
@@ -226,7 +226,7 @@ export function TournamentConfigForm({
       </div>
 
       <SectionHeader>Scoring</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
         <Row label="Score type" control={
           <Seg options={SCORE_TYPE_OPTIONS} value={formData.scoringFormat ?? 'badminton'} onChange={(v) => set('scoringFormat', v)} ariaLabel="Score type" />
         } />
@@ -242,23 +242,21 @@ export function TournamentConfigForm({
       </div>
 
       <SectionHeader>Events</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
-        <Row label="Men's singles" control={
-          <NumberInput value={ranks.MS ?? 3} onChange={(n) => setRank('MS', n)} min={0} max={20} ariaLabel="Men's singles positions" />
-        } />
-        <Row label="Men's doubles" control={
-          <NumberInput value={ranks.MD ?? 2} onChange={(n) => setRank('MD', n)} min={0} max={20} ariaLabel="Men's doubles positions" />
-        } />
-        <Row label="Women's singles" control={
-          <NumberInput value={ranks.WS ?? 3} onChange={(n) => setRank('WS', n)} min={0} max={20} ariaLabel="Women's singles positions" />
-        } />
-        <Row label="Women's doubles" control={
-          <NumberInput value={ranks.WD ?? 2} onChange={(n) => setRank('WD', n)} min={0} max={20} ariaLabel="Women's doubles positions" />
-        } />
-        <Row label="Mixed doubles" control={
-          <NumberInput value={ranks.XD ?? 2} onChange={(n) => setRank('XD', n)} min={0} max={20} ariaLabel="Mixed doubles positions" />
-        } />
-      </div>
+      <Row label="Men's singles" control={
+        <NumberInput value={ranks.MS ?? 3} onChange={(n) => setRank('MS', n)} min={0} max={20} ariaLabel="Men's singles positions" />
+      } />
+      <Row label="Women's singles" control={
+        <NumberInput value={ranks.WS ?? 3} onChange={(n) => setRank('WS', n)} min={0} max={20} ariaLabel="Women's singles positions" />
+      } />
+      <Row label="Men's doubles" control={
+        <NumberInput value={ranks.MD ?? 2} onChange={(n) => setRank('MD', n)} min={0} max={20} ariaLabel="Men's doubles positions" />
+      } />
+      <Row label="Women's doubles" control={
+        <NumberInput value={ranks.WD ?? 2} onChange={(n) => setRank('WD', n)} min={0} max={20} ariaLabel="Women's doubles positions" />
+      } />
+      <Row label="Mixed doubles" control={
+        <NumberInput value={ranks.XD ?? 2} onChange={(n) => setRank('XD', n)} min={0} max={20} ariaLabel="Mixed doubles positions" />
+      } last />
 
       {Object.keys(errors).length > 0 && (
         <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">

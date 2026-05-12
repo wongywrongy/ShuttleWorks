@@ -34,7 +34,7 @@ export function AppearanceSettings() {
   return (
     <div>
       <SectionHeader>Per-device</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
         <Row
           label="Theme"
           control={
