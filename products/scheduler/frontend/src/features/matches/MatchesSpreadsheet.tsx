@@ -45,7 +45,18 @@ function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
   return `${p.name || '(unnamed)'} · ${school}`;
 }
 
-export function MatchesSpreadsheet() {
+export function MatchesSpreadsheet({
+  pendingFocusId,
+  onFocusConsumed,
+}: {
+  /** Match ID whose row should auto-focus its event field after
+   *  mount. Set by MatchesTab after "+ Add match" so the operator can
+   *  pick the rank for the new row without hunting for it. */
+  pendingFocusId?: string | null;
+  /** Called by the row that consumes the focus directive so the
+   *  parent can clear `pendingFocusId`. */
+  onFocusConsumed?: () => void;
+} = {}) {
   const matches = useAppStore((s) => s.matches);
   const players = useAppStore((s) => s.players);
   const groups = useAppStore((s) => s.groups);
@@ -149,6 +160,8 @@ export function MatchesSpreadsheet() {
           groups={groups}
           configuredRanks={configuredRanks}
           issues={disruptions.byMatch.get(m.id) ?? EMPTY_ISSUES}
+          autoFocus={m.id === pendingFocusId}
+          onFocusConsumed={onFocusConsumed}
           onUpdate={updateMatch}
           onDelete={deleteMatch}
         />
@@ -184,6 +197,8 @@ function MatchRow({
   groups,
   configuredRanks,
   issues,
+  autoFocus,
+  onFocusConsumed,
   onUpdate,
   onDelete,
 }: {
@@ -198,17 +213,35 @@ function MatchRow({
    *  `useDisruptions` feed. Routing through the hook keeps the
    *  per-row flag and the TabBar badge from drifting out of sync. */
   issues: MatchIssue[];
+  /** When true on mount, focus the event field. Used by the
+   *  "+ Add match" flow to land focus on the new row. */
+  autoFocus?: boolean;
+  onFocusConsumed?: () => void;
   onUpdate: (id: string, patch: Partial<MatchDTO>) => void;
   onDelete: (id: string) => void;
 }) {
   const [durationDraft, setDurationDraft] = useState(
     String(match.durationSlots ?? 1),
   );
+  // Ref typed loosely — the event field may render as a select
+  // (configured ranks present) or an input (free-text fallback).
+  // Both inherit `focus()` from HTMLElement.
+  const eventFieldRef = useRef<HTMLSelectElement | HTMLInputElement | null>(null);
 
   useEffect(
     () => setDurationDraft(String(match.durationSlots ?? 1)),
     [match.durationSlots],
   );
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    eventFieldRef.current?.focus();
+    onFocusConsumed?.();
+    // The directive is a one-shot; ignore changes to onFocusConsumed
+    // after the initial mount (avoids re-firing if the parent
+    // changes its callback identity).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFocus]);
 
   const commitDuration = () => {
     const d = Math.max(1, Number(durationDraft) || 1);
@@ -273,6 +306,7 @@ function MatchRow({
       </span>
       {configuredRanks.length > 0 ? (
         <select
+          ref={eventFieldRef as React.RefObject<HTMLSelectElement>}
           value={currentRank}
           onChange={(e) =>
             onUpdate(match.id, { eventRank: e.target.value || undefined })
@@ -299,6 +333,7 @@ function MatchRow({
         </select>
       ) : (
         <input
+          ref={eventFieldRef as React.RefObject<HTMLInputElement>}
           value={currentRank}
           onChange={(e) =>
             onUpdate(match.id, { eventRank: e.target.value || undefined })

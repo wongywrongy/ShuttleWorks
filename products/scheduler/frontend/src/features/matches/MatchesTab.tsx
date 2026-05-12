@@ -8,7 +8,7 @@
  * Below: the Auto-generate row, the column-label row, and the match
  * rows all sit at the page edge separated only by hairlines.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Download, MagnifyingGlass } from '@phosphor-icons/react';
 import { v4 as uuid } from 'uuid';
 import { useAppStore } from '../../store/appStore';
@@ -27,6 +27,12 @@ export function MatchesTab() {
 
   const [searchQuery, setSearchQuery] = useSearchParamState('q', '');
   const playerById = usePlayerMap();
+  // After "+ Add match", we want the new row's event field to take
+  // focus so the operator can pick the rank without hunting for it.
+  // The button lives here (in the header) but the rows are rendered
+  // by MatchesSpreadsheet, so the focus directive crosses components
+  // via this state + callback.
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
 
   // Same filter logic the spreadsheet uses, computed once here for
   // the header count readout so "showing M of N" stays in sync.
@@ -47,14 +53,16 @@ export function MatchesTab() {
 
   const canAddRow = players.length >= 2;
   const addEmptyRow = () => {
+    const id = uuid();
     addMatch({
-      id: uuid(),
+      id,
       sideA: [],
       sideB: [],
       matchType: 'dual',
       eventRank: '',
       durationSlots: 1,
     });
+    setPendingFocusId(id);
   };
 
   return (
@@ -115,7 +123,10 @@ export function MatchesTab() {
       </header>
 
       <AutoGeneratePanel />
-      <MatchesSpreadsheet />
+      <MatchesSpreadsheet
+        pendingFocusId={pendingFocusId}
+        onFocusConsumed={() => setPendingFocusId(null)}
+      />
     </div>
   );
 }
