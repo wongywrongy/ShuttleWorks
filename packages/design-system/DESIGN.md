@@ -176,6 +176,12 @@ For new textures, propose them in BRAND.md §8 first.
 
 ---
 
+## 7.5 Motion — see MOTION.md
+
+Motion has its own rulebook: **`packages/design-system/MOTION.md`** (canonical) plus the date-stamped audits under `design/motion-audit-*.md`. Skim §1-§2 of MOTION.md before adding any animation; reach for the duration tokens (`duration-fast/standard/moderate`) + `ease-brand` for every new transition.
+
+> Quick gate: high-frequency interactions (tab clicks, row selects, score entry, solver-tick) get **zero motion**. Save/modal/banner mounts get the Jakub recipe (opacity + translateY + blur, 300ms, spring bounce-0). One Jhey delight beat lives on save-success (the existing `.sheen-overlay`). Anything else needs to justify itself against MOTION.md §10 anti-patterns.
+
 ## 8. The motion budget
 
 Two questions to ask before adding any animation:

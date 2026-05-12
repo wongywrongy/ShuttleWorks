@@ -51,8 +51,19 @@
     --radius-md: 0;        /* alias for cards (legacy md = same as default)  */
     --radius-lg: 0;        /* alias for legacy callers                       */
 
-    /* ----- Easing (inherited from scheduler) ---------------------------- */
-    --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
+    /* ----- Easing (canonical app curves) -------------------------------- */
+    --ease-brand:      cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-out-quick:  cubic-bezier(0.32, 0.72, 0, 1);   /* iOS-sheet curve */
+    --ease-linear:     linear;                            /* continuous solver-theatre only */
+
+    /* ----- Motion duration scale (see packages/design-system/MOTION.md) -
+     * Reach for the next-fastest tier when in doubt. 180ms feels more
+     * responsive than 400ms (Emil Kowalski). */
+    --motion-instant:  0ms;
+    --motion-fast:     120ms;
+    --motion-standard: 200ms;
+    --motion-moderate: 300ms;
+    --motion-slow:     450ms;
 
     /* ----- Density (inherited from scheduler — comfortable defaults) ----- */
     --density-row-h:        36px;

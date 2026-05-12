@@ -157,9 +157,18 @@ module.exports = {
         // Full removed (was rounded-full) — replace with rounded-none in code
       },
 
-      // -------- Brand easing --------
+      // -------- Brand easing + duration scale (see MOTION.md) --------
       transitionTimingFunction: {
-        brand: 'var(--ease-brand)',
+        brand:       'var(--ease-brand)',
+        'out-quick': 'var(--ease-out-quick)',
+        linear:      'var(--ease-linear)',
+      },
+      transitionDuration: {
+        instant:  'var(--motion-instant)',
+        fast:     'var(--motion-fast)',
+        standard: 'var(--motion-standard)',
+        moderate: 'var(--motion-moderate)',
+        slow:     'var(--motion-slow)',
       },
 
       // -------- Z-index scale --------
