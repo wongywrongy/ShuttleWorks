@@ -81,7 +81,7 @@ export function EngineSettings() {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="mx-auto max-w-4xl">
       <SectionHeader>Solver</SectionHeader>
       <Row
         label="Reproducible run"

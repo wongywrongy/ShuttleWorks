@@ -39,7 +39,7 @@ export function DataSettings() {
   };
 
   return (
-    <div>
+    <div className="mx-auto max-w-4xl">
       <SectionHeader>Export &amp; import</SectionHeader>
       <Row
         label="Export"

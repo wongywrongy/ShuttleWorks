@@ -116,7 +116,7 @@ export function PublicDisplaySettings() {
     (formData.tvGridColumns ?? null) === null ? 0 : (formData.tvGridColumns as number);
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="mx-auto max-w-4xl">
       <SectionHeader>Layout</SectionHeader>
       <Row label="Display mode" control={
         <Seg
