@@ -39,7 +39,10 @@ const buttonVariants = cva(
         secondary:
           'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 hover:underline',
+        // `link` variant uses the brand accent (Signal Orange) so links
+        // stand out from body. `text-primary` (shadcn default) would
+        // resolve to --ink and render the same color as paragraph text.
+        link: 'text-accent underline-offset-4 hover:underline',
         // NEW variant for brand emphasis (Signal Orange).
         // Use sparingly — only for THE primary action on a surface.
         brand: 'bg-brand text-brand-ink hover:bg-brand/90',

@@ -382,7 +382,7 @@ export function MatchControlCenterPage() {
           <p className="text-sm text-muted-foreground">No schedule generated.</p>
           <p className="text-xs text-muted-foreground">
             Generate a schedule on the{' '}
-            <Link to="/schedule" className="font-medium text-primary hover:underline">Schedule page</Link>
+            <Link to="/schedule" className="font-medium text-accent hover:underline">Schedule page</Link>
           </p>
         </div>
       </div>
