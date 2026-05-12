@@ -66,24 +66,29 @@ export function TabBar() {
                 data-testid={`tab-${tab.id}`}
                 className={[
                   INTERACTIVE_BASE,
-                  'relative rounded-md px-3 py-1.5 text-sm font-medium',
+                  // Brutalist tab: mono uppercase, square corners, no bg
+                  // tint on active — the brand-orange underline + brand
+                  // text color carry the active signal alone. The
+                  // shadcn-default `bg-primary/10 rounded-md` pill is
+                  // banned (BRAND.md §3, §1.10).
+                  'relative rounded-none px-3 py-2 font-mono text-xs font-semibold uppercase tracking-wider',
                   isActive
-                    ? 'bg-primary/10 text-primary dark:bg-primary/15'
+                    ? 'text-brand'
                     : isDisabled
                       ? 'text-muted-foreground/50'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
                 ].join(' ')}
               >
                 {tab.label}
-                {/* Underline always rendered so the inactive→active
-                    transition can grow the width instead of mounting a
-                    new node. Uses scaleX on a transform-anchored span,
-                    so motion is GPU-safe and follows the shared
-                    ``--ease-brand`` curve. */}
+                {/* Brand-orange underline. Always rendered so the
+                    inactive→active transition grows the width via scaleX
+                    on a transform-anchored span (GPU-safe), following
+                    the shared --ease-brand curve. Square corners — the
+                    underline IS the brutalist accent. */}
                 <span
                   aria-hidden
                   className={[
-                    'absolute inset-x-2 -bottom-[5px] h-0.5 origin-center rounded-full bg-primary',
+                    'absolute inset-x-2 -bottom-[1px] h-0.5 origin-center bg-brand',
                     'transition-transform duration-300 ease-brand',
                     isActive ? 'scale-x-100' : 'scale-x-0',
                   ].join(' ')}
