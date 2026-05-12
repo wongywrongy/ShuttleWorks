@@ -185,7 +185,7 @@ function TvPreviewTab() {
               url.searchParams.set('section', 'display');
               window.history.replaceState({}, '', url.toString());
             }}
-            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground`}
           >
             <GearSix aria-hidden="true" className="h-4 w-4" />
             Configure display

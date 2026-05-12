@@ -180,7 +180,7 @@ function MatchesTable({
             className={`px-2 py-0.5 text-xs rounded ${
               view === 'time'
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/40 hover:text-foreground'
             }`}
           >
             By Time
@@ -190,7 +190,7 @@ function MatchesTable({
             className={`px-2 py-0.5 text-xs rounded ${
               view === 'court'
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/40 hover:text-foreground'
             }`}
           >
             By Court
@@ -553,7 +553,7 @@ export function SchedulePage() {
                       ? 'Generate a schedule first'
                       : 'Download schedule as XLSX'
                   }
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground`}
                 >
                   <Download aria-hidden="true" className="h-4 w-4" />
                   Export XLSX
@@ -649,7 +649,7 @@ export function SchedulePage() {
                       type="button"
                       onClick={() => setDirectorOpen(true)}
                       title="Director tools — delays, breaks, reopen courts"
-                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`}
                     >
                       <GearSix aria-hidden="true" className="h-4 w-4" />
                       Director
@@ -657,7 +657,7 @@ export function SchedulePage() {
                     <button
                       type="button"
                       onClick={() => setWarmRestartOpen(true)}
-                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`}
                       title="Re-plan from here (full re-solve, stay-close objective)"
                     >
                       Re-plan
@@ -668,7 +668,7 @@ export function SchedulePage() {
                         setDisruptionPrefill({});
                         setDisruptionOpen(true);
                       }}
-                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`}
                       title="Repair after a disruption"
                     >
                       Disruption

@@ -71,7 +71,7 @@ export function CandidatesPanel({ schedule, onSelect }: Props) {
             className={`${INTERACTIVE_BASE} text-left rounded border px-3 py-2 text-xs transition-colors ${
               isActive
                 ? 'border-primary bg-primary/5 text-foreground'
-                : 'border-border bg-card hover:bg-accent'
+                : 'border-border bg-card hover:bg-muted/40'
             }`}
           >
             <div className="flex items-center justify-between gap-2">

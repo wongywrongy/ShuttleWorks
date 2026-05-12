@@ -52,24 +52,7 @@ module.exports = {
           DEFAULT: 'hsl(var(--rule))',
           soft:    'hsl(var(--rule-soft))',
         },
-        /* ---- Brand emphasis (Signal Orange) ----
-         * NOTE: scheduler's existing components use `bg-accent` /
-         * `text-accent-foreground` to mean a slate-gray surface hover, NOT
-         * the brand emphasis. To avoid turning every scheduler hover
-         * orange, the `accent.*` Tailwind classes below are remapped to
-         * the legacy surface gray during migration, and the brand orange
-         * lives under `brand.*` classes for new code.
-         *
-         * Phase 6: rename `bg-accent` → `bg-muted` (or eliminate) across
-         * scheduler, then remap `accent` back to the brand orange to
-         * match BRAND.md naming. */
-        brand: {
-          DEFAULT: 'hsl(var(--accent))',
-          bg:      'hsl(var(--accent-bg))',
-          ink:     'hsl(var(--accent-ink))',
-        },
-
-        // -------- Legacy scheduler aliases (Phase 6 strips) --------
+        // -------- Legacy scheduler aliases (still used by many components) --------
         border: 'hsl(var(--border))',
         input:  'hsl(var(--input))',
         ring:   'hsl(var(--ring))',
@@ -99,12 +82,18 @@ module.exports = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        /* `accent` = LEGACY scheduler surface-hover gray during migration.
-         * Phase 6 strips its references and `accent` is freed up to mean
-         * the brand orange (currently exposed as `brand` above). */
+        /* `accent` is now the canonical BRAND emphasis (Signal Orange)
+         * per BRAND.md §1. Phase 6 stripped the legacy surface-hover
+         * gray meaning — those call-sites moved to `bg-muted/40` /
+         * `text-foreground`. The `--accent-bg` / `--accent-ink` tokens
+         * remain for tinted callouts and text-on-accent fill. */
         accent: {
-          DEFAULT:    'hsl(var(--accent-legacy))',
-          foreground: 'hsl(var(--accent-legacy-foreground))',
+          DEFAULT: 'hsl(var(--accent))',
+          bg:      'hsl(var(--accent-bg))',
+          ink:     'hsl(var(--accent-ink))',
+          // Kept as alias for any holdouts (e.g., text-accent-foreground
+          // not yet renamed). Same value as `accent-ink`.
+          foreground: 'hsl(var(--accent-ink))',
         },
 
         // -------- Status palette --------

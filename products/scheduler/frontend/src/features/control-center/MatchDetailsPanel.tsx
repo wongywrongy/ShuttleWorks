@@ -236,7 +236,7 @@ export function MatchDetailsPanel({
   const actionBtn =
     `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded border border-border ` +
     `bg-card px-2 py-1 text-[11px] font-medium text-card-foreground ` +
-    `hover:bg-accent hover:text-accent-foreground ` +
+    `hover:bg-muted/40 hover:text-foreground ` +
     `disabled:cursor-not-allowed disabled:opacity-50`;
   const primaryActionBtn =
     `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded ` +
@@ -544,7 +544,7 @@ export function MatchDetailsPanel({
                         className={`inline-flex items-center justify-center rounded h-4 w-4 text-[10px] ${
                           confirmed
                             ? 'bg-green-600 text-white'
-                            : 'border border-border bg-card text-muted-foreground hover:bg-accent'
+                            : 'border border-border bg-card text-muted-foreground hover:bg-muted/40'
                         }`}
                       >
                         {confirmed ? <Check aria-hidden="true" className="h-2.5 w-2.5" /> : null}
@@ -571,8 +571,8 @@ export function MatchDetailsPanel({
                         onClick={() => setSubPickingFor(isPicking ? null : playerId)}
                         className={`rounded border border-border bg-card px-1 text-[9px] font-medium ${
                           isPicking
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            ? 'bg-muted/40 text-foreground'
+                            : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                         }`}
                         title="Substitute player"
                         aria-label={`Substitute ${name}`}
@@ -635,7 +635,7 @@ export function MatchDetailsPanel({
                             onSubstitute?.(match.id, playerId, p.id);
                             setSubPickingFor(null);
                           }}
-                          className="block w-full truncate px-1.5 py-0.5 text-left text-foreground hover:bg-accent"
+                          className="block w-full truncate px-1.5 py-0.5 text-left text-foreground hover:bg-muted/40"
                         >
                           {p.name}
                         </button>
@@ -748,7 +748,7 @@ export function MatchDetailsPanel({
                       onSelectMatch?.(matchId);
                     }
                   }}
-                  className="flex items-center gap-1.5 px-1.5 py-0.5 cursor-pointer hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 cursor-pointer hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title={sharedPlayerNames.join(', ')}
                 >
                   <span className="text-[11px] font-medium text-foreground tabular-nums w-12 flex-shrink-0">
@@ -821,7 +821,7 @@ export function MatchDetailsPanel({
                   <button
                     type="button"
                     onClick={() => onRequestDisruption('court_closed', match.id)}
-                    className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-accent"
+                    className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-muted/40"
                     title={`Close court ${assignment.courtId} and re-route its matches`}
                   >
                     Close court {assignment.courtId}

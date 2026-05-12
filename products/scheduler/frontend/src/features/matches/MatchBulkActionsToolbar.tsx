@@ -73,7 +73,7 @@ export function MatchBulkActionsToolbar({
             {/* Clear Selection */}
             <button
               onClick={onClearSelection}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-muted text-foreground text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-muted text-foreground text-sm font-medium rounded-md hover:bg-muted/40 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
               Clear Selection
             </button>

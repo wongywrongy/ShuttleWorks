@@ -154,7 +154,7 @@ export function DisruptionDialog({
               className={`${INTERACTIVE_BASE} rounded-full px-3 py-1 text-xs ${
                 type === t
                   ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/40'
               }`}
             >
               {TYPE_LABEL[t]}

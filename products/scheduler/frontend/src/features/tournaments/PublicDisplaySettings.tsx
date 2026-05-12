@@ -205,7 +205,7 @@ export function PublicDisplaySettings() {
                       'rounded border px-2.5 py-1 text-xs font-medium',
                       isActive
                         ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                        : 'border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground',
                     ].join(' ')}
                   >
                     {t.label}
@@ -252,7 +252,7 @@ export function PublicDisplaySettings() {
                         ? 'cursor-not-allowed opacity-50'
                         : isActive
                           ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                          : 'border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground',
                     ].join(' ')}
                   >
                     <span
@@ -321,7 +321,7 @@ function ChipRow<T extends string | number>({
               'rounded px-2 py-0.5 text-2xs font-medium',
               isActive
                 ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
             ].join(' ')}
           >
             {opt.label}

@@ -168,7 +168,7 @@ export function AppStatusPopover() {
             <button
               type="button"
               onClick={() => void refreshHealth()}
-              className={`${INTERACTIVE_BASE} rounded border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-accent-foreground`}
+              className={`${INTERACTIVE_BASE} rounded border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/40 hover:text-foreground`}
               aria-label="Refresh health"
             >
               Refresh
@@ -224,7 +224,7 @@ export function AppStatusPopover() {
               disabled={backingUp}
               data-testid="app-status-backup"
               aria-busy={backingUp}
-              className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-0.5 text-[11px] text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+              className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-0.5 text-[11px] text-card-foreground hover:bg-muted/40 hover:text-foreground`}
             >
               {backingUp ? 'Backing up…' : 'Back up now'}
             </button>
@@ -234,7 +234,7 @@ export function AppStatusPopover() {
                 setActiveTab('setup');
                 setOpen(false);
               }}
-              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[11px] text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[11px] text-card-foreground hover:bg-muted/40 hover:text-foreground`}
             >
               Manage backups
               <CaretRight aria-hidden="true" className="h-3 w-3" />

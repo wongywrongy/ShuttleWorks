@@ -73,7 +73,7 @@ export function TabBar() {
                   // banned (BRAND.md §3, §1.10).
                   'relative rounded-none px-3 py-2 font-mono text-xs font-semibold uppercase tracking-wider',
                   isActive
-                    ? 'text-brand'
+                    ? 'text-accent'
                     : isDisabled
                       ? 'text-muted-foreground/50'
                       : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
@@ -88,7 +88,7 @@ export function TabBar() {
                 <span
                   aria-hidden
                   className={[
-                    'absolute inset-x-2 -bottom-[1px] h-0.5 origin-center bg-brand',
+                    'absolute inset-x-2 -bottom-[1px] h-0.5 origin-center bg-accent',
                     'transition-transform duration-300 ease-brand',
                     isActive ? 'scale-x-100' : 'scale-x-0',
                   ].join(' ')}

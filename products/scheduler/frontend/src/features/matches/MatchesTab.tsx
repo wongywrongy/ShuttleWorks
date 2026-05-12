@@ -26,7 +26,7 @@ export function MatchesTab() {
             onClick={() => void exportMatchesXlsx(matches, players, groups)}
             disabled={matches.length === 0}
             data-testid="export-matches"
-            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50`}
+            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
           >
             <Download aria-hidden="true" className="h-4 w-4" />
             Export XLSX

@@ -256,7 +256,7 @@ export function PublicDisplayPage() {
       INTERACTIVE_BASE,
       'border px-4 py-2 text-base font-mono font-semibold uppercase tracking-wider',
       view === mode
-        ? 'border-brand bg-brand/15 text-brand'
+        ? 'border-accent bg-accent/15 text-accent'
         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
     ].join(' ');
 

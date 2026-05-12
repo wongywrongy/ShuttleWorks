@@ -45,7 +45,7 @@ export function SettingsNav({ sections, activeId, onSelect }: SettingsNavProps) 
               INTERACTIVE_BASE,
               'group relative flex w-full items-center gap-2.5 border-l-2 px-3 py-2 text-left text-sm',
               isActive
-                ? 'border-l-brand bg-muted/50 text-foreground font-semibold'
+                ? 'border-l-accent bg-muted/50 text-foreground font-semibold'
                 : 'border-l-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground',
             ].join(' ')}
             data-testid={`settings-nav-${s.id}`}
@@ -53,7 +53,7 @@ export function SettingsNav({ sections, activeId, onSelect }: SettingsNavProps) 
             <span
               className={[
                 'font-mono text-2xs tabular-nums tracking-wider',
-                isActive ? 'text-brand' : 'text-muted-foreground/60',
+                isActive ? 'text-accent' : 'text-muted-foreground/60',
               ].join(' ')}
               aria-hidden="true"
             >

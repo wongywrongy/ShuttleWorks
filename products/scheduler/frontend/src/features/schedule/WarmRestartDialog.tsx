@@ -130,7 +130,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
               className={`${INTERACTIVE_BASE} w-full text-left rounded border px-3 py-2 text-sm ${
                 pick === opt.id
                   ? 'border-primary bg-primary/5'
-                  : 'border-border bg-card hover:bg-accent'
+                  : 'border-border bg-card hover:bg-muted/40'
               }`}
             >
               <div className="font-medium">{opt.label}</div>

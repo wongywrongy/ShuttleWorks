@@ -203,7 +203,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                           'rounded px-3 py-1 text-xs font-medium capitalize transition-colors',
                           active
                             ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                            : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
                         ].join(' ')}
                       >
                         {mode}
@@ -333,7 +333,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                 variant="outline"
                 size="sm"
                 onClick={addBreak}
-                className="h-8 w-full justify-center border-dashed text-xs text-muted-foreground hover:bg-accent"
+                className="h-8 w-full justify-center border-dashed text-xs text-muted-foreground hover:bg-muted/40"
               >
                 + Add break{breakWindows.length === 0 ? ' (e.g. lunch 12:00–13:00)' : ''}
               </Button>
@@ -377,7 +377,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                   className={`flex-1 px-3 py-2 text-sm rounded border ${
                     formData.scoringFormat === 'simple'
                       ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background text-foreground border-input hover:bg-accent'
+                      : 'bg-background text-foreground border-input hover:bg-muted/40'
                   }`}
                 >
                   Simple score
@@ -389,7 +389,7 @@ export function TournamentConfigForm({ config, onSave, saving }: TournamentConfi
                   className={`flex-1 px-3 py-2 text-sm rounded border ${
                     formData.scoringFormat === 'badminton'
                       ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background text-foreground border-input hover:bg-accent'
+                      : 'bg-background text-foreground border-input hover:bg-muted/40'
                   }`}
                 >
                   Badminton sets

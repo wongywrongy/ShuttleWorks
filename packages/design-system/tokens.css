@@ -154,11 +154,6 @@
     --secondary-foreground: var(--ink);
     --muted:               60  8% 90%;
     --muted-foreground:     var(--ink-muted);
-    /* NOTE: scheduler uses --accent as a SURFACE (hover bg), brutalist
-     * --accent is EMPHASIS (orange). Legacy --accent stays as surface to
-     * not break hover styles; new code uses canonical --accent directly. */
-    --accent-legacy:       60  8% 90%;
-    --accent-legacy-foreground: var(--ink);
     --destructive:           0 72% 51%;
     --destructive-foreground: 0 0% 98%;
     --border:               var(--rule-soft);
@@ -236,6 +231,5 @@
     /* Legacy surface tokens — gray surfaces become charcoal */
     --secondary:           0  0% 14%;
     --muted:               0  0% 14%;
-    --accent-legacy:       0  0% 18%;
   }
 }

@@ -120,7 +120,7 @@ export function RosterTab() {
             onClick={() => void exportRosterXlsx(players, groups, config)}
             disabled={!canExportRoster}
             data-testid="export-roster"
-            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50`}
+            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
           >
             <Download aria-hidden="true" className="h-4 w-4" />
             Export XLSX
@@ -162,13 +162,13 @@ export function RosterTab() {
                       INTERACTIVE_BASE,
                       'border px-2.5 py-1 text-2xs font-mono uppercase tracking-wider',
                       isActive
-                        ? 'border-brand bg-brand/10 text-brand'
+                        ? 'border-accent bg-accent/10 text-accent'
                         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
                     ].join(' ')}
                   >
                     {s.name}
                     <span
-                      className={`ml-1.5 tabular-nums ${isActive ? 'text-brand/70' : 'text-muted-foreground/60'}`}
+                      className={`ml-1.5 tabular-nums ${isActive ? 'text-accent/70' : 'text-muted-foreground/60'}`}
                     >
                       {s.count}
                     </span>

@@ -19,7 +19,7 @@ export function FullscreenButton({
       onClick={onToggle}
       data-testid="tv-fullscreen-toggle"
       title={`${isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} (F)`}
-      className={`${INTERACTIVE_BASE} inline-flex items-center gap-2 rounded-sm border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground ${className}`}
+      className={`${INTERACTIVE_BASE} inline-flex items-center gap-2 rounded-sm border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/40 hover:text-foreground ${className}`}
       aria-pressed={isFullscreen}
     >
       {isFullscreen ? (

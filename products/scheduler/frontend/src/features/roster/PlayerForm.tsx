@@ -272,7 +272,7 @@ export function PlayerForm({ player, onSave, onCancel }: PlayerFormProps) {
             <button
               type="button"
               onClick={addAvailabilityWindow}
-              className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-sm hover:bg-accent hover:text-accent-foreground"
+              className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-sm hover:bg-muted/40 hover:text-foreground"
             >
               Add Window
             </button>
@@ -326,7 +326,7 @@ export function PlayerForm({ player, onSave, onCancel }: PlayerFormProps) {
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1.5 bg-muted text-foreground rounded-sm text-sm hover:bg-accent hover:text-accent-foreground"
+            className="px-3 py-1.5 bg-muted text-foreground rounded-sm text-sm hover:bg-muted/40 hover:text-foreground"
           >
             Cancel
           </button>

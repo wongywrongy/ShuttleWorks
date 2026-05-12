@@ -668,7 +668,7 @@ function ColumnManager({
         aria-haspopup="dialog"
         className={[
           INTERACTIVE_BASE,
-          'inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-2xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+          'inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-2xs font-medium text-muted-foreground hover:bg-muted/40 hover:text-foreground',
         ].join(' ')}
       >
         <GearSix aria-hidden="true" className="h-3 w-3" />
@@ -756,7 +756,7 @@ function SortableEventRow({
       style={style}
       className={[
         'flex items-center gap-1 rounded px-1 py-0.5',
-        isDragging ? 'bg-accent shadow-md ring-1 ring-ring' : 'hover:bg-muted/50',
+        isDragging ? 'bg-muted/40 shadow-md ring-1 ring-ring' : 'hover:bg-muted/50',
       ].join(' ')}
     >
       {/* Drag handle — only the grip is a drag source so the rest of

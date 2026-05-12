@@ -301,7 +301,7 @@ Aria Okafor	Bayshore Prep`}
           <div className="mt-4 flex gap-2 justify-end">
             <button
               onClick={handleClose}
-              className="px-3 py-1.5 bg-muted text-foreground rounded-sm text-sm hover:bg-accent hover:text-accent-foreground"
+              className="px-3 py-1.5 bg-muted text-foreground rounded-sm text-sm hover:bg-muted/40 hover:text-foreground"
             >
               Cancel
             </button>

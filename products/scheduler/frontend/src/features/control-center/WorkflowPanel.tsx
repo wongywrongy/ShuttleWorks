@@ -693,7 +693,7 @@ export function WorkflowPanel({
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
                 activeTab === 'up_next'
                   ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/40 hover:text-foreground'
               }`}
             >
               Up Next ({upNextFiltered.length}{searchQuery ? `/${upNextSorted.length}` : ''})
@@ -703,7 +703,7 @@ export function WorkflowPanel({
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
                 activeTab === 'finished'
                   ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/40 hover:text-foreground'
               }`}
             >
               Finished ({finishedFiltered.length}{searchQuery ? `/${finishedSorted.length}` : ''})

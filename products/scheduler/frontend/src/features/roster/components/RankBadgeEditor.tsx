@@ -211,7 +211,7 @@ export function RankBadgeEditor({
                       <button
                         type="button"
                         onClick={() => setIsOpen(false)}
-                        className="px-4 py-2 text-sm text-foreground bg-muted hover:bg-accent hover:text-accent-foreground rounded-md"
+                        className="px-4 py-2 text-sm text-foreground bg-muted hover:bg-muted/40 hover:text-foreground rounded-md"
                       >
                         Cancel
                       </button>

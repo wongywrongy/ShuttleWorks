@@ -438,7 +438,7 @@ function PlayerMultiPicker({
                         onClick={() => toggle(p.id)}
                         className={[
                           'flex w-full items-center justify-between rounded px-1.5 py-0.5 text-left text-xs transition-colors',
-                          isOn ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200' : 'text-foreground hover:bg-accent hover:text-accent-foreground',
+                          isOn ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200' : 'text-foreground hover:bg-muted/40 hover:text-foreground',
                         ].join(' ')}
                       >
                         <span>{playerLabel(p, groups)}</span>

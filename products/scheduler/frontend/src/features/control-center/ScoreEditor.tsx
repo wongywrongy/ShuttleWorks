@@ -162,7 +162,7 @@ function SimpleScoreEditor({
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-[11px] text-foreground hover:bg-accent`}
+          className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-[11px] text-foreground hover:bg-muted/40`}
         >
           Cancel
         </button>
@@ -399,7 +399,7 @@ function BadmintonInlineEditor({
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-[11px] text-foreground hover:bg-accent`}
+          className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-[11px] text-foreground hover:bg-muted/40`}
         >
           Cancel
         </button>
