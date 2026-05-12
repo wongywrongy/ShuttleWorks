@@ -35,7 +35,8 @@ All values defined as semantic CSS custom properties in `packages/design-system/
 | `--ink-faint` | `#9A9A98` | Disabled, ghost. |
 | `--rule` | `#0A0A0A` | Border, divider, grid line. Always full opacity black on light mode. |
 | `--rule-soft` | `#D8D6D0` | Inner divider where full-strength would be too loud. Used in dense tables. |
-| `--accent` | *TBD* — see §1.c | Single hazard accent. One. |
+| `--accent` | `#FF6B1A` | Signal Orange. Single hazard accent. One. |
+| `--accent-bg` | `#FFF1E8` | Tinted callout surface (hover, focus halo, soft emphasis). |
 | `--accent-ink` | `#FFFFFF` | Text on accent fill. |
 
 ### Dark mode (Tactical Telemetry)
@@ -49,20 +50,17 @@ All values defined as semantic CSS custom properties in `packages/design-system/
 | `--ink-faint` | `#555555` | Disabled, ghost. |
 | `--rule` | `#EAEAEA` | Border, divider — phosphor on substrate. |
 | `--rule-soft` | `#2A2A2A` | Inner divider in dense tables. |
-| `--accent` | *TBD* — same hue as light, calibrated for dark contrast | |
+| `--accent` | `#FF6B1A` | Signal Orange. Same hue both modes, by brutalist rule. |
+| `--accent-bg` | `#2A1808` | Tinted callout surface (hover, focus halo, soft emphasis). |
 | `--accent-ink` | `#0A0A0A` | Text on accent fill. |
 
-### 1.c — Accent candidate review (decide in board review)
+### 1.c — Brand accent (locked 2026-05-12)
 
-The brutalist rulebook specifies **hazard red `#E61919` / `#FF2A2A`** as the canonical accent. Scheduler already uses red for `--status-blocked` and `--destructive`. **If we adopt red as brand accent, we collide with established status semantics.** Three resolutions:
+**Brand accent: Signal Orange `#FF6B1A`** — same hex in both light and dark mode (brutalist single-accent rule). Rationale: aviation/safety-marker hue — brutalist-canonical, warm, distinct from `--status-blocked` red and `--status-called` amber. Reads premium-dark-editorial without losing industrial edge.
 
-| Candidate | Hex | Rationale | Risk |
-|---|---|---|---|
-| **Signal Orange** | `#FF6B1A` | Aviation/safety-marker hue — brutalist-canonical, warm, distinct from red-blocked and amber-called. Reads premium without losing edge. **(Recommended.)** | Slightly less "industrial" than red. |
-| **Hazard Red** | `#E61919` | Pure brutalist canonical. Maximum impact. | Collides with status-blocked + destructive. Would require remapping status palette. |
-| **Phosphor Green** | `#4AF626` | Strong terminal heritage; pairs with dark mode dramatically. | Reads too "Matrix"-y on light mode; less premium. |
+Hazard red `#E61919` was rejected because it collides with scheduler's existing `--status-blocked` and `--destructive` semantics. Phosphor green `#4AF626` was rejected as too "Matrix"-y on light substrate.
 
-**Default to Signal Orange `#FF6B1A`** unless board review picks otherwise. Accent rule: **one** accent across the system. Status colors (live/called/blocked/idle/done) live in their own semantic namespace and are NOT brand colors.
+**Accent rule: ONE accent across the system.** Status colors (`live` / `called` / `started` / `blocked` / `idle` / `done`) live in their own semantic namespace and are NOT brand colors — never use a status color for general emphasis on neutral content.
 
 ### Status palette (unchanged from scheduler, re-tinted slightly for both modes)
 
