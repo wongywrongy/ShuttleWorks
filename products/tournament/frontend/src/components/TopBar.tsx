@@ -118,35 +118,48 @@ function Counters({
   event: ReturnType<typeof buckets>;
   global: ReturnType<typeof buckets>;
 }) {
+  // Status colors now route through the canonical --status-* palette
+  // (shared with scheduler), so the same semantic state reads the same
+  // color in both products. Mapping intentionally matches scheduler:
+  //   done    → status-done   (slate, settled)
+  //   live    → status-live   (emerald, in progress)
+  //   ready   → status-called (amber, cued to play)
+  //   pending → status-idle   (slate-muted, not yet scheduled)
+  // Old mapping (emerald=done, amber=live, sky=ready) was inverted vs
+  // scheduler and pulled raw Tailwind palette colors (BRAND.md §1.10).
   return (
-    <div className="flex flex-col items-end text-xs font-mono">
+    <div className="flex flex-col items-end font-mono">
       <div className="flex items-center gap-2">
-        <Light color="bg-emerald-500" label="done" n={event.done} />
-        <Light color="bg-amber-500" label="live" n={event.live} />
-        <Light color="bg-sky-500" label="ready" n={event.ready} />
-        <Light color="bg-ink-300" label="pending" n={event.pending} />
+        <Light tone="text-status-done"   label="DONE"  n={event.done} />
+        <Light tone="text-status-live"   label="LIVE"  n={event.live} />
+        <Light tone="text-status-called" label="READY" n={event.ready} />
+        <Light tone="text-status-idle"   label="PEND"  n={event.pending} />
       </div>
-      <div className="text-[10px] text-ink-400">
-        all events: {global.done} done · {global.live} live · {global.ready} ready
+      <div className="text-[10px] uppercase tracking-wider text-ink-faint">
+        ALL · {global.done}D · {global.live}L · {global.ready}R
       </div>
     </div>
   );
 }
 
 function Light({
-  color,
+  tone,
   label,
   n,
 }: {
-  color: string;
+  tone: string;
   label: string;
   n: number;
 }) {
+  // Brutalist counter cell: mono uppercase tracking-wider label colored
+  // by --status-* token, then the count in tabular-nums. No rounded
+  // dot — typography carries the state, color is the secondary cue.
   return (
-    <span className="inline-flex items-center gap-1">
-      <span className={`w-2 h-2 rounded-full ${color}`} />
-      <span className="text-ink-600">{label}</span>
-      <span className="tabular-nums">{n}</span>
+    <span className="inline-flex items-baseline gap-1">
+      <span className={`text-2xs font-semibold uppercase tracking-wider ${tone}`}>
+        {label}
+      </span>
+      <span className="tabular-nums text-xs text-ink">{n}</span>
     </span>
   );
 }
