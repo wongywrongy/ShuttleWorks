@@ -38,30 +38,24 @@ import { INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET } from '../../lib/utils';
 
 import { EVENT_ORDER, EVENT_LABEL, isDoubles } from './positionGrid/helpers';
 
-export function PositionGrid({ schoolId }: { schoolId: string }) {
-  const players = useAppStore((s) => s.players);
-  const groups = useAppStore((s) => s.groups);
+/**
+ * Column ordering + visibility — both per-tournament settings on
+ * ``config``. Falls back to the canonical MD/WD/XD/WS/MS sequence
+ * when ``config.eventOrder`` is unset, and shows every configured
+ * event when ``config.eventVisible`` is unset.
+ *
+ * Exported so RosterTab's header can host the `<ColumnManager>`
+ * control without the grid having to render its own header bar.
+ */
+export function usePositionGridColumns() {
   const config = useAppStore((s) => s.config);
   const setConfig = useAppStore((s) => s.setConfig);
 
-  const schoolPlayers = useMemo(
-    () => players.filter((p) => p.groupId === schoolId),
-    [players, schoolId],
-  );
-
-  const school = groups.find((g) => g.id === schoolId);
-
-  // Column ordering + visibility — both per-tournament settings on
-  // ``config``. Falls back to the canonical MD/WD/XD/WS/MS sequence
-  // when ``config.eventOrder`` is unset, and shows every configured
-  // event when ``config.eventVisible`` is unset.
   const events = useMemo(() => {
     const counts = config?.rankCounts ?? {};
     const order = (config?.eventOrder?.length ? config.eventOrder : EVENT_ORDER).filter(
       (ev) => (counts[ev] ?? 0) > 0,
     );
-    // Append any newly-introduced events that aren't yet in eventOrder
-    // so the user never silently loses a column.
     for (const ev of EVENT_ORDER) {
       if ((counts[ev] ?? 0) > 0 && !order.includes(ev)) order.push(ev);
     }
@@ -110,6 +104,47 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
     setConfig({ ...config, eventOrder: undefined, eventVisible: undefined });
   };
 
+  return {
+    events,
+    allConfiguredEvents,
+    eventVisible: config?.eventVisible,
+    moveColumn,
+    reorderColumns,
+    toggleVisible,
+    resetColumns,
+  };
+}
+
+/**
+ * Standalone column-visibility/order control. Rendered by RosterTab
+ * inside its `PositionGridHeader` so the grid itself can sit flush
+ * against the page chrome with no internal header bar.
+ */
+export function PositionGridColumnControls() {
+  const { allConfiguredEvents, eventVisible, moveColumn, reorderColumns, toggleVisible, resetColumns } =
+    usePositionGridColumns();
+  return (
+    <ColumnManager
+      order={allConfiguredEvents}
+      visible={eventVisible}
+      onMove={moveColumn}
+      onReorder={reorderColumns}
+      onToggle={toggleVisible}
+      onReset={resetColumns}
+    />
+  );
+}
+
+export function PositionGrid({ schoolId }: { schoolId: string }) {
+  const players = useAppStore((s) => s.players);
+
+  const schoolPlayers = useMemo(
+    () => players.filter((p) => p.groupId === schoolId),
+    [players, schoolId],
+  );
+
+  const { events } = usePositionGridColumns();
+
   const maxRows = Math.max(0, ...events.map((e) => e.count));
 
   const byRank = useMemo(() => {
@@ -132,84 +167,59 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
   }
 
   return (
-    <div className="flex min-w-0 flex-col bg-card">
-      <div className="flex items-baseline justify-between border-b border-border/60 bg-muted/40 px-3 py-2">
-        <div className="flex items-baseline gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Position grid
-          </span>
-          <span className="text-[11px] text-foreground">
-            {school?.name ?? '—'}
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] text-muted-foreground">
-            {events.length} of {allConfiguredEvents.length} events · up to {maxRows} positions
-          </span>
-          <ColumnManager
-            order={allConfiguredEvents}
-            visible={config?.eventVisible}
-            onMove={moveColumn}
-            onReorder={reorderColumns}
-            onToggle={toggleVisible}
-            onReset={resetColumns}
-          />
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        {/* border-collapse so the per-cell borders merge into clean grid lines */}
-        <table
-          className="w-full min-w-[780px] border-collapse text-sm"
-          data-testid="position-grid-table"
-        >
-          <thead>
-            <tr>
-              <th className="w-12 border-b-2 border-r border-border bg-muted py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                #
-              </th>
+    <div className="overflow-x-auto bg-card">
+      {/* border-collapse so the per-cell borders merge into clean grid lines */}
+      <table
+        className="w-full min-w-[780px] border-collapse text-sm"
+        data-testid="position-grid-table"
+      >
+        <thead>
+          <tr>
+            <th className="w-12 border-b-2 border-r border-border bg-muted py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              #
+            </th>
+            {events.map((ev) => {
+              const label = EVENT_LABEL[ev.prefix];
+              return (
+                <th
+                  key={ev.prefix}
+                  className={`border-b-2 border-r border-border px-3 py-1.5 text-left text-xs font-bold tracking-wide last:border-r-0 ${label?.header ?? 'bg-muted text-foreground'}`}
+                  title={label?.full}
+                >
+                  {ev.prefix}
+                  <span className="ml-2 text-[10px] font-medium opacity-70">
+                    {isDoubles(ev.prefix) ? 'doubles' : 'singles'}
+                  </span>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: maxRows }, (_, i) => i + 1).map((row) => (
+            <tr key={row}>
+              <td className="w-12 border-b border-r border-border bg-muted/40 py-1.5 text-center text-xs font-semibold text-muted-foreground tabular-nums">
+                {row}
+              </td>
               {events.map((ev) => {
-                const label = EVENT_LABEL[ev.prefix];
+                const rank = `${ev.prefix}${row}`;
+                const occupants = row <= ev.count ? byRank.get(rank) ?? [] : null;
                 return (
-                  <th
+                  <PositionCell
                     key={ev.prefix}
-                    className={`border-b-2 border-r border-border px-3 py-2 text-left text-xs font-bold tracking-wide last:border-r-0 ${label?.header ?? 'bg-muted text-foreground'}`}
-                    title={label?.full}
-                  >
-                    {ev.prefix}
-                    <span className="ml-2 text-[10px] font-medium opacity-70">
-                      {isDoubles(ev.prefix) ? 'doubles' : 'singles'}
-                    </span>
-                  </th>
+                    schoolId={schoolId}
+                    rank={rank}
+                    eventPrefix={ev.prefix}
+                    doubles={isDoubles(ev.prefix)}
+                    disabled={occupants === null}
+                    occupants={occupants ?? []}
+                  />
                 );
               })}
             </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: maxRows }, (_, i) => i + 1).map((row) => (
-              <tr key={row}>
-                <td className="w-12 border-b border-r border-border bg-muted/40 py-2 text-center text-xs font-semibold text-muted-foreground tabular-nums">
-                  {row}
-                </td>
-                {events.map((ev) => {
-                  const rank = `${ev.prefix}${row}`;
-                  const occupants = row <= ev.count ? byRank.get(rank) ?? [] : null;
-                  return (
-                    <PositionCell
-                      key={ev.prefix}
-                      schoolId={schoolId}
-                      rank={rank}
-                      eventPrefix={ev.prefix}
-                      doubles={isDoubles(ev.prefix)}
-                      disabled={occupants === null}
-                      occupants={occupants ?? []}
-                    />
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -304,7 +314,7 @@ function PositionCell({
       ].join(' ')}
     >
       {disabled ? (
-        <span className="block px-2 py-2 text-[10px] italic opacity-50">—</span>
+        <span className="block px-2 py-1.5 text-[10px] italic opacity-50">—</span>
       ) : (
         <button
           type="button"
@@ -313,7 +323,7 @@ function PositionCell({
             setPickerOpen((v) => !v);
           }}
           data-testid={`pos-cell-btn-${schoolId}-${rank}`}
-          className="block w-full rounded px-2 py-2 text-left hover:bg-card/70 focus:outline-none focus:bg-card"
+          className="block w-full rounded px-2 py-1.5 text-left hover:bg-card/70 focus:outline-none focus:bg-card"
         >
           <div className="flex flex-col gap-1">
             {/* Names render in one of two shapes:

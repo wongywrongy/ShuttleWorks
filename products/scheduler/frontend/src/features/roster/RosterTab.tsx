@@ -33,7 +33,11 @@ import {
 import type { PlayerDTO } from '../../api/dto';
 import { useAppStore } from '../../store/appStore';
 import { exportRosterXlsx } from '../exports/xlsxExports';
-import { DraggablePlayerChip, PositionGrid } from './PositionGrid';
+import {
+  DraggablePlayerChip,
+  PositionGrid,
+  PositionGridColumnControls,
+} from './PositionGrid';
 import { PlayerDetailPanel } from './PlayerDetailPanel';
 import { InlineSearch } from '../../components/InlineSearch';
 import { INTERACTIVE_BASE } from '../../lib/utils';
@@ -544,16 +548,19 @@ function PositionGridHeader({
           {positionCount === 1 ? '' : 's'}
         </span>
       </div>
-      <button
-        type="button"
-        onClick={onExport}
-        disabled={!canExport}
-        data-testid="export-roster"
-        className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-sm border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
-      >
-        <Download aria-hidden="true" className="h-4 w-4" />
-        Export XLSX
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        <PositionGridColumnControls />
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={!canExport}
+          data-testid="export-roster"
+          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-sm border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
+        >
+          <Download aria-hidden="true" className="h-4 w-4" />
+          Export XLSX
+        </button>
+      </div>
     </header>
   );
 }
