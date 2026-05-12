@@ -32,31 +32,32 @@ export function AppearanceSettings() {
   const setDensity = usePreferencesStore((s) => s.setDensity);
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div>
       <SectionHeader>Per-device</SectionHeader>
-      <Row
-        label="Theme"
-        control={
-          <Seg
-            options={THEME_OPTIONS}
-            value={theme}
-            onChange={setTheme}
-            ariaLabel="Theme"
-          />
-        }
-      />
-      <Row
-        label="Density"
-        control={
-          <Seg
-            options={DENSITY_OPTIONS}
-            value={density}
-            onChange={setDensity}
-            ariaLabel="Density"
-          />
-        }
-        last
-      />
+      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+        <Row
+          label="Theme"
+          control={
+            <Seg
+              options={THEME_OPTIONS}
+              value={theme}
+              onChange={setTheme}
+              ariaLabel="Theme"
+            />
+          }
+        />
+        <Row
+          label="Density"
+          control={
+            <Seg
+              options={DENSITY_OPTIONS}
+              value={density}
+              onChange={setDensity}
+              ariaLabel="Density"
+            />
+          }
+        />
+      </div>
       <p className="mt-3 text-xs text-muted-foreground">
         Saved per browser.
       </p>

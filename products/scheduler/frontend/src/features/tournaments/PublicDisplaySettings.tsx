@@ -116,65 +116,67 @@ export function PublicDisplaySettings() {
     (formData.tvGridColumns ?? null) === null ? 0 : (formData.tvGridColumns as number);
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-4xl">
+    <form onSubmit={handleSubmit}>
       <SectionHeader>Layout</SectionHeader>
-      <Row label="Display mode" control={
-        <Seg
-          options={DISPLAY_MODE_OPTIONS}
-          value={formData.tvDisplayMode ?? 'strip'}
-          onChange={(v) => set('tvDisplayMode', v)}
-          ariaLabel="Display mode"
-        />
-      } />
-      <Row label="Grid columns" control={
-        <Seg
-          options={GRID_COLUMNS_OPTIONS}
-          value={gridColumnsValue}
-          onChange={(v) => set('tvGridColumns', v === 0 ? null : (v as 1 | 2 | 3 | 4))}
-          ariaLabel="Grid columns"
-        />
-      } />
-      <Row label="Card size" control={
-        <Seg
-          options={CARD_SIZE_OPTIONS}
-          value={formData.tvCardSize ?? 'auto'}
-          onChange={(v) => set('tvCardSize', v)}
-          ariaLabel="Card size"
-        />
-      } last />
+      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+        <Row label="Display mode" control={
+          <Seg
+            options={DISPLAY_MODE_OPTIONS}
+            value={formData.tvDisplayMode ?? 'strip'}
+            onChange={(v) => set('tvDisplayMode', v)}
+            ariaLabel="Display mode"
+          />
+        } />
+        <Row label="Grid columns" control={
+          <Seg
+            options={GRID_COLUMNS_OPTIONS}
+            value={gridColumnsValue}
+            onChange={(v) => set('tvGridColumns', v === 0 ? null : (v as 1 | 2 | 3 | 4))}
+            ariaLabel="Grid columns"
+          />
+        } />
+        <Row label="Card size" control={
+          <Seg
+            options={CARD_SIZE_OPTIONS}
+            value={formData.tvCardSize ?? 'auto'}
+            onChange={(v) => set('tvCardSize', v)}
+            ariaLabel="Card size"
+          />
+        } />
+        <Row label="Show scores" control={
+          <Toggle
+            value={formData.tvShowScores ?? true}
+            onChange={(v) => set('tvShowScores', v)}
+            ariaLabel="Show scores on public display"
+          />
+        } />
+      </div>
 
       <SectionHeader>Brand</SectionHeader>
-      <Row label="Accent colour" control={
-        <ColorSwatchRow
-          value={formData.tvAccent ?? '#10b981'}
-          onChange={(hex) => set('tvAccent', hex)}
-        />
-      } />
-      <Row label="Theme" control={
-        <Seg
-          options={THEME_OPTIONS}
-          value={formData.tvTheme ?? 'auto'}
-          onChange={(v) => set('tvTheme', v)}
-          ariaLabel="TV theme"
-        />
-      } />
-      <Row label="Background tone" control={
-        <Seg
-          options={BG_TONE_OPTIONS}
-          value={formData.tvBgTone ?? 'navy'}
-          onChange={(v) => set('tvBgTone', v)}
-          ariaLabel="Background tone"
-        />
-      } last />
-
-      <SectionHeader>Content</SectionHeader>
-      <Row label="Show scores" control={
-        <Toggle
-          value={formData.tvShowScores ?? true}
-          onChange={(v) => set('tvShowScores', v)}
-          ariaLabel="Show scores on public display"
-        />
-      } last />
+      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+        <Row label="Accent colour" control={
+          <ColorSwatchRow
+            value={formData.tvAccent ?? '#10b981'}
+            onChange={(hex) => set('tvAccent', hex)}
+          />
+        } />
+        <Row label="Theme" control={
+          <Seg
+            options={THEME_OPTIONS}
+            value={formData.tvTheme ?? 'auto'}
+            onChange={(v) => set('tvTheme', v)}
+            ariaLabel="TV theme"
+          />
+        } />
+        <Row label="Background tone" control={
+          <Seg
+            options={BG_TONE_OPTIONS}
+            value={formData.tvBgTone ?? 'navy'}
+            onChange={(v) => set('tvBgTone', v)}
+            ariaLabel="Background tone"
+          />
+        } />
+      </div>
 
       {saveError && (
         <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">

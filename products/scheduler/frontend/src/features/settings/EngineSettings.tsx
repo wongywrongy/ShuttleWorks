@@ -81,103 +81,102 @@ export function EngineSettings() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-4xl">
+    <form onSubmit={handleSubmit}>
       <SectionHeader>Solver</SectionHeader>
-      <Row
-        label="Reproducible run"
-        control={
-          <Toggle
-            value={formData.deterministic ?? false}
-            onChange={(v) => set('deterministic', v)}
-            ariaLabel="Reproducible solver run"
-          />
-        }
-      />
-      <Row
-        label="Solver time limit"
-        control={
-          <NumberWithSuffix
-            value={formData.solverTimeLimitSeconds ?? 30}
-            onChange={(v) => set('solverTimeLimitSeconds', v)}
-            suffix="s"
-            min={1}
-            max={600}
-            ariaLabel="Solver wall-clock cap in seconds"
-          />
-        }
-        last
-      />
-
-      <SectionHeader>Live operations</SectionHeader>
-      <Row
-        label="Freeze horizon"
-        control={
-          <NumberWithSuffix
-            value={formData.freezeHorizonSlots ?? 0}
-            onChange={(v) => set('freezeHorizonSlots', v)}
-            suffix="slots"
-            min={0}
-            max={32}
-            ariaLabel="Freeze horizon in slots"
-          />
-        }
-        last
-      />
+      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+        <Row
+          label="Reproducible run"
+          control={
+            <Toggle
+              value={formData.deterministic ?? false}
+              onChange={(v) => set('deterministic', v)}
+              ariaLabel="Reproducible solver run"
+            />
+          }
+        />
+        <Row
+          label="Solver time limit"
+          control={
+            <NumberWithSuffix
+              value={formData.solverTimeLimitSeconds ?? 30}
+              onChange={(v) => set('solverTimeLimitSeconds', v)}
+              suffix="s"
+              min={1}
+              max={600}
+              ariaLabel="Solver wall-clock cap in seconds"
+            />
+          }
+        />
+        <Row
+          label="Freeze horizon"
+          control={
+            <NumberWithSuffix
+              value={formData.freezeHorizonSlots ?? 0}
+              onChange={(v) => set('freezeHorizonSlots', v)}
+              suffix="slots"
+              min={0}
+              max={32}
+              ariaLabel="Freeze horizon in slots"
+            />
+          }
+        />
+      </div>
 
       <SectionHeader>Optimisation goals</SectionHeader>
-      <Row
-        label="Maximise court utilisation"
-        control={
-          <Toggle
-            value={formData.enableCourtUtilization ?? true}
-            onChange={(v) => set('enableCourtUtilization', v)}
-            ariaLabel="Maximise court utilisation"
-          />
-        }
-      />
-      <Row
-        label="Court utilisation weight"
-        control={
-          <RangeSlider
-            value={Math.round(formData.courtUtilizationPenalty ?? 50)}
-            onChange={(v) => set('courtUtilizationPenalty', v)}
-            min={0}
-            max={100}
-            ariaLabel="Court utilisation weight"
-          />
-        }
-      />
-      <Row
-        label="Game spacing"
-        control={
-          <Toggle
-            value={formData.enableGameProximity ?? false}
-            onChange={(v) => set('enableGameProximity', v)}
-            ariaLabel="Enforce game spacing"
-          />
-        }
-      />
-      <Row
-        label="Compact schedule"
-        control={
-          <Toggle
-            value={formData.enableCompactSchedule ?? false}
-            onChange={(v) => set('enableCompactSchedule', v)}
-            ariaLabel="Compact schedule"
-          />
-        }
-      />
-      <Row
-        label="Allow player overlap"
-        control={
-          <Toggle
-            value={formData.allowPlayerOverlap ?? false}
-            onChange={(v) => set('allowPlayerOverlap', v)}
-            ariaLabel="Allow player overlap"
-          />
-        }
-        last
-      />
+      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12">
+        <Row
+          label="Maximise court utilisation"
+          control={
+            <Toggle
+              value={formData.enableCourtUtilization ?? true}
+              onChange={(v) => set('enableCourtUtilization', v)}
+              ariaLabel="Maximise court utilisation"
+            />
+          }
+        />
+        <Row
+          label="Court utilisation weight"
+          control={
+            <RangeSlider
+              value={Math.round(formData.courtUtilizationPenalty ?? 50)}
+              onChange={(v) => set('courtUtilizationPenalty', v)}
+              min={0}
+              max={100}
+              ariaLabel="Court utilisation weight"
+            />
+          }
+        />
+        <Row
+          label="Game spacing"
+          control={
+            <Toggle
+              value={formData.enableGameProximity ?? false}
+              onChange={(v) => set('enableGameProximity', v)}
+              ariaLabel="Enforce game spacing"
+            />
+          }
+        />
+        <Row
+          label="Compact schedule"
+          control={
+            <Toggle
+              value={formData.enableCompactSchedule ?? false}
+              onChange={(v) => set('enableCompactSchedule', v)}
+              ariaLabel="Compact schedule"
+            />
+          }
+        />
+        <Row
+          label="Allow player overlap"
+          control={
+            <Toggle
+              value={formData.allowPlayerOverlap ?? false}
+              onChange={(v) => set('allowPlayerOverlap', v)}
+              ariaLabel="Allow player overlap"
+            />
+          }
+        />
+      </div>
 
       {saveError && (
         <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
