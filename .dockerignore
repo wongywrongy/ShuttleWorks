@@ -1,0 +1,94 @@
+# Root .dockerignore — applies to ALL builds that use repo-root as
+# context (frontend prod, frontend dev, backend prod). Without this,
+# Docker copies node_modules / .git / build artifacts into every build
+# context, which inflates the context send-time from <1s to many seconds.
+
+# === Version control ===
+.git/
+.gitignore
+.gitattributes
+
+# === Node ===
+node_modules/
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/tsconfig.tsbuildinfo
+
+# === Python ===
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyc
+.Python
+*.egg-info/
+*.whl
+venv/
+.venv/
+env/
+.pytest_cache/
+**/.pytest_cache/
+.benchmarks/
+.coverage
+htmlcov/
+
+# === Runtime data (Docker volumes) ===
+**/data/
+
+# === Env files (NEVER bake into images) ===
+**/.env
+**/.env.local
+**/.env.*.local
+
+# === Test artifacts ===
+**/e2e/test-results/
+**/e2e/playwright-report/
+**/e2e/blob-report/
+**/e2e/.playwright/
+**/e2e/node_modules/
+.playwright-mcp/
+
+# === Editor / IDE / OS ===
+.vscode/
+.idea/
+.cursor/
+.claude/
+.serena/
+.agents/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# === Skills + Claude harness files ===
+skills-lock.json
+
+# === Design references (kept locally, not in deploy images) ===
+design/baseline/
+design/identity/
+
+# === UI iteration screenshots ===
+**/docs/screenshots/
+
+# === Loose debug artifacts at repo root ===
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webm
+/schedule_*.csv
+/schedule_*.xlsx
+/roster_*.csv
+/roster_*.xlsx
+/matches_*.csv
+/matches_*.xlsx
+
+# === Logs ===
+*.log
+
+# === Docker artifacts ===
+.docker/
+
+# === Compose project state ===
+**/docker-compose.override.yml

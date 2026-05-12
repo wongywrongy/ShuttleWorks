@@ -32,8 +32,9 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
+      # Repo root context so Dockerfile.dev can install the workspace.
+      context: ../..
+      dockerfile: products/tournament/frontend/Dockerfile.dev
     environment:
       # The Vite dev server's proxy talks to the backend container by
       # its docker network name when the frontend is inside compose.
@@ -41,10 +42,12 @@ services:
     ports:
       - "${FRONTEND_HOST_PORT:-5174}:5173"
     volumes:
-      - ./frontend:/app
-      # Keep the container's own node_modules so host installs (or
-      # the lack thereof) don't shadow it.
-      - /app/node_modules
+      # Mount the frontend source at its workspace path so edits on the
+      # host trigger Vite HMR inside the container.
+      - ./frontend:/app/products/tournament/frontend
+      # Mask the host's node_modules — the container ran `npm ci` and
+      # owns its own node_modules / symlinks to packages/design-system.
+      - /app/products/tournament/frontend/node_modules
     command:
       - npm
       - run

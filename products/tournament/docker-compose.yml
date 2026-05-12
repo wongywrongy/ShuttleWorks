@@ -30,8 +30,12 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      # Context = repo root (matches backend) so the Dockerfile can copy
+      # workspace root metadata + the shared packages/design-system tree.
+      # Phase 2a consolidated to a root-only lockfile; building from the
+      # frontend dir alone can't run `npm ci` without it.
+      context: ../..
+      dockerfile: products/tournament/frontend/Dockerfile
     ports:
       - "${FRONTEND_HOST_PORT:-5174}:8080"
     depends_on:
