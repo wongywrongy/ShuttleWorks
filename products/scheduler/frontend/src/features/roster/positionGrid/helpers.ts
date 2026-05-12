@@ -52,3 +52,14 @@ export const EVENT_LABEL: Record<
 export function isDoubles(prefix: string): boolean {
   return prefix.endsWith('D');
 }
+
+/**
+ * True when the given rank (prefix+digits, e.g. "MD2", "WS3") belongs
+ * to a doubles event. Strips the trailing digits and consults
+ * `isDoubles`. Used to enforce the singles invariant (≤1 player per
+ * school per singles rank) at every mutation point.
+ */
+export function isDoublesRank(rank: string): boolean {
+  const prefix = rank.replace(/\d+$/, '');
+  return isDoubles(prefix);
+}

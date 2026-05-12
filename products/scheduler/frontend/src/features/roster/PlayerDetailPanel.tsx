@@ -23,6 +23,7 @@ import { useMemo } from 'react';
 import { X } from '@phosphor-icons/react';
 import type { PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../api/dto';
 import { useAppStore } from '../../store/appStore';
+import { isDoublesRank } from './positionGrid/helpers';
 
 interface Props {
   player: PlayerDTO | null;
@@ -40,6 +41,12 @@ export function PlayerDetailPanel({
   config,
 }: Props) {
   const updatePlayer = useAppStore((s) => s.updatePlayer);
+  // Need the full player list to enforce the singles invariant on
+  // toggle (displace any other player in the same school who already
+  // holds the rank). PositionCell's `assignPlayer` already does this;
+  // PlayerDetailPanel must mirror it so the rank-pill toggle can't
+  // create the same duplicate state PositionCell prevents.
+  const allPlayers = useAppStore((s) => s.players);
 
   // Available ranks derived from config.rankCounts. Per BRAND.md events
   // are 5 disciplines (MS / WS / MD / WD / XD), each with N positions.
@@ -51,6 +58,36 @@ export function PlayerDetailPanel({
     }
     return ranks;
   }, [config?.rankCounts]);
+
+  const handleToggleRank = (rank: string) => {
+    if (!player) return;
+    const isActive = (player.ranks ?? []).includes(rank);
+    if (isActive) {
+      // Removal: always safe.
+      updatePlayer(player.id, {
+        ranks: (player.ranks ?? []).filter((r) => r !== rank),
+      });
+      return;
+    }
+    // Addition: if singles, displace every other player in this school
+    // that already holds the rank — invariant: ≤1 player per (school,
+    // singles rank). Doubles allow 2 partners; let the toggle act
+    // freely and rely on PositionCell's capacity guard.
+    if (!isDoublesRank(rank)) {
+      for (const other of allPlayers) {
+        if (
+          other.id !== player.id &&
+          other.groupId === player.groupId &&
+          (other.ranks ?? []).includes(rank)
+        ) {
+          updatePlayer(other.id, {
+            ranks: (other.ranks ?? []).filter((r) => r !== rank),
+          });
+        }
+      }
+    }
+    updatePlayer(player.id, { ranks: [...(player.ranks ?? []), rank] });
+  };
 
   return (
     <div
@@ -179,14 +216,7 @@ export function PlayerDetailPanel({
                     <button
                       key={r}
                       type="button"
-                      onClick={() => {
-                        const current = player.ranks ?? [];
-                        updatePlayer(player.id, {
-                          ranks: isActive
-                            ? current.filter((x) => x !== r)
-                            : [...current, r],
-                        });
-                      }}
+                      onClick={() => handleToggleRank(r)}
                       aria-pressed={isActive}
                       className={[
                         'rounded-[6px] border px-2 py-0.5 text-[11px] font-mono font-medium tabular-nums',

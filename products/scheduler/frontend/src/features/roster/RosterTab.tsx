@@ -19,7 +19,7 @@
  * section that previously hung at the bottom is REMOVED — that data
  * lives in the docking PlayerDetailPanel only.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { Download } from '@phosphor-icons/react';
 import {
@@ -38,6 +38,7 @@ import {
   PositionGrid,
   PositionGridColumnControls,
 } from './PositionGrid';
+import { isDoublesRank } from './positionGrid/helpers';
 import { PlayerDetailPanel } from './PlayerDetailPanel';
 import { InlineSearch } from '../../components/InlineSearch';
 import { INTERACTIVE_BASE } from '../../lib/utils';
@@ -65,6 +66,52 @@ export function RosterTab() {
       setActiveSchoolId(groups[0].id);
     }
   }, [groups, activeSchoolId]);
+
+  // One-shot singles-invariant cleanup. Singles ranks must have ≤1
+  // player per school; existing demo/seed data and historic state
+  // from before invariant enforcement may violate this. Strip the
+  // duplicates so the grid shows what the data model actually
+  // promises. First occupant per (school, singles rank) wins —
+  // matches the visual stacking order in PositionGrid's `byRank`
+  // iteration. Doubles ranks (MD/WD/XD) are untouched: they legit-
+  // imately allow up to 2 partners.
+  const didCleanupRef = useRef(false);
+  useEffect(() => {
+    if (didCleanupRef.current) return;
+    if (players.length === 0 || groups.length === 0) return;
+    didCleanupRef.current = true;
+
+    type Strip = { playerId: string; ranks: string[] };
+    const strips = new Map<string, Strip>();
+    for (const group of groups) {
+      const inSchool = players.filter((p) => p.groupId === group.id);
+      const byRank = new Map<string, PlayerDTO[]>();
+      for (const p of inSchool) {
+        for (const r of p.ranks ?? []) {
+          if (!byRank.has(r)) byRank.set(r, []);
+          byRank.get(r)!.push(p);
+        }
+      }
+      for (const [r, occupants] of byRank.entries()) {
+        if (isDoublesRank(r)) continue;
+        if (occupants.length <= 1) continue;
+        for (let i = 1; i < occupants.length; i++) {
+          const id = occupants[i].id;
+          if (!strips.has(id)) strips.set(id, { playerId: id, ranks: [] });
+          strips.get(id)!.ranks.push(r);
+        }
+      }
+    }
+    if (strips.size === 0) return;
+    for (const { playerId, ranks } of strips.values()) {
+      const p = players.find((x) => x.id === playerId);
+      if (!p) continue;
+      const drop = new Set(ranks);
+      updatePlayer(p.id, {
+        ranks: (p.ranks ?? []).filter((r) => !drop.has(r)),
+      });
+    }
+  }, [players, groups, updatePlayer]);
 
   // Clear selected player if they leave the active school.
   useEffect(() => {
