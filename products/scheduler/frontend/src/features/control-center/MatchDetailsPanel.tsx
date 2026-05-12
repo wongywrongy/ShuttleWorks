@@ -8,41 +8,14 @@ import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
 import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import { getMatchLabel } from '../../utils/matchUtils';
-import { getMatchPlayerIds } from '../../utils/trafficLight';
 import { ElapsedTimer } from '../../components/common/ElapsedTimer';
-import { timeToSlot } from '../../lib/time';
 import { formatIsoClock, formatDuration } from '../../lib/timeFormatters';
 import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
 import { SchoolDot } from '../../components/SchoolDot';
 import { ScoreEditor } from './ScoreEditor';
 import { StatusPill } from '../../components/StatusPill';
 import { indexById } from '../../store/selectors';
-
-// Map traffic-light status → pill tone + label for the Ready / Resting
-// / Blocked badge on scheduled matches.
-const LIGHT_LABEL = { green: 'Ready', yellow: 'Resting', red: 'Blocked' } as const;
-
-// Event-rank prefix → full label for the per-player chip's tooltip.
-// The chip shows the abbreviation (MS1, MD2, XD1) — short and scannable
-// in a list. The title expands so a director who hasn't memorised the
-// codes can still read it.
-const RANK_PREFIX_LABELS: Record<string, string> = {
-  MS: "Men's Singles",
-  WS: "Women's Singles",
-  MD: "Men's Doubles",
-  WD: "Women's Doubles",
-  XD: 'Mixed Doubles',
-};
-
-function expandRankLabel(rank: string | null | undefined): string | null {
-  if (!rank) return null;
-  const m = /^([A-Z]{2})(\d*)$/.exec(rank);
-  if (!m) return rank;
-  const [, prefix, number] = m;
-  const label = RANK_PREFIX_LABELS[prefix];
-  if (!label) return rank;
-  return number ? `${label} ${number}` : label;
-}
+import { LIGHT_LABEL, expandRankLabel, getPlayerRestTime } from './matchDetails/helpers';
 
 interface MatchDetailsPanelProps {
   assignment?: ScheduleAssignment;
@@ -86,54 +59,6 @@ interface MatchDetailsPanelProps {
    *  everyday "this match is just running late" path that doesn't
    *  rise to a full disruption. */
   onRequestMove?: (matchId: string) => void;
-}
-
-/**
- * Calculate rest time since a player's last finished match
- */
-function getPlayerRestTime(
-  playerId: string,
-  matchStates: Record<string, MatchStateDTO>,
-  matches: MatchDTO[],
-  schedule: ScheduleDTO,
-  config: TournamentConfig,
-  currentSlot: number,
-  excludeMatchId?: string
-): { restSlots: number; restMinutes: number; lastMatchLabel?: string } | null {
-  let latestEnd = -1;
-  let lastMatchLabel: string | undefined;
-
-  for (const m of matches) {
-    if (excludeMatchId && m.id === excludeMatchId) continue;
-
-    const state = matchStates[m.id];
-    if (state?.status !== 'finished') continue;
-
-    const playerIds = getMatchPlayerIds(m);
-    if (!playerIds.includes(playerId)) continue;
-
-    const assignment = schedule.assignments.find((a) => a.matchId === m.id);
-    if (!assignment) continue;
-
-    let endSlot: number;
-    if (state.actualEndTime) {
-      endSlot = timeToSlot(state.actualEndTime, config);
-    } else {
-      endSlot = assignment.slotId + assignment.durationSlots;
-    }
-
-    if (endSlot > latestEnd) {
-      latestEnd = endSlot;
-      lastMatchLabel = m.eventRank || `M${m.matchNumber || '?'}`;
-    }
-  }
-
-  if (latestEnd < 0) return null;
-
-  const restSlots = currentSlot - latestEnd;
-  const restMinutes = restSlots * config.intervalMinutes;
-
-  return { restSlots, restMinutes, lastMatchLabel };
 }
 
 export function MatchDetailsPanel({
