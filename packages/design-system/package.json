@@ -1,0 +1,30 @@
+{
+  "name": "@scheduler/design-system",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shared design language for cp-sat-scheduling-engine — tokens, Tailwind preset, base CSS. Implements design/BRAND.md.",
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./tokens.css": "./tokens.css",
+    "./globals.css": "./globals.css",
+    "./tailwind-preset": "./tailwind-preset.js",
+    "./DESIGN.md": "./DESIGN.md"
+  },
+  "files": [
+    "index.ts",
+    "tokens.css",
+    "globals.css",
+    "tailwind-preset.js",
+    "DESIGN.md",
+    "icons",
+    "components"
+  ],
+  "peerDependencies": {
+    "tailwindcss": "^3.4.0"
+  },
+  "devDependencies": {
+    "tailwindcss-animate": "^1.0.7"
+  }
+}

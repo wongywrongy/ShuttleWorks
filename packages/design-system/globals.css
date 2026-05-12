@@ -1,0 +1,213 @@
+/* ============================================================================
+ * @scheduler/design-system — globals.css
+ *
+ * @layer base rules + reusable utility classes that aren't easily expressed
+ * as Tailwind theme extensions. Inherited from scheduler's index.css and
+ * generalized so tournament can use them too.
+ *
+ * Pairs with tokens.css (palette + scale variables) and tailwind-preset.js
+ * (theme bindings). Consumed by both products via:
+ *   @import '@scheduler/design-system/tokens.css';
+ *   @import '@scheduler/design-system/globals.css';
+ * ========================================================================= */
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html,
+  body {
+    background-color: hsl(var(--bg));
+    color:            hsl(var(--ink));
+    transition:
+      background-color 150ms ease,
+      color            150ms ease,
+      border-color     150ms ease;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Tabular numerics on all data-bearing elements. Critical for live
+   * timers, scores, IDs — digits don't jitter as values change. */
+  code, kbd, pre, samp, time, output, data, [data-numeric] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Brutalist eyebrow — uppercase mono overline above section titles.
+   * Replaces the old gray "small label" pattern that read as generic SaaS.
+   */
+  .eyebrow {
+    font-family:    var(--font-mono);
+    font-size:      var(--eyebrow-size);
+    font-weight:    var(--eyebrow-weight);
+    letter-spacing: var(--eyebrow-tracking);
+    text-transform: uppercase;
+    color:          hsl(var(--ink-muted));
+  }
+
+  /* Heading wrapping balance — keeps display type from orphaning. */
+  h1, h2, h3, .eyebrow {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+/* ===========================================================================
+ * Texture & solver-theater primitives — BRAND.md §8.
+ *
+ * Each is opt-in via classname. Composable with Tailwind utility classes.
+ * All motion respects prefers-reduced-motion at the bottom of this file.
+ * ======================================================================== */
+
+/* Marching-ants — animated dashed border. Used for in-flight states:
+ * pinned matches during speculative solve, drag-preview borders, etc. */
+.pin-marquee {
+  --ant-a: hsl(var(--accent));
+  --ant-b: transparent;
+  background-image:
+    linear-gradient(90deg, var(--ant-a) 50%, var(--ant-b) 50%),
+    linear-gradient(90deg, var(--ant-a) 50%, var(--ant-b) 50%),
+    linear-gradient(0deg,  var(--ant-a) 50%, var(--ant-b) 50%),
+    linear-gradient(0deg,  var(--ant-a) 50%, var(--ant-b) 50%);
+  background-repeat:   repeat-x, repeat-x, repeat-y, repeat-y;
+  background-size:     14px 2px, 14px 2px, 2px 14px, 2px 14px;
+  background-position: left top, right bottom, left top, right bottom;
+}
+
+/* Scan-sweep — a single light bar swept across a container.
+ * Used for solver-proven commit previews + similar one-pass signals. */
+.scan-bar { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.scan-bar::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 22%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsl(var(--status-live) / 0.00) 10%,
+    hsl(var(--status-live) / 0.18) 50%,
+    hsl(var(--status-live) / 0.00) 90%,
+    transparent 100%
+  );
+  filter: blur(6px);
+  animation: scan-sweep 1.6s linear infinite;
+}
+
+/* Sheen — diagonal light band that passes once on "optimal" proof. */
+.sheen-overlay {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+  border-radius: inherit;
+}
+.sheen-overlay::after {
+  content: '';
+  position: absolute;
+  top: -50%; bottom: -50%;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.55), transparent);
+  transform: translateX(-120%) skewX(-20deg);
+  animation: sheen 1.1s ease-out forwards;
+}
+
+/* Gantt grid — dotted background marker that signals "schedulable canvas".
+ * Light mode uses subtle ink dots; dark mode flips to phosphor. */
+.gantt-grid {
+  background-image:
+    radial-gradient(circle at 1px 1px, hsl(var(--ink) / 0.07) 1px, transparent 1.5px);
+  background-size:     28px 8px;
+  background-position: 0 0;
+}
+
+/* ===========================================================================
+ * Brutalist signature texture — BRAND.md §8 new additions.
+ *
+ * These are opt-in via classname. Apply to body or a specific surface.
+ * ======================================================================== */
+
+/* Hatch fill — diagonal 1px hatching for "out of service" surfaces.
+ * Apply via .hatch on status-blocked / status-idle surfaces so they read
+ * as inactive texture rather than just tinted plain backgrounds.        */
+.hatch {
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      hsl(var(--ink) / 0.06) 0,
+      hsl(var(--ink) / 0.06) 1px,
+      transparent 1px,
+      transparent 6px
+    );
+}
+.dark .hatch {
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      hsl(var(--ink) / 0.08) 0,
+      hsl(var(--ink) / 0.08) 1px,
+      transparent 1px,
+      transparent 6px
+    );
+}
+
+/* CRT scanlines — dark mode only, subtle. Applied to body::after; toggle
+ * via .scanlines class on body. Kept off by default; opt-in.            */
+.scanlines::after {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 2px,
+    hsl(0 0% 100% / 0.02) 2px,
+    hsl(0 0% 100% / 0.02) 3px
+  );
+  z-index: 9999;
+}
+
+/* Razor-thin grid dividers via `display: grid; gap: 1px` trick.
+ * Apply .grid-lines to a parent grid container; children get the rule
+ * color showing through the 1px gap automatically.                     */
+.grid-lines {
+  display: grid;
+  gap: 1px;
+  background-color: hsl(var(--rule));
+}
+.grid-lines > * {
+  background-color: hsl(var(--bg-elev));
+}
+
+/* ===========================================================================
+ * Slide-up animation kept from scheduler for toast/dock entry.
+ * ======================================================================== */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+.animate-slide-up { animation: slide-up 0.3s ease-out; }
+
+/* ===========================================================================
+ * prefers-reduced-motion: kill infinite motion, keep short signals.
+ * BRAND.md §5 reduced-motion contract.
+ * ======================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .animate-scan-sweep,
+  .animate-phase-glow,
+  .animate-marching-ants,
+  .animate-cell-pulse,
+  .pin-marquee,
+  .scan-bar::after {
+    animation: none !important;
+  }
+}
