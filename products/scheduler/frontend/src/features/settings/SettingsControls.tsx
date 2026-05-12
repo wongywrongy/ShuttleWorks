@@ -84,7 +84,10 @@ export function Seg<T extends string | number>({
             aria-checked={isActive}
             onClick={() => onChange(opt.value)}
             className={[
-              'px-3 py-1 text-xs font-medium transition-colors',
+              // MOTION.md §6 Seg: explicit duration-fast + ease-brand
+              // so the hover crossfade reads as intentional, not as a
+              // Tailwind default.
+              'px-3 py-1 text-xs font-medium transition-colors duration-fast ease-brand',
               isActive
                 ? 'bg-accent/15 text-accent'
                 : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
@@ -118,13 +121,16 @@ export function Toggle({
       aria-label={ariaLabel}
       onClick={() => onChange(!value)}
       className={[
-        'inline-flex h-5 w-9 items-center rounded-full transition-colors',
+        // MOTION.md §6 Toggle: track at duration-fast, thumb at
+        // duration-standard, both explicit ease-brand so the implicit
+        // Tailwind 150ms-linear default never ships.
+        'inline-flex h-5 w-9 items-center rounded-full transition-colors duration-fast ease-brand',
         value ? 'bg-accent' : 'bg-muted',
       ].join(' ')}
     >
       <span
         className={[
-          'inline-block h-4 w-4 transform rounded-full bg-bg-elev transition-transform',
+          'inline-block h-4 w-4 transform rounded-full bg-bg-elev transition-transform duration-standard ease-brand',
           value ? 'translate-x-[18px]' : 'translate-x-0.5',
         ].join(' ')}
       />

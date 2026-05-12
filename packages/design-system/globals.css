@@ -189,6 +189,31 @@
 }
 
 /* ===========================================================================
+ * MOTION.md §5 enter recipe — Jakub Krehel (opacity + translateY + blur).
+ * Apply to any conditionally-rendered chrome that needs to materialise
+ * instead of snapping in: error banners, save-success states, toast
+ * inline mounts, etc. `backwards` fill-mode keeps the first frame at
+ * the `from` state so there's no flash before the animation starts.
+ * ======================================================================== */
+@keyframes motion-enter {
+  from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
+  to   { opacity: 1; transform: translateY(0);   filter: blur(0);   }
+}
+.motion-enter {
+  animation: motion-enter var(--motion-moderate) var(--ease-brand) backwards;
+}
+
+/* Icon-swap variant — no translate, just opacity + scale + blur. Use on
+ * label/icon changes inside a single button (Save → Saved). */
+@keyframes motion-enter-icon {
+  from { opacity: 0; transform: scale(0.85); filter: blur(4px); }
+  to   { opacity: 1; transform: scale(1);    filter: blur(0);   }
+}
+.motion-enter-icon {
+  animation: motion-enter-icon var(--motion-fast) var(--ease-brand) backwards;
+}
+
+/* ===========================================================================
  * Slide-up animation kept from scheduler for toast/dock entry.
  * ======================================================================== */
 @keyframes slide-up {

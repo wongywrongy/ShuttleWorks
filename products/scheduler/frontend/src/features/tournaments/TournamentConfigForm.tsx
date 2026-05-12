@@ -15,7 +15,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { isValidTime } from '../../lib/time';
+import { useSuccessFlash } from '../../hooks/useSuccessFlash';
 import { Button } from '@/components/ui/button';
+import { IconDone } from '@scheduler/design-system';
 import {
   Row,
   SectionHeader,
@@ -77,6 +79,7 @@ export function TournamentConfigForm({
   const [breakWindows, setBreakWindows] = useState<BreakWindow[]>(
     config.breaks || []
   );
+  const justSaved = useSuccessFlash(saving);
 
   const baselineRef = useRef<TournamentConfig>(config);
   const breakBaselineRef = useRef<BreakWindow[]>(config.breaks ?? []);
@@ -251,7 +254,7 @@ export function TournamentConfigForm({
       } last />
 
       {Object.keys(errors).length > 0 && (
-        <div className="mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           Fix the highlighted fields before saving:
           <ul className="mt-1 list-disc pl-5">
             {Object.entries(errors).map(([k, v]) => (
@@ -264,7 +267,15 @@ export function TournamentConfigForm({
       )}
       <div className="mt-6">
         <Button type="submit" disabled={saving}>
-          {saving ? 'Saving…' : 'Save tournament settings'}
+          {justSaved ? (
+            <span key="saved" className="motion-enter-icon inline-flex items-center gap-2">
+              <IconDone size={16} /> Saved
+            </span>
+          ) : saving ? (
+            'Saving…'
+          ) : (
+            'Save tournament settings'
+          )}
         </Button>
       </div>
     </form>

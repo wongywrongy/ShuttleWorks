@@ -11,12 +11,32 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 AUDIT SUMMARY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 2 Critical  |  🟡 4 Important  |  🟢 3 Opportunities
+🔴 1 Critical  |  🟡 4 Important  |  🟢 3 Opportunities
 Primary perspective: Emil Kowalski (productivity tool, live-event time pressure)
 Secondary: Jakub Krehel (production polish on the moments that earned animation)
 Selective: Jhey Tompkins (one beat reserved for save success)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+
+**Audit revision 2026-05-12 (post-verification):** The originally
+flagged "no press feedback on Save buttons" was downgraded after a
+grep pass — both `<Button>` primitives (`packages/design-system/
+components/Button.tsx` and `products/scheduler/frontend/src/
+components/ui/button.tsx`) already include `active:scale-[0.97]` in
+their base classes. Critical count drops from 2 → 1.
+
+**Implementation status (this commit landed the fixes):**
+- 🔴 Save-success state — ✅ shipped across all 3 panes (Tournament /
+  Engine / Display) via the new `useSuccessFlash` hook + `IconDone`
+  swap with `motion-enter-icon` keyframe.
+- 🟡 Error banner enter recipe — ✅ shipped (`.motion-enter` class).
+- 🟡 Toggle thumb explicit easing — ✅ shipped (`duration-standard
+  ease-brand`).
+- 🟡 Seg hover explicit duration — ✅ shipped (`duration-fast
+  ease-brand`).
+- 🟡 Slider readout flash on keyboard increment — DEFERRED. Slider
+  drag fires constant onChange so a per-value flash would be noisy;
+  isolating keyboard-arrow events would require event-source plumbing
+  not worth the cost. Revisit if directors complain.
 
 ## Overall Assessment
 

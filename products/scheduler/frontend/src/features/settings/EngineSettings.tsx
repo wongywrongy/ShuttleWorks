@@ -14,7 +14,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TournamentConfig } from '../../api/dto';
 import { useTournament } from '../../hooks/useTournament';
 import { useLockGuard } from '../../hooks/useLockGuard';
+import { useSuccessFlash } from '../../hooks/useSuccessFlash';
 import { Button } from '@/components/ui/button';
+import { IconDone } from '@scheduler/design-system';
 import {
   Row,
   SectionHeader,
@@ -31,6 +33,7 @@ export function EngineSettings() {
   );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const justSaved = useSuccessFlash(saving);
 
   const baselineRef = useRef<TournamentConfig | null>(config);
 
@@ -177,13 +180,21 @@ export function EngineSettings() {
       />
 
       {saveError && (
-        <div className="mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {saveError}
         </div>
       )}
       <div className="mt-6">
         <Button type="submit" disabled={saving || !config}>
-          {saving ? 'Saving…' : 'Save engine settings'}
+          {justSaved ? (
+            <span key="saved" className="motion-enter-icon inline-flex items-center gap-2">
+              <IconDone size={16} /> Saved
+            </span>
+          ) : saving ? (
+            'Saving…'
+          ) : (
+            'Save engine settings'
+          )}
         </Button>
       </div>
     </form>
