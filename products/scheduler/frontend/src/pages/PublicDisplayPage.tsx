@@ -18,7 +18,6 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowsOut, ArrowsIn } from '@phosphor-icons/react';
 import { useAppStore } from '../store/appStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useAdvisories } from '../hooks/useAdvisories';
@@ -27,23 +26,18 @@ import { formatSlotTime } from '../lib/time';
 import { formatElapsed } from '../lib/timeFormatters';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment } from '../api/dto';
-import { useDisplaySync, type LiveStatus } from './publicDisplay/useDisplaySync';
+import { useDisplaySync } from './publicDisplay/useDisplaySync';
 import { useFullscreen } from './publicDisplay/useFullscreen';
+import {
+  formatTournamentDate,
+  formatPlayers as formatPlayersHelper,
+} from './publicDisplay/helpers';
+import { FullscreenButton } from './publicDisplay/FullscreenButton';
+import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
+import { ScheduleView } from './publicDisplay/ScheduleView';
+import { StandingsView } from './publicDisplay/StandingsView';
 
 type ViewMode = 'courts' | 'schedule' | 'standings';
-
-/** Safe parse for the ``tournamentDate`` config field. Returns null on
- *  any malformed / missing input so we don't render "Invalid Date". */
-function formatTournamentDate(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 export function PublicDisplayPage() {
   const [searchParams] = useSearchParams();
@@ -212,10 +206,11 @@ export function PublicDisplayPage() {
       .sort((a, b) => b.wins - a.wins || a.losses - b.losses);
   }, [matchesByStatus.finished, matchMap, matchStates, groups, groupNames, players]);
 
-  const formatPlayers = (ids: string[] | undefined) => {
-    if (!ids || ids.length === 0) return '—';
-    return ids.map((id) => playerNames.get(id) || id).join(' & ');
-  };
+  // Thin wrapper closes over playerNames so CourtsView (still inline) call
+  // sites stay `formatPlayers(ids)`. The canonical helper lives in
+  // ./publicDisplay/helpers.ts and takes the map explicitly.
+  const formatPlayers = (ids: string[] | undefined) =>
+    formatPlayersHelper(ids, playerNames);
 
   // ===== Rendering =====================================================
 
@@ -655,82 +650,17 @@ export function PublicDisplayPage() {
           </div>
         )}
 
-        {/* ---------- Schedule view -------------------------------------- */}
+        {/* ---------- Schedule view ---------- */}
         {view === 'schedule' && (
-          <div className="mx-auto max-w-4xl">
-            <div className="mb-4 text-xl font-semibold uppercase tracking-widest text-muted-foreground">
-              Up Next
-            </div>
-            {upcomingMatches.length === 0 ? (
-              <div className="py-12 text-center text-xl text-muted-foreground">
-                No upcoming matches
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {upcomingMatches.map(({ assignment, match }) => (
-                  <div
-                    key={assignment.matchId}
-                    className="flex items-center gap-5 rounded-xl border border-border bg-card/60 px-5 py-4"
-                  >
-                    <div className="w-20 text-xl font-bold text-foreground">
-                      {match?.eventRank || `M${match?.matchNumber || '?'}`}
-                    </div>
-                    <div className="w-14 text-lg font-semibold text-blue-600 dark:text-blue-400">
-                      C{assignment.courtId}
-                    </div>
-                    <div className="w-24 tabular-nums text-lg text-muted-foreground">
-                      {formatSlotTime(assignment.slotId, config)}
-                    </div>
-                    <div className="flex-1 text-xl text-foreground">
-                      <span>{formatPlayers(match?.sideA)}</span>
-                      <span className="mx-3 text-sm uppercase tracking-widest text-muted-foreground">
-                        vs
-                      </span>
-                      <span>{formatPlayers(match?.sideB)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <ScheduleView
+            upcomingMatches={upcomingMatches}
+            config={config}
+            playerNames={playerNames}
+          />
         )}
 
-        {/* ---------- Standings view ------------------------------------- */}
-        {view === 'standings' && (
-          <div className="mx-auto max-w-2xl">
-            <div className="mb-4 text-xl font-semibold uppercase tracking-widest text-muted-foreground">
-              Team Standings
-            </div>
-            {standings.length === 0 ? (
-              <div className="py-12 text-center text-xl text-muted-foreground">
-                No matches completed yet
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {standings.map((team, index) => (
-                  <div
-                    key={team.groupId}
-                    className={`flex items-center gap-5 rounded-xl border px-5 py-4 ${
-                      index === 0
-                        ? 'border-yellow-500/60 bg-yellow-500/10'
-                        : 'border-border bg-card/60'
-                    }`}
-                  >
-                    <div className="w-14 text-4xl font-black tabular-nums text-muted-foreground">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1 truncate text-3xl font-bold">{team.groupName}</div>
-                    <div className="flex items-baseline gap-3 text-xl tabular-nums">
-                      <span className="text-emerald-600 dark:text-emerald-400">{team.wins}W</span>
-                      <span className="text-muted-foreground">–</span>
-                      <span className="text-rose-600 dark:text-rose-400">{team.losses}L</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/* ---------- Standings view ---------- */}
+        {view === 'standings' && <StandingsView standings={standings} />}
       </div>
 
       {/* ---------- Progress footer ------------------------------------- */}
@@ -775,69 +705,3 @@ export function PublicDisplayPage() {
   );
 }
 
-function FullscreenButton({
-  isFullscreen,
-  onToggle,
-  className = '',
-}: {
-  isFullscreen: boolean;
-  onToggle: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      data-testid="tv-fullscreen-toggle"
-      title={`${isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} (F)`}
-      className={`${INTERACTIVE_BASE} inline-flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground ${className}`}
-      aria-pressed={isFullscreen}
-    >
-      {isFullscreen ? (
-        <ArrowsIn aria-hidden="true" className="h-4 w-4" />
-      ) : (
-        <ArrowsOut aria-hidden="true" className="h-4 w-4" />
-      )}
-      <span>{isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}</span>
-    </button>
-  );
-}
-
-/**
- * Small pill showing whether the TV is still talking to the backend.
- * Driven by ``liveStatus`` derived from the last-successful sync age.
- */
-function LiveStatusPill({
-  status,
-  error,
-}: {
-  status: LiveStatus;
-  error: string | null;
-}) {
-  const styles =
-    status === 'live'
-      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-      : status === 'reconnecting'
-        ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-        : 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300';
-  const dot =
-    status === 'live'
-      ? 'bg-emerald-500 dark:bg-emerald-400 animate-pulse'
-      : status === 'reconnecting'
-        ? 'bg-amber-500 dark:bg-amber-400 animate-pulse'
-        : 'bg-red-500 dark:bg-red-400';
-  const label =
-    status === 'live' ? 'Live' : status === 'reconnecting' ? 'Reconnecting…' : 'Offline';
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${styles}`}
-      title={error ?? `Live data ${status}`}
-      data-testid="tv-live-status"
-      role="status"
-      aria-live="polite"
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-      {label}
-    </span>
-  );
-}
