@@ -60,10 +60,19 @@ export function SettingsShell({ sections, defaultSectionId }: SettingsShellProps
         aria-labelledby={`section-${active.id}-title`}
         className="min-w-0"
       >
-        <header className="mb-4 border-b border-border/60 pb-3">
+        {/* Brutalist section lockup: mono uppercase eyebrow with [ ]
+            bracket framing, then the title in sans semibold. Hard rule
+            underline (2px) separates from the section body. */}
+        <header className="mb-4 border-b-2 border-border pb-3">
+          <div
+            className="font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground"
+            aria-hidden="true"
+          >
+            [ SETUP / {active.label.toUpperCase()} ]
+          </div>
           <h2
             id={`section-${active.id}-title`}
-            className="text-lg font-semibold tracking-tight text-foreground"
+            className="mt-1 text-lg font-semibold tracking-tight text-foreground"
           >
             {active.title ?? active.label}
           </h2>

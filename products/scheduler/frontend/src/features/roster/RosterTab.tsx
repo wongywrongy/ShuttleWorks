@@ -145,6 +145,12 @@ export function RosterTab() {
               </span>
               {schoolTabs.map((s) => {
                 const isActive = s.id === activeSchoolId;
+                // Brutalist school tabs: square corners + 1px border;
+                // active gets a brand-orange border + tinted bg + brand
+                // text. The "rounded-full pill" pattern is banned by
+                // BRAND.md §3 (90° default; 2px max only on form
+                // controls). Mono uppercase keeps the tab strip dense
+                // and rigid alongside the "Viewing" eyebrow above it.
                 return (
                   <button
                     key={s.id}
@@ -154,15 +160,15 @@ export function RosterTab() {
                     aria-pressed={isActive}
                     className={[
                       INTERACTIVE_BASE,
-                      'rounded-full px-3 py-1 text-xs font-medium',
+                      'border px-2.5 py-1 text-2xs font-mono uppercase tracking-wider',
                       isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted/40 text-foreground hover:bg-muted/60',
+                        ? 'border-brand bg-brand/10 text-brand'
+                        : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
                     ].join(' ')}
                   >
                     {s.name}
                     <span
-                      className={`ml-1.5 tabular-nums ${isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
+                      className={`ml-1.5 tabular-nums ${isActive ? 'text-brand/70' : 'text-muted-foreground/60'}`}
                     >
                       {s.count}
                     </span>
