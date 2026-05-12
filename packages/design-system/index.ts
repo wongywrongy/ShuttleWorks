@@ -10,7 +10,7 @@
  *   const preset = require('@scheduler/design-system/tailwind-preset');
  */
 
-// Phase 3 will add: export * from './icons';
+export * from './icons';
 // Phase 4 will add: export * from './components';
 
 export const DESIGN_SYSTEM_VERSION = '0.1.0' as const;
