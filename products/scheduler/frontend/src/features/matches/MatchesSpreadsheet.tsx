@@ -18,6 +18,13 @@ import { useAppStore } from '../../store/appStore';
 import { usePlayerMap } from '../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
+import { EVENT_LABEL } from '../roster/positionGrid/helpers';
+
+function eventTintForPrefix(rank: string | null | undefined): string {
+  if (!rank) return '';
+  const prefix = rank.match(/^[A-Z]+/)?.[0] ?? '';
+  return EVENT_LABEL[prefix]?.body ?? '';
+}
 
 function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
   const school = groups.find((g) => g.id === p.groupId)?.name ?? '?';
@@ -122,7 +129,7 @@ export function MatchesSpreadsheet() {
  * ========================================================================= */
 function ColumnHeaderRow() {
   return (
-    <div className="flex items-center gap-3 border-b border-border px-5 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+    <div className="flex items-center gap-3 border-b-2 border-border bg-muted/40 px-5 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
       <span className="w-8">#</span>
       <span className="w-20">Event</span>
       <span className="min-w-0 flex-[3]">Side A</span>
@@ -188,7 +195,12 @@ function MatchRow({
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
         }}
         placeholder="MS1, WD2…"
-        className="w-20 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-sm outline-none transition-colors duration-fast ease-brand hover:border-border/60 focus:border-accent focus:bg-card"
+        className={[
+          'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-mono tabular-nums outline-none',
+          'transition-colors duration-fast ease-brand',
+          'hover:border-border/60 focus:border-accent focus:bg-card',
+          eventTintForPrefix(match.eventRank),
+        ].join(' ')}
       />
       <PlayerCellEditor
         side="Side A"
@@ -335,7 +347,7 @@ function PlayerCellEditor({
         ) : null}
       </div>
       {open ? (
-        <div className="absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+        <div className="motion-enter absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
           {[...playersByGroup.entries()].map(([groupId, list]) => {
             const g = groups.find((gr) => gr.id === groupId);
             return (
