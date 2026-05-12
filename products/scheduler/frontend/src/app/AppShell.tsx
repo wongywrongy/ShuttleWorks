@@ -201,7 +201,7 @@ function TvPreviewTab() {
           </a>
         </div>
       </header>
-      <div className="relative flex-1 min-h-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="relative flex-1 min-h-0 overflow-hidden border border-border bg-card">
         <div className="pointer-events-none absolute inset-0 overflow-auto">
           <PublicDisplayPage />
         </div>

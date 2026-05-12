@@ -100,7 +100,12 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
         className={
           panelClassName ??
-          `w-full ${widthClass} rounded-lg bg-card shadow-xl focus:outline-none`
+          // BRAND.md §3 + §6 — square corners + 1px border + the
+          // canonical hard-offset shadow (`--shadow-hard`, light mode
+          // only; dark mode drops to bare substrate elevation).
+          // Previously `rounded-lg shadow-xl` which fought with the
+          // rest of the brutalist chrome.
+          `w-full ${widthClass} border border-border bg-card shadow-[var(--shadow-hard)] focus:outline-none`
         }
       >
         {children}
