@@ -169,7 +169,7 @@ export function TournamentConfigForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl">
+    <form onSubmit={handleSubmit}>
       <SectionHeader>Identity</SectionHeader>
       <Row
         label="Tournament name"

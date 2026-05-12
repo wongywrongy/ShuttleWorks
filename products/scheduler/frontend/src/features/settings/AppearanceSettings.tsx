@@ -32,7 +32,7 @@ export function AppearanceSettings() {
   const setDensity = usePreferencesStore((s) => s.setDensity);
 
   return (
-    <div className="max-w-2xl">
+    <div>
       <SectionHeader>Per-device</SectionHeader>
       <Row
         label="Theme"

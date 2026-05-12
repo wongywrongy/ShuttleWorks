@@ -81,7 +81,7 @@ export function EngineSettings() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl">
+    <form onSubmit={handleSubmit}>
       <SectionHeader>Solver</SectionHeader>
       <Row
         label="Reproducible run"
