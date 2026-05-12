@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { api } from "../api";
 import type { TournamentDTO } from "../types";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface Props {
   data: TournamentDTO;
@@ -76,6 +77,7 @@ export function TopBar({
           <button className="btn-outline" onClick={onReset}>
             Reset
           </button>
+          <ThemeToggle />
         </div>
       </div>
     </header>
