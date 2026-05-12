@@ -66,14 +66,13 @@ export function TabBar() {
                 data-testid={`tab-${tab.id}`}
                 className={[
                   INTERACTIVE_BASE,
-                  // Brutalist tab: mono uppercase, square corners, no bg
-                  // tint on active — the brand-orange underline + brand
-                  // text color carry the active signal alone. The
-                  // shadcn-default `bg-primary/10 rounded-md` pill is
-                  // banned (BRAND.md §3, §1.10).
-                  'relative rounded-none px-3 py-2 font-mono text-xs font-semibold uppercase tracking-wider',
+                  // Clean sans sentence-case tab. Visual emphasis comes
+                  // from the brand-orange underline + active text color,
+                  // not from typographic shouting. Sentence case keeps
+                  // the chrome readable without competing with content.
+                  'relative rounded-none px-3 py-2 text-sm font-medium tracking-tight',
                   isActive
-                    ? 'text-accent'
+                    ? 'text-accent font-semibold'
                     : isDisabled
                       ? 'text-muted-foreground/50'
                       : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',

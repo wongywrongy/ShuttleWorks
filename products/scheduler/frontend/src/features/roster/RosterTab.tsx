@@ -145,12 +145,9 @@ export function RosterTab() {
               </span>
               {schoolTabs.map((s) => {
                 const isActive = s.id === activeSchoolId;
-                // Brutalist school tabs: square corners + 1px border;
-                // active gets a brand-orange border + tinted bg + brand
-                // text. The "rounded-full pill" pattern is banned by
-                // BRAND.md §3 (90° default; 2px max only on form
-                // controls). Mono uppercase keeps the tab strip dense
-                // and rigid alongside the "Viewing" eyebrow above it.
+                // School tabs: square 1px-border chip in sentence-case
+                // sans. Active = brand-orange border + tinted bg + brand
+                // text. The count badge stays tabular-nums (data).
                 return (
                   <button
                     key={s.id}
@@ -160,7 +157,7 @@ export function RosterTab() {
                     aria-pressed={isActive}
                     className={[
                       INTERACTIVE_BASE,
-                      'border px-2.5 py-1 text-2xs font-mono uppercase tracking-wider',
+                      'border px-2.5 py-1 text-xs font-medium',
                       isActive
                         ? 'border-accent bg-accent/10 text-accent'
                         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',

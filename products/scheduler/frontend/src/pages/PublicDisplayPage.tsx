@@ -246,15 +246,13 @@ export function PublicDisplayPage() {
   const totalCount = schedule.assignments.length;
   const progressPct = totalCount === 0 ? 0 : Math.round((finishedCount / totalCount) * 100);
 
-  // Brutalist view tabs: square corners + 1px border, brand orange
-  // border + tinted background on the active tab. Mono-uppercase keeps
-  // them readable from across a gym while staying tight against the
-  // surrounding telemetry chrome. shadcn-style rounded-lg + bg-primary
-  // pill is banned by BRAND.md §3 + §1.10.
+  // TV view tabs: square 1px-border chip in sentence-case sans, active
+  // = brand-orange border + tinted bg + brand text. Readable across a
+  // gym without the mono-uppercase shouting.
   const tabClass = (mode: ViewMode) =>
     [
       INTERACTIVE_BASE,
-      'border px-4 py-2 text-base font-mono font-semibold uppercase tracking-wider',
+      'border px-4 py-2 text-base font-semibold',
       view === mode
         ? 'border-accent bg-accent/15 text-accent'
         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',

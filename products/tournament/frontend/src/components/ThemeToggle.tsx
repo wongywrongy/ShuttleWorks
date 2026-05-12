@@ -36,11 +36,11 @@ export function ThemeToggle() {
       type="button"
       onClick={() => setTheme(next)}
       aria-label={`Switch to ${next} mode`}
-      className="font-mono text-2xs uppercase tracking-wider px-2 py-1
+      className="px-2.5 py-1 text-xs font-medium
         border border-rule-soft text-ink-muted hover:text-ink
         hover:bg-rule-soft transition-colors"
     >
-      [ {next.toUpperCase()} ]
+      {next === 'dark' ? 'Dark' : 'Light'}
     </button>
   );
 }

@@ -33,20 +33,13 @@ export function MatchesTab() {
           </button>
         }
       />
-      {/* One outer surface — auto-generate and the matches table read as
-       *  a single page section. The eyebrow divider strip between them
-       *  mirrors RosterTab's "Viewing" pattern so the two operator
-       *  surfaces visually match. */}
+      {/* One outer surface — auto-generate and the matches table read
+       *  as a single page section, separated by a hairline. The bracketed
+       *  eyebrow strip was removed — it added chrome without adding info
+       *  beyond what the PageHeader already says. */}
       <div className="rounded border border-border bg-card">
         <AutoGeneratePanel />
-        <div className="flex items-center border-t border-border/60 bg-muted/40 px-3 py-2">
-          <span className="font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground">
-            [ MATCH LIST ]
-          </span>
-          <span className="ml-2 tabular-nums text-2xs text-muted-foreground/70">
-            {matches.length}
-          </span>
-        </div>
+        <div className="border-t border-border/60" />
         <MatchesSpreadsheet />
       </div>
     </div>
