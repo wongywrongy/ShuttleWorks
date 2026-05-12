@@ -218,7 +218,7 @@ export function SetupForm({ disabled, onCreated }: Props) {
             type="datetime-local"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
-            className="w-56 rounded-md border border-ink-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink-400"
+            className="w-56 rounded-md border border-ink-300 bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </Field>
       </div>
@@ -291,14 +291,14 @@ function EventEditor({
             type="text"
             value={value.id}
             onChange={(e) => onChange({ id: e.target.value.trim() || "E" })}
-            className="w-24 rounded-md border border-ink-300 bg-white px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ink-400"
+            className="w-24 rounded-md border border-ink-300 bg-bg-elev px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </Field>
         <Field label="Discipline">
           <select
             value={value.discipline}
             onChange={(e) => onChange({ discipline: e.target.value })}
-            className="rounded-md border border-ink-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink-400"
+            className="rounded-md border border-ink-300 bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {["MS", "WS", "MD", "WD", "XD", "GEN"].map((d) => (
               <option key={d} value={d}>
@@ -316,8 +316,8 @@ function EventEditor({
                 className={
                   "px-3 py-1.5 text-sm " +
                   (value.format === f
-                    ? "bg-ink-900 text-white"
-                    : "bg-white text-ink-700 hover:bg-ink-100")
+                    ? "bg-ink-900 text-bg"
+                    : "bg-bg-elev text-ink-700 hover:bg-ink-100")
                 }
               >
                 {f === "se" ? "Single Elim" : "Round Robin"}
@@ -367,7 +367,7 @@ function EventEditor({
           value={value.participantsText}
           onChange={(e) => onChange({ participantsText: e.target.value })}
           rows={8}
-          className="w-full font-mono text-sm rounded-md border border-ink-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ink-400"
+          className="w-full font-mono text-sm rounded-md border border-ink-300 bg-bg-elev px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
           spellCheck={false}
         />
       </Field>
@@ -429,7 +429,7 @@ function NumInput({
       min={min}
       max={max}
       onChange={(e) => setValue(Number(e.target.value))}
-      className="w-28 rounded-md border border-ink-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink-400"
+      className="w-28 rounded-md border border-ink-300 bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
     />
   );
 }

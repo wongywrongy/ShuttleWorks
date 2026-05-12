@@ -178,7 +178,7 @@ function Side({
           ? "bg-ink-50 text-ink-400 line-through"
           : bye
           ? "bg-ink-50 text-ink-400 italic"
-          : "bg-white border border-ink-200 hover:bg-ink-50")
+          : "bg-bg-elev border border-ink-200 hover:bg-accent")
       }
     >
       <span className="truncate">{label}</span>

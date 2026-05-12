@@ -102,7 +102,7 @@ export function ScheduleView({ data, eventId, refresh }: Props) {
           <tbody>
             {grid.rows.map((row) => (
               <tr key={row.court}>
-                <td className="sticky left-0 bg-white px-3 py-2 border-b border-ink-100 font-medium z-10">
+                <td className="sticky left-0 bg-bg-elev px-3 py-2 border-b border-ink-100 font-medium z-10">
                   Court {row.court}
                 </td>
                 {row.cells.map((cell, idx) => (

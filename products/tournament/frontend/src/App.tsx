@@ -27,7 +27,7 @@ export default function App() {
   if (!data) {
     return (
       <div className="min-h-screen bg-ink-50">
-        <header className="border-b border-ink-200 bg-white">
+        <header className="border-b border-ink-200 bg-bg-elev">
           <div className="mx-auto max-w-5xl px-6 py-4">
             <h1 className="text-lg font-semibold tracking-tight">
               Tournament Prototype

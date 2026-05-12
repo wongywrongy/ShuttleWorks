@@ -28,7 +28,7 @@ export function TopBar({
     selectedEvent?.format === "se" ? "Single Elim" : "Round Robin";
 
   return (
-    <header className="border-b border-ink-200 bg-white sticky top-0 z-10">
+    <header className="border-b border-ink-200 bg-bg-elev sticky top-0 z-10">
       <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <h1 className="text-base font-semibold tracking-tight whitespace-nowrap">
@@ -37,7 +37,7 @@ export function TopBar({
           <select
             value={eventId}
             onChange={(e) => onEventId(e.target.value)}
-            className="rounded-md border border-ink-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ink-400"
+            className="rounded-sm border border-ink-300 bg-bg-elev px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {data.events.map((e) => (
               <option key={e.id} value={e.id}>
@@ -62,8 +62,8 @@ export function TopBar({
               className={
                 "btn " +
                 (tab === t
-                  ? "bg-ink-900 text-white"
-                  : "btn-ghost text-ink-700")
+                  ? "bg-ink text-bg"
+                  : "btn-ghost text-ink-muted")
               }
               onClick={() => onTab(t)}
             >
