@@ -316,52 +316,69 @@ function PositionCell({
           className="block w-full rounded px-2 py-2 text-left hover:bg-card/70 focus:outline-none focus:bg-card"
         >
           <div className="flex flex-col gap-1">
-            {/* Names render as ONE bordered + rounded container. Each
-                name is a flush row inside; a single hairline divider
-                separates rows in doubles. Singles render the same
-                container with no divider — structurally identical to
-                doubles for 1-name case. Border + bg live on the
-                container so any highlight state (drag hover, focus,
-                event tint) reads as a single unified surface, not as
-                multiple competing chips. */}
-            {occupants.length > 0 ? (
-              <div
-                className={[
-                  'overflow-hidden rounded-[6px] border border-border bg-card text-foreground',
-                  'divide-y divide-border/40',
-                  'transition-colors duration-fast ease-brand',
-                ].join(' ')}
-              >
-                {occupants.map((p) => (
-                  <div
-                    key={p.id}
-                    className="group flex items-center justify-between gap-1 px-2 py-0.5 text-[11px] font-medium leading-tight"
-                  >
-                    <span className="break-words">{p.name || '(unnamed)'}</span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      data-no-picker="true"
-                      onClick={(e) => {
+            {/* Names render in one of two shapes:
+                 • 2+ occupants (doubles pair filled) → single bordered
+                   + rounded container; rows stack flush with a hairline
+                   divider between. Border + bg on the container so the
+                   pair reads as one unit.
+                 • 1 occupant → standalone bordered chip. No grouping
+                   to make from a single name (singles event AND
+                   half-filled doubles cells both hit this path).
+                 • 0 occupants → placeholder hint outside this block.
+                The inner row markup (name + ×) is identical in both
+                shapes, shared via the local `renderPlayerRow`. */}
+            {(() => {
+              const renderPlayerRow = (p: PlayerDTO) => (
+                <div
+                  key={p.id}
+                  className="group flex items-center justify-between gap-1 px-2 py-0.5 text-[11px] font-medium leading-tight"
+                >
+                  <span className="break-words">{p.name || '(unnamed)'}</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    data-no-picker="true"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeRank(p.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
                         e.stopPropagation();
+                        e.preventDefault();
                         removeRank(p.id);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          removeRank(p.id);
-                        }
-                      }}
-                      aria-label={`Unassign ${p.name} from ${rank}`}
-                      className="cursor-pointer text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100 hover:text-destructive"
-                    >
-                      ×
-                    </span>
+                      }
+                    }}
+                    aria-label={`Unassign ${p.name} from ${rank}`}
+                    className="cursor-pointer text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100 hover:text-destructive"
+                  >
+                    ×
+                  </span>
+                </div>
+              );
+
+              if (occupants.length >= 2) {
+                return (
+                  <div
+                    className={[
+                      'overflow-hidden rounded-[6px] border border-border bg-card text-foreground',
+                      'divide-y divide-border/40',
+                      'transition-colors duration-fast ease-brand',
+                    ].join(' ')}
+                  >
+                    {occupants.map(renderPlayerRow)}
                   </div>
-                ))}
-              </div>
-            ) : null}
+                );
+              }
+              if (occupants.length === 1) {
+                return (
+                  <div className="rounded-[6px] border border-border bg-card text-foreground transition-colors duration-fast ease-brand">
+                    {renderPlayerRow(occupants[0])}
+                  </div>
+                );
+              }
+              return null;
+            })()}
             {doubles && occupants.length === 1 ? (
               <span className="rounded-[6px] border border-dashed border-border px-2 py-0.5 text-[10px] italic text-muted-foreground">
                 ＋ add partner
