@@ -97,6 +97,22 @@ export function MatchesSpreadsheet() {
     });
   }, [matches, searchQuery, eventFilter, schoolFilter, typeFilter, playerById]);
 
+  const config = useAppStore((s) => s.config);
+
+  // Configured event ranks — derived from `config.rankCounts`. These
+  // populate the per-row event select so the operator picks from
+  // valid options instead of typing free text. Empty when no
+  // tournament config exists yet (e.g. brand new install) — the
+  // select degrades to free-text input in that case.
+  const configuredRanks = useMemo(() => {
+    if (!config?.rankCounts) return [] as string[];
+    const out: string[] = [];
+    for (const [prefix, count] of Object.entries(config.rankCounts)) {
+      for (let i = 1; i <= (count ?? 0); i++) out.push(`${prefix}${i}`);
+    }
+    return out;
+  }, [config?.rankCounts]);
+
   if (matches.length === 0) {
     return (
       <div className="px-5 py-10 text-center text-sm text-muted-foreground">
@@ -125,6 +141,7 @@ export function MatchesSpreadsheet() {
           index={matches.indexOf(m)}
           players={players}
           groups={groups}
+          configuredRanks={configuredRanks}
           onUpdate={updateMatch}
           onDelete={deleteMatch}
         />
@@ -158,6 +175,7 @@ function MatchRow({
   index,
   players,
   groups,
+  configuredRanks,
   onUpdate,
   onDelete,
 }: {
@@ -165,29 +183,34 @@ function MatchRow({
   index: number;
   players: PlayerDTO[];
   groups: RosterGroupDTO[];
+  /** Ranks defined in `config.rankCounts` — the select populates from
+   *  this list. Empty array → degrade to free-text input. */
+  configuredRanks: string[];
   onUpdate: (id: string, patch: Partial<MatchDTO>) => void;
   onDelete: (id: string) => void;
 }) {
-  const [eventDraft, setEventDraft] = useState(match.eventRank ?? '');
   const [durationDraft, setDurationDraft] = useState(
     String(match.durationSlots ?? 1),
   );
 
-  useEffect(() => setEventDraft(match.eventRank ?? ''), [match.eventRank]);
   useEffect(
     () => setDurationDraft(String(match.durationSlots ?? 1)),
     [match.durationSlots],
   );
 
-  const commitEvent = () => {
-    if (eventDraft !== (match.eventRank ?? '')) {
-      onUpdate(match.id, { eventRank: eventDraft });
-    }
-  };
   const commitDuration = () => {
     const d = Math.max(1, Number(durationDraft) || 1);
     if (d !== match.durationSlots) onUpdate(match.id, { durationSlots: d });
   };
+
+  // The current rank may be (a) blank, (b) one of `configuredRanks`,
+  // or (c) a legacy free-text value no longer in the configured list.
+  // For (c) we keep the existing value visible in the select via a
+  // dedicated "current" option so the operator isn't surprised by
+  // their data silently disappearing.
+  const currentRank = match.eventRank ?? '';
+  const rankInConfigured =
+    !currentRank || configuredRanks.includes(currentRank);
 
   // Per-row disruption surfacing — partner-switch detection, side-count
   // mismatches, cross-side conflicts, stale player references. The
@@ -240,21 +263,48 @@ function MatchRow({
       <span className="w-8 text-xs text-muted-foreground tabular-nums">
         {match.matchNumber ?? index + 1}
       </span>
-      <input
-        value={eventDraft}
-        onChange={(e) => setEventDraft(e.target.value)}
-        onBlur={commitEvent}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-        }}
-        placeholder="MS1, WD2…"
-        className={[
-          'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-mono tabular-nums outline-none',
-          'transition-colors duration-fast ease-brand',
-          'hover:border-border/60 focus:border-accent focus:bg-card',
-          eventTintForPrefix(match.eventRank),
-        ].join(' ')}
-      />
+      {configuredRanks.length > 0 ? (
+        <select
+          value={currentRank}
+          onChange={(e) =>
+            onUpdate(match.id, { eventRank: e.target.value || undefined })
+          }
+          aria-label="Event rank"
+          className={[
+            'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-mono tabular-nums outline-none',
+            'transition-colors duration-fast ease-brand cursor-pointer',
+            'hover:border-border/60 focus:border-accent focus:bg-card',
+            eventTintForPrefix(match.eventRank),
+          ].join(' ')}
+        >
+          <option value="">—</option>
+          {configuredRanks.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+          {/* Legacy / unknown current value — surface it so it doesn't
+              silently vanish from the dropdown. */}
+          {!rankInConfigured && currentRank ? (
+            <option value={currentRank}>{currentRank} (legacy)</option>
+          ) : null}
+        </select>
+      ) : (
+        <input
+          value={currentRank}
+          onChange={(e) =>
+            onUpdate(match.id, { eventRank: e.target.value || undefined })
+          }
+          placeholder="MS1, WD2…"
+          aria-label="Event rank"
+          className={[
+            'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-mono tabular-nums outline-none',
+            'transition-colors duration-fast ease-brand',
+            'hover:border-border/60 focus:border-accent focus:bg-card',
+            eventTintForPrefix(match.eventRank),
+          ].join(' ')}
+        />
+      )}
       <PlayerCellEditor
         side="Side A"
         selected={match.sideA ?? []}
@@ -262,6 +312,7 @@ function MatchRow({
         players={players}
         groups={groups}
         capacity={sideCapacity}
+        eligibleForRank={match.eventRank}
       />
       <PlayerCellEditor
         side="Side B"
@@ -270,6 +321,7 @@ function MatchRow({
         players={players}
         groups={groups}
         capacity={sideCapacity}
+        eligibleForRank={match.eventRank}
       />
       <input
         type="number"
@@ -297,6 +349,37 @@ function MatchRow({
  * name. No pills, no wrapping element. "＋ add" link opens the picker
  * dropdown for adding more players.
  * ========================================================================= */
+/** Single picker entry — shared between "Eligible" and "All other"
+ *  sections of the dropdown to keep the option styling identical. */
+function PickerRow({
+  player,
+  groups,
+  selected,
+  onClick,
+}: {
+  player: PlayerDTO;
+  groups: RosterGroupDTO[];
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'flex w-full items-center justify-between rounded px-1.5 py-0.5 text-left text-xs',
+        'transition-colors duration-fast ease-brand',
+        selected ? 'bg-accent/10 text-accent' : 'text-foreground hover:bg-muted/40',
+      ].join(' ')}
+    >
+      <span>{playerLabel(player, groups)}</span>
+      {selected ? (
+        <Check aria-label="Selected" className="h-3.5 w-3.5 text-accent" />
+      ) : null}
+    </button>
+  );
+}
+
 function PlayerCellEditor({
   side,
   selected,
@@ -304,6 +387,7 @@ function PlayerCellEditor({
   players,
   groups,
   capacity = 2,
+  eligibleForRank,
 }: {
   side: string;
   selected: string[];
@@ -316,6 +400,13 @@ function PlayerCellEditor({
    *  Default 2 lets the editor work for new rows with no event rank
    *  yet — validation will flag any oversized state. */
   capacity?: number;
+  /** When set, the picker surfaces players who hold this rank in
+   *  their roster `ranks[]` as a top-of-list "Eligible for {rank}"
+   *  section. The rest of the rostered players appear below grouped
+   *  by school. Ties the match editor to the Roster page — operators
+   *  see who's actually configured for the event they're editing
+   *  without having to remember. */
+  eligibleForRank?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -367,14 +458,28 @@ function PlayerCellEditor({
     }
   };
 
-  const playersByGroup = useMemo(() => {
+  // Partition players for the picker:
+  //   eligible = players whose roster `ranks[]` includes the match's
+  //              event rank. Tied to the Roster page — this is the
+  //              "what the previous page says" list.
+  //   rest     = everyone else, grouped by school as the fallback.
+  // When eligibleForRank is undefined, eligible is empty and the
+  // picker behaves like before (all-by-school).
+  const eligible = useMemo(() => {
+    if (!eligibleForRank) return [] as PlayerDTO[];
+    return players.filter((p) => (p.ranks ?? []).includes(eligibleForRank));
+  }, [players, eligibleForRank]);
+
+  const restByGroup = useMemo(() => {
+    const eligibleIds = new Set(eligible.map((p) => p.id));
     const by = new Map<string, PlayerDTO[]>();
     for (const p of players) {
+      if (eligibleIds.has(p.id)) continue;
       if (!by.has(p.groupId)) by.set(p.groupId, []);
       by.get(p.groupId)!.push(p);
     }
     return by;
-  }, [players]);
+  }, [players, eligible]);
 
   return (
     <div ref={ref} className="relative min-w-0 flex-[3]">
@@ -428,42 +533,69 @@ function PlayerCellEditor({
       </div>
       {open ? (
         <div className="motion-enter absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
-          {[...playersByGroup.entries()].map(([groupId, list]) => {
-            const g = groups.find((gr) => gr.id === groupId);
-            return (
-              <div key={groupId} className="mb-1 last:mb-0">
-                <div className="mb-0.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {g?.name ?? 'Unassigned'}
-                </div>
-                <div className="space-y-0.5">
-                  {list.map((p) => {
-                    const isOn = selected.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => toggle(p.id)}
-                        className={[
-                          'flex w-full items-center justify-between rounded px-1.5 py-0.5 text-left text-xs transition-colors duration-fast ease-brand',
-                          isOn
-                            ? 'bg-accent/10 text-accent'
-                            : 'text-foreground hover:bg-muted/40',
-                        ].join(' ')}
-                      >
-                        <span>{playerLabel(p, groups)}</span>
-                        {isOn ? (
-                          <Check
-                            aria-label="Selected"
-                            className="h-3.5 w-3.5 text-accent"
-                          />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
+          {/* Eligible-for-rank section — these are the players the
+              Roster page has configured for this match's event. Top
+              of the picker so the natural candidate is one click
+              away. Empty when no rank set or none are configured. */}
+          {eligible.length > 0 ? (
+            <div className="mb-1">
+              <div className="mb-0.5 flex items-baseline justify-between px-1 text-[10px] font-semibold uppercase tracking-wider text-accent">
+                <span>Eligible for {eligibleForRank}</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {eligible.length}
+                </span>
               </div>
-            );
-          })}
+              <div className="space-y-0.5">
+                {eligible.map((p) => (
+                  <PickerRow
+                    key={p.id}
+                    player={p}
+                    groups={groups}
+                    selected={selected.includes(p.id)}
+                    onClick={() => toggle(p.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* "All other rostered" section — partner-switch flexibility
+              for cases where a non-eligible player still needs to be
+              assigned (mid-tournament reassignments, edge cases). The
+              validator will flag the resulting `stale-rank` warning
+              so the operator knows they've stepped outside the
+              configured roster. */}
+          {restByGroup.size > 0 ? (
+            <div>
+              {eligible.length > 0 ? (
+                <div className="mb-0.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  All other rostered
+                </div>
+              ) : null}
+              {[...restByGroup.entries()].map(([groupId, list]) => {
+                const g = groups.find((gr) => gr.id === groupId);
+                return (
+                  <div key={groupId} className="mb-1 last:mb-0">
+                    <div className="mb-0.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {g?.name ?? 'Unassigned'}
+                    </div>
+                    <div className="space-y-0.5">
+                      {list.map((p) => (
+                        <PickerRow
+                          key={p.id}
+                          player={p}
+                          groups={groups}
+                          selected={selected.includes(p.id)}
+                          onClick={() => toggle(p.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
           {players.length === 0 ? (
             <div className="px-1 py-2 text-xs text-muted-foreground">
               No players. Add some in the Roster tab.
