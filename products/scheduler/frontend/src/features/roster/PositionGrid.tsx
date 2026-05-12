@@ -36,38 +36,7 @@ import { useAppStore } from '../../store/appStore';
 import type { PlayerDTO } from '../../api/dto';
 import { INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET } from '../../lib/utils';
 
-const EVENT_ORDER = ['MD', 'WD', 'XD', 'WS', 'MS'] as const;
-const EVENT_LABEL: Record<string, { full: string; header: string; body: string }> = {
-  MS: {
-    full: "Men's Singles",
-    header: 'bg-blue-200 text-blue-900 border-blue-400',
-    body:   'bg-blue-50/40',
-  },
-  WS: {
-    full: "Women's Singles",
-    header: 'bg-purple-200 text-purple-900 border-purple-400',
-    body:   'bg-purple-50/40',
-  },
-  MD: {
-    full: "Men's Doubles",
-    header: 'bg-rose-200 text-rose-900 border-rose-400',
-    body:   'bg-rose-50/40',
-  },
-  WD: {
-    full: "Women's Doubles",
-    header: 'bg-teal-200 text-teal-900 border-teal-400',
-    body:   'bg-teal-50/40',
-  },
-  XD: {
-    full: "Mixed Doubles",
-    header: 'bg-amber-200 text-amber-900 border-amber-400',
-    body:   'bg-amber-50/40',
-  },
-};
-
-function isDoubles(prefix: string): boolean {
-  return prefix.endsWith('D');
-}
+import { EVENT_ORDER, EVENT_LABEL, isDoubles } from './positionGrid/helpers';
 
 export function PositionGrid({ schoolId }: { schoolId: string }) {
   const players = useAppStore((s) => s.players);
