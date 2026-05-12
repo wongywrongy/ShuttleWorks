@@ -1,90 +1,117 @@
-.PHONY: build run rebuild stop logs clean dev help test-e2e test-e2e-rebuild test-e2e-dev test-e2e-install
+.PHONY: help \
+        scheduler scheduler-dev scheduler-rebuild \
+        tournament tournament-dev tournament-rebuild \
+        both stop stop-scheduler stop-tournament \
+        logs logs-scheduler logs-tournament \
+        ps clean \
+        test test-scheduler test-tournament test-e2e \
+        engine-readme
 
-# Default target
+# Default target — list everything.
 help:
-	@echo "Tournament Scheduler - Available Commands"
+	@echo "Monorepo entry point — pick a product."
 	@echo ""
-	@echo "Production (Docker):"
-	@echo "  make build             - Build Docker images"
-	@echo "  make run               - Build and run production (http://localhost)"
-	@echo "  make rebuild           - Fresh rebuild: stop, remove old images, rebuild with --no-cache, run"
-	@echo "  make stop              - Stop all containers"
-	@echo "  make logs              - View container logs"
-	@echo "  make clean             - Stop and remove containers, images, volumes"
+	@echo "Scheduler (day-of operator tool, ports 80 / 8000):"
+	@echo "  make scheduler          Build + start the scheduler stack"
+	@echo "  make scheduler-dev      Backend in Docker, Vite dev server on :5173"
+	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild of the scheduler"
+	@echo "  make stop-scheduler     Stop the scheduler stack"
+	@echo "  make logs-scheduler     Tail scheduler container logs"
 	@echo ""
-	@echo "Development (Hybrid):"
-	@echo "  make dev               - Run backend (Docker) + frontend (npm dev server)"
+	@echo "Tournament (bracket draws, ports 5174 / 8765):"
+	@echo "  make tournament         Build + start the tournament stack"
+	@echo "  make tournament-dev     Hot-reload stack (Vite + uvicorn --reload)"
+	@echo "  make tournament-rebuild Nuclear --no-cache rebuild of the tournament"
+	@echo "  make stop-tournament    Stop the tournament stack"
+	@echo "  make logs-tournament    Tail tournament container logs"
 	@echo ""
-	@echo "End-to-end tests (Playwright):"
-	@echo "  make test-e2e-install  - Install Playwright browsers (one-time)"
-	@echo "  make test-e2e          - Boot stack + run smoke tests + tear down"
-	@echo "  make test-e2e-rebuild  - Force rebuild images before running tests"
-	@echo "  make test-e2e-dev      - Run tests against http://localhost:5173 (requires 'make dev')"
+	@echo "Both at once:"
+	@echo "  make both               Bring up both products side-by-side"
+	@echo "  make stop               Stop both"
+	@echo "  make ps                 Show running containers for both"
 	@echo ""
-
-# === Production Commands ===
-
-build:
-	docker-compose build
-
-run:
-	docker-compose up -d --build
+	@echo "Tests:"
+	@echo "  make test-scheduler     Run scheduler pytest suite"
+	@echo "  make test-tournament    Run tournament pytest suite (Docker)"
+	@echo "  make test-e2e           Run scheduler Playwright e2e (boots stack)"
+	@echo "  make test               test-scheduler + test-tournament"
 	@echo ""
-	@echo "Application starting..."
-	@echo "  Frontend: http://localhost"
-	@echo "  Backend:  http://localhost:8000"
-	@echo "  API Docs: http://localhost:8000/docs"
-	@echo ""
-	@echo "Run 'make logs' to view logs"
+	@echo "Misc:"
+	@echo "  make clean              Down + remove images / volumes for both"
+	@echo "  make engine-readme      Open the shared scheduler_core/ README"
 
-# Nuclear rebuild: stop, remove old images, rebuild both containers from
-# scratch with no layer cache. Use this when UI changes aren't showing up.
-# Also forces you to hard-refresh the browser — nginx is configured to
-# send no-cache on index.html so a simple reload is enough going forward.
-rebuild:
-	docker-compose down --rmi local --remove-orphans || true
-	docker-compose build --no-cache
-	docker-compose up -d
-	@echo ""
-	@echo "Fresh rebuild complete."
-	@echo "  Frontend: http://localhost  (hard-refresh the browser: Cmd+Shift+R)"
-	@echo "  Backend:  http://localhost:8000"
-	@echo ""
+# === Scheduler product ===
 
-stop:
-	docker-compose down
+scheduler:
+	$(MAKE) -C products/scheduler run
 
-logs:
-	docker-compose logs -f
+scheduler-dev:
+	$(MAKE) -C products/scheduler dev
 
-clean:
-	docker-compose down -v --rmi local
-	@echo "Cleaned up containers and images"
+scheduler-rebuild:
+	$(MAKE) -C products/scheduler rebuild
 
-# === Development Commands ===
+stop-scheduler:
+	$(MAKE) -C products/scheduler stop
 
-dev:
-	@echo "Starting development environment..."
-	@echo "Backend: Docker | Frontend: npm dev server"
-	@echo ""
-	docker-compose up -d --build backend
-	@echo "Waiting for backend..."
-	@sleep 5
-	@curl -s http://localhost:8000/health > /dev/null && echo "Backend ready!" || echo "Backend starting..."
-	@echo ""
-	@echo "Starting frontend dev server..."
-	cd frontend && npm run dev
+logs-scheduler:
+	$(MAKE) -C products/scheduler logs
 
-# === End-to-end tests (Playwright) ===
-
-test-e2e-install:
-	cd e2e && npm install && npx playwright install --with-deps chromium
+test-scheduler:
+	cd products/scheduler && pytest
 
 test-e2e:
-	cd e2e && npm install --silent && npx playwright test
+	$(MAKE) -C products/scheduler test-e2e
 
-test-e2e-rebuild:
-	cd e2e && npm install --silent && E2E_REBUILD=1 npx playwright test
+# === Tournament product ===
 
-test-e2e-dev:
-	cd e2e && npm install --silent && E2E_BASE_URL=http://localhost:5173 E2E_MANAGE_STACK=0 npx playwright test
+tournament:
+	$(MAKE) -C products/tournament up
+
+tournament-dev:
+	$(MAKE) -C products/tournament dev
+
+tournament-rebuild:
+	$(MAKE) -C products/tournament rebuild
+
+stop-tournament:
+	$(MAKE) -C products/tournament down
+
+logs-tournament:
+	$(MAKE) -C products/tournament logs
+
+test-tournament:
+	$(MAKE) -C products/tournament test
+
+# === Both at once ===
+
+both:
+	$(MAKE) scheduler
+	$(MAKE) tournament
+
+stop:
+	$(MAKE) stop-scheduler || true
+	$(MAKE) stop-tournament || true
+
+ps:
+	@echo "=== scheduler (btp) ==="
+	@cd products/scheduler && docker compose ps || true
+	@echo ""
+	@echo "=== tournament ==="
+	@cd products/tournament && docker compose ps || true
+
+logs:
+	@echo "Pass a specific target: make logs-scheduler or make logs-tournament"
+
+# === Tests ===
+
+test: test-scheduler test-tournament
+
+# === Cleanup ===
+
+clean:
+	-$(MAKE) -C products/scheduler clean
+	-$(MAKE) -C products/tournament clean
+
+engine-readme:
+	@$${PAGER:-less} scheduler_core/README.md

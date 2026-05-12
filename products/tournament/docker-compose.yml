@@ -1,0 +1,40 @@
+# Tournament prototype — prod-style compose.
+#
+# Brings up the nginx-served frontend and the FastAPI backend on the
+# host ports configured in .env (defaults: 5174 frontend, 8765
+# backend). Project name defaults to `tournament` so containers /
+# networks / volumes are namespaced and the BTP stack (`btp`) can run
+# alongside this one.
+#
+# Hot-reload during dev: use `make dev`, which layers
+# `docker-compose.dev.yml` over this file.
+
+name: ${COMPOSE_PROJECT_NAME:-tournament}
+
+services:
+  backend:
+    build:
+      # Context = repo root so the Dockerfile can COPY the shared
+      # scheduler_core/ tree alongside the product files.
+      context: ../..
+      dockerfile: products/tournament/backend/Dockerfile
+    ports:
+      - "${BACKEND_HOST_PORT:-8765}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_HOST_PORT:-5174}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

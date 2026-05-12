@@ -1,0 +1,56 @@
+# Dev override — applied via `make dev`:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Mounts the source tree into both containers, swaps to a `uvicorn
+# --reload` CMD on the backend, and runs the Vite dev server in the
+# frontend container so HMR updates the browser when you edit a .tsx
+# file. The base compose file's port mappings and project name are
+# inherited unchanged.
+
+services:
+  backend:
+    command:
+      - uvicorn
+      - backend.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/backend
+      - --reload-dir
+      - /app/tournament
+      - --reload-dir
+      - /app/scheduler_core
+    volumes:
+      - ./backend:/app/backend
+      - ./tournament:/app/tournament
+      # Shared engine lives at the repo root; reach up two levels.
+      - ../../scheduler_core:/app/scheduler_core
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      # The Vite dev server's proxy talks to the backend container by
+      # its docker network name when the frontend is inside compose.
+      VITE_PROXY_TARGET: http://backend:8000
+    ports:
+      - "${FRONTEND_HOST_PORT:-5174}:5173"
+    volumes:
+      - ./frontend:/app
+      # Keep the container's own node_modules so host installs (or
+      # the lack thereof) don't shadow it.
+      - /app/node_modules
+    command:
+      - npm
+      - run
+      - dev
+      - --
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5173"

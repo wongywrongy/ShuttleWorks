@@ -21,11 +21,11 @@ jobs:
       matrix:
         include:
           - name: backend
-            dockerfile: backend/Dockerfile
+            dockerfile: products/scheduler/backend/Dockerfile
             context: .
           - name: frontend
-            dockerfile: frontend/Dockerfile
-            context: ./frontend
+            dockerfile: products/scheduler/frontend/Dockerfile
+            context: ./products/scheduler/frontend
     steps:
       - uses: actions/checkout@v4
 
