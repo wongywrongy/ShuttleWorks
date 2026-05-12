@@ -23,19 +23,16 @@ import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useAdvisories } from '../hooks/useAdvisories';
 import { AdvisoryBanner } from '../components/status/AdvisoryBanner';
 import { formatSlotTime } from '../lib/time';
-import { formatElapsed } from '../lib/timeFormatters';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import type { ScheduleAssignment } from '../api/dto';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
 import { useFullscreen } from './publicDisplay/useFullscreen';
-import {
-  formatTournamentDate,
-  formatPlayers as formatPlayersHelper,
-} from './publicDisplay/helpers';
+import { formatTournamentDate } from './publicDisplay/helpers';
 import { FullscreenButton } from './publicDisplay/FullscreenButton';
 import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
 import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
+import { CourtsView } from './publicDisplay/CourtsView';
 
 type ViewMode = 'courts' | 'schedule' | 'standings';
 
@@ -206,11 +203,6 @@ export function PublicDisplayPage() {
       .sort((a, b) => b.wins - a.wins || a.losses - b.losses);
   }, [matchesByStatus.finished, matchMap, matchStates, groups, groupNames, players]);
 
-  // Thin wrapper closes over playerNames so CourtsView (still inline) call
-  // sites stay `formatPlayers(ids)`. The canonical helper lives in
-  // ./publicDisplay/helpers.ts and takes the map explicitly.
-  const formatPlayers = (ids: string[] | undefined) =>
-    formatPlayersHelper(ids, playerNames);
 
   // ===== Rendering =====================================================
 
@@ -382,272 +374,24 @@ export function PublicDisplayPage() {
       </div>
 
       <div className="px-6 pb-28 pt-6">
-        {/* ---------- Courts view ----------------------------------------
-         *
-         * Each court gets one compact horizontal strip. Courts are
-         * peers — they run in parallel, never in conflict with each
-         * other — so the visual metaphor is a set of independent
-         * rails, not a deck of layered cards. Two-column grid on wide
-         * screens halves the vertical footprint so a 6+ court
-         * tournament still fits above the fold on a 1080p TV.
-         */}
-        {view === 'courts' && tvDisplayMode === 'list' && (
-          // Compact list — one short row per court. Best for venues
-          // with 16+ courts on a 1080p TV. Trades the giant court-
-          // number anchor for one-line scannability. Full-span: no
-          // max-width cap so the audience uses every pixel; rows are
-          // constant-height for predictability.
-          <div className="flex w-full flex-col divide-y divide-border rounded border border-border bg-card/40">
-            {courtMatches.map(({ courtId, match, state, status, nextMatch, nextStartTime }) => {
-              const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
-              const aggregate = state?.score ? `${state.score.sideA}–${state.score.sideB}` : null;
-              const sideA = match ? formatPlayers(match.sideA) : '';
-              const sideB = match ? formatPlayers(match.sideB) : '';
-              // Court is "closed *now*" when either:
-              //   (a) it's in the legacy all-day closedCourts list, or
-              //   (b) any time-bounded courtClosures entry covers the
-              //       current wall-clock minute. Spectators only need
-              //       the "now" view; the schedule tab shows future
-              //       windows through normal match rendering.
-              const nowMin = now.getHours() * 60 + now.getMinutes();
-              const minToMin = (hhmm?: string | null) =>
-                hhmm ? Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5)) : null;
-              const isClosed =
-                (config.closedCourts ?? []).includes(courtId) ||
-                (config.courtClosures ?? []).some((c) => {
-                  if (c.courtId !== courtId) return false;
-                  const f = minToMin(c.fromTime) ?? 0;
-                  const t = minToMin(c.toTime) ?? 24 * 60;
-                  return nowMin >= f && nowMin < t;
-                });
-              // Row tint carries status — replaces the banned left-stripe.
-              // Uses the same status tokens as the grid card mode so the
-              // two display modes feel consistent.
-              const rowTintClass =
-                status === 'active'
-                  ? 'bg-status-live-bg/60'
-                  : status === 'called'
-                    ? 'bg-status-called-bg/50'
-                    : '';
-              return (
-                <div
-                  key={courtId}
-                  className={`grid items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass} ${
-                    isClosed ? 'opacity-50' : ''
-                  }`}
-                  style={{ height: 56 }}
-                >
-                  <span className={`tabular-nums text-2xl font-bold ${isClosed ? 'line-through text-muted-foreground' : ''}`}>
-                    {courtId}
-                  </span>
-                  <span className="tabular-nums text-base font-semibold text-muted-foreground">
-                    {isClosed ? '—' : match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
-                  </span>
-                  <span className="truncate">
-                    {isClosed ? (
-                      <span className="uppercase tracking-wider text-muted-foreground">Court closed</span>
-                    ) : match ? (
-                      <>
-                        <span className="font-medium">{sideA}</span>
-                        <span className="px-2 text-muted-foreground">vs</span>
-                        <span className="font-medium">{sideB}</span>
-                      </>
-                    ) : nextMatch ? (
-                      <span className="text-muted-foreground">
-                        Next {nextStartTime ? `· ${nextStartTime}` : ''} · {formatPlayers(nextMatch.sideA)} vs {formatPlayers(nextMatch.sideB)}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">Available</span>
-                    )}
-                  </span>
-                  <span className="tabular-nums text-right font-semibold">
-                    {tvShowScores ? (aggregate ?? '') : ''}
-                  </span>
-                  <span className="tabular-nums text-right text-muted-foreground">
-                    {elapsed ?? ''}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {view === 'courts' && tvDisplayMode !== 'list' && (
-          // Strip = single-column, Grid = N-column responsive grid.
-          // Both reuse the same court-card render below; only the
-          // wrapping container differs. Public-display rules:
-          //   • full span (no max-width cap) — venues use big TVs
-          //   • constant cell height via ``grid-auto-rows`` (grid)
-          //     or ``style.height`` on each card (strip)
-          //   • Grid uses the operator's ``tvGridColumns`` override
-          //     when set; otherwise auto-fits.
-          <div
-            className={`w-full ${tvDisplayMode === 'grid' ? `grid gap-3 ${gridColsClass}` : 'flex flex-col gap-2'}`}
-            style={tvDisplayMode === 'grid' ? { gridAutoRows: `${cardHeightPx}px` } : undefined}
-          >
-            {courtMatches.map(({ courtId, match, state, status, nextMatch, nextStartTime }, idx) => {
-              const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
-              // Closed-now check (mirrors the list-view logic above):
-              // either the legacy all-day list or any time-bounded
-              // closure window that covers the current minute.
-              const nowMin = now.getHours() * 60 + now.getMinutes();
-              const minToMin = (hhmm?: string | null) =>
-                hhmm ? Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5)) : null;
-              const isClosed =
-                (config.closedCourts ?? []).includes(courtId) ||
-                (config.courtClosures ?? []).some((c) => {
-                  if (c.courtId !== courtId) return false;
-                  const f = minToMin(c.fromTime) ?? 0;
-                  const t = minToMin(c.toTime) ?? 24 * 60;
-                  return nowMin >= f && nowMin < t;
-                });
-              // Active / called cards get a tinted background carrying
-              // the state. Replaces the old left-stripe accent (which
-              // is a banned anti-pattern) with a full-card tint plus an
-              // inset highlight ring on active. Backgrounds map to the
-              // same status tokens used everywhere else, so theming
-              // and dark mode stay consistent.
-              const cardBgClass = isClosed
-                ? 'bg-muted/30 opacity-60'
-                : status === 'active'
-                  ? 'bg-status-live-bg/80 ring-1 ring-status-live/30 shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.25)]'
-                  : status === 'called'
-                    ? 'bg-status-called-bg/70 ring-1 ring-status-called/25'
-                    : 'bg-card/60';
-              const aggregate = state?.score
-                ? `${state.score.sideA}–${state.score.sideB}`
-                : null;
-              const sideA = match ? formatPlayers(match.sideA) : '';
-              const sideB = match ? formatPlayers(match.sideB) : '';
-
-              return (
-                <div
-                  key={courtId}
-                  className={`overflow-hidden rounded-xl border border-border shadow-lg animate-block-in ${cardBgClass}`}
-                  style={{
-                    height: cardHeightPx,
-                    // Staggered entry — each tile arrives 60ms after the
-                    // previous so the grid doesn't flash on every poll.
-                    animationDelay: `${idx * 60}ms`,
-                  }}
-                >
-                  <div
-                    className={`grid h-full items-center gap-3 ${cardPadX} grid-cols-[auto_auto_1fr_auto_auto]`}
-                  >
-                    {/* Court number — anchor of the strip */}
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        Court
-                      </span>
-                      <span
-                        className={`${courtNumSize} font-black tabular-nums leading-none`}
-                      >
-                        {courtId}
-                      </span>
-                    </div>
-
-                    {/* Event code */}
-                    <div
-                      className={`min-w-[3.5rem] ${eventCodeSize} font-bold text-foreground tabular-nums`}
-                    >
-                      {match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
-                    </div>
-
-                    {/* Players (grows). Always rendered on their own
-                        lines so long doubles names never truncate. */}
-                    <div
-                      className={`min-w-0 ${playerSize} leading-tight text-foreground`}
-                    >
-                      {isClosed ? (
-                        <span className="uppercase tracking-wider text-muted-foreground">
-                          Court closed
-                        </span>
-                      ) : match ? (
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <span className="block truncate font-medium" title={sideA}>{sideA}</span>
-                          <span
-                            className={`${isFullscreen ? 'text-sm' : 'text-xs'} uppercase tracking-widest text-muted-foreground`}
-                          >
-                            vs
-                          </span>
-                          <span className="block truncate font-medium" title={sideB}>{sideB}</span>
-                        </div>
-                      ) : nextMatch ? (
-                        <div className="flex flex-col gap-0.5 text-muted-foreground">
-                          <span
-                            className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.18em]`}
-                          >
-                            Next up{nextStartTime ? ` · ${nextStartTime}` : ''}
-                          </span>
-                          <span className={`${isFullscreen ? 'text-2xl' : 'text-base'} font-medium text-foreground`}>
-                            {formatPlayers(nextMatch.sideA)} <span className="text-muted-foreground">vs</span> {formatPlayers(nextMatch.sideB)}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">Available</span>
-                      )}
-                    </div>
-
-                    {/* Status pill */}
-                    <div>
-                      {status === 'active' && (
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider`}
-                          style={{
-                            backgroundColor: `${tvAccent}33`,
-                            color: tvAccent,
-                          }}
-                        >
-                          <span
-                            className="h-1.5 w-1.5 rounded-full animate-pulse"
-                            style={{ backgroundColor: tvAccent }}
-                          />
-                          Live
-                        </span>
-                      )}
-                      {status === 'called' && (
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300`}
-                        >
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400 animate-pulse" />
-                          Calling
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Score + elapsed */}
-                    <div className={`flex items-baseline gap-3 tabular-nums ${isFullscreen ? 'text-2xl' : 'text-lg'}`}>
-                      {tvShowScores && aggregate && (
-                        <span className="font-semibold text-foreground">{aggregate}</span>
-                      )}
-                      {elapsed && (
-                        <span className="text-muted-foreground min-w-[4.5rem] text-right">
-                          {elapsed}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Per-set breakdown */}
-                  {tvShowScores && status === 'active' && state?.sets && state.sets.length > 0 && (
-                    <div
-                      className={`border-t border-border px-4 ${isFullscreen ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} flex flex-wrap gap-1.5 font-mono`}
-                    >
-                      {state.sets.map((s, i) => (
-                        <span
-                          key={i}
-                          className={`rounded bg-muted ${isFullscreen ? 'px-2.5 py-1' : 'px-1.5 py-0.5'} tabular-nums text-foreground`}
-                          title={`Set ${i + 1}`}
-                        >
-                          {s.sideA}–{s.sideB}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+        {/* ---------- Courts view ---------- */}
+        {view === 'courts' && (
+          <CourtsView
+            courts={courtMatches}
+            config={config}
+            now={now}
+            displayMode={tvDisplayMode}
+            gridColsClass={gridColsClass}
+            cardHeightPx={cardHeightPx}
+            cardPadX={cardPadX}
+            courtNumSize={courtNumSize}
+            eventCodeSize={eventCodeSize}
+            playerSize={playerSize}
+            tvAccent={tvAccent}
+            tvShowScores={tvShowScores}
+            isFullscreen={isFullscreen}
+            playerNames={playerNames}
+          />
         )}
 
         {/* ---------- Schedule view ---------- */}
