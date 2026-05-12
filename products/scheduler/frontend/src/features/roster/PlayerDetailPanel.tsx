@@ -1,16 +1,23 @@
 /**
- * PlayerDetailPanel — permanent footer rail of the Roster right
- * panel. Always docked at the bottom of the page as a flex sibling
- * of the grid; renders an empty-state hint when no player is
- * selected, and an editable form when one is.
+ * PlayerDetailPanel — docks to the bottom of the Roster right panel
+ * when a player is selected. Slides up from below via CSS transform
+ * and overlays the bottom 280 px of the grid area; the grid itself
+ * keeps its full scrollable height (the operator scrolls past the
+ * panel rather than the panel taking grid space).
+ *
+ * Always mounted so the slide animation runs both directions cleanly;
+ * `pointer-events-none` + opacity 0 + translate-y-full make it inert
+ * when no player is selected.
  *
  * Shows the same fields the (now-removed) inline RosterSpreadsheet
  * carried for one player: school, availability summary, min rest, notes,
  * ranks as toggleable pills. All edits flow through `updatePlayer` on
  * the app store.
  *
- * The × close button clears the current selection back to the empty
- * state — it does NOT hide the panel.
+ * Dismissed by:
+ *  • the × close button
+ *  • clicking the same player in the left list a second time (handled
+ *    in RosterTab — passes `onDismiss`)
  */
 import { useMemo } from 'react';
 import { X } from '@phosphor-icons/react';
@@ -19,6 +26,7 @@ import { useAppStore } from '../../store/appStore';
 
 interface Props {
   player: PlayerDTO | null;
+  visible: boolean;
   onDismiss: () => void;
   groups: RosterGroupDTO[];
   config: TournamentConfig | null;
@@ -26,6 +34,7 @@ interface Props {
 
 export function PlayerDetailPanel({
   player,
+  visible,
   onDismiss,
   groups,
   config,
@@ -46,7 +55,15 @@ export function PlayerDetailPanel({
   return (
     <div
       data-testid="player-detail-panel"
-      className="shrink-0 border-t border-border bg-card text-foreground"
+      aria-hidden={!visible}
+      style={{ height: 280 }}
+      className={[
+        'absolute inset-x-0 bottom-0 z-overlay flex shrink-0 flex-col border-t border-border bg-card text-foreground',
+        'transition-[transform,opacity] duration-moderate ease-brand',
+        visible
+          ? 'translate-y-0 opacity-100'
+          : 'pointer-events-none translate-y-full opacity-0',
+      ].join(' ')}
     >
       <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-3 py-2">
         <div className="flex items-baseline gap-3">
@@ -57,26 +74,20 @@ export function PlayerDetailPanel({
             <span className="text-sm font-semibold text-foreground">
               {player.name || '(unnamed)'}
             </span>
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              No player selected
-            </span>
-          )}
+          ) : null}
         </div>
-        {player ? (
-          <button
-            type="button"
-            onClick={onDismiss}
-            aria-label="Clear player selection"
-            className="rounded-sm p-1 text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
-          >
-            <X aria-hidden="true" className="h-3.5 w-3.5" />
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Close player details"
+          className="rounded-sm p-1 text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
+        >
+          <X aria-hidden="true" className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {player ? (
-        <div className="max-h-[40vh] overflow-y-auto px-3 py-3">
+        <div className="flex-1 overflow-y-auto px-3 py-3">
           {/* Two-column layout matches the rest of the Setup-style
               rows: label left at 13px / fixed width, control right. */}
           <div className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-2 items-center">
@@ -193,12 +204,7 @@ export function PlayerDetailPanel({
             </div>
           </div>
         </div>
-      ) : (
-        <div className="px-3 py-4 text-xs text-muted-foreground">
-          Select a player from the list on the left to edit their school,
-          availability, rest minimum, notes, and rank assignments.
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }

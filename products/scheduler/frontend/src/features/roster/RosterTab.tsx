@@ -217,7 +217,7 @@ export function RosterTab() {
         {/* ───── RIGHT PANEL ────────────────────────────────────────── */}
         <main
           data-testid="roster-right-panel"
-          className="flex min-w-0 flex-1 flex-col overflow-hidden"
+          className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
         >
           <PositionGridHeader
             schoolName={activeSchool?.name ?? '—'}
@@ -228,7 +228,10 @@ export function RosterTab() {
           />
           <div className="min-h-0 flex-1 overflow-auto">
             {activeSchoolId ? (
-              <PositionGrid schoolId={activeSchoolId} />
+              <PositionGrid
+                schoolId={activeSchoolId}
+                highlightedPlayerId={selectedPlayerId}
+              />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 Add a school in the left panel to start rostering.
@@ -237,6 +240,7 @@ export function RosterTab() {
           </div>
           <PlayerDetailPanel
             player={selectedPlayer}
+            visible={selectedPlayer !== null}
             onDismiss={() => setSelectedPlayerId(null)}
             groups={groups}
             config={config}
@@ -279,16 +283,10 @@ function SchoolsSection({
   };
 
   return (
-    <div className="border-b border-border/60 px-3 py-3">
-      <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Schools
-        </span>
-        <span className="tabular-nums text-2xs text-muted-foreground/70">
-          {groups.length}
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
+    <div className="border-b border-border/60 px-3 py-2">
+      {/* Pills + Add on one line — no eyebrow label above; per-pill
+          count acts as the muted suffix. */}
+      <div className="flex flex-wrap items-center gap-1.5">
         {groups.map((g) => {
           const isActive = g.id === activeSchoolId;
           return (

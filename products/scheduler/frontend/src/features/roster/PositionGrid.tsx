@@ -135,7 +135,13 @@ export function PositionGridColumnControls() {
   );
 }
 
-export function PositionGrid({ schoolId }: { schoolId: string }) {
+export function PositionGrid({
+  schoolId,
+  highlightedPlayerId,
+}: {
+  schoolId: string;
+  highlightedPlayerId?: string | null;
+}) {
   const players = useAppStore((s) => s.players);
 
   const schoolPlayers = useMemo(
@@ -213,6 +219,7 @@ export function PositionGrid({ schoolId }: { schoolId: string }) {
                     doubles={isDoubles(ev.prefix)}
                     disabled={occupants === null}
                     occupants={occupants ?? []}
+                    highlightedPlayerId={highlightedPlayerId}
                   />
                 );
               })}
@@ -231,6 +238,7 @@ function PositionCell({
   doubles,
   disabled,
   occupants,
+  highlightedPlayerId,
 }: {
   schoolId: string;
   rank: string;
@@ -238,6 +246,7 @@ function PositionCell({
   doubles: boolean;
   disabled: boolean;
   occupants: PlayerDTO[];
+  highlightedPlayerId?: string | null;
 }) {
   const players = useAppStore((s) => s.players);
   const updatePlayer = useAppStore((s) => s.updatePlayer);
@@ -369,14 +378,28 @@ function PositionCell({
                 </div>
               );
 
+              // Highlight applies to the whole container / chip when
+              // ANY occupant matches the selection — per the spec, the
+              // border + bg shift together as one unit, not per-name.
+              const groupHighlighted =
+                !!highlightedPlayerId &&
+                occupants.some((o) => o.id === highlightedPlayerId);
+              const containerBase =
+                'transition-colors duration-fast ease-brand';
+              const containerHighlight = groupHighlighted
+                ? 'border-accent bg-accent/10'
+                : 'border-border bg-card';
+
               // Doubles + both seats filled = the only path that groups.
               if (doubles && occupants.length >= 2) {
                 return (
                   <div
+                    data-highlighted={groupHighlighted ? 'true' : 'false'}
                     className={[
-                      'overflow-hidden rounded-[6px] border border-border bg-card text-foreground',
-                      'divide-y divide-border/40',
-                      'transition-colors duration-fast ease-brand',
+                      'overflow-hidden rounded-[6px] border text-foreground',
+                      'divide-y-[0.5px] divide-border/40',
+                      containerBase,
+                      containerHighlight,
                     ].join(' ')}
                   >
                     {occupants.map(renderPlayerRow)}
@@ -384,16 +407,28 @@ function PositionCell({
                 );
               }
               // Singles cell (any occupant count) OR doubles with one
-              // seat filled → each occupant as a standalone chip.
+              // seat filled → each occupant as a standalone chip. Each
+              // chip highlights independently when its occupant is the
+              // selected player.
               if (occupants.length >= 1) {
-                return occupants.map((p) => (
-                  <div
-                    key={p.id}
-                    className="rounded-[6px] border border-border bg-card text-foreground transition-colors duration-fast ease-brand"
-                  >
-                    {renderPlayerRow(p)}
-                  </div>
-                ));
+                return occupants.map((p) => {
+                  const chipHighlighted = p.id === highlightedPlayerId;
+                  return (
+                    <div
+                      key={p.id}
+                      data-highlighted={chipHighlighted ? 'true' : 'false'}
+                      className={[
+                        'rounded-[6px] border text-foreground',
+                        containerBase,
+                        chipHighlighted
+                          ? 'border-accent bg-accent/10'
+                          : 'border-border bg-card',
+                      ].join(' ')}
+                    >
+                      {renderPlayerRow(p)}
+                    </div>
+                  );
+                });
               }
               return null;
             })()}
