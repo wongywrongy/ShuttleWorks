@@ -13,17 +13,26 @@
  * URL is the shared source of truth.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check } from '@phosphor-icons/react';
+import { Check, Warning } from '@phosphor-icons/react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerMap } from '../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
-import { EVENT_LABEL } from '../roster/positionGrid/helpers';
+import { EVENT_LABEL, isDoublesRank } from '../roster/positionGrid/helpers';
+import { validateMatch, maxSeverity } from './validateMatch';
 
 function eventTintForPrefix(rank: string | null | undefined): string {
   if (!rank) return '';
   const prefix = rank.match(/^[A-Z]+/)?.[0] ?? '';
   return EVENT_LABEL[prefix]?.body ?? '';
+}
+
+/** Side capacity derived from the event rank. Singles = 1, doubles =
+ *  2, unknown rank = 2 (let the operator fill it; validation will flag
+ *  any oversized state). */
+function capacityForRank(rank: string | null | undefined): number {
+  if (!rank?.trim()) return 2;
+  return isDoublesRank(rank) ? 2 : 1;
 }
 
 function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
@@ -130,6 +139,7 @@ export function MatchesSpreadsheet() {
 function ColumnHeaderRow() {
   return (
     <div className="flex items-center gap-3 border-b-2 border-border bg-muted/40 px-5 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <span className="w-4" aria-hidden />
       <span className="w-8">#</span>
       <span className="w-20">Event</span>
       <span className="min-w-0 flex-[3]">Side A</span>
@@ -179,11 +189,54 @@ function MatchRow({
     if (d !== match.durationSlots) onUpdate(match.id, { durationSlots: d });
   };
 
+  // Per-row disruption surfacing — partner-switch detection, side-count
+  // mismatches, cross-side conflicts, stale player references. The
+  // left-edge accent stripe + Warning icon flag issues without
+  // demanding modal dialogs; tooltip lists the specific issues.
+  const issues = useMemo(
+    () => validateMatch(match, players),
+    [match, players],
+  );
+  const severity = maxSeverity(issues);
+  const sideCapacity = capacityForRank(match.eventRank);
+
+  const accentStripe =
+    severity === 'error'
+      ? 'shadow-[inset_3px_0_0_hsl(var(--destructive))]'
+      : severity === 'warning'
+        ? 'shadow-[inset_3px_0_0_hsl(var(--status-warning))]'
+        : '';
+
   return (
     <div
       data-testid={`match-row-${match.id}`}
-      className="group flex min-h-[44px] items-center gap-3 border-b border-border px-5 transition-colors duration-fast ease-brand hover:bg-muted/30"
+      data-severity={severity ?? 'none'}
+      className={[
+        'group flex min-h-[44px] items-center gap-3 border-b border-border px-5',
+        'transition-colors duration-fast ease-brand hover:bg-muted/30',
+        accentStripe,
+      ].join(' ')}
     >
+      <span
+        className="flex w-4 shrink-0 items-center justify-center"
+        aria-hidden={issues.length === 0}
+        title={
+          issues.length > 0
+            ? issues.map((i) => `• ${i.message}`).join('\n')
+            : undefined
+        }
+      >
+        {issues.length > 0 ? (
+          <Warning
+            aria-label={`${issues.length} issue${issues.length === 1 ? '' : 's'} on this match`}
+            weight="fill"
+            className={[
+              'h-3.5 w-3.5',
+              severity === 'error' ? 'text-destructive' : 'text-status-warning',
+            ].join(' ')}
+          />
+        ) : null}
+      </span>
       <span className="w-8 text-xs text-muted-foreground tabular-nums">
         {match.matchNumber ?? index + 1}
       </span>
@@ -208,6 +261,7 @@ function MatchRow({
         onChange={(ids) => onUpdate(match.id, { sideA: ids })}
         players={players}
         groups={groups}
+        capacity={sideCapacity}
       />
       <PlayerCellEditor
         side="Side B"
@@ -215,6 +269,7 @@ function MatchRow({
         onChange={(ids) => onUpdate(match.id, { sideB: ids })}
         players={players}
         groups={groups}
+        capacity={sideCapacity}
       />
       <input
         type="number"
@@ -248,12 +303,19 @@ function PlayerCellEditor({
   onChange,
   players,
   groups,
+  capacity = 2,
 }: {
   side: string;
   selected: string[];
   onChange: (ids: string[]) => void;
   players: PlayerDTO[];
   groups: RosterGroupDTO[];
+  /** Max players this side can hold. 1 = singles event (single-select
+   *  semantics, picking a new player replaces the current one,
+   *  picker auto-closes); 2 = doubles event (multi-select up to 2).
+   *  Default 2 lets the editor work for new rows with no event rank
+   *  yet — validation will flag any oversized state. */
+  capacity?: number;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -264,6 +326,7 @@ function PlayerCellEditor({
         .filter(Boolean) as PlayerDTO[],
     [selected, players],
   );
+  const atCapacity = selected.length >= capacity;
 
   useEffect(() => {
     if (!open) return;
@@ -282,9 +345,26 @@ function PlayerCellEditor({
   }, [open]);
 
   const toggle = (id: string) => {
-    onChange(
-      selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id],
-    );
+    if (selected.includes(id)) {
+      // Always allow removal.
+      onChange(selected.filter((s) => s !== id));
+      return;
+    }
+    // Adding. Enforce capacity:
+    //   • singles (capacity = 1) → single-select: replace existing.
+    //     Auto-close the picker after the swap — "decisive" UX since
+    //     there's nothing else to pick on this side.
+    //   • doubles (capacity = 2) → multi-select up to 2: append if
+    //     room, no-op otherwise (operator must remove first). Picker
+    //     stays open for the partner pick.
+    if (capacity === 1) {
+      onChange([id]);
+      setOpen(false);
+      return;
+    }
+    if (selected.length < capacity) {
+      onChange([...selected, id]);
+    }
   };
 
   const playersByGroup = useMemo(() => {
@@ -335,7 +415,7 @@ function PlayerCellEditor({
             </span>
           ))
         )}
-        {selectedPlayers.length > 0 ? (
+        {selectedPlayers.length > 0 && !atCapacity ? (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
