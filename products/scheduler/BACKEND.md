@@ -152,11 +152,19 @@ be silenced in tests without quieting the app log.
 
 ## Tests
 
+Install the dev set (which pulls in the prod set via `-r`):
+
 ```
-cd backend && pytest    # HTTP-layer unit tests
-cd src && pytest        # solver + constraint unit tests
+pip install -r products/scheduler/backend/requirements-dev.txt
 ```
 
-Backend tests are pure-Python and don't touch HTTP. End-to-end
-coverage lives in `e2e/` (Playwright against the docker-compose
-stack).
+Then run from `products/scheduler/`:
+
+```
+pytest                                 # HTTP-layer + solver unit tests
+```
+
+The split keeps `pytest` + `httpx` (~25 MB) out of the production image
+— `backend/requirements.txt` is prod-only and is what the Dockerfile
+installs. End-to-end coverage lives in `e2e/` (Playwright against the
+docker-compose stack); run with `make test-e2e`.

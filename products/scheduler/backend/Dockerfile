@@ -9,26 +9,50 @@
 #   wheel around between builds.
 # - `runtime` is the final, slim image — just the installed packages
 #   from /install plus the app source. No pip, no apt residue.
+#
+# Layer order is tuned for cache reuse: third-party deps change rarely,
+# scheduler_core changes often, backend source changes most. Each gets
+# its own layer so iterating on the engine doesn't reinstall ortools.
 
 FROM python:3.11-slim AS builder
 
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /build
 
-# scheduler_core is installed as a regular package via its pyproject.toml.
-# The backend itself is not packaged — it ships as a source tree COPYed
-# into the runtime stage and launched directly by uvicorn from WORKDIR.
-COPY scheduler_core ./scheduler_core
-COPY products/scheduler/backend/requirements.txt ./backend/requirements.txt
-
+# Third-party deps first — pinned in requirements.txt and rarely
+# touched, so this layer stays cached across normal app/engine edits.
+COPY products/scheduler/backend/requirements.txt ./requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    pip install --prefix=/install \
-        ./scheduler_core \
-        -r ./backend/requirements.txt
+    pip install --prefix=/install -r ./requirements.txt
+
+# scheduler_core is installed as a regular package via its pyproject.toml.
+# Copied + installed in its own layer so engine edits don't invalidate
+# the (much larger) third-party dep layer above.
+COPY scheduler_core ./scheduler_core
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install --prefix=/install --no-deps ./scheduler_core
 
 
 FROM python:3.11-slim AS runtime
 
+# PYTHONDONTWRITEBYTECODE — keeps a read-only root filesystem actually
+#   read-only by stopping the interpreter from scattering .pyc files
+#   next to .py sources at import time.
+# PYTHONUNBUFFERED — flushes stdout/stderr line-by-line so docker logs
+#   shows uvicorn output without a 1-line lag on quiet traffic.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /app
+
+# Create the runtime user BEFORE the source COPYs so we can use
+# `--chown=app:app` and skip a recursive chown walk over /app at the
+# end of the build.
+RUN useradd --create-home --uid 1001 app \
+    && mkdir -p /app/data \
+    && chown app:app /app/data
 
 # Installed Python packages from the builder stage. scheduler_core lives
 # under /usr/local/lib/python3.11/site-packages/scheduler_core and is
@@ -37,19 +61,12 @@ COPY --from=builder /install /usr/local
 
 # Build context is the repo root (set in products/scheduler/docker-compose.yml)
 # so this Dockerfile can COPY the backend tree out of the monorepo.
-
-# Product backend application code.
-COPY products/scheduler/backend/app/ ./app/
-COPY products/scheduler/backend/api/ ./api/
-COPY products/scheduler/backend/adapters/ ./adapters/
-COPY products/scheduler/backend/services/ ./services/
-
-# Create a non-root user and a data dir it owns. The volume mount target
-# inherits these permissions (bind mount uid is fixed up via `chown` at
-# container start if a host volume is mounted with a different owner).
-RUN useradd --create-home --uid 1001 app \
-    && mkdir -p /app/data \
-    && chown -R app:app /app
+# Each top-level package gets its own COPY so a change inside one
+# directory only invalidates that layer (and the ones below it).
+COPY --chown=app:app products/scheduler/backend/app/      ./app/
+COPY --chown=app:app products/scheduler/backend/api/      ./api/
+COPY --chown=app:app products/scheduler/backend/adapters/ ./adapters/
+COPY --chown=app:app products/scheduler/backend/services/ ./services/
 
 # Healthcheck hits /health/deep so we catch "backend is up but can't
 # persist or can't import the solver" failure modes, not just liveness.
