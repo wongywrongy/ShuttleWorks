@@ -57,7 +57,7 @@ export function FinishedCard({
         'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
         isSelected
           ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-500/15'
-          : 'border-l-border bg-muted/40 hover:bg-muted/60',
+          : 'border-l-status-done bg-muted/40 hover:bg-muted/60',
       ].join(' ')}
     >
       <span className="font-semibold text-muted-foreground tabular-nums">
