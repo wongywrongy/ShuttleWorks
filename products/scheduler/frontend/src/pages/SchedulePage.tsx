@@ -95,14 +95,9 @@ export function SchedulePage() {
     }
   };
 
-  if (configLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Loading tournament configuration...</div>
-      </div>
-    );
-  }
-
+  // ── Derived values + hooks. ALL hooks must be called unconditionally
+  // before any early return, per Rules of Hooks. The `configLoading`
+  // branch lives below.
   const needsConfig = !config || (configError && configError.includes('not found'));
 
   const hasLiveProgress =
@@ -142,6 +137,14 @@ export function SchedulePage() {
     config ?? null,
     currentSlot,
   );
+
+  if (configLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Loading tournament configuration...</div>
+      </div>
+    );
+  }
 
   const selectedMatch = selectedMatchId
     ? matches.find((m) => m.id === selectedMatchId)

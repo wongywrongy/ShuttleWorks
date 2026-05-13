@@ -373,6 +373,47 @@ export function MatchControlCenterPage() {
     console.log(`Undid match ${matchId}, restored to slot ${originalSlot} court ${originalCourt}`);
   }, [schedule, liveOps.matchStates, setSchedule, setMatchState]);
 
+  // Live-operations advisory dispatcher. Routes every suggestedAction
+  // kind to the matching dialog so the toast's "Review" button and
+  // the AdvisoryBanner's Review button both have somewhere to land.
+  // Moved above the early returns so it satisfies Rules of Hooks —
+  // every render path now reaches the same hook calls in the same
+  // order regardless of liveTracking.schedule / liveOps.config state.
+  const handleAdvisoryReview = useCallback((advisory: Advisory) => {
+    const action = advisory.suggestedAction;
+    if (!action) return;
+    if (action.kind === 'repair') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const payload = action.payload as Record<string, any>;
+      setDisruptionPrefill({
+        type: payload.type,
+        matchId: payload.matchId,
+        courtId: payload.courtId,
+      });
+      setDisruptionOpen(true);
+    } else if (action.kind === 'warm_restart') {
+      setWarmRestartOpen(true);
+    } else if (
+      action.kind === 'delay_start' ||
+      action.kind === 'insert_blackout' ||
+      action.kind === 'remove_blackout' ||
+      action.kind === 'compress_remaining'
+    ) {
+      setDirectorOpen(true);
+    }
+  }, []);
+
+  // Cross-component intent: the toast's onAction sets
+  // `pendingAdvisoryReview` on the store; this effect picks it up and
+  // dispatches to the same handler the banner's Review button uses.
+  const pendingAdvisoryReview = useAppStore((s) => s.pendingAdvisoryReview);
+  const setPendingAdvisoryReview = useAppStore((s) => s.setPendingAdvisoryReview);
+  useEffect(() => {
+    if (!pendingAdvisoryReview) return;
+    handleAdvisoryReview(pendingAdvisoryReview);
+    setPendingAdvisoryReview(null);
+  }, [pendingAdvisoryReview, handleAdvisoryReview, setPendingAdvisoryReview]);
+
   // No schedule state
   if (!liveTracking.schedule) {
     return (
@@ -396,45 +437,6 @@ export function MatchControlCenterPage() {
       </div>
     );
   }
-
-  // Live-operations advisory dispatcher. Routes every suggestedAction
-  // kind to the matching dialog so the toast's "Review" button and
-  // the AdvisoryBanner's Review button both have somewhere to land.
-  const handleAdvisoryReview = useCallback((advisory: Advisory) => {
-    const action = advisory.suggestedAction;
-    if (!action) return;
-    if (action.kind === 'repair') {
-      const payload = action.payload as Record<string, any>;
-      setDisruptionPrefill({
-        type: payload.type,
-        matchId: payload.matchId,
-        courtId: payload.courtId,
-      });
-      setDisruptionOpen(true);
-    } else if (action.kind === 'warm_restart') {
-      setWarmRestartOpen(true);
-    } else if (
-      action.kind === 'delay_start' ||
-      action.kind === 'insert_blackout' ||
-      action.kind === 'remove_blackout' ||
-      action.kind === 'compress_remaining'
-    ) {
-      // Director-tool actions land in the DirectorToolsPanel modal so
-      // the operator can tweak the suggested values before previewing.
-      setDirectorOpen(true);
-    }
-  }, []);
-
-  // Cross-component intent: the toast's onAction sets
-  // `pendingAdvisoryReview` on the store; this effect picks it up and
-  // dispatches to the same handler the banner's Review button uses.
-  const pendingAdvisoryReview = useAppStore((s) => s.pendingAdvisoryReview);
-  const setPendingAdvisoryReview = useAppStore((s) => s.setPendingAdvisoryReview);
-  useEffect(() => {
-    if (!pendingAdvisoryReview) return;
-    handleAdvisoryReview(pendingAdvisoryReview);
-    setPendingAdvisoryReview(null);
-  }, [pendingAdvisoryReview, handleAdvisoryReview, setPendingAdvisoryReview]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
