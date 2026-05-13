@@ -2,9 +2,8 @@
 
 Public API (stable, minimal):
 - schedule(problem, *, options?) -> SchedulingResult
-- schedule_from_api(request) -> ScheduleResponse  (lazy app import; use from API layer)
 
-Core usable without FastAPI and without importing app schemas.
+Core is usable without FastAPI and without importing app schemas.
 """
 from scheduler_core.domain import (
     Assignment,
@@ -23,7 +22,7 @@ from scheduler_core.domain import (
     ValidationError,
     InfeasibleError,
 )
-from scheduler_core.schedule import schedule, schedule_from_api
+from scheduler_core.schedule import schedule
 
 # Backend + competition (for extension and advanced usage)
 from scheduler_core.engine import (
@@ -51,7 +50,6 @@ from scheduler_core.engine import (
 
 __all__ = [
     "schedule",
-    "schedule_from_api",
     "SchedulingProblem",
     "SchedulingResult",
     "ScheduleRequest",

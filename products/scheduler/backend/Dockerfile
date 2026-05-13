@@ -36,13 +36,7 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 
 # Build context is the repo root (set in products/scheduler/docker-compose.yml)
-# so this Dockerfile can COPY the legacy product tree alongside the backend.
-
-# Legacy `app/` + `adapters/` stubs — still needed at runtime by
-# scheduler_core/api_compat.py and adapters/fastapi/ until Item 2 of the
-# debt-remediation cleanup removes them.
-COPY products/scheduler/app ./src/app
-COPY products/scheduler/adapters ./src/adapters
+# so this Dockerfile can COPY the backend tree out of the monorepo.
 
 # Product backend application code.
 COPY products/scheduler/backend/app/ ./app/

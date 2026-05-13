@@ -1,20 +1,13 @@
 """Shared pytest setup for the backend test suite.
 
-Pytest's rootdir is ``products/scheduler/`` (the directory containing
-``pyproject.toml``), which forces it to the front of ``sys.path``.
-That makes ``from app.schemas import ...`` resolve to
-``products/scheduler/app/schemas.py`` (a legacy stub that lacks every
-model added since the v2 API rewrite). Each test file used to repeat
-the same fix-up — shift ``backend/`` to the front of ``sys.path`` and
-purge any cached ``app.*`` / ``api.*`` / ``services.*`` / ``adapters.*``
-modules so the next import resolves correctly.
+Pytest's rootdir is ``products/scheduler/``. The FastAPI app and its
+adapter / api / services packages live under ``products/scheduler/backend/``;
+we insert that directory at the front of ``sys.path`` at conftest load
+time so every test can do ``from app.X import Y`` and friends without
+local sys.path manipulation.
 
-``scheduler_core`` is installed as an editable package via
-``scheduler_core/pyproject.toml`` and reaches every test through
-site-packages, no ``sys.path`` insertion required. The
-``_pin_backend_root`` / ``purge_backend_modules`` helpers remain in
-place to defeat the legacy-``app/`` shadowing — they will become
-unnecessary once the legacy package itself goes away.
+``scheduler_core`` is installed as a regular package via its own
+``pyproject.toml`` and reaches every test through site-packages.
 """
 from __future__ import annotations
 
@@ -28,25 +21,19 @@ import pytest
 _PRODUCT_ROOT = Path(__file__).resolve().parents[1]
 _BACKEND_ROOT = str(_PRODUCT_ROOT / "backend")
 
-
-def _pin_backend_root() -> None:
-    """Move ``backend/`` to the very front of ``sys.path``."""
-    sys.path[:] = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
+if _BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, _BACKEND_ROOT)
 
 
 # Module names whose first segment lives under ``backend/``. We purge
-# these so the next ``from <pkg>.<mod> import ...`` resolves fresh.
+# these so the next ``from <pkg>.<mod> import ...`` resolves fresh —
+# router tests need this when a previous test mutated module state.
 _BACKEND_PACKAGE_PREFIXES = ("app.", "api.", "services.", "adapters.")
 _BACKEND_PACKAGE_NAMES = {"app", "api", "services", "adapters"}
 
 
 def purge_backend_modules(extra: Iterable[str] = ()) -> None:
-    """Drop every cached backend module so the next import is fresh.
-
-    Accepts an iterable of additional substring patterns to also
-    purge — keeps the surface flexible for tests that touch helpers
-    not under the standard four packages.
-    """
+    """Drop every cached backend module so the next import is fresh."""
     extras = tuple(extra)
     for cached in [
         k for k in list(sys.modules)
@@ -58,8 +45,7 @@ def purge_backend_modules(extra: Iterable[str] = ()) -> None:
 
 
 def reset_backend_test_env(extra_purge: Iterable[str] = ()) -> None:
-    """Convenience: pin sys.path then purge — what every fixture does."""
-    _pin_backend_root()
+    """Convenience: purge cached backend modules so the next import is fresh."""
     purge_backend_modules(extra_purge)
 
 
@@ -67,22 +53,9 @@ def reset_backend_test_env(extra_purge: Iterable[str] = ()) -> None:
 def backend_env(tmp_path, monkeypatch):
     """Opt-in fixture for backend (FastAPI router) tests.
 
-    Pins ``backend/`` to the front of ``sys.path``, purges any cached
-    backend modules so the next import resolves fresh, and routes the
-    persistence layer at a per-test tmp directory via ``BACKEND_DATA_DIR``.
-
-    Use as the foundation for ``client`` fixtures in router tests:
-
-        @pytest.fixture
-        def client(backend_env):
-            from api import schedule_proposals  # fresh import
-            ...
-
-    Tests that exercise pure scheduler-core code (under
-    ``products/scheduler/{app,adapters}/``) and don't touch FastAPI
-    routers should NOT request this fixture — pinning backend/ ahead
-    of the product root would shadow ``adapters.fastapi`` and similar
-    legacy-namespace modules.
+    Purges any cached backend modules so the next import resolves
+    fresh, and routes the persistence layer at a per-test tmp directory
+    via ``BACKEND_DATA_DIR``.
     """
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
     reset_backend_test_env()
