@@ -45,10 +45,12 @@ clean:
 
 # Run the test suite inside the backend container — useful to confirm
 # container parity with the host's bare-metal pytest run. The dev
-# override mounts the source tree (including tests/) into /app so the
-# slim prod image doesn't need to ship the test directory.
+# override mounts the source tree (including tests/) into /app and
+# pins `target: dev` so pytest + httpx are installed; the prod runtime
+# image doesn't ship them. `--build` forces the dev stage to be rebuilt
+# if the Dockerfile or sources changed since the last test run.
 test:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps backend pytest tests
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --build --no-deps backend pytest tests
 
 # Bare-metal fallbacks (no Docker daemon required)
 bare-backend:

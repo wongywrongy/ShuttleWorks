@@ -10,6 +10,10 @@
 
 services:
   backend:
+    build:
+      # Switch to the `dev` stage so pytest + httpx are installed and
+      # `make test` can run the test suite inside the container.
+      target: dev
     command:
       - uvicorn
       - backend.main:app

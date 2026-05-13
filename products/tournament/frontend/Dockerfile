@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Tournament frontend — multi-stage production build with npm workspaces.
 #
 # Build context = repo root (set in products/tournament/docker-compose.yml).
@@ -6,7 +7,9 @@
 # workspace graph.
 #
 # Multi-stage: build with node, serve the compiled bundle with the
-# nginx-unprivileged image (UID 101, listens on 8080).
+# nginx-unprivileged image (UID 101, listens on 8080). The workspace
+# package.json files come BEFORE source so `npm ci` lives on a cached
+# layer that survives source-only edits.
 
 FROM node:20-alpine AS builder
 
@@ -15,14 +18,18 @@ WORKDIR /app
 # Workspace root metadata.
 COPY package.json package-lock.json ./
 
-# Shared design-system package (consumed via @scheduler/design-system).
+# Each workspace's package.json — enough for `npm ci` to resolve the
+# graph. Source comes later so editing a .tsx doesn't bust this layer.
+COPY packages/design-system/package.json ./packages/design-system/package.json
+COPY products/tournament/frontend/package.json ./products/tournament/frontend/package.json
+
+# Install the workspace graph. Cache mount keeps the npm download cache
+# across builds without bloating the final image.
+RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
+
+# Full source for the workspaces we actually build.
 COPY packages/design-system ./packages/design-system
-
-# This product's frontend source.
 COPY products/tournament/frontend ./products/tournament/frontend
-
-# Install the workspace graph (root lockfile is canonical post Phase 2a).
-RUN npm ci
 
 RUN npm run -w products/tournament/frontend build
 

@@ -18,6 +18,9 @@ services:
       # scheduler_core/ tree alongside the product files.
       context: ../..
       dockerfile: products/tournament/backend/Dockerfile
+      # Pin the prod multi-stage target; the Dockerfile defines a `dev`
+      # stage AFTER `runtime` (so dev would otherwise be the default).
+      target: runtime
     ports:
       - "${BACKEND_HOST_PORT:-8765}:8000"
     restart: unless-stopped

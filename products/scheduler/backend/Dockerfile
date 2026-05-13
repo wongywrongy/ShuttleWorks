@@ -1,17 +1,33 @@
-# Backend Dockerfile - Stateless API
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1.7
+# Backend Dockerfile — Stateless API (FastAPI + CP-SAT).
+#
+# Multi-stage:
+# - `builder` resolves Python deps into /install. ortools 9.8+ ships
+#   manylinux wheels for cp311 on linux/amd64, so no compiler toolchain
+#   is needed; if a future dep starts requiring gcc, add it here only,
+#   not in runtime. A BuildKit cache mount keeps the ~120MB ortools
+#   wheel around between builds.
+# - `runtime` is the final, slim image — just the installed packages
+#   from /install plus the app source. No pip, no apt residue.
+
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+COPY products/scheduler/backend/requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install --prefix=/install -r requirements.txt
+
+
+FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Install system dependencies (build tools for OR-Tools native bits).
-RUN apt-get update && apt-get install -y \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# Installed Python packages from the builder stage.
+COPY --from=builder /install /usr/local
 
 # Build context is the repo root (set in products/scheduler/docker-compose.yml)
 # so this Dockerfile can COPY the shared engine sibling-to the product tree.
-COPY products/scheduler/backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Shared engine at the repo root.
 COPY scheduler_core ./scheduler_core

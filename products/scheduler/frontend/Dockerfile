@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Frontend Dockerfile — multi-stage production build with npm workspaces.
 #
 # Build context = repo root (set in products/scheduler/docker-compose.yml).
@@ -5,7 +6,9 @@
 # shared @scheduler/design-system package so `npm ci` resolves the full
 # workspace graph the same way it does on the developer's machine.
 #
-# Stage 1: build the React app with node:20-alpine.
+# Stage 1: build the React app with node:20-alpine. We copy lockfile +
+# every workspace's package.json FIRST so `npm ci` lands on its own
+# cacheable layer — source edits below don't bust it.
 # Stage 2: serve the compiled assets with the nginx-unprivileged image,
 # which runs as UID 101 by default and listens on port 8080 (non-root
 # can't bind to <1024). Compose remaps 80:8080 so users still hit
@@ -19,18 +22,19 @@ WORKDIR /app
 # is canonical since Phase 2a consolidated per-product lockfiles).
 COPY package.json package-lock.json ./
 
-# Shared design-system package — consumed by the frontend as
-# `@scheduler/design-system`. npm symlinks it from node_modules at install
-# time, so it MUST be present in the build context.
+# Each workspace's package.json — required by `npm ci` to resolve the
+# workspace graph. Source files come later so editing a .tsx doesn't
+# invalidate the install layer.
+COPY packages/design-system/package.json ./packages/design-system/package.json
+COPY products/scheduler/frontend/package.json ./products/scheduler/frontend/package.json
+
+# Install the workspace graph. Cache mount keeps the npm download cache
+# across builds; the cache mount itself is not part of the final layer.
+RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
+
+# Now copy the full source for the workspaces we actually build.
 COPY packages/design-system ./packages/design-system
-
-# This product's frontend source.
 COPY products/scheduler/frontend ./products/scheduler/frontend
-
-# Install the workspace graph. We let npm install all workspaces — it's
-# only marginally slower than filtering, and avoids the brittleness of
-# `npm ci -w` flag combinations on edge cases.
-RUN npm ci
 
 # Build args — baked into the static bundle at build time.
 ARG VITE_API_BASE_URL=/api
