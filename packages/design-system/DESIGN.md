@@ -62,6 +62,20 @@ Each rule has a **why** and a **what to do instead**.
 - **Why:** BRAND.md §6 — Gaussian drop shadows clash with the brutalist chrome. Every elevation should land on the same `0 4px 0 hsl(var(--rule))` offset in light mode, dropping to none in dark.
 - **Instead:** The Tailwind preset overrides `boxShadow.{sm, md, lg, xl, 2xl}` to resolve to `var(--shadow-hard)`. Use the utilities (`shadow-lg`, `shadow-xl`) — never `shadow-[<custom>]` arbitraries. `shadow-inner` keeps its own brand mapping for grid-cell drag highlights.
 
+### 1.8.c One font family — mono is for tabular data only
+- **Why:** Visual coherence. The operator should never feel a font shift while their eye sweeps a row. Decorative mono (mono nav labels, mono section eyebrows, mono description copy) breaks that.
+- **`--font-sans`** (the default) carries: body, headings, labels, eyebrows, SectionHeader, buttons, descriptions, error/warning copy, search inputs, comboboxes, dropdown options, banner messages — everything that's words.
+- **`--font-mono`** is reserved for:
+  - **Scores** — `21-19`, set columns
+  - **Rank codes** — `MS1`, `WD2`, `XD3`
+  - **Time stamps** — `09:30`, `14:45`
+  - **Court IDs** — `C3`, `C12`
+  - **Elapsed timers** — `02:34`, `1h 15m`
+  - **Numeric form inputs** for codes (event-rank `<select>` / `<input>`, score number inputs)
+  - **Solver progress logs** — the streaming log lines that mimic terminal output
+  - **TV / public-display tactical-telemetry surfaces** — the `/display` route specifically embraces a Bloomberg-Terminal aesthetic; whole panels there may be mono by design
+- **Test**: if a class applies `font-mono` to a wrapper rather than the specific data point, audit it. Either the wrapper exclusively holds tabular data (acceptable) or it's bleeding mono onto prose (replace).
+
 ### 1.9 No new colors outside the palette
 - **Why:** A single warm accent (Signal Orange) + ink scale + status palette is the entire design space. Adding hues collapses the discipline.
 - **Instead:** If a status needs differentiation, add a new `--status-*` token in `tokens.css` and use it through the `status.*` Tailwind color. **Never** invent a one-off color in a component.

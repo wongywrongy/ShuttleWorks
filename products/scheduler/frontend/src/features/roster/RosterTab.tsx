@@ -511,7 +511,7 @@ function PlayerListSection({
     return (
       <div className="flex-1 px-3 py-4 text-center text-xs text-muted-foreground">
         No matches for{' '}
-        <span className="font-mono text-foreground">{query}</span>.
+        <span className="font-medium text-foreground">{query}</span>.
       </div>
     );
   }
