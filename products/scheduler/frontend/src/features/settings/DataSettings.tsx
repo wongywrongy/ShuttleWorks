@@ -1,45 +1,25 @@
 /**
  * DataSettings — section 05 (Tournament data) of the Setup tab.
  *
- * Export / import buttons + a stub backup list + recover-from-XLSX
- * trigger + a destructive "reset to empty" button that wipes
- * groups/players/matches/schedule/state back to a fresh-load
- * tournament. The reset is the user-facing escape hatch for clearing
- * accumulated testing data without going through DevTools.
+ * Mounts the real `TournamentFileManagement` (JSON export/import) and
+ * `BackupPanel` (server-side backup list + XLSX recover) feature
+ * components, plus a destructive "Reset tournament" escape hatch.
+ *
+ * Earlier iterations had stub Row buttons here labeled "wire into
+ * TournamentFileManagement / BackupPanel actions in a follow-up" — the
+ * follow-up is this commit. Both feature components own their own
+ * Section chrome via `SettingsPrimitives.Section`, so they slot in
+ * directly without an outer SectionHeader.
  */
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useClearAllData } from '../../hooks/useClearAllData';
+import { BackupPanel } from '../setup/BackupPanel';
+import { TournamentFileManagement } from '../tournaments/TournamentFileManagement';
 import { Row, SectionHeader } from './SettingsControls';
-
-interface BackupEntry {
-  id: string;
-  timestamp: string;
-}
-
-const PLACEHOLDER_BACKUPS: BackupEntry[] = [
-  { id: 'b-2026-05-12-09-15', timestamp: '2026-05-12 09:15' },
-  { id: 'b-2026-05-11-17-42', timestamp: '2026-05-11 17:42' },
-  { id: 'b-2026-05-11-08-03', timestamp: '2026-05-11 08:03' },
-];
 
 export function DataSettings() {
   const clearAllData = useClearAllData();
-
-  // Stub handlers — wire into TournamentFileManagement /
-  // BackupPanel actions in a follow-up.
-  const onExport = () => {
-    /* no-op for now */
-  };
-  const onImport = () => {
-    /* no-op for now */
-  };
-  const onRestore = () => {
-    /* no-op for now — wired in a follow-up to BackupPanel.restoreBackup */
-  };
-  const onRecoverXlsx = () => {
-    /* no-op for now */
-  };
 
   // Two-click confirm for the destructive Reset — first click flips
   // the button into a red "Click again to wipe" state for 4 s; second
@@ -64,55 +44,8 @@ export function DataSettings() {
 
   return (
     <div>
-      <SectionHeader>Export &amp; import</SectionHeader>
-      <Row
-        label="Export"
-        control={
-          <Button type="button" variant="outline" size="sm" onClick={onExport}>
-            Export
-          </Button>
-        }
-      />
-      <Row
-        label="Import"
-        control={
-          <Button type="button" variant="outline" size="sm" onClick={onImport}>
-            Import
-          </Button>
-        }
-      />
-      <Row
-        label="Recover from XLSX"
-        control={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onRecoverXlsx}
-          >
-            Recover from XLSX…
-          </Button>
-        }
-        last
-      />
-
-      <SectionHeader>Backups</SectionHeader>
-      {PLACEHOLDER_BACKUPS.map((b) => (
-        <Row
-          key={b.id}
-          label={b.timestamp}
-          control={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onRestore()}
-            >
-              Restore
-            </Button>
-          }
-        />
-      ))}
+      <TournamentFileManagement />
+      <BackupPanel />
 
       <SectionHeader>Reset</SectionHeader>
       <Row
