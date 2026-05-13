@@ -273,9 +273,9 @@ function CourtCard({
           )}
           {status === 'called' && (
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300`}
+              className={`inline-flex items-center gap-1.5 rounded-full bg-status-called/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-status-called`}
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400 animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-status-called animate-pulse" />
               Calling
             </span>
           )}

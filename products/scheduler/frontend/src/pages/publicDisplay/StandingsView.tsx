@@ -45,11 +45,11 @@ export function StandingsView({ standings }: StandingsViewProps) {
                 {team.groupName}
               </div>
               <div className="flex items-baseline gap-3 text-xl tabular-nums">
-                <span className="text-emerald-600 dark:text-emerald-400">
+                <span className="text-status-done">
                   {team.wins}W
                 </span>
                 <span className="text-muted-foreground">–</span>
-                <span className="text-rose-600 dark:text-rose-400">
+                <span className="text-destructive">
                   {team.losses}L
                 </span>
               </div>

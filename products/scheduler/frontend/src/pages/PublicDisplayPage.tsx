@@ -341,10 +341,15 @@ export function PublicDisplayPage() {
       {/* ---------- Header ------------------------------------------------ */}
       <div className={`sticky top-0 z-hud border-b border-border ${tvHeaderBgClass} px-6 py-4 backdrop-blur`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-baseline gap-4 min-w-0">
-            <div className="text-3xl font-bold tracking-tight">Tournament Status</div>
+          <div className="flex min-w-0 items-baseline gap-4">
+            {/* Tournament name when set, else a generic "Live ops" label
+                so the header still anchors the page when the operator
+                hasn't named their tournament. */}
+            <div className="truncate text-3xl font-bold tracking-tight">
+              {config.tournamentName?.trim() || 'Tournament status'}
+            </div>
             {formatTournamentDate(config.tournamentDate) && (
-              <div className="text-base text-muted-foreground whitespace-nowrap">
+              <div className="whitespace-nowrap text-base text-muted-foreground tabular-nums">
                 {formatTournamentDate(config.tournamentDate)}
               </div>
             )}
@@ -376,8 +381,10 @@ export function PublicDisplayPage() {
         </div>
       </div>
 
-      <div className="px-6 pb-28 pt-6">
-        {/* ---------- Courts view ---------- */}
+      {/* View swap area. `key={view}` + `motion-enter` so changing tabs
+          materializes the new view via the brand recipe rather than
+          snapping in — visible from across a gym. */}
+      <div key={view} className="motion-enter px-6 pb-28 pt-6">
         {view === 'courts' && (
           <CourtsView
             courts={courtMatches}
@@ -397,7 +404,6 @@ export function PublicDisplayPage() {
           />
         )}
 
-        {/* ---------- Schedule view ---------- */}
         {view === 'schedule' && (
           <ScheduleView
             upcomingMatches={upcomingMatches}
@@ -406,7 +412,6 @@ export function PublicDisplayPage() {
           />
         )}
 
-        {/* ---------- Standings view ---------- */}
         {view === 'standings' && <StandingsView standings={standings} />}
       </div>
 
@@ -427,8 +432,8 @@ export function PublicDisplayPage() {
               />
               {matchesByStatus.started.length} active
             </span>
-            <span className="inline-flex items-center gap-2 text-amber-700 dark:text-amber-300">
-              <span className="h-2 w-2 rounded-full bg-amber-500 dark:bg-amber-400" />
+            <span className="inline-flex items-center gap-2 text-status-called">
+              <span className="h-2 w-2 rounded-full bg-status-called animate-pulse" />
               {matchesByStatus.called.length} called
             </span>
           </div>

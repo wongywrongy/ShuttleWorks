@@ -44,7 +44,7 @@ export function ScheduleView({
               <div className="w-20 text-xl font-bold text-foreground">
                 {match?.eventRank || `M${match?.matchNumber || '?'}`}
               </div>
-              <div className="w-14 text-lg font-semibold text-blue-600 dark:text-blue-400">
+              <div className="w-14 text-lg font-semibold text-accent tabular-nums">
                 C{assignment.courtId}
               </div>
               <div className="w-24 tabular-nums text-lg text-muted-foreground">
