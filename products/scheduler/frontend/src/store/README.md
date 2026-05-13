@@ -40,8 +40,9 @@ storage key.
 | Review pipeline | `useUiStore` | `activeProposal`, `advisories`, `suggestions`, `pendingAdvisoryReview`, `unlockModalState` |
 
 `pushToast` returns the toast id so callers can dismiss it later.
-`clearAllData` lives on `useTournamentStore` and also resets the match
-and UI stores.
+Each store exposes its own `reset()`. To wipe everything for "Reset
+tournament" use the `useClearAllData` hook (in `../hooks/`) — it
+composes all three resets and keeps the stores independent.
 
 ## Persistence boundary
 

@@ -155,7 +155,8 @@ interface UiState {
   unlockModalState: UnlockModalState | null;
   setUnlockModalState: (state: UnlockModalState | null) => void;
 
-  // Hard reset (called by tournamentStore.clearAllData).
+  // Hard reset — called by the `useClearAllData` hook so the three
+  // stores reset together when the operator wipes the tournament.
   reset: () => void;
 }
 

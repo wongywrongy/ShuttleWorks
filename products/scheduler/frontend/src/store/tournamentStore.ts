@@ -16,8 +16,6 @@ import type {
   ScheduleHistoryEntry,
   TournamentConfig,
 } from '../api/dto';
-import { useMatchStateStore } from './matchStateStore';
-import { useUiStore } from './uiStore';
 
 interface TournamentState {
   // Tournament Configuration
@@ -67,7 +65,7 @@ interface TournamentState {
   setScheduleHistory: (history: ScheduleHistoryEntry[]) => void;
 
   // Data management
-  clearAllData: () => void;
+  reset: () => void;
   exportData: () => string;
   importData: (jsonData: string) => void;
 }
@@ -221,11 +219,11 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   setScheduleVersion: (scheduleVersion) => set({ scheduleVersion }),
   setScheduleHistory: (scheduleHistory) => set({ scheduleHistory }),
 
-  clearAllData: () => {
-    set({ ...INITIAL, config: DEFAULT_CONFIG });
-    useMatchStateStore.getState().reset();
-    useUiStore.getState().reset();
-  },
+  // Reset is scoped to this store. Wiping match-state + UI on a full
+  // "Clear all data" is the job of `useClearAllData` in hooks/, which
+  // composes all three stores so this one doesn't reach across the
+  // persistence boundary.
+  reset: () => set({ ...INITIAL, config: DEFAULT_CONFIG }),
 
   exportData: () => {
     const state = get();
