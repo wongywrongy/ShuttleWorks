@@ -15,7 +15,9 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Request
+
+from services.persistence import PersistenceService, get_persistence
 
 from app.error_codes import ErrorCode, http_error
 
@@ -97,16 +99,19 @@ async def _handle_optimize(
     stay-close objective, so we'd need a second solve at higher
     weight to evaluate it.
     """
-    persisted = _read_persisted_state()
+    svc: PersistenceService = app.state.persistence
+    persisted = await _read_persisted_state(svc)
     if persisted is None or persisted.schedule is None or persisted.config is None:
         log.debug("suggestions: no persisted schedule to optimize against")
         return
 
     # Match states live in a separate persistence file.
-    from api.match_state import _read_state_file
     try:
-        match_state_file = _read_state_file()
-        match_states = match_state_file.matchStates
+        ms_data = await svc.read_match_states()
+        from api.match_state import MatchStateDTO
+        match_states = {
+            mid: MatchStateDTO(**ms) for mid, ms in (ms_data.get("matchStates") or {}).items()
+        }
     except Exception:
         log.exception("suggestions: failed to read match_states")
         match_states = {}
@@ -233,13 +238,17 @@ async def _handle_repair(
         log.warning("repair handler: missing disruption.type in %s", event.fingerprint)
         return
 
-    persisted = _read_persisted_state()
+    svc: PersistenceService = app.state.persistence
+    persisted = await _read_persisted_state(svc)
     if persisted is None or persisted.schedule is None or persisted.config is None:
         return
 
-    from api.match_state import _read_state_file
     try:
-        match_states = _read_state_file().matchStates
+        ms_data = await svc.read_match_states()
+        from api.match_state import MatchStateDTO
+        match_states = {
+            mid: MatchStateDTO(**ms) for mid, ms in (ms_data.get("matchStates") or {}).items()
+        }
     except Exception:
         log.exception("suggestions: failed to read match_states")
         match_states = {}

@@ -35,6 +35,9 @@ async def lifespan(app: FastAPI):
     """
     log.info("app_startup version=2.0.0")
 
+    from services.persistence import PersistenceService
+    app.state.persistence = PersistenceService()
+
     from services.suggestions_worker import (
         SuggestionsWorker,
         TriggerEvent,

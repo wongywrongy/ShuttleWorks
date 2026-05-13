@@ -21,7 +21,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+
+from services.persistence import PersistenceService, get_persistence
 
 from app.schemas import (
     Advisory,
@@ -463,7 +465,10 @@ def collect_advisories(
 
 
 @router.get("/advisories", response_model=List[Advisory])
-async def get_schedule_advisories(http_request: Request) -> List[Advisory]:
+async def get_schedule_advisories(
+    http_request: Request,
+    svc: PersistenceService = Depends(get_persistence),
+) -> List[Advisory]:
     """Return current advisories computed from tournament + match state.
 
     Reads both files via the existing helpers in tournament_state /
@@ -475,18 +480,11 @@ async def get_schedule_advisories(http_request: Request) -> List[Advisory]:
     to advisories that already have a pre-baked suggestion stamped by the
     worker.
     """
-    # Late imports to avoid circulars and to allow tests to monkeypatch
-    # the file paths via BACKEND_DATA_DIR before the helpers resolve.
-    from api import match_state as match_state_mod
-    from api import tournament_state as tournament_state_mod
-
     # Tournament state — may be None when nothing has been saved yet.
     state: Optional[TournamentStateDTO] = None
     try:
-        path = tournament_state_mod._state_path()
-        if path.exists():
-            data, _ = tournament_state_mod._read_with_recovery(path)
-            data = tournament_state_mod._migrate(data)
+        data, _ = await svc.read_tournament_state()
+        if data is not None:
             state = TournamentStateDTO(**{
                 k: v for k, v in data.items() if k != "_integrity"
             })
@@ -499,10 +497,8 @@ async def get_schedule_advisories(http_request: Request) -> List[Advisory]:
 
     # Match states — empty dict when no live state file yet.
     try:
-        ms_file = match_state_mod._read_state_file()
-        match_states_dict = {
-            mid: ms.model_dump() for mid, ms in ms_file.matchStates.items()
-        }
+        ms_data = await svc.read_match_states()
+        match_states_dict = ms_data.get("matchStates", {}) or {}
     except Exception as e:  # noqa: BLE001
         log.warning("advisories: match state unreadable: %s", e)
         match_states_dict = {}
