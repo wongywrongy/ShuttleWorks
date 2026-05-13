@@ -220,9 +220,15 @@ function BadmintonInlineEditor({
   };
   const [sets, setSets] = useState<SetScore[]>(() => padSets(initialSets));
 
-  // Keep the array length in sync with the format choice.
+  // Keep the array length in sync with the format choice. Guard the
+  // setState so a maxSets change that doesn't actually need to resize
+  // (previous length already matches) returns the same array ref —
+  // React then skips the re-render. Avoids the cascading-render
+  // anti-pattern in practice; the lint rule is silenced for this
+  // specific intentional sync-from-prop case.
   useEffect(() => {
-    setSets((prev) => padSets(prev));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSets((prev) => (prev.length === maxSets ? prev : padSets(prev)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maxSets]);
 

@@ -34,8 +34,8 @@ export function DataSettings() {
   const onImport = () => {
     /* no-op for now */
   };
-  const onRestore = (_id: string) => {
-    /* no-op for now */
+  const onRestore = () => {
+    /* no-op for now — wired in a follow-up to BackupPanel.restoreBackup */
   };
   const onRecoverXlsx = () => {
     /* no-op for now */
@@ -106,7 +106,7 @@ export function DataSettings() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => onRestore(b.id)}
+              onClick={() => onRestore()}
             >
               Restore
             </Button>

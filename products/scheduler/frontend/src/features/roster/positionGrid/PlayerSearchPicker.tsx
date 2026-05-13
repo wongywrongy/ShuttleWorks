@@ -60,9 +60,13 @@ export function PlayerSearchPicker({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [players, schoolId, occupants, query]);
 
-  useEffect(() => {
-    setActiveIndex((i) => Math.min(Math.max(i, 0), Math.max(candidates.length - 1, 0)));
-  }, [candidates.length]);
+  // Clamp the active index to the current candidate range. Computed at
+  // render time instead of via a setState-in-effect so a filter change
+  // doesn't trigger a second render pass per the React docs guidance.
+  const safeActiveIndex = Math.min(
+    Math.max(activeIndex, 0),
+    Math.max(candidates.length - 1, 0),
+  );
 
   const pick = (p: PlayerDTO) => {
     onAssign(p.id);
@@ -91,7 +95,7 @@ export function PlayerSearchPicker({
               setActiveIndex((i) => Math.max(i - 1, 0));
             } else if (e.key === 'Enter') {
               e.preventDefault();
-              const pick_ = candidates[activeIndex];
+              const pick_ = candidates[safeActiveIndex];
               if (pick_) pick(pick_);
             }
           }}
@@ -119,7 +123,7 @@ export function PlayerSearchPicker({
                 data-testid={`picker-option-${p.id}`}
                 className={[
                   'flex w-full items-center justify-between rounded px-2 py-1 text-left text-sm transition-colors',
-                  i === activeIndex
+                  i === safeActiveIndex
                     ? 'bg-accent/10 text-accent'
                     : 'text-foreground hover:bg-muted/50',
                 ].join(' ')}
