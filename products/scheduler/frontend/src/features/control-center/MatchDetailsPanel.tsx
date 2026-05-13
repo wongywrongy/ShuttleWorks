@@ -505,11 +505,21 @@ export function MatchDetailsPanel({
             (p) => !inMatchIds.has(p.id) && p.status !== 'withdrawn',
           );
 
+          // Team-name headers come from the first player on each side
+          // (dual-meet invariant: one school per side). Silently null if
+          // either side lacks a known group — the header simply doesn't
+          // render in that case.
+          const sideATeamName = match.sideA?.[0]
+            ? getPlayerSchoolAccent(playerMap.get(match.sideA[0]), groupIndex).name
+            : null;
+          const sideBTeamName = match.sideB?.[0]
+            ? getPlayerSchoolAccent(playerMap.get(match.sideB[0]), groupIndex).name
+            : null;
+
           const rankExpanded = expandRankLabel(match.eventRank);
           const renderRow = (playerId: string, side: 'A' | 'B', key: number) => {
             const name = playerNames.get(playerId) || playerId;
             const restInfo = playerRestTimes.get(playerId);
-            const accent = getPlayerSchoolAccent(playerMap.get(playerId), groupIndex);
             const confirmed = matchState?.playerConfirmations?.[playerId] || false;
             const isPicking = subPickingFor === playerId;
             return (
@@ -521,7 +531,6 @@ export function MatchDetailsPanel({
                         Won
                       </span>
                     )}
-                    {accent.name && <SchoolDot accent={accent} size="sm" />}
                     {match.eventRank && (
                       <span
                         title={rankExpanded ?? match.eventRank}
@@ -646,11 +655,27 @@ export function MatchDetailsPanel({
               </div>
             );
           };
+          // Team-name header — matches the SectionHeader vocabulary used
+          // elsewhere (2xs uppercase tracking-[0.18em] muted). Acts as the
+          // implicit separator between teams, replacing the old "vs" line
+          // and the colored SchoolDot indicators.
+          const teamHeader = (label: string | undefined) =>
+            label ? (
+              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {label}
+              </div>
+            ) : null;
+
           return (
-            <div className="text-xs space-y-0.5">
-              {(match.sideA || []).map((id, i) => renderRow(id, 'A', i))}
-              <div className="text-[10px] text-muted-foreground">vs</div>
-              {(match.sideB || []).map((id, i) => renderRow(id, 'B', i))}
+            <div className="text-xs space-y-2">
+              <div className="space-y-0.5">
+                {teamHeader(sideATeamName ?? undefined)}
+                {(match.sideA || []).map((id, i) => renderRow(id, 'A', i))}
+              </div>
+              <div className="space-y-0.5">
+                {teamHeader(sideBTeamName ?? undefined)}
+                {(match.sideB || []).map((id, i) => renderRow(id, 'B', i))}
+              </div>
             </div>
           );
         })()}
@@ -769,13 +794,14 @@ export function MatchDetailsPanel({
           dialogs with this match's id so the operator doesn't have to
           find it again. Move/postpone is the lighter, "match is just
           running late" path; the disruption row is the nuclear option.
-          Each button is followed by an inline consequence line so a
-          director sees what will happen before opening the dialog. */}
+          Per-button `title` tooltips carry the consequence detail; the
+          inline description copy was dropped — the buttons speak for
+          themselves. */}
       {(onRequestDisruption || onRequestMove) && match && status !== 'finished' && (
         <div className="px-3 py-2 border-t border-border/60 bg-muted/30 space-y-2">
           {onRequestMove && assignment && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Reschedule
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -783,19 +809,16 @@ export function MatchDetailsPanel({
                   type="button"
                   onClick={() => onRequestMove(match.id)}
                   className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-2xs text-blue-700 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200"
-                  title="Postpone or move this match to another time/court"
+                  title="Re-anchor this match to a new time or court. Other matches stay put."
                 >
                   Move / postpone…
                 </button>
               </div>
-              <p className="text-[10px] leading-snug text-muted-foreground">
-                Re-anchors this match to a new time or court. Other matches stay put.
-              </p>
             </div>
           )}
           {onRequestDisruption && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Disruption
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -804,7 +827,7 @@ export function MatchDetailsPanel({
                     type="button"
                     onClick={() => onRequestDisruption('overrun', match.id)}
                     className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-2xs text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-                    title="Mark as overrunning — slide successors back"
+                    title="Mark overrun — keeps this match playing, slides successors back to absorb the delay."
                   >
                     Mark overrun
                   </button>
@@ -813,7 +836,7 @@ export function MatchDetailsPanel({
                   type="button"
                   onClick={() => onRequestDisruption('cancellation', match.id)}
                   className="rounded border border-red-300 bg-red-50 px-2 py-0.5 text-2xs text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"
-                  title="Cancel this match and free its slot for a later one"
+                  title="Cancel match — removes it entirely and frees the slot for later use."
                 >
                   Cancel match
                 </button>
@@ -822,22 +845,12 @@ export function MatchDetailsPanel({
                     type="button"
                     onClick={() => onRequestDisruption('court_closed', match.id)}
                     className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-muted/40"
-                    title={`Close court ${assignment.courtId} and re-route its matches`}
+                    title={`Close court ${assignment.courtId} — closes it for the rest of the day; remaining matches on it are re-routed.`}
                   >
                     Close court {assignment.courtId}
                   </button>
                 )}
               </div>
-              <ul className="space-y-0.5 text-[10px] leading-snug text-muted-foreground">
-                {status === 'started' && (
-                  <li><span className="font-semibold text-amber-700 dark:text-amber-300">Mark overrun</span> — keeps this match playing, slides successors back to absorb the delay.</li>
-                )}
-                <li><span className="font-semibold text-red-700 dark:text-red-300">Cancel</span> — removes this match entirely; frees the slot for later use.</li>
-                {assignment && (
-                  <li><span className="font-semibold text-foreground">Close court {assignment.courtId}</span> — closes the court for the rest of the day; remaining matches on it are re-routed.</li>
-                )}
-                <li className="italic text-muted-foreground/80">Each opens a dialog where you set details before the solver runs.</li>
-              </ul>
             </div>
           )}
         </div>
