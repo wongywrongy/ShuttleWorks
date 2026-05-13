@@ -10,6 +10,16 @@ services:
       dockerfile: products/scheduler/backend/Dockerfile
     ports:
       - "${BACKEND_HOST_PORT:-8000}:8000"
+    # Optional: pass-through env file. Copy backend/.env.example to
+    # backend/.env and fill in SUPABASE_URL / SUPABASE_ANON_KEY /
+    # ENVIRONMENT=cloud to flip the stack from local-only (default)
+    # into cloud-mirroring mode. ``required: false`` so the stack
+    # still boots when the file is absent — the defaults in the
+    # ``environment:`` block below cover the local-only case. Values
+    # in ``.env`` override the inline defaults if present.
+    env_file:
+      - path: backend/.env
+        required: false
     environment:
       - LOG_LEVEL=info
       - DATA_DIR=/app/data

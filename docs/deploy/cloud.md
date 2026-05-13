@@ -157,21 +157,52 @@ Supabase every 5 seconds).
 
 ### Option A — Docker Compose (production-shape, recommended today)
 
+`make scheduler` from the repo root starts the Compose stack. By
+default it boots in **local-only mode** — SQLite source of truth,
+no Supabase replication, no Realtime broadcast, the synthetic
+local-dev user. This is the right mode for a single-laptop
+tournament where the director is also the operator.
+
+To enable cloud-mirror mode (browser operators read from Supabase
+Realtime, the outbox worker pushes match writes to Postgres), drop
+a `backend/.env` file in `products/scheduler/backend/`:
+
 ```bash
-# Repo root.
 cd products/scheduler
+cat > backend/.env <<EOF
+ENVIRONMENT=cloud
+SUPABASE_URL=https://<your-supabase-project>.supabase.co
+SUPABASE_ANON_KEY=<your-publishable-key>
+CORS_ORIGINS=https://<your-tv-display>.vercel.app,http://192.168.1.100
+EOF
 
-# .env in this directory provides the secrets the sidecar reads at
-# boot — see `backend/.env.example` for the full list.
-cp backend/.env.example backend/.env
-# Edit backend/.env with the Supabase URL, anon key, and a SQLite
-# path inside the volume mount (DATABASE_URL=sqlite:////app/data/local.db).
-
-make scheduler          # builds + starts → http://localhost (frontend), backend on :8000
+make scheduler          # → http://localhost (frontend), backend on :8000
 ```
 
-The Compose project namespaces ports + container names; runs cleanly
-side-by-side with the tournament product.
+The Compose backend service has `env_file: - path: backend/.env`
+with `required: false`, so the stack boots cleanly with or without
+the file. Values in `.env` override the inline `environment:`
+defaults; the backend's `Settings` model picks them up at boot
+and the `_enforce_cloud_secrets` validator hard-fails the
+container if `ENVIRONMENT=cloud` is set without all the Supabase
+secrets.
+
+The Compose project namespaces ports + container names; runs
+cleanly side-by-side with the tournament product.
+
+### How to tell which mode you're in
+
+After `make scheduler`, check the backend logs:
+
+```bash
+make logs-scheduler
+# Look for one of these on startup:
+#   sync_service started               → cloud mode
+#   sync_service skipped (SUPABASE_URL blank — local-dev mode)  → local mode
+```
+
+Or hit `/health/deep` and inspect the response — it doesn't echo
+the secrets but the `schemaVersion` is the same in both modes.
 
 ### Option B — Dev servers (Tauri WebView equivalent for development)
 
