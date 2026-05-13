@@ -15,7 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Warning } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { usePlayerMap } from '../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../hooks/useSearchParamState';
@@ -58,11 +58,11 @@ export function MatchesSpreadsheet({
    *  parent can clear `pendingFocusId`. */
   onFocusConsumed?: () => void;
 } = {}) {
-  const matches = useAppStore((s) => s.matches);
-  const players = useAppStore((s) => s.players);
-  const groups = useAppStore((s) => s.groups);
-  const updateMatch = useAppStore((s) => s.updateMatch);
-  const deleteMatch = useAppStore((s) => s.deleteMatch);
+  const matches = useTournamentStore((s) => s.matches);
+  const players = useTournamentStore((s) => s.players);
+  const groups = useTournamentStore((s) => s.groups);
+  const updateMatch = useTournamentStore((s) => s.updateMatch);
+  const deleteMatch = useTournamentStore((s) => s.deleteMatch);
 
   // Subscribes to the same URL-backed search the page header writes to.
   const [searchQuery] = useSearchParamState('q', '');
@@ -114,7 +114,7 @@ export function MatchesSpreadsheet({
     });
   }, [matches, searchQuery, eventFilter, schoolFilter, typeFilter, playerById]);
 
-  const config = useAppStore((s) => s.config);
+  const config = useTournamentStore((s) => s.config);
   const disruptions = useDisruptions();
 
   // Configured event ranks — derived from `config.rankCounts`. These

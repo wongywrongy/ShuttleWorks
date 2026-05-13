@@ -14,12 +14,13 @@
  * with the operator's choice.
  */
 import { useCallback } from 'react';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useUiStore } from '../store/uiStore';
 
 export function useLockGuard() {
-  const isScheduleLocked = useAppStore((state) => state.isScheduleLocked);
-  const unlockSchedule = useAppStore((state) => state.unlockSchedule);
-  const setUnlockModalState = useAppStore((state) => state.setUnlockModalState);
+  const isScheduleLocked = useTournamentStore((state) => state.isScheduleLocked);
+  const unlockSchedule = useTournamentStore((state) => state.unlockSchedule);
+  const setUnlockModalState = useUiStore((state) => state.setUnlockModalState);
 
   /**
    * Request to unlock the schedule.

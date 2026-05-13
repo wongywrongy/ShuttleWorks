@@ -25,7 +25,9 @@ import type {
 import { apiClient } from '../api/client';
 import type { Disruption } from '../api/client';
 import type { Proposal } from '../api/dto';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useMatchStateStore } from '../store/matchStateStore';
+import { useUiStore } from '../store/uiStore';
 
 type Status = 'idle' | 'loading' | 'error';
 
@@ -49,20 +51,20 @@ interface UseProposalsResult {
 }
 
 export function useProposals(): UseProposalsResult {
-  const config = useAppStore((s) => s.config);
-  const players = useAppStore((s) => s.players);
-  const matches = useAppStore((s) => s.matches);
-  const schedule = useAppStore((s) => s.schedule);
-  const matchStates = useAppStore((s) => s.matchStates);
-  const setSchedule = useAppStore((s) => s.setSchedule);
-  const setScheduleVersion = useAppStore((s) => s.setScheduleVersion);
-  const setScheduleHistory = useAppStore((s) => s.setScheduleHistory);
-  const setActiveProposal = useAppStore((s) => s.setActiveProposal);
-  const setAdvisories = useAppStore((s) => s.setAdvisories);
-  const setConfig = useAppStore((s) => s.setConfig);
-  const setScheduleStale = useAppStore((s) => s.setScheduleStale);
-  const pushToast = useAppStore((s) => s.pushToast);
-  const activeProposal = useAppStore((s) => s.activeProposal);
+  const config = useTournamentStore((s) => s.config);
+  const players = useTournamentStore((s) => s.players);
+  const matches = useTournamentStore((s) => s.matches);
+  const schedule = useTournamentStore((s) => s.schedule);
+  const matchStates = useMatchStateStore((s) => s.matchStates);
+  const setSchedule = useTournamentStore((s) => s.setSchedule);
+  const setScheduleVersion = useTournamentStore((s) => s.setScheduleVersion);
+  const setScheduleHistory = useTournamentStore((s) => s.setScheduleHistory);
+  const setActiveProposal = useUiStore((s) => s.setActiveProposal);
+  const setAdvisories = useUiStore((s) => s.setAdvisories);
+  const setConfig = useTournamentStore((s) => s.setConfig);
+  const setScheduleStale = useTournamentStore((s) => s.setScheduleStale);
+  const pushToast = useUiStore((s) => s.pushToast);
+  const activeProposal = useUiStore((s) => s.activeProposal);
 
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);

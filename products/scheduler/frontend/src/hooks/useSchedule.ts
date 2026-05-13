@@ -18,27 +18,28 @@
  * client treats ``ERR_CANCELED`` as silent (no toast).
  */
 import { useCallback, useState, useRef } from 'react';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useUiStore } from '../store/uiStore';
 import { apiClient } from '../api/client';
 import type { ScheduleView } from '../api/dto';
 
 export function useSchedule() {
-  const config = useAppStore((state) => state.config);
-  const players = useAppStore((state) => state.players);
-  const matches = useAppStore((state) => state.matches);
-  const schedule = useAppStore((state) => state.schedule);
-  const setSchedule = useAppStore((state) => state.setSchedule);
-  const setScheduleStats = useAppStore((state) => state.setScheduleStats);
+  const config = useTournamentStore((state) => state.config);
+  const players = useTournamentStore((state) => state.players);
+  const matches = useTournamentStore((state) => state.matches);
+  const schedule = useTournamentStore((state) => state.schedule);
+  const setSchedule = useTournamentStore((state) => state.setSchedule);
+  const setScheduleStats = useUiStore((state) => state.setScheduleStats);
 
   // Use global generation state (persists across tab switches)
-  const isGenerating = useAppStore((state) => state.isGenerating);
-  const generationProgress = useAppStore((state) => state.generationProgress);
-  const generationError = useAppStore((state) => state.generationError);
-  const setIsGenerating = useAppStore((state) => state.setIsGenerating);
-  const setGenerationProgress = useAppStore((state) => state.setGenerationProgress);
-  const setGenerationError = useAppStore((state) => state.setGenerationError);
-  const setSolverHud = useAppStore((state) => state.setSolverHud);
-  const resetSolverHud = useAppStore((state) => state.resetSolverHud);
+  const isGenerating = useUiStore((state) => state.isGenerating);
+  const generationProgress = useUiStore((state) => state.generationProgress);
+  const generationError = useUiStore((state) => state.generationError);
+  const setIsGenerating = useUiStore((state) => state.setIsGenerating);
+  const setGenerationProgress = useUiStore((state) => state.setGenerationProgress);
+  const setGenerationError = useUiStore((state) => state.setGenerationError);
+  const setSolverHud = useUiStore((state) => state.setSolverHud);
+  const resetSolverHud = useUiStore((state) => state.resetSolverHud);
 
   const [view, setView] = useState<ScheduleView>('timeslot');
 
@@ -102,7 +103,7 @@ export function useSchedule() {
 
       // Save final stats - use result.assignments (the actual final schedule),
       // not progress.current_assignments (which may be from an intermediate solution)
-      const finalProgress = useAppStore.getState().generationProgress;
+      const finalProgress = useUiStore.getState().generationProgress;
       setScheduleStats({
         elapsed: finalProgress?.elapsed_ms ?? 0,
         solutionCount: finalProgress?.solution_count,
@@ -178,8 +179,7 @@ export function useSchedule() {
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      const store = useAppStore.getState();
-      store.setPendingPin(pin);
+      useUiStore.getState().setPendingPin(pin);
 
       const previousAssignments = schedule.assignments.map((a) =>
         a.matchId === pin.matchId

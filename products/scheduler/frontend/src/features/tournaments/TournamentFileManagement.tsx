@@ -3,21 +3,21 @@
  * Handles export/import of complete tournament data (config, players, matches, schedule, match states)
  */
 import { useState } from 'react';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { apiClient } from '../../api/client';
 import type { TournamentExportV2, MatchStateDTO } from '../../api/dto';
 import { Button } from '@/components/ui/button';
 import { Section } from '../settings/SettingsPrimitives';
 
 export function TournamentFileManagement() {
-  const config = useAppStore((state) => state.config);
-  const players = useAppStore((state) => state.players);
-  const matches = useAppStore((state) => state.matches);
-  const schedule = useAppStore((state) => state.schedule);
-  const setConfig = useAppStore((state) => state.setConfig);
-  const setPlayers = useAppStore((state) => state.setPlayers);
-  const setMatches = useAppStore((state) => state.setMatches);
-  const setSchedule = useAppStore((state) => state.setSchedule);
+  const config = useTournamentStore((state) => state.config);
+  const players = useTournamentStore((state) => state.players);
+  const matches = useTournamentStore((state) => state.matches);
+  const schedule = useTournamentStore((state) => state.schedule);
+  const setConfig = useTournamentStore((state) => state.setConfig);
+  const setPlayers = useTournamentStore((state) => state.setPlayers);
+  const setMatches = useTournamentStore((state) => state.setMatches);
+  const setSchedule = useTournamentStore((state) => state.setSchedule);
 
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);

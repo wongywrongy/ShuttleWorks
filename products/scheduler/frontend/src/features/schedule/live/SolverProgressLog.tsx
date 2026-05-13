@@ -4,7 +4,7 @@
  * Uses global store for persistence across page navigation
  */
 import { useEffect, useRef } from 'react';
-import { useAppStore, type SolverLogEntry } from '../../../store/appStore';
+import { useUiStore } from '../../../store/uiStore';
 import type { ConstraintViolation } from '../../../api/dto';
 
 interface SolverProgressLogProps {
@@ -24,9 +24,9 @@ export function SolverProgressLog({
   status,
   violations,
 }: SolverProgressLogProps) {
-  const logs = useAppStore((state) => state.solverLogs);
-  const addSolverLog = useAppStore((state) => state.addSolverLog);
-  const clearSolverLogs = useAppStore((state) => state.clearSolverLogs);
+  const logs = useUiStore((state) => state.solverLogs);
+  const addSolverLog = useUiStore((state) => state.addSolverLog);
+  const clearSolverLogs = useUiStore((state) => state.clearSolverLogs);
 
   const logRef = useRef<HTMLDivElement>(null);
   const prevSolutionCount = useRef(solutionCount);

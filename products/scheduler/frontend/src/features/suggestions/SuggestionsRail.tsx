@@ -12,23 +12,24 @@ import { useState } from 'react';
 
 import { apiClient } from '../../api/client';
 import type { Suggestion } from '../../api/dto';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
 import { SuggestionRow } from './SuggestionRow';
 import { SuggestionPreview } from './SuggestionPreview';
 
 const VISIBLE_CAP = 3;
 
 export function SuggestionsRail() {
-  const suggestions = useAppStore((s) => s.suggestions);
-  const config = useAppStore((s) => s.config);
-  const setSuggestions = useAppStore((s) => s.setSuggestions);
-  const setSchedule = useAppStore((s) => s.setSchedule);
-  const setScheduleVersion = useAppStore((s) => s.setScheduleVersion);
-  const setScheduleHistory = useAppStore((s) => s.setScheduleHistory);
-  const setConfig = useAppStore((s) => s.setConfig);
-  const setScheduleStale = useAppStore((s) => s.setScheduleStale);
-  const setAdvisories = useAppStore((s) => s.setAdvisories);
-  const pushToast = useAppStore((s) => s.pushToast);
+  const suggestions = useUiStore((s) => s.suggestions);
+  const config = useTournamentStore((s) => s.config);
+  const setSuggestions = useUiStore((s) => s.setSuggestions);
+  const setSchedule = useTournamentStore((s) => s.setSchedule);
+  const setScheduleVersion = useTournamentStore((s) => s.setScheduleVersion);
+  const setScheduleHistory = useTournamentStore((s) => s.setScheduleHistory);
+  const setConfig = useTournamentStore((s) => s.setConfig);
+  const setScheduleStale = useTournamentStore((s) => s.setScheduleStale);
+  const setAdvisories = useUiStore((s) => s.setAdvisories);
+  const pushToast = useUiStore((s) => s.pushToast);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -61,7 +62,7 @@ export function SuggestionsRail() {
       // Functional updates avoid stale-closure races: a parallel
       // dismiss/apply on a different row could otherwise resurrect a
       // just-removed suggestion based on a stale `suggestions` snapshot.
-      setSuggestions(useAppStore.getState().suggestions.filter((x) => x.id !== s.id));
+      setSuggestions(useUiStore.getState().suggestions.filter((x) => x.id !== s.id));
       pushToast({
         level: 'success',
         message: r.historyEntry.summary || 'Applied',
@@ -74,7 +75,7 @@ export function SuggestionsRail() {
       // poll will reconcile.
       const code = err?.response?.status;
       const benign = code === 409 || code === 410;
-      setSuggestions(useAppStore.getState().suggestions.filter((x) => x.id !== s.id));
+      setSuggestions(useUiStore.getState().suggestions.filter((x) => x.id !== s.id));
       pushToast({
         level: benign ? 'info' : 'error',
         message: benign
@@ -90,7 +91,7 @@ export function SuggestionsRail() {
   const handleDismiss = async (s: Suggestion) => {
     // Read fresh state at call time so a parallel apply/dismiss on a
     // different row doesn't get its drop reverted by a stale snapshot.
-    setSuggestions(useAppStore.getState().suggestions.filter((x) => x.id !== s.id));
+    setSuggestions(useUiStore.getState().suggestions.filter((x) => x.id !== s.id));
     if (expandedId === s.id) setExpandedId(null);
     try {
       await apiClient.dismissSuggestion(s.id);

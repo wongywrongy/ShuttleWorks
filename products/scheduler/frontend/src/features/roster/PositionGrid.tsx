@@ -18,7 +18,7 @@
  * the `positionGrid/` sub-folder.
  */
 import { useMemo } from 'react';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import type { PlayerDTO } from '../../api/dto';
 import { EVENT_ORDER, EVENT_LABEL, isDoubles } from './positionGrid/helpers';
 import { PositionCell } from './positionGrid/PositionCell';
@@ -36,8 +36,8 @@ export { DraggablePlayerChip } from './positionGrid/DraggablePlayerChip';
  * event when `config.eventVisible` is unset.
  */
 export function usePositionGridColumns() {
-  const config = useAppStore((s) => s.config);
-  const setConfig = useAppStore((s) => s.setConfig);
+  const config = useTournamentStore((s) => s.config);
+  const setConfig = useTournamentStore((s) => s.setConfig);
 
   // Plain derivations — React Compiler auto-memoizes. Manual useMemo
   // with optional-chained deps was blocking whole-component compilation.
@@ -126,7 +126,7 @@ export function PositionGrid({
   schoolId: string;
   highlightedPlayerId?: string | null;
 }) {
-  const players = useAppStore((s) => s.players);
+  const players = useTournamentStore((s) => s.players);
 
   const schoolPlayers = useMemo(
     () => players.filter((p) => p.groupId === schoolId),

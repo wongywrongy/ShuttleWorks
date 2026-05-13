@@ -8,7 +8,7 @@
  * singles or full doubles, it auto-closes.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAppStore } from '../../../store/appStore';
+import { useTournamentStore } from '../../../store/tournamentStore';
 import type { PlayerDTO } from '../../../api/dto';
 
 export function PlayerSearchPicker({
@@ -26,7 +26,7 @@ export function PlayerSearchPicker({
   onAssign: (playerId: string) => void;
   onClose: () => void;
 }) {
-  const players = useAppStore((s) => s.players);
+  const players = useTournamentStore((s) => s.players);
   const ref = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState('');

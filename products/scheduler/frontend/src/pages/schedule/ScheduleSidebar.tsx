@@ -27,7 +27,7 @@ import { MoveMatchDialog } from '../../features/control-center/MoveMatchDialog';
 import { WarmRestartDialog } from '../../features/schedule/WarmRestartDialog';
 import { DirectorToolsPanel } from '../../features/director/DirectorToolsPanel';
 import { Modal } from '../../components/common/Modal';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { useProposals } from '../../hooks/useProposals';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { TrafficLightResult } from '../../hooks/useTrafficLights';
@@ -199,7 +199,7 @@ export function ScheduleSidebar({
           ) : sidebarTab === 'candidates' ? (
             <CandidatesPanel
               schedule={schedule}
-              onSelect={(i) => useAppStore.getState().setActiveCandidateIndex(i)}
+              onSelect={(i) => useTournamentStore.getState().setActiveCandidateIndex(i)}
             />
           ) : (
             <MatchDetailsPanel

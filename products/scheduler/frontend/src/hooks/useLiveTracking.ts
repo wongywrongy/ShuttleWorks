@@ -14,7 +14,8 @@
  * table.
  */
 import { useEffect, useCallback } from 'react';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useMatchStateStore } from '../store/matchStateStore';
 import { apiClient } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
 
@@ -41,20 +42,20 @@ function isValidTransition(
 }
 
 export function useLiveTracking() {
-  const schedule = useAppStore((state) => state.schedule);
-  const config = useAppStore((state) => state.config);
-  const matches = useAppStore((state) => state.matches);
-  const matchStates = useAppStore((state) => state.matchStates);
-  const liveState = useAppStore((state) => state.liveState);
-  const setMatchStates = useAppStore((state) => state.setMatchStates);
-  const setMatchState = useAppStore((state) => state.setMatchState);
-  const setCurrentTime = useAppStore((state) => state.setCurrentTime);
-  const setLastSynced = useAppStore((state) => state.setLastSynced);
+  const schedule = useTournamentStore((state) => state.schedule);
+  const config = useTournamentStore((state) => state.config);
+  const matches = useTournamentStore((state) => state.matches);
+  const matchStates = useMatchStateStore((state) => state.matchStates);
+  const liveState = useMatchStateStore((state) => state.liveState);
+  const setMatchStates = useMatchStateStore((state) => state.setMatchStates);
+  const setMatchState = useMatchStateStore((state) => state.setMatchState);
+  const setCurrentTime = useMatchStateStore((state) => state.setCurrentTime);
+  const setLastSynced = useMatchStateStore((state) => state.setLastSynced);
 
   const loadMatchStates = useCallback(async () => {
     try {
       const backendStates = await apiClient.getMatchStates();
-      const localStates = useAppStore.getState().matchStates;
+      const localStates = useMatchStateStore.getState().matchStates;
 
       // Merge backend with local, preserving local-only fields
       const mergedStates: Record<string, MatchStateDTO> = {};
@@ -83,7 +84,7 @@ export function useLiveTracking() {
   const syncMatchStates = useCallback(async () => {
     try {
       const backendStates = await apiClient.getMatchStates();
-      const localStates = useAppStore.getState().matchStates;
+      const localStates = useMatchStateStore.getState().matchStates;
 
       // Merge backend with local, preserving local-only fields
       const mergedStates: Record<string, MatchStateDTO> = {};
@@ -148,7 +149,7 @@ export function useLiveTracking() {
   ) => {
     try {
       // Get fresh state from store to avoid stale closures
-      const freshMatchStates = useAppStore.getState().matchStates;
+      const freshMatchStates = useMatchStateStore.getState().matchStates;
       const currentState = freshMatchStates[matchId] || { matchId, status: 'scheduled' };
       const currentStatus = currentState.status || 'scheduled';
 
@@ -197,7 +198,7 @@ export function useLiveTracking() {
         console.error('Failed to sync match status to backend:', apiError);
         const detail = apiError instanceof Error ? apiError.message : 'Network error';
         try {
-          useAppStore.getState().pushToast({
+          useUiStore.getState().pushToast({
             level: 'error',
             message: `Match ${matchId.slice(0, 8)}… did not save`,
             detail,
@@ -254,7 +255,7 @@ export function useLiveTracking() {
   ) => {
     try {
       // Get fresh state from store to avoid stale closures
-      const freshMatchStates = useAppStore.getState().matchStates;
+      const freshMatchStates = useMatchStateStore.getState().matchStates;
       const currentState = freshMatchStates[matchId] || { matchId, status: 'called' };
       const currentConfirmations = currentState.playerConfirmations || {};
 

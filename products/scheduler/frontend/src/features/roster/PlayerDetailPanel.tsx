@@ -22,7 +22,7 @@
 import { X } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
 import type { PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../api/dto';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { isDoublesRank } from './positionGrid/helpers';
 
 interface Props {
@@ -40,13 +40,13 @@ export function PlayerDetailPanel({
   groups,
   config,
 }: Props) {
-  const updatePlayer = useAppStore((s) => s.updatePlayer);
+  const updatePlayer = useTournamentStore((s) => s.updatePlayer);
   // Need the full player list to enforce the singles invariant on
   // toggle (displace any other player in the same school who already
   // holds the rank). PositionCell's `assignPlayer` already does this;
   // PlayerDetailPanel must mirror it so the rank-pill toggle can't
   // create the same duplicate state PositionCell prevents.
-  const allPlayers = useAppStore((s) => s.players);
+  const allPlayers = useTournamentStore((s) => s.players);
 
   // Available ranks derived from config.rankCounts. Per BRAND.md events
   // are 5 disciplines (MS / WS / MD / WD / XD), each with N positions.

@@ -15,14 +15,14 @@ import { useEffect, useRef } from 'react';
 
 import type { Advisory } from '../api/dto';
 import { apiClient } from '../api/client';
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 
 const POLL_MS = 15_000;
 
 export function useAdvisories(): null {
-  const setAdvisories = useAppStore((s) => s.setAdvisories);
-  const setPendingAdvisoryReview = useAppStore((s) => s.setPendingAdvisoryReview);
-  const pushToast = useAppStore((s) => s.pushToast);
+  const setAdvisories = useUiStore((s) => s.setAdvisories);
+  const setPendingAdvisoryReview = useUiStore((s) => s.setPendingAdvisoryReview);
+  const pushToast = useUiStore((s) => s.pushToast);
   const seenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {

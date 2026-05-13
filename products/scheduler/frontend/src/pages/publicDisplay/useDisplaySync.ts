@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../api/client';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 
 export type LiveStatus = 'live' | 'reconnecting' | 'offline';
 
@@ -46,13 +46,12 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
         const remote = await apiClient.getTournamentState();
         if (cancelled) return;
         if (remote) {
-          useAppStore.setState({
+          useTournamentStore.setState({
             config: remote.config ?? null,
             groups: remote.groups ?? [],
             players: remote.players ?? [],
             matches: remote.matches ?? [],
             schedule: remote.schedule ?? null,
-            scheduleStats: (remote.scheduleStats as never) ?? null,
             scheduleIsStale: remote.scheduleIsStale ?? false,
           });
         }

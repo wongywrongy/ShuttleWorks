@@ -23,7 +23,7 @@
  * relevant store slices.
  */
 import { useMemo } from 'react';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
 import {
   validateMatch,
   type MatchIssue,
@@ -45,8 +45,8 @@ export interface DisruptionFeed {
 }
 
 export function useDisruptions(): DisruptionFeed {
-  const matches = useAppStore((s) => s.matches);
-  const players = useAppStore((s) => s.players);
+  const matches = useTournamentStore((s) => s.matches);
+  const players = useTournamentStore((s) => s.players);
 
   return useMemo(() => {
     const byMatch = new Map<string, MatchIssue[]>();

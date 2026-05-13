@@ -15,7 +15,7 @@ import type {
   RosterGroupDTO,
   ScheduleAssignment,
 } from '../api/dto';
-import { useAppStore } from './appStore';
+import { useTournamentStore } from './tournamentStore';
 
 const cache = new WeakMap<object, Map<string, unknown>>();
 
@@ -35,17 +35,17 @@ export function indexById<T extends { id: string }>(rows: readonly T[]): Map<str
 }
 
 export function usePlayerMap(): Map<string, PlayerDTO> {
-  const players = useAppStore((s) => s.players);
+  const players = useTournamentStore((s) => s.players);
   return useMemo(() => indexById(players), [players]);
 }
 
 export function useMatchMap(): Map<string, MatchDTO> {
-  const matches = useAppStore((s) => s.matches);
+  const matches = useTournamentStore((s) => s.matches);
   return useMemo(() => indexById(matches), [matches]);
 }
 
 export function useGroupMap(): Map<string, RosterGroupDTO> {
-  const groups = useAppStore((s) => s.groups);
+  const groups = useTournamentStore((s) => s.groups);
   return useMemo(() => indexById(groups), [groups]);
 }
 
@@ -55,7 +55,7 @@ export function useGroupMap(): Map<string, RosterGroupDTO> {
  * so reading the array directly is correct.
  */
 export function useAssignmentByMatchId(): Map<string, ScheduleAssignment> {
-  const assignments = useAppStore((s) => s.schedule?.assignments);
+  const assignments = useTournamentStore((s) => s.schedule?.assignments);
   return useMemo(() => {
     const m = new Map<string, ScheduleAssignment>();
     if (!assignments) return m;

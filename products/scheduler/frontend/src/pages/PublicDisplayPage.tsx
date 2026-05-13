@@ -18,7 +18,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useAdvisories } from '../hooks/useAdvisories';
 import { AdvisoryBanner } from '../components/status/AdvisoryBanner';
@@ -33,6 +33,7 @@ import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
 import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
 import { CourtsView } from './publicDisplay/CourtsView';
+import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
 
 type ViewMode = 'courts' | 'schedule' | 'standings';
 
@@ -44,8 +45,8 @@ export function PublicDisplayPage() {
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const { schedule, config, matches, matchStates, matchesByStatus } = useLiveTracking();
-  const players = useAppStore((state) => state.players);
-  const groups = useAppStore((state) => state.groups);
+  const players = useTournamentStore((state) => state.players);
+  const groups = useTournamentStore((state) => state.groups);
 
   // Standalone display surfaces critical advisories so spectators
   // (and any operator watching the TV) know a replan is imminent.
@@ -206,25 +207,23 @@ export function PublicDisplayPage() {
 
   // ===== Rendering =====================================================
 
-  // ── Theme resolution ──────────────────────────────────────────
-  // ``tvTheme`` lets the venue lock the public display to dark or
-  // light independently of the operator's app theme. ``auto`` (or
-  // unset) follows the app's current theme — read from the
-  // ``.dark`` class that ``useAppliedTheme`` attaches to <html>.
-  const tvTheme = config?.tvTheme ?? 'dark';
-  const isDark = useMemo(() => {
-    if (tvTheme === 'dark') return true;
-    if (tvTheme === 'light') return false;
-    if (typeof document === 'undefined') return true;
-    return document.documentElement.classList.contains('dark');
-  }, [tvTheme, now]);
-  const themeClass = isDark ? 'dark' : '';
+  // ── Preset resolution ─────────────────────────────────────────
+  // ``tvPreset`` selects a complete substrate (bg + text + border)
+  // for the TV. Applied as a `data-tv-preset` attribute on the
+  // page root; the matching CSS in displayPresets.css overrides
+  // --bg / --ink / --rule-soft / --muted so every Tailwind token
+  // (bg-background, text-foreground, text-muted-foreground,
+  // border-border, bg-card) inside re-themes via the cascade.
+  // Independent of the operator's app theme — venues with sun-lit
+  // screens can pick a light preset while the operator stays dark.
+  const tvPreset = config?.tvPreset ?? DEFAULT_PRESET_ID;
 
   if (!schedule || !config) {
     return (
       <div
         ref={rootRef}
-        className={`${themeClass} min-h-[100dvh] bg-background text-foreground flex items-center justify-center`}
+        data-tv-preset={tvPreset}
+        className="min-h-[100dvh] bg-background text-foreground flex items-center justify-center"
       >
         <div className="absolute right-4 top-4 flex items-center gap-3">
           <LiveStatusPill status={liveStatus} error={syncError} />
@@ -265,23 +264,13 @@ export function PublicDisplayPage() {
   // standalone /display window.
   const tvDisplayMode: 'strip' | 'grid' | 'list' = config.tvDisplayMode ?? 'strip';
 
-  // ---- TV theme + sizing knobs (per-tournament) -----------------------
+  // ---- TV sizing + accent knobs (per-tournament) ----------------------
   // Accent — hex string driving the LIVE border, LIVE pill, and the
-  // bottom progress bar. Defaults to emerald (#10b981).
+  // bottom progress bar. Independent of the preset; always overlays.
+  // Defaults to emerald (#10b981).
   const tvAccent = (config.tvAccent && /^#?[0-9a-fA-F]{6}$/.test(config.tvAccent.replace(/^#/, '')))
     ? (config.tvAccent.startsWith('#') ? config.tvAccent : `#${config.tvAccent}`)
     : '#10b981';
-  // Background tone — only meaningful in dark mode. Light mode falls
-  // through to the app's ``bg-background`` token.
-  const tvBgTone = config.tvBgTone ?? 'navy';
-  const TV_BG_DARK = {
-    navy:     { bg: 'bg-slate-950',     header: 'bg-slate-950/90'     },
-    black:    { bg: 'bg-black',         header: 'bg-black/90'         },
-    midnight: { bg: 'bg-[#0a0e2a]',     header: 'bg-[#0a0e2a]/90'     },
-    slate:    { bg: 'bg-slate-900',     header: 'bg-slate-900/90'     },
-  } as const;
-  const tvBgClass = isDark ? TV_BG_DARK[tvBgTone].bg : 'bg-background';
-  const tvHeaderBgClass = isDark ? TV_BG_DARK[tvBgTone].header : 'bg-background/90';
   // Grid columns / card size / score visibility.
   const tvGridColumns = config.tvGridColumns ?? null;
   const tvCardSize = config.tvCardSize ?? 'auto';
@@ -319,7 +308,8 @@ export function PublicDisplayPage() {
   return (
     <div
       ref={rootRef}
-      className={`${themeClass} min-h-[100dvh] ${tvBgClass} text-foreground selection:bg-primary/30`}
+      data-tv-preset={tvPreset}
+      className="min-h-[100dvh] bg-background text-foreground selection:bg-primary/30"
     >
       {/* Subtle film-grain overlay — adds a barely-there texture to the
           full-screen TV surface so the pure flats don't read as
@@ -339,7 +329,7 @@ export function PublicDisplayPage() {
         <AdvisoryBanner readOnly />
       </div>
       {/* ---------- Header ------------------------------------------------ */}
-      <div className={`sticky top-0 z-hud border-b border-border ${tvHeaderBgClass} px-6 py-4 backdrop-blur`}>
+      <div className="sticky top-0 z-hud border-b border-border bg-background/90 px-6 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-baseline gap-4">
             {/* Tournament name when set, else a generic "Live ops" label
@@ -416,7 +406,7 @@ export function PublicDisplayPage() {
       </div>
 
       {/* ---------- Progress footer ------------------------------------- */}
-      <div className={`fixed inset-x-0 bottom-0 border-t border-border ${tvHeaderBgClass} px-6 py-3 backdrop-blur`}>
+      <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/90 px-6 py-3 backdrop-blur">
         <div className="flex items-center justify-between text-base">
           <div className="text-muted-foreground">
             {finishedCount} / {totalCount} matches complete · {progressPct}%

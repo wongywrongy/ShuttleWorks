@@ -19,7 +19,8 @@
  *  approximating it in the client.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useMatchStateStore } from '../store/matchStateStore';
 import { apiClient } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
 import { getMatchPlayerIds as getPlayerIdsFromMatch } from '../utils/trafficLight';
@@ -37,13 +38,13 @@ export interface ImpactAnalysis {
 }
 
 export function useLiveOperations() {
-  const schedule = useAppStore((state) => state.schedule);
-  const config = useAppStore((state) => state.config);
-  const matches = useAppStore((state) => state.matches);
-  const players = useAppStore((state) => state.players);
-  const matchStates = useAppStore((state) => state.matchStates);
-  const setMatchState = useAppStore((state) => state.setMatchState);
-  const setSchedule = useAppStore((state) => state.setSchedule);
+  const schedule = useTournamentStore((state) => state.schedule);
+  const config = useTournamentStore((state) => state.config);
+  const matches = useTournamentStore((state) => state.matches);
+  const players = useTournamentStore((state) => state.players);
+  const matchStates = useMatchStateStore((state) => state.matchStates);
+  const setMatchState = useMatchStateStore((state) => state.setMatchState);
+  const setSchedule = useTournamentStore((state) => state.setSchedule);
 
   const [isReoptimizing, setIsReoptimizing] = useState(false);
   const [reoptimizeError, setReoptimizeError] = useState<string | null>(null);

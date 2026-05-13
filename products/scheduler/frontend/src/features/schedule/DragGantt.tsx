@@ -25,7 +25,8 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { apiClient } from '../../api/client';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
 import { indexById } from '../../store/selectors';
 import { Hint } from '../../components/Hint';
 import { useSchedule } from '../../hooks/useSchedule';
@@ -91,11 +92,11 @@ export function DragGantt({
   readOnly = false,
   onRequestReopenCourt,
 }: DragGanttProps) {
-  const players = useAppStore((s) => s.players);
-  const pendingPin = useAppStore((s) => s.pendingPin);
-  const setLastValidation = useAppStore((s) => s.setLastValidation);
+  const players = useTournamentStore((s) => s.players);
+  const pendingPin = useUiStore((s) => s.pendingPin);
+  const setLastValidation = useUiStore((s) => s.setLastValidation);
   const { pinAndResolve } = useSchedule();
-  const isGenerating = useAppStore((s) => s.isGenerating);
+  const isGenerating = useUiStore((s) => s.isGenerating);
 
   const matchMap = useMemo(() => indexById(matches), [matches]);
   const totalSlots = calculateTotalSlots(config);

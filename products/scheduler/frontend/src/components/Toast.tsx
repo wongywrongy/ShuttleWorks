@@ -6,11 +6,11 @@
  * shim that wires the Zustand store's toast slice into the
  * design-system's pure `<ToastStack>`.
  */
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 import { ToastStack as DSToastStack } from '@scheduler/design-system';
 
 export function ToastStack() {
-  const toasts = useAppStore((s) => s.toasts);
-  const dismiss = useAppStore((s) => s.dismissToast);
+  const toasts = useUiStore((s) => s.toasts);
+  const dismiss = useUiStore((s) => s.dismissToast);
   return <DSToastStack toasts={toasts} onDismiss={dismiss} />;
 }

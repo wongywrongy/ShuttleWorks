@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { getCurrentSlot } from '../lib/time';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
 
 /**
  * Wall-clock slot index for the current tournament config, refreshed
@@ -12,7 +12,7 @@ import { useAppStore } from '../store/appStore';
  * Returns 0 when no config is loaded.
  */
 export function useCurrentSlot(): number {
-  const config = useAppStore((s) => s.config);
+  const config = useTournamentStore((s) => s.config);
   const [slot, setSlot] = useState(() => (config ? getCurrentSlot(config) : 0));
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { ArrowSquareOut, GearSix } from '@phosphor-icons/react';
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 import { useTournamentState } from '../hooks/useTournamentState';
 import { useAppliedTheme } from '../hooks/useAppliedTheme';
 import { useAppliedDensity } from '../hooks/useAppliedDensity';
@@ -53,9 +53,9 @@ export function AppShell() {
   // The SuggestionsRail (rendered per-page directly under each
   // AdvisoryBanner) reads from the store.
   useSuggestions();
-  const activeTab = useAppStore((s) => s.activeTab);
-  const pushToast = useAppStore((s) => s.pushToast);
-  const setActiveProposal = useAppStore((s) => s.setActiveProposal);
+  const activeTab = useUiStore((s) => s.activeTab);
+  const pushToast = useUiStore((s) => s.pushToast);
+  const setActiveProposal = useUiStore((s) => s.setActiveProposal);
 
   // Discard any in-flight proposal when the operator switches tabs.
   // Otherwise the next visit to the originating tab re-opens the
@@ -166,7 +166,7 @@ function UnsavedBannerSlot() {
 // card with clear hierarchy and pointer-events disabled so it reads as a
 // preview, not a live surface.
 function TvPreviewTab() {
-  const setActiveTab = useAppStore((s) => s.setActiveTab);
+  const setActiveTab = useUiStore((s) => s.setActiveTab);
   return (
     <div className="mx-auto flex h-full max-w-[1400px] flex-col gap-4 px-4 py-4">
       <header className="flex flex-wrap items-end justify-between gap-3">

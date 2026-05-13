@@ -31,7 +31,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import type { PlayerDTO } from '../../api/dto';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { exportRosterXlsx } from '../exports/xlsxExports';
 import {
   DraggablePlayerChip,
@@ -44,13 +44,13 @@ import { InlineSearch } from '../../components/InlineSearch';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 export function RosterTab() {
-  const groups = useAppStore((s) => s.groups);
-  const players = useAppStore((s) => s.players);
-  const config = useAppStore((s) => s.config);
-  const addGroup = useAppStore((s) => s.addGroup);
-  const addPlayer = useAppStore((s) => s.addPlayer);
-  const deletePlayer = useAppStore((s) => s.deletePlayer);
-  const updatePlayer = useAppStore((s) => s.updatePlayer);
+  const groups = useTournamentStore((s) => s.groups);
+  const players = useTournamentStore((s) => s.players);
+  const config = useTournamentStore((s) => s.config);
+  const addGroup = useTournamentStore((s) => s.addGroup);
+  const addPlayer = useTournamentStore((s) => s.addPlayer);
+  const deletePlayer = useTournamentStore((s) => s.deletePlayer);
+  const updatePlayer = useTournamentStore((s) => s.updatePlayer);
 
   const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);

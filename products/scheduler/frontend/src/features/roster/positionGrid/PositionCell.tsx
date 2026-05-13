@@ -12,7 +12,7 @@
  */
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { useAppStore } from '../../../store/appStore';
+import { useTournamentStore } from '../../../store/tournamentStore';
 import type { PlayerDTO } from '../../../api/dto';
 import { EVENT_LABEL } from './helpers';
 import { PlayerSearchPicker } from './PlayerSearchPicker';
@@ -34,8 +34,8 @@ export function PositionCell({
   occupants: PlayerDTO[];
   highlightedPlayerId?: string | null;
 }) {
-  const players = useAppStore((s) => s.players);
-  const updatePlayer = useAppStore((s) => s.updatePlayer);
+  const players = useTournamentStore((s) => s.players);
+  const updatePlayer = useTournamentStore((s) => s.updatePlayer);
   const capacity = doubles ? 2 : 1;
   const isFull = occupants.length >= capacity;
 

@@ -13,7 +13,8 @@ import { Select } from '@scheduler/design-system/components';
 import type { DisruptionType } from '../../api/client';
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
 import { useProposals } from '../../hooks/useProposals';
 import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
@@ -43,9 +44,9 @@ export function DisruptionDialog({
   initialType,
   initialCourtId,
 }: Props) {
-  const players = useAppStore((s) => s.players);
-  const config = useAppStore((s) => s.config);
-  const matches = useAppStore((s) => s.matches);
+  const players = useTournamentStore((s) => s.players);
+  const config = useTournamentStore((s) => s.config);
+  const matches = useTournamentStore((s) => s.matches);
 
   const [type, setType] = useState<DisruptionType>(initialType ?? 'court_closed');
   const [playerId, setPlayerId] = useState<string>(players[0]?.id ?? '');
@@ -69,7 +70,7 @@ export function DisruptionDialog({
   }, [isOpen, initialType, initialMatchId, initialCourtId]);
 
   const { createRepair, commit, cancel, status } = useProposals();
-  const activeProposal = useAppStore((s) => s.activeProposal);
+  const activeProposal = useUiStore((s) => s.activeProposal);
   const loading = status === 'loading';
 
   if (!isOpen) return null;

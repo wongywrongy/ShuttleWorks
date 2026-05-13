@@ -29,7 +29,8 @@ import { Select } from '@scheduler/design-system/components';
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
 import { useProposals } from '../../hooks/useProposals';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
 import { formatSlotTime, timeToSlot, slotToTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
@@ -44,11 +45,11 @@ interface Props {
 type Mode = 'postpone' | 'move-to';
 
 export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
-  const config = useAppStore((s) => s.config);
-  const matches = useAppStore((s) => s.matches);
-  const players = useAppStore((s) => s.players);
-  const schedule = useAppStore((s) => s.schedule);
-  const activeProposal = useAppStore((s) => s.activeProposal);
+  const config = useTournamentStore((s) => s.config);
+  const matches = useTournamentStore((s) => s.matches);
+  const players = useTournamentStore((s) => s.players);
+  const schedule = useTournamentStore((s) => s.schedule);
+  const activeProposal = useUiStore((s) => s.activeProposal);
   const { createManualEdit, commit, cancel, status } = useProposals();
   const loading = status === 'loading';
 

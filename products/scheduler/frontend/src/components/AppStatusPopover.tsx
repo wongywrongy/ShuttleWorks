@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import { apiClient } from '../api/client';
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
 interface DeepHealth {
@@ -36,11 +36,11 @@ async function fetchDeepHealth(): Promise<DeepHealth> {
 }
 
 export function AppStatusPopover() {
-  const isGenerating = useAppStore((s) => s.isGenerating);
-  const setActiveTab = useAppStore((s) => s.setActiveTab);
-  const persistStatus = useAppStore((s) => s.persistStatus);
-  const lastSavedAt = useAppStore((s) => s.lastSavedAt);
-  const pushToast = useAppStore((s) => s.pushToast);
+  const isGenerating = useUiStore((s) => s.isGenerating);
+  const setActiveTab = useUiStore((s) => s.setActiveTab);
+  const persistStatus = useUiStore((s) => s.persistStatus);
+  const lastSavedAt = useUiStore((s) => s.lastSavedAt);
+  const pushToast = useUiStore((s) => s.pushToast);
 
   const [open, setOpen] = useState(false);
   const [health, setHealth] = useState<DeepHealth | null>(null);

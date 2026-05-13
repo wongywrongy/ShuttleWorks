@@ -21,14 +21,16 @@ import { Clock, Coffee, DoorOpen, X } from '@phosphor-icons/react';
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
 import { useProposals } from '../../hooks/useProposals';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useMatchStateStore } from '../../store/matchStateStore';
+import { useUiStore } from '../../store/uiStore';
 import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 export function DirectorToolsPanel() {
-  const config = useAppStore((s) => s.config);
-  const matchStates = useAppStore((s) => s.matchStates);
-  const activeProposal = useAppStore((s) => s.activeProposal);
+  const config = useTournamentStore((s) => s.config);
+  const matchStates = useMatchStateStore((s) => s.matchStates);
+  const activeProposal = useUiStore((s) => s.activeProposal);
   const { createDirectorAction, commit, cancel, status } = useProposals();
   const loading = status === 'loading';
 

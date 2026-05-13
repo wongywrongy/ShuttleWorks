@@ -9,7 +9,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
 import { apiClient } from '../../api/client';
 import type { BackupEntryDTO, ScheduleDTO, TournamentStateDTO } from '../../api/dto';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
 import { parseScheduleXlsx, type ImportResult } from './importScheduleXlsx';
 import { ScheduleImportModal } from './ScheduleImportModal';
 import { INTERACTIVE_BASE } from '../../lib/utils';
@@ -30,13 +31,12 @@ function formatWhen(iso: string): string {
 function applyStateToStore(state: TournamentStateDTO): void {
   // Mirror the hydration path in useTournamentState so the in-memory
   // store matches the file we just restored — no page reload required.
-  useAppStore.setState({
+  useTournamentStore.setState({
     config: state.config ?? null,
     groups: state.groups ?? [],
     players: state.players ?? [],
     matches: state.matches ?? [],
     schedule: state.schedule ?? null,
-    scheduleStats: (state.scheduleStats as never) ?? null,
     scheduleIsStale: state.scheduleIsStale ?? false,
   });
 }
@@ -52,14 +52,14 @@ export function BackupPanel() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
 
-  const pushToast = useAppStore((s) => s.pushToast);
+  const pushToast = useUiStore((s) => s.pushToast);
 
   const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = ''; // allow re-selecting the same file
     if (!file) return;
 
-    const { matches, players, config } = useAppStore.getState();
+    const { matches, players, config } = useTournamentStore.getState();
 
     try {
       const result = await parseScheduleXlsx(file, matches, players, config);
@@ -86,7 +86,7 @@ export function BackupPanel() {
     setImporting(true);
     try {
       if (importResult.mode === 'schedule-only') {
-        const current = useAppStore.getState().schedule;
+        const current = useTournamentStore.getState().schedule;
         const next: ScheduleDTO = current
           ? { ...current, assignments: importResult.assignments }
           : {
@@ -97,7 +97,7 @@ export function BackupPanel() {
               infeasibleReasons: [],
               status: 'feasible',
             };
-        useAppStore.getState().setSchedule(next);
+        useTournamentStore.getState().setSchedule(next);
         pushToast({
           level: importResult.warnings.length > 0 ? 'warn' : 'success',
           message: `Schedule recovered — ${importResult.assignments.length} assignment${importResult.assignments.length === 1 ? '' : 's'} applied${importResult.warnings.length > 0 ? `, ${importResult.warnings.length} row${importResult.warnings.length === 1 ? '' : 's'} skipped` : ''}.`,

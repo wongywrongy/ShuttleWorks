@@ -3,7 +3,7 @@
  * Communicates with the stateless scheduling backend
  */
 import axios, { type AxiosInstance } from 'axios';
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 import type {
   TournamentConfig,
   PlayerDTO,
@@ -185,7 +185,7 @@ class ApiClient {
         // Surface the failure exactly once, at the edge, so every hook /
         // component gets consistent UI without needing to handle it.
         try {
-          useAppStore.getState().pushToast({
+          useUiStore.getState().pushToast({
             level: 'error',
             message,
             detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
@@ -377,7 +377,7 @@ class ApiClient {
         .then(async (response) => {
           // Clear the reconnecting toast once we have a response.
           if (reconnectToastId) {
-            useAppStore.getState().dismissToast(reconnectToastId);
+            useUiStore.getState().dismissToast(reconnectToastId);
             reconnectToastId = null;
           }
           if (!response.ok) {
@@ -456,7 +456,7 @@ class ApiClient {
           // rerun the solve after fixing the network/backend. We deliberately
           // don't auto-retry here to avoid silent duplicate solves.
           try {
-            useAppStore.getState().pushToast({
+            useUiStore.getState().pushToast({
               level: 'error',
               message: 'Solver stream dropped',
               detail: err.message,

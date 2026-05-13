@@ -1,4 +1,5 @@
-import { useAppStore, type AppTab } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useUiStore } from '../store/uiStore';
 import { AppStatusPopover } from '../components/AppStatusPopover';
 import { useDisruptions } from '../hooks/useDisruptions';
 import { INTERACTIVE_BASE } from '../lib/utils';
@@ -22,10 +23,10 @@ const TABS: TabDef[] = [
 const DISRUPTION_TABS = new Set<AppTab>(['matches', 'schedule', 'live']);
 
 export function TabBar() {
-  const activeTab = useAppStore((s) => s.activeTab);
-  const setActiveTab = useAppStore((s) => s.setActiveTab);
-  const matches = useAppStore((s) => s.matches);
-  const players = useAppStore((s) => s.players);
+  const activeTab = useUiStore((s) => s.activeTab);
+  const setActiveTab = useUiStore((s) => s.setActiveTab);
+  const matches = useTournamentStore((s) => s.matches);
+  const players = useTournamentStore((s) => s.players);
   const disruptions = useDisruptions();
 
   const disabledTabs = new Set<AppTab>();

@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { Row, SectionHeader } from './SettingsControls';
 
 interface BackupEntry {
@@ -24,7 +24,7 @@ const PLACEHOLDER_BACKUPS: BackupEntry[] = [
 ];
 
 export function DataSettings() {
-  const clearAllData = useAppStore((s) => s.clearAllData);
+  const clearAllData = useTournamentStore((s) => s.clearAllData);
 
   // Stub handlers — wire into TournamentFileManagement /
   // BackupPanel actions in a follow-up.

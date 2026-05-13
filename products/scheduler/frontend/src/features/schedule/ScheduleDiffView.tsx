@@ -28,7 +28,7 @@ import type {
   RosterGroupDTO,
   ScheduleAssignment,
 } from '../../api/dto';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 
 interface ScheduleDiffViewProps {
   impact: Impact;
@@ -153,10 +153,10 @@ export function ScheduleDiffView({
   impact,
   formatSlot = defaultFormatSlot,
 }: ScheduleDiffViewProps) {
-  const matches = useAppStore((s) => s.matches);
-  const players = useAppStore((s) => s.players);
-  const groups = useAppStore((s) => s.groups);
-  const config = useAppStore((s) => s.config);
+  const matches = useTournamentStore((s) => s.matches);
+  const players = useTournamentStore((s) => s.players);
+  const groups = useTournamentStore((s) => s.groups);
+  const config = useTournamentStore((s) => s.config);
   const [schoolsOpen, setSchoolsOpen] = useState(false);
 
   // Build enrichment lookups once per render rather than per row.

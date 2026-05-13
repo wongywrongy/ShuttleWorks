@@ -10,7 +10,7 @@
  * heads-up); operators see the CTA on the Live tab.
  */
 import { Warning, WarningOctagon, Info } from '@phosphor-icons/react';
-import { useAppStore } from '../../store/appStore';
+import { useUiStore } from '../../store/uiStore';
 import type { Advisory, AdvisorySeverity } from '../../api/dto';
 
 interface AdvisoryBannerProps {
@@ -63,7 +63,7 @@ function Icon({ severity, className }: { severity: AdvisorySeverity; className: 
 }
 
 export function AdvisoryBanner({ readOnly = false, onReview, className = '' }: AdvisoryBannerProps) {
-  const advisories = useAppStore((s) => s.advisories);
+  const advisories = useUiStore((s) => s.advisories);
   const advisory = pickHighestSeverity(advisories, readOnly);
   if (!advisory) return null;
 

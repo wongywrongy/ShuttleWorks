@@ -5,13 +5,13 @@
  * re-solving (user has printed copies and doesn't need a fresh layout).
  */
 import { Warning } from '@phosphor-icons/react';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { useSchedule } from '../../hooks/useSchedule';
 
 export function StaleBanner() {
-  const stale = useAppStore((s) => s.scheduleIsStale);
-  const schedule = useAppStore((s) => s.schedule);
-  const setStale = useAppStore((s) => s.setScheduleStale);
+  const stale = useTournamentStore((s) => s.scheduleIsStale);
+  const schedule = useTournamentStore((s) => s.schedule);
+  const setStale = useTournamentStore((s) => s.setScheduleStale);
   const { generateSchedule, loading } = useSchedule();
 
   if (!stale || !schedule) return null;

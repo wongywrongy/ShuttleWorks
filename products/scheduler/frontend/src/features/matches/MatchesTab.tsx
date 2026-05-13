@@ -11,7 +11,7 @@
 import { useMemo, useState } from 'react';
 import { Download, MagnifyingGlass } from '@phosphor-icons/react';
 import { v4 as uuid } from 'uuid';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { exportMatchesXlsx } from '../exports/xlsxExports';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { usePlayerMap } from '../../store/selectors';
@@ -20,10 +20,10 @@ import { MatchesSpreadsheet } from './MatchesSpreadsheet';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 export function MatchesTab() {
-  const matches = useAppStore((s) => s.matches);
-  const players = useAppStore((s) => s.players);
-  const groups = useAppStore((s) => s.groups);
-  const addMatch = useAppStore((s) => s.addMatch);
+  const matches = useTournamentStore((s) => s.matches);
+  const players = useTournamentStore((s) => s.players);
+  const groups = useTournamentStore((s) => s.groups);
+  const addMatch = useTournamentStore((s) => s.addMatch);
 
   const [searchQuery, setSearchQuery] = useSearchParamState('q', '');
   const playerById = usePlayerMap();

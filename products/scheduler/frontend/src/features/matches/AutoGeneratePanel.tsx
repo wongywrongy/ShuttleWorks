@@ -10,7 +10,7 @@
  */
 import { useMemo, useState } from 'react';
 import { v4 as uuid } from 'uuid';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import type { MatchDTO } from '../../api/dto';
 
 function expandRanks(counts: Record<string, number> | undefined): string[] {
@@ -27,11 +27,11 @@ function isDoublesRank(rank: string): boolean {
 }
 
 export function AutoGeneratePanel() {
-  const config = useAppStore((s) => s.config);
-  const players = useAppStore((s) => s.players);
-  const groups = useAppStore((s) => s.groups);
-  const importMatches = useAppStore((s) => s.importMatches);
-  const matches = useAppStore((s) => s.matches);
+  const config = useTournamentStore((s) => s.config);
+  const players = useTournamentStore((s) => s.players);
+  const groups = useTournamentStore((s) => s.groups);
+  const importMatches = useTournamentStore((s) => s.importMatches);
+  const matches = useTournamentStore((s) => s.matches);
 
   const ranks = useMemo(() => expandRanks(config?.rankCounts), [config?.rankCounts]);
 

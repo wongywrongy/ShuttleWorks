@@ -11,7 +11,7 @@
  * animations); we want a low-amplitude pulse to remain visible as a
  * legible loading hint rather than disappear.
  */
-import type { AppTab } from '../store/appStore';
+import type { AppTab } from '../store/uiStore';
 
 function Bar({ className = '' }: { className?: string }) {
   return <div className={`rounded bg-muted ${className}`} />;

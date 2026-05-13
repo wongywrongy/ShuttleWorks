@@ -19,7 +19,7 @@ import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useLiveOperations } from '../hooks/useLiveOperations';
 import { useTrafficLights } from '../hooks/useTrafficLights';
 import { useProposals } from '../hooks/useProposals';
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 import { GanttChart } from '../features/control-center/GanttChart';
 import { WorkflowPanel } from '../features/control-center/WorkflowPanel';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
@@ -39,11 +39,11 @@ export function MatchControlCenterPage() {
   const liveTracking = useLiveTracking();
   const liveOps = useLiveOperations();
   const { cancel: cancelProposal } = useProposals();
-  const players = useAppStore((state) => state.players);
-  const groups = useAppStore((state) => state.groups);
-  const schedule = useAppStore((state) => state.schedule);
-  const setSchedule = useAppStore((state) => state.setSchedule);
-  const setMatchState = useAppStore((state) => state.setMatchState);
+  const players = useTournamentStore((state) => state.players);
+  const groups = useTournamentStore((state) => state.groups);
+  const schedule = useTournamentStore((state) => state.schedule);
+  const setSchedule = useTournamentStore((state) => state.setSchedule);
+  const setMatchState = useMatchStateStore((state) => state.setMatchState);
 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [currentSlot, setCurrentSlot] = useState(0);
@@ -150,7 +150,7 @@ export function MatchControlCenterPage() {
   }, [liveOps.schedule, liveOps.matchStates, currentSlot]);
 
   // Get updateMatch from store
-  const updateMatch = useAppStore((state) => state.updateMatch);
+  const updateMatch = useTournamentStore((state) => state.updateMatch);
 
   // Handle player substitution
   const handleSubstitute = useCallback((
@@ -407,8 +407,8 @@ export function MatchControlCenterPage() {
   // Cross-component intent: the toast's onAction sets
   // `pendingAdvisoryReview` on the store; this effect picks it up and
   // dispatches to the same handler the banner's Review button uses.
-  const pendingAdvisoryReview = useAppStore((s) => s.pendingAdvisoryReview);
-  const setPendingAdvisoryReview = useAppStore((s) => s.setPendingAdvisoryReview);
+  const pendingAdvisoryReview = useUiStore((s) => s.pendingAdvisoryReview);
+  const setPendingAdvisoryReview = useUiStore((s) => s.setPendingAdvisoryReview);
   useEffect(() => {
     if (!pendingAdvisoryReview) return;
     handleAdvisoryReview(pendingAdvisoryReview);

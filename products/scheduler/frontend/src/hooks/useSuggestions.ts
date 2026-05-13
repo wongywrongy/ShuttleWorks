@@ -12,12 +12,12 @@
 import { useEffect, useRef } from 'react';
 
 import { apiClient } from '../api/client';
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 
 const POLL_MS = 8_000;
 
 export function useSuggestions(): null {
-  const setSuggestions = useAppStore((s) => s.setSuggestions);
+  const setSuggestions = useUiStore((s) => s.setSuggestions);
   const cancelledRef = useRef(false);
 
   useEffect(() => {

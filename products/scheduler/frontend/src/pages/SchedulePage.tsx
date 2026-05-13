@@ -15,7 +15,9 @@ import { Download, CalendarBlank } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system/components';
 import { useSchedule } from '../hooks/useSchedule';
 import { useTournament } from '../hooks/useTournament';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useMatchStateStore } from '../store/matchStateStore';
+import { useUiStore } from '../store/uiStore';
 import { useSmoothedAssignments } from '../hooks/useSmoothedAssignments';
 import { useTrafficLights } from '../hooks/useTrafficLights';
 import { useCurrentSlot } from '../hooks/useCurrentSlot';
@@ -33,12 +35,12 @@ import { ScheduleSidebar } from './schedule/ScheduleSidebar';
 
 export function SchedulePage() {
   const { config, loading: configLoading, error: configError } = useTournament();
-  const players = useAppStore((state) => state.players);
-  const matches = useAppStore((state) => state.matches);
-  const groups = useAppStore((state) => state.groups);
-  const matchStates = useAppStore((state) => state.matchStates);
-  const scheduleStats = useAppStore((state) => state.scheduleStats);
-  const addSolverLog = useAppStore((state) => state.addSolverLog);
+  const players = useTournamentStore((state) => state.players);
+  const matches = useTournamentStore((state) => state.matches);
+  const groups = useTournamentStore((state) => state.groups);
+  const matchStates = useMatchStateStore((state) => state.matchStates);
+  const scheduleStats = useUiStore((state) => state.scheduleStats);
+  const addSolverLog = useUiStore((state) => state.addSolverLog);
   const {
     schedule,
     loading,
