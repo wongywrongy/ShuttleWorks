@@ -62,7 +62,7 @@ export function InProgressCard({
       onClick={onSelect}
       style={{ gridTemplateColumns: 'auto auto auto 1fr auto' }}
       className={[
-        'grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
+        'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
         isSelected
           ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-500/15'
           : 'border-l-green-500 bg-green-50/60 hover:bg-green-50 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15',

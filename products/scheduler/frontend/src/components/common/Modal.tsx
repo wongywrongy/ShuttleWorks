@@ -103,9 +103,11 @@ export function Modal({
           // BRAND.md §3 + §6 — square corners + 1px border + the
           // canonical hard-offset shadow (`--shadow-hard`, light mode
           // only; dark mode drops to bare substrate elevation).
-          // Previously `rounded-lg shadow-xl` which fought with the
-          // rest of the brutalist chrome.
-          `w-full ${widthClass} border border-border bg-card shadow-[var(--shadow-hard)] focus:outline-none`
+          // `.motion-enter` from globals.css applies the MOTION.md §5
+          // standard enter recipe (opacity + translateY 8 + blur 4
+          // over --motion-moderate with --ease-brand) so dialogs
+          // materialize instead of popping in.
+          `motion-enter w-full ${widthClass} border border-border bg-card shadow-[var(--shadow-hard)] focus:outline-none`
         }
       >
         {children}

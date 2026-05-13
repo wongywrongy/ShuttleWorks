@@ -146,7 +146,7 @@ export function UpNextCard({
       onClick={onSelect}
       style={{ gridTemplateColumns: 'auto auto auto 1fr auto auto' }}
       className={[
-        'grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
+        'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
         lightStyles.border,
         isSelected ? 'bg-blue-50 dark:bg-blue-500/15' : `${lightStyles.bg} hover:brightness-[0.98]`,
       ].join(' ')}

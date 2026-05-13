@@ -570,9 +570,11 @@ function MatchBlock({
 
   // Smooth the `left` coordinate whenever blocks re-lay out after a re-solve.
   // Disable the transition while dragging so the block follows the pointer.
+  // Background + border color ease at 120ms (--motion-fast) so the selection
+  // highlight flips smoothly rather than snapping to the blue-500 ring.
   const positionTransition = isDragging
     ? 'none'
-    : 'left 420ms var(--ease-brand), top 420ms var(--ease-brand)';
+    : 'left 420ms var(--ease-brand), top 420ms var(--ease-brand), background-color 120ms var(--ease-brand), border-color 120ms var(--ease-brand)';
 
   const pinActive = isPinned && isGenerating;
   const eventColor = getEventColor(match.eventRank);
