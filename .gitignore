@@ -68,6 +68,12 @@ packages/*/dist/
 # Persisted state (Docker volumes; runtime, not source)
 **/data/
 
+# Local SQLite databases (dev + tests)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
 # E2E tests (per-product)
 **/e2e/node_modules/
 **/e2e/playwright-report/

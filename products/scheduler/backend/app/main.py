@@ -23,20 +23,42 @@ from api import (
 
 log = logging.getLogger("scheduler.app")
 
+# Backend root — used by Alembic to locate alembic.ini at startup so the
+# upgrade runs from whichever working directory uvicorn was launched in.
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+
+
+def _run_migrations() -> None:
+    """Apply outstanding Alembic migrations on startup.
+
+    Idempotent: a no-op once the database is at the latest revision.
+    Tests that build their own schema via ``Base.metadata.create_all``
+    skip this entirely (they don't invoke the lifespan).
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(_BACKEND_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(_BACKEND_DIR / "alembic"))
+    command.upgrade(cfg, "head")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Run startup + graceful shutdown hooks.
 
-    SuggestionsWorker spawns one asyncio.Task that consumes a
-    queue of speculative-solve triggers. Handler is built in
-    api.schedule_suggestions to keep solver imports out of this
-    top-level module.
+    Startup applies any outstanding Alembic migrations, then spins up the
+    SuggestionsWorker (one asyncio.Task that consumes a queue of
+    speculative-solve triggers; handler built in
+    ``api.schedule_suggestions``).
     """
     log.info("app_startup version=2.0.0")
 
-    from services.persistence import PersistenceService
-    app.state.persistence = PersistenceService()
+    try:
+        _run_migrations()
+        log.info("alembic_upgrade_head_complete")
+    except Exception:
+        log.exception("alembic_upgrade_failed — continuing; reads will surface")
 
     from services.suggestions_worker import (
         SuggestionsWorker,

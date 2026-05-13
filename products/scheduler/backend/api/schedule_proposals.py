@@ -55,7 +55,7 @@ from app.time_utils import now_iso
 from api.match_state import MatchStateDTO
 from api.schedule_repair import RepairRequest, _run_repair
 from api.schedule_warm_restart import WarmRestartRequest, _run_warm_restart
-from services.persistence import PersistenceService, get_persistence
+from repositories import LocalRepository, get_repository
 
 
 router = APIRouter(prefix="/schedule/proposals", tags=["schedule-proposals"])
@@ -178,28 +178,30 @@ def _new_proposal_id() -> str:
     return uuid.uuid4().hex
 
 
-async def _read_persisted_state(svc: PersistenceService) -> Optional[TournamentStateDTO]:
+async def _read_persisted_state(repo: LocalRepository) -> Optional[TournamentStateDTO]:
     """Load the current committed tournament state, or None if absent."""
     try:
-        data, _ = await svc.read_tournament_state()
+        tournament = repo.tournaments.get_singleton()
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001
         log.warning("proposals: state unreadable: %s", e)
         return None
-    if data is None:
+    if tournament is None:
         return None
-    return TournamentStateDTO(**{k: v for k, v in data.items() if k != "_integrity"})
+    return TournamentStateDTO(
+        **{k: v for k, v in tournament.data.items() if k != "_integrity"}
+    )
 
 
 async def _persist_committed_state(
-    svc: PersistenceService,
+    repo: LocalRepository,
     state: TournamentStateDTO,
     new_schedule: ScheduleDTO,
     history_entry: ScheduleHistoryEntry,
     new_config: Optional[TournamentConfig] = None,
 ) -> TournamentStateDTO:
-    """Atomically apply a committed schedule (and optional config) to disk."""
+    """Atomically apply a committed schedule (and optional config) to the DB."""
     new_history = list(state.scheduleHistory) + [history_entry]
     if len(new_history) > HISTORY_CAP:
         new_history = new_history[-HISTORY_CAP:]
@@ -214,13 +216,13 @@ async def _persist_committed_state(
         update_payload["config"] = new_config
     updated = state.model_copy(update=update_payload)
     try:
-        stamped = await svc.write_tournament_state(updated.model_dump())
-    except OSError as e:
+        row = repo.commit_tournament_state(updated.model_dump())
+    except Exception as e:
         log.error("proposals: write failed: %s", e)
         raise http_error(
             500, ErrorCode.STATE_WRITE_FAILED, "could not persist schedule commit"
         )
-    return TournamentStateDTO(**{k: v for k, v in stamped.items() if k != "_integrity"})
+    return TournamentStateDTO(**{k: v for k, v in row.data.items() if k != "_integrity"})
 
 
 def _build_proposal(
@@ -337,7 +339,7 @@ class CommitResponse(BaseModel):
 async def create_warm_restart_proposal(
     request: WarmRestartRequest,
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    repo: LocalRepository = Depends(get_repository),
 ) -> Proposal:
     """Run a stay-close warm-restart and stash the result as a proposal."""
     store = _get_store(http_request.app)
@@ -345,7 +347,7 @@ async def create_warm_restart_proposal(
     new_schedule, _moved = _run_warm_restart(request)
     async with lock:
         _evict_expired(store)
-        persisted = await _read_persisted_state(svc)
+        persisted = await _read_persisted_state(repo)
         from_version = persisted.scheduleVersion if persisted else 0
         groups = list(persisted.groups) if persisted else []
         return _build_proposal(
@@ -364,7 +366,7 @@ async def create_warm_restart_proposal(
 async def create_repair_proposal(
     request: RepairRequest,
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    repo: LocalRepository = Depends(get_repository),
 ) -> Proposal:
     """Run a slice-based repair and stash the result as a proposal.
 
@@ -377,7 +379,7 @@ async def create_repair_proposal(
     store = _get_store(http_request.app)
     lock = _get_lock(http_request.app)
     new_schedule, _ = _run_repair(request)
-    _ = svc  # ensure dependency stays in scope; used in inner block below
+    _ = repo  # ensure dependency stays in scope; used in inner block below
 
     # If this is a court-closure disruption, propose a config update
     # that pins the closure into TournamentConfig so it survives the
@@ -426,7 +428,7 @@ async def create_repair_proposal(
 
     async with lock:
         _evict_expired(store)
-        persisted = await _read_persisted_state(svc)
+        persisted = await _read_persisted_state(repo)
         from_version = persisted.scheduleVersion if persisted else 0
         groups = list(persisted.groups) if persisted else []
         return _build_proposal(
@@ -447,7 +449,7 @@ async def create_repair_proposal(
 async def create_manual_edit_proposal(
     request: ManualEditRequest,
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    repo: LocalRepository = Depends(get_repository),
 ) -> Proposal:
     """Pin one match to a new slot/court via warm-restart, high stay-close.
 
@@ -491,7 +493,7 @@ async def create_manual_edit_proposal(
     new_schedule, _ = _run_warm_restart(wr_request)
     async with lock:
         _evict_expired(store)
-        persisted = await _read_persisted_state(svc)
+        persisted = await _read_persisted_state(repo)
         from_version = persisted.scheduleVersion if persisted else 0
         groups = list(persisted.groups) if persisted else []
         return _build_proposal(
@@ -537,7 +539,7 @@ async def cancel_proposal(proposal_id: str, http_request: Request) -> dict:
 async def commit_proposal(
     proposal_id: str,
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    repo: LocalRepository = Depends(get_repository),
 ) -> CommitResponse:
     """Atomically apply a proposal to the persisted tournament state.
 
@@ -558,7 +560,7 @@ async def commit_proposal(
             raise http_error(
                 410, ErrorCode.PROPOSAL_EXPIRED, "proposal expired or not found"
             )
-        persisted = await _read_persisted_state(svc)
+        persisted = await _read_persisted_state(repo)
         if persisted is None:
             raise http_error(
                 409, ErrorCode.NO_COMMITTED_SCHEDULE,
@@ -580,7 +582,7 @@ async def commit_proposal(
             schedule=persisted.schedule,
         )
         updated = await _persist_committed_state(
-            svc,
+            repo,
             persisted,
             proposal.proposedSchedule,
             history_entry,

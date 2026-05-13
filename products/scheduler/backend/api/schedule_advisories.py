@@ -23,7 +23,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Request
 
-from services.persistence import PersistenceService, get_persistence
+from repositories import LocalRepository, get_repository
 
 from app.schemas import (
     Advisory,
@@ -467,7 +467,7 @@ def collect_advisories(
 @router.get("/advisories", response_model=List[Advisory])
 async def get_schedule_advisories(
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    repo: LocalRepository = Depends(get_repository),
 ) -> List[Advisory]:
     """Return current advisories computed from tournament + match state.
 
@@ -482,23 +482,26 @@ async def get_schedule_advisories(
     """
     # Tournament state — may be None when nothing has been saved yet.
     state: Optional[TournamentStateDTO] = None
+    tournament_row = None
     try:
-        data, _ = await svc.read_tournament_state()
-        if data is not None:
+        tournament_row = repo.tournaments.get_singleton()
+        if tournament_row is not None:
             state = TournamentStateDTO(**{
-                k: v for k, v in data.items() if k != "_integrity"
+                k: v for k, v in tournament_row.data.items() if k != "_integrity"
             })
     except Exception as e:  # noqa: BLE001 — advisor must never 500 on read failure
         log.warning("advisories: tournament state unreadable: %s", e)
         return []
 
-    if state is None:
+    if state is None or tournament_row is None:
         return []
 
     # Match states — empty dict when no live state file yet.
+    match_states_dict: dict = {}
     try:
-        ms_data = await svc.read_match_states()
-        match_states_dict = ms_data.get("matchStates", {}) or {}
+        rows = repo.match_states.list_for_tournament(tournament_row.id)
+        from api.match_state import _row_to_dto
+        match_states_dict = {row.match_id: _row_to_dto(row).model_dump() for row in rows}
     except Exception as e:  # noqa: BLE001
         log.warning("advisories: match state unreadable: %s", e)
         match_states_dict = {}

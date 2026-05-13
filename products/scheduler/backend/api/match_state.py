@@ -1,29 +1,30 @@
-"""Match state management API.
+"""Match state management API (SQLAlchemy-backed).
 
-Tournament-day match states (called / started / finished + scores) are
-persisted to ``./data/match_states.json``. All filesystem I/O is
-delegated to ``services.persistence.PersistenceService``, which owns the
-single write lock shared with ``/tournament/state``.
+Live tournament-day match status — called / started / finished, plus
+score and timing stamps. Backed by the ``match_states`` table, scoped to
+the singleton tournament for Step 1 (Step 2 will introduce explicit
+``tournament_id`` in the route URL).
 """
 from __future__ import annotations
 
 import json
 import logging
-from typing import Dict, Literal, Optional
+from typing import Dict, Iterable, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.error_codes import ErrorCode, http_error
 from app.time_utils import now_iso
-from services.persistence import PersistenceService, get_persistence
+from database.models import MatchState
+from repositories import LocalRepository, get_repository
 
 router = APIRouter(prefix="/match-states", tags=["match-states"])
 log = logging.getLogger("scheduler.match_state")
 
-# Import payload cap. Anything larger is almost certainly not a
-# legitimate match_states.json — cap at 20 MB to bound memory.
+# 20 MB import cap — anything larger isn't a legitimate match_states
+# payload.
 MAX_IMPORT_BYTES = 20 * 1024 * 1024
 
 
@@ -45,7 +46,6 @@ class MatchStateDTO(BaseModel):
     score: Optional[MatchScore] = None
     notes: Optional[str] = None
     updatedAt: Optional[str] = None
-    # Persisted so Undo survives a page reload.
     originalSlotId: Optional[int] = None
     originalCourtId: Optional[int] = None
 
@@ -59,119 +59,158 @@ class MatchStateDTO(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class TournamentStateFile(BaseModel):
-    matchStates: Dict[str, MatchStateDTO]
-    lastUpdated: str
-    version: str = "1.0"
+# ---- DTO <-> ORM translation -------------------------------------------
 
 
-def _parse_file(data: dict) -> TournamentStateFile:
-    try:
-        return TournamentStateFile(**data)
-    except Exception as e:
-        log.error("match-state schema mismatch: %s", e)
-        raise http_error(
-            500,
-            ErrorCode.STATE_SCHEMA_MISMATCH,
-            "match state schema mismatch; reset via Setup",
-        )
+def _dto_to_fields(update: MatchStateDTO) -> dict:
+    """Convert a wire-format DTO into ORM column kwargs."""
+    fields: dict = {
+        "status": update.status,
+        "called_at": update.calledAt,
+        "actual_start_time": update.actualStartTime,
+        "actual_end_time": update.actualEndTime,
+        "notes": update.notes,
+        "original_slot_id": update.originalSlotId,
+        "original_court_id": update.originalCourtId,
+    }
+    if update.score is not None:
+        fields["score_side_a"] = update.score.sideA
+        fields["score_side_b"] = update.score.sideB
+    else:
+        fields["score_side_a"] = None
+        fields["score_side_b"] = None
+    return fields
+
+
+def _row_to_dto(row: MatchState) -> MatchStateDTO:
+    score = None
+    if row.score_side_a is not None and row.score_side_b is not None:
+        score = MatchScore(sideA=row.score_side_a, sideB=row.score_side_b)
+    return MatchStateDTO(
+        matchId=row.match_id,
+        status=row.status,  # type: ignore[arg-type]
+        calledAt=row.called_at,
+        actualStartTime=row.actual_start_time,
+        actualEndTime=row.actual_end_time,
+        score=score,
+        notes=row.notes,
+        updatedAt=row.updated_at.isoformat() if row.updated_at else None,
+        originalSlotId=row.original_slot_id,
+        originalCourtId=row.original_court_id,
+    )
+
+
+def _require_tournament_id(repo: LocalRepository):
+    """Resolve the singleton tournament id, auto-creating an empty row
+    on first write.
+
+    Legacy parity: the JSON-file backend let ``PUT /match-states/...``
+    succeed before a tournament had been saved. We preserve that by
+    creating an empty placeholder tournament. Step 2 makes
+    ``tournament_id`` explicit in the URL and this fallback retires.
+    """
+    current = repo.tournaments.get_singleton()
+    if current is None:
+        current = repo.tournaments.upsert_singleton({})
+    return current.id
 
 
 # ---------- API endpoints -------------------------------------------------
 
 
 @router.get("", response_model=Dict[str, MatchStateDTO])
-async def get_all_match_states(svc: PersistenceService = Depends(get_persistence)):
-    """Get all match states."""
-    data = await svc.read_match_states()
-    return _parse_file(data).matchStates
+def get_all_match_states(repo: LocalRepository = Depends(get_repository)):
+    """Get all match states. Empty dict when no tournament exists yet."""
+    current = repo.tournaments.get_singleton()
+    if current is None:
+        return {}
+    rows = repo.match_states.list_for_tournament(current.id)
+    return {row.match_id: _row_to_dto(row) for row in rows}
 
 
 @router.get("/{match_id}", response_model=MatchStateDTO)
-async def get_match_state(
-    match_id: str, svc: PersistenceService = Depends(get_persistence)
+def get_match_state(
+    match_id: str,
+    repo: LocalRepository = Depends(get_repository),
 ):
     """Get a single match state, or a default `scheduled` if unseen."""
-    data = await svc.read_match_states()
-    state = _parse_file(data)
-    if match_id not in state.matchStates:
+    current = repo.tournaments.get_singleton()
+    if current is None:
         return MatchStateDTO(matchId=match_id, status="scheduled")
-    return state.matchStates[match_id]
+    row = repo.match_states.get(current.id, match_id)
+    if row is None:
+        return MatchStateDTO(matchId=match_id, status="scheduled")
+    return _row_to_dto(row)
 
 
 @router.put("/{match_id}", response_model=MatchStateDTO)
-async def update_match_state(
+def update_match_state(
     match_id: str,
     update: MatchStateDTO,
-    svc: PersistenceService = Depends(get_persistence),
+    repo: LocalRepository = Depends(get_repository),
 ):
     """Update a match state."""
+    tid = _require_tournament_id(repo)
     update.matchId = match_id
     update.updatedAt = now_iso()
-
-    def mutate(data: dict) -> dict:
-        state = _parse_file(data)
-        state.matchStates[match_id] = update
-        return state.model_dump()
-
     try:
-        await svc.update_match_states(mutate)
-    except OSError as e:
+        row = repo.match_states.upsert(tid, match_id, _dto_to_fields(update))
+    except Exception as e:
         log.error("match-state write failed: %s", e)
         raise http_error(
             500,
             ErrorCode.MATCH_STATE_WRITE_FAILED,
             "could not persist match state",
         )
-    return update
+    return _row_to_dto(row)
 
 
 @router.delete("/{match_id}")
-async def delete_match_state(
-    match_id: str, svc: PersistenceService = Depends(get_persistence)
+def delete_match_state(
+    match_id: str,
+    repo: LocalRepository = Depends(get_repository),
 ):
     """Remove a match state (reset to default)."""
-    def mutate(data: dict) -> dict:
-        state = _parse_file(data)
-        state.matchStates.pop(match_id, None)
-        return state.model_dump()
-
-    await svc.update_match_states(mutate)
+    tid = _require_tournament_id(repo)
+    repo.match_states.delete(tid, match_id)
     return {"message": f"Match state for {match_id} deleted successfully"}
 
 
 @router.post("/reset")
-async def reset_all_match_states(svc: PersistenceService = Depends(get_persistence)):
-    """Clear all match states (empty the file)."""
-    await svc.write_match_states(
-        {"matchStates": {}, "lastUpdated": now_iso(), "version": "1.0"}
-    )
+def reset_all_match_states(repo: LocalRepository = Depends(get_repository)):
+    """Clear all match states for the singleton tournament."""
+    current = repo.tournaments.get_singleton()
+    if current is None:
+        return {"message": "All match states reset successfully"}
+    repo.match_states.reset_all(current.id)
     return {"message": "All match states reset successfully"}
 
 
 @router.get("/export/download")
-async def export_match_states(svc: PersistenceService = Depends(get_persistence)):
-    """Download the match_states.json file."""
-    path = svc.match_states_path
-    if not path.exists():
-        # Make sure a baseline file exists so FileResponse has something to serve.
-        await svc.write_match_states(
-            {"matchStates": {}, "lastUpdated": now_iso(), "version": "1.0"}
-        )
-    return FileResponse(
-        path=path,
-        filename="match_states.json",
-        media_type="application/json",
-    )
+def export_match_states(repo: LocalRepository = Depends(get_repository)):
+    """Download the match states as a JSON file in the legacy shape."""
+    current = repo.tournaments.get_singleton()
+    rows: Iterable[MatchState] = []
+    if current is not None:
+        rows = repo.match_states.list_for_tournament(current.id)
+    payload = {
+        "matchStates": {
+            row.match_id: _row_to_dto(row).model_dump() for row in rows
+        },
+        "lastUpdated": now_iso(),
+        "version": "1.0",
+    }
+    headers = {"Content-Disposition": 'attachment; filename="match_states.json"'}
+    return JSONResponse(content=payload, headers=headers)
 
 
 @router.post("/import/upload")
 async def import_match_states(
     request: Request,
     file: UploadFile = File(...),
-    svc: PersistenceService = Depends(get_persistence),
+    repo: LocalRepository = Depends(get_repository),
 ):
-    """Upload and import a match_states.json file."""
+    """Upload a match_states.json file and replace the current contents."""
     if not (file.filename or "").endswith(".json"):
         raise http_error(400, ErrorCode.UPLOAD_WRONG_TYPE, "file must be a .json file")
 
@@ -190,41 +229,49 @@ async def import_match_states(
         raise http_error(400, ErrorCode.UPLOAD_INVALID_JSON, "invalid JSON file")
 
     try:
-        state = TournamentStateFile(**data)
+        match_states_raw = data.get("matchStates", {})
+        match_states = {
+            mid: MatchStateDTO(**(payload | {"matchId": mid}))
+            for mid, payload in match_states_raw.items()
+        }
     except Exception as e:
         log.warning("match-state import validation failed: %s", e)
         raise http_error(
             400, ErrorCode.UPLOAD_SCHEMA_MISMATCH, "payload does not match schema"
         )
 
-    await svc.write_match_states(state.model_dump())
+    tid = _require_tournament_id(repo)
+    repo.match_states.reset_all(tid)
+    repo.match_states.bulk_upsert(
+        tid,
+        {mid: _dto_to_fields(dto) for mid, dto in match_states.items()},
+    )
     return {
         "message": "Tournament state imported successfully",
-        "matchCount": len(state.matchStates),
-        "lastUpdated": state.lastUpdated,
+        "matchCount": len(match_states),
+        "lastUpdated": data.get("lastUpdated", now_iso()),
     }
 
 
 @router.post("/import-bulk")
-async def import_match_states_bulk(
+def import_match_states_bulk(
     match_states: Dict[str, MatchStateDTO],
-    svc: PersistenceService = Depends(get_persistence),
+    repo: LocalRepository = Depends(get_repository),
 ):
-    """Merge a dict of match states into the existing file."""
+    """Merge a dict of match states into the current set."""
     if not match_states:
         return {"message": "No match states to import", "importedCount": 0}
 
-    def mutate(data: dict) -> dict:
-        state = _parse_file(data)
-        for match_id, ms in match_states.items():
-            ms.matchId = match_id
-            ms.updatedAt = now_iso()
-            state.matchStates[match_id] = ms
-        return state.model_dump()
-
-    result = await svc.update_match_states(mutate)
+    tid = _require_tournament_id(repo)
+    fields_map: dict[str, dict] = {}
+    for match_id, ms in match_states.items():
+        ms.matchId = match_id
+        ms.updatedAt = now_iso()
+        fields_map[match_id] = _dto_to_fields(ms)
+    repo.match_states.bulk_upsert(tid, fields_map)
+    total = len(repo.match_states.list_for_tournament(tid))
     return {
         "message": "Match states imported successfully",
         "importedCount": len(match_states),
-        "totalStates": len(result["matchStates"]),
+        "totalStates": total,
     }

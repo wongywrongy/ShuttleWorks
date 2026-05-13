@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 
-from services.persistence import PersistenceService, get_persistence
+from repositories import LocalRepository, get_repository, open_repository
 
 from app.error_codes import ErrorCode, http_error
 
@@ -99,22 +99,23 @@ async def _handle_optimize(
     stay-close objective, so we'd need a second solve at higher
     weight to evaluate it.
     """
-    svc: PersistenceService = app.state.persistence
-    persisted = await _read_persisted_state(svc)
-    if persisted is None or persisted.schedule is None or persisted.config is None:
-        log.debug("suggestions: no persisted schedule to optimize against")
-        return
-
-    # Match states live in a separate persistence file.
-    try:
-        ms_data = await svc.read_match_states()
-        from api.match_state import MatchStateDTO
-        match_states = {
-            mid: MatchStateDTO(**ms) for mid, ms in (ms_data.get("matchStates") or {}).items()
-        }
-    except Exception:
-        log.exception("suggestions: failed to read match_states")
-        match_states = {}
+    # Open a short-lived session to load both the tournament and live
+    # match states; close it before the long-running solve.
+    with open_repository() as repo:
+        persisted = await _read_persisted_state(repo)
+        if persisted is None or persisted.schedule is None or persisted.config is None:
+            log.debug("suggestions: no persisted schedule to optimize against")
+            return
+        match_states: dict = {}
+        try:
+            current = repo.tournaments.get_singleton()
+            if current is not None:
+                rows = repo.match_states.list_for_tournament(current.id)
+                from api.match_state import _row_to_dto
+                match_states = {row.match_id: _row_to_dto(row) for row in rows}
+        except Exception:
+            log.exception("suggestions: failed to read match_states")
+            match_states = {}
 
     wr_req = WarmRestartRequest(
         originalSchedule=persisted.schedule,
@@ -238,20 +239,20 @@ async def _handle_repair(
         log.warning("repair handler: missing disruption.type in %s", event.fingerprint)
         return
 
-    svc: PersistenceService = app.state.persistence
-    persisted = await _read_persisted_state(svc)
-    if persisted is None or persisted.schedule is None or persisted.config is None:
-        return
-
-    try:
-        ms_data = await svc.read_match_states()
-        from api.match_state import MatchStateDTO
-        match_states = {
-            mid: MatchStateDTO(**ms) for mid, ms in (ms_data.get("matchStates") or {}).items()
-        }
-    except Exception:
-        log.exception("suggestions: failed to read match_states")
-        match_states = {}
+    with open_repository() as repo:
+        persisted = await _read_persisted_state(repo)
+        if persisted is None or persisted.schedule is None or persisted.config is None:
+            return
+        match_states: dict = {}
+        try:
+            current = repo.tournaments.get_singleton()
+            if current is not None:
+                rows = repo.match_states.list_for_tournament(current.id)
+                from api.match_state import _row_to_dto
+                match_states = {row.match_id: _row_to_dto(row) for row in rows}
+        except Exception:
+            log.exception("suggestions: failed to read match_states")
+            match_states = {}
 
     from api.schedule_repair import RepairRequest, _run_repair_with_cancel, Disruption
     try:
@@ -367,7 +368,11 @@ async def list_suggestions(http_request: Request) -> list[Suggestion]:
 
 
 @router.post("/{suggestion_id}/apply")
-async def apply_suggestion(suggestion_id: str, http_request: Request):
+async def apply_suggestion(
+    suggestion_id: str,
+    http_request: Request,
+    repo: LocalRepository = Depends(get_repository),
+):
     """Commit the proposal underlying a suggestion.
 
     Drops the suggestion before invoking commit so a 409 (stale
@@ -384,7 +389,7 @@ async def apply_suggestion(suggestion_id: str, http_request: Request):
             410, ErrorCode.PROPOSAL_EXPIRED,
             "suggestion expired or not found",
         )
-    return await commit_proposal(sug.proposalId, http_request)
+    return await commit_proposal(sug.proposalId, http_request, repo)
 
 
 @router.post("/{suggestion_id}/dismiss")

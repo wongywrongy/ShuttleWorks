@@ -34,18 +34,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from _helpers import isolate_test_database
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
-    sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
-    for _cached in [
-        k for k in list(sys.modules)
-        if k == "app" or k.startswith("app.")
-        or "tournament_state" in k
-    ]:
-        del sys.modules[_cached]
+    isolate_test_database(tmp_path, monkeypatch)
     import api.tournament_state as ts_module
 
     app_ = FastAPI()

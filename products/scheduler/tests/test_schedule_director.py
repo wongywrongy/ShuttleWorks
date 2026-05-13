@@ -28,17 +28,8 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
-    sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
-    for _cached in [
-        k for k in list(sys.modules)
-        if k == "app" or k.startswith("app.")
-        or k == "services" or k.startswith("services.")
-        or k == "adapters" or k.startswith("adapters.")
-        or k.startswith("api.")
-    ]:
-        del sys.modules[_cached]
+    from _helpers import isolate_test_database
+    isolate_test_database(tmp_path, monkeypatch)
 
     from api import (
         match_state,
