@@ -30,7 +30,10 @@ COPY products/scheduler/frontend/package.json ./products/scheduler/frontend/pack
 
 # Install the workspace graph. Cache mount keeps the npm download cache
 # across builds; the cache mount itself is not part of the final layer.
-RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
+# `--no-audit --no-fund` shaves 10-15 s off cold installs and produces
+# no signal in CI — the audit runs on the dev machine, not the build.
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci --no-audit --no-fund
 
 # Now copy the full source for the workspaces we actually build.
 COPY packages/design-system ./packages/design-system
