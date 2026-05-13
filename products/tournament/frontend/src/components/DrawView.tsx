@@ -171,7 +171,7 @@ function Side({
       onClick={onWin}
       disabled={!onWin || bye}
       className={
-        "w-full flex items-center justify-between rounded-md px-2 py-1.5 text-sm " +
+        "w-full flex items-center justify-between rounded-sm px-2 py-1.5 text-sm " +
         (winning
           ? "bg-status-done-bg border border-status-done/40 text-status-done font-medium"
           : loser

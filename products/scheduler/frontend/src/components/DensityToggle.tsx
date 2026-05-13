@@ -30,7 +30,7 @@ export function DensityToggle({ size = 'sm' }: { size?: Size }) {
     <div
       role="radiogroup"
       aria-label="Density"
-      className="inline-flex items-center rounded-md border border-border bg-card p-0.5"
+      className="inline-flex items-center rounded-sm border border-border bg-card p-0.5"
     >
       {OPTIONS.map(({ id, label, Icon }) => {
         const isActive = density === id;

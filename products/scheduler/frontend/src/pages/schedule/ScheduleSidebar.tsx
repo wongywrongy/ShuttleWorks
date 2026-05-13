@@ -302,7 +302,7 @@ function SidebarTab({
       onClick={onClick}
       className={[
         INTERACTIVE_BASE,
-        'whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium',
+        'whitespace-nowrap rounded-sm px-3 py-1 text-sm font-medium',
         active
           ? 'bg-primary text-primary-foreground shadow-sm'
           : 'text-muted-foreground hover:bg-muted hover:text-foreground',

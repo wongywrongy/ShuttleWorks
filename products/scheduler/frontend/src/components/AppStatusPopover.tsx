@@ -146,7 +146,7 @@ export function AppStatusPopover() {
         data-testid="app-status-chip"
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${chipTone} hover:brightness-95`}
+        className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs font-semibold ${chipTone} hover:brightness-95`}
       >
         <span
           key={tickKey}

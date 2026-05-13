@@ -74,7 +74,7 @@ export function PlayerSearchPicker({
     <div
       ref={ref}
       data-testid={`picker-${schoolId}-${rank}`}
-      className="absolute left-1 right-1 top-full z-overlay mt-1 rounded-md border border-border bg-card shadow-xl"
+      className="absolute left-1 right-1 top-full z-overlay mt-1 rounded-sm border border-border bg-card shadow-xl"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="border-b border-border/60 px-2 py-1.5">

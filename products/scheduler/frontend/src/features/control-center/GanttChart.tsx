@@ -435,7 +435,7 @@ export function GanttChart({
                       onClick={() => onMatchSelect(assignment.matchId)}
                       className={`absolute top-0.5 rounded border cursor-pointer
                         ${styles.bg} ${styles.border}
-                        transition-[transform,box-shadow,filter] duration-150 ease-brand
+                        transition-[transform,box-shadow,filter] duration-fast ease-brand
                         ${isAnimated ? 'scale-105' : ''}
                         ${ringClass}
                         ${isInProgress ? 'shadow-sm' : ''}

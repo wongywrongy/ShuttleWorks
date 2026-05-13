@@ -188,7 +188,7 @@ function buildGrid(data: TournamentDTO, eventId: string) {
 }
 
 function EmptyCell() {
-  return <div className="h-12 rounded-md border border-dashed border-ink-100" />;
+  return <div className="h-12 rounded-sm border border-dashed border-ink-100" />;
 }
 
 function MatchCell({
@@ -209,7 +209,7 @@ function MatchCell({
     : "bg-status-called-bg border-status-called/40 text-status-called";
   return (
     <div
-      className={`h-12 rounded-md border px-2 py-1 ${cls} flex flex-col justify-center overflow-hidden`}
+      className={`h-12 rounded-sm border px-2 py-1 ${cls} flex flex-col justify-center overflow-hidden`}
       title={`${puId}\n${label}`}
     >
       <div className="text-3xs font-mono opacity-70">{puId}</div>

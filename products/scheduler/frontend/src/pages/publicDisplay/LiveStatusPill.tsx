@@ -13,16 +13,16 @@ interface LiveStatusPillProps {
 export function LiveStatusPill({ status, error }: LiveStatusPillProps) {
   const styles =
     status === 'live'
-      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+      ? 'border-status-live/40 bg-status-live/10 text-status-live'
       : status === 'reconnecting'
-        ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-        : 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300';
+        ? 'border-status-warning/40 bg-status-warning/10 text-status-warning'
+        : 'border-status-blocked/40 bg-status-blocked/10 text-status-blocked';
   const dot =
     status === 'live'
-      ? 'bg-emerald-500 dark:bg-emerald-400 animate-pulse'
+      ? 'bg-status-live animate-pulse'
       : status === 'reconnecting'
-        ? 'bg-amber-500 dark:bg-amber-400 animate-pulse'
-        : 'bg-red-500 dark:bg-red-400';
+        ? 'bg-status-warning animate-pulse'
+        : 'bg-status-blocked';
   const label =
     status === 'live'
       ? 'Live'

@@ -507,7 +507,7 @@ function DropCell({
       data-testid={`cell-${courtId}-${slotId}`}
       title={closed ? `Court ${courtId} closed` : undefined}
       className={[
-        'relative flex-shrink-0 border-l border-border/30 transition-colors duration-150',
+        'relative flex-shrink-0 border-l border-border/30 transition-colors duration-fast',
         closed
           ? 'bg-muted/50'
           : isCurrent

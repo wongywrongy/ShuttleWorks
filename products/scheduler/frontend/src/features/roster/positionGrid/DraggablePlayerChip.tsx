@@ -32,7 +32,7 @@ export function DraggablePlayerChip({
       style={style}
       data-testid={`pool-chip-${player.id}`}
       className={[
-        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-brand',
+        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-fast ease-brand',
         isDragging
           ? 'z-popover shadow-lg ring-2 ring-primary cursor-grabbing opacity-90 scale-[1.02]'
           : 'cursor-grab hover:border-primary',

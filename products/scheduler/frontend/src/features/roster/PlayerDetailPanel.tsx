@@ -93,9 +93,8 @@ export function PlayerDetailPanel({
     <div
       data-testid="player-detail-panel"
       aria-hidden={!visible}
-      style={{ height: 280 }}
       className={[
-        'absolute inset-x-0 bottom-0 z-overlay flex shrink-0 flex-col border-t border-border bg-card text-foreground',
+        'absolute inset-x-0 bottom-0 z-overlay flex h-[280px] shrink-0 flex-col border-t border-border bg-card text-foreground',
         'transition-[transform,opacity] duration-moderate ease-brand',
         visible
           ? 'translate-y-0 opacity-100'
@@ -134,8 +133,7 @@ export function PlayerDetailPanel({
               onChange={(e) =>
                 updatePlayer(player.id, { groupId: e.target.value })
               }
-              className="h-7 rounded-sm border border-border bg-bg-elev px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              style={{ width: 220 }}
+              className="h-7 w-[220px] rounded-sm border border-border bg-bg-elev px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>
@@ -197,8 +195,7 @@ export function PlayerDetailPanel({
               }
               rows={2}
               placeholder="Optional notes…"
-              className="rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              style={{ width: 360 }}
+              className="w-[360px] rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
 
             <label className="text-xs font-medium text-muted-foreground self-start mt-1">

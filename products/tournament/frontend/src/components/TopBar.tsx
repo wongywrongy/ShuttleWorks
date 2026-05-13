@@ -86,7 +86,7 @@ export function TopBar({
 
 function ExportMenu() {
   return (
-    <div className="inline-flex rounded-md border border-ink-300 overflow-hidden text-xs">
+    <div className="inline-flex rounded-sm border border-ink-300 overflow-hidden text-xs">
       <a
         href={api.exportJsonUrl()}
         target="_blank"

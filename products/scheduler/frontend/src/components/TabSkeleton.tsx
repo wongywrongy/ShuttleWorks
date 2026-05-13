@@ -132,7 +132,7 @@ function LiveShape() {
   return (
     <div className="grid h-full grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="space-y-2 rounded-md border border-border p-3">
+        <div key={i} className="space-y-2 rounded-sm border border-border p-3">
           <Bar className="h-5 w-1/3" />
           <Bar className="h-9" />
           <Bar className="h-9" />

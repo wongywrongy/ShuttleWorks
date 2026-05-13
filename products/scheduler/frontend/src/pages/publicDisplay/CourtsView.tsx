@@ -86,10 +86,9 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
         return (
           <div
             key={courtId}
-            className={`grid items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass} ${
+            className={`grid h-14 items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass} ${
               isClosed ? 'opacity-50' : ''
             }`}
-            style={{ height: 56 }}
           >
             <span
               className={`tabular-nums text-2xl font-bold ${isClosed ? 'line-through text-muted-foreground' : ''}`}

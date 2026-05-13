@@ -235,7 +235,7 @@ export function LiveTimelineGrid({
                       key={assignment.matchId}
                       className={`absolute top-0.5 rounded border cursor-default hover:brightness-95
                         ${colors.bg} ${colors.border}
-                        transition-[opacity,transform] duration-150 ease-brand
+                        transition-[opacity,transform] duration-fast ease-brand
                         ${isAnimated ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
                       style={{ left, width, height: ROW_HEIGHT - 4 }}
                       title={getMatchTooltip(assignment.matchId, assignment)}
