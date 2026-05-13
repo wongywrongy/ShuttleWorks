@@ -67,7 +67,7 @@ export function ScheduleView({ data, eventId, refresh }: Props) {
         <div className="flex gap-2 items-center">
           {info && <span className="text-xs text-ink-500">{info}</span>}
           {error && (
-            <span className="text-xs text-red-700 bg-red-50 px-2 py-1 rounded">
+            <span className="text-xs text-status-blocked bg-status-blocked-bg px-2 py-1 rounded">
               {error}
             </span>
           )}
@@ -203,10 +203,10 @@ function MatchCell({
   started: boolean;
 }) {
   const cls = done
-    ? "bg-emerald-100 border-emerald-300 text-emerald-900"
+    ? "bg-status-done-bg border-status-done/40 text-status-done"
     : started
-    ? "bg-amber-100 border-amber-300 text-amber-900"
-    : "bg-sky-50 border-sky-300 text-sky-900";
+    ? "bg-status-warning-bg border-status-warning/40 text-status-warning"
+    : "bg-status-called-bg border-status-called/40 text-status-called";
   return (
     <div
       className={`h-12 rounded-md border px-2 py-1 ${cls} flex flex-col justify-center overflow-hidden`}

@@ -173,7 +173,7 @@ function Side({
       className={
         "w-full flex items-center justify-between rounded-md px-2 py-1.5 text-sm " +
         (winning
-          ? "bg-emerald-50 border border-emerald-300 text-emerald-900 font-medium"
+          ? "bg-status-done-bg border border-status-done/40 text-status-done font-medium"
           : loser
           ? "bg-ink-50 text-ink-400 line-through"
           : bye
