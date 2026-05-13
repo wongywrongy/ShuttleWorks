@@ -646,18 +646,6 @@ export function MatchControlCenterPage() {
         )}
       </div>
 
-      {liveTracking.isLoading && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="pointer-events-none fixed bottom-14 left-1/2 z-overlay -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
-        >
-          <span className="inline-flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full border-2 border-border border-t-primary animate-spin" aria-hidden />
-            Loading…
-          </span>
-        </div>
-      )}
       <DisruptionDialog
         isOpen={disruptionOpen}
         onClose={() => setDisruptionOpen(false)}

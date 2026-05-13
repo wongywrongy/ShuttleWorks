@@ -373,6 +373,5 @@ export function useLiveTracking() {
     importStates,
     resetStates,
     syncMatchStates,
-    isLoading: false, // TODO: Add loading state if needed
   };
 }
