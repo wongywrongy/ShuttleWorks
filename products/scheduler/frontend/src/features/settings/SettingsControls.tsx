@@ -209,7 +209,7 @@ export function TimeInput({
       onChange={(e) => onChange(e.target.value)}
       aria-label={ariaLabel}
       className={INPUT_CLASS}
-      style={{ width: '110px' }}
+      style={{ width: '132px' }}
     />
   );
 }

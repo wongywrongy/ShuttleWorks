@@ -9,6 +9,7 @@
  */
 @import '@scheduler/design-system/tokens.css';
 @import '@scheduler/design-system/globals.css';
+@import './pages/publicDisplay/displayPresets.css';
 
 @tailwind base;
 @tailwind components;

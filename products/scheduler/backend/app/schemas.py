@@ -94,8 +94,12 @@ class TournamentConfig(BaseModel):
     tvDisplayMode: Optional[Literal["strip", "grid", "list"]] = None
     # Public-display branding + layout knobs (all UI-only).
     tvAccent: Optional[str] = None  # hex "#RRGGBB"
-    tvTheme: Optional[Literal["auto", "dark", "light"]] = None
-    tvBgTone: Optional[Literal["navy", "black", "midnight", "slate"]] = None
+    tvPreset: Optional[
+        Literal[
+            "court", "pitch", "midnight", "ash",
+            "paper", "chalk", "daylight", "sand",
+        ]
+    ] = None
     tvGridColumns: Optional[int] = Field(None, ge=1, le=4)
     tvCardSize: Optional[Literal["auto", "compact", "comfortable", "large"]] = None
     tvShowScores: Optional[bool] = None

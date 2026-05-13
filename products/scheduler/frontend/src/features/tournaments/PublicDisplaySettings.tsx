@@ -15,7 +15,6 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TournamentConfig } from '../../api/dto';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useTournament } from '../../hooks/useTournament';
-import { useLockGuard } from '../../hooks/useLockGuard';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
 import { Button } from '@/components/ui/button';
 import { IconDone } from '@scheduler/design-system';
@@ -57,7 +56,6 @@ const CARD_SIZE_OPTIONS = [
 export function PublicDisplaySettings() {
   const config = useTournamentStore((s) => s.config);
   const { updateConfig } = useTournament();
-  const { confirmUnlock } = useLockGuard();
 
   const [formData, setFormData] = useState<Partial<TournamentConfig>>(() =>
     initialDisplayState(config)
@@ -95,7 +93,9 @@ export function PublicDisplaySettings() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!config) return;
-    if (!(await confirmUnlock())) return;
+    // No lock guard — every field this pane writes is on the
+    // NON_SCHEDULING_KEYS list in tournamentStore, so saving never
+    // marks the schedule stale and never needs an unlock.
     setSaving(true);
     setSaveError(null);
     try {

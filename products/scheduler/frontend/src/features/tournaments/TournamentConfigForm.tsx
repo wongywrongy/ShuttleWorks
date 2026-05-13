@@ -44,7 +44,7 @@ const MEET_TYPE_OPTIONS = [
 
 const SCORE_TYPE_OPTIONS = [
   { value: 'simple' as const,    label: 'Simple' },
-  { value: 'badminton' as const, label: 'Badminton sets' },
+  { value: 'badminton' as const, label: 'Sets' },
 ];
 
 const MATCH_FORMAT_OPTIONS = [

@@ -105,17 +105,27 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     set((state) => {
       const prev = state.config;
       if (!prev) return { config, scheduleIsStale: state.scheduleIsStale };
-      const SCORING_ONLY_KEYS: Array<keyof TournamentConfig> = [
+      // Fields that are pure UI/metadata and never feed the solver —
+      // changing them must NOT mark the schedule stale or trip the
+      // lock guard. Scoring format is operator-side display logic;
+      // every `tv*` knob lives only in the TV render path.
+      const NON_SCHEDULING_KEYS: Array<keyof TournamentConfig> = [
         'scoringFormat',
         'setsToWin',
         'pointsPerSet',
         'deuceEnabled',
+        'tvDisplayMode',
+        'tvAccent',
+        'tvPreset',
+        'tvGridColumns',
+        'tvCardSize',
+        'tvShowScores',
       ];
       const changedKeys = (Object.keys(config) as Array<keyof TournamentConfig>).filter(
         (k) => JSON.stringify(config[k]) !== JSON.stringify(prev[k]),
       );
       const schedulingFieldsChanged = changedKeys.some(
-        (k) => !SCORING_ONLY_KEYS.includes(k),
+        (k) => !NON_SCHEDULING_KEYS.includes(k),
       );
       return {
         config,
