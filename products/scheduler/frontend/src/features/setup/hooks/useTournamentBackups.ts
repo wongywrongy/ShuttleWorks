@@ -62,6 +62,11 @@ export function useTournamentBackups(): TournamentBackups {
   }, []);
 
   useEffect(() => {
+    // Initial fetch on mount. The lint rule flags `refresh()` because it
+    // calls setState internally; that's the canonical
+    // load-data-on-mount pattern here. Matches every other paginated
+    // hook in this codebase.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);
 

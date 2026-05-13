@@ -20,6 +20,9 @@ export function useProposalImpact(proposalId: string): ProposalImpactState {
 
   useEffect(() => {
     let cancelled = false;
+    // Reset on proposalId change so a stale impact never lingers when
+    // the operator collapses one row and expands another quickly.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setImpact(null);
     setError(null);
     apiClient
