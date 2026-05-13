@@ -59,50 +59,111 @@ def _backup_filename(payload: dict) -> str:
     return f"tournament-{slug}-{ts}.json"
 
 
+_TOURNAMENT_NAME_FROM_PAYLOAD_KEYS = ("config", "tournamentName")
+_ALLOWED_UPDATE_FIELDS = frozenset({"name", "status", "tournament_date"})
+
+
+def _extract_name(payload: dict) -> Optional[str]:
+    cfg = payload.get("config") if isinstance(payload.get("config"), dict) else None
+    return cfg.get("tournamentName") if cfg else None
+
+
+def _extract_date(payload: dict) -> Optional[str]:
+    cfg = payload.get("config") if isinstance(payload.get("config"), dict) else None
+    return cfg.get("tournamentDate") if cfg else None
+
+
+def _stamp_payload(payload: dict) -> dict:
+    """Apply server-stamped metadata + strip the legacy SHA field."""
+    stamped = {
+        **payload,
+        "updatedAt": now_iso(),
+        "version": CURRENT_TOURNAMENT_SCHEMA_VERSION,
+    }
+    stamped.pop("_integrity", None)
+    return stamped
+
+
 class _LocalTournamentRepo:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def get_singleton(self) -> Optional[Tournament]:
-        return self.session.scalar(
-            select(Tournament).order_by(Tournament.created_at.asc()).limit(1)
+    # ---- Multi-tournament queries (Step 2+) ----------------------------
+
+    def list_all(self) -> list[Tournament]:
+        """Newest-first list."""
+        return list(
+            self.session.scalars(
+                select(Tournament).order_by(Tournament.created_at.desc())
+            )
         )
 
-    def upsert_singleton(self, payload: dict) -> Tournament:
-        stamped = {
-            **payload,
-            "updatedAt": now_iso(),
-            "version": CURRENT_TOURNAMENT_SCHEMA_VERSION,
-        }
-        # Strip the legacy on-disk integrity hash if a client round-trips
-        # one — it has no analog in the SQL world and lingering in the
-        # payload would confuse Step 2's API consumers.
-        stamped.pop("_integrity", None)
+    def get_by_id(self, tournament_id: uuid.UUID) -> Optional[Tournament]:
+        return self.session.get(Tournament, tournament_id)
 
-        cfg = stamped.get("config") if isinstance(stamped.get("config"), dict) else None
-        name = cfg.get("tournamentName") if cfg else None
-        tdate = cfg.get("tournamentDate") if cfg else None
-
-        existing = self.get_singleton()
-        if existing is None:
-            row = Tournament(
-                data=stamped,
-                name=name,
-                tournament_date=tdate,
-                schema_version=CURRENT_TOURNAMENT_SCHEMA_VERSION,
-            )
-            self.session.add(row)
-            self.session.commit()
-            self.session.refresh(row)
-            return row
-
-        existing.data = stamped
-        existing.name = name
-        existing.tournament_date = tdate
-        existing.schema_version = CURRENT_TOURNAMENT_SCHEMA_VERSION
+    def create(
+        self,
+        *,
+        name: Optional[str] = None,
+        tournament_date: Optional[str] = None,
+        owner_id: Optional[uuid.UUID] = None,
+    ) -> Tournament:
+        row = Tournament(
+            owner_id=owner_id,
+            name=name,
+            tournament_date=tournament_date,
+            data={},
+            schema_version=CURRENT_TOURNAMENT_SCHEMA_VERSION,
+        )
+        self.session.add(row)
         self.session.commit()
-        self.session.refresh(existing)
-        return existing
+        self.session.refresh(row)
+        return row
+
+    def update(
+        self,
+        tournament_id: uuid.UUID,
+        fields: dict,
+    ) -> Optional[Tournament]:
+        row = self.get_by_id(tournament_id)
+        if row is None:
+            return None
+        for key, value in fields.items():
+            if key in _ALLOWED_UPDATE_FIELDS:
+                setattr(row, key, value)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def delete(self, tournament_id: uuid.UUID) -> bool:
+        row = self.get_by_id(tournament_id)
+        if row is None:
+            return False
+        # CASCADE wipes match_states + tournament_backups via the FK
+        # ondelete='CASCADE' declared on those models.
+        self.session.delete(row)
+        self.session.commit()
+        return True
+
+    def upsert_data(self, tournament_id: uuid.UUID, payload: dict) -> Tournament:
+        """Replace the ``data`` blob on an explicit tournament."""
+        row = self.get_by_id(tournament_id)
+        if row is None:
+            raise KeyError(tournament_id)
+        stamped = _stamp_payload(payload)
+        row.data = stamped
+        # Keep the denormalised columns in sync when the payload's config
+        # carries them. The DELETE side is gated by Step 6's status pill.
+        new_name = _extract_name(stamped)
+        if new_name is not None:
+            row.name = new_name
+        new_date = _extract_date(stamped)
+        if new_date is not None:
+            row.tournament_date = new_date
+        row.schema_version = CURRENT_TOURNAMENT_SCHEMA_VERSION
+        self.session.commit()
+        self.session.refresh(row)
+        return row
 
 
 class _LocalMatchStateRepo:
@@ -240,50 +301,66 @@ class LocalRepository:
         self.match_states = _LocalMatchStateRepo(session)
         self.backups = _LocalTournamentBackupRepo(session)
 
-    # ---- High-level orchestration that mirrors the legacy semantics ----
+    # ---- High-level orchestration (id-explicit, Step 2+) ----------------
 
-    def commit_tournament_state(self, payload: dict) -> Tournament:
-        """Snapshot the prior state into a backup, then upsert the new one.
+    def commit_tournament_state(
+        self,
+        tournament_id: uuid.UUID,
+        payload: dict,
+    ) -> Tournament:
+        """Snapshot the prior state into a backup, then write the new one.
 
-        Replaces the legacy ``_write_tournament_unlocked`` flow: every PUT
-        creates a backup of the *previous* live content, then writes the
-        new content. First-ever PUT has nothing to back up.
+        The first ``PUT`` after the tournament was created (when
+        ``data == {}``) skips the backup — there's nothing meaningful to
+        snapshot. Subsequent writes back up the prior payload, rotate to
+        ``BACKUP_KEEP`` entries, then upsert.
         """
-        prior = self.tournaments.get_singleton()
-        if prior is not None:
+        prior = self.tournaments.get_by_id(tournament_id)
+        if prior is None:
+            raise KeyError(tournament_id)
+        if prior.data:  # non-empty payload — worth a snapshot
             self.backups.create(
-                tournament_id=prior.id,
+                tournament_id=tournament_id,
                 snapshot=prior.data,
                 filename=_backup_filename(prior.data),
             )
-            self.backups.rotate(prior.id, keep=self.BACKUP_KEEP)
-        return self.tournaments.upsert_singleton(payload)
+            self.backups.rotate(tournament_id, keep=self.BACKUP_KEEP)
+        return self.tournaments.upsert_data(tournament_id, payload)
 
-    def snapshot_current_tournament(self) -> Optional[TournamentBackup]:
-        """``POST /tournament/state/backup`` — manual on-demand snapshot."""
-        current = self.tournaments.get_singleton()
+    def snapshot_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> Optional[TournamentBackup]:
+        """``POST /tournaments/{id}/state/backup`` — manual snapshot."""
+        current = self.tournaments.get_by_id(tournament_id)
         if current is None:
             return None
+        if not current.data:
+            return None
         backup = self.backups.create(
-            tournament_id=current.id,
+            tournament_id=tournament_id,
             snapshot=current.data,
         )
-        self.backups.rotate(current.id, keep=self.BACKUP_KEEP)
+        self.backups.rotate(tournament_id, keep=self.BACKUP_KEEP)
         return backup
 
-    def restore_tournament_from_backup(self, filename: str) -> Tournament:
-        """Replace the singleton tournament's ``data`` with a backup row.
+    def restore_tournament_from_backup(
+        self,
+        tournament_id: uuid.UUID,
+        filename: str,
+    ) -> Tournament:
+        """Replace ``data`` for a tournament with a stored backup.
 
-        Raises ``FileNotFoundError`` when the filename doesn't exist for
-        the current tournament — caller maps to HTTP 404.
+        Raises ``FileNotFoundError`` when either the tournament or the
+        filename is missing — callers map both to HTTP 404.
         """
-        current = self.tournaments.get_singleton()
+        current = self.tournaments.get_by_id(tournament_id)
         if current is None:
             raise FileNotFoundError(filename)
-        backup = self.backups.get_by_filename(current.id, filename)
+        backup = self.backups.get_by_filename(tournament_id, filename)
         if backup is None:
             raise FileNotFoundError(filename)
-        return self.tournaments.upsert_singleton(backup.snapshot)
+        return self.tournaments.upsert_data(tournament_id, backup.snapshot)
 
     def close(self) -> None:
         self.session.close()

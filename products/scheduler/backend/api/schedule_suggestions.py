@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Path, Request
 
 from repositories import LocalRepository, get_repository, open_repository
 
@@ -49,7 +50,10 @@ from services.suggestions_worker import (
     TriggerKind,
 )
 
-router = APIRouter(prefix="/schedule/suggestions", tags=["schedule-suggestions"])
+router = APIRouter(
+    prefix="/tournaments/{tournament_id}/schedule/suggestions",
+    tags=["schedule-suggestions"],
+)
 log = logging.getLogger("scheduler.suggestions")
 
 
@@ -99,20 +103,22 @@ async def _handle_optimize(
     stay-close objective, so we'd need a second solve at higher
     weight to evaluate it.
     """
+    tournament_id = event.tournament_id
+    if tournament_id is None:
+        log.warning("suggestions: optimize trigger missing tournament_id")
+        return
     # Open a short-lived session to load both the tournament and live
     # match states; close it before the long-running solve.
     with open_repository() as repo:
-        persisted = await _read_persisted_state(repo)
+        persisted = await _read_persisted_state(repo, tournament_id)
         if persisted is None or persisted.schedule is None or persisted.config is None:
             log.debug("suggestions: no persisted schedule to optimize against")
             return
         match_states: dict = {}
         try:
-            current = repo.tournaments.get_singleton()
-            if current is not None:
-                rows = repo.match_states.list_for_tournament(current.id)
-                from api.match_state import _row_to_dto
-                match_states = {row.match_id: _row_to_dto(row) for row in rows}
+            rows = repo.match_states.list_for_tournament(tournament_id)
+            from api.match_state import _row_to_dto
+            match_states = {row.match_id: _row_to_dto(row) for row in rows}
         except Exception:
             log.exception("suggestions: failed to read match_states")
             match_states = {}
@@ -160,8 +166,8 @@ async def _handle_optimize(
         return
 
     # Stamp the proposal + suggestion.
-    store = _get_store(app)
-    suggestion_store = _get_suggestion_store(app)
+    store = _get_store(app, tournament_id)
+    suggestion_store = _get_suggestion_store(app, tournament_id)
     lock = _get_lock(app)
     async with lock:
         _evict_expired(store)
@@ -239,17 +245,19 @@ async def _handle_repair(
         log.warning("repair handler: missing disruption.type in %s", event.fingerprint)
         return
 
+    tournament_id = event.tournament_id
+    if tournament_id is None:
+        log.warning("suggestions: repair trigger missing tournament_id")
+        return
     with open_repository() as repo:
-        persisted = await _read_persisted_state(repo)
+        persisted = await _read_persisted_state(repo, tournament_id)
         if persisted is None or persisted.schedule is None or persisted.config is None:
             return
         match_states: dict = {}
         try:
-            current = repo.tournaments.get_singleton()
-            if current is not None:
-                rows = repo.match_states.list_for_tournament(current.id)
-                from api.match_state import _row_to_dto
-                match_states = {row.match_id: _row_to_dto(row) for row in rows}
+            rows = repo.match_states.list_for_tournament(tournament_id)
+            from api.match_state import _row_to_dto
+            match_states = {row.match_id: _row_to_dto(row) for row in rows}
         except Exception:
             log.exception("suggestions: failed to read match_states")
             match_states = {}
@@ -289,8 +297,8 @@ async def _handle_repair(
         persisted.schedule, new_schedule, persisted.config,
     )
 
-    store = _get_store(app)
-    suggestion_store = _get_suggestion_store(app)
+    store = _get_store(app, tournament_id)
+    suggestion_store = _get_suggestion_store(app, tournament_id)
     lock = _get_lock(app)
     async with lock:
         _evict_expired(store)
@@ -351,13 +359,16 @@ _KIND_TIER = {"repair": 0, "director": 1, "optimize": 2, "candidate": 3}
 
 
 @router.get("", response_model=list[Suggestion])
-async def list_suggestions(http_request: Request) -> list[Suggestion]:
-    """Active suggestions, sorted by severity then creation time.
+async def list_suggestions(
+    http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
+) -> list[Suggestion]:
+    """Active suggestions for this tournament, sorted by severity then time.
 
     Drops expired entries before returning. The frontend polls this
     endpoint every ~8s and rebuilds the rail from the response.
     """
-    store = _get_suggestion_store(http_request.app)
+    store = _get_suggestion_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     async with lock:
         _evict_expired_suggestions(store)
@@ -371,15 +382,11 @@ async def list_suggestions(http_request: Request) -> list[Suggestion]:
 async def apply_suggestion(
     suggestion_id: str,
     http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ):
-    """Commit the proposal underlying a suggestion.
-
-    Drops the suggestion before invoking commit so a 409 (stale
-    version) doesn't leave a dead entry in the inbox — the
-    frontend's next poll will reconcile.
-    """
-    store = _get_suggestion_store(http_request.app)
+    """Commit the proposal underlying a suggestion."""
+    store = _get_suggestion_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     async with lock:
         _evict_expired_suggestions(store)
@@ -389,14 +396,18 @@ async def apply_suggestion(
             410, ErrorCode.PROPOSAL_EXPIRED,
             "suggestion expired or not found",
         )
-    return await commit_proposal(sug.proposalId, http_request, repo)
+    return await commit_proposal(sug.proposalId, http_request, tournament_id, repo)
 
 
 @router.post("/{suggestion_id}/dismiss")
-async def dismiss_suggestion(suggestion_id: str, http_request: Request) -> dict:
+async def dismiss_suggestion(
+    suggestion_id: str,
+    http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
+) -> dict:
     """Drop a suggestion and cancel its underlying proposal."""
-    store = _get_suggestion_store(http_request.app)
-    proposal_store = _get_store(http_request.app)
+    store = _get_suggestion_store(http_request.app, tournament_id)
+    proposal_store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     async with lock:
         _evict_expired_suggestions(store)

@@ -2,7 +2,6 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { IconContext } from '@phosphor-icons/react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { AppShell } from './AppShell';
 
 // Phosphor defaults: ultra-light strokes are the visual lift the
 // taste skills mandate. ``size="1em"`` lets size flow from the
@@ -13,6 +12,16 @@ const ICON_DEFAULTS = { weight: 'light' as const, size: '1em' as const, mirrored
 const PublicDisplayPage = lazy(() =>
   import('../pages/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
 );
+const TournamentListPage = lazy(() =>
+  import('../pages/TournamentListPage').then((m) => ({ default: m.TournamentListPage })),
+);
+const TournamentPage = lazy(() =>
+  import('../pages/TournamentPage').then((m) => ({ default: m.TournamentPage })),
+);
+
+function Fallback() {
+  return <div className="p-4 text-sm text-muted-foreground">Loading…</div>;
+}
 
 function App() {
   return (
@@ -24,16 +33,35 @@ function App() {
           <Route
             path="/display"
             element={
-              <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading…</div>}>
+              <Suspense fallback={<Fallback />}>
                 <PublicDisplayPage />
               </Suspense>
             }
           />
-          {/* Legacy deep links redirect to root so existing bookmarks keep working. */}
+          {/* Legacy deep links redirect to the list. */}
           <Route path="/tracking" element={<Navigate to="/" replace />} />
           <Route path="/live-ops" element={<Navigate to="/" replace />} />
-          {/* Everything else is the one-shell app. */}
-          <Route path="/*" element={<AppShell />} />
+          {/* Dashboard / tournament list. */}
+          <Route
+            path="/"
+            element={
+              <Suspense fallback={<Fallback />}>
+                <TournamentListPage />
+              </Suspense>
+            }
+          />
+          {/* Per-tournament app shell. ``*`` keeps internal tab state
+              owned by AppShell (no nested routes). */}
+          <Route
+            path="/tournaments/:id/*"
+            element={
+              <Suspense fallback={<Fallback />}>
+                <TournamentPage />
+              </Suspense>
+            }
+          />
+          {/* Fallback — anything else goes home. */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
       </IconContext.Provider>

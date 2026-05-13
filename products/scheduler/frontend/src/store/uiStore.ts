@@ -99,6 +99,13 @@ interface UiState {
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
 
+  // URL-derived tournament id. Set by ``TournamentPage`` on mount; read
+  // by ``forceSaveNow`` and other module-level helpers that don't have
+  // direct access to React Router params. NOT persisted — refreshing
+  // the page re-derives it from the URL.
+  activeTournamentId: string | null;
+  setActiveTournamentId: (id: string | null) => void;
+
   // Solver HUD
   solverHud: SolverHudState;
   setSolverHud: (patch: Partial<SolverHudState>) => void;
@@ -163,6 +170,7 @@ interface UiState {
 const INITIAL: Pick<
   UiState,
   | 'activeTab'
+  | 'activeTournamentId'
   | 'solverHud'
   | 'pendingPin'
   | 'lastValidation'
@@ -182,6 +190,7 @@ const INITIAL: Pick<
   | 'unlockModalState'
 > = {
   activeTab: 'setup',
+  activeTournamentId: null,
   solverHud: DEFAULT_SOLVER_HUD,
   pendingPin: null,
   lastValidation: null,
@@ -205,6 +214,7 @@ export const useUiStore = create<UiState>((set) => ({
   ...INITIAL,
 
   setActiveTab: (activeTab) => set({ activeTab }),
+  setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
 
   setSolverHud: (patch) =>
     set((state) => ({ solverHud: { ...state.solverHud, ...patch } })),

@@ -28,6 +28,7 @@ import type { Proposal } from '../api/dto';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useMatchStateStore } from '../store/matchStateStore';
 import { useUiStore } from '../store/uiStore';
+import { useTournamentId } from './useTournamentId';
 
 type Status = 'idle' | 'loading' | 'error';
 
@@ -51,6 +52,7 @@ interface UseProposalsResult {
 }
 
 export function useProposals(): UseProposalsResult {
+  const tid = useTournamentId();
   const config = useTournamentStore((s) => s.config);
   const players = useTournamentStore((s) => s.players);
   const matches = useTournamentStore((s) => s.matches);
@@ -107,7 +109,7 @@ export function useProposals(): UseProposalsResult {
           stayCloseWeight,
           nowIso: new Date().toISOString(),
         };
-        const proposal = await apiClient.createWarmRestartProposal(req);
+        const proposal = await apiClient.createWarmRestartProposal(tid, req);
         setActiveProposal(proposal);
         setStatus('idle');
         return proposal;
@@ -133,7 +135,7 @@ export function useProposals(): UseProposalsResult {
           disruption,
           nowIso: new Date().toISOString(),
         };
-        const proposal = await apiClient.createRepairProposal(req);
+        const proposal = await apiClient.createRepairProposal(tid, req);
         setActiveProposal(proposal);
         setStatus('idle');
         return proposal;
@@ -160,7 +162,7 @@ export function useProposals(): UseProposalsResult {
           pinnedSlotId: slotId,
           pinnedCourtId: courtId,
         };
-        const proposal = await apiClient.createManualEditProposal(req);
+        const proposal = await apiClient.createManualEditProposal(tid, req);
         setActiveProposal(proposal);
         setStatus('idle');
         return proposal;
@@ -185,7 +187,7 @@ export function useProposals(): UseProposalsResult {
           originalSchedule: schedule!,
           matchStates,
         };
-        const proposal = await apiClient.createDirectorActionProposal(req);
+        const proposal = await apiClient.createDirectorActionProposal(tid, req);
         setActiveProposal(proposal);
         setStatus('idle');
         return proposal;
@@ -203,7 +205,7 @@ export function useProposals(): UseProposalsResult {
       setStatus('loading');
       setError(null);
       try {
-        const result = await apiClient.commitProposal(target);
+        const result = await apiClient.commitProposal(tid, target);
         setSchedule(result.state.schedule ?? null);
         setScheduleVersion(result.state.scheduleVersion ?? 0);
         setScheduleHistory(result.state.scheduleHistory ?? []);
@@ -253,7 +255,7 @@ export function useProposals(): UseProposalsResult {
       const target = id || activeProposal?.id;
       if (!target) return;
       try {
-        await apiClient.cancelProposal(target);
+        await apiClient.cancelProposal(tid, target);
       } catch {
         // Swallow — cancel is best-effort. Even if the server doesn't
         // know about it (already expired), we still want to clear the

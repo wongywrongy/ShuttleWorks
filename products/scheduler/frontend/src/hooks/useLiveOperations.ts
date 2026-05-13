@@ -23,6 +23,7 @@ import { useTournamentStore } from '../store/tournamentStore';
 import { useMatchStateStore } from '../store/matchStateStore';
 import { apiClient } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
+import { useTournamentId } from './useTournamentId';
 import { getMatchPlayerIds as getPlayerIdsFromMatch } from '../utils/trafficLight';
 import { timeToSlot, slotToTime } from '../lib/time';
 
@@ -38,6 +39,7 @@ export interface ImpactAnalysis {
 }
 
 export function useLiveOperations() {
+  const tid = useTournamentId();
   const schedule = useTournamentStore((state) => state.schedule);
   const config = useTournamentStore((state) => state.config);
   const matches = useTournamentStore((state) => state.matches);
@@ -190,7 +192,7 @@ export function useLiveOperations() {
 
       // Sync to backend
       try {
-        await apiClient.updateMatchState(matchId, updated);
+        await apiClient.updateMatchState(tid, matchId, updated);
       } catch (err) {
         console.error('Failed to sync match state:', err);
       }

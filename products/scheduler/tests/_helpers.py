@@ -62,3 +62,16 @@ def isolate_test_database(tmp_path, monkeypatch) -> Path:
     from database.session import engine
     Base.metadata.create_all(engine)
     return db_path
+
+
+def seed_tournament(client, name: str = "Test") -> str:
+    """POST /tournaments and return the new id.
+
+    Most route tests need an existing tournament in the DB before the
+    scoped endpoints (match-states, schedule/*) accept writes. Use this
+    helper from a fixture so the boilerplate stays out of test bodies.
+    The ``client`` must already include the ``api.tournaments`` router.
+    """
+    r = client.post("/tournaments", json={"name": name})
+    assert r.status_code == 201, r.text
+    return r.json()["id"]

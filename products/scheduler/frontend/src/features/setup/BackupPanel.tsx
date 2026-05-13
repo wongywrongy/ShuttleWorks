@@ -11,6 +11,7 @@ import { apiClient } from '../../api/client';
 import type { ScheduleDTO } from '../../api/dto';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useUiStore } from '../../store/uiStore';
+import { useTournamentId } from '../../hooks/useTournamentId';
 import { parseScheduleXlsx, type ImportResult } from './importScheduleXlsx';
 import { ScheduleImportModal } from './ScheduleImportModal';
 import {
@@ -33,6 +34,7 @@ function formatWhen(iso: string): string {
 }
 
 export function BackupPanel() {
+  const tid = useTournamentId();
   const { entries, loading, error, busyAction, refresh, createBackup, restoreBackup } =
     useTournamentBackups();
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export function BackupPanel() {
           infeasibleReasons: [],
           status: 'feasible',
         };
-        const stamped = await apiClient.putTournamentState({
+        const stamped = await apiClient.putTournamentState(tid, {
           version: 1,
           config: plan.config,
           groups: plan.groups,

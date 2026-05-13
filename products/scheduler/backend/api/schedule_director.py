@@ -22,9 +22,10 @@ Action kinds:
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Path, Request
 from pydantic import BaseModel, Field
 
 from app.error_codes import ErrorCode, http_error
@@ -47,7 +48,10 @@ from api.schedule_warm_restart import WarmRestartRequest, _run_warm_restart
 _MAX_CLOCK_SHIFT_MIN = 24 * 60
 
 
-router = APIRouter(prefix="/schedule", tags=["schedule-director"])
+router = APIRouter(
+    prefix="/tournaments/{tournament_id}/schedule",
+    tags=["schedule-director"],
+)
 log = logging.getLogger("scheduler.director")
 
 
@@ -83,7 +87,10 @@ class DirectorActionRequest(BaseModel):
 
 
 async def _apply_delay_start(
-    store, request: DirectorActionRequest, repo: LocalRepository,
+    store,
+    request: DirectorActionRequest,
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
 ) -> Proposal:
     """Bump ``clockShiftMinutes``; do not re-solve; produce a Proposal."""
     if request.action.minutes is None or request.action.minutes <= 0:
@@ -100,7 +107,7 @@ async def _apply_delay_start(
         )
     new_config = request.config.model_copy(update={"clockShiftMinutes": accumulated})
     from api.schedule_proposals import _read_persisted_state
-    persisted = await _read_persisted_state(repo)
+    persisted = await _read_persisted_state(repo, tournament_id)
     from_version = persisted.scheduleVersion if persisted else 0
     groups = list(persisted.groups) if persisted else []
 
@@ -123,7 +130,10 @@ async def _apply_delay_start(
 
 
 async def _apply_insert_blackout(
-    store, request: DirectorActionRequest, repo: LocalRepository,
+    store,
+    request: DirectorActionRequest,
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
 ) -> Proposal:
     """Append a BreakWindow to config and warm-restart around it."""
     if not request.action.fromTime or not request.action.toTime:
@@ -145,6 +155,7 @@ async def _apply_insert_blackout(
         request,
         new_config,
         repo=repo,
+        tournament_id=tournament_id,
         summary=(
             f"Insert blackout {request.action.fromTime}–{request.action.toTime}"
             + (f" ({request.action.reason})" if request.action.reason else "")
@@ -153,7 +164,10 @@ async def _apply_insert_blackout(
 
 
 async def _apply_reopen_court(
-    store, request: DirectorActionRequest, repo: LocalRepository,
+    store,
+    request: DirectorActionRequest,
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
 ) -> Proposal:
     """Drop court closures and warm-restart so matches can flow back
     onto the now-open court. Removes ALL closures (legacy + windowed)
@@ -184,12 +198,16 @@ async def _apply_reopen_court(
         request,
         new_config,
         repo=repo,
+        tournament_id=tournament_id,
         summary=f"Reopen court {court_id}",
     )
 
 
 async def _apply_remove_blackout(
-    store, request: DirectorActionRequest, repo: LocalRepository,
+    store,
+    request: DirectorActionRequest,
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
 ) -> Proposal:
     if request.action.blackoutIndex is None:
         raise http_error(
@@ -209,6 +227,7 @@ async def _apply_remove_blackout(
         request,
         new_config,
         repo=repo,
+        tournament_id=tournament_id,
         summary=f"Remove blackout {removed.start}–{removed.end}",
     )
 
@@ -219,11 +238,12 @@ async def _solve_and_propose(
     new_config: TournamentConfig,
     *,
     repo: LocalRepository,
+    tournament_id: uuid.UUID,
     summary: str,
 ) -> Proposal:
     """Run a warm-restart with the updated config and wrap as a Proposal."""
     from api.schedule_proposals import _read_persisted_state
-    persisted = await _read_persisted_state(repo)
+    persisted = await _read_persisted_state(repo, tournament_id)
     from_version = persisted.scheduleVersion if persisted else 0
     groups = list(persisted.groups) if persisted else []
 
@@ -254,6 +274,7 @@ async def _solve_and_propose(
 async def create_director_action(
     request: DirectorActionRequest,
     http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ) -> Proposal:
     """Create a proposal from a director time-axis action.
@@ -267,7 +288,7 @@ async def create_director_action(
     actions can solve in parallel — they only serialize when storing
     the proposal.
     """
-    store = _get_store(http_request.app)
+    store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     kind = request.action.kind
     # Validate input + run solver outside the lock; only the store
@@ -275,19 +296,19 @@ async def create_director_action(
     if kind == "delay_start":
         async with lock:
             _evict_expired(store)
-            return await _apply_delay_start(store, request, repo)
+            return await _apply_delay_start(store, request, repo, tournament_id)
     if kind == "insert_blackout":
         async with lock:
             _evict_expired(store)
-            return await _apply_insert_blackout(store, request, repo)
+            return await _apply_insert_blackout(store, request, repo, tournament_id)
     if kind == "remove_blackout":
         async with lock:
             _evict_expired(store)
-            return await _apply_remove_blackout(store, request, repo)
+            return await _apply_remove_blackout(store, request, repo, tournament_id)
     if kind == "reopen_court":
         async with lock:
             _evict_expired(store)
-            return await _apply_reopen_court(store, request, repo)
+            return await _apply_reopen_court(store, request, repo, tournament_id)
     raise http_error(
         422, ErrorCode.STATE_SCHEMA_MISMATCH,
         f"unknown director-action kind: {kind!r}",

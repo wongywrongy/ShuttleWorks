@@ -16,16 +16,19 @@ import { useEffect, useRef } from 'react';
 import type { Advisory } from '../api/dto';
 import { apiClient } from '../api/client';
 import { useUiStore } from '../store/uiStore';
+import { useTournamentIdOrNull } from './useTournamentId';
 
 const POLL_MS = 15_000;
 
 export function useAdvisories(): null {
+  const tid = useTournamentIdOrNull();
   const setAdvisories = useUiStore((s) => s.setAdvisories);
   const setPendingAdvisoryReview = useUiStore((s) => s.setPendingAdvisoryReview);
   const pushToast = useUiStore((s) => s.pushToast);
   const seenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    if (!tid) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -36,7 +39,7 @@ export function useAdvisories(): null {
       // every browser tab adds up across many open windows.
       if (typeof document !== 'undefined' && document.hidden) return;
       try {
-        const advisories = await apiClient.getAdvisories();
+        const advisories = await apiClient.getAdvisories(tid);
         if (cancelled) return;
         // Dedupe + toast for genuinely new warn/critical entries.
         const known = seenIdsRef.current;
@@ -95,7 +98,7 @@ export function useAdvisories(): null {
       if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [pushToast, setAdvisories, setPendingAdvisoryReview]);
+  }, [tid, pushToast, setAdvisories, setPendingAdvisoryReview]);
 
   return null;
 }

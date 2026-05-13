@@ -17,6 +17,9 @@ import type {
   ProposedMove,
   ValidationResponseDTO,
   TournamentStateDTO,
+  TournamentSummaryDTO,
+  TournamentCreateDTO,
+  TournamentUpdateDTO,
   BackupListDTO,
   BackupCreatedDTO,
   Advisory,
@@ -207,12 +210,49 @@ class ApiClient {
   }
 
   /**
-   * Generate optimized schedule
-   * This is the only API call - backend is stateless
+   * Generate optimized schedule.
+   * Stateless compute — no tournament_id needed; the full problem is in the body.
    */
   async generateSchedule(request: GenerateScheduleRequest): Promise<ScheduleDTO> {
     const response = await this.client.post<ScheduleDTO>('/schedule', request);
     return response.data;
+  }
+
+  // ---- Multi-tournament CRUD (Step 2) ----------------------------------
+
+  /** List all tournaments (newest first). */
+  async listTournaments(): Promise<TournamentSummaryDTO[]> {
+    const response = await this.client.get<TournamentSummaryDTO[]>('/tournaments');
+    return response.data;
+  }
+
+  /** Create an empty tournament. Returns the summary row including the new id. */
+  async createTournament(body: TournamentCreateDTO): Promise<TournamentSummaryDTO> {
+    const response = await this.client.post<TournamentSummaryDTO>('/tournaments', body);
+    return response.data;
+  }
+
+  /** Fetch a tournament's summary (id, name, status, dates). */
+  async getTournament(tid: string): Promise<TournamentSummaryDTO> {
+    const response = await this.client.get<TournamentSummaryDTO>(`/tournaments/${tid}`);
+    return response.data;
+  }
+
+  /** Partial update: name / status / tournamentDate. */
+  async updateTournament(
+    tid: string,
+    body: TournamentUpdateDTO,
+  ): Promise<TournamentSummaryDTO> {
+    const response = await this.client.patch<TournamentSummaryDTO>(
+      `/tournaments/${tid}`,
+      body,
+    );
+    return response.data;
+  }
+
+  /** Delete a tournament. CASCADE wipes match-states + backups. */
+  async deleteTournament(tid: string): Promise<void> {
+    await this.client.delete(`/tournaments/${tid}`);
   }
 
   // ---- Two-phase commit (proposal pipeline) ----------------------------
@@ -220,18 +260,21 @@ class ApiClient {
   /** Create a warm-restart proposal — same body as warm-restart, but
    *  the result is stashed server-side for review and not committed
    *  until ``commitProposal`` is called. */
-  async createWarmRestartProposal(request: WarmRestartRequest): Promise<Proposal> {
+  async createWarmRestartProposal(
+    tid: string,
+    request: WarmRestartRequest,
+  ): Promise<Proposal> {
     const response = await this.client.post<Proposal>(
-      '/schedule/proposals/warm-restart',
+      `/tournaments/${tid}/schedule/proposals/warm-restart`,
       request,
     );
     return response.data;
   }
 
   /** Create a repair proposal for a given disruption. */
-  async createRepairProposal(request: RepairRequest): Promise<Proposal> {
+  async createRepairProposal(tid: string, request: RepairRequest): Promise<Proposal> {
     const response = await this.client.post<Proposal>(
-      '/schedule/proposals/repair',
+      `/tournaments/${tid}/schedule/proposals/repair`,
       request,
     );
     return response.data;
@@ -239,18 +282,24 @@ class ApiClient {
 
   /** Manual-edit proposal (drag-drop). Pins one match to a new
    *  slot/court via warm-restart with a high stay-close weight. */
-  async createManualEditProposal(request: ManualEditProposalRequest): Promise<Proposal> {
+  async createManualEditProposal(
+    tid: string,
+    request: ManualEditProposalRequest,
+  ): Promise<Proposal> {
     const response = await this.client.post<Proposal>(
-      '/schedule/proposals/manual-edit',
+      `/tournaments/${tid}/schedule/proposals/manual-edit`,
       request,
     );
     return response.data;
   }
 
   /** Director-action proposal: delay_start, insert_blackout, remove_blackout. */
-  async createDirectorActionProposal(request: DirectorActionRequest): Promise<Proposal> {
+  async createDirectorActionProposal(
+    tid: string,
+    request: DirectorActionRequest,
+  ): Promise<Proposal> {
     const response = await this.client.post<Proposal>(
-      '/schedule/director-action',
+      `/tournaments/${tid}/schedule/director-action`,
       request,
     );
     return response.data;
@@ -258,54 +307,53 @@ class ApiClient {
 
   /** Atomically apply a proposal. 409 if the committed schedule has
    *  advanced since the proposal was created (operator must re-review). */
-  async commitProposal(id: string): Promise<CommitProposalResponse> {
+  async commitProposal(tid: string, id: string): Promise<CommitProposalResponse> {
     const response = await this.client.post<CommitProposalResponse>(
-      `/schedule/proposals/${id}/commit`,
+      `/tournaments/${tid}/schedule/proposals/${id}/commit`,
     );
     return response.data;
   }
 
   /** Discard a proposal without committing. */
-  async cancelProposal(id: string): Promise<void> {
-    await this.client.delete(`/schedule/proposals/${id}`);
+  async cancelProposal(tid: string, id: string): Promise<void> {
+    await this.client.delete(`/tournaments/${tid}/schedule/proposals/${id}`);
   }
 
-  /** Fetch a single proposal by id (used by SuggestionPreview to load the
-   *  impact diff without committing). */
-  async getProposal(id: string): Promise<Proposal> {
-    const response = await this.client.get<Proposal>(`/schedule/proposals/${id}`);
-    return response.data;
-  }
-
-  /** Live-operations advisories (overruns, no-shows, running-behind, etc.).
-   *  Polled on a 15s cadence by the useAdvisories hook. */
-  async getAdvisories(): Promise<Advisory[]> {
-    const response = await this.client.get<Advisory[]>('/schedule/advisories');
-    return response.data;
-  }
-
-  /** Pre-computed re-optimization proposals from the SuggestionsWorker.
-   *  Polled every 8s by the useSuggestions hook; rendered in the
-   *  SuggestionsRail. */
-  async getSuggestions(): Promise<Suggestion[]> {
-    const response = await this.client.get<Suggestion[]>('/schedule/suggestions');
-    return response.data;
-  }
-
-  /** Apply a suggestion — commits the underlying proposal atomically.
-   *  Returns the same shape as proposal commit. 409/410 surface as
-   *  axios errors with response.status set; the rail handles them. */
-  async applySuggestion(id: string): Promise<CommitProposalResponse> {
-    const response = await this.client.post<CommitProposalResponse>(
-      `/schedule/suggestions/${id}/apply`,
+  /** Fetch a single proposal by id (used by SuggestionPreview). */
+  async getProposal(tid: string, id: string): Promise<Proposal> {
+    const response = await this.client.get<Proposal>(
+      `/tournaments/${tid}/schedule/proposals/${id}`,
     );
     return response.data;
   }
 
-  /** Dismiss a suggestion — drops it from the inbox and cancels the
-   *  underlying proposal so it can't be applied later. */
-  async dismissSuggestion(id: string): Promise<void> {
-    await this.client.post(`/schedule/suggestions/${id}/dismiss`);
+  /** Live-operations advisories. Polled on a 15s cadence by useAdvisories. */
+  async getAdvisories(tid: string): Promise<Advisory[]> {
+    const response = await this.client.get<Advisory[]>(
+      `/tournaments/${tid}/schedule/advisories`,
+    );
+    return response.data;
+  }
+
+  /** Pre-computed re-optimization proposals from the SuggestionsWorker. */
+  async getSuggestions(tid: string): Promise<Suggestion[]> {
+    const response = await this.client.get<Suggestion[]>(
+      `/tournaments/${tid}/schedule/suggestions`,
+    );
+    return response.data;
+  }
+
+  /** Apply a suggestion — commits the underlying proposal atomically. */
+  async applySuggestion(tid: string, id: string): Promise<CommitProposalResponse> {
+    const response = await this.client.post<CommitProposalResponse>(
+      `/tournaments/${tid}/schedule/suggestions/${id}/apply`,
+    );
+    return response.data;
+  }
+
+  /** Dismiss a suggestion — drops it and cancels the underlying proposal. */
+  async dismissSuggestion(tid: string, id: string): Promise<void> {
+    await this.client.post(`/tournaments/${tid}/schedule/suggestions/${id}/dismiss`);
   }
 
   /**
@@ -498,116 +546,129 @@ class ApiClient {
   }
 
   /**
-   * Fetch the server-side tournament state.
-   * Returns `null` when the server has no state yet (HTTP 204).
+   * Fetch a tournament's persisted state blob.
+   * Returns `null` when the row exists but has no data yet (HTTP 204).
    */
-  async getTournamentState(): Promise<TournamentStateDTO | null> {
+  async getTournamentState(tid: string): Promise<TournamentStateDTO | null> {
     const response = await this.client.get<TournamentStateDTO>(
-      '/tournament/state',
+      `/tournaments/${tid}/state`,
       { validateStatus: (s) => s === 200 || s === 204 },
     );
     if (response.status === 204) return null;
     return response.data;
   }
 
-  /** Overwrite the tournament state file. Returns the stamped state. */
-  async putTournamentState(state: TournamentStateDTO): Promise<TournamentStateDTO> {
+  /** Overwrite a tournament's state blob. Returns the stamped state. */
+  async putTournamentState(
+    tid: string,
+    state: TournamentStateDTO,
+  ): Promise<TournamentStateDTO> {
     const response = await this.client.put<TournamentStateDTO>(
-      '/tournament/state',
+      `/tournaments/${tid}/state`,
       state,
     );
     return response.data;
   }
 
-  /** List rolling backups of the tournament state (newest first). */
-  async listTournamentBackups(): Promise<BackupListDTO> {
-    const res = await this.client.get<BackupListDTO>('/tournament/state/backups');
-    return res.data;
-  }
-
-  /** Snapshot the live file into the backup pool right now. */
-  async createTournamentBackup(): Promise<BackupCreatedDTO> {
-    const res = await this.client.post<BackupCreatedDTO>('/tournament/state/backup');
-    return res.data;
-  }
-
-  /** Replace the live file with the named backup. Returns the newly-current state. */
-  async restoreTournamentBackup(filename: string): Promise<TournamentStateDTO> {
-    const res = await this.client.post<TournamentStateDTO>(
-      `/tournament/state/restore/${encodeURIComponent(filename)}`,
+  /** List rolling backups (newest first). */
+  async listTournamentBackups(tid: string): Promise<BackupListDTO> {
+    const res = await this.client.get<BackupListDTO>(
+      `/tournaments/${tid}/state/backups`,
     );
     return res.data;
   }
 
-  // Match State Management (File-based)
+  /** Snapshot the current state into the backup pool. */
+  async createTournamentBackup(tid: string): Promise<BackupCreatedDTO> {
+    const res = await this.client.post<BackupCreatedDTO>(
+      `/tournaments/${tid}/state/backup`,
+    );
+    return res.data;
+  }
 
-  /**
-   * Get all match states from the JSON file
-   */
-  async getMatchStates(): Promise<Record<string, MatchStateDTO>> {
-    const response = await this.client.get<Record<string, MatchStateDTO>>('/match-states');
+  /** Restore from a named backup. Returns the newly-current state. */
+  async restoreTournamentBackup(
+    tid: string,
+    filename: string,
+  ): Promise<TournamentStateDTO> {
+    const res = await this.client.post<TournamentStateDTO>(
+      `/tournaments/${tid}/state/restore/${encodeURIComponent(filename)}`,
+    );
+    return res.data;
+  }
+
+  // ---- Match State Management ------------------------------------------
+
+  /** Get all match states for the tournament. */
+  async getMatchStates(tid: string): Promise<Record<string, MatchStateDTO>> {
+    const response = await this.client.get<Record<string, MatchStateDTO>>(
+      `/tournaments/${tid}/match-states`,
+    );
     return response.data;
   }
 
-  /**
-   * Get a single match state
-   */
-  async getMatchState(matchId: string): Promise<MatchStateDTO> {
-    const response = await this.client.get<MatchStateDTO>(`/match-states/${matchId}`);
+  /** Get a single match state, or a synthetic 'scheduled' default. */
+  async getMatchState(tid: string, matchId: string): Promise<MatchStateDTO> {
+    const response = await this.client.get<MatchStateDTO>(
+      `/tournaments/${tid}/match-states/${matchId}`,
+    );
     return response.data;
   }
 
-  /**
-   * Update a match state in the file
-   */
-  async updateMatchState(matchId: string, update: Partial<MatchStateDTO>): Promise<MatchStateDTO> {
-    const response = await this.client.put<MatchStateDTO>(`/match-states/${matchId}`, {
-      matchId,
-      ...update,
-    });
+  /** Update a match state. */
+  async updateMatchState(
+    tid: string,
+    matchId: string,
+    update: Partial<MatchStateDTO>,
+  ): Promise<MatchStateDTO> {
+    const response = await this.client.put<MatchStateDTO>(
+      `/tournaments/${tid}/match-states/${matchId}`,
+      { matchId, ...update },
+    );
     return response.data;
   }
 
-  /**
-   * Reset all match states (clear the file)
-   */
-  async resetMatchStates(): Promise<void> {
-    await this.client.post('/match-states/reset');
+  /** Reset all match states for the tournament. */
+  async resetMatchStates(tid: string): Promise<void> {
+    await this.client.post(`/tournaments/${tid}/match-states/reset`);
   }
 
-  /**
-   * Export tournament state as downloadable JSON file
-   */
-  async exportMatchStates(): Promise<Blob> {
-    const response = await this.client.get('/match-states/export/download', {
-      responseType: 'blob',
-    });
+  /** Download match states as a JSON file. */
+  async exportMatchStates(tid: string): Promise<Blob> {
+    const response = await this.client.get(
+      `/tournaments/${tid}/match-states/export/download`,
+      { responseType: 'blob' },
+    );
     return response.data;
   }
 
-  /**
-   * Import tournament state from JSON file
-   */
-  async importMatchStates(file: File): Promise<{ message: string; matchCount: number }> {
+  /** Import match states from an uploaded JSON file. */
+  async importMatchStates(
+    tid: string,
+    file: File,
+  ): Promise<{ message: string; matchCount: number }> {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await this.client.post('/match-states/import/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await this.client.post(
+      `/tournaments/${tid}/match-states/import/upload`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
     return response.data;
   }
 
-  /**
-   * Bulk import match states from a dictionary (used for v2.0 tournament export)
-   */
-  async importMatchStatesBulk(matchStates: Record<string, MatchStateDTO>): Promise<{ message: string; importedCount: number }> {
-    const response = await this.client.post('/match-states/import-bulk', matchStates);
+  /** Bulk import match states from a dictionary (used for v2.0 export). */
+  async importMatchStatesBulk(
+    tid: string,
+    matchStates: Record<string, MatchStateDTO>,
+  ): Promise<{ message: string; importedCount: number }> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/match-states/import-bulk`,
+      matchStates,
+    );
     return response.data;
   }
-
 }
 
 export const apiClient = new ApiClient();

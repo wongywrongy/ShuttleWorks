@@ -562,6 +562,29 @@ export interface BackupCreatedDTO {
   filename: string | null;
 }
 
+// Multi-tournament CRUD (Step 2)
+export type TournamentStatus = 'draft' | 'active' | 'archived';
+
+export interface TournamentSummaryDTO {
+  id: string;
+  name: string | null;
+  status: TournamentStatus;
+  tournamentDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TournamentCreateDTO {
+  name?: string | null;
+  tournamentDate?: string | null;
+}
+
+export interface TournamentUpdateDTO {
+  name?: string | null;
+  status?: TournamentStatus;
+  tournamentDate?: string | null;
+}
+
 // Constraint Visualization Types
 export interface ConstraintViolation {
   type: 'rest' | 'overlap' | 'availability' | 'court_capacity' | 'game_proximity_min' | 'game_proximity_max';

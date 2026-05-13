@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Awaitable, Callable, Dict, Optional, Tuple
@@ -52,10 +53,16 @@ class TriggerEvent:
     fingerprint within the cooldown window collapse to a single
     handler invocation. The handler itself decides whether to
     actually stamp a suggestion based on solver output.
+
+    ``tournament_id`` scopes the event to a particular tournament so
+    the in-process proposal/suggestion stores can be keyed correctly.
+    It's typed ``Optional`` for backward compat with tests that build
+    events directly; production callers always populate it.
     """
     kind: TriggerKind
     fingerprint: str
     payload: Dict[str, object] = field(default_factory=dict)
+    tournament_id: Optional[uuid.UUID] = None
 
 
 HandlerFn = Callable[[TriggerEvent, CancelToken], Awaitable[None]]

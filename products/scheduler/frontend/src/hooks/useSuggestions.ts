@@ -13,14 +13,17 @@ import { useEffect, useRef } from 'react';
 
 import { apiClient } from '../api/client';
 import { useUiStore } from '../store/uiStore';
+import { useTournamentIdOrNull } from './useTournamentId';
 
 const POLL_MS = 8_000;
 
 export function useSuggestions(): null {
+  const tid = useTournamentIdOrNull();
   const setSuggestions = useUiStore((s) => s.setSuggestions);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
+    if (!tid) return;
     cancelledRef.current = false;
 
     const tick = async () => {
@@ -28,7 +31,7 @@ export function useSuggestions(): null {
       // Skip the network roundtrip while the tab is hidden.
       if (typeof document !== 'undefined' && document.hidden) return;
       try {
-        const list = await apiClient.getSuggestions();
+        const list = await apiClient.getSuggestions(tid);
         if (!cancelledRef.current) setSuggestions(list);
       } catch (err) {
         // Non-critical — failed fetch shouldn't disrupt the UI.
@@ -56,7 +59,7 @@ export function useSuggestions(): null {
       window.clearInterval(id);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [setSuggestions]);
+  }, [tid, setSuggestions]);
 
   return null;
 }

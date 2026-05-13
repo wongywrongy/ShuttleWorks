@@ -8,30 +8,63 @@ the migration tractable.
 from __future__ import annotations
 
 import uuid
-from typing import Optional, Protocol
+from typing import List, Optional, Protocol
 
 from database.models import MatchState, Tournament, TournamentBackup
+
+# Note: ``List[Tournament]`` rendered as ``list[Tournament]`` below uses
+# PEP 585 generics (Python 3.9+); kept consistent with the rest of the
+# backend code which targets 3.11.
 
 
 class TournamentRepository(Protocol):
     """Tournament document persistence."""
 
-    def get_singleton(self) -> Optional[Tournament]:
-        """Return the only tournament row, or None if the table is empty.
+    def list_all(self) -> list[Tournament]:
+        """Newest-first list for the dashboard view."""
+        ...
 
-        Step 1 routes are single-tournament; Step 2 will introduce
-        explicit ``tournament_id`` scoping and the singleton concept
-        retires.
+    def create(
+        self,
+        *,
+        name: Optional[str] = None,
+        tournament_date: Optional[str] = None,
+        owner_id: Optional[uuid.UUID] = None,
+    ) -> Tournament:
+        """Insert an empty tournament row.
+
+        ``data`` starts as ``{}``; the first ``PUT /tournaments/{id}/state``
+        fills it. ``owner_id`` is populated from Step 4's Supabase JWT;
+        nullable until then.
         """
         ...
 
-    def upsert_singleton(self, payload: dict) -> Tournament:
-        """Insert the tournament row if missing, otherwise overwrite ``data``.
+    def get_by_id(self, tournament_id: uuid.UUID) -> Optional[Tournament]:
+        ...
+
+    def update(
+        self,
+        tournament_id: uuid.UUID,
+        fields: dict,
+    ) -> Optional[Tournament]:
+        """Apply whitelisted scalar updates (name, status, tournament_date).
+
+        Returns the updated row, or ``None`` if no row exists with that id.
+        """
+        ...
+
+    def delete(self, tournament_id: uuid.UUID) -> bool:
+        """Delete the tournament + its CASCADE children. Returns False
+        if no row existed."""
+        ...
+
+    def upsert_data(self, tournament_id: uuid.UUID, payload: dict) -> Tournament:
+        """Replace the ``data`` blob for an explicit tournament.
 
         ``payload`` is the wire-format ``TournamentStateDTO`` dict. The
-        method stamps ``updated_at`` server-side and extracts the
-        denormalised ``name`` from ``payload["config"]["tournamentName"]``
-        so the Step 6 dashboard can list rows without parsing the blob.
+        method stamps ``updated_at`` server-side and refreshes the
+        denormalised ``name`` from ``payload["config"]["tournamentName"]``.
+        Raises ``KeyError`` if no row exists with that id.
         """
         ...
 

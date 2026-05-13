@@ -1,41 +1,53 @@
 /**
- * Server-side persistence of the tournament state.
+ * Server-side persistence of a single tournament's state.
  *
- * On mount:
- *   1. GET /tournament/state
- *      - 200: hydrate Zustand from the returned payload
- *      - 204 (no file yet): read legacy `scheduler-storage` localStorage — if
- *        present, seed the server with it; otherwise keep Zustand defaults
+ * Mounted inside ``TournamentPage`` at ``/tournaments/:id/*``. On mount:
+ *   1. GET /tournaments/{id}/state
+ *      - 200 → hydrate Zustand from the returned payload
+ *      - 204 → no state yet; Zustand keeps its defaults
+ *   2. Stamp ``ui.activeTournamentId`` so ``forceSaveNow`` knows which
+ *      tournament to PUT against.
  *
  * After hydration, subscribe to the tournament store and debounce a PUT
- * for 500 ms whenever a persisted field changes. A `hydrationDone` flag
- * prevents the first hydration setState from echoing back to the server.
+ * for 500 ms whenever a persisted field changes. A ``hydrationDone``
+ * flag prevents the first hydration setState from echoing back to the
+ * server.
+ *
+ * Step 2 retired the legacy ``scheduler-storage`` localStorage
+ * migration — tournament data has been server-side since pre-Step-1.
  */
 import { useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import type { TournamentStateDTO } from '../api/dto';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore } from '../store/uiStore';
 
 const DEBOUNCE_MS = 500;
-const LEGACY_KEY = 'scheduler-storage';
 
 // Module-level timer so `forceSaveNow()` can flush from anywhere.
 let moduleTimer: number | null = null;
 let flushPromise: Promise<void> | null = null;
 
-/** Cancel any pending debounced save and flush immediately. */
+/** Cancel any pending debounced save and flush immediately.
+ *
+ * Reads the active tournament id from ``useUiStore`` (set by
+ * ``TournamentPage`` on mount). No-ops when no tournament is active —
+ * the public display and the tournament-list page have nothing to save.
+ */
 export async function forceSaveNow(): Promise<void> {
   if (moduleTimer !== null) {
     window.clearTimeout(moduleTimer);
     moduleTimer = null;
   }
   if (flushPromise) return flushPromise;
+  const tid = useUiStore.getState().activeTournamentId;
+  if (!tid) return;
   flushPromise = (async () => {
     const ui = useUiStore.getState();
     ui.setPersistStatus('saving');
     try {
-      await apiClient.putTournamentState(snapshot(useTournamentStore.getState()));
+      await apiClient.putTournamentState(tid, snapshot(useTournamentStore.getState()));
       useUiStore.getState().setLastSavedAt(new Date().toISOString());
       useUiStore.getState().setLastSaveError(null);
       useUiStore.getState().setPersistStatus('idle');
@@ -95,33 +107,22 @@ function hydrate(s: TournamentStateDTO): void {
   });
 }
 
-function readLegacyLocalStorage(): TournamentStateDTO | null {
-  try {
-    const raw = window.localStorage.getItem(LEGACY_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const legacy = parsed?.state;
-    if (!legacy) return null;
-    return {
-      version: 2,
-      config: legacy.config ?? null,
-      groups: legacy.groups ?? [],
-      players: legacy.players ?? [],
-      matches: legacy.matches ?? [],
-      schedule: null,
-      scheduleStats: null,
-      scheduleIsStale: false,
-      scheduleVersion: 0,
-      scheduleHistory: [],
-    };
-  } catch {
-    return null;
-  }
+function resetToDefaults(): void {
+  useTournamentStore.setState({
+    config: null,
+    groups: [],
+    players: [],
+    matches: [],
+    schedule: null,
+    scheduleIsStale: false,
+    scheduleVersion: 0,
+    scheduleHistory: [],
+    isScheduleLocked: false,
+  });
 }
 
 // Expose the stores on `window.__STORE__` so the Playwright e2e suite
-// can read+seed app state without round-tripping through the UI. Module-
-// scoped so it runs once at load time, not on every component render.
+// can read+seed app state without round-tripping through the UI.
 if (typeof window !== 'undefined') {
   (window as unknown as {
     __STORE__?: {
@@ -135,24 +136,27 @@ if (typeof window !== 'undefined') {
 }
 
 export function useTournamentState(): void {
+  const params = useParams<{ id?: string }>();
+  const tid = params.id ?? null;
   const hydrationDoneRef = useRef(false);
 
-  // ---- hydrate once on mount ------------------------------------------
+  // ---- hydrate once per tournament change ------------------------------
   useEffect(() => {
+    if (!tid) return;
     let cancelled = false;
+    hydrationDoneRef.current = false;
+    useUiStore.getState().setActiveTournamentId(tid);
     (async () => {
       try {
-        const remote = await apiClient.getTournamentState();
+        const remote = await apiClient.getTournamentState(tid);
         if (cancelled) return;
         if (remote) {
           hydrate(remote);
         } else {
-          // No server state yet — migrate from legacy localStorage if any.
-          const legacy = readLegacyLocalStorage();
-          if (legacy) {
-            hydrate(legacy);
-            await apiClient.putTournamentState(legacy);
-          }
+          // No state yet for this tournament — reset Zustand to defaults
+          // so leftover state from a previously-viewed tournament doesn't
+          // leak in.
+          resetToDefaults();
         }
       } catch (err) {
         console.error('[useTournamentState] hydrate failed:', err);
@@ -162,11 +166,15 @@ export function useTournamentState(): void {
     })();
     return () => {
       cancelled = true;
+      // Flush any pending debounced PUT before the tournament changes.
+      void forceSaveNow().catch(() => {});
+      useUiStore.getState().setActiveTournamentId(null);
     };
-  }, []);
+  }, [tid]);
 
   // ---- debounced PUT on any persisted-field change --------------------
   useEffect(() => {
+    if (!tid) return;
     const unsub = useTournamentStore.subscribe((state, prev) => {
       if (!hydrationDoneRef.current) return;
       const changed =
@@ -193,8 +201,6 @@ export function useTournamentState(): void {
     });
     return () => {
       unsub();
-      // Keep the module timer alive across unmount — the hook lives at the
-      // shell level, so this cleanup only fires on full app teardown.
     };
-  }, []);
+  }, [tid]);
 }

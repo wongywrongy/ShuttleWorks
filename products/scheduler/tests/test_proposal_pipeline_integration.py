@@ -31,11 +31,12 @@ for _cached in [
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from _helpers import seed_tournament
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    from _helpers import isolate_test_database
+    from _helpers import isolate_test_database, seed_tournament
     isolate_test_database(tmp_path, monkeypatch)
 
     from api import (
@@ -45,7 +46,7 @@ def client(tmp_path, monkeypatch):
         schedule_proposals,
         schedule_repair,
         schedule_warm_restart,
-        tournament_state,
+        tournaments,
     )
 
     app_ = FastAPI()
@@ -55,7 +56,7 @@ def client(tmp_path, monkeypatch):
     app_.include_router(schedule_director.router)
     app_.include_router(schedule_advisories.router)
     app_.include_router(match_state.router)
-    app_.include_router(tournament_state.router)
+    app_.include_router(tournaments.router)
     return TestClient(app_)
 
 
@@ -110,20 +111,21 @@ def _seeded_state() -> dict:
 
 
 def test_overrun_advisory_drives_repair_proposal_to_commit(client):
+    tid = seed_tournament(client)
     state = _seeded_state()
-    assert client.put("/tournament/state", json=state).status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     # Operator marks m1 as started 50 min ago — well past the
     # expected 30-min duration.
     started = (datetime.now(timezone.utc) - timedelta(minutes=80)).isoformat().replace("+00:00", "Z")
     r = client.put(
-        "/match-states/m1",
+        f"/tournaments/{tid}/match-states/m1",
         json={"matchId": "m1", "status": "started", "actualStartTime": started},
     )
     assert r.status_code == 200
 
     # Advisory pipeline detects the overrun.
-    advisories = client.get("/schedule/advisories").json()
+    advisories = client.get(f"/tournaments/{tid}/schedule/advisories").json()
     overrun = next((a for a in advisories if a["kind"] == "overrun"), None)
     assert overrun is not None
     assert overrun["severity"] == "critical"
@@ -133,7 +135,7 @@ def test_overrun_advisory_drives_repair_proposal_to_commit(client):
     # Operator clicks "Review" — payload becomes a repair proposal.
     suggested = overrun["suggestedAction"]["payload"]
     proposal_r = client.post(
-        "/schedule/proposals/repair",
+        f"/tournaments/{tid}/schedule/proposals/repair",
         json={
             "originalSchedule": state["schedule"],
             "config": state["config"],
@@ -155,7 +157,7 @@ def test_overrun_advisory_drives_repair_proposal_to_commit(client):
     pid = proposal["id"]
 
     # Operator commits.
-    commit_r = client.post(f"/schedule/proposals/{pid}/commit")
+    commit_r = client.post(f"/tournaments/{tid}/schedule/proposals/{pid}/commit")
     assert commit_r.status_code == 200, commit_r.text
     body = commit_r.json()
     assert body["state"]["scheduleVersion"] == 1
@@ -167,12 +169,13 @@ def test_overrun_advisory_drives_repair_proposal_to_commit(client):
 
 
 def test_director_delay_start_persists_clock_shift_atomically(client):
+    tid = seed_tournament(client)
     state = _seeded_state()
-    assert client.put("/tournament/state", json=state).status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     # Director declares the tournament started 25 min late.
     propose = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json={
             "action": {"kind": "delay_start", "minutes": 25},
             "config": state["config"],
@@ -188,9 +191,9 @@ def test_director_delay_start_persists_clock_shift_atomically(client):
     assert proposal["proposedConfig"]["clockShiftMinutes"] == 25
 
     # Commit applies both schedule (unchanged) and config (clockShift bumped).
-    commit_r = client.post(f"/schedule/proposals/{proposal['id']}/commit")
+    commit_r = client.post(f"/tournaments/{tid}/schedule/proposals/{proposal['id']}/commit")
     assert commit_r.status_code == 200
-    persisted = client.get("/tournament/state").json()
+    persisted = client.get(f"/tournaments/{tid}/state").json()
     assert persisted["config"]["clockShiftMinutes"] == 25
     assert persisted["scheduleVersion"] == 1
 
@@ -199,13 +202,14 @@ def test_director_delay_start_persists_clock_shift_atomically(client):
 
 
 def test_director_insert_blackout_reschedules_via_warm_restart(client):
+    tid = seed_tournament(client)
     state = _seeded_state()
     # Start with matches at slots 0 and 1 (09:00 and 09:30).
-    assert client.put("/tournament/state", json=state).status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     # Director inserts a 09:00–09:45 break — both matches must move past it.
     propose = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json={
             "action": {
                 "kind": "insert_blackout",
@@ -238,8 +242,9 @@ def test_director_insert_blackout_reschedules_via_warm_restart(client):
 
 
 def test_two_proposals_against_same_version_only_one_can_commit(client):
+    tid = seed_tournament(client)
     state = _seeded_state()
-    assert client.put("/tournament/state", json=state).status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     body = {
         "originalSchedule": state["schedule"],
@@ -249,14 +254,14 @@ def test_two_proposals_against_same_version_only_one_can_commit(client):
         "matchStates": {},
         "stayCloseWeight": 10,
     }
-    pa = client.post("/schedule/proposals/warm-restart", json=body).json()
-    pb = client.post("/schedule/proposals/warm-restart", json=body).json()
+    pa = client.post(f"/tournaments/{tid}/schedule/proposals/warm-restart", json=body).json()
+    pb = client.post(f"/tournaments/{tid}/schedule/proposals/warm-restart", json=body).json()
     assert pa["fromScheduleVersion"] == 0
     assert pb["fromScheduleVersion"] == 0
 
     # First commit succeeds, second 409s because version advanced.
-    assert client.post(f"/schedule/proposals/{pa['id']}/commit").status_code == 200
-    second = client.post(f"/schedule/proposals/{pb['id']}/commit")
+    assert client.post(f"/tournaments/{tid}/schedule/proposals/{pa['id']}/commit").status_code == 200
+    second = client.post(f"/tournaments/{tid}/schedule/proposals/{pb['id']}/commit")
     assert second.status_code == 409
     assert second.json()["detail"]["code"] == "SCHEDULE_VERSION_CONFLICT"
 
@@ -265,11 +270,12 @@ def test_two_proposals_against_same_version_only_one_can_commit(client):
 
 
 def test_cancelled_proposal_leaves_committed_state_unchanged(client):
+    tid = seed_tournament(client)
     state = _seeded_state()
-    assert client.put("/tournament/state", json=state).status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     propose = client.post(
-        "/schedule/proposals/warm-restart",
+        f"/tournaments/{tid}/schedule/proposals/warm-restart",
         json={
             "originalSchedule": state["schedule"],
             "config": state["config"],
@@ -281,9 +287,9 @@ def test_cancelled_proposal_leaves_committed_state_unchanged(client):
     )
     pid = propose.json()["id"]
     # Operator cancels.
-    assert client.delete(f"/schedule/proposals/{pid}").status_code == 200
+    assert client.delete(f"/tournaments/{tid}/schedule/proposals/{pid}").status_code == 200
 
-    persisted = client.get("/tournament/state").json()
+    persisted = client.get(f"/tournaments/{tid}/state").json()
     assert persisted["scheduleVersion"] == 0  # never bumped
     assert persisted["scheduleHistory"] == []  # never appended
 
@@ -326,7 +332,7 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
         match_state,
         schedule_proposals,
         schedule_warm_restart,
-        tournament_state,
+        tournaments,
     )
     from api.schedule_suggestions import build_handler
     from services.suggestions_worker import SuggestionsWorker, TriggerEvent, TriggerKind
@@ -336,15 +342,18 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
     app_.include_router(schedule_warm_restart.router)
     app_.include_router(schedule_proposals.router)
     app_.include_router(match_state.router)
-    app_.include_router(tournament_state.router)
+    app_.include_router(tournaments.router)
 
     # Seed tournament state via sync TestClient so _read_persisted_state() finds it.
     seed = _seeded_state()
     with TestClient(app_) as c:
-        r = c.put("/tournament/state", json=seed)
+        tid = seed_tournament(c)
+        r = c.put(f"/tournaments/{tid}/state", json=seed)
         assert r.status_code == 200, r.text
 
     # Start the worker closed over the same app instance.
+    import uuid as _uuid
+    tournament_uuid = _uuid.UUID(tid)
     worker = SuggestionsWorker(
         handler=build_handler(app_),
         cooldown_seconds=0,
@@ -355,6 +364,7 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
             await worker.post(TriggerEvent(
                 kind=TriggerKind.OPTIMIZE,
                 fingerprint="opt:test:e2e",
+                tournament_id=tournament_uuid,
             ))
 
             # Give the consumer task a chance to pull the event from
@@ -384,7 +394,7 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
         # via _get_suggestion_store ensures we get the dict the
         # handler actually populated.
         from api.schedule_proposals import _get_suggestion_store
-        suggestion_store = _get_suggestion_store(app_)
+        suggestion_store = _get_suggestion_store(app_, tournament_uuid)
         if suggestion_store:
             sug = next(iter(suggestion_store.values()))
             assert sug.kind == "optimize"

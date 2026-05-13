@@ -1,17 +1,18 @@
-"""Match state management API (SQLAlchemy-backed).
+"""Match state management API (SQLAlchemy-backed, tournament-scoped).
 
 Live tournament-day match status — called / started / finished, plus
-score and timing stamps. Backed by the ``match_states`` table, scoped to
-the singleton tournament for Step 1 (Step 2 will introduce explicit
-``tournament_id`` in the route URL).
+score and timing stamps. Backed by the ``match_states`` table; routes
+take ``tournament_id`` as a path parameter so multiple tournaments stay
+isolated.
 """
 from __future__ import annotations
 
 import json
 import logging
+import uuid
 from typing import Dict, Iterable, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Path, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -20,7 +21,10 @@ from app.time_utils import now_iso
 from database.models import MatchState
 from repositories import LocalRepository, get_repository
 
-router = APIRouter(prefix="/match-states", tags=["match-states"])
+router = APIRouter(
+    prefix="/tournaments/{tournament_id}/match-states",
+    tags=["match-states"],
+)
 log = logging.getLogger("scheduler.match_state")
 
 # 20 MB import cap — anything larger isn't a legitimate match_states
@@ -100,44 +104,40 @@ def _row_to_dto(row: MatchState) -> MatchStateDTO:
     )
 
 
-def _require_tournament_id(repo: LocalRepository):
-    """Resolve the singleton tournament id, auto-creating an empty row
-    on first write.
-
-    Legacy parity: the JSON-file backend let ``PUT /match-states/...``
-    succeed before a tournament had been saved. We preserve that by
-    creating an empty placeholder tournament. Step 2 makes
-    ``tournament_id`` explicit in the URL and this fallback retires.
-    """
-    current = repo.tournaments.get_singleton()
-    if current is None:
-        current = repo.tournaments.upsert_singleton({})
-    return current.id
+def _ensure_tournament(repo: LocalRepository, tournament_id: uuid.UUID) -> uuid.UUID:
+    """404 if the tournament doesn't exist; otherwise return its id."""
+    if repo.tournaments.get_by_id(tournament_id) is None:
+        raise http_error(
+            404,
+            ErrorCode.STATE_CORRUPT,
+            f"tournament not found: {tournament_id}",
+        )
+    return tournament_id
 
 
 # ---------- API endpoints -------------------------------------------------
 
 
 @router.get("", response_model=Dict[str, MatchStateDTO])
-def get_all_match_states(repo: LocalRepository = Depends(get_repository)):
-    """Get all match states. Empty dict when no tournament exists yet."""
-    current = repo.tournaments.get_singleton()
-    if current is None:
-        return {}
-    rows = repo.match_states.list_for_tournament(current.id)
+def get_all_match_states(
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Get all match states for the tournament."""
+    tid = _ensure_tournament(repo, tournament_id)
+    rows = repo.match_states.list_for_tournament(tid)
     return {row.match_id: _row_to_dto(row) for row in rows}
 
 
 @router.get("/{match_id}", response_model=MatchStateDTO)
 def get_match_state(
     match_id: str,
+    tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Get a single match state, or a default `scheduled` if unseen."""
-    current = repo.tournaments.get_singleton()
-    if current is None:
-        return MatchStateDTO(matchId=match_id, status="scheduled")
-    row = repo.match_states.get(current.id, match_id)
+    tid = _ensure_tournament(repo, tournament_id)
+    row = repo.match_states.get(tid, match_id)
     if row is None:
         return MatchStateDTO(matchId=match_id, status="scheduled")
     return _row_to_dto(row)
@@ -147,10 +147,11 @@ def get_match_state(
 def update_match_state(
     match_id: str,
     update: MatchStateDTO,
+    tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Update a match state."""
-    tid = _require_tournament_id(repo)
+    tid = _ensure_tournament(repo, tournament_id)
     update.matchId = match_id
     update.updatedAt = now_iso()
     try:
@@ -168,31 +169,34 @@ def update_match_state(
 @router.delete("/{match_id}")
 def delete_match_state(
     match_id: str,
+    tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Remove a match state (reset to default)."""
-    tid = _require_tournament_id(repo)
+    tid = _ensure_tournament(repo, tournament_id)
     repo.match_states.delete(tid, match_id)
     return {"message": f"Match state for {match_id} deleted successfully"}
 
 
 @router.post("/reset")
-def reset_all_match_states(repo: LocalRepository = Depends(get_repository)):
-    """Clear all match states for the singleton tournament."""
-    current = repo.tournaments.get_singleton()
-    if current is None:
-        return {"message": "All match states reset successfully"}
-    repo.match_states.reset_all(current.id)
+def reset_all_match_states(
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Clear all match states for the tournament."""
+    tid = _ensure_tournament(repo, tournament_id)
+    repo.match_states.reset_all(tid)
     return {"message": "All match states reset successfully"}
 
 
 @router.get("/export/download")
-def export_match_states(repo: LocalRepository = Depends(get_repository)):
+def export_match_states(
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
     """Download the match states as a JSON file in the legacy shape."""
-    current = repo.tournaments.get_singleton()
-    rows: Iterable[MatchState] = []
-    if current is not None:
-        rows = repo.match_states.list_for_tournament(current.id)
+    tid = _ensure_tournament(repo, tournament_id)
+    rows: Iterable[MatchState] = repo.match_states.list_for_tournament(tid)
     payload = {
         "matchStates": {
             row.match_id: _row_to_dto(row).model_dump() for row in rows
@@ -208,6 +212,7 @@ def export_match_states(repo: LocalRepository = Depends(get_repository)):
 async def import_match_states(
     request: Request,
     file: UploadFile = File(...),
+    tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Upload a match_states.json file and replace the current contents."""
@@ -240,7 +245,7 @@ async def import_match_states(
             400, ErrorCode.UPLOAD_SCHEMA_MISMATCH, "payload does not match schema"
         )
 
-    tid = _require_tournament_id(repo)
+    tid = _ensure_tournament(repo, tournament_id)
     repo.match_states.reset_all(tid)
     repo.match_states.bulk_upsert(
         tid,
@@ -256,13 +261,14 @@ async def import_match_states(
 @router.post("/import-bulk")
 def import_match_states_bulk(
     match_states: Dict[str, MatchStateDTO],
+    tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Merge a dict of match states into the current set."""
     if not match_states:
         return {"message": "No match states to import", "importedCount": 0}
 
-    tid = _require_tournament_id(repo)
+    tid = _ensure_tournament(repo, tournament_id)
     fields_map: dict[str, dict] = {}
     for match_id, ms in match_states.items():
         ms.matchId = match_id

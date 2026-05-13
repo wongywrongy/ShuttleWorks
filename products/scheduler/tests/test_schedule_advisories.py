@@ -47,6 +47,7 @@ from api.schedule_advisories import (
     detect_running_behind,
     detect_start_delay,
 )
+from _helpers import seed_tournament
 
 
 def _config(**overrides) -> TournamentConfig:
@@ -391,25 +392,27 @@ def test_collect_advisories_returns_empty_when_no_schedule():
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    from _helpers import isolate_test_database
+    from _helpers import isolate_test_database, seed_tournament
     isolate_test_database(tmp_path, monkeypatch)
 
-    from api import schedule_advisories, match_state, tournament_state
+    from api import schedule_advisories, match_state, tournaments
 
     app_ = FastAPI()
     app_.include_router(schedule_advisories.router)
     app_.include_router(match_state.router)
-    app_.include_router(tournament_state.router)
+    app_.include_router(tournaments.router)
     return TestClient(app_)
 
 
 def test_advisories_endpoint_returns_empty_when_no_state(client):
-    r = client.get("/schedule/advisories")
+    tid = seed_tournament(client)
+    r = client.get(f"/tournaments/{tid}/schedule/advisories")
     assert r.status_code == 200
     assert r.json() == []
 
 
 def test_advisories_endpoint_returns_overrun_from_persisted_state(client, tmp_path):
+    tid = seed_tournament(client)
     # 1) PUT a tournament state with one match and a schedule
     payload = {
         "version": 2,
@@ -439,14 +442,14 @@ def test_advisories_endpoint_returns_overrun_from_persisted_state(client, tmp_pa
         "scheduleStats": None,
         "scheduleIsStale": False,
     }
-    r = client.put("/tournament/state", json=payload)
+    r = client.put(f"/tournaments/{tid}/state", json=payload)
     assert r.status_code == 200
 
     # 2) PUT a match-state row that puts m_late 50 min over a 30-min match
     started_dt = datetime.now(timezone.utc) - timedelta(minutes=80)
     started = started_dt.isoformat().replace("+00:00", "Z")
     r = client.put(
-        "/match-states/m_late",
+        f"/tournaments/{tid}/match-states/m_late",
         json={
             "matchId": "m_late",
             "status": "started",
@@ -456,7 +459,7 @@ def test_advisories_endpoint_returns_overrun_from_persisted_state(client, tmp_pa
     assert r.status_code == 200
 
     # 3) GET advisories — expect one critical overrun
-    r = client.get("/schedule/advisories")
+    r = client.get(f"/tournaments/{tid}/schedule/advisories")
     assert r.status_code == 200
     advisories = r.json()
     assert len(advisories) >= 1

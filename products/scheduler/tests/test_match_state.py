@@ -1,11 +1,11 @@
-"""Tests for /match-states persistence endpoints (SQLite-backed)."""
+"""Tests for /tournaments/{id}/match-states endpoints (SQLite-backed)."""
 from __future__ import annotations
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from _helpers import isolate_test_database
+from _helpers import isolate_test_database, seed_tournament
 
 
 def _detail_msg(r) -> str:
@@ -18,11 +18,17 @@ def _detail_msg(r) -> str:
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    import api.match_state as ms_module
+    from api import match_state, tournaments
 
     app_ = FastAPI()
-    app_.include_router(ms_module.router)
+    app_.include_router(tournaments.router)
+    app_.include_router(match_state.router)
     return TestClient(app_)
+
+
+@pytest.fixture
+def tid(client) -> str:
+    return seed_tournament(client, "Test")
 
 
 def _ok_state(match_id: str = "m1", status: str = "called") -> dict:
@@ -36,53 +42,61 @@ def _ok_state(match_id: str = "m1", status: str = "called") -> dict:
     }
 
 
-def test_put_then_get_round_trip(client):
-    r = client.put("/match-states/m1", json=_ok_state("m1", "called"))
+def _base(tid: str) -> str:
+    return f"/tournaments/{tid}/match-states"
+
+
+def test_put_then_get_round_trip(client, tid):
+    r = client.put(f"{_base(tid)}/m1", json=_ok_state("m1", "called"))
     assert r.status_code == 200
     assert r.json()["status"] == "called"
-    r = client.get("/match-states")
+    r = client.get(_base(tid))
     assert r.status_code == 200
     assert "m1" in r.json()
 
 
-def test_unknown_status_coerced_to_scheduled(client):
+def test_unknown_status_coerced_to_scheduled(client, tid):
     """The pre-validator on MatchStateDTO rewrites unknown status values."""
     payload = _ok_state("m1", "definitely-not-real")
-    r = client.put("/match-states/m1", json=payload)
+    r = client.put(f"{_base(tid)}/m1", json=payload)
     assert r.status_code == 200
     assert r.json()["status"] == "scheduled"
 
 
-def test_import_upload_rejects_oversize(client):
+def test_put_against_missing_tournament_404(client):
+    bad_tid = "00000000-0000-0000-0000-000000000000"
+    r = client.put(f"{_base(bad_tid)}/m1", json=_ok_state())
+    assert r.status_code == 404
+
+
+def test_import_upload_rejects_oversize(client, tid):
     """Multi-MB uploads must 413 before the server reads them all."""
     blob = b"x" * (20 * 1024 * 1024 + 1024)  # just over 20 MB
     r = client.post(
-        "/match-states/import/upload",
+        f"{_base(tid)}/import/upload",
         files={"file": ("big.json", blob, "application/json")},
     )
     assert r.status_code == 413
 
 
-def test_import_upload_rejects_invalid_json(client):
+def test_import_upload_rejects_invalid_json(client, tid):
     blob = b"{ not json }"
     r = client.post(
-        "/match-states/import/upload",
+        f"{_base(tid)}/import/upload",
         files={"file": ("bad.json", blob, "application/json")},
     )
     assert r.status_code == 400
     assert "json" in _detail_msg(r).lower()
 
 
-def test_reset_empties_all_match_states(client):
-    client.put("/match-states/m1", json=_ok_state("m1", "called"))
-    r = client.post("/match-states/reset")
+def test_reset_empties_all_match_states(client, tid):
+    client.put(f"{_base(tid)}/m1", json=_ok_state("m1", "called"))
+    r = client.post(f"{_base(tid)}/reset")
     assert r.status_code == 200
-    assert client.get("/match-states").json() == {}
+    assert client.get(_base(tid)).json() == {}
 
 
-def test_called_at_and_original_slot_court_roundtrip(client):
-    """``calledAt`` and ``originalSlotId/originalCourtId`` must survive
-    PUT → GET."""
+def test_called_at_and_original_slot_court_roundtrip(client, tid):
     payload = {
         "matchId": "m1",
         "status": "called",
@@ -94,52 +108,60 @@ def test_called_at_and_original_slot_court_roundtrip(client):
         "originalSlotId": 5,
         "originalCourtId": 3,
     }
-    r = client.put("/match-states/m1", json=payload)
+    r = client.put(f"{_base(tid)}/m1", json=payload)
     assert r.status_code == 200
-    got = client.get("/match-states/m1").json()
+    got = client.get(f"{_base(tid)}/m1").json()
     assert got["calledAt"] == "2026-04-19T18:30:00.000Z"
     assert got["originalSlotId"] == 5
     assert got["originalCourtId"] == 3
 
 
-def test_delete_removes_match(client):
-    client.put("/match-states/m1", json=_ok_state("m1", "called"))
-    r = client.delete("/match-states/m1")
+def test_delete_removes_match(client, tid):
+    client.put(f"{_base(tid)}/m1", json=_ok_state("m1", "called"))
+    r = client.delete(f"{_base(tid)}/m1")
     assert r.status_code == 200
-    assert "m1" not in client.get("/match-states").json()
+    assert "m1" not in client.get(_base(tid)).json()
 
 
-def test_default_state_when_match_unseen(client):
+def test_default_state_when_match_unseen(client, tid):
     """GET on a match_id with no row returns a synthetic 'scheduled' state."""
-    r = client.get("/match-states/never-saved")
+    r = client.get(f"{_base(tid)}/never-saved")
     assert r.status_code == 200
     body = r.json()
     assert body["matchId"] == "never-saved"
     assert body["status"] == "scheduled"
 
 
-def test_score_roundtrip(client):
+def test_score_roundtrip(client, tid):
     payload = {
         "matchId": "m1",
         "status": "finished",
         "score": {"sideA": 21, "sideB": 18},
     }
-    r = client.put("/match-states/m1", json=payload)
+    r = client.put(f"{_base(tid)}/m1", json=payload)
     assert r.status_code == 200
-    body = client.get("/match-states/m1").json()
+    body = client.get(f"{_base(tid)}/m1").json()
     assert body["score"] == {"sideA": 21, "sideB": 18}
 
 
-def test_import_bulk_merges(client):
-    """``/match-states/import-bulk`` accepts a dict and upserts every entry."""
+def test_import_bulk_merges(client, tid):
     payload = {
         "m1": {"matchId": "m1", "status": "called"},
         "m2": {"matchId": "m2", "status": "started"},
     }
-    r = client.post("/match-states/import-bulk", json=payload)
+    r = client.post(f"{_base(tid)}/import-bulk", json=payload)
     assert r.status_code == 200
     body = r.json()
     assert body["importedCount"] == 2
     assert body["totalStates"] == 2
-    listing = client.get("/match-states").json()
+    listing = client.get(_base(tid)).json()
     assert set(listing.keys()) == {"m1", "m2"}
+
+
+def test_match_states_isolated_across_tournaments(client):
+    a = seed_tournament(client, "A")
+    b = seed_tournament(client, "B")
+    client.put(f"{_base(a)}/m1", json=_ok_state("m1", "called"))
+    assert "m1" in client.get(_base(a)).json()
+    # Tournament B sees nothing.
+    assert client.get(_base(b)).json() == {}

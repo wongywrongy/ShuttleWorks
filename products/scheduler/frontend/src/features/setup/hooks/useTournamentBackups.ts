@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../../../api/client';
 import type { BackupEntryDTO, TournamentStateDTO } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { useTournamentId } from '../../../hooks/useTournamentId';
 
 /** Mirror a restored snapshot back into the live tournament store.
  *
@@ -43,6 +44,7 @@ export interface TournamentBackups {
 }
 
 export function useTournamentBackups(): TournamentBackups {
+  const tid = useTournamentId();
   const [entries, setEntries] = useState<BackupEntryDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,14 +54,14 @@ export function useTournamentBackups(): TournamentBackups {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiClient.listTournamentBackups();
+      const res = await apiClient.listTournamentBackups(tid);
       setEntries(res.backups);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to list backups');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tid]);
 
   useEffect(() => {
     // Initial fetch on mount. The lint rule flags `refresh()` because it
@@ -74,21 +76,21 @@ export function useTournamentBackups(): TournamentBackups {
     setBusyAction('create');
     setError(null);
     try {
-      await apiClient.createTournamentBackup();
+      await apiClient.createTournamentBackup(tid);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Backup failed');
     } finally {
       setBusyAction(null);
     }
-  }, [refresh]);
+  }, [tid, refresh]);
 
   const restoreBackup = useCallback(
     async (filename: string) => {
       setBusyAction(filename);
       setError(null);
       try {
-        const restored = await apiClient.restoreTournamentBackup(filename);
+        const restored = await apiClient.restoreTournamentBackup(tid, filename);
         applyStateToStore(restored);
         await refresh();
       } catch (err) {
@@ -97,7 +99,7 @@ export function useTournamentBackups(): TournamentBackups {
         setBusyAction(null);
       }
     },
-    [refresh],
+    [tid, refresh],
   );
 
   return { entries, loading, error, busyAction, refresh, createBackup, restoreBackup };
@@ -114,15 +116,16 @@ export function useCreateBackup(): {
   createBackup: () => Promise<{ created: boolean; filename: string | undefined }>;
   busy: boolean;
 } {
+  const tid = useTournamentId();
   const [busy, setBusy] = useState(false);
   const createBackup = useCallback(async () => {
     setBusy(true);
     try {
-      const res = await apiClient.createTournamentBackup();
+      const res = await apiClient.createTournamentBackup(tid);
       return { created: res.created, filename: res.filename ?? undefined };
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [tid]);
   return { createBackup, busy };
 }
