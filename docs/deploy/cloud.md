@@ -69,32 +69,48 @@ secret-hygiene audit entry in `docs/changes/`.
 | Postgres host (pooler) | `aws-0-<REGION>.pooler.supabase.com:6543` |
 | Postgres host (direct) | `db.<PROJECT_ID>.supabase.co:5432` |
 
-### Schema migrations (prerequisite — apply before any sidecar boots in cloud-mode)
+### Schema migrations on Supabase — what actually needs to land
 
 The local Alembic chain on the director's machine ends at revision
-`e2a5f3b8c1d6` (Step E's `sync_queue` table). The Supabase project
-was migrated up to `c2e587494c07` during the cloud-prep arc — it is
-**missing** the three arc-adjustment migrations:
+`e2a5f3b8c1d6` (Step E's `sync_queue` table). Of the three new
+tables the arc adds, **only one needs to exist on Supabase**:
 
-- `b7e3a9f4c8d2_step_a_matches_table` (Step A)
-- `d8c4f1a7e6b2_step_c_commands_table` (Step C)
-- `e2a5f3b8c1d6_step_e_sync_queue` (Step E)
+| Table | Local SQLite | Supabase | Why |
+|---|---|---|---|
+| `matches` | ✅ | ✅ — **required** | The outbox pushes match rows; Realtime publication needs the table; operator browsers + TV display read it |
+| `commands` | ✅ | ❌ — local-only | Audit log lives on the director's machine; no current sync path |
+| `sync_queue` | ✅ | ❌ — local-only | The outbox is by definition a local-only construct |
 
-Apply them via the Supabase MCP `apply_migration` tool or the
-Supabase CLI before the director's sidecar ever boots in cloud mode
-— otherwise the outbox worker will push into non-existent tables,
-fail, increment `attempts`, and eventually cap. Order:
+The `matches` table was applied to the Supabase project on
+2026-05-13 via the MCP `apply_migration` tool as a single
+migration named `step_a_matches_table_and_rls`. It bundles three
+changes:
 
-1. Apply `step_a_matches` (creates `matches` table + composite PK +
-   index). Include the SQL backfill from the local migration if the
-   Supabase database has any pre-existing `tournaments.data` content
-   that needs to be projected.
-2. Apply `step_c_commands_table` (creates `commands` + composite FK
-   to matches).
-3. Apply `step_e_sync_queue` (creates `sync_queue`).
+1. `CREATE TABLE public.matches` with composite PK
+   `(tournament_id, id)`, FK CASCADE to `public.tournaments(id)`,
+   and the `ix_matches_tournament_status` index.
+2. `ENABLE ROW LEVEL SECURITY` + `matches_select_member` policy
+   that lets `authenticated` users read matches for tournaments
+   they're members of (reuses the `app.role_in_tournament()`
+   SECURITY DEFINER helper installed by `step8_rls_and_policies`).
+   No INSERT / UPDATE / DELETE policy — only the backend's
+   postgres role (used by the SyncService for outbox replication)
+   can write.
+3. `ALTER PUBLICATION supabase_realtime ADD TABLE public.matches`
+   so the operator browser + the public TV display see live
+   updates via `subscribeToMatches()`.
 
-After applying, confirm via `mcp__plugin_supabase__list_tables` that
-`matches`, `commands`, `sync_queue` all appear under `public`.
+If you're re-applying the arc to a different Supabase project,
+run the equivalent migration via the MCP or the Supabase CLI
+before the director's sidecar boots — otherwise the SyncService's
+outbox worker will push into a non-existent table, fail,
+increment `attempts`, and eventually cap at 10.
+
+After applying, confirm via the MCP `list_tables` that `matches`
+appears under `public`; via `pg_publication_tables` that it's in
+`supabase_realtime`; and via `get_advisors` that no
+`rls_disabled_in_public` or `rls_enabled_no_policy` warnings fire
+on the new table.
 
 ### Realtime publication
 
