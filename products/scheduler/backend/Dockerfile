@@ -14,27 +14,33 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
-COPY products/scheduler/backend/requirements.txt .
+# scheduler_core is installed as a regular package via its pyproject.toml.
+# The backend itself is not packaged — it ships as a source tree COPYed
+# into the runtime stage and launched directly by uvicorn from WORKDIR.
+COPY scheduler_core ./scheduler_core
+COPY products/scheduler/backend/requirements.txt ./backend/requirements.txt
+
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    pip install --prefix=/install -r requirements.txt
+    pip install --prefix=/install \
+        ./scheduler_core \
+        -r ./backend/requirements.txt
 
 
 FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Installed Python packages from the builder stage.
+# Installed Python packages from the builder stage. scheduler_core lives
+# under /usr/local/lib/python3.11/site-packages/scheduler_core and is
+# importable from anywhere — no sys.path bootstrap required.
 COPY --from=builder /install /usr/local
 
 # Build context is the repo root (set in products/scheduler/docker-compose.yml)
-# so this Dockerfile can COPY the shared engine sibling-to the product tree.
+# so this Dockerfile can COPY the legacy product tree alongside the backend.
 
-# Shared engine at the repo root.
-COPY scheduler_core ./scheduler_core
-
-# The product carries a legacy `app/` + `adapters/` namespace; we keep
-# them under /app/src/ inside the image so backend imports `from app.X`
-# and `from adapters.X` resolve the same way they do locally.
+# Legacy `app/` + `adapters/` stubs — still needed at runtime by
+# scheduler_core/api_compat.py and adapters/fastapi/ until Item 2 of the
+# debt-remediation cleanup removes them.
 COPY products/scheduler/app ./src/app
 COPY products/scheduler/adapters ./src/adapters
 

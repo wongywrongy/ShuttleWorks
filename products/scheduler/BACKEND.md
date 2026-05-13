@@ -13,8 +13,7 @@ backend/
 │   ├── schemas.py               # Pydantic DTOs (mirror frontend/src/api/dto.ts)
 │   ├── error_codes.py           # ErrorCode enum + http_error() helper
 │   ├── paths.py                 # data_dir() / ensure_data_dir() helpers
-│   ├── time_utils.py            # ISO-8601 UTC + slot-math helpers
-│   └── scheduler_core_path.py   # sys.path bootstrap for scheduler_core
+│   └── time_utils.py            # ISO-8601 UTC + slot-math helpers
 ├── api/
 │   ├── schedule.py              # POST /schedule, /schedule/stream (SSE), /schedule/validate
 │   ├── schedule_repair.py       # POST /schedule/repair — targeted disruption repair
@@ -33,9 +32,9 @@ src/adapters/         # sport-specific adapters (badminton)
 ```
 
 The HTTP layer lives in `backend/`. The solver engine lives under
-`scheduler_core/` and is imported via the `scheduler_core_path`
-shim — kept decoupled so the engine can be unit-tested without the
-FastAPI app booted.
+`scheduler_core/` and is installed as a regular package via its own
+`pyproject.toml`, so `import scheduler_core` resolves without any
+`sys.path` bootstrap.
 
 ## Request lifecycle
 

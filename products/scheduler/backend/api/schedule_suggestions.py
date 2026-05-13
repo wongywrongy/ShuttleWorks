@@ -19,7 +19,6 @@ from fastapi import APIRouter, FastAPI, Request
 
 from app.error_codes import ErrorCode, http_error
 
-import app.scheduler_core_path  # noqa: F401
 from app.schemas import (
     ProposalKind,
     SUGGESTION_TTL_MINUTES,

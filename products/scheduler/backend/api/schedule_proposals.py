@@ -35,9 +35,8 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
-import app.scheduler_core_path  # noqa: F401
 from app.error_codes import ErrorCode, http_error
-from app.schemas import (  # noqa: E402
+from app.schemas import (
     Impact,
     MatchDTO,
     PlayerDTO,

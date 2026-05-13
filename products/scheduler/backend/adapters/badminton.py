@@ -28,8 +28,7 @@ from typing import List, Optional, Tuple
 
 from fastapi import HTTPException
 
-import app.scheduler_core_path  # noqa: F401  -- side effect: sys.path
-from app.schemas import (  # noqa: E402
+from app.schemas import (
     MatchDTO,
     PlayerDTO,
     ScheduleAssignment,

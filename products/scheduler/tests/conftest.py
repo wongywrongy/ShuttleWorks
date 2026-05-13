@@ -9,19 +9,12 @@ the same fix-up — shift ``backend/`` to the front of ``sys.path`` and
 purge any cached ``app.*`` / ``api.*`` / ``services.*`` / ``adapters.*``
 modules so the next import resolves correctly.
 
-Centralising both shifts here:
-
-  - ``_pin_backend_root_on_path``: a session-scoped autouse fixture
-    that re-prepends ``backend/`` whenever pytest's collection
-    machinery shoves ``src/`` ahead of it.
-  - ``backend_test_env`` / ``purge_backend_modules``: helpers test
-    fixtures call before importing routers, so the import resolves
-    fresh against ``backend/`` instead of the cached, possibly stale
-    module from a previous test.
-
-Existing test files keep working — they call the helpers explicitly
-inside their own ``client`` fixtures. New tests just import what they
-need; the autouse fixture handles the rest.
+``scheduler_core`` is installed as an editable package via
+``scheduler_core/pyproject.toml`` and reaches every test through
+site-packages, no ``sys.path`` insertion required. The
+``_pin_backend_root`` / ``purge_backend_modules`` helpers remain in
+place to defeat the legacy-``app/`` shadowing — they will become
+unnecessary once the legacy package itself goes away.
 """
 from __future__ import annotations
 
@@ -32,19 +25,8 @@ from typing import Iterable
 import pytest
 
 
-# Resolve once. ``products/scheduler/tests/conftest.py`` lives at
-# parents[0]=tests, parents[1]=scheduler (product root), parents[2]=products,
-# parents[3]=repo root.
 _PRODUCT_ROOT = Path(__file__).resolve().parents[1]
-_REPO_ROOT = Path(__file__).resolve().parents[3]
 _BACKEND_ROOT = str(_PRODUCT_ROOT / "backend")
-
-# Repo root needs to be on sys.path so tests can ``from scheduler_core
-# import ...`` directly. Pytest already has the product root (rootdir
-# from pyproject.toml) on the path; we add the repo root once at module
-# load so scheduler_core/ resolves regardless of how the test was kicked off.
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
 
 
 def _pin_backend_root() -> None:
