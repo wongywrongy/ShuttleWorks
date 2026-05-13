@@ -24,6 +24,12 @@ from app.error_codes import ErrorCode, http_error
 from app.schemas import TournamentStateDTO
 from database.models import Tournament
 from repositories import LocalRepository, get_repository
+from api.invites import (
+    InviteCreateDTO,
+    InviteCreatedDTO,
+    InviteSummaryDTO,
+    _to_summary as _invite_summary,
+)
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 log = logging.getLogger("scheduler.tournaments")
@@ -377,3 +383,96 @@ def restore_tournament_backup(
             f"restore failed: {e}",
         )
     return get_tournament_state(tournament_id, repo)
+
+
+# ---- Invite-link endpoints scoped under a tournament --------------------
+
+
+@router.post(
+    "/{tournament_id}/invites",
+    response_model=InviteCreatedDTO,
+    status_code=201,
+    dependencies=[Depends(require_tournament_access("owner"))],
+)
+def create_invite_link(
+    body: InviteCreateDTO,
+    tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Generate an invite link granting ``body.role`` on the tournament.
+
+    Returns the token + a relative URL (``/invite/{token}``) the
+    frontend joins with ``window.location.origin`` to produce a
+    copy-able link.
+    """
+    user_uuid = user.as_uuid()
+    if user_uuid is None:
+        # Owner-role dep already verified the caller; this is defensive.
+        raise http_error(
+            403,
+            ErrorCode.STATE_CORRUPT,
+            "user id is not a UUID",
+        )
+    invite = repo.invite_links.create(
+        tournament_id=tournament_id,
+        role=body.role,
+        created_by=user_uuid,
+    )
+    return InviteCreatedDTO(
+        token=str(invite.id),
+        url=f"/invite/{invite.id}",
+        tournamentId=str(tournament_id),
+        role=invite.role,  # type: ignore[arg-type]
+        createdAt=invite.created_at.isoformat(),
+    )
+
+
+@router.get(
+    "/{tournament_id}/invites",
+    response_model=List[InviteSummaryDTO],
+    dependencies=[Depends(require_tournament_access("owner"))],
+)
+def list_invite_links(
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """List every invite (active + revoked + expired) for a tournament.
+
+    Owner-only. The Step 7 Settings → Share UI uses this to render the
+    "Active links" + revoke-button list.
+    """
+    rows = repo.invite_links.list_for_tournament(tournament_id)
+    return [_invite_summary(r) for r in rows]
+
+
+# ---- Member listing scoped under a tournament ---------------------------
+
+
+class TournamentMemberDTO(BaseModel):
+    """Wire shape for the Step 7 Settings → Share "Members" list."""
+    userId: str
+    role: str
+    joinedAt: str
+
+
+@router.get(
+    "/{tournament_id}/members",
+    response_model=List[TournamentMemberDTO],
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
+def list_tournament_members(
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """All members of a tournament. Viewer-level so any member can see
+    who else has access; owner-only management actions stay gated."""
+    members = repo.members.list_for_tournament(tournament_id)
+    return [
+        TournamentMemberDTO(
+            userId=str(m.user_id),
+            role=m.role,
+            joinedAt=m.joined_at.isoformat() if m.joined_at else "",
+        )
+        for m in members
+    ]

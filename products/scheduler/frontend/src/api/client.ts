@@ -20,12 +20,18 @@ import type {
   TournamentSummaryDTO,
   TournamentCreateDTO,
   TournamentUpdateDTO,
+  TournamentMemberDTO,
   BackupListDTO,
   BackupCreatedDTO,
   Advisory,
   Proposal,
   ScheduleHistoryEntry,
   Suggestion,
+  InviteCreateDTO,
+  InviteCreatedDTO,
+  InviteSummaryDTO,
+  InviteResolveDTO,
+  InviteAcceptedDTO,
 } from './dto';
 
 // Use /api proxy in dev, or explicit URL in production
@@ -270,6 +276,59 @@ class ApiClient {
   /** Delete a tournament. CASCADE wipes match-states + backups. */
   async deleteTournament(tid: string): Promise<void> {
     await this.client.delete(`/tournaments/${tid}`);
+  }
+
+  // ---- Invite links (Step 7) -------------------------------------------
+
+  /** Owner-only. Generates an invite link granting ``role``. */
+  async createInvite(
+    tid: string,
+    body: InviteCreateDTO,
+  ): Promise<InviteCreatedDTO> {
+    const r = await this.client.post<InviteCreatedDTO>(
+      `/tournaments/${tid}/invites`,
+      body,
+    );
+    return r.data;
+  }
+
+  /** Owner-only. Lists every invite (active + revoked + expired). */
+  async listInvites(tid: string): Promise<InviteSummaryDTO[]> {
+    const r = await this.client.get<InviteSummaryDTO[]>(
+      `/tournaments/${tid}/invites`,
+    );
+    return r.data;
+  }
+
+  /** Viewer-level. Lists every member of the tournament. */
+  async listMembers(tid: string): Promise<TournamentMemberDTO[]> {
+    const r = await this.client.get<TournamentMemberDTO[]>(
+      `/tournaments/${tid}/members`,
+    );
+    return r.data;
+  }
+
+  /** Public lookup. Returns tournament name + role + valid flag. The
+   *  call goes through the same axios instance so the interceptor
+   *  still tries to attach an Authorization header when a session
+   *  exists — backend ignores it on this route. */
+  async resolveInvite(token: string): Promise<InviteResolveDTO> {
+    const r = await this.client.get<InviteResolveDTO>(`/invites/${token}`);
+    return r.data;
+  }
+
+  /** Auth required. Adds the current user to the tournament with the
+   *  invite's role (idempotent; never downgrades). */
+  async acceptInvite(token: string): Promise<InviteAcceptedDTO> {
+    const r = await this.client.post<InviteAcceptedDTO>(
+      `/invites/${token}/accept`,
+    );
+    return r.data;
+  }
+
+  /** Owner-only. Stamps ``revoked_at`` on the invite. */
+  async revokeInvite(token: string): Promise<void> {
+    await this.client.delete(`/invites/${token}`);
   }
 
   // ---- Two-phase commit (proposal pipeline) ----------------------------

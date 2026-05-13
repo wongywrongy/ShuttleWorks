@@ -414,6 +414,40 @@ class _LocalInviteLinkRepo:
             )
         )
 
+    def get(self, token: uuid.UUID) -> Optional[InviteLink]:
+        return self.session.get(InviteLink, token)
+
+    def revoke(self, token: uuid.UUID) -> bool:
+        row = self.session.get(InviteLink, token)
+        if row is None:
+            return False
+        if row.revoked_at is None:
+            row.revoked_at = datetime.now(timezone.utc)
+            self.session.commit()
+        return True
+
+
+def _ensure_utc_aware(dt: datetime) -> datetime:
+    """SQLite drops tz info on round-trip even with ``DateTime(timezone=True)``.
+    Coerce naive datetimes to UTC-aware so comparisons don't TypeError."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def is_invite_valid(invite: InviteLink, *, now: Optional[datetime] = None) -> bool:
+    """Pure check: an invite is valid iff it's neither revoked nor expired.
+
+    Exported so route handlers and tests share the same definition.
+    """
+    if invite.revoked_at is not None:
+        return False
+    if invite.expires_at is not None:
+        cutoff = now or datetime.now(timezone.utc)
+        if _ensure_utc_aware(invite.expires_at) < _ensure_utc_aware(cutoff):
+            return False
+    return True
+
 
 class LocalRepository:
     """Façade: holds the session and exposes the sub-repositories."""

@@ -593,6 +593,54 @@ export interface TournamentUpdateDTO {
   tournamentDate?: string | null;
 }
 
+// Invite links (Step 7)
+export type InviteRole = 'operator' | 'viewer';
+
+export interface InviteCreateDTO {
+  role: InviteRole;
+}
+
+export interface InviteCreatedDTO {
+  token: string;
+  /** Relative path — frontend prepends ``window.location.origin``. */
+  url: string;
+  tournamentId: string;
+  role: InviteRole;
+  createdAt: string;
+}
+
+export interface InviteSummaryDTO {
+  token: string;
+  tournamentId: string;
+  role: InviteRole;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  valid: boolean;
+}
+
+export interface InviteResolveDTO {
+  token: string;
+  tournamentId: string;
+  tournamentName: string | null;
+  role: InviteRole;
+  valid: boolean;
+  expiresAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface InviteAcceptedDTO {
+  tournamentId: string;
+  role: string;
+  alreadyMember: boolean;
+}
+
+export interface TournamentMemberDTO {
+  userId: string;
+  role: string;
+  joinedAt: string;
+}
+
 // Constraint Visualization Types
 export interface ConstraintViolation {
   type: 'rest' | 'overlap' | 'availability' | 'court_capacity' | 'game_proximity_min' | 'game_proximity_max';

@@ -167,9 +167,9 @@ class MemberRepository(Protocol):
 
 
 class InviteLinkRepository(Protocol):
-    """Step 5 lands the schema; Step 7 will widen this protocol with
-    resolve/revoke/accept semantics. Keeping the surface narrow until
-    then avoids designing the API before the routes exist."""
+    """Step 5 lands the schema; Step 7 widens the protocol with
+    get/revoke/validity semantics that drive the public resolve
+    endpoint and the owner-only revoke endpoint."""
 
     def create(
         self,
@@ -183,6 +183,15 @@ class InviteLinkRepository(Protocol):
         self,
         tournament_id: uuid.UUID,
     ) -> list[InviteLink]:
+        ...
+
+    def get(self, token: uuid.UUID) -> Optional[InviteLink]:
+        """Lookup an invite by its id (which doubles as the URL token)."""
+        ...
+
+    def revoke(self, token: uuid.UUID) -> bool:
+        """Stamp ``revoked_at`` on the matching row. Returns False if
+        the invite doesn't exist."""
         ...
 
 

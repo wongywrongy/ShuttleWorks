@@ -19,6 +19,9 @@ const TournamentPage = lazy(() =>
 const LoginPage = lazy(() =>
   import('../pages/LoginPage').then((m) => ({ default: m.LoginPage })),
 );
+const InvitePage = lazy(() =>
+  import('../pages/InvitePage').then((m) => ({ default: m.InvitePage })),
+);
 
 function Fallback() {
   return <div className="p-4 text-sm text-muted-foreground">Loading…</div>;
@@ -37,6 +40,19 @@ function App() {
                 element={
                   <Suspense fallback={<Fallback />}>
                     <LoginPage />
+                  </Suspense>
+                }
+              />
+
+              {/* Public: invite landing. The page itself handles the
+                  "redirect to login if not authenticated" flow so a
+                  shared link works without requiring the recipient to
+                  be signed in already. */}
+              <Route
+                path="/invite/:token"
+                element={
+                  <Suspense fallback={<Fallback />}>
+                    <InvitePage />
                   </Suspense>
                 }
               />

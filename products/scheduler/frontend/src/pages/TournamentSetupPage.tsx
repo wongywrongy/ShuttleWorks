@@ -11,7 +11,7 @@
  * provides layout; nothing else.
  */
 import { useState } from 'react';
-import { Sliders, Palette, Monitor, Database, Cpu } from '@phosphor-icons/react';
+import { Sliders, Palette, Monitor, Database, Cpu, Share } from '@phosphor-icons/react';
 import { useTournament } from '../hooks/useTournament';
 import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
@@ -21,6 +21,7 @@ import { SettingsShell, type SettingsSectionDef } from '../features/settings/Set
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { EngineSettings } from '../features/settings/EngineSettings';
 import { DataSettings } from '../features/settings/DataSettings';
+import { ShareSettings } from '../features/settings/ShareSettings';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {
@@ -106,6 +107,12 @@ export function TournamentSetupPage() {
       label: 'Tournament data',
       icon: Database,
       render: () => <DataSettings />,
+    },
+    {
+      id: 'share',
+      label: 'Share',
+      icon: Share,
+      render: () => <ShareSettings />,
     },
   ];
 
