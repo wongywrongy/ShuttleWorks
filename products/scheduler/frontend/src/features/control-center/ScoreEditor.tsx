@@ -140,7 +140,7 @@ function SimpleScoreEditor({
             value={a}
             onChange={(e) => setA(e.target.value)}
             placeholder="0"
-            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
         </div>
         <span className="text-muted-foreground">–</span>
@@ -153,7 +153,7 @@ function SimpleScoreEditor({
             value={b}
             onChange={(e) => setB(e.target.value)}
             placeholder="0"
-            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
         </div>
       </div>
@@ -270,7 +270,7 @@ function BadmintonInlineEditor({
   };
 
   const inputCls =
-    'w-full rounded border border-border bg-card px-1 py-1 text-center text-sm font-mono tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200';
+    'w-full rounded border border-border bg-card px-1 py-1 text-center text-sm font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30';
 
   return (
     <form onSubmit={submit} className="mb-3 rounded border border-border bg-muted/30 p-2">

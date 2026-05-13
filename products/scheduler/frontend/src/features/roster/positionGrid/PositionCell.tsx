@@ -100,10 +100,10 @@ export function PositionCell({
         disabled ? 'bg-muted/60 text-muted-foreground/70' : bodyTint,
         isDragging && !disabled ? 'ring-1 ring-inset ring-border' : '',
         dragHover
-          ? 'bg-emerald-100 ring-[3px] ring-inset ring-emerald-500 shadow-inner'
+          ? 'bg-status-done-bg ring-[3px] ring-inset ring-status-done shadow-inner'
           : '',
         dragReject
-          ? 'bg-red-100 ring-[3px] ring-inset ring-red-500 shadow-inner'
+          ? 'bg-destructive/10 ring-[3px] ring-inset ring-destructive shadow-inner'
           : '',
       ].join(' ')}
     >

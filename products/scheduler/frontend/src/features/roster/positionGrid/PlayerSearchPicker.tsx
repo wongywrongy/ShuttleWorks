@@ -97,7 +97,7 @@ export function PlayerSearchPicker({
           }}
           placeholder={`Search players for ${rank}…`}
           data-testid="picker-search"
-          className="w-full rounded border border-border px-2 py-1 text-sm outline-none focus:border-blue-400"
+          className="w-full rounded border border-border px-2 py-1 text-sm outline-none focus:border-accent"
         />
       </div>
       <div className="max-h-64 overflow-y-auto p-1">
@@ -120,7 +120,7 @@ export function PlayerSearchPicker({
                 className={[
                   'flex w-full items-center justify-between rounded px-2 py-1 text-left text-sm transition-colors',
                   i === activeIndex
-                    ? 'bg-blue-50 text-blue-900 dark:bg-blue-500/15 dark:text-blue-300'
+                    ? 'bg-accent/10 text-accent'
                     : 'text-foreground hover:bg-muted/50',
                 ].join(' ')}
               >

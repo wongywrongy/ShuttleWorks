@@ -40,8 +40,8 @@ export function ScheduleActions({
           generating
             ? 'bg-muted text-muted-foreground'
             : confirming
-              ? 'bg-red-600 text-white hover:bg-red-700 motion-safe:animate-pulse'
-              : 'bg-blue-600 text-white hover:bg-blue-700',
+              ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90 motion-safe:animate-pulse'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90',
         ].join(' ')}
       >
         {generating && <CircleNotch aria-hidden="true" className="h-4 w-4 animate-spin" />}
