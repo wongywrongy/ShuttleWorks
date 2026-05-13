@@ -20,8 +20,13 @@
  */
 import { test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+// CommonJS-style `__dirname` is undefined under Playwright's ESM
+// loader (the e2e package is type: "module"). Re-derive from
+// import.meta so the spec loads regardless of module system.
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const baselineDir = resolve(__dirname, '../../../../design/baseline/scheduler');
 
 // Tabs the AppShell exposes. `display` is a top-level route handled
