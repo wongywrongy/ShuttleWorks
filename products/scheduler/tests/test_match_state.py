@@ -39,7 +39,8 @@ def client(tmp_path, monkeypatch):
         if k == "app"
         or k.startswith("app.")
         or "match_state" in k
-        or k == "api._backups"
+        or k == "services._backups"
+        or k == "services.persistence"
     ]:
         del sys.modules[_cached]
 

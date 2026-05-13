@@ -23,7 +23,7 @@ from fastapi import Request
 
 from app.paths import data_dir, ensure_data_dir
 from app.time_utils import now_iso
-from api import _backups
+from services import _backups
 
 log = logging.getLogger("scheduler.persistence")
 

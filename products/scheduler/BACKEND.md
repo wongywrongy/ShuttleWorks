@@ -20,9 +20,10 @@ backend/
 │   ├── schedule_warm_restart.py # POST /schedule/warm-restart — stay-close re-solve
 │   ├── match_state.py           # GET/PUT /match-state — live match status
 │   ├── tournament_state.py      # GET/PUT /tournament-state — debounced full snapshot
-│   ├── _backups.py              # tournament-state backup helpers
 │   └── _validate.py             # shared validation utilities
 ├── services/
+│   ├── persistence.py           # single owner of on-disk state + write lock
+│   ├── _backups.py              # atomic-write + backup-rotation primitives
 │   └── csv_importer.py          # parse roster/matches CSVs
 ├── Dockerfile
 └── requirements.txt
