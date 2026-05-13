@@ -69,10 +69,18 @@ Compose auto-loads `.env` from the repo root; no flags needed.
 
 ### Tests
 
+Backend + solver unit tests (198 tests as of 2026-05-12):
+
 ```bash
-cd src && pytest                   # backend + solver (~170 tests)
-make test-e2e-install              # one-time
-make test-e2e                      # Playwright end-to-end (boots stack, tears down)
+pip install -r backend/requirements-dev.txt    # one-time, pulls in pytest + httpx
+pytest                                          # run from products/scheduler/
+```
+
+End-to-end (Playwright against the docker-compose stack):
+
+```bash
+make test-e2e-install              # one-time, downloads Playwright browsers
+make test-e2e                      # boots stack, runs specs, tears down
 make test-e2e-dev                  # run against `make dev` on :5173
 ```
 
@@ -91,9 +99,11 @@ make test-e2e-dev                  # run against `make dev` on :5173
 
 ```
 ../../scheduler_core/    CP-SAT engine (shared across products — domain, constraint plugins, solver)
-backend/                 FastAPI routes + adapters (HTTP boundary)
-adapters/                Sport-specific adapters (badminton)
-app/                     Legacy DTO schemas / utilities (imported as `app.X`)
+backend/                 FastAPI HTTP boundary
+├── app/                 main, schemas, error_codes, paths, time_utils
+├── api/                 route handlers (one file per resource)
+├── services/            persistence + suggestions worker + impact scoring
+└── adapters/            sport-specific adapters (badminton)
 tests/                   Backend + solver tests
 frontend/src/            React app (shell, tabs, DragGantt, SolverHud, dialogs, TV)
 e2e/                     Playwright specs

@@ -27,8 +27,9 @@ instead.
 
 ## Conventions
 
-- Pure functions only. If you find yourself reaching for `useAppStore`
-  inside a util, the function probably wants to be a hook.
+- Pure functions only. If you find yourself reaching for
+  `useTournamentStore` / `useMatchStateStore` / `useUiStore` inside a
+  util, the function probably wants to be a hook.
 - Time/slot math: read `lib/time.ts`'s docstrings — overnight
   schedules and the live play-head have non-obvious edge cases that
   are already encoded.
