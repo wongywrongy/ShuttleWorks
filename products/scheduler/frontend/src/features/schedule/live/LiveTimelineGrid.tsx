@@ -4,7 +4,7 @@
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
 import { calculateTotalSlots, formatSlotTime } from '../../../lib/time';
-import { indexById } from '../../../store/selectors';
+import { indexById } from '../../../lib/indexById';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig } from '../../../api/dto';
 import { EVENT_COLORS, DEFAULT_EVENT_COLOR } from '../eventColors';
 

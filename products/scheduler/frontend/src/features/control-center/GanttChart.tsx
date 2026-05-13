@@ -11,7 +11,7 @@ import {
   isCourtFullyClosed,
   isSlotClosed,
 } from '../../lib/courtClosures';
-import { indexById } from '../../store/selectors';
+import { indexById } from '../../lib/indexById';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import type {
   ScheduleDTO,

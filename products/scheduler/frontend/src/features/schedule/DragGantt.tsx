@@ -27,7 +27,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { apiClient } from '../../api/client';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useUiStore } from '../../store/uiStore';
-import { indexById } from '../../store/selectors';
+import { indexById } from '../../lib/indexById';
 import { Hint } from '../../components/Hint';
 import { useSchedule } from '../../hooks/useSchedule';
 import { calculateTotalSlots, formatSlotTime } from '../../lib/time';

@@ -14,7 +14,7 @@ import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
 import { SchoolDot } from '../../components/SchoolDot';
 import { ScoreEditor } from './ScoreEditor';
 import { StatusPill } from '../../components/StatusPill';
-import { indexById } from '../../store/selectors';
+import { indexById } from '../../lib/indexById';
 import { LIGHT_LABEL, expandRankLabel, getPlayerRestTime } from './matchDetails/helpers';
 
 interface MatchDetailsPanelProps {

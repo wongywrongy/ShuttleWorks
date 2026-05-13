@@ -1,11 +1,14 @@
 /**
- * Memoized lookup-map hooks built on top of ``useAppStore``.
+ * Memoized lookup-map hooks built on top of ``useTournamentStore``.
  *
  * Every consumer that wrote ``new Map(players.map(p => [p.id, p]))`` inline
  * was paying that O(n) build cost on every render. These hooks build the
  * map once per source-array reference (Zustand keeps array refs stable
  * until something actually mutates them), so two components reading the
  * same map only pay the build once between updates.
+ *
+ * Pure helpers (``indexById``) live in ``lib/indexById`` so non-React
+ * callers in ``utils/`` can use them without crossing the store boundary.
  */
 import { useMemo } from 'react';
 
@@ -15,24 +18,8 @@ import type {
   RosterGroupDTO,
   ScheduleAssignment,
 } from '../api/dto';
+import { indexById } from '../lib/indexById';
 import { useTournamentStore } from './tournamentStore';
-
-const cache = new WeakMap<object, Map<string, unknown>>();
-
-/**
- * Build a stable id-keyed map for an array of rows. Returns the *same*
- * Map instance the next time the same array reference is passed in,
- * so prop-driven callers can wrap this in ``useMemo`` and never pay
- * the build cost twice.
- */
-export function indexById<T extends { id: string }>(rows: readonly T[]): Map<string, T> {
-  const cached = cache.get(rows as unknown as object);
-  if (cached) return cached as Map<string, T>;
-  const m = new Map<string, T>();
-  for (const r of rows) m.set(r.id, r);
-  cache.set(rows as unknown as object, m as Map<string, unknown>);
-  return m;
-}
 
 export function usePlayerMap(): Map<string, PlayerDTO> {
   const players = useTournamentStore((s) => s.players);
