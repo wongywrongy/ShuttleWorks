@@ -1,6 +1,13 @@
 /**
  * Tournament File Management Component
- * Handles export/import of complete tournament data (config, players, matches, schedule, match states)
+ * Handles export/import of complete tournament data (config, players, matches, schedule, match states).
+ *
+ * The two `apiClient.{get,importBulk}MatchStates` calls stay inline
+ * intentionally: this component IS the one-off orchestrator for the
+ * JSON export/import workflow, and the conventions explicitly allow a
+ * one-off page-level component to own its fetches. Extracting them
+ * into a hook would put two trivial wrappers in a separate file with
+ * no other consumer.
  */
 import { useState } from 'react';
 import { useTournamentStore } from '../../store/tournamentStore';
