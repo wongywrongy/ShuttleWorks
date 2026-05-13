@@ -51,34 +51,6 @@ export function useLiveTracking() {
   const setCurrentTime = useAppStore((state) => state.setCurrentTime);
   const setLastSynced = useAppStore((state) => state.setLastSynced);
 
-  // Load match states from file on mount
-  useEffect(() => {
-    loadMatchStates();
-  }, []);
-
-  // Auto-refresh every 5 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      syncMatchStates();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Update current time every second
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date().toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-      setCurrentTime(now);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [setCurrentTime]);
-
   const loadMatchStates = useCallback(async () => {
     try {
       const backendStates = await apiClient.getMatchStates();
@@ -140,6 +112,34 @@ export function useLiveTracking() {
       console.error('Failed to sync match states:', error);
     }
   }, [setMatchStates, setLastSynced]);
+
+  // Lifecycle wiring — declared AFTER `loadMatchStates` / `syncMatchStates`
+  // so the useEffect callbacks don't hit the temporal dead zone on the
+  // useCallback references. (Previously these effects sat at the top of
+  // the hook body; the runtime worked because effects fire after the
+  // function returns, but the lint rule flagged the order as fragile.)
+  useEffect(() => {
+    loadMatchStates();
+  }, [loadMatchStates]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      syncMatchStates();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [syncMatchStates]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      setCurrentTime(now);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [setCurrentTime]);
 
   const updateMatchStatus = useCallback(async (
     matchId: string,

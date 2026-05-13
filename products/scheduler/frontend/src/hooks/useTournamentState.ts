@@ -116,13 +116,17 @@ function readLegacyLocalStorage(): TournamentStateDTO | null {
   }
 }
 
+// Expose the store on `window.__STORE__` so the Playwright e2e suite
+// can read+seed app state without round-tripping through the UI. Module-
+// scoped so it runs once at load time, not on every component render —
+// the previous inline expression in the hook body tripped the
+// react-compiler "value cannot be modified" check.
+if (typeof window !== 'undefined') {
+  (window as unknown as { __STORE__?: typeof useAppStore }).__STORE__ = useAppStore;
+}
+
 export function useTournamentState(): void {
   const hydrationDoneRef = useRef(false);
-
-  // Expose the store on window for end-to-end tests (no-op in production; harmless).
-  if (typeof window !== 'undefined') {
-    (window as unknown as { __STORE__?: typeof useAppStore }).__STORE__ = useAppStore;
-  }
 
   // ---- hydrate once on mount ------------------------------------------
   useEffect(() => {

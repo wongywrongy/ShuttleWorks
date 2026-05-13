@@ -207,13 +207,15 @@ export function useBulkOperations() {
       let newRanks: string[];
 
       switch (mode) {
-        case 'add':
-          // Union: add new ranks to existing
+        case 'add': {
+          // Union: add new ranks to existing. Block-scoped to keep
+          // `ranksToAdd` out of the surrounding case body.
           const ranksToAdd = conflict && skipConflicts
             ? ranksToAssign.filter(r => !conflict.conflictingRanks.includes(r))
             : ranksToAssign;
           newRanks = [...new Set([...currentRanks, ...ranksToAdd])];
           break;
+        }
         case 'set':
           // Replace: set exactly these ranks
           newRanks = ranksToAssign;
