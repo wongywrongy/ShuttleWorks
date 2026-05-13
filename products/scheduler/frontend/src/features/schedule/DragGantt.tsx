@@ -319,7 +319,7 @@ export function DragGantt({
                   style={{ width: SLOT_WIDTH }}
                   className={`flex-shrink-0 border-l border-border px-1 py-1 text-center text-2xs tabular-nums ${
                     slot === currentSlot
-                      ? 'bg-blue-100/70 font-semibold text-blue-700 dark:bg-blue-500/20 dark:text-blue-200'
+                      ? 'bg-status-live/15 font-semibold text-status-live'
                       : 'text-muted-foreground'
                   }`}
                 >
@@ -443,12 +443,12 @@ export function DragGantt({
         >
           {activeAssignment && hoverCell && validation ? (
             validation.feasible ? (
-              <span className="inline-flex items-center gap-1 text-emerald-700">
+              <span className="inline-flex items-center gap-1 text-status-done">
                 <Check aria-hidden="true" className="h-3.5 w-3.5" />
                 Feasible — drop to pin at Court {hoverCell.courtId}, {formatSlotTime(hoverCell.slotId, config)}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-red-700">
+              <span className="inline-flex items-center gap-1 text-destructive">
                 <XIcon aria-hidden="true" className="h-3.5 w-3.5" />
                 Infeasible ({validation.conflicts.length} conflict{validation.conflicts.length === 1 ? '' : 's'}):{' '}
                 {validation.conflicts[0]?.description}
@@ -461,7 +461,7 @@ export function DragGantt({
             </span>
           )}
           {pendingPin ? (
-            <span className="text-blue-700" data-testid="drag-gantt-pin">
+            <span className="text-accent" data-testid="drag-gantt-pin">
               Pin in flight: {pendingPin.matchId.slice(0, 6)} to Court {pendingPin.courtId},{' '}
               {formatSlotTime(pendingPin.slotId, config)}
             </span>
@@ -511,13 +511,13 @@ function DropCell({
         closed
           ? 'bg-muted/50'
           : isCurrent
-            ? 'bg-blue-50/30'
+            ? 'bg-accent/5'
             : '',
         !closed && isOver ? 'bg-muted/80' : '',
         !closed && hovered ? 'motion-safe:animate-cell-pulse' : '',
-        infeasible ? 'ring-2 ring-inset ring-red-400 bg-red-50/50' : '',
-        feasible ? 'ring-2 ring-inset ring-emerald-400 bg-emerald-50/50' : '',
-        showShake ? 'motion-safe:animate-shake ring-2 ring-inset ring-red-400 bg-red-100/60' : '',
+        infeasible ? 'ring-2 ring-inset ring-destructive bg-destructive/5' : '',
+        feasible ? 'ring-2 ring-inset ring-status-done bg-status-done/5' : '',
+        showShake ? 'motion-safe:animate-shake ring-2 ring-inset ring-destructive bg-destructive/10' : '',
       ].join(' ')}
     >
       {showOk ? (
@@ -571,7 +571,7 @@ function MatchBlock({
   // Smooth the `left` coordinate whenever blocks re-lay out after a re-solve.
   // Disable the transition while dragging so the block follows the pointer.
   // Background + border color ease at 120ms (--motion-fast) so the selection
-  // highlight flips smoothly rather than snapping to the blue-500 ring.
+  // highlight flips smoothly rather than snapping to the accent ring.
   const positionTransition = isDragging
     ? 'none'
     : 'left 420ms var(--ease-brand), top 420ms var(--ease-brand), background-color 120ms var(--ease-brand), border-color 120ms var(--ease-brand)';
@@ -604,9 +604,9 @@ function MatchBlock({
         'group rounded border text-left px-2 py-0.5 shadow-sm',
         'motion-safe:animate-block-in',
         isSelected
-          ? 'bg-blue-50 border-blue-500 text-blue-900 ring-1 ring-blue-400 dark:bg-blue-500/20 dark:text-blue-100 dark:border-blue-400'
+          ? 'bg-accent/10 border-accent text-accent ring-1 ring-accent/30'
           : `${eventColor.bg} ${eventColor.border} text-foreground hover:shadow-md hover:brightness-95`,
-        isPinned && !pinActive ? 'ring-2 ring-inset ring-amber-400 border-dashed' : '',
+        isPinned && !pinActive ? 'ring-2 ring-inset ring-status-warning border-dashed' : '',
         readOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing',
       ].join(' ')}
       title={`${matchLabel(match)} · ${eventColor.label}`}
