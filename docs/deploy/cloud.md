@@ -144,36 +144,66 @@ the WebView's session.
 
 ---
 
-## Director's laptop — Tauri sidecar
+## Director's laptop — running the sidecar
 
-The director boots a single binary (or `npm run tauri dev` during
-development). The binary launches:
+The architecture-adjustment arc's target packaging is Tauri (a
+native binary that bundles the FastAPI sidecar + the React WebView
++ a managed SQLite). **Tauri is not yet scaffolded in the repo.**
+For now, run the equivalent stack via Docker Compose or via the
+existing dev-server flow; both produce the same runtime behaviour
+(local FastAPI on a port + nginx-served frontend pointing at it +
+the background `SyncService` worker draining `sync_queue` to
+Supabase every 5 seconds).
 
-1. A Python uvicorn process serving the FastAPI sidecar on a local
-   port (defaults to `8000`).
-2. The React WebView pointing at that local port.
-3. The background `SyncService` worker thread that drains
-   `sync_queue` to Supabase Postgres every 5 seconds.
-
-### One-time setup (per laptop)
+### Option A — Docker Compose (production-shape, recommended today)
 
 ```bash
-# Python dependencies for the sidecar.
-cd products/scheduler/backend
-pip install -r requirements.txt
+# Repo root.
+cd products/scheduler
 
-# Frontend build for the WebView.
-cd ../frontend
-npm install
-npm run build
+# .env in this directory provides the secrets the sidecar reads at
+# boot — see `backend/.env.example` for the full list.
+cp backend/.env.example backend/.env
+# Edit backend/.env with the Supabase URL, anon key, and a SQLite
+# path inside the volume mount (DATABASE_URL=sqlite:////app/data/local.db).
 
-# Tauri bundling (production binary).
-cd ..
-npm run tauri build
+make scheduler          # builds + starts → http://localhost (frontend), backend on :8000
 ```
 
-The Tauri build produces a platform-native installer in
-`src-tauri/target/release/bundle/`. Distribute that to the director.
+The Compose project namespaces ports + container names; runs cleanly
+side-by-side with the tournament product.
+
+### Option B — Dev servers (Tauri WebView equivalent for development)
+
+```bash
+# Backend.
+cd products/scheduler/backend
+pip install -r requirements.txt
+python -m app.main          # FastAPI on :8000
+
+# Frontend (separate terminal).
+cd products/scheduler/frontend
+npm install
+npm run dev                 # Vite on :5173 with HMR
+```
+
+Use this for iterative development. The Compose stack is what the
+director would actually boot on tournament day.
+
+### Option C — Tauri (future work, not yet scaffolded)
+
+A native binary bundling the sidecar + WebView is the intended
+end-state. Requires:
+- Rust toolchain on the build machine.
+- `@tauri-apps/cli` + `src-tauri/` scaffold.
+- Sidecar binary configuration (`tauri.conf.json` `tauri.bundle.externalBin`)
+  pointing at a packaged Python+uvicorn executable (PyInstaller or
+  similar).
+- Build commands wired into `products/scheduler/frontend/package.json`
+  (`tauri`, `tauri dev`, `tauri build`).
+
+This is a known follow-up — `npm run tauri build` will fail with
+"missing script" until that work lands.
 
 ### Environment configuration
 
@@ -334,16 +364,35 @@ arc and are migrating to the post-arc sidecar model:
    the Setup → Backups → Download flow.
 2. **Stop the cloud-deployed backend** (Fly.io: `fly apps destroy`;
    Render: delete the service). The Supabase project keeps running.
-3. **Apply the three arc-adjustment migrations to Supabase** (see
-   the Schema migrations section above).
-4. **Configure Realtime publication** on `matches`.
-5. **Boot the Tauri sidecar** on the director's laptop with the
+3. **Apply the matches schema to Supabase** (see the Schema
+   migrations section above — already done on the `shuttleworks`
+   project on 2026-05-13).
+4. **Configure Realtime publication** on `matches` (also done).
+5. **Boot the sidecar** on the director's laptop via Docker
+   Compose (`make scheduler` from `products/scheduler/`) with the
    cloud-mode `.env`. The sidecar's Alembic step builds the local
    SQLite schema from scratch at revision `e2a5f3b8c1d6`.
 6. **Import the tournament state** via the Setup → Backups → Import
    flow. The local DB is now seeded; the sync worker pushes
    everything to Supabase within a minute.
 7. **Update operator client URLs** to point at the director's
-   reachable address rather than the old Fly.io / Render URL.
+   reachable address (LAN IP or tunnel URL) rather than the old
+   Fly.io / Render URL.
 
 After migration, the cloud-prep deployment topology can be retired.
+
+## Known follow-ups for the deployment story
+
+- **Tauri scaffolding** — `src-tauri/` + `@tauri-apps/cli` + sidecar
+  bundling. The Docker Compose stack works today; Tauri is a
+  packaging upgrade.
+- **Sidecar reachability for browser operators** — production needs
+  either LAN-only operation (operators on the same Wi-Fi as the
+  director's laptop) or a tunnel (ngrok, Cloudflare Tunnel). The
+  arc's architecture works under both but the choice is the
+  director's; no automation in the repo for either.
+- **Backup of the director's SQLite to durable storage** — the
+  outbox replicates writes to Supabase but the canonical SQLite
+  itself can die with the laptop. A cron-style copy of
+  `data/local.db` to a USB drive or cloud bucket is a sensible
+  follow-up.

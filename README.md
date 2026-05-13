@@ -1,9 +1,10 @@
 # CP-SAT Tournament Scheduling — Monorepo
 
-Two products sharing one CP-SAT engine. The scheduler runs as a Tauri
-sidecar on the tournament director's laptop with SQLite as the source
-of truth; Supabase mirrors the live match state to operator browsers
-on other devices and to a public TV display.
+Two products sharing one CP-SAT engine. The scheduler runs on the
+tournament director's laptop (today via Docker Compose; a Tauri
+binary is the intended end-state — see [deploy doc](./docs/deploy/cloud.md))
+with SQLite as the source of truth; Supabase mirrors the live match
+state to operator browsers on other devices and to a public TV display.
 
 | Product | Dev port | What it does |
 | ------- | -------- | ------------ |
@@ -33,9 +34,10 @@ make help               # full target list
 Each product is namespaced (Compose project + host ports) so
 `make both` just works on one machine.
 
-For the scheduler's production deployment shape (Tauri sidecar on the
-director's laptop + Supabase project for auth/replication + Vercel
-for the public TV view), see [`docs/deploy/cloud.md`](./docs/deploy/cloud.md).
+For the scheduler's production deployment shape (Docker Compose on
+the director's laptop today + Supabase project for auth/replication
++ Vercel for the public TV view; Tauri packaging is a known
+follow-up), see [`docs/deploy/cloud.md`](./docs/deploy/cloud.md).
 
 ---
 
@@ -118,9 +120,9 @@ Makefile                       top-level chooser (this is what most people use)
 - **Engine** — Python 3.11 · Google OR-Tools (CP-SAT) · pure dataclasses
 - **Scheduler backend** — FastAPI (sync via threadpool) · SQLAlchemy 2.0 · Alembic · SQLite (canonical) · Supabase Postgres (mirror via outbox) · Supabase Auth · SSE for solver progress
 - **Scheduler frontend** — React 19 · TypeScript · Vite · Zustand · Tailwind · dnd-kit · Radix · IndexedDB command queue · Supabase Realtime (subscribe + polling fallback) · Vitest + jsdom + RTL
-- **Scheduler shell** — Tauri (production); Docker Compose (dev)
+- **Scheduler shell** — Docker Compose today (`make scheduler`); Tauri packaging is a known follow-up
 - **Tournament** — FastAPI · React · TypeScript · Vite · Tailwind (unchanged from initial)
-- **Deployment** — Tauri sidecar on the director's laptop (scheduler production) · Vercel for the public TV display · Supabase project (Auth + Postgres + Realtime). Docker Compose still works for local dev.
+- **Deployment** — Docker Compose on the director's laptop (scheduler today, Tauri later) · Vercel for the public TV display · Supabase project (Auth + Postgres + Realtime).
 
 ---
 
@@ -143,10 +145,10 @@ For a deeper read of either product:
 ## Status
 
 The scheduler is production-ready for the documented operating
-envelope — Tauri sidecar on the director's laptop with browser
-operators on the LAN or via a tunnel, public TV display via Vercel.
-Operates correctly even if Supabase is unreachable for the entire
-tournament; the cloud mirror catches up via the outbox when
+envelope — Docker Compose stack on the director's laptop with
+browser operators on the LAN or via a tunnel, public TV display via
+Vercel. Operates correctly even if Supabase is unreachable for the
+entire tournament; the cloud mirror catches up via the outbox when
 connectivity returns.
 
 Multi-worker / Postgres-as-primary deployments need additional work
