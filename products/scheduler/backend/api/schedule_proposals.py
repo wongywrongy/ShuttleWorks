@@ -57,6 +57,7 @@ from api.match_state import MatchStateDTO
 from api.schedule_repair import RepairRequest, _run_repair
 from api.schedule_warm_restart import WarmRestartRequest, _run_warm_restart
 from repositories import LocalRepository, get_repository
+from services.match_state import build_locked_assignments
 
 
 router = APIRouter(
@@ -370,7 +371,10 @@ async def create_warm_restart_proposal(
     """Run a stay-close warm-restart and stash the result as a proposal."""
     store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
-    new_schedule, _moved = _run_warm_restart(request)
+    locked_assignments = build_locked_assignments(repo, tournament_id)
+    new_schedule, _moved = _run_warm_restart(
+        request, locked_assignments=locked_assignments
+    )
     async with lock:
         _evict_expired(store)
         persisted = await _read_persisted_state(repo, tournament_id)
@@ -405,8 +409,10 @@ async def create_repair_proposal(
     """
     store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
-    new_schedule, _ = _run_repair(request)
-    _ = repo  # ensure dependency stays in scope; used in inner block below
+    locked_assignments = build_locked_assignments(repo, tournament_id)
+    new_schedule, _ = _run_repair(
+        request, locked_assignments=locked_assignments
+    )
 
     # If this is a court-closure disruption, propose a config update
     # that pins the closure into TournamentConfig so it survives the
@@ -518,7 +524,10 @@ async def create_manual_edit_proposal(
         matchStates=request.matchStates,
         stayCloseWeight=10,
     )
-    new_schedule, _ = _run_warm_restart(wr_request)
+    locked_assignments = build_locked_assignments(repo, tournament_id)
+    new_schedule, _ = _run_warm_restart(
+        wr_request, locked_assignments=locked_assignments
+    )
     async with lock:
         _evict_expired(store)
         persisted = await _read_persisted_state(repo, tournament_id)

@@ -4,19 +4,57 @@
  * Live-ops match transitions (called / started / finished + actual
  * start/end timestamps + scores) flush immediately because the
  * mutations carry user intent that must not be lost.
+ *
+ * Step F additions (architecture-adjustment arc): a
+ * ``pendingCommandsByMatchId`` map tracks every match that has an
+ * in-flight idempotent command via the operator command queue. Step
+ * G's pending-badge UI subscribes by selector. ``applyOptimisticStatus``
+ * is the write-through path used during optimistic apply — the
+ * canonical server state lands later via ``setMatchState``.
  */
 import { create } from 'zustand';
 import type { LiveScheduleState, MatchStateDTO } from '../api/dto';
 
+type LegacyStatus = 'scheduled' | 'called' | 'started' | 'finished';
+
+/**
+ * Step G addition: a server-rejected command leaves a record here so
+ * the inline ConflictBanner can render. One entry per match — a
+ * second conflict overwrites the first (no log; YAGNI per the
+ * prompt's "inline and dismissible" framing).
+ */
+export interface ConflictRecord {
+  flavour: 'stale_version' | 'conflict';
+  message: string;
+  occurredAt: number;
+}
+
 interface MatchStateState {
   matchStates: Record<string, MatchStateDTO>;
   liveState: LiveScheduleState | null;
+  /** match_id → queued command_id for in-flight optimistic actions. */
+  pendingCommandsByMatchId: Record<string, string>;
+  /** match_id → last unresolved conflict (Step G). */
+  recentConflictsByMatchId: Record<string, ConflictRecord>;
 
   setMatchStates: (states: Record<string, MatchStateDTO>) => void;
   setMatchState: (matchId: string, state: MatchStateDTO) => void;
   setCurrentTime: (time: string) => void;
   setLastSynced: (time: string) => void;
   reset: () => void;
+
+  // Step F: command-queue integration.
+  setPendingCommand: (matchId: string, commandId: string) => void;
+  clearPendingCommand: (matchId: string) => void;
+  applyOptimisticStatus: (matchId: string, status: LegacyStatus) => void;
+
+  // Step G: conflict-record bookkeeping.
+  recordConflict: (
+    matchId: string,
+    flavour: ConflictRecord['flavour'],
+    message: string,
+  ) => void;
+  dismissConflict: (matchId: string) => void;
 }
 
 function buildLiveState(matchStates: Record<string, MatchStateDTO>): LiveScheduleState {
@@ -35,6 +73,8 @@ function buildLiveState(matchStates: Record<string, MatchStateDTO>): LiveSchedul
 export const useMatchStateStore = create<MatchStateState>((set) => ({
   matchStates: {},
   liveState: null,
+  pendingCommandsByMatchId: {},
+  recentConflictsByMatchId: {},
 
   setMatchStates: (matchStates) =>
     set({ matchStates, liveState: buildLiveState(matchStates) }),
@@ -57,5 +97,52 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
       liveState: state.liveState ? { ...state.liveState, lastSynced: time } : null,
     })),
 
-  reset: () => set({ matchStates: {}, liveState: null }),
+  reset: () =>
+    set({
+      matchStates: {},
+      liveState: null,
+      pendingCommandsByMatchId: {},
+      recentConflictsByMatchId: {},
+    }),
+
+  setPendingCommand: (matchId, commandId) =>
+    set((prev) => ({
+      pendingCommandsByMatchId: {
+        ...prev.pendingCommandsByMatchId,
+        [matchId]: commandId,
+      },
+    })),
+
+  clearPendingCommand: (matchId) =>
+    set((prev) => {
+      const next = { ...prev.pendingCommandsByMatchId };
+      delete next[matchId];
+      return { pendingCommandsByMatchId: next };
+    }),
+
+  applyOptimisticStatus: (matchId, status) =>
+    set((prev) => {
+      const existing = prev.matchStates[matchId] ?? { matchId, status: 'scheduled' as LegacyStatus };
+      const next: MatchStateDTO = { ...existing, matchId, status };
+      const newMatchStates = { ...prev.matchStates, [matchId]: next };
+      return {
+        matchStates: newMatchStates,
+        liveState: buildLiveState(newMatchStates),
+      };
+    }),
+
+  recordConflict: (matchId, flavour, message) =>
+    set((prev) => ({
+      recentConflictsByMatchId: {
+        ...prev.recentConflictsByMatchId,
+        [matchId]: { flavour, message, occurredAt: Date.now() },
+      },
+    })),
+
+  dismissConflict: (matchId) =>
+    set((prev) => {
+      const next = { ...prev.recentConflictsByMatchId };
+      delete next[matchId];
+      return { recentConflictsByMatchId: next };
+    }),
 }));

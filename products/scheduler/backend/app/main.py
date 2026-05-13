@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api import (
     schedule,
@@ -18,9 +19,11 @@ from api import (
     schedule_director,
     schedule_suggestions,
     invites,  # Step 7 — invite-link generate / resolve / accept / revoke
+    commands,  # Arch-adjustment Step C — idempotent operator command log
 )
 from app.config import settings
 from app.dependencies import get_current_user
+from app.exceptions import ConflictError, PreconditionFailedError
 from repositories.local import (
     CURRENT_TOURNAMENT_SCHEMA_VERSION as _CURRENT_TOURNAMENT_SCHEMA_VERSION,
 )
@@ -75,6 +78,19 @@ async def lifespan(app: FastAPI):
     await worker.start()
     log.info("suggestions_worker started")
 
+    # Step E: Supabase outbox replicator. Skip in local-dev mode
+    # (SUPABASE_URL blank) — the worker would have no client and
+    # would idle. The enqueue path still writes to ``sync_queue``
+    # regardless; the queue just doesn't drain.
+    from services.sync_service import SyncService
+    sync_service = SyncService()
+    app.state.sync_service = sync_service
+    if settings.supabase_url and settings.supabase_anon_key:
+        sync_service.start()
+        log.info("sync_service started")
+    else:
+        log.info("sync_service skipped (SUPABASE_URL blank — local-dev mode)")
+
     # The single-tournament 90 s OPTIMIZE heartbeat retired in Step 2 —
     # post-commit and advisory-driven triggers now carry an explicit
     # ``tournament_id``, and a global periodic tick has no obvious way
@@ -87,6 +103,8 @@ async def lifespan(app: FastAPI):
     finally:
         await worker.stop()
         log.info("suggestions_worker stopped")
+        sync_service.stop()
+        log.info("sync_service stopped")
         log.info("app_shutdown")
 
 
@@ -108,6 +126,29 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
     expose_headers=["X-Request-ID"],
 )
+
+
+@app.exception_handler(ConflictError)
+async def _conflict_error_handler(request: Request, exc: ConflictError) -> JSONResponse:
+    """Translate the domain ``ConflictError`` into an HTTP 409 response.
+
+    The structured body lets the frontend branch on ``error`` (either
+    ``conflict`` for state-machine violations or ``stale_version`` for
+    optimistic-concurrency mismatches) without parsing a string.
+    """
+    return JSONResponse(status_code=409, content=exc.to_dict())
+
+
+@app.exception_handler(PreconditionFailedError)
+async def _precondition_failed_handler(
+    request: Request, exc: PreconditionFailedError
+) -> JSONResponse:
+    """Translate the domain ``PreconditionFailedError`` into HTTP 412.
+
+    Body shape matches the 409 handler — flat, no ``detail`` wrapper —
+    so the frontend has one parser across both error families.
+    """
+    return JSONResponse(status_code=412, content=exc.to_dict())
 
 
 @app.middleware("http")
@@ -142,6 +183,7 @@ app.include_router(schedule_proposals.router, dependencies=_AUTH_DEP)
 app.include_router(schedule_director.router, dependencies=_AUTH_DEP)
 app.include_router(schedule_suggestions.router, dependencies=_AUTH_DEP)
 app.include_router(match_state.router, dependencies=_AUTH_DEP)
+app.include_router(commands.router, dependencies=_AUTH_DEP)
 app.include_router(tournaments.router, dependencies=_AUTH_DEP)
 # Invites: registered WITHOUT the router-level auth dep so the public
 # ``GET /invites/{token}`` resolve endpoint stays unauthenticated. The

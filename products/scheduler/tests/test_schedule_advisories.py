@@ -445,9 +445,20 @@ def test_advisories_endpoint_returns_overrun_from_persisted_state(client, tmp_pa
     r = client.put(f"/tournaments/{tid}/state", json=payload)
     assert r.status_code == 200
 
-    # 2) PUT a match-state row that puts m_late 50 min over a 30-min match
+    # 2) PUT a match-state row that puts m_late 50 min over a 30-min match.
+    # The Step A state machine requires going through ``called`` first
+    # before ``started`` is a legal transition. Step D requires an
+    # ``If-Match`` header; the schedule commit above projected the
+    # ``matches`` table at version 1 for every match.
     started_dt = datetime.now(timezone.utc) - timedelta(minutes=80)
     started = started_dt.isoformat().replace("+00:00", "Z")
+    r1 = client.put(
+        f"/tournaments/{tid}/match-states/m_late",
+        json={"matchId": "m_late", "status": "called"},
+        headers={"If-Match": '"1"'},
+    )
+    assert r1.status_code == 200
+    next_etag = r1.headers["ETag"].strip('"')
     r = client.put(
         f"/tournaments/{tid}/match-states/m_late",
         json={
@@ -455,6 +466,7 @@ def test_advisories_endpoint_returns_overrun_from_persisted_state(client, tmp_pa
             "status": "started",
             "actualStartTime": started,
         },
+        headers={"If-Match": f'"{next_etag}"'},
     )
     assert r.status_code == 200
 

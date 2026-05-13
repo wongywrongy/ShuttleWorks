@@ -33,13 +33,26 @@ _BACKEND_PACKAGE_NAMES = {
 }
 
 
+# Pure domain modules with no settings/DB dependency. Exempting them
+# from the purge keeps class identity stable across test fixtures — so
+# ``pytest.raises(SomeException)`` in one test still matches an instance
+# raised by code that imported the same class after a different test's
+# fixture reset ``sys.modules``.
+_PURGE_EXEMPT = frozenset({
+    "app.exceptions",
+})
+
+
 def purge_backend_modules(extra: Iterable[str] = ()) -> None:
     extras = tuple(extra)
     for cached in [
         k for k in list(sys.modules)
-        if k in _BACKEND_PACKAGE_NAMES
-        or any(k.startswith(p) for p in _BACKEND_PACKAGE_PREFIXES)
-        or any(e in k for e in extras)
+        if (
+            k in _BACKEND_PACKAGE_NAMES
+            or any(k.startswith(p) for p in _BACKEND_PACKAGE_PREFIXES)
+            or any(e in k for e in extras)
+        )
+        and k not in _PURGE_EXEMPT
     ]:
         del sys.modules[cached]
 

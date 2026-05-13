@@ -48,6 +48,7 @@ from api.schedule_warm_restart import (
     _run_warm_restart_with_cancel,
 )
 from scheduler_core.engine.cancel_token import CancelToken
+from services.match_state import build_locked_assignments
 from services.suggestions_worker import (
     HandlerFn,
     TriggerEvent,
@@ -126,6 +127,10 @@ async def _handle_optimize(
         except Exception:
             log.exception("suggestions: failed to read match_states")
             match_states = {}
+        # Resolve locked matches inside the session — the helper reads
+        # from the ``matches`` table. We materialise the list into plain
+        # dataclasses so the solver can use it after the session closes.
+        locked_assignments = build_locked_assignments(repo, tournament_id)
 
     wr_req = WarmRestartRequest(
         originalSchedule=persisted.schedule,
@@ -143,7 +148,11 @@ async def _handle_optimize(
     loop = asyncio.get_running_loop()
 
     def _solve_sync():
-        return _run_warm_restart_with_cancel(wr_req, cancel_token=token)
+        return _run_warm_restart_with_cancel(
+            wr_req,
+            cancel_token=token,
+            locked_assignments=locked_assignments,
+        )
 
     try:
         new_schedule, moved = await loop.run_in_executor(None, _solve_sync)
@@ -265,6 +274,7 @@ async def _handle_repair(
         except Exception:
             log.exception("suggestions: failed to read match_states")
             match_states = {}
+        locked_assignments = build_locked_assignments(repo, tournament_id)
 
     from api.schedule_repair import RepairRequest, _run_repair_with_cancel, Disruption
     try:
@@ -286,7 +296,11 @@ async def _handle_repair(
     loop = asyncio.get_running_loop()
 
     def _solve_sync():
-        return _run_repair_with_cancel(rr, cancel_token=token)
+        return _run_repair_with_cancel(
+            rr,
+            cancel_token=token,
+            locked_assignments=locked_assignments,
+        )
 
     try:
         new_schedule, _ = await loop.run_in_executor(None, _solve_sync)

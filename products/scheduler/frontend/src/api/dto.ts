@@ -641,6 +641,60 @@ export interface TournamentMemberDTO {
   joinedAt: string;
 }
 
+// ---- Operator commands (Step F of the architecture-adjustment arc) -------
+
+export type MatchAction =
+  | 'call_to_court'
+  | 'start_match'
+  | 'finish_match'
+  | 'retire_match'
+  | 'uncall';
+
+/**
+ * Body of ``POST /tournaments/{tid}/commands``. The ``id`` is the
+ * client-generated UUID used as the idempotency key; the same id
+ * resubmitted gets the original outcome.
+ */
+export interface CommandRequestDTO {
+  id: string;
+  match_id: string;
+  action: MatchAction;
+  payload: Record<string, unknown> | null;
+  seen_version: number;
+}
+
+/**
+ * Successful (200) response body — carries the *current* match
+ * state. Replay after a third-party update returns the current
+ * (mutated) state, not the post-original-apply state.
+ */
+export interface CommandResponseDTO {
+  command_id: string;
+  match_id: string;
+  status: 'scheduled' | 'called' | 'playing' | 'finished' | 'retired';
+  version: number;
+  court_id: number | null;
+  time_slot: number | null;
+  applied_at: string;
+  replay: boolean;
+}
+
+/**
+ * Body shape for 409 (state-machine conflict or stale version).
+ * ``error`` discriminates between the two flavours; the frontend
+ * branches on it to choose between "refetch and retry" and "show
+ * permanent rejection."
+ */
+export interface CommandConflictDTO {
+  error: 'conflict' | 'stale_version';
+  match_id: string;
+  message: string;
+  current_status?: string;
+  attempted_status?: string;
+  current_version?: number;
+  attempted_version?: number;
+}
+
 // Constraint Visualization Types
 export interface ConstraintViolation {
   type: 'rest' | 'overlap' | 'availability' | 'court_capacity' | 'game_proximity_min' | 'game_proximity_max';

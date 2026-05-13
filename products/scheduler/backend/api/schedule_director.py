@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
 from repositories import LocalRepository, get_repository
+from services.match_state import build_locked_assignments
 from app.schemas import (
     BreakWindow,
     HHMMTime,
@@ -256,7 +257,10 @@ async def _solve_and_propose(
         matchStates=request.matchStates,
         stayCloseWeight=10,
     )
-    new_schedule, _moved = _run_warm_restart(wr_request)
+    locked_assignments = build_locked_assignments(repo, tournament_id)
+    new_schedule, _moved = _run_warm_restart(
+        wr_request, locked_assignments=locked_assignments
+    )
     return _build_proposal(
         store,
         kind=ProposalKind.DIRECTOR_ACTION,

@@ -8,10 +8,11 @@ the migration tractable.
 from __future__ import annotations
 
 import uuid
-from typing import List, Optional, Protocol
+from typing import Iterable, List, Optional, Protocol
 
 from database.models import (
     InviteLink,
+    Match,
     MatchState,
     Tournament,
     TournamentBackup,
@@ -74,6 +75,89 @@ class TournamentRepository(Protocol):
         method stamps ``updated_at`` server-side and refreshes the
         denormalised ``name`` from ``payload["config"]["tournamentName"]``.
         Raises ``KeyError`` if no row exists with that id.
+        """
+        ...
+
+
+class MatchRepository(Protocol):
+    """Per-match operational state — status, version, court, time_slot.
+
+    Added by the architecture-adjustment arc's Step A. Single source of
+    truth for the state-machine + solver-locking + sync layers.
+    ``version`` increments on every write; passing ``expected_version``
+    enables optimistic-concurrency checks (raises ``ConflictError`` on
+    mismatch). The HTTP ``If-Match`` wrapper that surfaces this to
+    clients lands in Step D.
+    """
+
+    def get(
+        self,
+        tournament_id: uuid.UUID,
+        match_id: str,
+    ) -> Optional[Match]:
+        ...
+
+    def list_for_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[Match]:
+        ...
+
+    def get_by_statuses(
+        self,
+        tournament_id: uuid.UUID,
+        statuses: Iterable[str],
+    ) -> list[Match]:
+        """Return every match whose status is in ``statuses``.
+
+        Used by the solver locking path (Step B) to find ``called`` /
+        ``playing`` / ``finished`` / ``retired`` rows that must stay
+        pinned at their existing court + time slot.
+        """
+        ...
+
+    def upsert(
+        self,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        fields: dict,
+        *,
+        expected_version: Optional[int] = None,
+    ) -> Match:
+        """Insert or update a match row. Increments ``version`` by 1.
+
+        ``fields`` may include any of ``court_id``, ``time_slot``,
+        ``status``. Unknown keys are ignored. If ``expected_version``
+        is supplied and doesn't match the row's current version,
+        raises ``ConflictError`` and the row is not modified.
+        """
+        ...
+
+    def set_status(
+        self,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        status: str,
+        *,
+        expected_version: Optional[int] = None,
+    ) -> Match:
+        """Convenience wrapper around ``upsert`` for status-only changes."""
+        ...
+
+    def bulk_project_from_schedule(
+        self,
+        tournament_id: uuid.UUID,
+        matches: list[dict],
+        assignments: list[dict],
+    ) -> int:
+        """Project a tournament's JSONB matches + schedule into SQL rows.
+
+        Called from ``commit_tournament_state`` whenever the canonical
+        ``tournaments.data`` blob is rewritten. Inserts rows for new
+        match ids, updates ``court_id`` / ``time_slot`` on existing
+        rows (without resetting status or version), and deletes rows
+        whose match id is no longer present in ``matches``. Returns
+        the count of rows touched.
         """
         ...
 

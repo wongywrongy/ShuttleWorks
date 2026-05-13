@@ -6,8 +6,12 @@ live in the sibling ``repositories`` package.
 """
 from database.models import (
     Base,
+    Command,
     InviteLink,
+    Match,
     MatchState,
+    MatchStatus,
+    SyncQueue,
     Tournament,
     TournamentBackup,
     TournamentMember,
@@ -16,8 +20,12 @@ from database.session import SessionLocal, engine, get_session
 
 __all__ = [
     "Base",
+    "Command",
     "InviteLink",
+    "Match",
     "MatchState",
+    "MatchStatus",
+    "SyncQueue",
     "Tournament",
     "TournamentBackup",
     "TournamentMember",

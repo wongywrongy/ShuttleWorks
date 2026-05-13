@@ -8,6 +8,7 @@ Postgres.
 """
 from repositories.base import (
     InviteLinkRepository,
+    MatchRepository,
     MatchStateRepository,
     MemberRepository,
     TournamentBackupRepository,
@@ -18,6 +19,7 @@ from repositories.local import LocalRepository, get_repository, open_repository
 __all__ = [
     "InviteLinkRepository",
     "LocalRepository",
+    "MatchRepository",
     "MatchStateRepository",
     "MemberRepository",
     "TournamentBackupRepository",

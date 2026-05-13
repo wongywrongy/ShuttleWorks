@@ -19,6 +19,7 @@ from typing import Mapping, Optional, Sequence, Set
 
 from scheduler_core.domain.models import (
     Assignment,
+    LockedAssignment,
     Match,
     Player,
     PreviousAssignment,
@@ -42,6 +43,7 @@ def solve_warm_start(
     stay_close_weight: int = 10,
     solver_options: Optional[SolverOptions] = None,
     cancel_token: Optional[CancelToken] = None,
+    locked_assignments: Optional[Sequence[LockedAssignment]] = None,
 ) -> ScheduleResult:
     """Full re-solve, seeded with ``reference`` and biased to stay close.
 
@@ -101,6 +103,8 @@ def solve_warm_start(
     scheduler.add_matches(matches)
     scheduler.add_players(players)
     scheduler.set_previous_assignments(previous)
+    if locked_assignments:
+        scheduler.set_locked_assignments(list(locked_assignments))
     scheduler.build()
 
     # Warm-start: hint every reference match (including finished, which

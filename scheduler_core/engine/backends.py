@@ -50,6 +50,7 @@ class CPSATBackend(SchedulingBackend):
         scheduler.add_players(request.players)
         scheduler.add_matches(request.matches)
         scheduler.set_previous_assignments(request.previous_assignments)
+        scheduler.set_locked_assignments(request.locked_assignments)
         scheduler.build()
         return scheduler.solve(candidate_pool_size=self.candidate_pool_size)
 

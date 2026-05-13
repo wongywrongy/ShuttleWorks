@@ -116,11 +116,24 @@ def test_overrun_advisory_drives_repair_proposal_to_commit(client):
     assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     # Operator marks m1 as started 50 min ago — well past the
-    # expected 30-min duration.
+    # expected 30-min duration. The Step A state machine requires
+    # going through ``called`` first, so we walk the transition here
+    # (matching the real operator flow). Step D requires an
+    # ``If-Match`` header on every single-match PUT; the schedule
+    # commit above populated the ``matches`` table at version 1, so
+    # the first match-state PUT sends ``If-Match: "1"``.
     started = (datetime.now(timezone.utc) - timedelta(minutes=80)).isoformat().replace("+00:00", "Z")
+    r1 = client.put(
+        f"/tournaments/{tid}/match-states/m1",
+        json={"matchId": "m1", "status": "called"},
+        headers={"If-Match": '"1"'},
+    )
+    assert r1.status_code == 200
+    next_etag = r1.headers["ETag"].strip('"')
     r = client.put(
         f"/tournaments/{tid}/match-states/m1",
         json={"matchId": "m1", "status": "started", "actualStartTime": started},
+        headers={"If-Match": f'"{next_etag}"'},
     )
     assert r.status_code == 200
 

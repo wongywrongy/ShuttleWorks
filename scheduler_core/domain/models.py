@@ -50,6 +50,31 @@ class PreviousAssignment:
 
 
 @dataclass
+class LockedAssignment:
+    """Hard-pin a match at a known court + time slot.
+
+    Introduced by the architecture-adjustment arc (Step B). Mirrors
+    the rows in the new ``matches`` SQL table whose ``status`` is in
+    ``LOCKED_STATUSES`` (called / playing / finished / retired). The
+    solver must never reassign these matches.
+
+    Distinct from :class:`PreviousAssignment`: the latter can be a
+    hint (locked=False) or a lock (locked=True), and it carries
+    legacy fields for the older constraint plugin. A
+    ``LockedAssignment`` is unambiguously a hard pin.
+
+    ``court_id`` is an integer to match the rest of the codebase
+    (``Match.court_id``, ``MatchDTO.preferredCourt``, the CP-SAT
+    ``court`` variable's ``[1, C]`` domain). The prompt's pseudocode
+    uses ``str``; ``int`` is the deviation that matches the data
+    model and avoids a redundant ``_court_index`` translation.
+    """
+    match_id: str
+    court_id: int
+    time_slot: int
+
+
+@dataclass
 class ScheduleConfig:
     """Tournament/schedule configuration."""
     total_slots: int
@@ -186,3 +211,8 @@ class ScheduleRequest:
     matches: List[Match]
     previous_assignments: List[PreviousAssignment] = field(default_factory=list)
     solver_options: Optional[SolverOptions] = None
+    # Step B: matches the solver MUST keep pinned at (court_id, time_slot).
+    # Empty by default — callers without state-machine context (the
+    # stateless ``POST /schedule`` route, legacy tests) leave it empty
+    # and rely on the legacy ``PreviousAssignment.locked`` mechanism.
+    locked_assignments: List[LockedAssignment] = field(default_factory=list)

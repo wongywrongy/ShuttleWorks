@@ -32,6 +32,9 @@ import type {
   InviteSummaryDTO,
   InviteResolveDTO,
   InviteAcceptedDTO,
+  CommandRequestDTO,
+  CommandResponseDTO,
+  CommandConflictDTO,
 } from './dto';
 
 // Use /api proxy in dev, or explicit URL in production
@@ -707,6 +710,81 @@ class ApiClient {
   /** Reset all match states for the tournament. */
   async resetMatchStates(tid: string): Promise<void> {
     await this.client.post(`/tournaments/${tid}/match-states/reset`);
+  }
+
+  /**
+   * Shallow health probe. Used by Step G's reachability hook to drive
+   * the ConnectionIndicator. Returns true when the backend responds
+   * 2xx, false otherwise (any error, any non-2xx). Doesn't throw —
+   * the caller wants a boolean, not exception handling.
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      const r = await this.client.get('/health', { timeout: 3000 });
+      return r.status >= 200 && r.status < 300;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Step F: submit an idempotent operator command.
+   *
+   * Returns a discriminated-union normalised against the four
+   * outcomes the prompt's spec calls out: ``ok`` (200 with current
+   * state), ``staleVersion`` and ``conflict`` (both 409, different
+   * recovery), and ``networkError`` (anything else). The command
+   * queue's flush loop branches on ``kind`` to pick its rollback /
+   * retry behaviour.
+   */
+  async submitCommand(
+    tid: string,
+    body: CommandRequestDTO,
+  ): Promise<
+    | {
+        kind: 'ok';
+        matchStatus: string;
+        matchVersion: number;
+        courtId: number | null;
+        timeSlot: number | null;
+      }
+    | { kind: 'staleVersion'; message: string }
+    | { kind: 'conflict'; message: string }
+    | { kind: 'networkError'; message: string }
+  > {
+    try {
+      const response = await this.client.post<CommandResponseDTO>(
+        `/tournaments/${tid}/commands`,
+        body,
+      );
+      const r = response.data;
+      return {
+        kind: 'ok',
+        matchStatus: r.status,
+        matchVersion: r.version,
+        courtId: r.court_id,
+        timeSlot: r.time_slot,
+      };
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: CommandConflictDTO };
+        message?: string;
+      };
+      const status = axiosErr.response?.status;
+      const data = axiosErr.response?.data;
+      if (status === 409 && data) {
+        if (data.error === 'stale_version') {
+          return { kind: 'staleVersion', message: data.message };
+        }
+        if (data.error === 'conflict') {
+          return { kind: 'conflict', message: data.message };
+        }
+      }
+      return {
+        kind: 'networkError',
+        message: axiosErr.message ?? 'submit failed',
+      };
+    }
   }
 
   /** Download match states as a JSON file. */
