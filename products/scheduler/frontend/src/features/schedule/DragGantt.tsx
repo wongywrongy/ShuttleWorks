@@ -172,6 +172,11 @@ export function DragGantt({
 
   useEffect(() => () => clearDragState(), [clearDragState]);
 
+  // Inline apiClient.validateMove call — the drag flow owns the debounce
+  // timer, the AbortController, and the dedupe ref together; extracting
+  // them to a hook would split the drag state across two files for one
+  // call site. Documented exception per the conventions ("one-off
+  // orchestrator that owns its fetch").
   const scheduleValidation = useCallback(
     (matchId: string, targetCourt: number, targetSlot: number) => {
       if (!config) return;

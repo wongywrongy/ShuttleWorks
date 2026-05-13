@@ -8,32 +8,14 @@
  * Setup-tab BackupPanel. Designed so the operator never has to open a
  * terminal on tournament day.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import { useUiStore } from '../store/uiStore';
 import { useCreateBackup } from '../features/setup/hooks/useTournamentBackups';
+import { useDeepHealth } from '../hooks/useDeepHealth';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
-interface DeepHealth {
-  status: 'healthy' | 'degraded';
-  version: string;
-  schemaVersion: number;
-  dataDirWritable: boolean;
-  solverLoaded: boolean;
-  dataDirError: string | null;
-  solverError: string | null;
-  requestId: string | null;
-}
-
-async function fetchDeepHealth(): Promise<DeepHealth> {
-  // Deliberately hits the raw fetch so a 503/timeout here doesn't blast
-  // the global toast stack — the popover surfaces failure inline.
-  const base = import.meta.env.VITE_API_BASE_URL ||
-    (import.meta.env.DEV ? '/api' : 'http://localhost:8000');
-  const res = await fetch(`${base}/health/deep`);
-  if (!res.ok) throw new Error(`health ${res.status}`);
-  return res.json();
-}
+const HEALTH_POLL_INTERVAL_MS = 30_000;
 
 export function AppStatusPopover() {
   const isGenerating = useUiStore((s) => s.isGenerating);
@@ -43,8 +25,7 @@ export function AppStatusPopover() {
   const pushToast = useUiStore((s) => s.pushToast);
 
   const [open, setOpen] = useState(false);
-  const [health, setHealth] = useState<DeepHealth | null>(null);
-  const [healthError, setHealthError] = useState<string | null>(null);
+  const { health, error: healthError, refresh: refreshHealth } = useDeepHealth();
   const { createBackup, busy: backingUp } = useCreateBackup();
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -81,21 +62,11 @@ export function AppStatusPopover() {
     };
   }, [open]);
 
-  const refreshHealth = useCallback(async () => {
-    setHealthError(null);
-    try {
-      setHealth(await fetchDeepHealth());
-    } catch (err) {
-      setHealthError(err instanceof Error ? err.message : 'Health check failed');
-      setHealth(null);
-    }
-  }, []);
-
   // Refresh when the popover opens + poll every 30s while open.
   useEffect(() => {
     if (!open) return;
     void refreshHealth();
-    const t = window.setInterval(() => void refreshHealth(), 30_000);
+    const t = window.setInterval(() => void refreshHealth(), HEALTH_POLL_INTERVAL_MS);
     return () => window.clearInterval(t);
   }, [open, refreshHealth]);
 
