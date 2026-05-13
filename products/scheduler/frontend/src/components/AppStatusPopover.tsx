@@ -10,8 +10,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
-import { apiClient } from '../api/client';
 import { useUiStore } from '../store/uiStore';
+import { useCreateBackup } from '../features/setup/hooks/useTournamentBackups';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
 interface DeepHealth {
@@ -45,7 +45,7 @@ export function AppStatusPopover() {
   const [open, setOpen] = useState(false);
   const [health, setHealth] = useState<DeepHealth | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
-  const [backingUp, setBackingUp] = useState(false);
+  const { createBackup, busy: backingUp } = useCreateBackup();
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   // Solver-finished celebration: when isGenerating flips false after
@@ -100,25 +100,16 @@ export function AppStatusPopover() {
   }, [open, refreshHealth]);
 
   const handleBackupNow = async () => {
-    setBackingUp(true);
-    try {
-      const res = await apiClient.createTournamentBackup();
-      if (res.created) {
-        pushToast({
-          level: 'success',
-          message: 'Backup created',
-          detail: res.filename ?? undefined,
-        });
-      } else {
-        pushToast({
-          level: 'info',
-          message: 'Nothing to back up yet',
-          detail: 'Save a tournament first.',
-        });
-      }
-    } finally {
-      setBackingUp(false);
-    }
+    const res = await createBackup();
+    pushToast(
+      res.created
+        ? { level: 'success', message: 'Backup created', detail: res.filename }
+        : {
+            level: 'info',
+            message: 'Nothing to back up yet',
+            detail: 'Save a tournament first.',
+          },
+    );
   };
 
   // Status chip — wired to the semantic ``status-*`` tokens. The chip is

@@ -5,14 +5,18 @@
  * on every save (last 10 kept). This panel lists them, lets the user
  * snapshot on demand, and restores any backup with a confirmation step.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
 import { apiClient } from '../../api/client';
-import type { BackupEntryDTO, ScheduleDTO, TournamentStateDTO } from '../../api/dto';
+import type { ScheduleDTO } from '../../api/dto';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useUiStore } from '../../store/uiStore';
 import { parseScheduleXlsx, type ImportResult } from './importScheduleXlsx';
 import { ScheduleImportModal } from './ScheduleImportModal';
+import {
+  applyStateToStore,
+  useTournamentBackups,
+} from './hooks/useTournamentBackups';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { Section } from '../settings/SettingsPrimitives';
 
@@ -28,24 +32,9 @@ function formatWhen(iso: string): string {
   return d.toLocaleString();
 }
 
-function applyStateToStore(state: TournamentStateDTO): void {
-  // Mirror the hydration path in useTournamentState so the in-memory
-  // store matches the file we just restored — no page reload required.
-  useTournamentStore.setState({
-    config: state.config ?? null,
-    groups: state.groups ?? [],
-    players: state.players ?? [],
-    matches: state.matches ?? [],
-    schedule: state.schedule ?? null,
-    scheduleIsStale: state.scheduleIsStale ?? false,
-  });
-}
-
 export function BackupPanel() {
-  const [entries, setEntries] = useState<BackupEntryDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const { entries, loading, error, busyAction, refresh, createBackup, restoreBackup } =
+    useTournamentBackups();
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -104,6 +93,11 @@ export function BackupPanel() {
         });
       } else {
         // full-rebuild: overwrite the server state, then hydrate the store.
+        // Direct apiClient call kept here intentionally — this panel is
+        // the one-off orchestrator for the XLSX-recover workflow, and
+        // the documented convention exception applies. The other backup
+        // operations (list/create/restore) all go through
+        // ``useTournamentBackups``.
         const { plan } = importResult;
         const schedule: ScheduleDTO = {
           assignments: plan.assignments,
@@ -136,49 +130,9 @@ export function BackupPanel() {
     }
   };
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiClient.listTournamentBackups();
-      setEntries(res.backups);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to list backups');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  const handleCreate = async () => {
-    setBusyAction('create');
-    setError(null);
-    try {
-      await apiClient.createTournamentBackup();
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Backup failed');
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
   const handleRestore = async (filename: string) => {
-    setBusyAction(filename);
-    setError(null);
-    try {
-      const restored = await apiClient.restoreTournamentBackup(filename);
-      applyStateToStore(restored);
-      setConfirmRestore(null);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Restore failed');
-    } finally {
-      setBusyAction(null);
-    }
+    await restoreBackup(filename);
+    setConfirmRestore(null);
   };
 
   return (
@@ -189,7 +143,7 @@ export function BackupPanel() {
         trailing={
           <button
             type="button"
-            onClick={handleCreate}
+            onClick={() => void createBackup()}
             disabled={busyAction !== null}
             data-testid="backup-create"
             aria-busy={busyAction === 'create'}
