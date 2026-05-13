@@ -12,7 +12,11 @@ services:
       - "${BACKEND_HOST_PORT:-8000}:8000"
     environment:
       - LOG_LEVEL=info
-      - BACKEND_DATA_DIR=/app/data
+      - DATA_DIR=/app/data
+      # SQLite file lives inside the writable volume mount. Step 3 made
+      # the URL explicit so the read-only root filesystem doesn't trip
+      # the default ``./local.db`` path.
+      - DATABASE_URL=sqlite:////app/data/local.db
     volumes:
       - ./data:/app/data
     restart: unless-stopped

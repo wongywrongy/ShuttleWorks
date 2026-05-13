@@ -7,4 +7,8 @@ ortools>=9.8.0
 python-multipart>=0.0.6
 sqlalchemy>=2.0.0
 alembic>=1.13.0
+# Postgres driver — SQLAlchemy auto-selects when DATABASE_URL starts
+# with ``postgresql://`` (or ``postgresql+psycopg2://``). The pure-binary
+# wheel keeps the Dockerfile compiler-free.
+psycopg2-binary>=2.9.0
 

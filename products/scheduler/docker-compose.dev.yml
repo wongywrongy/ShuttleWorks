@@ -1,0 +1,61 @@
+# Local Postgres dev stack — Step 3 of the cloud-prep migration.
+#
+# This file is for **developers only**, never shipped to operators. It
+# stands up a Postgres instance alongside the backend so we can exercise
+# the cloud path (Supabase Postgres) without leaving the laptop.
+#
+#   make -C products/scheduler dev-postgres
+#   # or directly:
+#   docker compose -f products/scheduler/docker-compose.dev.yml up --build
+#
+# The backend container reads ``DATABASE_URL`` from the environment —
+# overridden here to point at the in-network Postgres service. Once
+# Step 8 lands, the same env var points at Supabase Postgres in
+# production with zero code change.
+
+name: ${COMPOSE_PROJECT_NAME:-btp-dev}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scheduler
+      POSTGRES_PASSWORD: scheduler
+      POSTGRES_DB: scheduler
+    ports:
+      # 5433 to avoid colliding with a host Postgres on 5432.
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: products/scheduler/backend/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_HOST_PORT:-8000}:8000"
+    environment:
+      - LOG_LEVEL=info
+      - DATA_DIR=/app/data
+      - DATABASE_URL=postgresql://scheduler:scheduler@postgres:5432/scheduler
+      - ENVIRONMENT=local
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys,json; r=urllib.request.urlopen('http://localhost:8000/health/deep', timeout=5); sys.exit(0 if json.load(r).get('status')=='healthy' else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

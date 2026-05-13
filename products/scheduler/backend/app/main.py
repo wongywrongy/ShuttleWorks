@@ -1,6 +1,5 @@
 """Main FastAPI application - stateless scheduler for school sparring."""
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -19,6 +18,7 @@ from api import (
     schedule_director,
     schedule_suggestions,
 )
+from app.config import settings
 from repositories.local import (
     CURRENT_TOURNAMENT_SCHEMA_VERSION as _CURRENT_TOURNAMENT_SCHEMA_VERSION,
 )
@@ -95,21 +95,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware - explicit dev origins for local development
-DEV_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",  # Vite alternate port
-    "http://127.0.0.1:5174",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:4173",  # Vite preview
-    "http://127.0.0.1:4173",
-]
-
+# CORS middleware — origins read from ``settings.cors_origins`` so a
+# deployment can extend (or replace) the dev allowlist via the
+# ``CORS_ORIGINS`` env var without rebuilding the image.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=DEV_ORIGINS,
+    allow_origins=settings.cors_origins,
     allow_credentials=False,  # Set to False when not using cookies/session auth
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
@@ -160,7 +151,7 @@ async def health_deep(request: Request):
     imports successfully. Used by the Docker HEALTHCHECK so orchestrators
     can catch "backend is up but can't persist" failure modes.
     """
-    data_dir = Path(os.environ.get("BACKEND_DATA_DIR", "/app/data"))
+    data_dir = Path(settings.data_dir)
     data_dir_writable = False
     data_error: str | None = None
     try:
@@ -195,4 +186,9 @@ async def health_deep(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app,
+        host=settings.host,
+        port=settings.port,
+        log_level=settings.log_level,
+    )
