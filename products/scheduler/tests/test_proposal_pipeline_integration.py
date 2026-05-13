@@ -49,6 +49,9 @@ def client(tmp_path, monkeypatch):
         tournaments,
     )
 
+    from app.exceptions import ConflictError, PreconditionFailedError
+    from app.main import _conflict_error_handler, _precondition_failed_handler
+
     app_ = FastAPI()
     app_.include_router(schedule_warm_restart.router)
     app_.include_router(schedule_repair.router)
@@ -57,6 +60,8 @@ def client(tmp_path, monkeypatch):
     app_.include_router(schedule_advisories.router)
     app_.include_router(match_state.router)
     app_.include_router(tournaments.router)
+    app_.add_exception_handler(ConflictError, _conflict_error_handler)
+    app_.add_exception_handler(PreconditionFailedError, _precondition_failed_handler)
     return TestClient(app_)
 
 
@@ -348,6 +353,8 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
         tournaments,
     )
     from api.schedule_suggestions import build_handler
+    from app.exceptions import ConflictError, PreconditionFailedError
+    from app.main import _conflict_error_handler, _precondition_failed_handler
     from services.suggestions_worker import SuggestionsWorker, TriggerEvent, TriggerKind
 
     # Build an isolated FastAPI app (same pattern as the `client` fixture).
@@ -356,6 +363,8 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
     app_.include_router(schedule_proposals.router)
     app_.include_router(match_state.router)
     app_.include_router(tournaments.router)
+    app_.add_exception_handler(ConflictError, _conflict_error_handler)
+    app_.add_exception_handler(PreconditionFailedError, _precondition_failed_handler)
 
     # Seed tournament state via sync TestClient so _read_persisted_state() finds it.
     seed = _seeded_state()

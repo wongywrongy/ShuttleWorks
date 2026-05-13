@@ -170,7 +170,7 @@ def test_stale_version_is_rejected_with_409_stale_version_body(client, tid):
     assert body["error"] == "stale_version"
     assert body["match_id"] == "m1"
     assert body["current_version"] == 2
-    assert body["attempted_version"] == 1
+    assert body["seen_version"] == 1
 
 
 # ---- 4. Invalid transition -----------------------------------------------

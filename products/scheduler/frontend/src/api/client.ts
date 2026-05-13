@@ -694,6 +694,33 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Read the canonical ``matches.version`` for a match via the legacy
+   * match-state route's ETag header. Returns 0 when the match has
+   * never been written (the implicit pre-write convention from Step D).
+   *
+   * The command queue's submit path uses this on first interaction
+   * with each match — subsequent commands read the version from the
+   * Zustand cache (populated by CommandResponse.version). One
+   * roundtrip per never-before-seen match; sub-millisecond cache hits
+   * after.
+   */
+  async getMatchVersion(tid: string, matchId: string): Promise<number> {
+    const response = await this.client.get(
+      `/tournaments/${tid}/match-states/${matchId}`,
+      { validateStatus: () => true },
+    );
+    if (response.status >= 200 && response.status < 300) {
+      const etag = response.headers['etag'] ?? response.headers['ETag'];
+      if (typeof etag === 'string') {
+        const stripped = etag.replace(/^W\//, '').replace(/^"|"$/g, '');
+        const parsed = parseInt(stripped, 10);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+    return 0;
+  }
+
   /** Update a match state. */
   async updateMatchState(
     tid: string,

@@ -396,11 +396,19 @@ def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
 
     from api import schedule_advisories, match_state, tournaments
+    from app.exceptions import ConflictError, PreconditionFailedError
+    from app.main import _conflict_error_handler, _precondition_failed_handler
 
     app_ = FastAPI()
     app_.include_router(schedule_advisories.router)
     app_.include_router(match_state.router)
     app_.include_router(tournaments.router)
+    # Audit-pass fix: register the same exception handlers app.main does,
+    # so 409 ConflictError and 412 PreconditionFailedError surface as
+    # the flat structured body the production app emits — not the
+    # default 500.
+    app_.add_exception_handler(ConflictError, _conflict_error_handler)
+    app_.add_exception_handler(PreconditionFailedError, _precondition_failed_handler)
     return TestClient(app_)
 
 

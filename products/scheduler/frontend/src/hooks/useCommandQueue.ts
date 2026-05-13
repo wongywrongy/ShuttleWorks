@@ -76,6 +76,10 @@ export function useCommandQueue() {
   const setPendingCommand = useMatchStateStore((s) => s.setPendingCommand);
   const clearPendingCommand = useMatchStateStore((s) => s.clearPendingCommand);
   const recordConflict = useMatchStateStore((s) => s.recordConflict);
+  const canonicalVersionsByMatchId = useMatchStateStore(
+    (s) => s.canonicalVersionsByMatchId,
+  );
+  const setMatchVersion = useMatchStateStore((s) => s.setMatchVersion);
 
   const submit = useCallback(
     async (
@@ -85,13 +89,28 @@ export function useCommandQueue() {
     ): Promise<SubmitOutcome> => {
       const commandId = uuidv4();
       const optimisticStatus = ACTION_TO_LEGACY_STATUS[action];
-      // ``seen_version`` is sourced from the canonical matches table
-      // via the ETag flow added in Step D. For Step F's primitive we
-      // use ``0`` as a safe default — the server's stale_version
-      // path is the source of truth and will reject any stale write.
-      // Future hooks will read the canonical version from a richer
-      // selector once the Realtime → store wiring lands.
-      const seenVersion = 0;
+      // Resolve the canonical match version. Audit-pass fix: the
+      // previous Step F placeholder of 0 caused every first command
+      // on a fresh match to 409 (backfill creates rows at version=1).
+      // Read from the Zustand cache first; fetch via the legacy
+      // route's ETag header on cache-miss. Subsequent commands on
+      // the same match hit the cache (populated by the previous
+      // command's response.version).
+      let seenVersion = canonicalVersionsByMatchId[matchId];
+      if (seenVersion === undefined) {
+        try {
+          seenVersion = await apiClient.getMatchVersion(tid, matchId);
+        } catch {
+          // Network error during the cold-read — fall back to 0 so
+          // the submit still attempts. Server will 409 stale_version
+          // if there's a real mismatch; the operator retries.
+          seenVersion = 0;
+        }
+        setMatchVersion(matchId, seenVersion);
+      }
+      // Capture the prior store status BEFORE the optimistic apply so
+      // we can roll back precisely on a 409 if the refetch fails.
+      const previousStatus = matchStates[matchId]?.status ?? 'scheduled';
 
       // 1-3: optimistic apply + pending bookkeeping.
       applyOptimisticStatus(matchId, optimisticStatus);
@@ -139,6 +158,9 @@ export function useCommandQueue() {
             CANONICAL_TO_LEGACY_STATUS[result.matchStatus] ?? 'scheduled';
           const previous = matchStates[matchId] ?? { matchId, status: 'scheduled' as const };
           setMatchState(matchId, { ...previous, matchId, status: legacy });
+          // Audit-pass fix: cache the canonical version so the next
+          // command on this match doesn't pay the cold-read roundtrip.
+          setMatchVersion(matchId, result.matchVersion);
           break;
         }
         case 'staleVersion': {
@@ -147,14 +169,27 @@ export function useCommandQueue() {
           // Auto-dismiss is the banner component's responsibility.
           recordConflict(matchId, 'stale_version', result.message);
           // Refetch from server — caller's component will re-render
-          // off the refreshed `matchStates`.
+          // off the refreshed `matchStates`. Audit-pass fix: on
+          // refetch failure, roll back to the captured prior status
+          // so the optimistic update doesn't linger indefinitely.
           try {
             const fresh = await apiClient.getMatchState(tid, matchId);
             setMatchState(matchId, fresh);
+            // The legacy route's GET response carries the canonical
+            // version via ETag — read it through getMatchVersion to
+            // populate the cache so the next command works.
+            try {
+              const v = await apiClient.getMatchVersion(tid, matchId);
+              setMatchVersion(matchId, v);
+            } catch {
+              // best-effort
+            }
           } catch {
-            // Best-effort: if the refetch fails, leave the optimistic
-            // state where it is; the next Realtime push or polling
-            // sweep will reconcile.
+            // Refetch failed (transient). Roll back the optimistic
+            // apply explicitly so the operator UX doesn't show a
+            // wrong status that the next Realtime push might never
+            // arrive to correct.
+            applyOptimisticStatus(matchId, previousStatus);
           }
           break;
         }
@@ -164,12 +199,19 @@ export function useCommandQueue() {
           // Persists until the operator dismisses (× button).
           recordConflict(matchId, 'conflict', result.message);
           // Permanent rejection — refetch so the optimistic update
-          // doesn't linger.
+          // doesn't linger. Same rollback-on-failure semantics as
+          // the staleVersion path.
           try {
             const fresh = await apiClient.getMatchState(tid, matchId);
             setMatchState(matchId, fresh);
+            try {
+              const v = await apiClient.getMatchVersion(tid, matchId);
+              setMatchVersion(matchId, v);
+            } catch {
+              // best-effort
+            }
           } catch {
-            // ignore
+            applyOptimisticStatus(matchId, previousStatus);
           }
           break;
         }
@@ -191,6 +233,8 @@ export function useCommandQueue() {
       setPendingCommand,
       clearPendingCommand,
       recordConflict,
+      canonicalVersionsByMatchId,
+      setMatchVersion,
     ],
   );
 

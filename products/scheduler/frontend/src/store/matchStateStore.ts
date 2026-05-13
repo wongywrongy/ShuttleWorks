@@ -36,6 +36,17 @@ interface MatchStateState {
   pendingCommandsByMatchId: Record<string, string>;
   /** match_id → last unresolved conflict (Step G). */
   recentConflictsByMatchId: Record<string, ConflictRecord>;
+  /**
+   * match_id → canonical ``matches.version`` last observed.
+   *
+   * Populated from ``CommandResponse.version`` after each successful
+   * command + from the legacy match-state route's ETag header on
+   * pre-submit reads. The ``useCommandQueue`` hook reads from here
+   * to set ``seen_version`` on outbound commands; absence means the
+   * frontend hasn't observed the match yet and falls back to a
+   * roundtrip read.
+   */
+  canonicalVersionsByMatchId: Record<string, number>;
 
   setMatchStates: (states: Record<string, MatchStateDTO>) => void;
   setMatchState: (matchId: string, state: MatchStateDTO) => void;
@@ -55,6 +66,9 @@ interface MatchStateState {
     message: string,
   ) => void;
   dismissConflict: (matchId: string) => void;
+
+  // Post-audit: canonical version tracking for the command queue.
+  setMatchVersion: (matchId: string, version: number) => void;
 }
 
 function buildLiveState(matchStates: Record<string, MatchStateDTO>): LiveScheduleState {
@@ -75,6 +89,7 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
   liveState: null,
   pendingCommandsByMatchId: {},
   recentConflictsByMatchId: {},
+  canonicalVersionsByMatchId: {},
 
   setMatchStates: (matchStates) =>
     set({ matchStates, liveState: buildLiveState(matchStates) }),
@@ -103,6 +118,7 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
       liveState: null,
       pendingCommandsByMatchId: {},
       recentConflictsByMatchId: {},
+      canonicalVersionsByMatchId: {},
     }),
 
   setPendingCommand: (matchId, commandId) =>
@@ -145,4 +161,12 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
       delete next[matchId];
       return { recentConflictsByMatchId: next };
     }),
+
+  setMatchVersion: (matchId, version) =>
+    set((prev) => ({
+      canonicalVersionsByMatchId: {
+        ...prev.canonicalVersionsByMatchId,
+        [matchId]: version,
+      },
+    })),
 }));

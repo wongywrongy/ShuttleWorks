@@ -692,7 +692,7 @@ export interface CommandConflictDTO {
   current_status?: string;
   attempted_status?: string;
   current_version?: number;
-  attempted_version?: number;
+  seen_version?: number;
 }
 
 // Constraint Visualization Types

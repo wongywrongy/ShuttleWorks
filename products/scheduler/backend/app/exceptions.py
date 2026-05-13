@@ -27,7 +27,7 @@ class ConflictError(Exception):
       set) — the state machine rejected a status transition that isn't
       in ``VALID_TRANSITIONS``.
     - **Stale-version conflict** (``current_version`` +
-      ``attempted_version`` set) — the caller's ``expected_version``
+      ``seen_version`` set) — the caller's ``expected_version``
       didn't match the row's current version. The HTTP ``If-Match``
       wrapper that surfaces this externally lands in Step D.
 
@@ -43,7 +43,7 @@ class ConflictError(Exception):
         current_status: Optional[str] = None,
         attempted_status: Optional[str] = None,
         current_version: Optional[int] = None,
-        attempted_version: Optional[int] = None,
+        seen_version: Optional[int] = None,
     ) -> None:
         super().__init__(message)
         self.match_id = match_id
@@ -51,12 +51,12 @@ class ConflictError(Exception):
         self.current_status = current_status
         self.attempted_status = attempted_status
         self.current_version = current_version
-        self.attempted_version = attempted_version
+        self.seen_version = seen_version
 
     def to_dict(self) -> dict:
         is_stale_version = (
             self.current_version is not None
-            or self.attempted_version is not None
+            or self.seen_version is not None
         )
         body: dict = {
             # ``stale_version`` hints to the client that a fresh read +
@@ -72,8 +72,8 @@ class ConflictError(Exception):
             body["attempted_status"] = self.attempted_status
         if self.current_version is not None:
             body["current_version"] = self.current_version
-        if self.attempted_version is not None:
-            body["attempted_version"] = self.attempted_version
+        if self.seen_version is not None:
+            body["seen_version"] = self.seen_version
         return body
 
 

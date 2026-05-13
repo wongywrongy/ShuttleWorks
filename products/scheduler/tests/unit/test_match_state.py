@@ -49,7 +49,10 @@ def _ce():
     the same lookup pattern), so ``pytest.raises(_ce())`` always
     matches.
     """
-    return sys.modules["app.exceptions"].ConflictError
+    mod = sys.modules.get("app.exceptions")
+    if mod is None:
+        from app import exceptions as mod  # noqa: F811
+    return mod.ConflictError
 
 
 # ---- Fixtures ----------------------------------------------------------
@@ -246,7 +249,7 @@ def test_match_repo_upsert_with_stale_expected_version_raises(repo, tid):
     err = excinfo.value
     assert err.match_id == "m-2"
     assert err.current_version == 2
-    assert err.attempted_version == 1
+    assert err.seen_version == 1
     body = err.to_dict()
     assert body["error"] == "stale_version"
     # The row was not modified by the rejected write.
@@ -448,7 +451,7 @@ def test_conflict_error_stale_version_body():
     err = _ce()(
         match_id="m-y",
         current_version=15,
-        attempted_version=14,
+        seen_version=14,
         message="Match m-y was updated since you last loaded it",
     )
     body = err.to_dict()
@@ -457,5 +460,5 @@ def test_conflict_error_stale_version_body():
         "match_id": "m-y",
         "message": "Match m-y was updated since you last loaded it",
         "current_version": 15,
-        "attempted_version": 14,
+        "seen_version": 14,
     }

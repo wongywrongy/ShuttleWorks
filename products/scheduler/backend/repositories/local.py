@@ -280,7 +280,7 @@ class _LocalMatchRepo:
                 raise _conflict_error_class()(
                     match_id=match_id,
                     current_version=0,
-                    attempted_version=expected_version,
+                    seen_version=expected_version,
                     message=(
                         f"Match {match_id} does not exist yet "
                         f"(expected version {expected_version})."
@@ -298,7 +298,7 @@ class _LocalMatchRepo:
                 raise _conflict_error_class()(
                     match_id=match_id,
                     current_version=row.version,
-                    attempted_version=expected_version,
+                    seen_version=expected_version,
                     message=(
                         f"Match {match_id} was updated since you last "
                         f"loaded it (current version {row.version}, "
@@ -958,7 +958,7 @@ class LocalRepository:
             raise ce_cls(
                 match_id=match_id,
                 current_version=match.version,
-                attempted_version=seen_version,
+                seen_version=seen_version,
                 message=(
                     "Match was updated since you last loaded it. "
                     "Reload and retry."
