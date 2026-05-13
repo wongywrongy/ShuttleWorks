@@ -115,9 +115,9 @@ function SimpleScoreEditor({
   };
 
   return (
-    <form onSubmit={submit} className="mb-3 rounded border border-border bg-muted/30 p-2">
+    <form onSubmit={submit} className="mb-3 border-t border-border pt-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Score
         </span>
         <button
@@ -273,9 +273,9 @@ function BadmintonInlineEditor({
     'w-full rounded border border-border bg-card px-1 py-1 text-center text-sm font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30';
 
   return (
-    <form onSubmit={submit} className="mb-3 rounded border border-border bg-muted/30 p-2">
+    <form onSubmit={submit} className="mb-3 border-t border-border pt-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Score · best of {maxSets}
         </span>
         <div className="flex items-center gap-1">

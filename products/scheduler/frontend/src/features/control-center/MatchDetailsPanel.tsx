@@ -284,16 +284,16 @@ export function MatchDetailsPanel({
         const winnerNames = (winnerIds ?? []).map((id) => playerNames.get(id) ?? id).join(' & ');
 
         return (
-          <div className="mb-3 rounded bg-muted/40 px-2 py-2 text-xs text-foreground">
+          <div className="mb-3 border-t border-border pt-2 text-xs text-foreground">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Done
               </span>
               {onUpdateStatus && mode === 'idle' && (
                 <button
                   type="button"
                   onClick={() => setMode('score')}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-3xs font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/15`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2 py-0.5 text-3xs font-medium text-accent transition-colors duration-fast ease-brand hover:bg-accent/10`}
                   title="Edit score"
                   aria-label="Edit score"
                 >
