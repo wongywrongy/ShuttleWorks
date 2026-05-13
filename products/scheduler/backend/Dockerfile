@@ -63,10 +63,14 @@ COPY --from=builder /install /usr/local
 # so this Dockerfile can COPY the backend tree out of the monorepo.
 # Each top-level package gets its own COPY so a change inside one
 # directory only invalidates that layer (and the ones below it).
-COPY --chown=app:app products/scheduler/backend/app/      ./app/
-COPY --chown=app:app products/scheduler/backend/api/      ./api/
-COPY --chown=app:app products/scheduler/backend/adapters/ ./adapters/
-COPY --chown=app:app products/scheduler/backend/services/ ./services/
+COPY --chown=app:app products/scheduler/backend/app/          ./app/
+COPY --chown=app:app products/scheduler/backend/api/          ./api/
+COPY --chown=app:app products/scheduler/backend/adapters/     ./adapters/
+COPY --chown=app:app products/scheduler/backend/services/     ./services/
+COPY --chown=app:app products/scheduler/backend/database/     ./database/
+COPY --chown=app:app products/scheduler/backend/repositories/ ./repositories/
+COPY --chown=app:app products/scheduler/backend/alembic/      ./alembic/
+COPY --chown=app:app products/scheduler/backend/alembic.ini   ./alembic.ini
 
 # Healthcheck hits /health/deep so we catch "backend is up but can't
 # persist or can't import the solver" failure modes, not just liveness.
