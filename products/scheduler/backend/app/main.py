@@ -4,7 +4,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import (
@@ -19,6 +19,7 @@ from api import (
     schedule_suggestions,
 )
 from app.config import settings
+from app.dependencies import get_current_user
 from repositories.local import (
     CURRENT_TOURNAMENT_SCHEMA_VERSION as _CURRENT_TOURNAMENT_SCHEMA_VERSION,
 )
@@ -125,16 +126,22 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
-# Register API routers
-app.include_router(schedule.router)
-app.include_router(schedule_repair.router)
-app.include_router(schedule_warm_restart.router)
-app.include_router(schedule_advisories.router)
-app.include_router(schedule_proposals.router)
-app.include_router(schedule_director.router)
-app.include_router(schedule_suggestions.router)
-app.include_router(match_state.router)
-app.include_router(tournaments.router)
+# Step 4 — every data router is guarded by ``get_current_user``. The
+# ``/health`` and ``/health/deep`` endpoints are intentionally excluded
+# so liveness probes don't require a token; Step 7's
+# ``GET /invites/:token`` will be added to the public set when it
+# lands.
+_AUTH_DEP = [Depends(get_current_user)]
+
+app.include_router(schedule.router, dependencies=_AUTH_DEP)
+app.include_router(schedule_repair.router, dependencies=_AUTH_DEP)
+app.include_router(schedule_warm_restart.router, dependencies=_AUTH_DEP)
+app.include_router(schedule_advisories.router, dependencies=_AUTH_DEP)
+app.include_router(schedule_proposals.router, dependencies=_AUTH_DEP)
+app.include_router(schedule_director.router, dependencies=_AUTH_DEP)
+app.include_router(schedule_suggestions.router, dependencies=_AUTH_DEP)
+app.include_router(match_state.router, dependencies=_AUTH_DEP)
+app.include_router(tournaments.router, dependencies=_AUTH_DEP)
 
 
 @app.get("/health")

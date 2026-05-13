@@ -138,6 +138,23 @@ class ApiClient {
       timeout: 300000, // 5 minutes for large schedules
     });
 
+    // Attach the Supabase JWT to every outgoing request. ``getSession``
+    // returns the current cached session (Supabase handles automatic
+    // refresh, so we read at request time rather than caching here).
+    // When the Supabase client is null (no env config — local dev /
+    // pytest), the backend's ``get_current_user`` is in synthetic-user
+    // mode and doesn't need a header.
+    this.client.interceptors.request.use(async (config) => {
+      const { supabase } = await import('../lib/supabase');
+      if (!supabase) return config;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (token) {
+        config.headers.set?.('Authorization', `Bearer ${token}`);
+      }
+      return config;
+    });
+
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {

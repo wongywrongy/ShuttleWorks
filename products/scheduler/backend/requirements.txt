@@ -11,4 +11,9 @@ alembic>=1.13.0
 # with ``postgresql://`` (or ``postgresql+psycopg2://``). The pure-binary
 # wheel keeps the Dockerfile compiler-free.
 psycopg2-binary>=2.9.0
+# Supabase Python client — used by ``app/dependencies.get_current_user``
+# to verify the JWT on every protected route. When ``SUPABASE_URL`` is
+# blank the dependency short-circuits into local-dev mode and the client
+# is never instantiated.
+supabase>=2.0.0
 
