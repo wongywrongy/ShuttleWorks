@@ -613,6 +613,14 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'scheduler-storage', // localStorage key
+      // Persist version bumped 2026-05-12 — any stored state from the
+      // pre-design-audit era (including ad-hoc testing data the
+      // operator accumulated) is discarded on next load so users land
+      // on a genuine empty tournament. zustand/persist's default
+      // behavior on version mismatch is to drop the persisted state
+      // and fall through to the in-code initial state (empty arrays
+      // + DEFAULT_CONFIG), which is what we want here.
+      version: 1,
       partialize: (state) => ({
         // Only persist these fields (not schedule)
         config: state.config,

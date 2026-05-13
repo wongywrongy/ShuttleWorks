@@ -2,13 +2,14 @@
  * DataSettings — section 05 (Tournament data) of the Setup tab.
  *
  * Export / import buttons + a stub backup list + recover-from-XLSX
- * trigger. Per the rebuild spec the buttons are plain (no-op for now)
- * and the backup entries are static placeholders. The handlers can be
- * wired to the existing TournamentFileManagement / BackupPanel
- * actions in a follow-up — the goal of this pass is the uniform-rows
- * shape across all 5 sections of the Setup tab.
+ * trigger + a destructive "reset to empty" button that wipes
+ * groups/players/matches/schedule/state back to a fresh-load
+ * tournament. The reset is the user-facing escape hatch for clearing
+ * accumulated testing data without going through DevTools.
  */
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useAppStore } from '../../store/appStore';
 import { Row, SectionHeader } from './SettingsControls';
 
 interface BackupEntry {
@@ -23,7 +24,9 @@ const PLACEHOLDER_BACKUPS: BackupEntry[] = [
 ];
 
 export function DataSettings() {
-  // Stub handlers — these will hook into TournamentFileManagement /
+  const clearAllData = useAppStore((s) => s.clearAllData);
+
+  // Stub handlers — wire into TournamentFileManagement /
   // BackupPanel actions in a follow-up.
   const onExport = () => {
     /* no-op for now */
@@ -36,6 +39,27 @@ export function DataSettings() {
   };
   const onRecoverXlsx = () => {
     /* no-op for now */
+  };
+
+  // Two-click confirm for the destructive Reset — first click flips
+  // the button into a red "Click again to wipe" state for 4 s; second
+  // click within that window actually clears the store. Pattern
+  // mirrors the player-remove confirm in MatchDetailsPanel and the
+  // generate-replace confirm in AutoGeneratePanel.
+  const [confirmReset, setConfirmReset] = useState(false);
+  useEffect(() => {
+    if (!confirmReset) return;
+    const t = window.setTimeout(() => setConfirmReset(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [confirmReset]);
+
+  const handleReset = () => {
+    if (!confirmReset) {
+      setConfirmReset(true);
+      return;
+    }
+    setConfirmReset(false);
+    clearAllData();
   };
 
   return (
@@ -73,7 +97,7 @@ export function DataSettings() {
       />
 
       <SectionHeader>Backups</SectionHeader>
-      {PLACEHOLDER_BACKUPS.map((b, i) => (
+      {PLACEHOLDER_BACKUPS.map((b) => (
         <Row
           key={b.id}
           label={b.timestamp}
@@ -87,9 +111,25 @@ export function DataSettings() {
               Restore
             </Button>
           }
-          last={i === PLACEHOLDER_BACKUPS.length - 1}
         />
       ))}
+
+      <SectionHeader>Reset</SectionHeader>
+      <Row
+        label="Clear all data"
+        control={
+          <Button
+            type="button"
+            variant={confirmReset ? 'destructive' : 'outline'}
+            size="sm"
+            onClick={handleReset}
+            title="Wipes groups, players, matches, schedule, and live state. Configuration is reset to defaults. localStorage is cleared on next save."
+          >
+            {confirmReset ? 'Click again to wipe' : 'Reset tournament'}
+          </Button>
+        }
+        last
+      />
     </div>
   );
 }
