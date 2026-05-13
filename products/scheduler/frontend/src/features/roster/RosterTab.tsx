@@ -183,13 +183,12 @@ export function RosterTab() {
   const selectedPlayer =
     players.find((p) => p.id === selectedPlayerId) ?? null;
 
-  const schoolCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const p of players) {
-      map.set(p.groupId, (map.get(p.groupId) ?? 0) + 1);
-    }
-    return map;
-  }, [players]);
+  // Plain derivations — React Compiler auto-memoizes. Removing the
+  // manual useMemo with optional-chained deps unblocks compilation.
+  const schoolCounts = new Map<string, number>();
+  for (const p of players) {
+    schoolCounts.set(p.groupId, (schoolCounts.get(p.groupId) ?? 0) + 1);
+  }
 
   // Toggle selection: clicking the selected player a second time dismisses.
   const togglePlayer = (playerId: string) => {
@@ -197,17 +196,13 @@ export function RosterTab() {
   };
 
   // Position-grid header derived counts.
-  const eventCount = useMemo(() => {
-    if (!config?.rankCounts) return 0;
-    return Object.values(config.rankCounts).filter((n) => (n ?? 0) > 0).length;
-  }, [config?.rankCounts]);
-  const positionCount = useMemo(() => {
-    if (!config?.rankCounts) return 0;
-    return Object.values(config.rankCounts).reduce(
-      (sum, n) => sum + (n ?? 0),
-      0,
-    );
-  }, [config?.rankCounts]);
+  const rankCounts = config?.rankCounts;
+  const eventCount = rankCounts
+    ? Object.values(rankCounts).filter((n) => (n ?? 0) > 0).length
+    : 0;
+  const positionCount = rankCounts
+    ? Object.values(rankCounts).reduce((sum, n) => sum + (n ?? 0), 0)
+    : 0;
 
   const canExport = groups.length > 0 && players.length > 0;
 

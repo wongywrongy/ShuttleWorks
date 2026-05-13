@@ -14,6 +14,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Warning } from '@phosphor-icons/react';
+import { Select } from '@scheduler/design-system/components';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerMap } from '../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../api/dto';
@@ -117,18 +118,15 @@ export function MatchesSpreadsheet({
   const disruptions = useDisruptions();
 
   // Configured event ranks — derived from `config.rankCounts`. These
-  // populate the per-row event select so the operator picks from
-  // valid options instead of typing free text. Empty when no
-  // tournament config exists yet (e.g. brand new install) — the
-  // select degrades to free-text input in that case.
-  const configuredRanks = useMemo(() => {
-    if (!config?.rankCounts) return [] as string[];
-    const out: string[] = [];
+  // populate the per-row event select. Plain derivation (no useMemo)
+  // so React Compiler can auto-memoize the whole component; a manual
+  // useMemo with an optional-chained dep was blocking compilation.
+  const configuredRanks: string[] = [];
+  if (config?.rankCounts) {
     for (const [prefix, count] of Object.entries(config.rankCounts)) {
-      for (let i = 1; i <= (count ?? 0); i++) out.push(`${prefix}${i}`);
+      for (let i = 1; i <= (count ?? 0); i++) configuredRanks.push(`${prefix}${i}`);
     }
-    return out;
-  }, [config?.rankCounts]);
+  }
 
   if (matches.length === 0) {
     return (
@@ -223,10 +221,10 @@ function MatchRow({
   const [durationDraft, setDurationDraft] = useState(
     String(match.durationSlots ?? 1),
   );
-  // Ref typed loosely — the event field may render as a select
-  // (configured ranks present) or an input (free-text fallback).
-  // Both inherit `focus()` from HTMLElement.
-  const eventFieldRef = useRef<HTMLSelectElement | HTMLInputElement | null>(null);
+  // Ref typed loosely — the event field may render as a Radix Select
+  // trigger (button, configured ranks present) or an input (free-text
+  // fallback). Both inherit `focus()` from HTMLElement.
+  const eventFieldRef = useRef<HTMLButtonElement | HTMLInputElement | null>(null);
 
   useEffect(
     () => setDurationDraft(String(match.durationSlots ?? 1)),
@@ -305,32 +303,28 @@ function MatchRow({
         {match.matchNumber ?? index + 1}
       </span>
       {configuredRanks.length > 0 ? (
-        <select
-          ref={eventFieldRef as React.RefObject<HTMLSelectElement>}
+        <Select
+          triggerRef={eventFieldRef as React.RefObject<HTMLButtonElement>}
           value={currentRank}
-          onChange={(e) =>
-            onUpdate(match.id, { eventRank: e.target.value || undefined })
+          onValueChange={(v) =>
+            onUpdate(match.id, { eventRank: v || undefined })
           }
-          aria-label="Event rank"
-          className={[
-            'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-mono tabular-nums outline-none',
-            'transition-colors duration-fast ease-brand cursor-pointer',
-            'hover:border-border/60 focus:border-accent focus:bg-card',
+          options={[
+            ...configuredRanks.map((r) => ({ value: r, label: r })),
+            // Surface legacy/unknown current value so it doesn't vanish.
+            ...(!rankInConfigured && currentRank
+              ? [{ value: currentRank, label: `${currentRank} (legacy)` }]
+              : []),
+          ]}
+          clearable
+          mono
+          size="sm"
+          ariaLabel="Event rank"
+          triggerClassName={[
+            'w-20 border-transparent px-1.5 py-0.5 hover:border-border/60 focus:bg-card',
             eventTintForPrefix(match.eventRank),
           ].join(' ')}
-        >
-          <option value="">—</option>
-          {configuredRanks.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-          {/* Legacy / unknown current value — surface it so it doesn't
-              silently vanish from the dropdown. */}
-          {!rankInConfigured && currentRank ? (
-            <option value={currentRank}>{currentRank} (legacy)</option>
-          ) : null}
-        </select>
+        />
       ) : (
         <input
           ref={eventFieldRef as React.RefObject<HTMLInputElement>}

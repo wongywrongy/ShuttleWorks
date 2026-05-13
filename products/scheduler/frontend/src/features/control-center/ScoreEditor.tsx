@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from '@phosphor-icons/react';
+import { Select } from '@scheduler/design-system/components';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { MatchDTO, MatchStateDTO, SetScore, TournamentConfig } from '../../api/dto';
 
@@ -308,29 +309,33 @@ function BadmintonInlineEditor({
         <div className="mb-2 grid grid-cols-2 gap-1.5 rounded border border-border bg-card p-1.5 text-3xs">
           <label className="flex items-center justify-between gap-1">
             <span className="text-muted-foreground">Sets to win</span>
-            <select
-              value={setsToWin}
-              onChange={(e) => setSetsToWin(parseInt(e.target.value, 10))}
-              className="rounded border border-border bg-card px-1 py-0.5 text-3xs font-mono"
-            >
-              {[1, 2, 3].map((n) => (
-                <option key={n} value={n}>
-                  {n} (BO{n * 2 - 1})
-                </option>
-              ))}
-            </select>
+            <Select
+              value={String(setsToWin)}
+              onValueChange={(v) => setSetsToWin(parseInt(v, 10))}
+              options={[1, 2, 3].map((n) => ({
+                value: String(n),
+                label: `${n} (BO${n * 2 - 1})`,
+              }))}
+              ariaLabel="Sets to win"
+              size="sm"
+              mono
+              triggerClassName="h-6 px-1 text-3xs"
+            />
           </label>
           <label className="flex items-center justify-between gap-1">
             <span className="text-muted-foreground">Pts/set</span>
-            <select
-              value={pointsPerSet}
-              onChange={(e) => setPointsPerSet(parseInt(e.target.value, 10))}
-              className="rounded border border-border bg-card px-1 py-0.5 text-3xs font-mono"
-            >
-              {[11, 15, 21].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
+            <Select
+              value={String(pointsPerSet)}
+              onValueChange={(v) => setPointsPerSet(parseInt(v, 10))}
+              options={[11, 15, 21].map((n) => ({
+                value: String(n),
+                label: String(n),
+              }))}
+              ariaLabel="Points per set"
+              size="sm"
+              mono
+              triggerClassName="h-6 px-1 text-3xs"
+            />
           </label>
           <label className="col-span-2 flex items-center justify-between gap-1">
             <span className="text-muted-foreground">Deuce (cap {pointsPerSet === 21 ? 30 : pointsPerSet + 10})</span>

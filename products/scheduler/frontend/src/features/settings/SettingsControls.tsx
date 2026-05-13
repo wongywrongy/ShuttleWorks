@@ -13,6 +13,8 @@
  */
 import { type ReactNode } from 'react';
 
+import { Select } from '@scheduler/design-system/components';
+
 /* =========================================================================
  * Row — the only layout primitive in the Setup form.
  * ========================================================================= */
@@ -286,24 +288,24 @@ export function SelectInput<T extends string | number>({
   width?: number;
   ariaLabel?: string;
 }) {
+  // Stringify value/options to bridge T extends string|number → string-only
+  // Radix API. Map back to the original T in onChange via the options table.
+  const stringOptions = options.map((o) => ({
+    value: String(o.value),
+    label: o.label,
+  }));
   return (
-    <select
+    <Select
       value={String(value)}
-      onChange={(e) => {
-        const raw = e.target.value;
-        const target = options.find((o) => String(o.value) === raw);
+      onValueChange={(v) => {
+        const target = options.find((o) => String(o.value) === v);
         if (target) onChange(target.value);
       }}
-      aria-label={ariaLabel}
-      className={INPUT_CLASS}
-      style={{ width: `${width}px` }}
-    >
-      {options.map((opt) => (
-        <option key={String(opt.value)} value={String(opt.value)}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+      options={stringOptions}
+      ariaLabel={ariaLabel}
+      size="sm"
+      triggerStyle={{ width: `${width}px` }}
+    />
   );
 }
 

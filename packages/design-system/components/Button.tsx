@@ -46,6 +46,12 @@ const buttonVariants = cva(
         // NEW variant for brand emphasis (Signal Orange).
         // Use sparingly — only for THE primary action on a surface.
         brand: 'bg-brand text-brand-ink hover:bg-brand/90',
+        // Toolbar chip used by the Schedule + Live page headers — same
+        // hairline + bg-card chrome on both surfaces so action buttons
+        // (Export, Director, Disruption, Re-optimize, Generate) share
+        // one visual vocabulary instead of diverging per page.
+        toolbar:
+          'border border-border bg-card text-card-foreground hover:bg-muted/40 hover:text-foreground',
       },
       size: {
         // xs / icon-xs / icon-sm get an invisible 44x44 hit area via a

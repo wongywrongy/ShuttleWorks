@@ -3,7 +3,14 @@ const preset = require('@scheduler/design-system/tailwind-preset');
 
 export default {
   presets: [preset],
-  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./index.html",
+    "./src/**/*.{ts,tsx}",
+    // Same workspace-design-system scan as scheduler — so shared
+    // Button/Select variants paint here too.
+    "../../../packages/design-system/components/**/*.{ts,tsx}",
+    "../../../packages/design-system/icons/**/*.{ts,tsx}",
+  ],
   theme: {
     extend: {
       colors: {

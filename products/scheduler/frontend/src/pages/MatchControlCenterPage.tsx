@@ -14,6 +14,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, CaretLeft, CaretRight, ClipboardText, GearSix } from '@phosphor-icons/react';
+import { Button } from '@scheduler/design-system/components';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useLiveOperations } from '../hooks/useLiveOperations';
 import { useTrafficLights } from '../hooks/useTrafficLights';
@@ -477,8 +478,10 @@ export function MatchControlCenterPage() {
               ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button
+              <Button
                 type="button"
+                size="xs"
+                variant="toolbar"
                 onClick={() => void exportScheduleXlsx(
                   liveOps.schedule,
                   liveOps.matches,
@@ -491,40 +494,42 @@ export function MatchControlCenterPage() {
                     ? 'No schedule to export'
                     : 'Download schedule as XLSX'
                 }
-                className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
               >
-                <Download aria-hidden="true" className="h-3.5 w-3.5" />
+                <Download aria-hidden="true" />
                 Export XLSX
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="xs"
+                variant="toolbar"
                 onClick={() => setDirectorOpen(true)}
                 title="Director tools — delays, breaks, blackouts"
-                className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
               >
-                <GearSix aria-hidden="true" className="h-3.5 w-3.5" />
+                <GearSix aria-hidden="true" />
                 Director
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="xs"
+                variant="toolbar"
                 onClick={() => {
                   setDisruptionPrefill({});
                   setDisruptionOpen(true);
                 }}
                 title="Repair after a disruption (court closed, withdrawal, overrun, cancellation)"
-                className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
               >
                 Disruption
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="xs"
+                variant="toolbar"
                 onClick={liveOps.triggerReoptimize}
                 disabled={liveOps.isReoptimizing}
                 title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan or Move/postpone."
-                className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
               >
                 {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
-              </button>
+              </Button>
             </div>
           </header>
           {/* Gantt grid */}

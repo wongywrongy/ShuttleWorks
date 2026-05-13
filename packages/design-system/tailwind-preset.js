@@ -96,6 +96,14 @@ module.exports = {
           // not yet renamed). Same value as `accent-ink`.
           foreground: 'hsl(var(--accent-ink))',
         },
+        /* `brand` is an alias of `accent` so the Button variant="brand"
+         * (BRAND.md §1 Signal Orange) actually paints — previously the
+         * variant referenced `bg-brand` / `text-brand-ink` Tailwind names
+         * that were never wired here, so the class was a no-op. */
+        brand: {
+          DEFAULT: 'hsl(var(--accent))',
+          ink:     'hsl(var(--accent-ink))',
+        },
 
         // -------- Status palette --------
         // bg-status-live / text-status-live / border-status-live + -bg variant

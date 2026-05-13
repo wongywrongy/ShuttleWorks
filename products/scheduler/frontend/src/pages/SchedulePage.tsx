@@ -12,6 +12,7 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, CalendarBlank } from '@phosphor-icons/react';
+import { Button } from '@scheduler/design-system/components';
 import { useSchedule } from '../hooks/useSchedule';
 import { useTournament } from '../hooks/useTournament';
 import { useAppStore } from '../store/appStore';
@@ -27,7 +28,6 @@ import { SuggestionsRail } from '../features/suggestions/SuggestionsRail';
 import { exportScheduleXlsx } from '../features/exports/xlsxExports';
 import { computeConstraintViolations } from '../utils/constraintChecker';
 import { formatSlotTime } from '../lib/time';
-import { INTERACTIVE_BASE } from '../lib/utils';
 import { MatchesTable, type TableView } from './schedule/MatchesTable';
 import { ScheduleSidebar } from './schedule/ScheduleSidebar';
 
@@ -229,8 +229,10 @@ export function SchedulePage() {
                 status={status}
               />
               <div className="flex shrink-0 items-center gap-2">
-                <button
+                <Button
                   type="button"
+                  size="xs"
+                  variant="toolbar"
                   onClick={() => void exportScheduleXlsx(schedule, matches, players, config)}
                   disabled={!schedule || schedule.assignments.length === 0}
                   data-testid="export-schedule"
@@ -239,11 +241,10 @@ export function SchedulePage() {
                       ? 'Generate a schedule first'
                       : 'Download schedule as XLSX'
                   }
-                  className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
                 >
-                  <Download aria-hidden="true" className="h-3.5 w-3.5" />
+                  <Download aria-hidden="true" />
                   Export XLSX
-                </button>
+                </Button>
                 <ScheduleActions
                   onGenerate={handleGenerate}
                   generating={isOptimizing}

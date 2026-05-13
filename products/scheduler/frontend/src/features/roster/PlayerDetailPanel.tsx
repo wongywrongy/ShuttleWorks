@@ -19,8 +19,8 @@
  *  • clicking the same player in the left list a second time (handled
  *    in RosterTab — passes `onDismiss`)
  */
-import { useMemo } from 'react';
 import { X } from '@phosphor-icons/react';
+import { Select } from '@scheduler/design-system/components';
 import type { PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../api/dto';
 import { useAppStore } from '../../store/appStore';
 import { isDoublesRank } from './positionGrid/helpers';
@@ -50,14 +50,13 @@ export function PlayerDetailPanel({
 
   // Available ranks derived from config.rankCounts. Per BRAND.md events
   // are 5 disciplines (MS / WS / MD / WD / XD), each with N positions.
-  const availableRanks = useMemo(() => {
-    if (!config?.rankCounts) return [] as string[];
-    const ranks: string[] = [];
+  // Plain derivation — React Compiler handles memoization.
+  const availableRanks: string[] = [];
+  if (config?.rankCounts) {
     for (const [prefix, count] of Object.entries(config.rankCounts)) {
-      for (let i = 1; i <= (count ?? 0); i++) ranks.push(`${prefix}${i}`);
+      for (let i = 1; i <= (count ?? 0); i++) availableRanks.push(`${prefix}${i}`);
     }
-    return ranks;
-  }, [config?.rankCounts]);
+  }
 
   const handleToggleRank = (rank: string) => {
     if (!player) return;
@@ -128,19 +127,16 @@ export function PlayerDetailPanel({
               rows: label left at 13px / fixed width, control right. */}
           <div className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-2 items-center">
             <label className="text-xs font-medium text-muted-foreground">School</label>
-            <select
+            <Select
               value={player.groupId}
-              onChange={(e) =>
-                updatePlayer(player.id, { groupId: e.target.value })
+              onValueChange={(v) =>
+                updatePlayer(player.id, { groupId: v })
               }
-              className="h-7 w-[220px] rounded-sm border border-border bg-bg-elev px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
+              options={groups.map((g) => ({ value: g.id, label: g.name }))}
+              ariaLabel="School"
+              size="sm"
+              triggerStyle={{ width: 220 }}
+            />
 
             <label className="text-xs font-medium text-muted-foreground">Availability</label>
             <span className="text-xs text-muted-foreground">

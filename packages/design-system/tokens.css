@@ -124,12 +124,17 @@
     --shadow-md: var(--shadow-none);
     --shadow-lg: var(--shadow-hard);
 
-    /* ----- Z-index scale (inherited from scheduler) ---------------------- */
+    /* ----- Z-index scale ------------------------------------------------- */
+    /* Popovers sit ABOVE modals so dropdowns/tooltips opened inside a
+     * dialog render in front of the dialog body (the standard a11y
+     * expectation). The earlier hierarchy put popover below modal,
+     * which clipped Select menus inside DisruptionDialog/MoveMatchDialog.
+     */
     --z-hud:      10;
     --z-chrome:   20;
-    --z-popover:  30;
     --z-overlay:  40;
     --z-modal:    50;
+    --z-popover:  60;
 
     /* ----- Status palette (inherited from scheduler, unchanged) ---------- */
     /* Status colors live in their own semantic namespace and are NEVER

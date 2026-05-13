@@ -11,6 +11,7 @@
  */
 import { useEffect, useState } from 'react';
 import { GearSix } from '@phosphor-icons/react';
+import { Button } from '@scheduler/design-system/components';
 import type {
   ScheduleAssignment,
   MatchDTO,
@@ -148,34 +149,37 @@ export function ScheduleSidebar({
                 Dynamic
               </span>
               <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                <button
+                <Button
                   type="button"
+                  size="xs"
+                  variant="toolbar"
                   onClick={() => setDirectorOpen(true)}
                   title="Director tools — delays, breaks, reopen courts"
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`}
                 >
-                  <GearSix aria-hidden="true" className="h-4 w-4" />
+                  <GearSix aria-hidden="true" />
                   Director
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  size="xs"
+                  variant="toolbar"
                   onClick={() => setWarmRestartOpen(true)}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`}
                   title="Re-plan from here (full re-solve, stay-close objective)"
                 >
                   Re-plan
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  size="xs"
+                  variant="toolbar"
                   onClick={() => {
                     setDisruptionPrefill({});
                     setDisruptionOpen(true);
                   }}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`}
                   title="Repair after a disruption"
                 >
                   Disruption
-                </button>
+                </Button>
               </div>
             </div>
           )}

@@ -25,6 +25,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clock, ArrowRight } from '@phosphor-icons/react';
 
+import { Select } from '@scheduler/design-system/components';
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
 import { useProposals } from '../../hooks/useProposals';
@@ -273,17 +274,18 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
             </label>
             <label className="block text-xs">
               <span className="text-muted-foreground">Court</span>
-              <select
-                value={moveToCourt}
-                onChange={(e) => setMoveToCourt(parseInt(e.target.value, 10))}
-                className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
-              >
-                {Array.from({ length: config.courtCount }, (_, i) => i + 1).map((c) => (
-                  <option key={c} value={c}>
-                    Court {c}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1">
+                <Select
+                  value={String(moveToCourt)}
+                  onValueChange={(v) => setMoveToCourt(parseInt(v, 10))}
+                  options={Array.from({ length: config.courtCount }, (_, i) => i + 1).map(
+                    (c) => ({ value: String(c), label: `Court ${c}` }),
+                  )}
+                  ariaLabel="Target court"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
             </label>
           </div>
         )}

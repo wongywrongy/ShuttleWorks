@@ -39,30 +39,20 @@ export function usePositionGridColumns() {
   const config = useAppStore((s) => s.config);
   const setConfig = useAppStore((s) => s.setConfig);
 
-  const events = useMemo(() => {
-    const counts = config?.rankCounts ?? {};
-    const order = (config?.eventOrder?.length ? config.eventOrder : EVENT_ORDER).filter(
-      (ev) => (counts[ev] ?? 0) > 0,
-    );
-    for (const ev of EVENT_ORDER) {
-      if ((counts[ev] ?? 0) > 0 && !order.includes(ev)) order.push(ev);
-    }
-    const visible = config?.eventVisible;
-    return order
-      .filter((ev) => visible?.[ev] !== false)
-      .map((ev) => ({ prefix: ev, count: counts[ev] ?? 0 }));
-  }, [config?.rankCounts, config?.eventOrder, config?.eventVisible]);
-
-  const allConfiguredEvents = useMemo(() => {
-    const counts = config?.rankCounts ?? {};
-    const order = (config?.eventOrder?.length ? config.eventOrder : EVENT_ORDER).filter(
-      (ev) => (counts[ev] ?? 0) > 0,
-    );
-    for (const ev of EVENT_ORDER) {
-      if ((counts[ev] ?? 0) > 0 && !order.includes(ev)) order.push(ev);
-    }
-    return order;
-  }, [config?.rankCounts, config?.eventOrder]);
+  // Plain derivations — React Compiler auto-memoizes. Manual useMemo
+  // with optional-chained deps was blocking whole-component compilation.
+  const _counts = config?.rankCounts ?? {};
+  const _orderedEvents = (config?.eventOrder?.length ? config.eventOrder : EVENT_ORDER).filter(
+    (ev) => (_counts[ev] ?? 0) > 0,
+  );
+  for (const ev of EVENT_ORDER) {
+    if ((_counts[ev] ?? 0) > 0 && !_orderedEvents.includes(ev)) _orderedEvents.push(ev);
+  }
+  const allConfiguredEvents = _orderedEvents;
+  const _visible = config?.eventVisible;
+  const events = allConfiguredEvents
+    .filter((ev) => _visible?.[ev] !== false)
+    .map((ev) => ({ prefix: ev, count: _counts[ev] ?? 0 }));
 
   const moveColumn = (prefix: string, direction: -1 | 1) => {
     if (!config) return;
