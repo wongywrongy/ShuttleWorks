@@ -36,13 +36,21 @@ TournamentStatus = Literal["draft", "active", "archived"]
 
 class TournamentSummaryDTO(BaseModel):
     """Dashboard row shape — light enough to render dozens without loading
-    the full payload."""
+    the full payload.
+
+    Step 6 added ``role`` (the requesting user's role on this
+    tournament; always non-null in the list response because the list
+    is filtered to memberships) and ``ownerName`` (the owner's email,
+    denormalised at create time — see ``Tournament.owner_email``).
+    """
     id: str
     name: Optional[str] = None
     status: TournamentStatus = "draft"
     tournamentDate: Optional[str] = None
     createdAt: str
     updatedAt: str
+    role: Optional[str] = None
+    ownerName: Optional[str] = None
 
 
 class TournamentCreateDTO(BaseModel):
@@ -74,7 +82,11 @@ class BackupCreatedDTO(BaseModel):
 # ---- Helpers -----------------------------------------------------------
 
 
-def _to_summary(row: Tournament) -> TournamentSummaryDTO:
+def _to_summary(
+    row: Tournament,
+    *,
+    role: Optional[str] = None,
+) -> TournamentSummaryDTO:
     return TournamentSummaryDTO(
         id=str(row.id),
         name=row.name,
@@ -82,6 +94,8 @@ def _to_summary(row: Tournament) -> TournamentSummaryDTO:
         tournamentDate=row.tournament_date,
         createdAt=row.created_at.isoformat() if row.created_at else "",
         updatedAt=row.updated_at.isoformat() if row.updated_at else "",
+        role=role,
+        ownerName=row.owner_email,
     )
 
 
@@ -117,17 +131,25 @@ def list_tournaments(
     repo: LocalRepository = Depends(get_repository),
 ):
     """Newest-first list, filtered to tournaments the caller is a member
-    of. Owners, operators, and viewers all appear here; non-members
-    don't see the row at all (not even a 403 — invisibility).
+    of. Each row carries the caller's role on that tournament so the
+    Step 6 dashboard can split owned vs shared without an extra
+    request.
     """
     user_uuid = user.as_uuid()
     if user_uuid is None:
         return []
-    tournament_ids = set(repo.members.list_tournament_ids_for_user(user_uuid))
+    # Resolve every (tournament_id, role) pair for the caller up front
+    # so the list response can carry the role per row without an N+1
+    # lookup. ``list_all`` is already newest-first.
+    role_by_tournament: dict = {}
+    for tid in repo.members.list_tournament_ids_for_user(user_uuid):
+        role = repo.members.get_role(tid, user_uuid)
+        if role is not None:
+            role_by_tournament[tid] = role
     return [
-        _to_summary(t)
+        _to_summary(t, role=role_by_tournament[t.id])
         for t in repo.tournaments.list_all()
-        if t.id in tournament_ids
+        if t.id in role_by_tournament
     ]
 
 
@@ -141,17 +163,20 @@ def create_tournament(
     owner — both on the ``tournaments.owner_id`` column and as a
     ``tournament_members`` row with ``role='owner'`` — so the same
     user can immediately read / write / delete the new tournament via
-    the role-checked endpoints.
+    the role-checked endpoints. ``owner_email`` is denormalised here
+    so Step 6's "Shared with You" dashboard rows can show who the
+    tournament belongs to without a Supabase auth join.
     """
     user_uuid = user.as_uuid()
     row = repo.tournaments.create(
         name=body.name,
         tournament_date=body.tournamentDate,
         owner_id=user_uuid,
+        owner_email=user.email,
     )
     if user_uuid is not None:
         repo.members.add_member(row.id, user_uuid, role="owner")
-    return _to_summary(row)
+    return _to_summary(row, role="owner")
 
 
 @router.get(
@@ -161,15 +186,22 @@ def create_tournament(
 )
 def get_tournament(
     tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Return the summary row (id + denormalised metadata).
 
     The full ``TournamentStateDTO`` payload is served by
     ``GET /tournaments/{id}/state`` to keep this endpoint cheap for
-    dashboard polling.
+    dashboard polling. ``role`` is included so the frontend can hide
+    owner-only affordances without a separate request.
     """
-    return _to_summary(_resolve_tournament(tournament_id, repo))
+    row = _resolve_tournament(tournament_id, repo)
+    role: Optional[str] = None
+    user_uuid = user.as_uuid()
+    if user_uuid is not None:
+        role = repo.members.get_role(tournament_id, user_uuid)
+    return _to_summary(row, role=role)
 
 
 @router.patch(
@@ -180,6 +212,7 @@ def get_tournament(
 def update_tournament(
     body: TournamentUpdateDTO,
     tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Partial update of name / status / tournament_date.
@@ -202,7 +235,11 @@ def update_tournament(
             ErrorCode.STATE_CORRUPT,
             f"tournament not found: {tournament_id}",
         )
-    return _to_summary(row)
+    role: Optional[str] = None
+    user_uuid = user.as_uuid()
+    if user_uuid is not None:
+        role = repo.members.get_role(tournament_id, user_uuid)
+    return _to_summary(row, role=role)
 
 
 @router.delete(

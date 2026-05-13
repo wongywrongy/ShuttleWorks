@@ -417,3 +417,81 @@ def test_list_tournaments_returns_only_user_memberships(client):
     listed_ids = {row["id"] for row in listing}
     assert own_id in listed_ids
     assert str(other_uuid) not in listed_ids
+
+
+# ---- Step 6: role + ownerName fields ---------------------------------
+
+
+def test_create_response_includes_role_and_owner_name(client):
+    """Creator becomes owner; the synthetic local-dev user has
+    email='local@dev' which surfaces as ownerName."""
+    r = client.post("/tournaments", json={"name": "A"})
+    assert r.status_code == 201
+    body = r.json()
+    assert body["role"] == "owner"
+    assert body["ownerName"] == "local@dev"
+
+
+def test_list_response_includes_role_per_row(client):
+    own_id = client.post("/tournaments", json={"name": "Owned"}).json()["id"]
+    shared_id = client.post("/tournaments", json={"name": "Shared"}).json()["id"]
+    # Demote the second to viewer so it shows up in the shared section.
+    _set_role("viewer", shared_id)
+
+    rows = client.get("/tournaments").json()
+    by_id = {r["id"]: r for r in rows}
+    assert by_id[own_id]["role"] == "owner"
+    assert by_id[shared_id]["role"] == "viewer"
+
+
+def test_get_response_includes_role_and_owner_name(client):
+    tid = client.post("/tournaments", json={"name": "A"}).json()["id"]
+    body = client.get(f"/tournaments/{tid}").json()
+    assert body["role"] == "owner"
+    assert body["ownerName"] == "local@dev"
+
+
+def test_patch_preserves_owner_name(client):
+    """A rename shouldn't clear the denormalised owner email."""
+    tid = client.post("/tournaments", json={"name": "Original"}).json()["id"]
+    r = client.patch(f"/tournaments/{tid}", json={"name": "Renamed"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["name"] == "Renamed"
+    assert body["ownerName"] == "local@dev"
+
+
+def test_shared_row_keeps_original_owner_name(client):
+    """A tournament owned by someone else (here: a manually seeded row
+    with a different owner_email) still reports that original owner
+    even when the caller has a non-owner role on it."""
+    from database.models import Tournament, TournamentMember
+    from database.session import SessionLocal
+    from app.dependencies import LOCAL_DEV_USER_UUID
+
+    other_owner_uuid = uuid.uuid4()
+    shared_id = uuid.uuid4()
+    session = SessionLocal()
+    try:
+        session.add(Tournament(
+            id=shared_id,
+            data={},
+            name="Owned by someone else",
+            owner_id=other_owner_uuid,
+            owner_email="alice@example.com",
+        ))
+        # Caller is just a viewer on this one.
+        session.add(TournamentMember(
+            tournament_id=shared_id,
+            user_id=LOCAL_DEV_USER_UUID,
+            role="viewer",
+        ))
+        session.commit()
+    finally:
+        session.close()
+
+    rows = client.get("/tournaments").json()
+    matching = [r for r in rows if r["id"] == str(shared_id)]
+    assert len(matching) == 1
+    assert matching[0]["role"] == "viewer"
+    assert matching[0]["ownerName"] == "alice@example.com"

@@ -1,14 +1,24 @@
 /**
  * Tournament dashboard — the multi-tournament landing page at ``/``.
  *
- * Step 2 ships a minimal version: list rows + "New Tournament" button.
- * The richer Step 6 dashboard layers ownership filters and status
- * pills on top of the same data.
+ * Step 6 split rows into two sections:
+ *   - **Your Tournaments** (``role === 'owner'``): columns name /
+ *     status / date / Open.
+ *   - **Shared with You** (any other role): columns name / your role /
+ *     owner name / date / Open.
+ *
+ * Status pill colours follow the PRODUCT-doc semantic palette: draft is
+ * neutral grey, active is green, archived is muted. The "New
+ * Tournament" button opens a minimal dialog (name + date); on submit it
+ * POSTs and navigates to the new tournament's Setup tab.
+ *
+ * No charts, no activity feed, no onboarding — the spec explicitly
+ * scopes v1 to the functional cockpit.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
-import type { TournamentSummaryDTO } from '../api/dto';
+import type { TournamentStatus, TournamentSummaryDTO } from '../api/dto';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 
@@ -19,17 +29,96 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString();
 }
 
-function StatusPill({ status }: { status: TournamentSummaryDTO['status'] }) {
-  const colour =
+function StatusPill({ status }: { status: TournamentStatus }) {
+  const tone =
     status === 'active'
       ? 'bg-green-50 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800'
       : status === 'archived'
         ? 'bg-stone-100 text-stone-500 border-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:border-stone-700'
         : 'bg-stone-50 text-stone-700 border-stone-200 dark:bg-stone-900 dark:text-stone-300 dark:border-stone-700';
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs border tabular-nums ${colour}`}>
+    <span className={`inline-block px-2 py-0.5 rounded text-xs border tabular-nums ${tone}`}>
       {status}
     </span>
+  );
+}
+
+interface RowProps {
+  tournament: TournamentSummaryDTO;
+  variant: 'owned' | 'shared';
+  onOpen: () => void;
+}
+
+function TournamentRow({ tournament, variant, onOpen }: RowProps) {
+  return (
+    <div
+      className="flex items-center gap-4 p-4 hover:bg-muted/40 cursor-pointer"
+      onClick={onOpen}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="font-medium truncate">{tournament.name || 'Untitled'}</div>
+        {variant === 'shared' && (
+          <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
+            owner: {tournament.ownerName ?? '—'}
+          </div>
+        )}
+      </div>
+      {variant === 'shared' && (
+        <span className="text-xs text-muted-foreground capitalize w-16 text-right">
+          {tournament.role ?? '—'}
+        </span>
+      )}
+      <span className="text-xs text-muted-foreground tabular-nums w-24 text-right">
+        {formatDate(tournament.tournamentDate)}
+      </span>
+      <StatusPill status={tournament.status} />
+      <Button
+        variant="ghost"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+      >
+        Open
+      </Button>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  variant,
+  items,
+  onOpen,
+  emptyHint,
+}: {
+  title: string;
+  variant: 'owned' | 'shared';
+  items: TournamentSummaryDTO[];
+  onOpen: (id: string) => void;
+  emptyHint?: string;
+}) {
+  if (items.length === 0 && !emptyHint) return null;
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+        {title}
+      </h2>
+      {items.length === 0 ? (
+        <Card className="p-6 text-sm text-muted-foreground">{emptyHint}</Card>
+      ) : (
+        <Card className="divide-y divide-border">
+          {items.map((t) => (
+            <TournamentRow
+              key={t.id}
+              tournament={t}
+              variant={variant}
+              onOpen={() => onOpen(t.id)}
+            />
+          ))}
+        </Card>
+      )}
+    </section>
   );
 }
 
@@ -61,6 +150,21 @@ export function TournamentListPage() {
     void refresh();
   }, [refresh]);
 
+  const { owned, shared } = useMemo(() => {
+    const owned: TournamentSummaryDTO[] = [];
+    const shared: TournamentSummaryDTO[] = [];
+    for (const t of tournaments) {
+      if (t.role === 'owner') owned.push(t);
+      else shared.push(t);
+    }
+    return { owned, shared };
+  }, [tournaments]);
+
+  const openTournament = useCallback(
+    (id: string) => navigate(`/tournaments/${id}/setup`),
+    [navigate],
+  );
+
   const handleCreate = useCallback(async () => {
     setCreating(true);
     try {
@@ -78,8 +182,8 @@ export function TournamentListPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-4xl px-6 py-12">
-        <header className="flex items-baseline justify-between mb-8">
+      <div className="mx-auto max-w-4xl px-6 py-12 space-y-8">
+        <header className="flex items-baseline justify-between">
           <div>
             <h1 className="text-3xl font-medium tracking-tight">ShuttleWorks</h1>
             <p className="text-sm text-muted-foreground mt-1">Tournaments</p>
@@ -88,7 +192,7 @@ export function TournamentListPage() {
         </header>
 
         {error && (
-          <div className="mb-4 p-3 rounded border border-red-200 bg-red-50 text-sm text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300">
+          <div className="p-3 rounded border border-red-200 bg-red-50 text-sm text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300">
             {error}
           </div>
         )}
@@ -103,30 +207,21 @@ export function TournamentListPage() {
             </p>
           </Card>
         ) : (
-          <Card className="divide-y divide-border">
-            {tournaments.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center justify-between p-4 hover:bg-muted/40"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{t.name || 'Untitled'}</div>
-                  <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
-                    {formatDate(t.tournamentDate)} · updated {formatDate(t.updatedAt)}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 ml-4">
-                  <StatusPill status={t.status} />
-                  <Button
-                    variant="ghost"
-                    onClick={() => navigate(`/tournaments/${t.id}/setup`)}
-                  >
-                    Open
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </Card>
+          <>
+            <Section
+              title="Your Tournaments"
+              variant="owned"
+              items={owned}
+              onOpen={openTournament}
+              emptyHint="You don't own any tournaments yet."
+            />
+            <Section
+              title="Shared with You"
+              variant="shared"
+              items={shared}
+              onOpen={openTournament}
+            />
+          </>
         )}
       </div>
 

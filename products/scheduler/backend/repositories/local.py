@@ -113,9 +113,11 @@ class _LocalTournamentRepo:
         name: Optional[str] = None,
         tournament_date: Optional[str] = None,
         owner_id: Optional[uuid.UUID] = None,
+        owner_email: Optional[str] = None,
     ) -> Tournament:
         row = Tournament(
             owner_id=owner_id,
+            owner_email=owner_email,
             name=name,
             tournament_date=tournament_date,
             data={},

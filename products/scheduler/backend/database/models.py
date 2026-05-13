@@ -63,6 +63,12 @@ class Tournament(Base):
     # for the Step 6 dashboard list. Nullable to mirror the existing
     # behaviour where ``tournamentName`` is optional.
     name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # Denormalised owner email captured at create time from the
+    # authenticated user. Step 6 surfaces it as ``ownerName`` in the
+    # dashboard's "Shared with You" section. We don't store it in the
+    # Supabase ``auth.users`` table directly because that schema
+    # isn't reachable from our DB; this column is a one-way cache.
+    owner_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
     # ``draft`` / ``active`` / ``archived`` — used by the Step 6 status
     # pill. Stored as plain string for ease of evolution; enforcement
     # lives at the application layer.

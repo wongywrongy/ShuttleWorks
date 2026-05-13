@@ -36,12 +36,15 @@ class TournamentRepository(Protocol):
         name: Optional[str] = None,
         tournament_date: Optional[str] = None,
         owner_id: Optional[uuid.UUID] = None,
+        owner_email: Optional[str] = None,
     ) -> Tournament:
         """Insert an empty tournament row.
 
         ``data`` starts as ``{}``; the first ``PUT /tournaments/{id}/state``
         fills it. ``owner_id`` is populated from Step 4's Supabase JWT;
-        nullable until then.
+        ``owner_email`` is denormalised from the same auth context so
+        Step 6's dashboard can show "Shared with You" rows without
+        joining across Supabase's auth schema.
         """
         ...
 

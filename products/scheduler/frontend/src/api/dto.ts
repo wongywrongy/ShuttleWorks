@@ -562,8 +562,10 @@ export interface BackupCreatedDTO {
   filename: string | null;
 }
 
-// Multi-tournament CRUD (Step 2)
+// Multi-tournament CRUD (Step 2; widened in Step 6)
 export type TournamentStatus = 'draft' | 'active' | 'archived';
+
+export type TournamentRole = 'owner' | 'operator' | 'viewer';
 
 export interface TournamentSummaryDTO {
   id: string;
@@ -572,6 +574,12 @@ export interface TournamentSummaryDTO {
   tournamentDate: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Caller's role on this tournament — non-null in list responses
+   *  because the list is filtered to the caller's memberships. */
+  role: TournamentRole | null;
+  /** Owner's email, denormalised at tournament-create time. Used by
+   *  the "Shared with You" dashboard section. */
+  ownerName: string | null;
 }
 
 export interface TournamentCreateDTO {
