@@ -97,6 +97,7 @@ export function TabBar() {
                 disruptions.total > 0 &&
                 !isDisabled ? (
                   <span
+                    key={`${disruptions.total}-${disruptions.severity}`}
                     aria-label={`${disruptions.total} disruption${disruptions.total === 1 ? '' : 's'}`}
                     title={
                       disruptions.errors > 0 && disruptions.warnings > 0
@@ -106,7 +107,7 @@ export function TabBar() {
                           : `${disruptions.warnings} warning${disruptions.warnings === 1 ? '' : 's'}`
                     }
                     className={[
-                      'ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums',
+                      'motion-enter-icon ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums',
                       disruptions.severity === 'error'
                         ? 'bg-destructive text-destructive-foreground'
                         : 'bg-status-warning/20 text-status-warning',
