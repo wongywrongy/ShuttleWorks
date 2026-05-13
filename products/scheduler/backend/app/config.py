@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -81,6 +81,28 @@ class Settings(BaseSettings):
                 return json.loads(v)
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
+
+    @model_validator(mode="after")
+    def _enforce_cloud_secrets(self) -> "Settings":
+        # In cloud mode the synthetic-user auth bypass is unacceptable
+        # — a blank ``SUPABASE_URL`` would silently log every request
+        # in as the local-dev user. Refuse to start instead.
+        if self.environment != "cloud":
+            return self
+        missing: list[str] = []
+        if not self.supabase_url:
+            missing.append("SUPABASE_URL")
+        if not self.supabase_anon_key:
+            missing.append("SUPABASE_ANON_KEY")
+        if self.database_url.startswith("sqlite"):
+            missing.append("DATABASE_URL (must be a postgres URL)")
+        if missing:
+            raise ValueError(
+                "ENVIRONMENT=cloud requires: "
+                + ", ".join(missing)
+                + ". Set these via your deployment host's secret manager."
+            )
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",

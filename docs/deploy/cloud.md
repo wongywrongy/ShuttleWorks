@@ -12,17 +12,22 @@ for you. The commands below are what you run from your terminal.
 
 ## Supabase project
 
-Already provisioned in Step 8 setup:
+A Supabase project was provisioned for ShuttleWorks in Step 8. The
+project-specific values below are templated — substitute your own
+project ID / region / publishable key from the Supabase Dashboard
+(or your `.env` file). **Never commit the real values to this repo**
+— see the secret-hygiene audit entry in `docs/changes/` for the
+guardrails enforcing that.
 
 | Field | Value |
 |---|---|
-| Project ID | `gbdxktbkxszggajqqfku` |
-| Project ref | `gbdxktbkxszggajqqfku` |
-| Region | `us-west-1` (MCP enum didn't accept us-west-2; closest Pacific) |
-| Supabase URL | `https://gbdxktbkxszggajqqfku.supabase.co` |
-| Publishable key | `sb_publishable_90-8VALEk_SMAomIkpVsXQ_RmJSC4HB` |
+| Project ID | `<PROJECT_ID>` |
+| Project ref | `<PROJECT_ID>` |
+| Region | `<REGION>` (e.g. `us-west-1`; the MCP enum doesn't accept `us-west-2`) |
+| Supabase URL | `https://<PROJECT_ID>.supabase.co` |
+| Publishable key | `<YOUR_PUBLISHABLE_KEY>` (Dashboard → Project Settings → API Keys → publishable) |
 | Legacy anon key (JWT) | available via Dashboard → Project Settings → API Keys |
-| Postgres host | `db.gbdxktbkxszggajqqfku.supabase.co` |
+| Postgres host | `db.<PROJECT_ID>.supabase.co` |
 
 Schema applied via the Supabase MCP `apply_migration` tool:
 
@@ -37,18 +42,18 @@ When the deployed FastAPI app boots, its lifespan calls `_run_migrations()` whic
 
 The MCP doesn't expose your Postgres password. To build `DATABASE_URL`:
 
-1. Open https://supabase.com/dashboard/project/gbdxktbkxszggajqqfku/settings/database
+1. Open https://supabase.com/dashboard/project/<PROJECT_ID>/settings/database
 2. Reset the database password (the dashboard has a "Reset password" affordance). Copy the new password.
 3. Use the **Connection pooler** (Supavisor) URL, transaction mode (port 6543) — recommended for Fly.io / Render-style deploys:
 
    ```
-   postgresql://postgres.gbdxktbkxszggajqqfku:<PASSWORD>@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+   postgresql://postgres.<PROJECT_ID>:<PASSWORD>@aws-0-<REGION>.pooler.supabase.com:6543/postgres
    ```
 
 4. Or the direct connection (port 5432) if your host pins long-lived connections:
 
    ```
-   postgresql://postgres:<PASSWORD>@db.gbdxktbkxszggajqqfku.supabase.co:5432/postgres
+   postgresql://postgres:<PASSWORD>@db.<PROJECT_ID>.supabase.co:5432/postgres
    ```
 
    Append `?sslmode=require` if your host doesn't default to TLS.
@@ -69,9 +74,9 @@ fly launch --copy-config --name shuttleworks-api \
 
 # Set env vars (substitute the Postgres password you reset above).
 fly secrets set \
-  DATABASE_URL='postgresql://postgres.gbdxktbkxszggajqqfku:<PASSWORD>@aws-0-us-west-1.pooler.supabase.com:6543/postgres' \
-  SUPABASE_URL='https://gbdxktbkxszggajqqfku.supabase.co' \
-  SUPABASE_ANON_KEY='sb_publishable_90-8VALEk_SMAomIkpVsXQ_RmJSC4HB' \
+  DATABASE_URL='postgresql://postgres.<PROJECT_ID>:<PASSWORD>@aws-0-<REGION>.pooler.supabase.com:6543/postgres' \
+  SUPABASE_URL='https://<PROJECT_ID>.supabase.co' \
+  SUPABASE_ANON_KEY='<YOUR_PUBLISHABLE_KEY>' \
   CORS_ORIGINS='https://<YOUR-FRONTEND-DOMAIN>.vercel.app' \
   ENVIRONMENT='cloud' \
   LOG_LEVEL='info' \
@@ -115,8 +120,8 @@ cd products/scheduler/frontend
 
 # Set env vars (paste these in the Vercel dashboard → Project → Settings → Environment Variables):
 #   VITE_API_BASE_URL=https://shuttleworks-api.fly.dev   (or your Render URL)
-#   VITE_SUPABASE_URL=https://gbdxktbkxszggajqqfku.supabase.co
-#   VITE_SUPABASE_ANON_KEY=sb_publishable_90-8VALEk_SMAomIkpVsXQ_RmJSC4HB
+#   VITE_SUPABASE_URL=https://<PROJECT_ID>.supabase.co
+#   VITE_SUPABASE_ANON_KEY=<YOUR_PUBLISHABLE_KEY>
 
 vercel --prod
 ```
@@ -138,8 +143,8 @@ netlify login
 # From products/scheduler/frontend:
 netlify init  # connects this folder to a new Netlify site
 netlify env:set VITE_API_BASE_URL https://shuttleworks-api.fly.dev
-netlify env:set VITE_SUPABASE_URL https://gbdxktbkxszggajqqfku.supabase.co
-netlify env:set VITE_SUPABASE_ANON_KEY sb_publishable_90-8VALEk_SMAomIkpVsXQ_RmJSC4HB
+netlify env:set VITE_SUPABASE_URL https://<PROJECT_ID>.supabase.co
+netlify env:set VITE_SUPABASE_ANON_KEY <YOUR_PUBLISHABLE_KEY>
 netlify deploy --prod
 ```
 
@@ -152,12 +157,12 @@ backend's `CORS_ORIGINS` and redeploy the backend.
 
 Before users can log in, enable the providers:
 
-1. Open https://supabase.com/dashboard/project/gbdxktbkxszggajqqfku/auth/providers
+1. Open https://supabase.com/dashboard/project/<PROJECT_ID>/auth/providers
 2. **Email** — leave enabled (default). Optionally enable confirmation emails.
 3. **Google** — flip on, paste OAuth client id / secret per Supabase's guide. The Google Cloud console "Authorized redirect URI" should be:
 
    ```
-   https://gbdxktbkxszggajqqfku.supabase.co/auth/v1/callback
+   https://<PROJECT_ID>.supabase.co/auth/v1/callback
    ```
 
 4. Set the **Site URL** under Auth → URL configuration to your deployed frontend domain (`https://<project>.vercel.app`). This is the default redirect after email confirmation / OAuth.
