@@ -26,8 +26,7 @@ from __future__ import annotations
 
 from typing import List, Optional, Tuple
 
-from fastapi import HTTPException
-
+from app.error_codes import ErrorCode, http_error
 from app.schemas import (
     MatchDTO,
     PlayerDTO,
@@ -74,9 +73,9 @@ def _time_to_minutes(time: str) -> int:
     try:
         hours, minutes = map(int, time.split(":"))
     except (ValueError, AttributeError):
-        raise HTTPException(status_code=422, detail=f"invalid time string: {time!r}")
+        raise http_error(422, ErrorCode.INVALID_INPUT, f"invalid time string: {time!r}")
     if not (0 <= hours <= 23 and 0 <= minutes <= 59):
-        raise HTTPException(status_code=422, detail=f"time out of range: {time!r}")
+        raise http_error(422, ErrorCode.INVALID_INPUT, f"time out of range: {time!r}")
     return hours * 60 + minutes
 
 
