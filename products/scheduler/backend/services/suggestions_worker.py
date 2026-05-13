@@ -23,7 +23,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Awaitable, Callable, Dict, Optional, Tuple
 
-import app.scheduler_core_path  # noqa: F401
 from scheduler_core.engine.cancel_token import CancelToken
 
 log = logging.getLogger("scheduler.suggestions")

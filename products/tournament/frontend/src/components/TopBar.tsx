@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { api } from "../api";
 import type { TournamentDTO } from "../types";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface Props {
   data: TournamentDTO;
@@ -27,7 +28,7 @@ export function TopBar({
     selectedEvent?.format === "se" ? "Single Elim" : "Round Robin";
 
   return (
-    <header className="border-b border-ink-200 bg-white sticky top-0 z-10">
+    <header className="border-b border-ink-200 bg-bg-elev sticky top-0 z-10">
       <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <h1 className="text-base font-semibold tracking-tight whitespace-nowrap">
@@ -36,7 +37,7 @@ export function TopBar({
           <select
             value={eventId}
             onChange={(e) => onEventId(e.target.value)}
-            className="rounded-md border border-ink-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ink-400"
+            className="rounded-sm border border-ink-300 bg-bg-elev px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {data.events.map((e) => (
               <option key={e.id} value={e.id}>
@@ -61,8 +62,8 @@ export function TopBar({
               className={
                 "btn " +
                 (tab === t
-                  ? "bg-ink-900 text-white"
-                  : "btn-ghost text-ink-700")
+                  ? "bg-ink text-bg"
+                  : "btn-ghost text-ink-muted")
               }
               onClick={() => onTab(t)}
             >
@@ -76,6 +77,7 @@ export function TopBar({
           <button className="btn-outline" onClick={onReset}>
             Reset
           </button>
+          <ThemeToggle />
         </div>
       </div>
     </header>
@@ -84,7 +86,7 @@ export function TopBar({
 
 function ExportMenu() {
   return (
-    <div className="inline-flex rounded-md border border-ink-300 overflow-hidden text-xs">
+    <div className="inline-flex rounded-sm border border-ink-300 overflow-hidden text-xs">
       <a
         href={api.exportJsonUrl()}
         target="_blank"
@@ -116,35 +118,48 @@ function Counters({
   event: ReturnType<typeof buckets>;
   global: ReturnType<typeof buckets>;
 }) {
+  // Status colors now route through the canonical --status-* palette
+  // (shared with scheduler), so the same semantic state reads the same
+  // color in both products. Mapping intentionally matches scheduler:
+  //   done    → status-done   (slate, settled)
+  //   live    → status-live   (emerald, in progress)
+  //   ready   → status-called (amber, cued to play)
+  //   pending → status-idle   (slate-muted, not yet scheduled)
+  // Old mapping (emerald=done, amber=live, sky=ready) was inverted vs
+  // scheduler and pulled raw Tailwind palette colors (BRAND.md §1.10).
   return (
-    <div className="flex flex-col items-end text-xs font-mono">
+    <div className="flex flex-col items-end font-mono">
       <div className="flex items-center gap-2">
-        <Light color="bg-emerald-500" label="done" n={event.done} />
-        <Light color="bg-amber-500" label="live" n={event.live} />
-        <Light color="bg-sky-500" label="ready" n={event.ready} />
-        <Light color="bg-ink-300" label="pending" n={event.pending} />
+        <Light tone="text-status-done"   label="DONE"  n={event.done} />
+        <Light tone="text-status-live"   label="LIVE"  n={event.live} />
+        <Light tone="text-status-called" label="READY" n={event.ready} />
+        <Light tone="text-status-idle"   label="PEND"  n={event.pending} />
       </div>
-      <div className="text-[10px] text-ink-400">
-        all events: {global.done} done · {global.live} live · {global.ready} ready
+      <div className="text-3xs uppercase tracking-wider text-ink-faint">
+        ALL · {global.done}D · {global.live}L · {global.ready}R
       </div>
     </div>
   );
 }
 
 function Light({
-  color,
+  tone,
   label,
   n,
 }: {
-  color: string;
+  tone: string;
   label: string;
   n: number;
 }) {
+  // Brutalist counter cell: mono uppercase tracking-wider label colored
+  // by --status-* token, then the count in tabular-nums. No rounded
+  // dot — typography carries the state, color is the secondary cue.
   return (
-    <span className="inline-flex items-center gap-1">
-      <span className={`w-2 h-2 rounded-full ${color}`} />
-      <span className="text-ink-600">{label}</span>
-      <span className="tabular-nums">{n}</span>
+    <span className="inline-flex items-baseline gap-1">
+      <span className={`text-2xs font-semibold uppercase tracking-wider ${tone}`}>
+        {label}
+      </span>
+      <span className="tabular-nums text-xs text-ink">{n}</span>
     </span>
   );
 }

@@ -42,8 +42,12 @@ services:
   # remap to host port 80 so the user still visits http://localhost).
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      # Context = repo root (matches backend) so the Dockerfile can copy
+      # workspace root metadata + the shared packages/design-system tree.
+      # Phase 2a consolidated to a root-only lockfile; building from the
+      # frontend dir alone can't run `npm ci` without it.
+      context: ../..
+      dockerfile: products/scheduler/frontend/Dockerfile
       args:
         - VITE_API_BASE_URL=/api
     ports:

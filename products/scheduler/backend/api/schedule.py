@@ -18,7 +18,6 @@ from app.schemas import (
     ScheduleAssignment, SolverStatus,
     PreviousAssignmentDTO, ProposedMoveDTO, ValidationResponseDTO,
 )
-import app.scheduler_core_path  # noqa: F401  -- side effect: sys.path setup
 
 # Import directly from scheduler_core domain models and engine
 try:

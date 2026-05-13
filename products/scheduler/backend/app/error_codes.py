@@ -38,6 +38,10 @@ class ErrorCode(str, Enum):
     BACKUP_NOT_FOUND = "BACKUP_NOT_FOUND"
     BACKUP_RESTORE_FAILED = "BACKUP_RESTORE_FAILED"
 
+    # Generic input validation (deeper than schema — raised when a
+    # converter sees a malformed value that slipped past Pydantic).
+    INVALID_INPUT = "INVALID_INPUT"
+
     # Solver
     SOLVE_FAILED = "SOLVE_FAILED"
     SOLVE_INFEASIBLE = "SOLVE_INFEASIBLE"

@@ -1,0 +1,18 @@
+[project]
+name = "scheduler-core"
+version = "1.0.0"
+description = "CP-SAT scheduling engine — domain models, constraint plugins, solver entry points."
+requires-python = ">=3.11"
+dependencies = [
+    "ortools>=9.8.0",
+    "pydantic>=2.5.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = [".."]
+include = ["scheduler_core*"]
+exclude = ["scheduler_core.tests*", "scheduler_core.benchmarks*"]

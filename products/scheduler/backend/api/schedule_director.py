@@ -24,12 +24,12 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-import app.scheduler_core_path  # noqa: F401
 from app.error_codes import ErrorCode, http_error
-from app.schemas import (  # noqa: E402
+from services.persistence import PersistenceService, get_persistence
+from app.schemas import (
     BreakWindow,
     HHMMTime,
     MatchDTO,
@@ -82,8 +82,8 @@ class DirectorActionRequest(BaseModel):
     matchStates: Dict[str, MatchStateDTO] = {}
 
 
-def _apply_delay_start(
-    store, request: DirectorActionRequest,
+async def _apply_delay_start(
+    store, request: DirectorActionRequest, svc: PersistenceService,
 ) -> Proposal:
     """Bump ``clockShiftMinutes``; do not re-solve; produce a Proposal."""
     if request.action.minutes is None or request.action.minutes <= 0:
@@ -100,7 +100,7 @@ def _apply_delay_start(
         )
     new_config = request.config.model_copy(update={"clockShiftMinutes": accumulated})
     from api.schedule_proposals import _read_persisted_state
-    persisted = _read_persisted_state()
+    persisted = await _read_persisted_state(svc)
     from_version = persisted.scheduleVersion if persisted else 0
     groups = list(persisted.groups) if persisted else []
 
@@ -123,7 +123,7 @@ def _apply_delay_start(
 
 
 async def _apply_insert_blackout(
-    store, request: DirectorActionRequest,
+    store, request: DirectorActionRequest, svc: PersistenceService,
 ) -> Proposal:
     """Append a BreakWindow to config and warm-restart around it."""
     if not request.action.fromTime or not request.action.toTime:
@@ -144,6 +144,7 @@ async def _apply_insert_blackout(
         store,
         request,
         new_config,
+        svc=svc,
         summary=(
             f"Insert blackout {request.action.fromTime}–{request.action.toTime}"
             + (f" ({request.action.reason})" if request.action.reason else "")
@@ -152,7 +153,7 @@ async def _apply_insert_blackout(
 
 
 async def _apply_reopen_court(
-    store, request: DirectorActionRequest,
+    store, request: DirectorActionRequest, svc: PersistenceService,
 ) -> Proposal:
     """Drop court closures and warm-restart so matches can flow back
     onto the now-open court. Removes ALL closures (legacy + windowed)
@@ -182,12 +183,13 @@ async def _apply_reopen_court(
         store,
         request,
         new_config,
+        svc=svc,
         summary=f"Reopen court {court_id}",
     )
 
 
 async def _apply_remove_blackout(
-    store, request: DirectorActionRequest,
+    store, request: DirectorActionRequest, svc: PersistenceService,
 ) -> Proposal:
     if request.action.blackoutIndex is None:
         raise http_error(
@@ -206,6 +208,7 @@ async def _apply_remove_blackout(
         store,
         request,
         new_config,
+        svc=svc,
         summary=f"Remove blackout {removed.start}–{removed.end}",
     )
 
@@ -215,11 +218,12 @@ async def _solve_and_propose(
     request: DirectorActionRequest,
     new_config: TournamentConfig,
     *,
+    svc: PersistenceService,
     summary: str,
 ) -> Proposal:
     """Run a warm-restart with the updated config and wrap as a Proposal."""
     from api.schedule_proposals import _read_persisted_state
-    persisted = _read_persisted_state()
+    persisted = await _read_persisted_state(svc)
     from_version = persisted.scheduleVersion if persisted else 0
     groups = list(persisted.groups) if persisted else []
 
@@ -248,7 +252,9 @@ async def _solve_and_propose(
 
 @router.post("/director-action", response_model=Proposal)
 async def create_director_action(
-    request: DirectorActionRequest, http_request: Request
+    request: DirectorActionRequest,
+    http_request: Request,
+    svc: PersistenceService = Depends(get_persistence),
 ) -> Proposal:
     """Create a proposal from a director time-axis action.
 
@@ -269,19 +275,19 @@ async def create_director_action(
     if kind == "delay_start":
         async with lock:
             _evict_expired(store)
-            return _apply_delay_start(store, request)
+            return await _apply_delay_start(store, request, svc)
     if kind == "insert_blackout":
         async with lock:
             _evict_expired(store)
-            return await _apply_insert_blackout(store, request)
+            return await _apply_insert_blackout(store, request, svc)
     if kind == "remove_blackout":
         async with lock:
             _evict_expired(store)
-            return await _apply_remove_blackout(store, request)
+            return await _apply_remove_blackout(store, request, svc)
     if kind == "reopen_court":
         async with lock:
             _evict_expired(store)
-            return await _apply_reopen_court(store, request)
+            return await _apply_reopen_court(store, request, svc)
     raise http_error(
         422, ErrorCode.STATE_SCHEMA_MISMATCH,
         f"unknown director-action kind: {kind!r}",

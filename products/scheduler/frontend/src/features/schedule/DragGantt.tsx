@@ -25,8 +25,9 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { apiClient } from '../../api/client';
-import { useAppStore } from '../../store/appStore';
-import { indexById } from '../../store/selectors';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
+import { indexById } from '../../lib/indexById';
 import { Hint } from '../../components/Hint';
 import { useSchedule } from '../../hooks/useSchedule';
 import { calculateTotalSlots, formatSlotTime } from '../../lib/time';
@@ -91,11 +92,11 @@ export function DragGantt({
   readOnly = false,
   onRequestReopenCourt,
 }: DragGanttProps) {
-  const players = useAppStore((s) => s.players);
-  const pendingPin = useAppStore((s) => s.pendingPin);
-  const setLastValidation = useAppStore((s) => s.setLastValidation);
+  const players = useTournamentStore((s) => s.players);
+  const pendingPin = useUiStore((s) => s.pendingPin);
+  const setLastValidation = useUiStore((s) => s.setLastValidation);
   const { pinAndResolve } = useSchedule();
-  const isGenerating = useAppStore((s) => s.isGenerating);
+  const isGenerating = useUiStore((s) => s.isGenerating);
 
   const matchMap = useMemo(() => indexById(matches), [matches]);
   const totalSlots = calculateTotalSlots(config);
@@ -171,6 +172,11 @@ export function DragGantt({
 
   useEffect(() => () => clearDragState(), [clearDragState]);
 
+  // Inline apiClient.validateMove call — the drag flow owns the debounce
+  // timer, the AbortController, and the dedupe ref together; extracting
+  // them to a hook would split the drag state across two files for one
+  // call site. Documented exception per the conventions ("one-off
+  // orchestrator that owns its fetch").
   const scheduleValidation = useCallback(
     (matchId: string, targetCourt: number, targetSlot: number) => {
       if (!config) return;
@@ -319,7 +325,7 @@ export function DragGantt({
                   style={{ width: SLOT_WIDTH }}
                   className={`flex-shrink-0 border-l border-border px-1 py-1 text-center text-2xs tabular-nums ${
                     slot === currentSlot
-                      ? 'bg-blue-100/70 font-semibold text-blue-700 dark:bg-blue-500/20 dark:text-blue-200'
+                      ? 'bg-status-live/15 font-semibold text-status-live'
                       : 'text-muted-foreground'
                   }`}
                 >
@@ -438,17 +444,17 @@ export function DragGantt({
 
         {/* Live hover status */}
         <div
-          className="flex items-center justify-between border-t border-border/60 bg-muted/40 px-3 py-1.5 text-[11px]"
+          className="flex items-center justify-between border-t border-border/60 bg-muted/40 px-3 py-1.5 text-2xs"
           data-testid="drag-gantt-status"
         >
           {activeAssignment && hoverCell && validation ? (
             validation.feasible ? (
-              <span className="inline-flex items-center gap-1 text-emerald-700">
+              <span className="inline-flex items-center gap-1 text-status-done">
                 <Check aria-hidden="true" className="h-3.5 w-3.5" />
                 Feasible — drop to pin at Court {hoverCell.courtId}, {formatSlotTime(hoverCell.slotId, config)}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-red-700">
+              <span className="inline-flex items-center gap-1 text-destructive">
                 <XIcon aria-hidden="true" className="h-3.5 w-3.5" />
                 Infeasible ({validation.conflicts.length} conflict{validation.conflicts.length === 1 ? '' : 's'}):{' '}
                 {validation.conflicts[0]?.description}
@@ -461,7 +467,7 @@ export function DragGantt({
             </span>
           )}
           {pendingPin ? (
-            <span className="text-blue-700" data-testid="drag-gantt-pin">
+            <span className="text-accent" data-testid="drag-gantt-pin">
               Pin in flight: {pendingPin.matchId.slice(0, 6)} to Court {pendingPin.courtId},{' '}
               {formatSlotTime(pendingPin.slotId, config)}
             </span>
@@ -507,17 +513,17 @@ function DropCell({
       data-testid={`cell-${courtId}-${slotId}`}
       title={closed ? `Court ${courtId} closed` : undefined}
       className={[
-        'relative flex-shrink-0 border-l border-border/30 transition-colors duration-150',
+        'relative flex-shrink-0 border-l border-border/30 transition-colors duration-fast',
         closed
           ? 'bg-muted/50'
           : isCurrent
-            ? 'bg-blue-50/30'
+            ? 'bg-accent/5'
             : '',
         !closed && isOver ? 'bg-muted/80' : '',
         !closed && hovered ? 'motion-safe:animate-cell-pulse' : '',
-        infeasible ? 'ring-2 ring-inset ring-red-400 bg-red-50/50' : '',
-        feasible ? 'ring-2 ring-inset ring-emerald-400 bg-emerald-50/50' : '',
-        showShake ? 'motion-safe:animate-shake ring-2 ring-inset ring-red-400 bg-red-100/60' : '',
+        infeasible ? 'ring-2 ring-inset ring-destructive bg-destructive/5' : '',
+        feasible ? 'ring-2 ring-inset ring-status-done bg-status-done/5' : '',
+        showShake ? 'motion-safe:animate-shake ring-2 ring-inset ring-destructive bg-destructive/10' : '',
       ].join(' ')}
     >
       {showOk ? (
@@ -570,9 +576,11 @@ function MatchBlock({
 
   // Smooth the `left` coordinate whenever blocks re-lay out after a re-solve.
   // Disable the transition while dragging so the block follows the pointer.
+  // Background + border color ease at 120ms (--motion-fast) so the selection
+  // highlight flips smoothly rather than snapping to the accent ring.
   const positionTransition = isDragging
     ? 'none'
-    : 'left 420ms var(--ease-brand), top 420ms var(--ease-brand)';
+    : 'left 420ms var(--ease-brand), top 420ms var(--ease-brand), background-color 120ms var(--ease-brand), border-color 120ms var(--ease-brand)';
 
   const pinActive = isPinned && isGenerating;
   const eventColor = getEventColor(match.eventRank);
@@ -602,9 +610,9 @@ function MatchBlock({
         'group rounded border text-left px-2 py-0.5 shadow-sm',
         'motion-safe:animate-block-in',
         isSelected
-          ? 'bg-blue-50 border-blue-500 text-blue-900 ring-1 ring-blue-400 dark:bg-blue-500/20 dark:text-blue-100 dark:border-blue-400'
+          ? 'bg-accent/10 border-accent text-accent ring-1 ring-accent/30'
           : `${eventColor.bg} ${eventColor.border} text-foreground hover:shadow-md hover:brightness-95`,
-        isPinned && !pinActive ? 'ring-2 ring-inset ring-amber-400 border-dashed' : '',
+        isPinned && !pinActive ? 'ring-2 ring-inset ring-status-warning border-dashed' : '',
         readOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing',
       ].join(' ')}
       title={`${matchLabel(match)} · ${eventColor.label}`}
@@ -616,7 +624,7 @@ function MatchBlock({
           className="pointer-events-none absolute -inset-[1px] rounded pin-marquee motion-safe:animate-marching-ants"
         />
       ) : null}
-      <span className="relative text-[11px] font-semibold leading-tight block truncate">
+      <span className="relative text-2xs font-semibold leading-tight block truncate">
         {matchLabel(match)}
       </span>
     </button>

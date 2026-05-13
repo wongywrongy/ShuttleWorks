@@ -10,29 +10,21 @@
  */
 import { useState } from 'react';
 
-import { apiClient } from '../../api/client';
-import type { Suggestion } from '../../api/dto';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
 import { SuggestionRow } from './SuggestionRow';
 import { SuggestionPreview } from './SuggestionPreview';
+import { useSuggestionActions } from './hooks/useSuggestionActions';
 
 const VISIBLE_CAP = 3;
 
 export function SuggestionsRail() {
-  const suggestions = useAppStore((s) => s.suggestions);
-  const config = useAppStore((s) => s.config);
-  const setSuggestions = useAppStore((s) => s.setSuggestions);
-  const setSchedule = useAppStore((s) => s.setSchedule);
-  const setScheduleVersion = useAppStore((s) => s.setScheduleVersion);
-  const setScheduleHistory = useAppStore((s) => s.setScheduleHistory);
-  const setConfig = useAppStore((s) => s.setConfig);
-  const setScheduleStale = useAppStore((s) => s.setScheduleStale);
-  const setAdvisories = useAppStore((s) => s.setAdvisories);
-  const pushToast = useAppStore((s) => s.pushToast);
+  const suggestions = useUiStore((s) => s.suggestions);
+  const config = useTournamentStore((s) => s.config);
+  const { apply, dismiss, applyingId } = useSuggestionActions();
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const [applyingId, setApplyingId] = useState<string | null>(null);
 
   if (suggestions.length === 0) return null;
 
@@ -40,64 +32,6 @@ export function SuggestionsRail() {
     ? suggestions
     : suggestions.slice(0, VISIBLE_CAP);
   const overflow = suggestions.length - VISIBLE_CAP;
-
-  const handleApply = async (s: Suggestion) => {
-    setApplyingId(s.id);
-    try {
-      const r = await apiClient.applySuggestion(s.id);
-      setSchedule(r.state.schedule ?? null);
-      setScheduleVersion(r.state.scheduleVersion ?? 0);
-      setScheduleHistory(r.state.scheduleHistory ?? []);
-      if (r.state.config) setConfig(r.state.config);
-      // setConfig flags the schedule as stale whenever scheduling-relevant
-      // fields change (e.g., closedCourts). The schedule we just committed
-      // already accounts for those changes, so override the flag back to
-      // false. Mirrors useProposals.commit.
-      setScheduleStale(false);
-      // Drop now-stale advisories — the committed schedule may have
-      // resolved the conditions that triggered them. The next poll
-      // repopulates from a clean slate. Mirrors useProposals.commit.
-      setAdvisories([]);
-      // Functional updates avoid stale-closure races: a parallel
-      // dismiss/apply on a different row could otherwise resurrect a
-      // just-removed suggestion based on a stale `suggestions` snapshot.
-      setSuggestions(useAppStore.getState().suggestions.filter((x) => x.id !== s.id));
-      pushToast({
-        level: 'success',
-        message: r.historyEntry.summary || 'Applied',
-        durationMs: 3000,
-      });
-    } catch (err: any) {
-      // 409 (stale version) and 410 (suggestion expired before commit)
-      // both indicate "this suggestion is no longer applicable" — drop
-      // locally and surface as an info-level refresh nudge. The next
-      // poll will reconcile.
-      const code = err?.response?.status;
-      const benign = code === 409 || code === 410;
-      setSuggestions(useAppStore.getState().suggestions.filter((x) => x.id !== s.id));
-      pushToast({
-        level: benign ? 'info' : 'error',
-        message: benign
-          ? 'Suggestion was stale, refreshing'
-          : err?.message ?? 'Apply failed',
-        durationMs: 4000,
-      });
-    } finally {
-      setApplyingId(null);
-    }
-  };
-
-  const handleDismiss = async (s: Suggestion) => {
-    // Read fresh state at call time so a parallel apply/dismiss on a
-    // different row doesn't get its drop reverted by a stale snapshot.
-    setSuggestions(useAppStore.getState().suggestions.filter((x) => x.id !== s.id));
-    if (expandedId === s.id) setExpandedId(null);
-    try {
-      await apiClient.dismissSuggestion(s.id);
-    } catch {
-      // best-effort; the next poll will reconcile
-    }
-  };
 
   return (
     <section
@@ -115,8 +49,11 @@ export function SuggestionsRail() {
               onToggleExpanded={() =>
                 setExpandedId(expandedId === s.id ? null : s.id)
               }
-              onApply={() => void handleApply(s)}
-              onDismiss={() => void handleDismiss(s)}
+              onApply={() => void apply(s)}
+              onDismiss={() => {
+                if (expandedId === s.id) setExpandedId(null);
+                void dismiss(s);
+              }}
             />
             {expandedId === s.id && (
               <SuggestionPreview proposalId={s.proposalId} config={config} />

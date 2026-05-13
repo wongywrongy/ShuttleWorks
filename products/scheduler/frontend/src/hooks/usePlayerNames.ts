@@ -1,4 +1,4 @@
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
 
 /**
  * Hook to resolve player IDs to player names
@@ -7,7 +7,7 @@ import { useAppStore } from '../store/appStore';
  * Falls back to showing the ID if the player is not found in the store.
  */
 export function usePlayerNames() {
-  const players = useAppStore((state) => state.players);
+  const players = useTournamentStore((state) => state.players);
 
   /**
    * Get a single player's name by ID

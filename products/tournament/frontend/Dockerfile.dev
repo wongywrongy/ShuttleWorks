@@ -1,16 +1,29 @@
-# Tournament prototype — frontend DEV image.
+# Tournament prototype — frontend DEV image (HMR via docker-compose.dev.yml).
 #
-# Used by docker-compose.dev.yml so `make dev` gives you HMR inside a
-# container. The image just installs deps; the compose override mounts
-# the source tree and runs `npm run dev`.
+# Build context = repo root so we can install the workspace graph.
+# The compose dev override then mounts the live frontend source over the
+# COPY'd copy so `npm run dev` picks up edits on the host filesystem.
+
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+# Workspace root metadata.
+COPY package.json package-lock.json ./
+
+# Shared design-system package — baked in at build time. Changes to
+# packages/design-system require a `make tournament-rebuild`. If you
+# need live design-system updates during dev, add a second volume
+# mount for ../../packages/design-system in docker-compose.dev.yml.
+COPY packages/design-system ./packages/design-system
+
+# This product's frontend source (overlaid by compose volume at runtime).
+COPY products/tournament/frontend ./products/tournament/frontend
+
 RUN npm ci
 
-# Source is mounted at runtime by the dev compose override.
+WORKDIR /app/products/tournament/frontend
+
 EXPOSE 5173
 
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

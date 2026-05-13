@@ -1,50 +1,17 @@
 import { useState } from "react";
 import { api } from "../api";
 import type { CreateTournamentIn, EventIn, TournamentDTO } from "../types";
+import {
+  type EventDraft,
+  emptyEvent,
+  playerSlug,
+  defaultStartTime,
+} from "./setupForm/helpers";
+import { EventEditor, Field, NumInput } from "./setupForm/EventEditor";
 
 interface Props {
   disabled?: boolean;
   onCreated: (t: TournamentDTO) => void;
-}
-
-interface EventDraft {
-  id: string;
-  discipline: string;
-  format: "se" | "rr";
-  participantsText: string;
-  rrRounds: number;
-  durationSlots: number;
-  bracketSize?: number;
-  seededCount?: number;
-}
-
-const SAMPLE_8 = `Alice
-Bob
-Carla
-Dani
-Erin
-Felix
-Grace
-Hugo`;
-
-const SAMPLE_32 = Array.from({ length: 32 }, (_, i) => `Seed ${i + 1}`).join(
-  "\n"
-);
-
-const SAMPLE_DOUBLES = `Alice / Anna
-Bob / Brent
-Carla / Cora
-Dani / Drew`;
-
-function emptyEvent(id: string, discipline = "MS"): EventDraft {
-  return {
-    id,
-    discipline,
-    format: "se",
-    participantsText: SAMPLE_8,
-    rrRounds: 1,
-    durationSlots: 1,
-  };
 }
 
 export function SetupForm({ disabled, onCreated }: Props) {
@@ -218,7 +185,7 @@ export function SetupForm({ disabled, onCreated }: Props) {
             type="datetime-local"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
-            className="w-56 rounded-md border border-ink-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink-400"
+            className="w-56 rounded-sm border border-ink-300 bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </Field>
       </div>
@@ -244,7 +211,7 @@ export function SetupForm({ disabled, onCreated }: Props) {
       </div>
 
       {error && (
-        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+        <div className="text-sm text-status-blocked bg-status-blocked-bg border border-status-blocked/40 rounded-sm px-3 py-2">
           {error}
         </div>
       )}
@@ -274,180 +241,3 @@ export function SetupForm({ disabled, onCreated }: Props) {
   );
 }
 
-function EventEditor({
-  value,
-  onChange,
-  onRemove,
-}: {
-  value: EventDraft;
-  onChange: (patch: Partial<EventDraft>) => void;
-  onRemove?: () => void;
-}) {
-  return (
-    <div className="card border-ink-200 p-4 space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="Event id">
-          <input
-            type="text"
-            value={value.id}
-            onChange={(e) => onChange({ id: e.target.value.trim() || "E" })}
-            className="w-24 rounded-md border border-ink-300 bg-white px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ink-400"
-          />
-        </Field>
-        <Field label="Discipline">
-          <select
-            value={value.discipline}
-            onChange={(e) => onChange({ discipline: e.target.value })}
-            className="rounded-md border border-ink-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink-400"
-          >
-            {["MS", "WS", "MD", "WD", "XD", "GEN"].map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Format">
-          <div className="inline-flex rounded-md border border-ink-300 overflow-hidden">
-            {(["se", "rr"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => onChange({ format: f })}
-                className={
-                  "px-3 py-1.5 text-sm " +
-                  (value.format === f
-                    ? "bg-ink-900 text-white"
-                    : "bg-white text-ink-700 hover:bg-ink-100")
-                }
-              >
-                {f === "se" ? "Single Elim" : "Round Robin"}
-              </button>
-            ))}
-          </div>
-        </Field>
-        <Field label="Match duration (slots)">
-          <NumInput
-            value={value.durationSlots}
-            setValue={(v) => onChange({ durationSlots: v })}
-            min={1}
-            max={16}
-          />
-        </Field>
-        {value.format === "rr" && (
-          <Field label="RR cycles">
-            <NumInput
-              value={value.rrRounds}
-              setValue={(v) => onChange({ rrRounds: v })}
-              min={1}
-              max={4}
-            />
-          </Field>
-        )}
-        {value.format === "se" && (
-          <Field label="Seeded count">
-            <NumInput
-              value={value.seededCount ?? 0}
-              setValue={(v) =>
-                onChange({ seededCount: v > 0 ? v : undefined })
-              }
-              min={0}
-              max={256}
-            />
-          </Field>
-        )}
-        {onRemove && (
-          <button className="btn-ghost ml-auto text-red-600" onClick={onRemove}>
-            Remove
-          </button>
-        )}
-      </div>
-
-      <Field label="Participants (one per line, in seed order — use 'A / B' for doubles)">
-        <textarea
-          value={value.participantsText}
-          onChange={(e) => onChange({ participantsText: e.target.value })}
-          rows={8}
-          className="w-full font-mono text-sm rounded-md border border-ink-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ink-400"
-          spellCheck={false}
-        />
-      </Field>
-
-      <div className="flex gap-2 text-xs">
-        <button
-          className="btn-ghost text-xs"
-          onClick={() => onChange({ participantsText: SAMPLE_8 })}
-        >
-          Sample 8 singles
-        </button>
-        <button
-          className="btn-ghost text-xs"
-          onClick={() => onChange({ participantsText: SAMPLE_32 })}
-        >
-          Sample 32 singles
-        </button>
-        <button
-          className="btn-ghost text-xs"
-          onClick={() => onChange({ participantsText: SAMPLE_DOUBLES })}
-        >
-          Sample 4 pairs
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-ink-600">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function NumInput({
-  value,
-  setValue,
-  min,
-  max,
-}: {
-  value: number;
-  setValue: (n: number) => void;
-  min: number;
-  max: number;
-}) {
-  return (
-    <input
-      type="number"
-      value={value}
-      min={min}
-      max={max}
-      onChange={(e) => setValue(Number(e.target.value))}
-      className="w-28 rounded-md border border-ink-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink-400"
-    />
-  );
-}
-
-function playerSlug(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return `p-${slug || "player"}`;
-}
-
-function defaultStartTime(): string {
-  const d = new Date();
-  d.setHours(9, 0, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  );
-}

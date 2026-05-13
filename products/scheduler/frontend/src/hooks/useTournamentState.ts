@@ -7,14 +7,15 @@
  *      - 204 (no file yet): read legacy `scheduler-storage` localStorage — if
  *        present, seed the server with it; otherwise keep Zustand defaults
  *
- * After hydration, subscribe to Zustand and debounce a PUT for 500 ms
- * whenever a persisted field changes. A `hydrationDone` flag prevents
- * the first hydration setState from echoing back to the server.
+ * After hydration, subscribe to the tournament store and debounce a PUT
+ * for 500 ms whenever a persisted field changes. A `hydrationDone` flag
+ * prevents the first hydration setState from echoing back to the server.
  */
 import { useEffect, useRef } from 'react';
 import { apiClient } from '../api/client';
 import type { TournamentStateDTO } from '../api/dto';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useUiStore } from '../store/uiStore';
 
 const DEBOUNCE_MS = 500;
 const LEGACY_KEY = 'scheduler-storage';
@@ -31,17 +32,17 @@ export async function forceSaveNow(): Promise<void> {
   }
   if (flushPromise) return flushPromise;
   flushPromise = (async () => {
-    const store = useAppStore.getState();
-    store.setPersistStatus('saving');
+    const ui = useUiStore.getState();
+    ui.setPersistStatus('saving');
     try {
-      await apiClient.putTournamentState(snapshot(useAppStore.getState()));
-      useAppStore.getState().setLastSavedAt(new Date().toISOString());
-      useAppStore.getState().setLastSaveError(null);
-      useAppStore.getState().setPersistStatus('idle');
+      await apiClient.putTournamentState(snapshot(useTournamentStore.getState()));
+      useUiStore.getState().setLastSavedAt(new Date().toISOString());
+      useUiStore.getState().setLastSaveError(null);
+      useUiStore.getState().setPersistStatus('idle');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed';
-      useAppStore.getState().setLastSaveError(message);
-      useAppStore.getState().setPersistStatus('error');
+      useUiStore.getState().setLastSaveError(message);
+      useUiStore.getState().setPersistStatus('error');
       throw err;
     } finally {
       flushPromise = null;
@@ -50,12 +51,15 @@ export async function forceSaveNow(): Promise<void> {
   return flushPromise;
 }
 
-function snapshot(state: ReturnType<typeof useAppStore.getState>): TournamentStateDTO {
+function snapshot(
+  state: ReturnType<typeof useTournamentStore.getState>,
+): TournamentStateDTO {
   // Schema v2 adds ``scheduleVersion`` + ``scheduleHistory`` for the
   // proposal pipeline. Both MUST be included in every PUT — without
   // them, Pydantic's default values (0 / []) overwrite the server's
   // value every time the operator edits a config field, wiping the
-  // proposal-commit audit trail.
+  // proposal-commit audit trail. ``scheduleStats`` is ephemeral (UI
+  // store) and is not part of the persisted snapshot.
   return {
     version: 2,
     config: state.config,
@@ -63,7 +67,7 @@ function snapshot(state: ReturnType<typeof useAppStore.getState>): TournamentSta
     players: state.players,
     matches: state.matches,
     schedule: state.schedule,
-    scheduleStats: state.scheduleStats as unknown,
+    scheduleStats: null as unknown,
     scheduleIsStale: state.scheduleIsStale,
     scheduleVersion: state.scheduleVersion,
     scheduleHistory: state.scheduleHistory,
@@ -73,13 +77,12 @@ function snapshot(state: ReturnType<typeof useAppStore.getState>): TournamentSta
 function hydrate(s: TournamentStateDTO): void {
   // Direct setState (not the action setters) so we don't accidentally flip
   // scheduleIsStale=true during hydration.
-  useAppStore.setState({
+  useTournamentStore.setState({
     config: s.config ?? null,
     groups: s.groups ?? [],
     players: s.players ?? [],
     matches: s.matches ?? [],
     schedule: s.schedule ?? null,
-    scheduleStats: (s.scheduleStats as never) ?? null,
     scheduleIsStale: s.scheduleIsStale ?? false,
     // Schema v2 fields — server is the authority, default to clean
     // values when the file pre-dates the v2 migration.
@@ -116,13 +119,23 @@ function readLegacyLocalStorage(): TournamentStateDTO | null {
   }
 }
 
+// Expose the stores on `window.__STORE__` so the Playwright e2e suite
+// can read+seed app state without round-tripping through the UI. Module-
+// scoped so it runs once at load time, not on every component render.
+if (typeof window !== 'undefined') {
+  (window as unknown as {
+    __STORE__?: {
+      tournament: typeof useTournamentStore;
+      ui: typeof useUiStore;
+    };
+  }).__STORE__ = {
+    tournament: useTournamentStore,
+    ui: useUiStore,
+  };
+}
+
 export function useTournamentState(): void {
   const hydrationDoneRef = useRef(false);
-
-  // Expose the store on window for end-to-end tests (no-op in production; harmless).
-  if (typeof window !== 'undefined') {
-    (window as unknown as { __STORE__?: typeof useAppStore }).__STORE__ = useAppStore;
-  }
 
   // ---- hydrate once on mount ------------------------------------------
   useEffect(() => {
@@ -154,7 +167,7 @@ export function useTournamentState(): void {
 
   // ---- debounced PUT on any persisted-field change --------------------
   useEffect(() => {
-    const unsub = useAppStore.subscribe((state, prev) => {
+    const unsub = useTournamentStore.subscribe((state, prev) => {
       if (!hydrationDoneRef.current) return;
       const changed =
         state.config !== prev.config ||
@@ -162,13 +175,13 @@ export function useTournamentState(): void {
         state.players !== prev.players ||
         state.matches !== prev.matches ||
         state.schedule !== prev.schedule ||
-        state.scheduleStats !== prev.scheduleStats ||
         state.scheduleIsStale !== prev.scheduleIsStale;
       if (!changed) return;
 
       // Mark dirty immediately so the unsaved-changes UI can react before
       // the debounced flush fires.
-      if (state.persistStatus !== 'saving') state.setPersistStatus('dirty');
+      const ui = useUiStore.getState();
+      if (ui.persistStatus !== 'saving') ui.setPersistStatus('dirty');
 
       if (moduleTimer !== null) window.clearTimeout(moduleTimer);
       moduleTimer = window.setTimeout(() => {

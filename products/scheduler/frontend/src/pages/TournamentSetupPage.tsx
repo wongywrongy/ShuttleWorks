@@ -1,23 +1,26 @@
 /**
- * Setup tab — settings shell with section-rail navigation.
+ * Setup tab — operator surface. Edge-to-edge, dividers only, matches
+ * the language used by RosterTab and MatchesTab.
+ *
+ * Page-level banners (lock indicator, new-tournament hint, errors)
+ * stack at the top as `border-b` ribbon rows. Below them, the
+ * SettingsShell fills the remaining height with its left rail + right
+ * pane operator layout.
  *
  * Each section pane owns its own controls + save flow. The shell
- * provides the layout; nothing else.
+ * provides layout; nothing else.
  */
 import { useState } from 'react';
 import { Sliders, Palette, Monitor, Database, Cpu } from '@phosphor-icons/react';
 import { useTournament } from '../hooks/useTournament';
 import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
-import { TournamentFileManagement } from '../features/tournaments/TournamentFileManagement';
-import { BackupPanel } from '../features/setup/BackupPanel';
 import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicator';
 import { PublicDisplaySettings } from '../features/tournaments/PublicDisplaySettings';
 import { SettingsShell, type SettingsSectionDef } from '../features/settings/SettingsShell';
-import { PageHeader } from '../components/PageHeader';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { EngineSettings } from '../features/settings/EngineSettings';
-import { Surface } from '../features/settings/SettingsPrimitives';
+import { DataSettings } from '../features/settings/DataSettings';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {
@@ -64,14 +67,14 @@ export function TournamentSetupPage() {
 
   // Section definitions wired to the SettingsShell. Order is intentional:
   // Tournament first (the heaviest config; usually why people opened
-  // Settings), then Display (also config-shaped), then per-device
-  // Appearance, then Data ops.
+  // Settings), then Engine, Display, per-device Appearance, then Data
+  // ops. Descriptions intentionally dropped per the rebuild spec —
+  // labels only.
   const sections: SettingsSectionDef[] = [
     {
       id: 'tournament',
       label: 'Tournament',
       icon: Sliders,
-      description: 'Schedule, scoring, events, and optimisation knobs.',
       render: () => (
         <TournamentConfigForm
           config={displayConfig}
@@ -84,65 +87,56 @@ export function TournamentSetupPage() {
       id: 'engine',
       label: 'Engine',
       icon: Cpu,
-      description: 'Solver tuning + reproducibility — how schedules are produced.',
       render: () => <EngineSettings />,
     },
     {
       id: 'display',
       label: 'Public display',
       icon: Monitor,
-      description: 'Layout, brand, and content of the venue TV.',
       render: () => <PublicDisplaySettings />,
     },
     {
       id: 'appearance',
       label: 'Appearance',
       icon: Palette,
-      description: 'Per-device theme and density. Not part of tournament export.',
       render: () => <AppearanceSettings />,
     },
     {
       id: 'data',
       label: 'Tournament data',
       icon: Database,
-      description: 'Export, import, and rolling backups.',
-      render: () => (
-        <Surface>
-          <TournamentFileManagement />
-          <BackupPanel />
-        </Surface>
-      ),
+      render: () => <DataSettings />,
     },
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-3 px-4 py-4">
-      <PageHeader
-        eyebrow="Setup"
-        title="Tournament configuration"
-        description="Schedule, scoring, events, engine, and per-device preferences."
-      />
-      {/* Page-level alerts stay above the shell so they apply to every
-          section. The shell itself never shows them. */}
-      {isLocked && <ScheduleLockIndicator showUnlockHint />}
-      {isNewTournament && (
-        <div className="rounded border border-status-started/40 bg-status-started-bg px-3 py-2 text-xs text-status-started">
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Page-level banners — full-bleed border-b ribbons. Each is
+          shrink-0 so the SettingsShell below absorbs any remaining
+          height. */}
+      {isLocked ? (
+        <ScheduleLockIndicator showUnlockHint />
+      ) : null}
+      {isNewTournament ? (
+        <div className="motion-enter shrink-0 border-b border-status-started/40 bg-status-started/5 px-4 py-2 text-xs text-status-started">
           <span className="font-semibold">New tournament — </span>
           configure settings below. Saved on first save.
         </div>
-      )}
-      {error && !isNewTournament && (
-        <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      ) : null}
+      {error && !isNewTournament ? (
+        <div className="motion-enter shrink-0 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
         </div>
-      )}
-      {saveError && (
-        <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      ) : null}
+      {saveError ? (
+        <div className="motion-enter shrink-0 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {saveError}
         </div>
-      )}
+      ) : null}
 
-      <SettingsShell sections={sections} defaultSectionId="tournament" />
+      <div className="min-h-0 flex-1">
+        <SettingsShell sections={sections} defaultSectionId="tournament" />
+      </div>
     </div>
   );
 }

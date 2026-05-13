@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAppStore, type SolverPhase } from '../store/appStore';
+import { useUiStore, type SolverPhase } from '../store/uiStore';
 import { useSchedule } from '../hooks/useSchedule';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 
@@ -41,9 +41,9 @@ const PHASES: Record<NonNullable<SolverPhase>, PhaseStyle> = {
 };
 
 export function SolverHud() {
-  const hud = useAppStore((s) => s.solverHud);
-  const isGenerating = useAppStore((s) => s.isGenerating);
-  const activeTab = useAppStore((s) => s.activeTab);
+  const hud = useUiStore((s) => s.solverHud);
+  const isGenerating = useUiStore((s) => s.isGenerating);
+  const activeTab = useUiStore((s) => s.activeTab);
 
   // Track whether a final "complete" sheen should play this render.
   const [celebrate, setCelebrate] = useState(false);

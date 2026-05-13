@@ -1,14 +1,14 @@
 /**
  * Matches hook - uses Zustand store (no API calls)
  */
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
 import type { MatchDTO } from '../api/dto';
 
 export function useMatches() {
-  const matches = useAppStore((state) => state.matches);
-  const addMatch = useAppStore((state) => state.addMatch);
-  const updateMatchStore = useAppStore((state) => state.updateMatch);
-  const deleteMatchStore = useAppStore((state) => state.deleteMatch);
+  const matches = useTournamentStore((state) => state.matches);
+  const addMatch = useTournamentStore((state) => state.addMatch);
+  const updateMatchStore = useTournamentStore((state) => state.updateMatch);
+  const deleteMatchStore = useTournamentStore((state) => state.deleteMatch);
 
   const createMatch = async (match: MatchDTO) => {
     addMatch(match);

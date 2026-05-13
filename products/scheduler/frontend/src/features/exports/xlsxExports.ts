@@ -18,7 +18,7 @@
 // ExcelJS is large (~400 kB min). Loaded lazily inside exportScheduleXlsx so
 // it never enters the initial bundle.
 import type ExcelJSNs from 'exceljs';
-import { indexById } from '../../store/selectors';
+import { indexById } from '../../lib/indexById';
 import { getActiveAssignments } from '../../lib/getActiveAssignments';
 type ExcelJSType = typeof ExcelJSNs;
 

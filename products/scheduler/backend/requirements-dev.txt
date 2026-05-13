@@ -1,0 +1,9 @@
+# Test-only dependencies. The production runtime image must NOT install
+# this file — pytest + httpx (used by `fastapi.testclient.TestClient`)
+# add ~25 MB to the wheel set and never run inside the container.
+#
+# Install for local development:
+#   pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+pytest>=7.4.0
+httpx>=0.26.0

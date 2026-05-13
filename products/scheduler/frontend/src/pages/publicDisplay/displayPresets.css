@@ -1,0 +1,254 @@
+/* ============================================================================
+ * Public-display preset substrates.
+ *
+ * One selector per preset, mirroring the `:root` (light) / `.dark`
+ * substrate pattern in @scheduler/design-system/tokens.css. Each
+ * preset overrides the canonical HSL triplets (--bg, --ink, --rule…)
+ * so existing Tailwind classes (`bg-background`, `text-foreground`,
+ * `text-muted-foreground`, `border-border`, `bg-card`, `bg-muted`)
+ * re-theme automatically when `data-tv-preset="X"` is on any element
+ * in the subtree.
+ *
+ * IMPORTANT — legacy aliases must be redeclared too, not inherited.
+ * Custom properties propagate as COMPUTED values, not declarations.
+ * The legacy aliases (--background, --foreground, --card, --border…)
+ * are declared on `:root` as `var(--bg)` etc., so their computed
+ * value is fixed at <html> using <html>'s --bg. A descendant that
+ * only overrides --bg won't recompute --background — descendants
+ * inherit the already-substituted value. To make the preset cascade
+ * actually swap the operator app's palette for the preset's, every
+ * alias the TV components consume must be redeclared on the preset
+ * selector itself; the var(--bg) substitution then happens at the
+ * preset's scope where --bg is the preset value.
+ *
+ * Accent (--accent / --accent-bg / --accent-ink) is intentionally NOT
+ * overridden — the operator's brand accent picker controls that
+ * independently. Status palette (--status-live etc.) also stays
+ * global so a "Live" pill reads the same regardless of substrate.
+ * ========================================================================= */
+
+/* Shared legacy-alias block — applied alongside each preset's canonical
+ * substrate so the var() chain rebinds at preset scope. Kept on every
+ * selector (not factored to a parent) because Tailwind classes consume
+ * the aliases directly. */
+
+/* ---------------- Dark presets ---------------- */
+
+[data-tv-preset='court'] {
+  color-scheme: dark;
+  --bg:        222 50%  8%;   /* #0a0f1e deep navy                          */
+  --bg-elev:   222 35% 14%;
+  --ink:         0  0% 100%;  /* #ffffff                                     */
+  --ink-muted: 220 12% 65%;
+  --ink-faint: 220  8% 35%;
+  --rule:        0  0% 100%;
+  --rule-soft: 220 25% 22%;
+  --muted:     222 28% 16%;
+  --secondary: 222 28% 16%;
+  --shadow-hard: none;
+  --shadow-lg:   none;
+
+  /* Legacy aliases — redeclared so var() rebinds at preset scope */
+  --background:           var(--bg);
+  --foreground:           var(--ink);
+  --card:                 var(--bg-elev);
+  --card-foreground:      var(--ink);
+  --popover:              var(--bg-elev);
+  --popover-foreground:   var(--ink);
+  --primary:              var(--ink);
+  --primary-foreground:   var(--bg-elev);
+  --secondary-foreground: var(--ink);
+  --muted-foreground:     var(--ink-muted);
+  --border:               var(--rule-soft);
+  --input:                var(--rule-soft);
+}
+
+[data-tv-preset='pitch'] {
+  color-scheme: dark;
+  --bg:        145 25%  6%;   /* #0c1410 dark green-black                   */
+  --bg-elev:   145 22% 11%;
+  --ink:         0  0% 100%;
+  --ink-muted: 145  8% 60%;
+  --ink-faint: 145  6% 30%;
+  --rule:        0  0% 100%;
+  --rule-soft: 145 15% 19%;
+  --muted:     145 18% 13%;
+  --secondary: 145 18% 13%;
+  --shadow-hard: none;
+  --shadow-lg:   none;
+
+  --background:           var(--bg);
+  --foreground:           var(--ink);
+  --card:                 var(--bg-elev);
+  --card-foreground:      var(--ink);
+  --popover:              var(--bg-elev);
+  --popover-foreground:   var(--ink);
+  --primary:              var(--ink);
+  --primary-foreground:   var(--bg-elev);
+  --secondary-foreground: var(--ink);
+  --muted-foreground:     var(--ink-muted);
+  --border:               var(--rule-soft);
+  --input:                var(--rule-soft);
+}
+
+[data-tv-preset='midnight'] {
+  color-scheme: dark;
+  --bg:          0  0%   0%;  /* pure black                                 */
+  --bg-elev:     0  0%   6%;
+  --ink:         0  0% 100%;
+  --ink-muted:   0  0%  65%;
+  --ink-faint:   0  0%  30%;
+  --rule:        0  0% 100%;
+  --rule-soft:   0  0%  18%;
+  --muted:       0  0%  10%;
+  --secondary:   0  0%  10%;
+  --shadow-hard: none;
+  --shadow-lg:   none;
+
+  --background:           var(--bg);
+  --foreground:           var(--ink);
+  --card:                 var(--bg-elev);
+  --card-foreground:      var(--ink);
+  --popover:              var(--bg-elev);
+  --popover-foreground:   var(--ink);
+  --primary:              var(--ink);
+  --primary-foreground:   var(--bg-elev);
+  --secondary-foreground: var(--ink);
+  --muted-foreground:     var(--ink-muted);
+  --border:               var(--rule-soft);
+  --input:                var(--rule-soft);
+}
+
+[data-tv-preset='ash'] {
+  color-scheme: dark;
+  --bg:         30  6% 12%;   /* #211f1d warm dark grey                     */
+  --bg-elev:    30  6% 17%;
+  --ink:        30  8%  92%;  /* #ebe7e2 warm off-white                     */
+  --ink-muted:  30  5%  60%;
+  --ink-faint:  30  4%  35%;
+  --rule:       30  8%  92%;
+  --rule-soft:  30  5%  22%;
+  --muted:      30  5%  18%;
+  --secondary:  30  5%  18%;
+  --shadow-hard: none;
+  --shadow-lg:   none;
+
+  --background:           var(--bg);
+  --foreground:           var(--ink);
+  --card:                 var(--bg-elev);
+  --card-foreground:      var(--ink);
+  --popover:              var(--bg-elev);
+  --popover-foreground:   var(--ink);
+  --primary:              var(--ink);
+  --primary-foreground:   var(--bg-elev);
+  --secondary-foreground: var(--ink);
+  --muted-foreground:     var(--ink-muted);
+  --border:               var(--rule-soft);
+  --input:                var(--rule-soft);
+}
+
+/* ---------------- Light presets ---------------- */
+
+[data-tv-preset='paper'] {
+  color-scheme: light;
+  --bg:         40 35% 94%;   /* #f4efe6 warm off-white                     */
+  --bg-elev:    40 40% 98%;
+  --ink:         0  0%   8%;
+  --ink-muted:  35  8%  38%;
+  --ink-faint:  35  6%  60%;
+  --rule:        0  0%   8%;
+  --rule-soft:  40 18%  78%;
+  --muted:      40 22%  88%;
+  --secondary:  40 22%  88%;
+
+  --background:           var(--bg);
+  --foreground:           var(--ink);
+  --card:                 var(--bg-elev);
+  --card-foreground:      var(--ink);
+  --popover:              var(--bg-elev);
+  --popover-foreground:   var(--ink);
+  --primary:              var(--ink);
+  --primary-foreground:   var(--bg-elev);
+  --secondary-foreground: var(--ink);
+  --muted-foreground:     var(--ink-muted);
+  --border:               var(--rule-soft);
+  --input:                var(--rule-soft);
+}
+
+[data-tv-preset='chalk'] {
+  color-scheme: light;
+  --bg:        220 12% 92%;   /* #e8eaee cool light grey                    */
+  --bg-elev:   220 18% 96%;
+  --ink:       220 15% 12%;
+  --ink-muted: 220  8% 38%;
+  --ink-faint: 220  5% 60%;
+  --rule:      220 15% 12%;
+  --rule-soft: 220 12% 78%;
+  --muted:     220 12% 86%;
+  --secondary: 220 12% 86%;
+
+  --background:           var(--bg);
+  --foreground:           var(--ink);
+  --card:                 var(--bg-elev);
+  --card-foreground:      var(--ink);
+  --popover:              var(--bg-elev);
+  --popover-foreground:   var(--ink);
+  --primary:              var(--ink);
+  --primary-foreground:   var(--bg-elev);
+  --secondary-foreground: var(--ink);
+  --muted-foreground:     var(--ink-muted);
+  --border:               var(--rule-soft);
+  --input:                var(--rule-soft);
+}
+
+[data-tv-preset='daylight'] {
+  color-scheme: light;
+  --bg:          0  0% 100%;  /* pure white                                 */
+  --bg-elev:     0  0% 100%;
+  --ink:         0  0%   0%;
+  --ink-muted:   0  0%  35%;
+  --ink-faint:   0  0%  60%;
+  --rule:        0  0%   0%;
+  --rule-soft:   0  0%  78%;
+  --muted:       0  0%  92%;
+  --secondary:   0  0%  92%;
+
+  --background:           var(--bg);
+  --foreground:           var(--ink);
+  --card:                 var(--bg-elev);
+  --card-foreground:      var(--ink);
+  --popover:              var(--bg-elev);
+  --popover-foreground:   var(--ink);
+  --primary:              var(--ink);
+  --primary-foreground:   var(--bg-elev);
+  --secondary-foreground: var(--ink);
+  --muted-foreground:     var(--ink-muted);
+  --border:               var(--rule-soft);
+  --input:                var(--rule-soft);
+}
+
+[data-tv-preset='sand'] {
+  color-scheme: light;
+  --bg:         35 35% 84%;   /* #e6dcc6 warm beige                         */
+  --bg-elev:    35 40% 92%;
+  --ink:        25 38% 18%;   /* #3a2a18 dark warm brown                    */
+  --ink-muted:  30 22% 38%;
+  --ink-faint:  30 16% 58%;
+  --rule:       25 38% 18%;
+  --rule-soft:  35 22% 72%;
+  --muted:      35 28% 80%;
+  --secondary:  35 28% 80%;
+
+  --background:           var(--bg);
+  --foreground:           var(--ink);
+  --card:                 var(--bg-elev);
+  --card-foreground:      var(--ink);
+  --popover:              var(--bg-elev);
+  --popover-foreground:   var(--ink);
+  --primary:              var(--ink);
+  --primary-foreground:   var(--bg-elev);
+  --secondary-foreground: var(--ink);
+  --muted-foreground:     var(--ink-muted);
+  --border:               var(--rule-soft);
+  --input:                var(--rule-soft);
+}

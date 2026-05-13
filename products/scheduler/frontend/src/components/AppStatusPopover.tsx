@@ -8,44 +8,25 @@
  * Setup-tab BackupPanel. Designed so the operator never has to open a
  * terminal on tournament day.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
-import { apiClient } from '../api/client';
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
+import { useCreateBackup } from '../features/setup/hooks/useTournamentBackups';
+import { useDeepHealth } from '../hooks/useDeepHealth';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
-interface DeepHealth {
-  status: 'healthy' | 'degraded';
-  version: string;
-  schemaVersion: number;
-  dataDirWritable: boolean;
-  solverLoaded: boolean;
-  dataDirError: string | null;
-  solverError: string | null;
-  requestId: string | null;
-}
-
-async function fetchDeepHealth(): Promise<DeepHealth> {
-  // Deliberately hits the raw fetch so a 503/timeout here doesn't blast
-  // the global toast stack — the popover surfaces failure inline.
-  const base = import.meta.env.VITE_API_BASE_URL ||
-    (import.meta.env.DEV ? '/api' : 'http://localhost:8000');
-  const res = await fetch(`${base}/health/deep`);
-  if (!res.ok) throw new Error(`health ${res.status}`);
-  return res.json();
-}
+const HEALTH_POLL_INTERVAL_MS = 30_000;
 
 export function AppStatusPopover() {
-  const isGenerating = useAppStore((s) => s.isGenerating);
-  const setActiveTab = useAppStore((s) => s.setActiveTab);
-  const persistStatus = useAppStore((s) => s.persistStatus);
-  const lastSavedAt = useAppStore((s) => s.lastSavedAt);
-  const pushToast = useAppStore((s) => s.pushToast);
+  const isGenerating = useUiStore((s) => s.isGenerating);
+  const setActiveTab = useUiStore((s) => s.setActiveTab);
+  const persistStatus = useUiStore((s) => s.persistStatus);
+  const lastSavedAt = useUiStore((s) => s.lastSavedAt);
+  const pushToast = useUiStore((s) => s.pushToast);
 
   const [open, setOpen] = useState(false);
-  const [health, setHealth] = useState<DeepHealth | null>(null);
-  const [healthError, setHealthError] = useState<string | null>(null);
-  const [backingUp, setBackingUp] = useState(false);
+  const { health, error: healthError, refresh: refreshHealth } = useDeepHealth();
+  const { createBackup, busy: backingUp } = useCreateBackup();
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   // Solver-finished celebration: when isGenerating flips false after
@@ -81,44 +62,25 @@ export function AppStatusPopover() {
     };
   }, [open]);
 
-  const refreshHealth = useCallback(async () => {
-    setHealthError(null);
-    try {
-      setHealth(await fetchDeepHealth());
-    } catch (err) {
-      setHealthError(err instanceof Error ? err.message : 'Health check failed');
-      setHealth(null);
-    }
-  }, []);
-
   // Refresh when the popover opens + poll every 30s while open.
   useEffect(() => {
     if (!open) return;
     void refreshHealth();
-    const t = window.setInterval(() => void refreshHealth(), 30_000);
+    const t = window.setInterval(() => void refreshHealth(), HEALTH_POLL_INTERVAL_MS);
     return () => window.clearInterval(t);
   }, [open, refreshHealth]);
 
   const handleBackupNow = async () => {
-    setBackingUp(true);
-    try {
-      const res = await apiClient.createTournamentBackup();
-      if (res.created) {
-        pushToast({
-          level: 'success',
-          message: 'Backup created',
-          detail: res.filename ?? undefined,
-        });
-      } else {
-        pushToast({
-          level: 'info',
-          message: 'Nothing to back up yet',
-          detail: 'Save a tournament first.',
-        });
-      }
-    } finally {
-      setBackingUp(false);
-    }
+    const res = await createBackup();
+    pushToast(
+      res.created
+        ? { level: 'success', message: 'Backup created', detail: res.filename }
+        : {
+            level: 'info',
+            message: 'Nothing to back up yet',
+            detail: 'Save a tournament first.',
+          },
+    );
   };
 
   // Status chip — wired to the semantic ``status-*`` tokens. The chip is
@@ -146,7 +108,7 @@ export function AppStatusPopover() {
         data-testid="app-status-chip"
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${chipTone} hover:brightness-95`}
+        className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs font-semibold ${chipTone} hover:brightness-95`}
       >
         <span
           key={tickKey}
@@ -168,7 +130,7 @@ export function AppStatusPopover() {
             <button
               type="button"
               onClick={() => void refreshHealth()}
-              className={`${INTERACTIVE_BASE} rounded border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-accent-foreground`}
+              className={`${INTERACTIVE_BASE} rounded border border-border px-2 py-0.5 text-3xs text-muted-foreground hover:bg-muted/40 hover:text-foreground`}
               aria-label="Refresh health"
             >
               Refresh
@@ -224,7 +186,7 @@ export function AppStatusPopover() {
               disabled={backingUp}
               data-testid="app-status-backup"
               aria-busy={backingUp}
-              className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-0.5 text-[11px] text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+              className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-0.5 text-2xs text-card-foreground hover:bg-muted/40 hover:text-foreground`}
             >
               {backingUp ? 'Backing up…' : 'Back up now'}
             </button>
@@ -234,14 +196,14 @@ export function AppStatusPopover() {
                 setActiveTab('setup');
                 setOpen(false);
               }}
-              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[11px] text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-card-foreground hover:bg-muted/40 hover:text-foreground`}
             >
               Manage backups
               <CaretRight aria-hidden="true" className="h-3 w-3" />
             </button>
           </div>
 
-          <p className="mt-2 text-[10px] text-muted-foreground">
+          <p className="mt-2 text-3xs text-muted-foreground">
             To quit, close the launcher terminal window or run the Stop script.
           </p>
         </div>

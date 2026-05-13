@@ -9,10 +9,12 @@
  */
 import { useEffect, useState } from 'react';
 
+import { Select } from '@scheduler/design-system/components';
 import type { DisruptionType } from '../../api/client';
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
 import { useProposals } from '../../hooks/useProposals';
 import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
@@ -42,9 +44,9 @@ export function DisruptionDialog({
   initialType,
   initialCourtId,
 }: Props) {
-  const players = useAppStore((s) => s.players);
-  const config = useAppStore((s) => s.config);
-  const matches = useAppStore((s) => s.matches);
+  const players = useTournamentStore((s) => s.players);
+  const config = useTournamentStore((s) => s.config);
+  const matches = useTournamentStore((s) => s.matches);
 
   const [type, setType] = useState<DisruptionType>(initialType ?? 'court_closed');
   const [playerId, setPlayerId] = useState<string>(players[0]?.id ?? '');
@@ -68,7 +70,7 @@ export function DisruptionDialog({
   }, [isOpen, initialType, initialMatchId, initialCourtId]);
 
   const { createRepair, commit, cancel, status } = useProposals();
-  const activeProposal = useAppStore((s) => s.activeProposal);
+  const activeProposal = useUiStore((s) => s.activeProposal);
   const loading = status === 'loading';
 
   if (!isOpen) return null;
@@ -154,7 +156,7 @@ export function DisruptionDialog({
               className={`${INTERACTIVE_BASE} rounded-full px-3 py-1 text-xs ${
                 type === t
                   ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/40'
               }`}
             >
               {TYPE_LABEL[t]}
@@ -165,17 +167,19 @@ export function DisruptionDialog({
         {type === 'withdrawal' && (
           <label className="block text-xs">
             <span className="text-muted-foreground">Withdrawn player</span>
-            <select
-              value={playerId}
-              onChange={(e) => setPlayerId(e.target.value)}
-              className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
-            >
-              {players.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name || p.id}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <Select
+                value={playerId}
+                onValueChange={(v) => setPlayerId(v)}
+                options={players.map((p) => ({
+                  value: p.id,
+                  label: p.name || p.id,
+                }))}
+                ariaLabel="Withdrawn player"
+                size="sm"
+                triggerClassName="w-full"
+              />
+            </div>
           </label>
         )}
 
@@ -183,17 +187,18 @@ export function DisruptionDialog({
           <div className="space-y-2">
             <label className="block text-xs">
               <span className="text-muted-foreground">Closed court</span>
-              <select
-                value={courtId}
-                onChange={(e) => setCourtId(parseInt(e.target.value, 10))}
-                className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
-              >
-                {Array.from({ length: config.courtCount }, (_, i) => i + 1).map((c) => (
-                  <option key={c} value={c}>
-                    Court {c}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1">
+                <Select
+                  value={String(courtId)}
+                  onValueChange={(v) => setCourtId(parseInt(v, 10))}
+                  options={Array.from({ length: config.courtCount }, (_, i) => i + 1).map(
+                    (c) => ({ value: String(c), label: `Court ${c}` }),
+                  )}
+                  ariaLabel="Closed court"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
             </label>
 
             {/* Closure mode — indefinite (default) or time-bounded. */}
@@ -244,17 +249,19 @@ export function DisruptionDialog({
         {(type === 'overrun' || type === 'cancellation') && (
           <label className="block text-xs">
             <span className="text-muted-foreground">Match</span>
-            <select
-              value={matchId}
-              onChange={(e) => setMatchId(e.target.value)}
-              className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
-            >
-              {matches.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.eventRank ?? m.id}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <Select
+                value={matchId}
+                onValueChange={(v) => setMatchId(v)}
+                options={matches.map((m) => ({
+                  value: m.id,
+                  label: m.eventRank ?? m.id,
+                }))}
+                ariaLabel="Affected match"
+                size="sm"
+                triggerClassName="w-full"
+              />
+            </div>
           </label>
         )}
 

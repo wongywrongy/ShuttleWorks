@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { ArrowSquareOut, GearSix } from '@phosphor-icons/react';
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 import { useTournamentState } from '../hooks/useTournamentState';
 import { useAppliedTheme } from '../hooks/useAppliedTheme';
 import { useAppliedDensity } from '../hooks/useAppliedDensity';
@@ -53,9 +53,9 @@ export function AppShell() {
   // The SuggestionsRail (rendered per-page directly under each
   // AdvisoryBanner) reads from the store.
   useSuggestions();
-  const activeTab = useAppStore((s) => s.activeTab);
-  const pushToast = useAppStore((s) => s.pushToast);
-  const setActiveProposal = useAppStore((s) => s.setActiveProposal);
+  const activeTab = useUiStore((s) => s.activeTab);
+  const pushToast = useUiStore((s) => s.pushToast);
+  const setActiveProposal = useUiStore((s) => s.setActiveProposal);
 
   // Discard any in-flight proposal when the operator switches tabs.
   // Otherwise the next visit to the originating tab re-opens the
@@ -121,7 +121,7 @@ export function AppShell() {
           the <main> element below. */}
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-modal focus:rounded-md focus:bg-primary focus:px-3 focus:py-1.5 focus:text-sm focus:text-primary-foreground focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-modal focus:rounded-sm focus:bg-primary focus:px-3 focus:py-1.5 focus:text-sm focus:text-primary-foreground focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
       >
         Skip to content
       </a>
@@ -166,7 +166,7 @@ function UnsavedBannerSlot() {
 // card with clear hierarchy and pointer-events disabled so it reads as a
 // preview, not a live surface.
 function TvPreviewTab() {
-  const setActiveTab = useAppStore((s) => s.setActiveTab);
+  const setActiveTab = useUiStore((s) => s.setActiveTab);
   return (
     <div className="mx-auto flex h-full max-w-[1400px] flex-col gap-4 px-4 py-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -185,7 +185,7 @@ function TvPreviewTab() {
               url.searchParams.set('section', 'display');
               window.history.replaceState({}, '', url.toString());
             }}
-            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-accent hover:text-accent-foreground`}
+            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground`}
           >
             <GearSix aria-hidden="true" className="h-4 w-4" />
             Configure display
@@ -201,7 +201,7 @@ function TvPreviewTab() {
           </a>
         </div>
       </header>
-      <div className="relative flex-1 min-h-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="relative flex-1 min-h-0 overflow-hidden border border-border bg-card">
         <div className="pointer-events-none absolute inset-0 overflow-auto">
           <PublicDisplayPage />
         </div>

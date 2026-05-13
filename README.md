@@ -43,10 +43,9 @@ scheduler_core/                shared CP-SAT engine (pure Python, no HTTP)
 
 products/
 ├── scheduler/                 day-of operator tool (BTP)
-│   ├── backend/               FastAPI routes + proposal pipeline
+│   ├── backend/               FastAPI app + api routes + services + badminton adapter
 │   ├── frontend/              React 19 + Zustand + dnd-kit
 │   ├── e2e/                   Playwright specs
-│   ├── app/, adapters/        legacy DTO + badminton adapters
 │   ├── tests/                 backend + solver tests
 │   ├── docker-compose.yml     prod stack
 │   ├── Makefile               product-local targets

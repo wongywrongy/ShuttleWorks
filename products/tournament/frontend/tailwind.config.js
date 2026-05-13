@@ -1,27 +1,37 @@
 /** @type {import('tailwindcss').Config} */
+const preset = require('@scheduler/design-system/tailwind-preset');
+
 export default {
-  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  presets: [preset],
+  content: [
+    "./index.html",
+    "./src/**/*.{ts,tsx}",
+    // Same workspace-design-system scan as scheduler — so shared
+    // Button/Select variants paint here too.
+    "../../../packages/design-system/components/**/*.{ts,tsx}",
+    "../../../packages/design-system/icons/**/*.{ts,tsx}",
+  ],
   theme: {
     extend: {
       colors: {
+        // Tournament-only legacy aliases — many component files still reference
+        // `bg-ink-50`, `text-ink-700`, etc. These map to canonical tokens so
+        // the brand palette swap takes effect immediately on body/cards/pills
+        // without touching every component. Phase 6 strips these and converts
+        // call-sites to the canonical `bg-bg` / `text-ink` / etc.
         ink: {
-          50: "#f6f7f9",
-          100: "#eceef2",
-          200: "#d6dae2",
-          300: "#aeb5c2",
-          400: "#7a8294",
-          500: "#525a6c",
-          600: "#3a4253",
-          700: "#262d3c",
-          800: "#181d2a",
-          900: "#0f131c",
+          50:  'hsl(var(--bg))',
+          100: 'hsl(var(--rule-soft))',
+          200: 'hsl(var(--rule-soft))',
+          300: 'hsl(var(--ink-faint))',
+          400: 'hsl(var(--ink-faint))',
+          500: 'hsl(var(--ink-muted))',
+          600: 'hsl(var(--ink-muted))',
+          700: 'hsl(var(--ink-muted))',
+          800: 'hsl(var(--ink))',
+          900: 'hsl(var(--ink))',
         },
-      },
-      fontFamily: {
-        sans: ["Inter", "system-ui", "ui-sans-serif", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
     },
   },
-  plugins: [],
 };

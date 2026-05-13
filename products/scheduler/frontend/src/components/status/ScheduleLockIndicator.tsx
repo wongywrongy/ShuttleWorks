@@ -2,7 +2,7 @@
  * Schedule lock indicator
  * Shows when a schedule is locked (generated) and editing would clear it
  */
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 
 interface ScheduleLockIndicatorProps {
   className?: string;
@@ -13,7 +13,7 @@ export function ScheduleLockIndicator({
   className = '',
   showUnlockHint = false,
 }: ScheduleLockIndicatorProps) {
-  const isScheduleLocked = useAppStore((state) => state.isScheduleLocked);
+  const isScheduleLocked = useTournamentStore((state) => state.isScheduleLocked);
 
   if (!isScheduleLocked) return null;
 

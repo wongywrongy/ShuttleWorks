@@ -8,11 +8,11 @@
  *
  * Mount once at the top of ``AppShell`` so every page benefits.
  */
-import { useAppStore } from '../../store/appStore';
+import { useUiStore } from '../../store/uiStore';
 import { UnlockModal } from './UnlockModal';
 
 export function UnlockModalHost() {
-  const state = useAppStore((s) => s.unlockModalState);
+  const state = useUiStore((s) => s.unlockModalState);
   if (!state || !state.open) return null;
   return (
     <UnlockModal

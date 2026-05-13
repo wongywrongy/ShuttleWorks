@@ -1,4 +1,4 @@
-import { useAppStore } from '../../../store/appStore';
+import { useTournamentStore } from '../../../store/tournamentStore';
 import type { PlayerDTO } from '../../../api/dto';
 
 interface BulkOperationResult {
@@ -25,7 +25,8 @@ interface RankConflict {
  * - Validation before applying changes
  */
 export function useBulkOperations() {
-  const { players, updatePlayer } = useAppStore();
+  const players = useTournamentStore((s) => s.players);
+  const updatePlayer = useTournamentStore((s) => s.updatePlayer);
 
   /**
    * Validate bulk school assignment and detect rank conflicts
@@ -207,13 +208,15 @@ export function useBulkOperations() {
       let newRanks: string[];
 
       switch (mode) {
-        case 'add':
-          // Union: add new ranks to existing
+        case 'add': {
+          // Union: add new ranks to existing. Block-scoped to keep
+          // `ranksToAdd` out of the surrounding case body.
           const ranksToAdd = conflict && skipConflicts
             ? ranksToAssign.filter(r => !conflict.conflictingRanks.includes(r))
             : ranksToAssign;
           newRanks = [...new Set([...currentRanks, ...ranksToAdd])];
           break;
+        }
         case 'set':
           // Replace: set exactly these ranks
           newRanks = ranksToAssign;
@@ -235,7 +238,7 @@ export function useBulkOperations() {
    * Delete multiple players
    */
   const bulkDeletePlayers = (playerIds: string[]): BulkOperationResult => {
-    const { deletePlayer } = useAppStore.getState();
+    const { deletePlayer } = useTournamentStore.getState();
     const result: BulkOperationResult = {
       success: 0,
       skipped: 0,

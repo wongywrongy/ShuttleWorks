@@ -25,7 +25,10 @@ jobs:
             context: .
           - name: frontend
             dockerfile: products/scheduler/frontend/Dockerfile
-            context: ./products/scheduler/frontend
+            # Context = repo root: the Dockerfile copies the workspace
+            # root package.json/lockfile + packages/design-system from
+            # the repo root, so a narrowed context can't satisfy it.
+            context: .
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +38,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Required for `cache-to: type=gha` below — the default docker
+      # driver on ubuntu-latest doesn't support GHA cache export.
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Compute image tag
         id: meta

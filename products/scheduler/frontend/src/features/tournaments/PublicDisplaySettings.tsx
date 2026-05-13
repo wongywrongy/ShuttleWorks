@@ -1,330 +1,248 @@
 /**
- * Public Display (TV) settings panel.
+ * PublicDisplaySettings — section 03 (Public display) of the Setup tab.
  *
- * Enterprise three-section layout — Layout / Brand / Content — each
- * a labelled group of compact rows. Lives inside the admin shell
- * above the embedded ``/display`` preview, never on the standalone
- * fullscreen window.
+ * Operator-facing TV configuration: layout mode + grid columns + card
+ * size, brand (accent palette + display preset), content visibility.
+ * Reads from the live tournament config via useAppStore; saves the
+ * subset of fields this pane owns.
  *
- * Design rules:
- *   • Every row: eyebrow label (left) + control (right). One row per
- *     setting. No subheaders inside a row.
- *   • Inline minimal toggles + chips — no large radiopills.
- *   • All values persist on ``TournamentConfig`` so the venue's setup
- *     survives reloads.
+ * The row area is wrapped in a `data-tv-preset` surface so changing
+ * the Display preset instantly re-themes the whole pane against the
+ * preset's bg / text / border — the director sees exactly what the TV
+ * will look like without opening the /display page.
  */
-import { useAppStore } from '../../store/appStore';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TournamentConfig } from '../../api/dto';
-import { Surface, Section, Field } from '../settings/SettingsPrimitives';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useTournament } from '../../hooks/useTournament';
+import { useSuccessFlash } from '../../hooks/useSuccessFlash';
+import { Button } from '@/components/ui/button';
+import { IconDone } from '@scheduler/design-system';
+import {
+  Row,
+  SectionHeader,
+  Seg,
+  Toggle,
+  ColorSwatchRow,
+} from '../settings/SettingsControls';
+import {
+  DISPLAY_PRESETS,
+  DEFAULT_PRESET_ID,
+} from '../../pages/publicDisplay/displayPresets';
 
-const ACCENT_PRESETS: Array<{ id: string; label: string; hex: string }> = [
-  { id: 'emerald', label: 'Emerald', hex: '#10b981' },
-  { id: 'blue', label: 'Blue', hex: '#3b82f6' },
-  { id: 'violet', label: 'Violet', hex: '#7c3aed' },
-  { id: 'rose', label: 'Rose', hex: '#e11d48' },
-  { id: 'amber', label: 'Amber', hex: '#d97706' },
-  { id: 'teal', label: 'Teal', hex: '#0d9488' },
-  { id: 'cyan', label: 'Cyan', hex: '#06b6d4' },
-  { id: 'orange', label: 'Orange', hex: '#ea580c' },
+const DISPLAY_MODE_OPTIONS = [
+  { value: 'strip' as const, label: 'Strip' },
+  { value: 'grid'  as const, label: 'Grid'  },
+  { value: 'list'  as const, label: 'List'  },
 ];
 
-const BG_TONES: Array<{ id: NonNullable<TournamentConfig['tvBgTone']>; label: string; swatch: string }> = [
-  { id: 'navy',     label: 'Navy',     swatch: '#020617' },
-  { id: 'black',    label: 'Black',    swatch: '#000000' },
-  { id: 'midnight', label: 'Midnight', swatch: '#0a0e2a' },
-  { id: 'slate',    label: 'Slate',    swatch: '#0f172a' },
+// Grid columns Seg — `0` is the sentinel for Auto (we round-trip
+// through `null` on the wire).
+const GRID_COLUMNS_OPTIONS = [
+  { value: 0, label: 'Auto' },
+  { value: 1, label: '1' },
+  { value: 2, label: '2' },
+  { value: 3, label: '3' },
+  { value: 4, label: '4' },
 ];
 
-const CARD_SIZES: Array<{ id: NonNullable<TournamentConfig['tvCardSize']>; label: string }> = [
-  { id: 'auto',        label: 'Auto' },
-  { id: 'compact',     label: 'Compact' },
-  { id: 'comfortable', label: 'Comfortable' },
-  { id: 'large',       label: 'Large' },
-];
-
-const MODES: Array<{ id: NonNullable<TournamentConfig['tvDisplayMode']>; label: string }> = [
-  { id: 'strip', label: 'Strip' },
-  { id: 'grid',  label: 'Grid' },
-  { id: 'list',  label: 'List' },
+const CARD_SIZE_OPTIONS = [
+  { value: 'auto'        as const, label: 'Auto' },
+  { value: 'compact'     as const, label: 'Compact' },
+  { value: 'comfortable' as const, label: 'Comfortable' },
+  { value: 'large'       as const, label: 'Large' },
 ];
 
 export function PublicDisplaySettings() {
-  const config = useAppStore((s) => s.config);
-  const setConfig = useAppStore((s) => s.setConfig);
-  if (!config) return null;
+  const config = useTournamentStore((s) => s.config);
+  const { updateConfig } = useTournament();
 
-  const update = (patch: Partial<TournamentConfig>) =>
-    setConfig({ ...config, ...patch });
+  const [formData, setFormData] = useState<Partial<TournamentConfig>>(() =>
+    initialDisplayState(config)
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const justSaved = useSuccessFlash(saving);
 
-  const accent = (config.tvAccent ?? '#10b981').toLowerCase();
-  const bgTone = config.tvBgTone ?? 'navy';
-  const cardSize = config.tvCardSize ?? 'auto';
-  const mode = config.tvDisplayMode ?? 'strip';
-  const gridCols = config.tvGridColumns ?? null;
-  const showScores = config.tvShowScores !== false;
+  const baselineRef = useRef<TournamentConfig | null>(config);
+
+  useEffect(() => {
+    if (!config) return;
+    setFormData((prev) => {
+      const merged: Partial<TournamentConfig> = { ...prev };
+      const prevBaseline = baselineRef.current ?? config;
+      (Object.keys(initialDisplayState(config)) as Array<keyof TournamentConfig>).forEach((key) => {
+        const userTouched =
+          JSON.stringify(prev[key]) !== JSON.stringify(prevBaseline[key]);
+        if (!userTouched) {
+          (merged as Record<string, unknown>)[key] = config[key];
+        }
+      });
+      return merged;
+    });
+    baselineRef.current = config;
+  }, [config]);
+
+  function set<K extends keyof TournamentConfig>(
+    key: K,
+    value: TournamentConfig[K]
+  ) {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!config) return;
+    // No lock guard — every field this pane writes is on the
+    // NON_SCHEDULING_KEYS list in tournamentStore, so saving never
+    // marks the schedule stale and never needs an unlock.
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateConfig({ ...config, ...formData });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Grid columns round-trips through 0 ↔ null
+  const gridColumnsValue =
+    (formData.tvGridColumns ?? null) === null ? 0 : (formData.tvGridColumns as number);
+
+  const activePresetId = formData.tvPreset ?? DEFAULT_PRESET_ID;
 
   return (
-    <Surface>
-      <Section
-        title="Layout"
-        description="How matches are arranged on the venue TV. Live preview below."
+    <form onSubmit={handleSubmit}>
+      {/* Preview surface — applying data-tv-preset cascades the
+          preset's --bg / --ink / --rule-soft / --muted overrides to
+          every Tailwind token (`bg-background`, `text-foreground`,
+          `text-muted-foreground`, `border-border`) inside. The
+          director sees the TV's exact palette while configuring. */}
+      <div
+        data-tv-preset={activePresetId}
+        className="bg-background text-foreground -mx-4 px-4 pb-5 transition-colors duration-standard ease-brand"
       >
-        <Field
-          label="Display mode"
-          hint="Strip is a single horizontal banner. Grid is a card grid sized to courts. List is a tall vertical roster."
-        >
-          <ChipRow
-            ariaLabel="Display mode"
-            value={mode}
-            options={MODES}
-            onChange={(id) => update({ tvDisplayMode: id })}
-          />
-        </Field>
-        <Field
-          label="Grid columns"
-          hint="Force a fixed column count when in Grid mode. Auto picks the best fit for the screen width."
-        >
-          <ChipRow
-            ariaLabel="Grid columns"
-            value={gridCols ?? 'auto'}
-            options={[
-              { id: 'auto', label: 'Auto' },
-              { id: 1, label: '1' },
-              { id: 2, label: '2' },
-              { id: 3, label: '3' },
-              { id: 4, label: '4' },
-            ]}
-            onChange={(id) =>
-              update({ tvGridColumns: id === 'auto' ? null : (id as 1 | 2 | 3 | 4) })
-            }
-          />
-        </Field>
-        <Field
-          label="Card size"
-          hint="Compact fits more matches on screen. Large is readable from across the venue."
-        >
-          <ChipRow
-            ariaLabel="Card size"
-            value={cardSize}
-            options={CARD_SIZES}
-            onChange={(id) => update({ tvCardSize: id })}
-          />
-        </Field>
-      </Section>
+        <SectionHeader>Layout</SectionHeader>
+        <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
+          <Row label="Display mode" control={
+            <Seg
+              options={DISPLAY_MODE_OPTIONS}
+              value={formData.tvDisplayMode ?? 'strip'}
+              onChange={(v) => set('tvDisplayMode', v)}
+              ariaLabel="Display mode"
+            />
+          } />
+          <Row label="Grid columns" control={
+            <Seg
+              options={GRID_COLUMNS_OPTIONS}
+              value={gridColumnsValue}
+              onChange={(v) => set('tvGridColumns', v === 0 ? null : (v as 1 | 2 | 3 | 4))}
+              ariaLabel="Grid columns"
+            />
+          } />
+          <Row label="Card size" control={
+            <Seg
+              options={CARD_SIZE_OPTIONS}
+              value={formData.tvCardSize ?? 'auto'}
+              onChange={(v) => set('tvCardSize', v)}
+              ariaLabel="Card size"
+            />
+          } />
+          <Row label="Show scores" control={
+            <Toggle
+              value={formData.tvShowScores ?? true}
+              onChange={(v) => set('tvShowScores', v)}
+              ariaLabel="Show scores on public display"
+            />
+          } />
+        </div>
 
-      <Section
-        title="Brand"
-        description="Colour and theme of the public display."
-      >
-          <Field
-            label="Accent colour"
-            hint="Used for the LIVE badge, court rails, and primary score highlights."
-          >
-            {/* Two-line layout: preset swatches first, custom hex picker
-                below. Stacking guarantees the row's intrinsic width
-                never exceeds the panel column even with 8 swatches +
-                color picker + hex input — the previous one-line layout
-                could overflow into the neighbouring field on narrow
-                viewports. */}
-            <div className="flex flex-col items-end gap-1.5">
-              <div
-                role="radiogroup"
-                aria-label="Accent presets"
-                className="flex flex-wrap items-center justify-end gap-1.5"
-              >
-                {ACCENT_PRESETS.map((p) => {
-                  const isActive = accent === p.hex.toLowerCase();
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={isActive}
-                      aria-label={p.label}
-                      title={`${p.label} · ${p.hex}`}
-                      onClick={() => update({ tvAccent: p.hex })}
-                      className={[
-                        INTERACTIVE_BASE,
-                        'h-5 w-5 rounded-full border-2',
-                        isActive
-                          ? 'border-foreground ring-2 ring-ring ring-offset-2 ring-offset-card'
-                          : 'border-transparent hover:border-border',
-                      ].join(' ')}
-                      style={{ backgroundColor: p.hex }}
-                    />
-                  );
-                })}
-              </div>
-              <div className="inline-flex items-center gap-1">
-                <span className="text-2xs text-muted-foreground">Custom</span>
-                <input
-                  type="color"
-                  value={accent}
-                  onChange={(e) => update({ tvAccent: e.target.value })}
-                  aria-label="Custom accent colour"
-                  title={`Custom · ${accent}`}
-                  className="h-6 w-6 cursor-pointer rounded border border-border bg-card p-0.5"
-                />
-                <input
-                  type="text"
-                  value={accent}
-                  onChange={(e) => {
-                    const v = e.target.value.trim();
-                    if (/^#?[0-9a-fA-F]{6}$/.test(v.replace(/^#/, ''))) {
-                      update({ tvAccent: v.startsWith('#') ? v : `#${v}` });
-                    }
-                  }}
-                  placeholder="#10b981"
-                  aria-label="Custom accent hex"
-                  className="h-6 w-24 rounded border border-border bg-background px-2 font-mono text-2xs uppercase tracking-wider"
-                />
-              </div>
-            </div>
-          </Field>
-          <Field
-            label="Theme"
-            hint="Auto follows the operator's app theme. Dark or Light forces a fixed mode."
-          >
-            <div role="radiogroup" aria-label="TV theme" className="flex flex-wrap items-center gap-1.5">
-              {[
-                { id: 'auto' as const, label: 'Auto' },
-                { id: 'dark' as const, label: 'Dark' },
-                { id: 'light' as const, label: 'Light' },
-              ].map((t) => {
-                const isActive = (config.tvTheme ?? 'dark') === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={isActive}
-                    onClick={() => update({ tvTheme: t.id })}
-                    className={[
-                      INTERACTIVE_BASE,
-                      'rounded border px-2.5 py-1 text-xs font-medium',
-                      isActive
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                    ].join(' ')}
-                  >
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-          </Field>
-          <Field
-            label="Background tone"
-            hint={
-              (config.tvTheme ?? 'dark') === 'light'
-                ? 'Inactive — only used when the TV theme is Dark.'
-                : 'Pick the dark surface tone that flatters your accent colour.'
-            }
-            disabled={(config.tvTheme ?? 'dark') === 'light'}
-          >
-            <div
-              role="radiogroup"
-              aria-label="Background tone"
-              aria-disabled={(config.tvTheme ?? 'dark') === 'light'}
-              className="flex flex-wrap items-center gap-1.5"
-            >
-              {BG_TONES.map((t) => {
-                const isActive = bgTone === t.id;
-                const isLightTheme = (config.tvTheme ?? 'dark') === 'light';
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={isActive}
-                    onClick={() => update({ tvBgTone: t.id })}
-                    disabled={isLightTheme}
-                    title={
-                      isLightTheme
-                        ? 'Switch to Dark theme to choose a background tone'
-                        : t.label
-                    }
-                    className={[
-                      INTERACTIVE_BASE,
-                      'inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs font-medium',
-                      isLightTheme
-                        ? 'cursor-not-allowed opacity-50'
-                        : isActive
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                    ].join(' ')}
-                  >
-                    <span
-                      className="h-2.5 w-2.5 rounded-full border border-border/60"
-                      style={{ backgroundColor: t.swatch }}
-                      aria-hidden
-                    />
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-          </Field>
-      </Section>
-
-      <Section
-        title="Content"
-        description="What data appears on each match card."
-      >
-        <Field
-          label="Show scores"
-          hint="Display set scores alongside player names. Turn off for spectator privacy or before official results are posted."
-        >
-          <Switch
-            checked={showScores}
-            onChange={(next) => update({ tvShowScores: next })}
-            label={showScores ? 'On' : 'Off'}
+        <SectionHeader>Brand</SectionHeader>
+        <Row label="Display preset" control={
+          <PresetSwatchRow
+            value={activePresetId}
+            onChange={(id) => set('tvPreset', id)}
           />
-        </Field>
-      </Section>
-    </Surface>
+        } />
+        <Row label="Accent colour" control={
+          <ColorSwatchRow
+            value={formData.tvAccent ?? '#10b981'}
+            onChange={(hex) => set('tvAccent', hex)}
+          />
+        } last />
+      </div>
+
+      {saveError && (
+        <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {saveError}
+        </div>
+      )}
+      <div className="mt-6">
+        <Button type="submit" disabled={saving || !config}>
+          {justSaved ? (
+            <span key="saved" className="motion-enter-icon inline-flex items-center gap-2">
+              <IconDone size={16} /> Saved
+            </span>
+          ) : saving ? (
+            'Saving…'
+          ) : (
+            'Save display settings'
+          )}
+        </Button>
+      </div>
+    </form>
   );
 }
 
-// ── Layout primitives ─────────────────────────────────────────────
-
-interface ChipOption<T extends string | number> {
-  id: T;
-  label: string;
-}
-
-function ChipRow<T extends string | number>({
-  ariaLabel,
+/* =========================================================================
+ * PresetSwatchRow — horizontal strip of 8 small preset tiles.
+ *
+ * Each tile is 40×28 with the preset's bg as fill and a 2px stripe
+ * along the bottom in the preset's text color (so light vs. dark
+ * presets read at a glance). Selected tile gets a 2px accent ring;
+ * native `title` attribute carries the preset name as a tooltip.
+ * ========================================================================= */
+function PresetSwatchRow({
   value,
-  options,
   onChange,
 }: {
-  ariaLabel: string;
-  value: T;
-  options: ChipOption<T>[];
-  onChange: (next: T) => void;
+  value: string;
+  onChange: (id: string) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="inline-flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5">
-      {options.map((opt) => {
-        const isActive = value === opt.id;
+    <div role="radiogroup" aria-label="Display preset" className="inline-flex gap-1.5">
+      {DISPLAY_PRESETS.map((preset) => {
+        const isActive = preset.id === value;
         return (
           <button
-            key={String(opt.id)}
+            key={preset.id}
             type="button"
             role="radio"
             aria-checked={isActive}
-            onClick={() => onChange(opt.id)}
+            aria-label={preset.name}
+            title={preset.name}
+            onClick={() => onChange(preset.id)}
             className={[
-              INTERACTIVE_BASE,
-              'rounded px-2 py-0.5 text-2xs font-medium',
+              'group relative overflow-hidden rounded-sm transition-shadow duration-fast ease-brand',
               isActive
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg-elev'
+                : 'ring-1 ring-border hover:ring-2 hover:ring-foreground/40 hover:ring-offset-2 hover:ring-offset-bg-elev',
             ].join(' ')}
+            style={{
+              backgroundColor: preset.swatchBg,
+              width: 40,
+              height: 28,
+            }}
           >
-            {opt.label}
+            {/* 2px text-color stripe at the bottom — disambiguates
+                dark vs light presets when the bg alone is ambiguous. */}
+            <span
+              aria-hidden
+              className="absolute inset-x-0 bottom-0 h-[2px]"
+              style={{ backgroundColor: preset.swatchText }}
+            />
           </button>
         );
       })}
@@ -332,36 +250,15 @@ function ChipRow<T extends string | number>({
   );
 }
 
-function Switch({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  label: string;
-}) {
-  return (
-    <label className="inline-flex cursor-pointer items-center gap-2">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={[
-          INTERACTIVE_BASE,
-          'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-          checked ? 'bg-primary' : 'bg-border',
-        ].join(' ')}
-      >
-        <span
-          className={[
-            'inline-block h-4 w-4 transform rounded-full bg-card shadow transition-transform',
-            checked ? 'translate-x-4' : 'translate-x-0.5',
-          ].join(' ')}
-        />
-      </button>
-      <span className="text-xs text-foreground tabular-nums">{label}</span>
-    </label>
-  );
+function initialDisplayState(
+  config: TournamentConfig | null
+): Partial<TournamentConfig> {
+  return {
+    tvDisplayMode: config?.tvDisplayMode ?? 'strip',
+    tvGridColumns: config?.tvGridColumns ?? null,
+    tvCardSize: config?.tvCardSize ?? 'auto',
+    tvAccent: config?.tvAccent ?? '#10b981',
+    tvPreset: config?.tvPreset ?? DEFAULT_PRESET_ID,
+    tvShowScores: config?.tvShowScores ?? true,
+  };
 }

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useAppStore } from '../../../store/appStore';
+import { useTournamentStore } from '../../../store/tournamentStore';
 import type { PlayerDTO } from '../../../api/dto';
 
 interface RankOption {
@@ -46,7 +46,8 @@ function isDoublesRank(rank: string): boolean {
  * - isRankFull: Check if a rank has reached its player limit
  */
 export function useRankValidation(schoolId: string | null, currentPlayerId?: string) {
-  const { players, config } = useAppStore();
+  const players = useTournamentStore((s) => s.players);
+  const config = useTournamentStore((s) => s.config);
 
   /**
    * Get all ranks currently assigned to other players in the same school

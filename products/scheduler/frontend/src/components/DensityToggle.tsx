@@ -30,7 +30,7 @@ export function DensityToggle({ size = 'sm' }: { size?: Size }) {
     <div
       role="radiogroup"
       aria-label="Density"
-      className="inline-flex items-center rounded-md border border-border bg-card p-0.5"
+      className="inline-flex items-center rounded-sm border border-border bg-card p-0.5"
     >
       {OPTIONS.map(({ id, label, Icon }) => {
         const isActive = density === id;
@@ -48,7 +48,7 @@ export function DensityToggle({ size = 'sm' }: { size?: Size }) {
               'inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium',
               isActive
                 ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
             ].join(' ')}
           >
             <Icon size={iconSize} aria-hidden="true" />

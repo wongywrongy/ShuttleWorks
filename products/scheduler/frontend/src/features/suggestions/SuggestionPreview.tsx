@@ -5,12 +5,10 @@
  * Reuses ScheduleDiffView. Indented under the row so the row's
  * Apply button stays visible at the top.
  */
-import { useEffect, useState } from 'react';
-
-import type { Impact, TournamentConfig } from '../../api/dto';
-import { apiClient } from '../../api/client';
+import type { TournamentConfig } from '../../api/dto';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
 import { formatSlotTime } from '../../lib/time';
+import { useProposalImpact } from './hooks/useProposalImpact';
 
 interface Props {
   proposalId: string;
@@ -18,16 +16,7 @@ interface Props {
 }
 
 export function SuggestionPreview({ proposalId, config }: Props) {
-  const [impact, setImpact] = useState<Impact | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiClient.getProposal(proposalId)
-      .then((p) => { if (!cancelled) setImpact(p.impact); })
-      .catch((e) => { if (!cancelled) setError(e?.message ?? 'load failed'); });
-    return () => { cancelled = true; };
-  }, [proposalId]);
+  const { impact, error } = useProposalImpact(proposalId);
 
   const formatSlot = (slotId: number | null | undefined): string => {
     if (slotId == null) return '—';

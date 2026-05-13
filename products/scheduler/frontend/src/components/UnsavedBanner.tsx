@@ -8,14 +8,14 @@
  * The banner is mounted inside AppShell so it's visible on every tab.
  */
 import { useEffect, useState } from 'react';
-import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 import { forceSaveNow } from '../hooks/useTournamentState';
 
 const STALE_MS = 30_000;
 
 export function UnsavedBanner() {
-  const persistStatus = useAppStore((s) => s.persistStatus);
-  const lastSaveError = useAppStore((s) => s.lastSaveError);
+  const persistStatus = useUiStore((s) => s.persistStatus);
+  const lastSaveError = useUiStore((s) => s.lastSaveError);
   const [dirtyForTooLong, setDirtyForTooLong] = useState(false);
   const [saving, setSaving] = useState(false);
 

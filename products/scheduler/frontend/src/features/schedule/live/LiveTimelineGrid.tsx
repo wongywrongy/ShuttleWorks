@@ -4,7 +4,7 @@
  */
 import { useMemo, useEffect, useState, useRef } from 'react';
 import { calculateTotalSlots, formatSlotTime } from '../../../lib/time';
-import { indexById } from '../../../store/selectors';
+import { indexById } from '../../../lib/indexById';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig } from '../../../api/dto';
 import { EVENT_COLORS, DEFAULT_EVENT_COLOR } from '../eventColors';
 
@@ -235,7 +235,7 @@ export function LiveTimelineGrid({
                       key={assignment.matchId}
                       className={`absolute top-0.5 rounded border cursor-default hover:brightness-95
                         ${colors.bg} ${colors.border}
-                        transition-[opacity,transform] duration-150 ease-brand
+                        transition-[opacity,transform] duration-fast ease-brand
                         ${isAnimated ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
                       style={{ left, width, height: ROW_HEIGHT - 4 }}
                       title={getMatchTooltip(assignment.matchId, assignment)}

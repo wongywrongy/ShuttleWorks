@@ -1,8 +1,13 @@
 import { CircleNotch } from '@phosphor-icons/react';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { Button } from '@scheduler/design-system/components';
 
 /**
  * Schedule toolbar — the single primary action for producing a plan.
+ *
+ * Uses the shared `Button size="xs"` so it sits flush with the rest of
+ * the toolbar chips (Export, and the Live page's Director / Disruption
+ * / Re-optimize). Variant flips: `brand` for the resting/primary state,
+ * `destructive` while confirming a replace, `toolbar` while busy.
  *
  * The previous "Re-optimize" sibling button was redundant: it ran the
  * solver with previous assignments as warm start but did NOT pin
@@ -18,8 +23,6 @@ interface ScheduleActionsProps {
   confirmingReplace?: boolean;
 }
 
-const BTN = `${INTERACTIVE_BASE} inline-flex items-center gap-2 rounded px-3 py-1.5 text-sm font-medium`;
-
 export function ScheduleActions({
   onGenerate,
   generating,
@@ -29,28 +32,23 @@ export function ScheduleActions({
   const confirming = hasSchedule && confirmingReplace && !generating;
   return (
     <div className="flex items-center gap-2">
-      <button
+      <Button
         type="button"
+        size="xs"
+        variant={generating ? 'toolbar' : confirming ? 'destructive' : 'brand'}
         onClick={onGenerate}
         disabled={generating}
         data-testid="schedule-generate"
         aria-busy={generating}
-        className={[
-          BTN,
-          generating
-            ? 'bg-muted text-muted-foreground'
-            : confirming
-              ? 'bg-red-600 text-white hover:bg-red-700 motion-safe:animate-pulse'
-              : 'bg-blue-600 text-white hover:bg-blue-700',
-        ].join(' ')}
+        className={confirming ? 'motion-safe:animate-pulse' : undefined}
       >
-        {generating && <CircleNotch aria-hidden="true" className="h-4 w-4 animate-spin" />}
+        {generating && <CircleNotch aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
         {generating
           ? 'Generating…'
           : confirming
             ? 'Click again to replace'
             : 'Generate'}
-      </button>
+      </Button>
     </div>
   );
 }

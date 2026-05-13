@@ -1,0 +1,252 @@
+/* ============================================================================
+ * @scheduler/design-system — tokens.css
+ *
+ * Implements design/BRAND.md §1 (palette), §2 (typography), §4 (spacing),
+ * §5 (motion budget), §6 (shadow/elevation). Two substrates: Swiss
+ * Industrial Print (light) and Tactical Telemetry (dark). Same brutalist
+ * grammar across both; only substrate vars and texture overlays differ.
+ *
+ * All values are HSL triplets (space-separated, no commas) so consumers
+ * can do `hsl(var(--token))` and `hsl(var(--token) / 0.5)` for alpha.
+ * Hex equivalents noted inline for human review.
+ *
+ * NEW canonical tokens follow BRAND.md naming: --bg, --ink, --rule,
+ * --accent, etc. LEGACY aliases (--background, --foreground, --primary…)
+ * remap to the canonical layer so scheduler's existing components don't
+ * break during migration; Phase 6 strips the legacy aliases.
+ * ========================================================================= */
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* ----- Canonical substrate (Swiss Industrial Print) ------------------- */
+    --bg:           60 13% 95%;    /* #F4F4F0 unbleached documentation paper */
+    --bg-elev:       0  0% 100%;   /* #FFFFFF crisp white sheet (elevated)   */
+    --ink:           0  0%   4%;   /* #0A0A0A carbon ink                     */
+    --ink-muted:    60  1%  29%;   /* #4A4A48 secondary text                  */
+    --ink-faint:    60  1%  60%;   /* #9A9A98 disabled, ghost                 */
+    --rule:          0  0%   4%;   /* #0A0A0A full-strength divider/border   */
+    --rule-soft:    45 11%  83%;   /* #D8D6D0 inner divider in dense tables  */
+    --accent:       22 100% 55%;   /* #FF6B1A Signal Orange (single accent)   */
+    --accent-bg:    25 100% 95%;   /* #FFF1E8 tinted callout surface          */
+    --accent-ink:    0  0% 100%;   /* #FFFFFF text on accent fill             */
+
+    /* ----- Spacing ladder (BRAND.md §4) ---------------------------------- */
+    --space-0:    0;
+    --space-1:    2px;
+    --space-2:    4px;
+    --space-3:    8px;
+    --space-4:   12px;
+    --space-5:   16px;
+    --space-6:   24px;
+    --space-7:   32px;
+    --space-8:   48px;
+    --space-9:   64px;
+    --space-10:  96px;
+
+    /* ----- Radii (BRAND.md §3 — 90° default, 2px max on form controls) --- */
+    --radius:    0;        /* default = sharp brutalist corner               */
+    --radius-sm: 2px;      /* max allowed on interactive controls            */
+    --radius-md: 0;        /* alias for cards (legacy md = same as default)  */
+    --radius-lg: 0;        /* alias for legacy callers                       */
+
+    /* ----- Easing (canonical app curves) -------------------------------- */
+    --ease-brand:      cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-out-quick:  cubic-bezier(0.32, 0.72, 0, 1);   /* iOS-sheet curve */
+    --ease-linear:     linear;                            /* continuous solver-theatre only */
+
+    /* ----- Motion duration scale (see packages/design-system/MOTION.md) -
+     * Reach for the next-fastest tier when in doubt. 180ms feels more
+     * responsive than 400ms (Emil Kowalski). */
+    --motion-instant:  0ms;
+    --motion-fast:     120ms;
+    --motion-standard: 200ms;
+    --motion-moderate: 300ms;
+    --motion-slow:     450ms;
+
+    /* ----- Density (inherited from scheduler — comfortable defaults) ----- */
+    --density-row-h:        36px;
+    --density-cell-py:       8px;
+    --density-cell-px:      12px;
+    --density-gap:          16px;
+    --density-section-gap:  24px;
+    --density-badge-h:      22px;
+
+    /* ----- Type ladder px (BRAND.md §2 — strict 10/11/12/14/16/18/24) --- */
+    --text-3xs:  0.625rem;  /* 10px footnote / status pill / micro-stamp     */
+    --text-2xs:  0.6875rem; /* 11px overline / eyebrow / SectionHeader       */
+    --text-xs:   0.75rem;   /* 12px metadata / mono ids                      */
+    --text-sm:   0.875rem;  /* 14px body default                             */
+    --text-base: 1rem;      /* 16px                                          */
+    --text-lg:   1.125rem;  /* 18px                                          */
+    --text-2xl:  1.5rem;    /* 24px card titles                              */
+
+    /* ----- Type stacks (BRAND.md §2) -------------------------------------
+     * The fallback chain matters per product:
+     *   • Scheduler self-hosts @fontsource-variable/geist + jetbrains-mono.
+     *     Both register as `Geist Variable` / `JetBrains Mono Variable`.
+     *   • Tournament currently loads Inter via the rsms.me CDN, which
+     *     registers as `Inter` (NOT `Inter Variable`). The chain must
+     *     include plain `'Inter'` or tournament falls all the way through
+     *     to system-ui — which is exactly the bug Phase 2b(ii.b)
+     *     introduced. Plain `'Inter'` stays in every chain. */
+    --font-display: 'Inter', 'Archivo Black', 'Monument Extended',
+                    -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                    sans-serif;
+    --font-sans:    'Geist Variable', 'Inter Variable', 'Inter',
+                    -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                    'Roboto', 'Helvetica Neue', sans-serif;
+    --font-mono:    'JetBrains Mono Variable', 'JetBrains Mono',
+                    'IBM Plex Mono', ui-monospace, SFMono-Regular,
+                    Menlo, Monaco, Consolas, 'Liberation Mono',
+                    'Courier New', monospace;
+
+    /* ----- Semantic type roles (kept from scheduler for compatibility) -- */
+    --h1-size: 1.5rem;     --h1-weight: 600; --h1-tracking: -0.01em;
+    --h2-size: 1.125rem;   --h2-weight: 600; --h2-tracking: -0.005em;
+    --h3-size: 1rem;       --h3-weight: 600;
+    --p-size:  0.875rem;   --p-weight:  400; --p-leading: 1.5;
+    --label-size:   0.75rem;    --label-weight:   500;
+    --eyebrow-size: 0.6875rem;  --eyebrow-weight: 600; --eyebrow-tracking: 0.06em;
+
+    /* ----- Display type — BRAND.md §2.a (brutalist macro) ---------------- */
+    --display-tracking: -0.04em;
+    --display-leading:  0.9;
+    --display-min:      clamp(2.5rem, 6vw, 6rem);
+    --display-section:  clamp(1.5rem, 3vw, 2.5rem);
+
+    /* ----- Shadow (BRAND.md §6 — none on light; hard offsets for modal) -- */
+    --shadow-none: none;
+    --shadow-hard: 0 4px 0 hsl(var(--rule));  /* modal/popover only         */
+    /* legacy aliases for scheduler components mid-migration: stripped P6  */
+    --shadow-sm: var(--shadow-none);
+    --shadow-md: var(--shadow-none);
+    --shadow-lg: var(--shadow-hard);
+
+    /* ----- Z-index scale ------------------------------------------------- */
+    /* Popovers sit ABOVE modals so dropdowns/tooltips opened inside a
+     * dialog render in front of the dialog body (the standard a11y
+     * expectation). The earlier hierarchy put popover below modal,
+     * which clipped Select menus inside DisruptionDialog/MoveMatchDialog.
+     */
+    --z-hud:      10;
+    --z-chrome:   20;
+    --z-overlay:  40;
+    --z-modal:    50;
+    --z-popover:  60;
+
+    /* ----- Status palette (inherited from scheduler, unchanged) ---------- */
+    /* Status colors live in their own semantic namespace and are NEVER
+     * brand accents (BRAND.md §1). Light values: saturated hue + 38-50%L.
+     */
+    --status-live:        142 71% 38%;
+    --status-live-bg:     142 71% 92%;
+    --status-called:       38 92% 42%;
+    --status-called-bg:    38 92% 92%;
+    --status-started:     199 89% 38%;
+    --status-started-bg:  199 89% 93%;
+    --status-blocked:       0 72% 45%;
+    --status-blocked-bg:    0 72% 95%;
+    --status-warning:      38 92% 42%;
+    --status-warning-bg:   38 92% 92%;
+    --status-idle:        220  9% 46%;
+    --status-idle-bg:     220 14% 92%;
+    --status-done:        220 13% 50%;
+    --status-done-bg:     220 14% 94%;
+
+    /* ----- Legacy aliases (scheduler compat — stripped in Phase 6) ------- *
+     * Existing scheduler components reference these names. They remap to  *
+     * the canonical layer so the visual palette swap is automatic without *
+     * touching every component.                                            */
+    --background:           var(--bg);
+    --foreground:           var(--ink);
+    --card:                 var(--bg-elev);
+    --card-foreground:      var(--ink);
+    --popover:              var(--bg-elev);
+    --popover-foreground:   var(--ink);
+    --primary:              var(--ink);        /* scheduler used primary as text/ink */
+    --primary-foreground:   var(--bg-elev);
+    --secondary:           60  8% 90%;          /* light gray surface */
+    --secondary-foreground: var(--ink);
+    --muted:               60  8% 90%;
+    --muted-foreground:     var(--ink-muted);
+    --destructive:           0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border:               var(--rule-soft);
+    --input:                var(--rule-soft);
+    --ring:                 var(--accent);     /* focus ring = brand accent */
+
+    /* Semantic data colors (kept for compatibility) */
+    --success:           142 71% 45%;
+    --success-foreground:  0  0% 98%;
+    --warning:            38 92% 50%;
+    --warning-foreground:  0  0% 98%;
+    --info:              199 89% 48%;
+    --info-foreground:     0  0% 98%;
+  }
+
+  /* ----- Compact density (toggle via [data-density="compact"]) ------------ */
+  [data-density="compact"] {
+    --density-row-h:       28px;
+    --density-cell-py:      4px;
+    --density-cell-px:      8px;
+    --density-gap:         12px;
+    --density-section-gap: 16px;
+    --density-badge-h:     18px;
+  }
+
+  /* ============================================================== DARK ==
+   * Tactical Telemetry substrate. Same brutalist grammar; same single
+   * accent; substrate flips. .dark class on <html> triggers it (matches
+   * scheduler's existing AppearanceSettings toggle).
+   * ====================================================================== */
+  .dark {
+    color-scheme: dark;
+
+    --bg:           0  0%   4%;    /* #0A0A0A deactivated CRT (NEVER pure black) */
+    --bg-elev:      0  0%   8%;    /* #141414 elevated panel                      */
+    --ink:          0  0%  92%;    /* #EAEAEA white phosphor (NEVER pure white)   */
+    --ink-muted:    0  0%  60%;    /* #9A9A9A secondary                            */
+    --ink-faint:    0  0%  33%;    /* #555555 disabled                             */
+    --rule:         0  0%  92%;    /* phosphor on substrate                        */
+    --rule-soft:    0  0%  16%;    /* #2A2A2A inner divider                        */
+    --accent:      22 100% 55%;    /* same orange both modes (brutalist rule)      */
+    --accent-bg:   22  70% 10%;    /* #2A1808 tinted callout on dark substrate     */
+    --accent-ink:   0  0%   4%;    /* #0A0A0A text on accent fill                  */
+
+    /* Shadow rule on dark: none; elevation via --bg-elev only */
+    --shadow-hard: none;
+    --shadow-lg:   none;
+
+    /* Status palette — desaturated text + lower-lightness backgrounds */
+    --status-live:        142 71% 60%;
+    --status-live-bg:     142 71% 25%;
+    --status-called:       38 92% 65%;
+    --status-called-bg:    38 92% 25%;
+    --status-started:     199 89% 65%;
+    --status-started-bg:  199 89% 25%;
+    --status-blocked:       0 72% 65%;
+    --status-blocked-bg:    0 72% 25%;
+    --status-warning:      38 92% 65%;
+    --status-warning-bg:   38 92% 25%;
+    --status-idle:          0  0% 60%;
+    --status-idle-bg:       0  0% 16%;
+    --status-done:          0  0% 50%;
+    --status-done-bg:       0  0% 14%;
+
+    /* Semantic data colors */
+    --success:           142 71% 55%;
+    --success-foreground:  0  0% 10%;
+    --warning:            38 92% 58%;
+    --warning-foreground:  0  0% 10%;
+    --info:              199 89% 60%;
+    --info-foreground:     0  0% 10%;
+    --destructive:         0 72% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* Legacy surface tokens — gray surfaces become charcoal */
+    --secondary:           0  0% 14%;
+    --muted:               0  0% 14%;
+  }
+}

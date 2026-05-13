@@ -13,17 +13,17 @@ backend/
 │   ├── schemas.py               # Pydantic DTOs (mirror frontend/src/api/dto.ts)
 │   ├── error_codes.py           # ErrorCode enum + http_error() helper
 │   ├── paths.py                 # data_dir() / ensure_data_dir() helpers
-│   ├── time_utils.py            # ISO-8601 UTC + slot-math helpers
-│   └── scheduler_core_path.py   # sys.path bootstrap for scheduler_core
+│   └── time_utils.py            # ISO-8601 UTC + slot-math helpers
 ├── api/
 │   ├── schedule.py              # POST /schedule, /schedule/stream (SSE), /schedule/validate
 │   ├── schedule_repair.py       # POST /schedule/repair — targeted disruption repair
 │   ├── schedule_warm_restart.py # POST /schedule/warm-restart — stay-close re-solve
 │   ├── match_state.py           # GET/PUT /match-state — live match status
 │   ├── tournament_state.py      # GET/PUT /tournament-state — debounced full snapshot
-│   ├── _backups.py              # tournament-state backup helpers
 │   └── _validate.py             # shared validation utilities
 ├── services/
+│   ├── persistence.py           # single owner of on-disk state + write lock
+│   ├── _backups.py              # atomic-write + backup-rotation primitives
 │   └── csv_importer.py          # parse roster/matches CSVs
 ├── Dockerfile
 └── requirements.txt
@@ -33,9 +33,9 @@ src/adapters/         # sport-specific adapters (badminton)
 ```
 
 The HTTP layer lives in `backend/`. The solver engine lives under
-`scheduler_core/` and is imported via the `scheduler_core_path`
-shim — kept decoupled so the engine can be unit-tested without the
-FastAPI app booted.
+`scheduler_core/` and is installed as a regular package via its own
+`pyproject.toml`, so `import scheduler_core` resolves without any
+`sys.path` bootstrap.
 
 ## Request lifecycle
 
@@ -103,14 +103,31 @@ intent that must not be debounced away.
 
 ## Adding a new HTTP route
 
-1. Add a Pydantic model to `app/schemas.py` (and its TypeScript twin
-   to `frontend/src/api/dto.ts`).
+1. Add a Pydantic model to `app/schemas.py`. Run `make generate-api`
+   from `products/scheduler/` to refresh `frontend/src/api/dto.generated.ts`
+   from FastAPI's OpenAPI schema; reconcile any drift into the curated
+   `frontend/src/api/dto.ts` by hand. `dto.generated.ts` carries a "do
+   not edit by hand" header.
 2. Create the handler under `backend/api/<feature>.py`. Define a
    `router = APIRouter(prefix=..., tags=[...])`.
 3. Register it in `backend/app/main.py` via `app.include_router(...)`.
 4. Use `error_codes.http_error(...)` for any `HTTPException`.
 5. Add a method on `frontend/src/api/client.ts` and call it from the
    relevant feature hook.
+
+## API contract regeneration
+
+`frontend/src/api/dto.generated.ts` is auto-generated from the running
+backend's OpenAPI schema via `openapi-typescript`. After any change to
+`app/schemas.py` (or any Pydantic model referenced from a route handler),
+run `make generate-api` from `products/scheduler/` to refresh it. The
+target imports the FastAPI app directly (via `tools/generate_openapi.py`)
+so no Docker / uvicorn is needed.
+
+The curated `frontend/src/api/dto.ts` mirrors the auto-generated file
+for contract types, plus a hand-written section for frontend-private
+shapes (SSE events, internal enums, importer payloads). Treat
+`dto.generated.ts` as the authority — drift between the two is a bug.
 
 ## Adding a new constraint or objective term
 
@@ -135,11 +152,19 @@ be silenced in tests without quieting the app log.
 
 ## Tests
 
+Install the dev set (which pulls in the prod set via `-r`):
+
 ```
-cd backend && pytest    # HTTP-layer unit tests
-cd src && pytest        # solver + constraint unit tests
+pip install -r products/scheduler/backend/requirements-dev.txt
 ```
 
-Backend tests are pure-Python and don't touch HTTP. End-to-end
-coverage lives in `e2e/` (Playwright against the docker-compose
-stack).
+Then run from `products/scheduler/`:
+
+```
+pytest                                 # HTTP-layer + solver unit tests
+```
+
+The split keeps `pytest` + `httpx` (~25 MB) out of the production image
+— `backend/requirements.txt` is prod-only and is what the Dockerfile
+installs. End-to-end coverage lives in `e2e/` (Playwright against the
+docker-compose stack); run with `make test-e2e`.

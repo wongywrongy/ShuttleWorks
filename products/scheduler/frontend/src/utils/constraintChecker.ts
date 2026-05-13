@@ -8,7 +8,7 @@ import type {
   TournamentConfig,
   ConstraintViolation,
 } from '../api/dto';
-import { indexById } from '../store/selectors';
+import { indexById } from '../lib/indexById';
 
 /**
  * Compute constraint violations from current schedule assignments

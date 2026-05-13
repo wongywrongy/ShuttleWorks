@@ -26,11 +26,15 @@ export function SettingsNav({ sections, activeId, onSelect }: SettingsNavProps) 
   return (
     <nav
       aria-label="Settings sections"
-      className="flex flex-col gap-0.5 py-2 pr-1"
+      className="flex flex-col py-1"
     >
-      {sections.map((s) => {
+      {sections.map((s, i) => {
         const isActive = s.id === activeId;
         const Icon = s.icon;
+        // Brutalist signature: numeric index in mono + left-border accent
+        // on the active row instead of a full background pill. Keeps the
+        // rail scannable and visually rigid without making it shouty.
+        const index = String(i + 1).padStart(2, '0');
         return (
           <button
             key={s.id}
@@ -39,17 +43,26 @@ export function SettingsNav({ sections, activeId, onSelect }: SettingsNavProps) 
             aria-current={isActive ? 'page' : undefined}
             className={[
               INTERACTIVE_BASE,
-              'group flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm font-medium',
+              'group relative flex w-full items-center gap-2.5 border-l-2 px-3 py-2 text-left text-sm',
               isActive
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+                ? 'border-l-accent bg-muted/50 text-foreground font-semibold'
+                : 'border-l-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground',
             ].join(' ')}
             data-testid={`settings-nav-${s.id}`}
           >
+            <span
+              className={[
+                'font-mono text-2xs tabular-nums tracking-wider',
+                isActive ? 'text-accent' : 'text-muted-foreground/60',
+              ].join(' ')}
+              aria-hidden="true"
+            >
+              {index}
+            </span>
             {Icon && (
               <Icon
                 aria-hidden="true"
-                className={`h-4 w-4 flex-shrink-0 ${isActive ? '' : 'opacity-70'}`}
+                className={`h-4 w-4 flex-shrink-0 ${isActive ? '' : 'opacity-60'}`}
               />
             )}
             <span className="flex-1 truncate">{s.label}</span>

@@ -152,7 +152,7 @@ function FilterGroup({ group }: { group: FilterChipGroup }) {
                 'inline-flex h-6 items-center rounded border px-2 text-2xs font-medium',
                 isActive
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  : 'border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground',
               ].join(' ')}
             >
               {opt.label}

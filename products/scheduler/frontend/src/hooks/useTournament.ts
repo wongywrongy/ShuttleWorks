@@ -1,12 +1,12 @@
 /**
  * Tournament configuration hook - uses Zustand store (no API calls)
  */
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
 import type { TournamentConfig } from '../api/dto';
 
 export function useTournament() {
-  const config = useAppStore((state) => state.config);
-  const setConfig = useAppStore((state) => state.setConfig);
+  const config = useTournamentStore((state) => state.config);
+  const setConfig = useTournamentStore((state) => state.setConfig);
 
   const updateConfig = async (newConfig: TournamentConfig) => {
     setConfig(newConfig);

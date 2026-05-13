@@ -25,10 +25,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clock, ArrowRight } from '@phosphor-icons/react';
 
+import { Select } from '@scheduler/design-system/components';
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
 import { useProposals } from '../../hooks/useProposals';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
 import { formatSlotTime, timeToSlot, slotToTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
@@ -43,11 +45,11 @@ interface Props {
 type Mode = 'postpone' | 'move-to';
 
 export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
-  const config = useAppStore((s) => s.config);
-  const matches = useAppStore((s) => s.matches);
-  const players = useAppStore((s) => s.players);
-  const schedule = useAppStore((s) => s.schedule);
-  const activeProposal = useAppStore((s) => s.activeProposal);
+  const config = useTournamentStore((s) => s.config);
+  const matches = useTournamentStore((s) => s.matches);
+  const players = useTournamentStore((s) => s.players);
+  const schedule = useTournamentStore((s) => s.schedule);
+  const activeProposal = useUiStore((s) => s.activeProposal);
   const { createManualEdit, commit, cancel, status } = useProposals();
   const loading = status === 'loading';
 
@@ -273,17 +275,18 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
             </label>
             <label className="block text-xs">
               <span className="text-muted-foreground">Court</span>
-              <select
-                value={moveToCourt}
-                onChange={(e) => setMoveToCourt(parseInt(e.target.value, 10))}
-                className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
-              >
-                {Array.from({ length: config.courtCount }, (_, i) => i + 1).map((c) => (
-                  <option key={c} value={c}>
-                    Court {c}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1">
+                <Select
+                  value={String(moveToCourt)}
+                  onValueChange={(v) => setMoveToCourt(parseInt(v, 10))}
+                  options={Array.from({ length: config.courtCount }, (_, i) => i + 1).map(
+                    (c) => ({ value: String(c), label: `Court ${c}` }),
+                  )}
+                  ariaLabel="Target court"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
             </label>
           </div>
         )}

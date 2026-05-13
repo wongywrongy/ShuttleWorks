@@ -22,11 +22,9 @@ from app.schemas import (
     ValidationResponseDTO,
 )
 
-import app.scheduler_core_path  # noqa: F401  -- side effect: sys.path setup
-
-from adapters.badminton import prepare_solver_input  # noqa: E402
-from scheduler_core.domain.models import Assignment as CoreAssignment  # noqa: E402
-from scheduler_core.engine.validation import Conflict, find_conflicts  # noqa: E402
+from adapters.badminton import prepare_solver_input
+from scheduler_core.domain.models import Assignment as CoreAssignment
+from scheduler_core.engine.validation import Conflict, find_conflicts
 
 
 def validate_move(

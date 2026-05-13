@@ -21,14 +21,16 @@ import { Clock, Coffee, DoorOpen, X } from '@phosphor-icons/react';
 import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
 import { useProposals } from '../../hooks/useProposals';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useMatchStateStore } from '../../store/matchStateStore';
+import { useUiStore } from '../../store/uiStore';
 import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 export function DirectorToolsPanel() {
-  const config = useAppStore((s) => s.config);
-  const matchStates = useAppStore((s) => s.matchStates);
-  const activeProposal = useAppStore((s) => s.activeProposal);
+  const config = useTournamentStore((s) => s.config);
+  const matchStates = useMatchStateStore((s) => s.matchStates);
+  const activeProposal = useUiStore((s) => s.activeProposal);
   const { createDirectorAction, commit, cancel, status } = useProposals();
   const loading = status === 'loading';
 
@@ -126,7 +128,7 @@ export function DirectorToolsPanel() {
                   disabled={loading}
                   title="Reopen court — clears every closure for this court"
                   aria-label={`Reopen Court ${courtId} — clears every closure for this court`}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-muted/40 disabled:opacity-50`}
                 >
                   <DoorOpen className="h-3 w-3" aria-hidden="true" />
                   Reopen…
@@ -151,7 +153,7 @@ export function DirectorToolsPanel() {
                   disabled={loading}
                   title="Reopen court — clears every closure for this court"
                   aria-label={`Reopen Court ${closure.courtId} — clears every closure for this court`}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-accent disabled:opacity-50`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-muted/40 disabled:opacity-50`}
                 >
                   <DoorOpen className="h-3 w-3" aria-hidden="true" />
                   Reopen…

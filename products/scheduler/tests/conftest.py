@@ -1,27 +1,13 @@
 """Shared pytest setup for the backend test suite.
 
-Pytest's rootdir is ``products/scheduler/`` (the directory containing
-``pyproject.toml``), which forces it to the front of ``sys.path``.
-That makes ``from app.schemas import ...`` resolve to
-``products/scheduler/app/schemas.py`` (a legacy stub that lacks every
-model added since the v2 API rewrite). Each test file used to repeat
-the same fix-up — shift ``backend/`` to the front of ``sys.path`` and
-purge any cached ``app.*`` / ``api.*`` / ``services.*`` / ``adapters.*``
-modules so the next import resolves correctly.
+Pytest's rootdir is ``products/scheduler/``. The FastAPI app and its
+adapter / api / services packages live under ``products/scheduler/backend/``;
+we insert that directory at the front of ``sys.path`` at conftest load
+time so every test can do ``from app.X import Y`` and friends without
+local sys.path manipulation.
 
-Centralising both shifts here:
-
-  - ``_pin_backend_root_on_path``: a session-scoped autouse fixture
-    that re-prepends ``backend/`` whenever pytest's collection
-    machinery shoves ``src/`` ahead of it.
-  - ``backend_test_env`` / ``purge_backend_modules``: helpers test
-    fixtures call before importing routers, so the import resolves
-    fresh against ``backend/`` instead of the cached, possibly stale
-    module from a previous test.
-
-Existing test files keep working — they call the helpers explicitly
-inside their own ``client`` fixtures. New tests just import what they
-need; the autouse fixture handles the rest.
+``scheduler_core`` is installed as a regular package via its own
+``pyproject.toml`` and reaches every test through site-packages.
 """
 from __future__ import annotations
 
@@ -32,39 +18,22 @@ from typing import Iterable
 import pytest
 
 
-# Resolve once. ``products/scheduler/tests/conftest.py`` lives at
-# parents[0]=tests, parents[1]=scheduler (product root), parents[2]=products,
-# parents[3]=repo root.
 _PRODUCT_ROOT = Path(__file__).resolve().parents[1]
-_REPO_ROOT = Path(__file__).resolve().parents[3]
 _BACKEND_ROOT = str(_PRODUCT_ROOT / "backend")
 
-# Repo root needs to be on sys.path so tests can ``from scheduler_core
-# import ...`` directly. Pytest already has the product root (rootdir
-# from pyproject.toml) on the path; we add the repo root once at module
-# load so scheduler_core/ resolves regardless of how the test was kicked off.
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-
-def _pin_backend_root() -> None:
-    """Move ``backend/`` to the very front of ``sys.path``."""
-    sys.path[:] = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
+if _BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, _BACKEND_ROOT)
 
 
 # Module names whose first segment lives under ``backend/``. We purge
-# these so the next ``from <pkg>.<mod> import ...`` resolves fresh.
+# these so the next ``from <pkg>.<mod> import ...`` resolves fresh —
+# router tests need this when a previous test mutated module state.
 _BACKEND_PACKAGE_PREFIXES = ("app.", "api.", "services.", "adapters.")
 _BACKEND_PACKAGE_NAMES = {"app", "api", "services", "adapters"}
 
 
 def purge_backend_modules(extra: Iterable[str] = ()) -> None:
-    """Drop every cached backend module so the next import is fresh.
-
-    Accepts an iterable of additional substring patterns to also
-    purge — keeps the surface flexible for tests that touch helpers
-    not under the standard four packages.
-    """
+    """Drop every cached backend module so the next import is fresh."""
     extras = tuple(extra)
     for cached in [
         k for k in list(sys.modules)
@@ -76,8 +45,7 @@ def purge_backend_modules(extra: Iterable[str] = ()) -> None:
 
 
 def reset_backend_test_env(extra_purge: Iterable[str] = ()) -> None:
-    """Convenience: pin sys.path then purge — what every fixture does."""
-    _pin_backend_root()
+    """Convenience: purge cached backend modules so the next import is fresh."""
     purge_backend_modules(extra_purge)
 
 
@@ -85,22 +53,9 @@ def reset_backend_test_env(extra_purge: Iterable[str] = ()) -> None:
 def backend_env(tmp_path, monkeypatch):
     """Opt-in fixture for backend (FastAPI router) tests.
 
-    Pins ``backend/`` to the front of ``sys.path``, purges any cached
-    backend modules so the next import resolves fresh, and routes the
-    persistence layer at a per-test tmp directory via ``BACKEND_DATA_DIR``.
-
-    Use as the foundation for ``client`` fixtures in router tests:
-
-        @pytest.fixture
-        def client(backend_env):
-            from api import schedule_proposals  # fresh import
-            ...
-
-    Tests that exercise pure scheduler-core code (under
-    ``products/scheduler/{app,adapters}/``) and don't touch FastAPI
-    routers should NOT request this fixture — pinning backend/ ahead
-    of the product root would shadow ``adapters.fastapi`` and similar
-    legacy-namespace modules.
+    Purges any cached backend modules so the next import resolves
+    fresh, and routes the persistence layer at a per-test tmp directory
+    via ``BACKEND_DATA_DIR``.
     """
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
     reset_backend_test_env()

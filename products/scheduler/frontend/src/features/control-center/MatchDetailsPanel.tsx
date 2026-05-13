@@ -8,41 +8,14 @@ import type { ImpactAnalysis } from '../../hooks/useLiveOperations';
 import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../api/dto';
 import type { TrafficLightResult } from '../../utils/trafficLight';
 import { getMatchLabel } from '../../utils/matchUtils';
-import { getMatchPlayerIds } from '../../utils/trafficLight';
 import { ElapsedTimer } from '../../components/common/ElapsedTimer';
-import { timeToSlot } from '../../lib/time';
 import { formatIsoClock, formatDuration } from '../../lib/timeFormatters';
 import { buildGroupIndex, getPlayerSchoolAccent } from '../../lib/schoolAccent';
 import { SchoolDot } from '../../components/SchoolDot';
 import { ScoreEditor } from './ScoreEditor';
 import { StatusPill } from '../../components/StatusPill';
-import { indexById } from '../../store/selectors';
-
-// Map traffic-light status → pill tone + label for the Ready / Resting
-// / Blocked badge on scheduled matches.
-const LIGHT_LABEL = { green: 'Ready', yellow: 'Resting', red: 'Blocked' } as const;
-
-// Event-rank prefix → full label for the per-player chip's tooltip.
-// The chip shows the abbreviation (MS1, MD2, XD1) — short and scannable
-// in a list. The title expands so a director who hasn't memorised the
-// codes can still read it.
-const RANK_PREFIX_LABELS: Record<string, string> = {
-  MS: "Men's Singles",
-  WS: "Women's Singles",
-  MD: "Men's Doubles",
-  WD: "Women's Doubles",
-  XD: 'Mixed Doubles',
-};
-
-function expandRankLabel(rank: string | null | undefined): string | null {
-  if (!rank) return null;
-  const m = /^([A-Z]{2})(\d*)$/.exec(rank);
-  if (!m) return rank;
-  const [, prefix, number] = m;
-  const label = RANK_PREFIX_LABELS[prefix];
-  if (!label) return rank;
-  return number ? `${label} ${number}` : label;
-}
+import { indexById } from '../../lib/indexById';
+import { LIGHT_LABEL, expandRankLabel, getPlayerRestTime } from './matchDetails/helpers';
 
 interface MatchDetailsPanelProps {
   assignment?: ScheduleAssignment;
@@ -86,54 +59,6 @@ interface MatchDetailsPanelProps {
    *  everyday "this match is just running late" path that doesn't
    *  rise to a full disruption. */
   onRequestMove?: (matchId: string) => void;
-}
-
-/**
- * Calculate rest time since a player's last finished match
- */
-function getPlayerRestTime(
-  playerId: string,
-  matchStates: Record<string, MatchStateDTO>,
-  matches: MatchDTO[],
-  schedule: ScheduleDTO,
-  config: TournamentConfig,
-  currentSlot: number,
-  excludeMatchId?: string
-): { restSlots: number; restMinutes: number; lastMatchLabel?: string } | null {
-  let latestEnd = -1;
-  let lastMatchLabel: string | undefined;
-
-  for (const m of matches) {
-    if (excludeMatchId && m.id === excludeMatchId) continue;
-
-    const state = matchStates[m.id];
-    if (state?.status !== 'finished') continue;
-
-    const playerIds = getMatchPlayerIds(m);
-    if (!playerIds.includes(playerId)) continue;
-
-    const assignment = schedule.assignments.find((a) => a.matchId === m.id);
-    if (!assignment) continue;
-
-    let endSlot: number;
-    if (state.actualEndTime) {
-      endSlot = timeToSlot(state.actualEndTime, config);
-    } else {
-      endSlot = assignment.slotId + assignment.durationSlots;
-    }
-
-    if (endSlot > latestEnd) {
-      latestEnd = endSlot;
-      lastMatchLabel = m.eventRank || `M${m.matchNumber || '?'}`;
-    }
-  }
-
-  if (latestEnd < 0) return null;
-
-  const restSlots = currentSlot - latestEnd;
-  const restMinutes = restSlots * config.intervalMinutes;
-
-  return { restSlots, restMinutes, lastMatchLabel };
 }
 
 export function MatchDetailsPanel({
@@ -310,12 +235,12 @@ export function MatchDetailsPanel({
   // header uses so the panel feels like an extension of the page.
   const actionBtn =
     `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded border border-border ` +
-    `bg-card px-2 py-1 text-[11px] font-medium text-card-foreground ` +
-    `hover:bg-accent hover:text-accent-foreground ` +
+    `bg-card px-2 py-1 text-2xs font-medium text-card-foreground ` +
+    `hover:bg-muted/40 hover:text-foreground ` +
     `disabled:cursor-not-allowed disabled:opacity-50`;
   const primaryActionBtn =
     `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded ` +
-    `bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground ` +
+    `bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground ` +
     `hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50`;
 
   return (
@@ -325,11 +250,11 @@ export function MatchDetailsPanel({
         <div className="text-sm font-bold text-foreground mb-0.5">
           {getMatchLabel(match)}
         </div>
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-3xs text-muted-foreground">
           C{displayCourtId}{courtChanged && ` (sched: C${assignment.courtId})`} · {scheduledTime}
         </div>
         {showSchools && (
-          <div className="mt-1 flex items-center gap-1 text-[11px] text-foreground">
+          <div className="mt-1 flex items-center gap-1 text-2xs text-foreground">
             <SchoolDot accent={sideASchool!} size="sm" />
             <span className="truncate">{sideASchool!.name}</span>
             <span className="text-muted-foreground">vs</span>
@@ -359,16 +284,16 @@ export function MatchDetailsPanel({
         const winnerNames = (winnerIds ?? []).map((id) => playerNames.get(id) ?? id).join(' & ');
 
         return (
-          <div className="mb-3 rounded bg-muted/40 px-2 py-2 text-xs text-foreground">
+          <div className="mb-3 border-t border-border pt-2 text-xs text-foreground">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Done
               </span>
               {onUpdateStatus && mode === 'idle' && (
                 <button
                   type="button"
                   onClick={() => setMode('score')}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/15`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2 py-0.5 text-3xs font-medium text-accent transition-colors duration-fast ease-brand hover:bg-accent/10`}
                   title="Edit score"
                   aria-label="Edit score"
                 >
@@ -379,7 +304,7 @@ export function MatchDetailsPanel({
             {winner && winnerNames ? (
               <div className="mt-1 flex items-baseline justify-between gap-2">
                 <span className="min-w-0 truncate">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Winner
                   </span>{' '}
                   <span className="font-semibold text-blue-800 dark:text-blue-300">{winnerNames}</span>
@@ -387,7 +312,7 @@ export function MatchDetailsPanel({
                 {score && (
                   <span className="font-mono text-sm font-bold tabular-nums text-foreground">
                     {score.sideA}–{score.sideB}
-                    <span className="ml-1 text-[10px] font-medium text-muted-foreground">sets</span>
+                    <span className="ml-1 text-3xs font-medium text-muted-foreground">sets</span>
                   </span>
                 )}
               </div>
@@ -401,9 +326,9 @@ export function MatchDetailsPanel({
                   return (
                     <div
                       key={i}
-                      className="flex items-center justify-between rounded bg-card px-1.5 py-0.5 font-mono text-[11px]"
+                      className="flex items-center justify-between rounded bg-card px-1.5 py-0.5 font-mono text-2xs"
                     >
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
                         Set {i + 1}
                       </span>
                       <span className="tabular-nums">
@@ -424,7 +349,7 @@ export function MatchDetailsPanel({
                 })}
               </div>
             ) : (
-              <div className="mt-1 text-[10px] text-muted-foreground">
+              <div className="mt-1 text-3xs text-muted-foreground">
                 No per-set scores recorded — tap Edit to fill them in.
               </div>
             )}
@@ -434,7 +359,7 @@ export function MatchDetailsPanel({
 
       {/* Reason for yellow/red */}
       {status === 'scheduled' && trafficLight?.reason && light !== 'green' && (
-        <div className={`px-2 py-1.5 rounded text-[10px] mb-3 ${
+        <div className={`px-2 py-1.5 rounded text-3xs mb-3 ${
           light === 'yellow'
             ? 'bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-500/15 dark:border-yellow-500/40 dark:text-yellow-200'
             : 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-500/15 dark:border-red-500/40 dark:text-red-200'
@@ -449,7 +374,7 @@ export function MatchDetailsPanel({
           popping a modal — keeps every interaction in the rail. */}
       {onUpdateStatus && mode === 'idle' && (
         <div className="mb-3">
-          <div className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
+          <div className="text-3xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
             Actions
           </div>
           <div className="flex flex-wrap gap-1">
@@ -550,7 +475,7 @@ export function MatchDetailsPanel({
 
       {/* Players */}
       <div className="mb-3">
-        <div className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
+        <div className="text-3xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
           Players
         </div>
         {(() => {
@@ -580,11 +505,21 @@ export function MatchDetailsPanel({
             (p) => !inMatchIds.has(p.id) && p.status !== 'withdrawn',
           );
 
+          // Team-name headers come from the first player on each side
+          // (dual-meet invariant: one school per side). Silently null if
+          // either side lacks a known group — the header simply doesn't
+          // render in that case.
+          const sideATeamName = match.sideA?.[0]
+            ? getPlayerSchoolAccent(playerMap.get(match.sideA[0]), groupIndex).name
+            : null;
+          const sideBTeamName = match.sideB?.[0]
+            ? getPlayerSchoolAccent(playerMap.get(match.sideB[0]), groupIndex).name
+            : null;
+
           const rankExpanded = expandRankLabel(match.eventRank);
           const renderRow = (playerId: string, side: 'A' | 'B', key: number) => {
             const name = playerNames.get(playerId) || playerId;
             const restInfo = playerRestTimes.get(playerId);
-            const accent = getPlayerSchoolAccent(playerMap.get(playerId), groupIndex);
             const confirmed = matchState?.playerConfirmations?.[playerId] || false;
             const isPicking = subPickingFor === playerId;
             return (
@@ -592,16 +527,15 @@ export function MatchDetailsPanel({
                 <div className="flex items-center justify-between gap-1">
                   <span className={`${sideClass(side)} inline-flex items-center gap-1.5 min-w-0`}>
                     {winner === side && (
-                      <span className="rounded bg-blue-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
+                      <span className="rounded bg-blue-100 px-1 text-3xs font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
                         Won
                       </span>
                     )}
-                    {accent.name && <SchoolDot accent={accent} size="sm" />}
                     {match.eventRank && (
                       <span
                         title={rankExpanded ?? match.eventRank}
                         aria-label={rankExpanded ?? match.eventRank}
-                        className="rounded bg-muted px-1 text-[9px] font-semibold tabular-nums tracking-wide text-muted-foreground"
+                        className="rounded bg-muted px-1 text-3xs font-semibold tabular-nums tracking-wide text-muted-foreground"
                       >
                         {match.eventRank}
                       </span>
@@ -616,10 +550,10 @@ export function MatchDetailsPanel({
                         disabled={updating}
                         title={confirmed ? 'Mark as not checked in' : 'Check in'}
                         aria-label={confirmed ? 'Mark as not checked in' : 'Check in'}
-                        className={`inline-flex items-center justify-center rounded h-4 w-4 text-[10px] ${
+                        className={`inline-flex items-center justify-center rounded h-4 w-4 text-3xs ${
                           confirmed
                             ? 'bg-green-600 text-white'
-                            : 'border border-border bg-card text-muted-foreground hover:bg-accent'
+                            : 'border border-border bg-card text-muted-foreground hover:bg-muted/40'
                         }`}
                       >
                         {confirmed ? <Check aria-hidden="true" className="h-2.5 w-2.5" /> : null}
@@ -627,7 +561,7 @@ export function MatchDetailsPanel({
                     )}
                     {restInfo ? (
                       <span
-                        className="text-[9px] text-foreground"
+                        className="text-3xs text-foreground"
                         title={`Since ${restInfo.lastMatchLabel || 'last match'}`}
                       >
                         {restInfo.restMinutes >= 60
@@ -638,16 +572,16 @@ export function MatchDetailsPanel({
                         rest
                       </span>
                     ) : (
-                      <span className="text-[9px] text-muted-foreground">1st</span>
+                      <span className="text-3xs text-muted-foreground">1st</span>
                     )}
                     {canSub && (
                       <button
                         type="button"
                         onClick={() => setSubPickingFor(isPicking ? null : playerId)}
-                        className={`rounded border border-border bg-card px-1 text-[9px] font-medium ${
+                        className={`rounded border border-border bg-card px-1 text-3xs font-medium ${
                           isPicking
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            ? 'bg-muted/40 text-foreground'
+                            : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                         }`}
                         title="Substitute player"
                         aria-label={`Substitute ${name}`}
@@ -674,8 +608,8 @@ export function MatchDetailsPanel({
                           }}
                           className={
                             armed
-                              ? 'rounded border border-red-500 bg-red-600 px-1 text-[9px] font-semibold text-white motion-safe:animate-pulse'
-                              : 'rounded border border-red-300 bg-red-50 px-1 text-[9px] text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300'
+                              ? 'rounded border border-red-500 bg-red-600 px-1 text-3xs font-semibold text-white motion-safe:animate-pulse'
+                              : 'rounded border border-red-300 bg-red-50 px-1 text-3xs text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300'
                           }
                           title={
                             armed
@@ -691,8 +625,8 @@ export function MatchDetailsPanel({
                   </span>
                 </div>
                 {isPicking && (
-                  <div className="ml-3 rounded border border-border bg-card text-[11px]">
-                    <div className="border-b border-border/60 px-1.5 py-1 text-[10px] leading-snug text-muted-foreground">
+                  <div className="ml-3 rounded border border-border bg-card text-2xs">
+                    <div className="border-b border-border/60 px-1.5 py-1 text-3xs leading-snug text-muted-foreground">
                       Replaces this player in this match only. The new player
                       appears on the TV and in live tracking; if they're
                       already in another scheduled match, a conflict will
@@ -700,7 +634,7 @@ export function MatchDetailsPanel({
                     </div>
                     <div className="max-h-32 overflow-y-auto">
                       {subCandidates.length === 0 && (
-                        <div className="px-1.5 py-1 text-[10px] text-muted-foreground">No available players.</div>
+                        <div className="px-1.5 py-1 text-3xs text-muted-foreground">No available players.</div>
                       )}
                       {subCandidates.map((p) => (
                         <button
@@ -710,7 +644,7 @@ export function MatchDetailsPanel({
                             onSubstitute?.(match.id, playerId, p.id);
                             setSubPickingFor(null);
                           }}
-                          className="block w-full truncate px-1.5 py-0.5 text-left text-foreground hover:bg-accent"
+                          className="block w-full truncate px-1.5 py-0.5 text-left text-foreground hover:bg-muted/40"
                         >
                           {p.name}
                         </button>
@@ -721,11 +655,27 @@ export function MatchDetailsPanel({
               </div>
             );
           };
+          // Team-name header — matches the SectionHeader vocabulary used
+          // elsewhere (2xs uppercase tracking-[0.18em] muted). Acts as the
+          // implicit separator between teams, replacing the old "vs" line
+          // and the colored SchoolDot indicators.
+          const teamHeader = (label: string | undefined) =>
+            label ? (
+              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {label}
+              </div>
+            ) : null;
+
           return (
-            <div className="text-xs space-y-0.5">
-              {(match.sideA || []).map((id, i) => renderRow(id, 'A', i))}
-              <div className="text-[10px] text-muted-foreground">vs</div>
-              {(match.sideB || []).map((id, i) => renderRow(id, 'B', i))}
+            <div className="text-xs space-y-2">
+              <div className="space-y-0.5">
+                {teamHeader(sideATeamName ?? undefined)}
+                {(match.sideA || []).map((id, i) => renderRow(id, 'A', i))}
+              </div>
+              <div className="space-y-0.5">
+                {teamHeader(sideBTeamName ?? undefined)}
+                {(match.sideB || []).map((id, i) => renderRow(id, 'B', i))}
+              </div>
             </div>
           );
         })()}
@@ -735,7 +685,7 @@ export function MatchDetailsPanel({
           so the operator can audit waits vs. runs at a glance. */}
       {(matchState?.calledAt || matchState?.actualStartTime || matchState?.actualEndTime) && (
         <div className="mb-3">
-          <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+          <div className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
             Timing
           </div>
           <div className="space-y-0.5 text-xs">
@@ -749,11 +699,11 @@ export function MatchDetailsPanel({
                 <span className="tabular-nums text-foreground">
                   {formatIsoClock(matchState.calledAt)}
                   {matchState.actualStartTime ? (
-                    <span className="ml-1 text-[10px] text-muted-foreground">
+                    <span className="ml-1 text-3xs text-muted-foreground">
                       · waited {formatDuration(matchState.calledAt, matchState.actualStartTime)}
                     </span>
                   ) : (
-                    <span className="ml-1 text-[10px] text-blue-600">
+                    <span className="ml-1 text-3xs text-blue-600">
                       · {formatDuration(matchState.calledAt, new Date().toISOString())} ago
                     </span>
                   )}
@@ -766,7 +716,7 @@ export function MatchDetailsPanel({
                 <span className="tabular-nums text-foreground">
                   {formatIsoClock(matchState.actualStartTime)}
                   {status === 'started' && (
-                    <span className="ml-1 text-[10px] text-green-700">
+                    <span className="ml-1 text-3xs text-green-700">
                       · playing{' '}
                       <ElapsedTimer
                         startTime={matchState.actualStartTime}
@@ -782,7 +732,7 @@ export function MatchDetailsPanel({
                 <span className="text-muted-foreground">Finished</span>
                 <span className="tabular-nums text-foreground">
                   {formatIsoClock(matchState.actualEndTime)}
-                  <span className="ml-1 text-[10px] text-muted-foreground">
+                  <span className="ml-1 text-3xs text-muted-foreground">
                     · ran {formatDuration(matchState.actualStartTime, matchState.actualEndTime)}
                   </span>
                 </span>
@@ -796,7 +746,7 @@ export function MatchDetailsPanel({
           in the rail. Each row is ``<event> · <shared player>``. */}
       {analysis && analysis.directlyImpacted.length > 0 && (
         <div>
-          <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+          <div className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
             Impacted ({analysis.directlyImpacted.length})
           </div>
           <div className="divide-y divide-border/60 rounded bg-muted/40">
@@ -823,13 +773,13 @@ export function MatchDetailsPanel({
                       onSelectMatch?.(matchId);
                     }
                   }}
-                  className="flex items-center gap-1.5 px-1.5 py-0.5 cursor-pointer hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 cursor-pointer hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title={sharedPlayerNames.join(', ')}
                 >
-                  <span className="text-[11px] font-medium text-foreground tabular-nums w-12 flex-shrink-0">
+                  <span className="text-2xs font-medium text-foreground tabular-nums w-12 flex-shrink-0">
                     {eventLabel}
                   </span>
-                  <span className="flex-1 truncate text-[10px] text-muted-foreground">
+                  <span className="flex-1 truncate text-3xs text-muted-foreground">
                     {sharedPlayerNames.join(', ') || '—'}
                   </span>
                   <CaretRight aria-hidden="true" className="h-3 w-3 text-muted-foreground flex-shrink-0" />
@@ -844,13 +794,14 @@ export function MatchDetailsPanel({
           dialogs with this match's id so the operator doesn't have to
           find it again. Move/postpone is the lighter, "match is just
           running late" path; the disruption row is the nuclear option.
-          Each button is followed by an inline consequence line so a
-          director sees what will happen before opening the dialog. */}
+          Per-button `title` tooltips carry the consequence detail; the
+          inline description copy was dropped — the buttons speak for
+          themselves. */}
       {(onRequestDisruption || onRequestMove) && match && status !== 'finished' && (
         <div className="px-3 py-2 border-t border-border/60 bg-muted/30 space-y-2">
           {onRequestMove && assignment && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Reschedule
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -858,19 +809,16 @@ export function MatchDetailsPanel({
                   type="button"
                   onClick={() => onRequestMove(match.id)}
                   className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-2xs text-blue-700 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200"
-                  title="Postpone or move this match to another time/court"
+                  title="Re-anchor this match to a new time or court. Other matches stay put."
                 >
                   Move / postpone…
                 </button>
               </div>
-              <p className="text-[10px] leading-snug text-muted-foreground">
-                Re-anchors this match to a new time or court. Other matches stay put.
-              </p>
             </div>
           )}
           {onRequestDisruption && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Disruption
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -879,7 +827,7 @@ export function MatchDetailsPanel({
                     type="button"
                     onClick={() => onRequestDisruption('overrun', match.id)}
                     className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-2xs text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-                    title="Mark as overrunning — slide successors back"
+                    title="Mark overrun — keeps this match playing, slides successors back to absorb the delay."
                   >
                     Mark overrun
                   </button>
@@ -888,7 +836,7 @@ export function MatchDetailsPanel({
                   type="button"
                   onClick={() => onRequestDisruption('cancellation', match.id)}
                   className="rounded border border-red-300 bg-red-50 px-2 py-0.5 text-2xs text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"
-                  title="Cancel this match and free its slot for a later one"
+                  title="Cancel match — removes it entirely and frees the slot for later use."
                 >
                   Cancel match
                 </button>
@@ -896,23 +844,13 @@ export function MatchDetailsPanel({
                   <button
                     type="button"
                     onClick={() => onRequestDisruption('court_closed', match.id)}
-                    className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-accent"
-                    title={`Close court ${assignment.courtId} and re-route its matches`}
+                    className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-muted/40"
+                    title={`Close court ${assignment.courtId} — closes it for the rest of the day; remaining matches on it are re-routed.`}
                   >
                     Close court {assignment.courtId}
                   </button>
                 )}
               </div>
-              <ul className="space-y-0.5 text-[10px] leading-snug text-muted-foreground">
-                {status === 'started' && (
-                  <li><span className="font-semibold text-amber-700 dark:text-amber-300">Mark overrun</span> — keeps this match playing, slides successors back to absorb the delay.</li>
-                )}
-                <li><span className="font-semibold text-red-700 dark:text-red-300">Cancel</span> — removes this match entirely; frees the slot for later use.</li>
-                {assignment && (
-                  <li><span className="font-semibold text-foreground">Close court {assignment.courtId}</span> — closes the court for the rest of the day; remaining matches on it are re-routed.</li>
-                )}
-                <li className="italic text-muted-foreground/80">Each opens a dialog where you set details before the solver runs.</li>
-              </ul>
             </div>
           )}
         </div>

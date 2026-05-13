@@ -92,7 +92,7 @@ export function Hint({ id, children, variant = 'info', className = '' }: HintPro
     <div
       role="note"
       className={[
-        'flex w-full items-start gap-2 rounded-md border-l-2 px-2.5 py-1.5 text-xs leading-snug',
+        'flex w-full items-start gap-2 rounded-sm border-l-2 px-2.5 py-1.5 text-xs leading-snug',
         variant === 'info' ? 'border-l-blue-500 dark:border-l-blue-400' : 'border-l-border',
         tone,
         className,

@@ -32,12 +32,11 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
-import app.scheduler_core_path  # noqa: F401
 from app.error_codes import ErrorCode, http_error
-from app.schemas import (  # noqa: E402
+from app.schemas import (
     Impact,
     MatchDTO,
     PlayerDTO,
@@ -53,10 +52,10 @@ from app.schemas import (  # noqa: E402
 )
 from app.time_utils import now_iso
 
-from api import _backups
 from api.match_state import MatchStateDTO
 from api.schedule_repair import RepairRequest, _run_repair
 from api.schedule_warm_restart import WarmRestartRequest, _run_warm_restart
+from services.persistence import PersistenceService, get_persistence
 
 
 router = APIRouter(prefix="/schedule/proposals", tags=["schedule-proposals"])
@@ -179,53 +178,28 @@ def _new_proposal_id() -> str:
     return uuid.uuid4().hex
 
 
-def _read_persisted_state() -> Optional[TournamentStateDTO]:
+async def _read_persisted_state(svc: PersistenceService) -> Optional[TournamentStateDTO]:
     """Load the current committed tournament state, or None if absent."""
-    # Late import — avoids a circular at module load time and lets tests
-    # monkeypatch BACKEND_DATA_DIR before the helpers resolve a path.
-    from api import tournament_state as ts_mod
-
-    path = ts_mod._state_path()
-    if not path.exists():
-        return None
     try:
-        data, _ = ts_mod._read_with_recovery(path)
+        data, _ = await svc.read_tournament_state()
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001
         log.warning("proposals: state unreadable: %s", e)
         return None
-    data = ts_mod._migrate(data)
+    if data is None:
+        return None
     return TournamentStateDTO(**{k: v for k, v in data.items() if k != "_integrity"})
 
 
-def _persist_committed_state(
+async def _persist_committed_state(
+    svc: PersistenceService,
     state: TournamentStateDTO,
     new_schedule: ScheduleDTO,
     history_entry: ScheduleHistoryEntry,
     new_config: Optional[TournamentConfig] = None,
 ) -> TournamentStateDTO:
-    """Atomically apply a committed schedule (and optional config) to disk.
-
-    Bumps ``scheduleVersion``, appends ``history_entry`` (capped at
-    HISTORY_CAP, oldest dropped), refreshes ``updatedAt``, and re-stamps
-    the integrity hash via the existing atomic-write helper. When
-    ``new_config`` is provided (director-action commits), the persisted
-    ``config`` is replaced too.
-    """
-    from api import tournament_state as ts_mod
-    from app.paths import data_dir, ensure_data_dir
-
-    ensure_data_dir()
-    path = ts_mod._state_path()
-
-    # Rotate a backup of the previous live file before stomping it.
-    tournament_name = (state.config.tournamentName if state.config else None)
-    try:
-        _backups.create_backup(data_dir(), path, tournament_name)
-    except OSError as e:
-        log.warning("proposals: backup rotation failed: %s", e)
-
+    """Atomically apply a committed schedule (and optional config) to disk."""
     new_history = list(state.scheduleHistory) + [history_entry]
     if len(new_history) > HISTORY_CAP:
         new_history = new_history[-HISTORY_CAP:]
@@ -234,21 +208,19 @@ def _persist_committed_state(
         "schedule": new_schedule,
         "scheduleVersion": state.scheduleVersion + 1,
         "scheduleHistory": new_history,
-        "updatedAt": now_iso(),
-        "version": ts_mod.CURRENT_SCHEMA_VERSION,
         "scheduleIsStale": False,
     }
     if new_config is not None:
         update_payload["config"] = new_config
     updated = state.model_copy(update=update_payload)
     try:
-        _backups.atomic_write_json(path, updated.model_dump())
+        stamped = await svc.write_tournament_state(updated.model_dump())
     except OSError as e:
         log.error("proposals: write failed: %s", e)
         raise http_error(
             500, ErrorCode.STATE_WRITE_FAILED, "could not persist schedule commit"
         )
-    return updated
+    return TournamentStateDTO(**{k: v for k, v in stamped.items() if k != "_integrity"})
 
 
 def _build_proposal(
@@ -363,7 +335,9 @@ class CommitResponse(BaseModel):
 
 @router.post("/warm-restart", response_model=Proposal)
 async def create_warm_restart_proposal(
-    request: WarmRestartRequest, http_request: Request
+    request: WarmRestartRequest,
+    http_request: Request,
+    svc: PersistenceService = Depends(get_persistence),
 ) -> Proposal:
     """Run a stay-close warm-restart and stash the result as a proposal."""
     store = _get_store(http_request.app)
@@ -371,7 +345,7 @@ async def create_warm_restart_proposal(
     new_schedule, _moved = _run_warm_restart(request)
     async with lock:
         _evict_expired(store)
-        persisted = _read_persisted_state()
+        persisted = await _read_persisted_state(svc)
         from_version = persisted.scheduleVersion if persisted else 0
         groups = list(persisted.groups) if persisted else []
         return _build_proposal(
@@ -388,7 +362,9 @@ async def create_warm_restart_proposal(
 
 @router.post("/repair", response_model=Proposal)
 async def create_repair_proposal(
-    request: RepairRequest, http_request: Request
+    request: RepairRequest,
+    http_request: Request,
+    svc: PersistenceService = Depends(get_persistence),
 ) -> Proposal:
     """Run a slice-based repair and stash the result as a proposal.
 
@@ -401,6 +377,7 @@ async def create_repair_proposal(
     store = _get_store(http_request.app)
     lock = _get_lock(http_request.app)
     new_schedule, _ = _run_repair(request)
+    _ = svc  # ensure dependency stays in scope; used in inner block below
 
     # If this is a court-closure disruption, propose a config update
     # that pins the closure into TournamentConfig so it survives the
@@ -449,7 +426,7 @@ async def create_repair_proposal(
 
     async with lock:
         _evict_expired(store)
-        persisted = _read_persisted_state()
+        persisted = await _read_persisted_state(svc)
         from_version = persisted.scheduleVersion if persisted else 0
         groups = list(persisted.groups) if persisted else []
         return _build_proposal(
@@ -468,7 +445,9 @@ async def create_repair_proposal(
 
 @router.post("/manual-edit", response_model=Proposal)
 async def create_manual_edit_proposal(
-    request: ManualEditRequest, http_request: Request
+    request: ManualEditRequest,
+    http_request: Request,
+    svc: PersistenceService = Depends(get_persistence),
 ) -> Proposal:
     """Pin one match to a new slot/court via warm-restart, high stay-close.
 
@@ -512,7 +491,7 @@ async def create_manual_edit_proposal(
     new_schedule, _ = _run_warm_restart(wr_request)
     async with lock:
         _evict_expired(store)
-        persisted = _read_persisted_state()
+        persisted = await _read_persisted_state(svc)
         from_version = persisted.scheduleVersion if persisted else 0
         groups = list(persisted.groups) if persisted else []
         return _build_proposal(
@@ -555,7 +534,11 @@ async def cancel_proposal(proposal_id: str, http_request: Request) -> dict:
 
 
 @router.post("/{proposal_id}/commit", response_model=CommitResponse)
-async def commit_proposal(proposal_id: str, http_request: Request) -> CommitResponse:
+async def commit_proposal(
+    proposal_id: str,
+    http_request: Request,
+    svc: PersistenceService = Depends(get_persistence),
+) -> CommitResponse:
     """Atomically apply a proposal to the persisted tournament state.
 
     Optimistic-concurrency-checked: if the committed ``scheduleVersion``
@@ -575,7 +558,7 @@ async def commit_proposal(proposal_id: str, http_request: Request) -> CommitResp
             raise http_error(
                 410, ErrorCode.PROPOSAL_EXPIRED, "proposal expired or not found"
             )
-        persisted = _read_persisted_state()
+        persisted = await _read_persisted_state(svc)
         if persisted is None:
             raise http_error(
                 409, ErrorCode.NO_COMMITTED_SCHEDULE,
@@ -596,7 +579,8 @@ async def commit_proposal(proposal_id: str, http_request: Request) -> CommitResp
             summary=proposal.summary,
             schedule=persisted.schedule,
         )
-        updated = _persist_committed_state(
+        updated = await _persist_committed_state(
+            svc,
             persisted,
             proposal.proposedSchedule,
             history_entry,

@@ -20,21 +20,19 @@ from fastapi import APIRouter, HTTPException
 from app.error_codes import ErrorCode, http_error
 from pydantic import BaseModel
 
-import app.scheduler_core_path  # noqa: F401
-from app.schemas import (  # noqa: E402
+from app.schemas import (
     MatchDTO,
     PlayerDTO,
     ScheduleAssignment,
     ScheduleDTO,
     TournamentConfig,
 )
-from api.match_state import MatchStateDTO  # noqa: E402
-# These imports rely on the sys.path bootstrap above.
-from scheduler_core.domain.models import Assignment  # noqa: E402
-from scheduler_core.engine.cancel_token import CancelToken  # noqa: E402
-from scheduler_core.engine.repair import RepairSpec, solve_repair  # noqa: E402
+from api.match_state import MatchStateDTO
+from scheduler_core.domain.models import Assignment
+from scheduler_core.engine.cancel_token import CancelToken
+from scheduler_core.engine.repair import RepairSpec, solve_repair
 
-from adapters.badminton import (  # noqa: E402
+from adapters.badminton import (
     matches_from_dto,
     players_from_dto,
     result_to_dto,

@@ -20,7 +20,8 @@ import { Modal } from '../../components/common/Modal';
 import { ScheduleDiffView } from './ScheduleDiffView';
 import { useProposals } from '../../hooks/useProposals';
 import { formatSlotTime } from '../../lib/time';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useUiStore } from '../../store/uiStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 interface Props {
@@ -37,8 +38,8 @@ const WEIGHTS: Array<{ id: 'conservative' | 'balanced' | 'aggressive'; label: st
 export function WarmRestartDialog({ isOpen, onClose }: Props) {
   const [pick, setPick] = useState<typeof WEIGHTS[number]['id']>('conservative');
   const { createWarmRestart, commit, cancel, status } = useProposals();
-  const activeProposal = useAppStore((s) => s.activeProposal);
-  const config = useAppStore((s) => s.config);
+  const activeProposal = useUiStore((s) => s.activeProposal);
+  const config = useTournamentStore((s) => s.config);
   const loading = status === 'loading';
 
   if (!isOpen) return null;
@@ -130,7 +131,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
               className={`${INTERACTIVE_BASE} w-full text-left rounded border px-3 py-2 text-sm ${
                 pick === opt.id
                   ? 'border-primary bg-primary/5'
-                  : 'border-border bg-card hover:bg-accent'
+                  : 'border-border bg-card hover:bg-muted/40'
               }`}
             >
               <div className="font-medium">{opt.label}</div>

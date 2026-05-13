@@ -80,7 +80,7 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
         {plan.schools.join(' vs ')}), <strong>{plan.players.length}</strong> players,{' '}
         <strong>{plan.matches.length}</strong> matches,{' '}
         <strong>{plan.assignments.length}</strong> scheduled of {plan.totalScheduleRows} rows.
-        <span className="block text-[11px] text-orange-700">
+        <span className="block text-2xs text-orange-700">
           This replaces your entire current tournament (groups, players, matches, schedule).
         </span>
       </>

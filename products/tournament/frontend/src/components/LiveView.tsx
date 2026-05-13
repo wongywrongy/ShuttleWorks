@@ -150,12 +150,12 @@ function StatePill({ state }: { state: RowState }) {
   switch (state) {
     case "done":
       return (
-        <span className="pill bg-emerald-100 text-emerald-800">Done</span>
+        <span className="pill bg-status-done-bg text-status-done">Done</span>
       );
     case "live":
-      return <span className="pill bg-amber-100 text-amber-800">Live</span>;
+      return <span className="pill bg-status-warning-bg text-status-warning">Live</span>;
     case "ready":
-      return <span className="pill bg-sky-100 text-sky-800">Ready</span>;
+      return <span className="pill bg-status-called-bg text-status-called">Ready</span>;
     case "pending":
       return <span className="pill bg-ink-100 text-ink-600">Pending</span>;
   }

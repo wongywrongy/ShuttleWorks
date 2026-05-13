@@ -5,13 +5,13 @@
  * re-solving (user has printed copies and doesn't need a fresh layout).
  */
 import { Warning } from '@phosphor-icons/react';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { useSchedule } from '../../hooks/useSchedule';
 
 export function StaleBanner() {
-  const stale = useAppStore((s) => s.scheduleIsStale);
-  const schedule = useAppStore((s) => s.schedule);
-  const setStale = useAppStore((s) => s.setScheduleStale);
+  const stale = useTournamentStore((s) => s.scheduleIsStale);
+  const schedule = useTournamentStore((s) => s.schedule);
+  const setStale = useTournamentStore((s) => s.setScheduleStale);
   const { generateSchedule, loading } = useSchedule();
 
   if (!stale || !schedule) return null;
@@ -19,7 +19,7 @@ export function StaleBanner() {
   return (
     <div
       data-testid="stale-banner"
-      className="flex items-center justify-between gap-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+      className="flex items-center justify-between gap-3 rounded-sm border border-status-warning/40 bg-status-warning-bg px-3 py-2 text-sm text-status-warning shadow-sm"
     >
       <span className="flex items-center gap-2">
         <Warning aria-hidden="true" className="h-4 w-4" />
@@ -30,7 +30,7 @@ export function StaleBanner() {
           type="button"
           onClick={() => setStale(false)}
           data-testid="stale-banner-dismiss"
-          className="rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-900 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-500/15"
+          className="rounded-sm border border-status-warning/40 bg-card px-2 py-1 text-xs text-status-warning transition-colors duration-fast ease-brand hover:bg-status-warning/10"
         >
           Keep anyway
         </button>
@@ -41,7 +41,7 @@ export function StaleBanner() {
           }}
           disabled={loading}
           data-testid="stale-banner-resolve"
-          className="rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50 dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-amber-950"
+          className="rounded-sm bg-status-warning px-2 py-1 text-xs font-medium text-white transition-colors duration-fast ease-brand hover:bg-status-warning/90 disabled:opacity-50"
         >
           {loading ? 'Re-solving…' : 'Re-solve'}
         </button>

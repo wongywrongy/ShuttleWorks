@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from '@phosphor-icons/react';
+import { Select } from '@scheduler/design-system/components';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { MatchDTO, MatchStateDTO, SetScore, TournamentConfig } from '../../api/dto';
 
@@ -115,9 +116,9 @@ function SimpleScoreEditor({
   };
 
   return (
-    <form onSubmit={submit} className="mb-3 rounded border border-border bg-muted/30 p-2">
+    <form onSubmit={submit} className="mb-3 border-t border-border pt-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Score
         </span>
         <button
@@ -131,7 +132,7 @@ function SimpleScoreEditor({
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5">
         <div className="min-w-0">
-          <div className="mb-0.5 truncate text-[10px] text-muted-foreground" title={sideAName}>{sideAName}</div>
+          <div className="mb-0.5 truncate text-3xs text-muted-foreground" title={sideAName}>{sideAName}</div>
           <input
             ref={aRef}
             type="number"
@@ -140,12 +141,12 @@ function SimpleScoreEditor({
             value={a}
             onChange={(e) => setA(e.target.value)}
             placeholder="0"
-            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
         </div>
         <span className="text-muted-foreground">–</span>
         <div className="min-w-0">
-          <div className="mb-0.5 truncate text-[10px] text-muted-foreground text-right" title={sideBName}>{sideBName}</div>
+          <div className="mb-0.5 truncate text-3xs text-muted-foreground text-right" title={sideBName}>{sideBName}</div>
           <input
             type="number"
             min={0}
@@ -153,7 +154,7 @@ function SimpleScoreEditor({
             value={b}
             onChange={(e) => setB(e.target.value)}
             placeholder="0"
-            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
         </div>
       </div>
@@ -162,14 +163,14 @@ function SimpleScoreEditor({
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-[11px] text-foreground hover:bg-accent`}
+          className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-2xs text-foreground hover:bg-muted/40`}
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={!canSubmit || isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50`}
+          className={`${INTERACTIVE_BASE} rounded bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50`}
         >
           {isSubmitting ? 'Saving…' : 'Save'}
         </button>
@@ -220,9 +221,15 @@ function BadmintonInlineEditor({
   };
   const [sets, setSets] = useState<SetScore[]>(() => padSets(initialSets));
 
-  // Keep the array length in sync with the format choice.
+  // Keep the array length in sync with the format choice. Guard the
+  // setState so a maxSets change that doesn't actually need to resize
+  // (previous length already matches) returns the same array ref —
+  // React then skips the re-render. Avoids the cascading-render
+  // anti-pattern in practice; the lint rule is silenced for this
+  // specific intentional sync-from-prop case.
   useEffect(() => {
-    setSets((prev) => padSets(prev));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSets((prev) => (prev.length === maxSets ? prev : padSets(prev)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maxSets]);
 
@@ -270,19 +277,19 @@ function BadmintonInlineEditor({
   };
 
   const inputCls =
-    'w-full rounded border border-border bg-card px-1 py-1 text-center text-sm font-mono tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200';
+    'w-full rounded border border-border bg-card px-1 py-1 text-center text-sm font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30';
 
   return (
-    <form onSubmit={submit} className="mb-3 rounded border border-border bg-muted/30 p-2">
+    <form onSubmit={submit} className="mb-3 border-t border-border pt-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Score · best of {maxSets}
         </span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setShowFormat((v) => !v)}
-            className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
+            className="rounded px-1.5 py-0.5 text-3xs text-muted-foreground hover:bg-muted"
             title="Adjust format for this match"
           >
             {showFormat ? 'Done' : 'Format'}
@@ -299,32 +306,36 @@ function BadmintonInlineEditor({
       </div>
 
       {showFormat && (
-        <div className="mb-2 grid grid-cols-2 gap-1.5 rounded border border-border bg-card p-1.5 text-[10px]">
+        <div className="mb-2 grid grid-cols-2 gap-1.5 rounded border border-border bg-card p-1.5 text-3xs">
           <label className="flex items-center justify-between gap-1">
             <span className="text-muted-foreground">Sets to win</span>
-            <select
-              value={setsToWin}
-              onChange={(e) => setSetsToWin(parseInt(e.target.value, 10))}
-              className="rounded border border-border bg-card px-1 py-0.5 text-[10px] font-mono"
-            >
-              {[1, 2, 3].map((n) => (
-                <option key={n} value={n}>
-                  {n} (BO{n * 2 - 1})
-                </option>
-              ))}
-            </select>
+            <Select
+              value={String(setsToWin)}
+              onValueChange={(v) => setSetsToWin(parseInt(v, 10))}
+              options={[1, 2, 3].map((n) => ({
+                value: String(n),
+                label: `${n} (BO${n * 2 - 1})`,
+              }))}
+              ariaLabel="Sets to win"
+              size="sm"
+              mono
+              triggerClassName="h-6 px-1 text-3xs"
+            />
           </label>
           <label className="flex items-center justify-between gap-1">
             <span className="text-muted-foreground">Pts/set</span>
-            <select
-              value={pointsPerSet}
-              onChange={(e) => setPointsPerSet(parseInt(e.target.value, 10))}
-              className="rounded border border-border bg-card px-1 py-0.5 text-[10px] font-mono"
-            >
-              {[11, 15, 21].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
+            <Select
+              value={String(pointsPerSet)}
+              onValueChange={(v) => setPointsPerSet(parseInt(v, 10))}
+              options={[11, 15, 21].map((n) => ({
+                value: String(n),
+                label: String(n),
+              }))}
+              ariaLabel="Points per set"
+              size="sm"
+              mono
+              triggerClassName="h-6 px-1 text-3xs"
+            />
           </label>
           <label className="col-span-2 flex items-center justify-between gap-1">
             <span className="text-muted-foreground">Deuce (cap {pointsPerSet === 21 ? 30 : pointsPerSet + 10})</span>
@@ -338,7 +349,7 @@ function BadmintonInlineEditor({
         </div>
       )}
 
-      <div className="mb-1 grid grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-1.5 text-[10px] text-muted-foreground">
+      <div className="mb-1 grid grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-1.5 text-3xs text-muted-foreground">
         <span></span>
         <span className="truncate" title={sideAName}>{sideAName}</span>
         <span></span>
@@ -356,7 +367,7 @@ function BadmintonInlineEditor({
                 decided ? 'opacity-40' : ''
               }`}
             >
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Set {i + 1}</span>
+              <span className="text-3xs uppercase tracking-wide text-muted-foreground">Set {i + 1}</span>
               <input
                 type="number"
                 min={0}
@@ -385,7 +396,7 @@ function BadmintonInlineEditor({
         })}
       </div>
 
-      <div className="mt-2 flex items-center justify-between rounded bg-card px-2 py-1 text-[11px]">
+      <div className="mt-2 flex items-center justify-between rounded bg-card px-2 py-1 text-2xs">
         <span className="text-muted-foreground">Sets</span>
         <span className="font-mono tabular-nums text-foreground">
           <span className={matchWinner === 'A' ? 'font-semibold text-green-700 dark:text-green-300' : ''}>{setsWonA}</span>
@@ -399,14 +410,14 @@ function BadmintonInlineEditor({
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-[11px] text-foreground hover:bg-accent`}
+          className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-2xs text-foreground hover:bg-muted/40`}
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={!matchWinner || isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50`}
+          className={`${INTERACTIVE_BASE} rounded bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50`}
         >
           {isSubmitting ? 'Saving…' : 'Save'}
         </button>

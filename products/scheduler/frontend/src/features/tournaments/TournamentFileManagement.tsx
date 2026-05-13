@@ -1,23 +1,30 @@
 /**
  * Tournament File Management Component
- * Handles export/import of complete tournament data (config, players, matches, schedule, match states)
+ * Handles export/import of complete tournament data (config, players, matches, schedule, match states).
+ *
+ * The two `apiClient.{get,importBulk}MatchStates` calls stay inline
+ * intentionally: this component IS the one-off orchestrator for the
+ * JSON export/import workflow, and the conventions explicitly allow a
+ * one-off page-level component to own its fetches. Extracting them
+ * into a hook would put two trivial wrappers in a separate file with
+ * no other consumer.
  */
 import { useState } from 'react';
-import { useAppStore } from '../../store/appStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { apiClient } from '../../api/client';
 import type { TournamentExportV2, MatchStateDTO } from '../../api/dto';
 import { Button } from '@/components/ui/button';
 import { Section } from '../settings/SettingsPrimitives';
 
 export function TournamentFileManagement() {
-  const config = useAppStore((state) => state.config);
-  const players = useAppStore((state) => state.players);
-  const matches = useAppStore((state) => state.matches);
-  const schedule = useAppStore((state) => state.schedule);
-  const setConfig = useAppStore((state) => state.setConfig);
-  const setPlayers = useAppStore((state) => state.setPlayers);
-  const setMatches = useAppStore((state) => state.setMatches);
-  const setSchedule = useAppStore((state) => state.setSchedule);
+  const config = useTournamentStore((state) => state.config);
+  const players = useTournamentStore((state) => state.players);
+  const matches = useTournamentStore((state) => state.matches);
+  const schedule = useTournamentStore((state) => state.schedule);
+  const setConfig = useTournamentStore((state) => state.setConfig);
+  const setPlayers = useTournamentStore((state) => state.setPlayers);
+  const setMatches = useTournamentStore((state) => state.setMatches);
+  const setSchedule = useTournamentStore((state) => state.setSchedule);
 
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -132,7 +139,7 @@ export function TournamentFileManagement() {
     >
       {message && (
         <div
-          className={`rounded-md p-2 text-sm ${
+          className={`rounded-sm p-2 text-sm ${
             message.type === 'success'
               ? 'bg-green-50 border border-green-200 text-green-800'
               : 'bg-destructive/10 border border-destructive/20 text-destructive'
@@ -177,7 +184,7 @@ export function TournamentFileManagement() {
       </div>
 
       {!hasData && (
-        <div className="flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+        <div className="flex items-center gap-1.5 rounded-sm border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>

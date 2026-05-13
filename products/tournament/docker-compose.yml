@@ -18,6 +18,9 @@ services:
       # scheduler_core/ tree alongside the product files.
       context: ../..
       dockerfile: products/tournament/backend/Dockerfile
+      # Pin the prod multi-stage target; the Dockerfile defines a `dev`
+      # stage AFTER `runtime` (so dev would otherwise be the default).
+      target: runtime
     ports:
       - "${BACKEND_HOST_PORT:-8765}:8000"
     restart: unless-stopped
@@ -30,8 +33,12 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      # Context = repo root (matches backend) so the Dockerfile can copy
+      # workspace root metadata + the shared packages/design-system tree.
+      # Phase 2a consolidated to a root-only lockfile; building from the
+      # frontend dir alone can't run `npm ci` without it.
+      context: ../..
+      dockerfile: products/tournament/frontend/Dockerfile
     ports:
       - "${FRONTEND_HOST_PORT:-5174}:8080"
     depends_on:

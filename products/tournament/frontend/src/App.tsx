@@ -27,7 +27,7 @@ export default function App() {
   if (!data) {
     return (
       <div className="min-h-screen bg-ink-50">
-        <header className="border-b border-ink-200 bg-white">
+        <header className="border-b border-ink-200 bg-bg-elev">
           <div className="mx-auto max-w-5xl px-6 py-4">
             <h1 className="text-lg font-semibold tracking-tight">
               Tournament Prototype
@@ -39,7 +39,7 @@ export default function App() {
         </header>
         <main className="mx-auto max-w-4xl px-6 py-8">
           {error ? (
-            <div className="card mb-6 p-4 text-sm text-red-700 bg-red-50 border-red-200">
+            <div className="card mb-6 p-4 text-sm text-status-blocked bg-status-blocked-bg border-status-blocked/40">
               {error}
             </div>
           ) : null}
@@ -71,7 +71,7 @@ export default function App() {
       />
       <main className="mx-auto w-full max-w-7xl px-6 py-6 flex-1">
         {error ? (
-          <div className="card mb-4 p-3 text-sm text-red-700 bg-red-50 border-red-200">
+          <div className="card mb-4 p-3 text-sm text-status-blocked bg-status-blocked-bg border-status-blocked/40">
             {error}
           </div>
         ) : null}

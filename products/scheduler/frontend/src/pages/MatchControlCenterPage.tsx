@@ -14,11 +14,14 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, CaretLeft, CaretRight, ClipboardText, GearSix } from '@phosphor-icons/react';
+import { Button } from '@scheduler/design-system/components';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useLiveOperations } from '../hooks/useLiveOperations';
 import { useTrafficLights } from '../hooks/useTrafficLights';
 import { useProposals } from '../hooks/useProposals';
-import { useAppStore } from '../store/appStore';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useMatchStateStore } from '../store/matchStateStore';
+import { useUiStore } from '../store/uiStore';
 import { GanttChart } from '../features/control-center/GanttChart';
 import { WorkflowPanel } from '../features/control-center/WorkflowPanel';
 import { MatchDetailsPanel } from '../features/control-center/MatchDetailsPanel';
@@ -38,11 +41,11 @@ export function MatchControlCenterPage() {
   const liveTracking = useLiveTracking();
   const liveOps = useLiveOperations();
   const { cancel: cancelProposal } = useProposals();
-  const players = useAppStore((state) => state.players);
-  const groups = useAppStore((state) => state.groups);
-  const schedule = useAppStore((state) => state.schedule);
-  const setSchedule = useAppStore((state) => state.setSchedule);
-  const setMatchState = useAppStore((state) => state.setMatchState);
+  const players = useTournamentStore((state) => state.players);
+  const groups = useTournamentStore((state) => state.groups);
+  const schedule = useTournamentStore((state) => state.schedule);
+  const setSchedule = useTournamentStore((state) => state.setSchedule);
+  const setMatchState = useMatchStateStore((state) => state.setMatchState);
 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [currentSlot, setCurrentSlot] = useState(0);
@@ -149,7 +152,7 @@ export function MatchControlCenterPage() {
   }, [liveOps.schedule, liveOps.matchStates, currentSlot]);
 
   // Get updateMatch from store
-  const updateMatch = useAppStore((state) => state.updateMatch);
+  const updateMatch = useTournamentStore((state) => state.updateMatch);
 
   // Handle player substitution
   const handleSubstitute = useCallback((
@@ -373,37 +376,17 @@ export function MatchControlCenterPage() {
     console.log(`Undid match ${matchId}, restored to slot ${originalSlot} court ${originalCourt}`);
   }, [schedule, liveOps.matchStates, setSchedule, setMatchState]);
 
-  // No schedule state
-  if (!liveTracking.schedule) {
-    return (
-      <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-card rounded-lg border border-dashed border-border">
-          <ClipboardText aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
-          <p className="text-sm text-muted-foreground">No schedule generated.</p>
-          <p className="text-xs text-muted-foreground">
-            Generate a schedule on the{' '}
-            <Link to="/schedule" className="font-medium text-primary hover:underline">Schedule page</Link>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!liveTracking.config || !liveOps.config || !liveOps.schedule) {
-    return (
-      <div className="flex h-full w-full items-center justify-center">
-        <div className="text-muted-foreground text-sm">Loading…</div>
-      </div>
-    );
-  }
-
   // Live-operations advisory dispatcher. Routes every suggestedAction
   // kind to the matching dialog so the toast's "Review" button and
   // the AdvisoryBanner's Review button both have somewhere to land.
+  // Moved above the early returns so it satisfies Rules of Hooks —
+  // every render path now reaches the same hook calls in the same
+  // order regardless of liveTracking.schedule / liveOps.config state.
   const handleAdvisoryReview = useCallback((advisory: Advisory) => {
     const action = advisory.suggestedAction;
     if (!action) return;
     if (action.kind === 'repair') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const payload = action.payload as Record<string, any>;
       setDisruptionPrefill({
         type: payload.type,
@@ -419,8 +402,6 @@ export function MatchControlCenterPage() {
       action.kind === 'remove_blackout' ||
       action.kind === 'compress_remaining'
     ) {
-      // Director-tool actions land in the DirectorToolsPanel modal so
-      // the operator can tweak the suggested values before previewing.
       setDirectorOpen(true);
     }
   }, []);
@@ -428,50 +409,81 @@ export function MatchControlCenterPage() {
   // Cross-component intent: the toast's onAction sets
   // `pendingAdvisoryReview` on the store; this effect picks it up and
   // dispatches to the same handler the banner's Review button uses.
-  const pendingAdvisoryReview = useAppStore((s) => s.pendingAdvisoryReview);
-  const setPendingAdvisoryReview = useAppStore((s) => s.setPendingAdvisoryReview);
+  const pendingAdvisoryReview = useUiStore((s) => s.pendingAdvisoryReview);
+  const setPendingAdvisoryReview = useUiStore((s) => s.setPendingAdvisoryReview);
   useEffect(() => {
     if (!pendingAdvisoryReview) return;
     handleAdvisoryReview(pendingAdvisoryReview);
     setPendingAdvisoryReview(null);
   }, [pendingAdvisoryReview, handleAdvisoryReview, setPendingAdvisoryReview]);
 
+  // No schedule state
+  if (!liveTracking.schedule) {
+    return (
+      <div className="flex h-full w-full flex-col">
+        <div className="motion-enter flex flex-1 flex-col items-center justify-center gap-3">
+          <ClipboardText aria-hidden="true" className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
+          <p className="text-sm text-muted-foreground">No schedule generated.</p>
+          <p className="text-xs text-muted-foreground">
+            Generate a schedule on the{' '}
+            <Link to="/schedule" className="font-medium text-accent hover:underline">Schedule page</Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!liveTracking.config || !liveOps.config || !liveOps.schedule) {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="text-muted-foreground text-sm">Loading…</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
+    <div className="flex h-full w-full flex-col overflow-hidden">
       <AdvisoryBanner onReview={handleAdvisoryReview} />
       <SuggestionsRail />
-      {/* Single unified surface for the live work area. Stats bar /
-          Gantt / legend / search / queue stack vertically in the left
-          column, separated by hairline horizontal dividers; the
+      {/* One flat surface. Stats bar / Gantt / legend / queue stack
+          vertically in the left column separated by hairlines; the
           Match-details column on the right is a sibling separated by a
           single vertical hairline. No per-region cards. */}
-      <div className="flex-1 min-h-0 bg-card rounded border border-border flex overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left column */}
-        <div className="flex-1 min-w-0 flex flex-col">
-          {/* Section 1 — stats + page-level actions */}
-          <div className="flex-shrink-0 border-b border-border/60 px-2 py-1.5 flex items-center justify-between">
-            <div className="flex items-center gap-3 text-xs">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Operator header strip — eyebrow + stats + actions, single
+              baseline. Same vocabulary as Matches/Roster/Setup. */}
+          <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
+            <div className="flex min-w-0 items-baseline gap-3">
+              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Live
+              </span>
               <span
-                className="font-medium text-foreground tabular-nums"
+                className="text-sm font-semibold text-foreground tabular-nums"
                 title="Share of currently-scheduled matches that are finished. Cancelled or court-closed matches drop out of both sides of the ratio."
               >
                 {stats?.percentage || 0}%
               </span>
-              <span className="text-muted-foreground tabular-nums">
-                {stats?.finished || 0}/{stats?.total || 0} matches
+              <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                {stats?.finished || 0} of {stats?.total || 0} matches
               </span>
-              {(stats?.inProgress || 0) > 0 && (
-                <span className="font-medium text-status-live tabular-nums">{stats.inProgress} active</span>
-              )}
-              {delayedCount > 0 && (
-                <span className="rounded border border-status-warning/40 bg-status-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-status-warning tabular-nums">
+              {(stats?.inProgress || 0) > 0 ? (
+                <span className="text-xs font-medium text-status-live tabular-nums whitespace-nowrap">
+                  · {stats.inProgress} active
+                </span>
+              ) : null}
+              {delayedCount > 0 ? (
+                <span className="rounded-sm border border-status-warning/40 bg-status-warning/10 px-1.5 py-0.5 text-2xs font-semibold text-status-warning tabular-nums">
                   {delayedCount} late
                 </span>
-              )}
+              ) : null}
             </div>
-            <div className="flex items-center gap-2">
-              <button
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
                 type="button"
+                size="xs"
+                variant="toolbar"
                 onClick={() => void exportScheduleXlsx(
                   liveOps.schedule,
                   liveOps.matches,
@@ -484,44 +496,46 @@ export function MatchControlCenterPage() {
                     ? 'No schedule to export'
                     : 'Download schedule as XLSX'
                 }
-                className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
               >
-                <Download aria-hidden="true" className="h-4 w-4" />
+                <Download aria-hidden="true" />
                 Export XLSX
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="xs"
+                variant="toolbar"
                 onClick={() => setDirectorOpen(true)}
                 title="Director tools — delays, breaks, blackouts"
-                className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
               >
-                <GearSix aria-hidden="true" className="h-4 w-4" />
+                <GearSix aria-hidden="true" />
                 Director
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="xs"
+                variant="toolbar"
                 onClick={() => {
                   setDisruptionPrefill({});
                   setDisruptionOpen(true);
                 }}
                 title="Repair after a disruption (court closed, withdrawal, overrun, cancellation)"
-                className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground`}
               >
                 Disruption
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="xs"
+                variant="toolbar"
                 onClick={liveOps.triggerReoptimize}
                 disabled={liveOps.isReoptimizing}
                 title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan or Move/postpone."
-                className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-border bg-card px-3 py-1.5 text-sm font-medium text-card-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
-              </button>
+              </Button>
             </div>
-          </div>
-          {/* Section 2 — Gantt grid */}
-          <div className="flex-shrink-0 border-b border-border/60 p-2 overflow-x-auto">
+          </header>
+          {/* Gantt grid */}
+          <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-3">
             <GanttChart
               schedule={liveOps.schedule}
               matches={liveOps.matches}
@@ -535,15 +549,12 @@ export function MatchControlCenterPage() {
               onRequestReopenCourt={() => setDirectorOpen(true)}
             />
           </div>
-          {/* Section 3 — Gantt color legend (always visible reference) */}
-          <div className="flex-shrink-0 border-b border-border/60 px-2 py-1">
+          {/* Legend strip */}
+          <div className="shrink-0 border-b border-border px-4 py-1">
             <GanttLegend />
           </div>
-          {/* Section 4 + 5 — search bar (top of WorkflowPanel) and the
-              match queue underneath. WorkflowPanel keeps its own border-b
-              under the search row so the section divider falls in the
-              same place as the others. */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          {/* Match queue (WorkflowPanel) */}
+          <div className="min-h-0 flex-1 overflow-hidden">
             <WorkflowPanel
               matchesByStatus={liveTracking.matchesByStatus}
               matches={liveTracking.matches}
@@ -568,19 +579,19 @@ export function MatchControlCenterPage() {
 
         {/* Right column — Match details (vertical hairline as separator) */}
         {detailsOpen ? (
-          <div className="w-72 flex-shrink-0 border-l border-border/60 flex flex-col overflow-hidden">
-            <div className="flex-shrink-0 border-b border-border/60 px-2 py-1.5 flex items-center justify-between">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Match Details
+          <div className="motion-enter flex w-72 shrink-0 flex-col overflow-hidden border-l border-border">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
+              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Match details
               </span>
               <button
                 type="button"
                 onClick={() => setDetailsOpen(false)}
                 title="Collapse details"
                 aria-label="Collapse details"
-                className={`${INTERACTIVE_BASE} flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground`}
+                className={`${INTERACTIVE_BASE} flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
               >
-                <CaretRight aria-hidden="true" className="h-4 w-4" />
+                <CaretRight aria-hidden="true" className="h-3.5 w-3.5" />
               </button>
             </div>
             <MatchDetailsPanel
@@ -628,25 +639,13 @@ export function MatchControlCenterPage() {
             onClick={() => setDetailsOpen(true)}
             title="Show match details"
             aria-label="Show match details"
-            className={`${INTERACTIVE_BASE} w-6 flex-shrink-0 border-l border-border/60 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground`}
+            className={`${INTERACTIVE_BASE} flex w-6 shrink-0 items-center justify-center border-l border-border text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
           >
-            <CaretLeft aria-hidden="true" className="h-4 w-4" />
+            <CaretLeft aria-hidden="true" className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
 
-      {liveTracking.isLoading && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="pointer-events-none fixed bottom-14 left-1/2 z-overlay -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
-        >
-          <span className="inline-flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full border-2 border-border border-t-primary animate-spin" aria-hidden />
-            Loading…
-          </span>
-        </div>
-      )}
       <DisruptionDialog
         isOpen={disruptionOpen}
         onClose={() => setDisruptionOpen(false)}
