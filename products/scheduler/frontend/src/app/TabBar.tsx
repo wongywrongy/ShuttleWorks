@@ -1,5 +1,5 @@
 import { useTournamentStore } from '../store/tournamentStore';
-import { useUiStore } from '../store/uiStore';
+import { useUiStore, type AppTab } from '../store/uiStore';
 import { AppStatusPopover } from '../components/AppStatusPopover';
 import { useDisruptions } from '../hooks/useDisruptions';
 import { INTERACTIVE_BASE } from '../lib/utils';

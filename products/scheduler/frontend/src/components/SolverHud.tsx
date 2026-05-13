@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useUiStore } from '../store/uiStore';
+import { useUiStore, type SolverPhase } from '../store/uiStore';
 import { useSchedule } from '../hooks/useSchedule';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 

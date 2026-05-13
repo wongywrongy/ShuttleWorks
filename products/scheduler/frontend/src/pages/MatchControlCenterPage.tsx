@@ -19,6 +19,8 @@ import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useLiveOperations } from '../hooks/useLiveOperations';
 import { useTrafficLights } from '../hooks/useTrafficLights';
 import { useProposals } from '../hooks/useProposals';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useMatchStateStore } from '../store/matchStateStore';
 import { useUiStore } from '../store/uiStore';
 import { GanttChart } from '../features/control-center/GanttChart';
 import { WorkflowPanel } from '../features/control-center/WorkflowPanel';

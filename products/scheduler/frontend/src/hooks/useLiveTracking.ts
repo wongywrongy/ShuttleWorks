@@ -16,6 +16,7 @@
 import { useEffect, useCallback } from 'react';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useMatchStateStore } from '../store/matchStateStore';
+import { useUiStore } from '../store/uiStore';
 import { apiClient } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
 

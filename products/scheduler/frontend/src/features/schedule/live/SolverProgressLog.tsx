@@ -4,7 +4,7 @@
  * Uses global store for persistence across page navigation
  */
 import { useEffect, useRef } from 'react';
-import { useUiStore } from '../../../store/uiStore';
+import { useUiStore, type SolverLogEntry } from '../../../store/uiStore';
 import type { ConstraintViolation } from '../../../api/dto';
 
 interface SolverProgressLogProps {
