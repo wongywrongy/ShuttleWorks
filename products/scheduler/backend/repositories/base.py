@@ -10,7 +10,13 @@ from __future__ import annotations
 import uuid
 from typing import List, Optional, Protocol
 
-from database.models import MatchState, Tournament, TournamentBackup
+from database.models import (
+    InviteLink,
+    MatchState,
+    Tournament,
+    TournamentBackup,
+    TournamentMember,
+)
 
 # Note: ``List[Tournament]`` rendered as ``list[Tournament]`` below uses
 # PEP 585 generics (Python 3.9+); kept consistent with the rest of the
@@ -101,6 +107,79 @@ class MatchStateRepository(Protocol):
     ) -> int:
         """Apply many match-state updates in one transaction. Returns the
         number of rows affected."""
+        ...
+
+
+class MemberRepository(Protocol):
+    """Per-tournament role assignments.
+
+    Step 5: every protected route resolves the caller's role for the
+    tournament via ``get_role`` and rejects when below the required
+    threshold.
+    """
+
+    def get_role(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> Optional[str]:
+        ...
+
+    def add_member(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+    ) -> TournamentMember:
+        ...
+
+    def set_role(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+    ) -> Optional[TournamentMember]:
+        """Update an existing member's role; returns None if not found."""
+        ...
+
+    def remove_member(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> bool:
+        ...
+
+    def list_for_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[TournamentMember]:
+        ...
+
+    def list_tournament_ids_for_user(
+        self,
+        user_id: uuid.UUID,
+    ) -> list[uuid.UUID]:
+        """Tournament ids the user is a member of (any role)."""
+        ...
+
+
+class InviteLinkRepository(Protocol):
+    """Step 5 lands the schema; Step 7 will widen this protocol with
+    resolve/revoke/accept semantics. Keeping the surface narrow until
+    then avoids designing the API before the routes exist."""
+
+    def create(
+        self,
+        tournament_id: uuid.UUID,
+        role: str,
+        created_by: uuid.UUID,
+    ) -> InviteLink:
+        ...
+
+    def list_for_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[InviteLink]:
         ...
 
 

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, File, Path, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
+from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
 from app.time_utils import now_iso
 from database.models import MatchState
@@ -25,6 +26,12 @@ router = APIRouter(
     prefix="/tournaments/{tournament_id}/match-states",
     tags=["match-states"],
 )
+
+# Convenience aliases so route decorators read cleanly. Step 5 spec:
+# GET routes → viewer; writes → operator; tournament-level destructive
+# (handled in api/tournaments.py) → owner.
+_VIEWER = Depends(require_tournament_access("viewer"))
+_OPERATOR = Depends(require_tournament_access("operator"))
 log = logging.getLogger("scheduler.match_state")
 
 # 20 MB import cap — anything larger isn't a legitimate match_states
@@ -118,7 +125,7 @@ def _ensure_tournament(repo: LocalRepository, tournament_id: uuid.UUID) -> uuid.
 # ---------- API endpoints -------------------------------------------------
 
 
-@router.get("", response_model=Dict[str, MatchStateDTO])
+@router.get("", response_model=Dict[str, MatchStateDTO], dependencies=[_VIEWER])
 def get_all_match_states(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -129,7 +136,7 @@ def get_all_match_states(
     return {row.match_id: _row_to_dto(row) for row in rows}
 
 
-@router.get("/{match_id}", response_model=MatchStateDTO)
+@router.get("/{match_id}", response_model=MatchStateDTO, dependencies=[_VIEWER])
 def get_match_state(
     match_id: str,
     tournament_id: uuid.UUID = Path(...),
@@ -143,7 +150,7 @@ def get_match_state(
     return _row_to_dto(row)
 
 
-@router.put("/{match_id}", response_model=MatchStateDTO)
+@router.put("/{match_id}", response_model=MatchStateDTO, dependencies=[_OPERATOR])
 def update_match_state(
     match_id: str,
     update: MatchStateDTO,
@@ -166,7 +173,7 @@ def update_match_state(
     return _row_to_dto(row)
 
 
-@router.delete("/{match_id}")
+@router.delete("/{match_id}", dependencies=[_OPERATOR])
 def delete_match_state(
     match_id: str,
     tournament_id: uuid.UUID = Path(...),
@@ -178,7 +185,7 @@ def delete_match_state(
     return {"message": f"Match state for {match_id} deleted successfully"}
 
 
-@router.post("/reset")
+@router.post("/reset", dependencies=[_OPERATOR])
 def reset_all_match_states(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -189,7 +196,7 @@ def reset_all_match_states(
     return {"message": "All match states reset successfully"}
 
 
-@router.get("/export/download")
+@router.get("/export/download", dependencies=[_VIEWER])
 def export_match_states(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -208,7 +215,7 @@ def export_match_states(
     return JSONResponse(content=payload, headers=headers)
 
 
-@router.post("/import/upload")
+@router.post("/import/upload", dependencies=[_OPERATOR])
 async def import_match_states(
     request: Request,
     file: UploadFile = File(...),
@@ -258,7 +265,7 @@ async def import_match_states(
     }
 
 
-@router.post("/import-bulk")
+@router.post("/import-bulk", dependencies=[_OPERATOR])
 def import_match_states_bulk(
     match_states: Dict[str, MatchStateDTO],
     tournament_id: uuid.UUID = Path(...),

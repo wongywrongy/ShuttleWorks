@@ -63,10 +63,13 @@ def test_unknown_status_coerced_to_scheduled(client, tid):
     assert r.json()["status"] == "scheduled"
 
 
-def test_put_against_missing_tournament_404(client):
-    bad_tid = "00000000-0000-0000-0000-000000000000"
+def test_put_against_missing_tournament_403(client):
+    """Step 5: role check fires before route handler can 404; a tournament
+    you can't access returns 403 rather than 404 so its existence isn't
+    a probe oracle."""
+    bad_tid = "00000000-0000-0000-0000-000000000099"
     r = client.put(f"{_base(bad_tid)}/m1", json=_ok_state())
-    assert r.status_code == 404
+    assert r.status_code == 403
 
 
 def test_import_upload_rejects_oversize(client, tid):

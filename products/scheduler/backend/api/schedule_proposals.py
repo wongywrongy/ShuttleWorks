@@ -35,6 +35,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
 from pydantic import BaseModel
 
+from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
 from app.schemas import (
     Impact,
@@ -63,6 +64,9 @@ router = APIRouter(
     tags=["schedule-proposals"],
 )
 log = logging.getLogger("scheduler.proposals")
+
+_VIEWER = Depends(require_tournament_access("viewer"))
+_OPERATOR = Depends(require_tournament_access("operator"))
 
 
 # Proposal TTL: review windows of >30 min imply the operator walked
@@ -356,7 +360,7 @@ class CommitResponse(BaseModel):
 # ---------- endpoints ------------------------------------------------------
 
 
-@router.post("/warm-restart", response_model=Proposal)
+@router.post("/warm-restart", response_model=Proposal, dependencies=[_OPERATOR])
 async def create_warm_restart_proposal(
     request: WarmRestartRequest,
     http_request: Request,
@@ -384,7 +388,7 @@ async def create_warm_restart_proposal(
         )
 
 
-@router.post("/repair", response_model=Proposal)
+@router.post("/repair", response_model=Proposal, dependencies=[_OPERATOR])
 async def create_repair_proposal(
     request: RepairRequest,
     http_request: Request,
@@ -468,7 +472,7 @@ async def create_repair_proposal(
         )
 
 
-@router.post("/manual-edit", response_model=Proposal)
+@router.post("/manual-edit", response_model=Proposal, dependencies=[_OPERATOR])
 async def create_manual_edit_proposal(
     request: ManualEditRequest,
     http_request: Request,
@@ -532,7 +536,7 @@ async def create_manual_edit_proposal(
         )
 
 
-@router.get("/{proposal_id}", response_model=Proposal)
+@router.get("/{proposal_id}", response_model=Proposal, dependencies=[_VIEWER])
 async def get_proposal(
     proposal_id: str,
     http_request: Request,
@@ -551,7 +555,7 @@ async def get_proposal(
     return proposal
 
 
-@router.delete("/{proposal_id}")
+@router.delete("/{proposal_id}", dependencies=[_OPERATOR])
 async def cancel_proposal(
     proposal_id: str,
     http_request: Request,
@@ -567,7 +571,11 @@ async def cancel_proposal(
     return {"cancelled": True}
 
 
-@router.post("/{proposal_id}/commit", response_model=CommitResponse)
+@router.post(
+    "/{proposal_id}/commit",
+    response_model=CommitResponse,
+    dependencies=[_OPERATOR],
+)
 async def commit_proposal(
     proposal_id: str,
     http_request: Request,

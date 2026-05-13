@@ -15,7 +15,14 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # conftest.py adds backend/ to sys.path before this module is collected.
-from database.models import Base, MatchState, Tournament, TournamentBackup
+from database.models import (
+    Base,
+    InviteLink,
+    MatchState,
+    Tournament,
+    TournamentBackup,
+    TournamentMember,
+)
 from repositories.local import LocalRepository
 
 
@@ -347,3 +354,105 @@ def test_delete_cascades_match_states_and_backups(repo):
 
     assert repo.session.query(MatchState).count() == 0
     assert repo.session.query(TournamentBackup).count() == 0
+
+
+# ---- Member repo ------------------------------------------------------
+
+
+def test_member_repo_add_get_role(repo):
+    tid = _seed_tournament(repo, name="A")
+    uid = uuid.uuid4()
+    repo.members.add_member(tid, uid, role="operator")
+    assert repo.members.get_role(tid, uid) == "operator"
+
+
+def test_member_repo_get_role_returns_none_when_missing(repo):
+    tid = _seed_tournament(repo, name="A")
+    assert repo.members.get_role(tid, uuid.uuid4()) is None
+
+
+def test_member_repo_add_member_is_upsert(repo):
+    """A second add_member with a different role overwrites — used by
+    Step 7 when accepting an invite link upgrades a viewer to operator."""
+    tid = _seed_tournament(repo, name="A")
+    uid = uuid.uuid4()
+    repo.members.add_member(tid, uid, role="viewer")
+    repo.members.add_member(tid, uid, role="operator")
+    assert repo.members.get_role(tid, uid) == "operator"
+
+
+def test_member_repo_set_role(repo):
+    tid = _seed_tournament(repo, name="A")
+    uid = uuid.uuid4()
+    repo.members.add_member(tid, uid, role="viewer")
+    repo.members.set_role(tid, uid, "owner")
+    assert repo.members.get_role(tid, uid) == "owner"
+
+
+def test_member_repo_set_role_returns_none_when_missing(repo):
+    tid = _seed_tournament(repo, name="A")
+    assert repo.members.set_role(tid, uuid.uuid4(), "owner") is None
+
+
+def test_member_repo_remove_member(repo):
+    tid = _seed_tournament(repo, name="A")
+    uid = uuid.uuid4()
+    repo.members.add_member(tid, uid, role="viewer")
+    assert repo.members.remove_member(tid, uid) is True
+    assert repo.members.remove_member(tid, uid) is False
+    assert repo.members.get_role(tid, uid) is None
+
+
+def test_member_repo_list_for_tournament(repo):
+    tid = _seed_tournament(repo, name="A")
+    u1, u2 = uuid.uuid4(), uuid.uuid4()
+    repo.members.add_member(tid, u1, role="owner")
+    repo.members.add_member(tid, u2, role="viewer")
+    members = repo.members.list_for_tournament(tid)
+    assert {m.user_id for m in members} == {u1, u2}
+
+
+def test_member_repo_list_tournament_ids_for_user(repo):
+    t_a = _seed_tournament(repo, name="A")
+    t_b = _seed_tournament(repo, name="B")
+    _seed_tournament(repo, name="C")  # user not a member of this one
+    uid = uuid.uuid4()
+    repo.members.add_member(t_a, uid, role="owner")
+    repo.members.add_member(t_b, uid, role="viewer")
+    ids = set(repo.members.list_tournament_ids_for_user(uid))
+    assert ids == {t_a, t_b}
+
+
+def test_member_repo_cascade_on_tournament_delete(repo):
+    tid = _seed_tournament(repo, name="A")
+    repo.members.add_member(tid, uuid.uuid4(), role="owner")
+    repo.members.add_member(tid, uuid.uuid4(), role="viewer")
+    assert len(repo.members.list_for_tournament(tid)) == 2
+
+    repo.tournaments.delete(tid)
+    assert repo.session.query(TournamentMember).count() == 0
+
+
+# ---- InviteLink repo (Step 5 schema; routes land in Step 7) -----------
+
+
+def test_invite_link_repo_create_and_list(repo):
+    tid = _seed_tournament(repo, name="A")
+    creator = uuid.uuid4()
+    link = repo.invite_links.create(tid, role="viewer", created_by=creator)
+    assert link.id is not None
+    assert link.role == "viewer"
+    assert link.created_by == creator
+    assert link.expires_at is None
+    assert link.revoked_at is None
+
+    listed = repo.invite_links.list_for_tournament(tid)
+    assert [l.id for l in listed] == [link.id]
+
+
+def test_invite_link_repo_cascade_on_tournament_delete(repo):
+    tid = _seed_tournament(repo, name="A")
+    repo.invite_links.create(tid, role="operator", created_by=uuid.uuid4())
+    repo.invite_links.create(tid, role="viewer", created_by=uuid.uuid4())
+    repo.tournaments.delete(tid)
+    assert repo.session.query(InviteLink).count() == 0

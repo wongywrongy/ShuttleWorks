@@ -28,6 +28,7 @@ from typing import Dict, List, Literal, Optional
 from fastapi import APIRouter, Depends, Path, Request
 from pydantic import BaseModel, Field
 
+from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
 from repositories import LocalRepository, get_repository
 from app.schemas import (
@@ -270,7 +271,11 @@ async def _solve_and_propose(
     )
 
 
-@router.post("/director-action", response_model=Proposal)
+@router.post(
+    "/director-action",
+    response_model=Proposal,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
 async def create_director_action(
     request: DirectorActionRequest,
     http_request: Request,

@@ -52,7 +52,8 @@ def test_local_dev_mode_returns_synthetic_user_without_token(monkeypatch):
     r = client.get("/me")
     assert r.status_code == 200
     body = r.json()
-    assert body["id"] == "local-dev"
+    # Step 5: synthetic user is a stable UUID so it can hold member rows.
+    assert body["id"] == str(deps.LOCAL_DEV_USER_UUID)
     assert body["email"] == "local@dev"
 
 
@@ -62,7 +63,7 @@ def test_local_dev_mode_ignores_supplied_token(monkeypatch):
     client = _client_with_protected_route(deps)
     r = client.get("/me", headers={"Authorization": "Bearer literally-anything"})
     assert r.status_code == 200
-    assert r.json()["id"] == "local-dev"
+    assert r.json()["id"] == str(deps.LOCAL_DEV_USER_UUID)
 
 
 # ---- Configured (real Supabase) mode -----------------------------------

@@ -28,7 +28,13 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.time_utils import now_iso
-from database.models import MatchState, Tournament, TournamentBackup
+from database.models import (
+    InviteLink,
+    MatchState,
+    Tournament,
+    TournamentBackup,
+    TournamentMember,
+)
 from database.session import SessionLocal
 
 log = logging.getLogger("scheduler.repositories")
@@ -290,8 +296,125 @@ class _LocalTournamentBackupRepo:
         return len(to_delete)
 
 
+class _LocalMemberRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def get_role(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> Optional[str]:
+        row = self.session.get(TournamentMember, (tournament_id, user_id))
+        return row.role if row is not None else None
+
+    def add_member(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+    ) -> TournamentMember:
+        existing = self.session.get(TournamentMember, (tournament_id, user_id))
+        if existing is not None:
+            existing.role = role
+            self.session.commit()
+            self.session.refresh(existing)
+            return existing
+        row = TournamentMember(
+            tournament_id=tournament_id,
+            user_id=user_id,
+            role=role,
+        )
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def set_role(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+    ) -> Optional[TournamentMember]:
+        row = self.session.get(TournamentMember, (tournament_id, user_id))
+        if row is None:
+            return None
+        row.role = role
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def remove_member(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> bool:
+        row = self.session.get(TournamentMember, (tournament_id, user_id))
+        if row is None:
+            return False
+        self.session.delete(row)
+        self.session.commit()
+        return True
+
+    def list_for_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[TournamentMember]:
+        return list(
+            self.session.scalars(
+                select(TournamentMember)
+                .where(TournamentMember.tournament_id == tournament_id)
+                .order_by(TournamentMember.joined_at.asc())
+            )
+        )
+
+    def list_tournament_ids_for_user(
+        self,
+        user_id: uuid.UUID,
+    ) -> list[uuid.UUID]:
+        return list(
+            self.session.scalars(
+                select(TournamentMember.tournament_id)
+                .where(TournamentMember.user_id == user_id)
+            )
+        )
+
+
+class _LocalInviteLinkRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create(
+        self,
+        tournament_id: uuid.UUID,
+        role: str,
+        created_by: uuid.UUID,
+    ) -> InviteLink:
+        row = InviteLink(
+            tournament_id=tournament_id,
+            role=role,
+            created_by=created_by,
+        )
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def list_for_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[InviteLink]:
+        return list(
+            self.session.scalars(
+                select(InviteLink)
+                .where(InviteLink.tournament_id == tournament_id)
+                .order_by(InviteLink.created_at.desc())
+            )
+        )
+
+
 class LocalRepository:
-    """Façade: holds the session and exposes the three sub-repositories."""
+    """Façade: holds the session and exposes the sub-repositories."""
 
     BACKUP_KEEP = 10  # mirrors the legacy on-disk rotation count
 
@@ -300,6 +423,8 @@ class LocalRepository:
         self.tournaments = _LocalTournamentRepo(session)
         self.match_states = _LocalMatchStateRepo(session)
         self.backups = _LocalTournamentBackupRepo(session)
+        self.members = _LocalMemberRepo(session)
+        self.invite_links = _LocalInviteLinkRepo(session)
 
     # ---- High-level orchestration (id-explicit, Step 2+) ----------------
 

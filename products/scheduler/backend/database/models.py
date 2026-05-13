@@ -91,6 +91,12 @@ class Tournament(Base):
     backups: Mapped[list["TournamentBackup"]] = relationship(
         back_populates="tournament", cascade="all, delete-orphan"
     )
+    members: Mapped[list["TournamentMember"]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan"
+    )
+    invite_links: Mapped[list["InviteLink"]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan"
+    )
 
 
 class MatchState(Base):
@@ -136,3 +142,61 @@ class TournamentBackup(Base):
     )
 
     tournament: Mapped[Tournament] = relationship(back_populates="backups")
+
+
+class TournamentMember(Base):
+    """Per-tournament role assignment.
+
+    Step 5 of the cloud-prep migration adds this table to gate every
+    ``/tournaments/{id}/*`` route behind a role check. The composite
+    primary key (tournament_id, user_id) enforces one role per user
+    per tournament; promotions/demotions overwrite the existing row.
+
+    ``role`` is a plain string column ("owner" / "operator" /
+    "viewer") rather than a DB-level enum so role changes ship as
+    plain DML and don't need an Alembic migration each time the
+    application widens the vocabulary.
+    """
+
+    __tablename__ = "tournament_members"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    tournament: Mapped[Tournament] = relationship(back_populates="members")
+
+
+class InviteLink(Base):
+    """Shareable URL token granting a fixed role on a tournament.
+
+    Step 5 lands the schema; Step 7 fills in the routes (generate /
+    resolve / revoke). ``role`` is constrained at the application layer
+    to ``operator`` or ``viewer``; ``owner`` is reserved for the
+    tournament creator and isn't transferable via invite.
+    """
+
+    __tablename__ = "invite_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    tournament: Mapped[Tournament] = relationship(back_populates="invite_links")

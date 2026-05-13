@@ -15,6 +15,11 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, Path, Response
 from pydantic import BaseModel, Field
 
+from app.dependencies import (
+    AuthUser,
+    get_current_user,
+    require_tournament_access,
+)
 from app.error_codes import ErrorCode, http_error
 from app.schemas import TournamentStateDTO
 from database.models import Tournament
@@ -107,26 +112,53 @@ def _resolve_tournament(
 
 
 @router.get("", response_model=List[TournamentSummaryDTO])
-def list_tournaments(repo: LocalRepository = Depends(get_repository)):
-    """Newest-first list. Step 6 layers status filter + ownership on top."""
-    return [_to_summary(t) for t in repo.tournaments.list_all()]
+def list_tournaments(
+    user: AuthUser = Depends(get_current_user),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Newest-first list, filtered to tournaments the caller is a member
+    of. Owners, operators, and viewers all appear here; non-members
+    don't see the row at all (not even a 403 — invisibility).
+    """
+    user_uuid = user.as_uuid()
+    if user_uuid is None:
+        return []
+    tournament_ids = set(repo.members.list_tournament_ids_for_user(user_uuid))
+    return [
+        _to_summary(t)
+        for t in repo.tournaments.list_all()
+        if t.id in tournament_ids
+    ]
 
 
 @router.post("", response_model=TournamentSummaryDTO, status_code=201)
 def create_tournament(
     body: TournamentCreateDTO,
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ):
-    """Create an empty tournament. ``state`` stays an empty blob until the
-    first ``PUT /tournaments/{id}/state``."""
+    """Create an empty tournament. The current user is stamped as the
+    owner — both on the ``tournaments.owner_id`` column and as a
+    ``tournament_members`` row with ``role='owner'`` — so the same
+    user can immediately read / write / delete the new tournament via
+    the role-checked endpoints.
+    """
+    user_uuid = user.as_uuid()
     row = repo.tournaments.create(
         name=body.name,
         tournament_date=body.tournamentDate,
+        owner_id=user_uuid,
     )
+    if user_uuid is not None:
+        repo.members.add_member(row.id, user_uuid, role="owner")
     return _to_summary(row)
 
 
-@router.get("/{tournament_id}", response_model=TournamentSummaryDTO)
+@router.get(
+    "/{tournament_id}",
+    response_model=TournamentSummaryDTO,
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
 def get_tournament(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -140,7 +172,11 @@ def get_tournament(
     return _to_summary(_resolve_tournament(tournament_id, repo))
 
 
-@router.patch("/{tournament_id}", response_model=TournamentSummaryDTO)
+@router.patch(
+    "/{tournament_id}",
+    response_model=TournamentSummaryDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
 def update_tournament(
     body: TournamentUpdateDTO,
     tournament_id: uuid.UUID = Path(...),
@@ -169,12 +205,17 @@ def update_tournament(
     return _to_summary(row)
 
 
-@router.delete("/{tournament_id}", status_code=204)
+@router.delete(
+    "/{tournament_id}",
+    status_code=204,
+    dependencies=[Depends(require_tournament_access("owner"))],
+)
 def delete_tournament(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ):
-    """Delete the tournament and CASCADE its match_states + backups."""
+    """Delete the tournament and CASCADE its match_states + backups +
+    members + invite_links."""
     if not repo.tournaments.delete(tournament_id):
         raise http_error(
             404,
@@ -187,7 +228,10 @@ def delete_tournament(
 # ---- Scoped state routes -----------------------------------------------
 
 
-@router.get("/{tournament_id}/state")
+@router.get(
+    "/{tournament_id}/state",
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
 def get_tournament_state(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -204,7 +248,11 @@ def get_tournament_state(
     return row.data
 
 
-@router.put("/{tournament_id}/state", response_model=TournamentStateDTO)
+@router.put(
+    "/{tournament_id}/state",
+    response_model=TournamentStateDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
 def put_tournament_state(
     state: TournamentStateDTO,
     tournament_id: uuid.UUID = Path(...),
@@ -220,13 +268,12 @@ def put_tournament_state(
     try:
         row = repo.commit_tournament_state(tournament_id, state.model_dump())
     except KeyError:
-        # Race: tournament deleted between resolve and commit. Map to 404.
         raise http_error(
             404,
             ErrorCode.STATE_CORRUPT,
             f"tournament not found: {tournament_id}",
         )
-    except Exception as e:  # broad — SQLAlchemy raises many types
+    except Exception as e:
         log.error("tournament-state write failed: %s", e)
         raise http_error(
             500,
@@ -236,7 +283,11 @@ def put_tournament_state(
     return TournamentStateDTO(**row.data)
 
 
-@router.get("/{tournament_id}/state/backups", response_model=BackupListDTO)
+@router.get(
+    "/{tournament_id}/state/backups",
+    response_model=BackupListDTO,
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
 def list_tournament_backups(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -246,7 +297,11 @@ def list_tournament_backups(
     return BackupListDTO(backups=[_backup_entry(r) for r in rows])
 
 
-@router.post("/{tournament_id}/state/backup", response_model=BackupCreatedDTO)
+@router.post(
+    "/{tournament_id}/state/backup",
+    response_model=BackupCreatedDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
 def create_tournament_backup(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -259,7 +314,10 @@ def create_tournament_backup(
     )
 
 
-@router.post("/{tournament_id}/state/restore/{filename}")
+@router.post(
+    "/{tournament_id}/state/restore/{filename}",
+    dependencies=[Depends(require_tournament_access("owner"))],
+)
 def restore_tournament_backup(
     filename: str,
     tournament_id: uuid.UUID = Path(...),

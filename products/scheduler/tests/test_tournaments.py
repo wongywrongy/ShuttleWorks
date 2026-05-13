@@ -2,8 +2,11 @@
 
 Covers `GET/POST /tournaments`, `GET/PATCH/DELETE /tournaments/{id}`,
 plus `GET/PUT /tournaments/{id}/state` and the three backup endpoints.
+Step 5 added the role-matrix block at the bottom.
 """
 from __future__ import annotations
+
+import uuid
 
 import pytest
 from fastapi import FastAPI
@@ -91,9 +94,12 @@ def test_get_returns_summary(client):
     assert r.json()["name"] == "A"
 
 
-def test_get_missing_returns_404(client):
-    r = client.get("/tournaments/00000000-0000-0000-0000-000000000000")
-    assert r.status_code == 404
+def test_get_missing_returns_403_to_non_member(client):
+    """Step 5: an id that doesn't exist (or that the caller isn't a
+    member of) returns 403, not 404. Hiding the existence distinction
+    keeps tournament ids from leaking via membership probes."""
+    r = client.get("/tournaments/00000000-0000-0000-0000-000000000001")
+    assert r.status_code == 403
 
 
 def test_patch_updates_name_status_and_date(client):
@@ -127,20 +133,25 @@ def test_patch_rejects_unknown_status(client):
     assert r.status_code == 422
 
 
-def test_patch_missing_returns_404(client):
+def test_patch_missing_returns_403(client):
+    """Step 5: same as GET — non-membership trumps not-found."""
     r = client.patch(
-        "/tournaments/00000000-0000-0000-0000-000000000000",
+        "/tournaments/00000000-0000-0000-0000-000000000001",
         json={"name": "X"},
     )
-    assert r.status_code == 404
+    assert r.status_code == 403
 
 
-def test_delete_returns_204_then_404(client):
+def test_delete_returns_204_then_403(client):
+    """First DELETE succeeds (caller is owner via creation). Second
+    DELETE: the row + member row are both gone (CASCADE), so the
+    role check returns 403 — matching the missing/not-a-member pattern
+    used by GET and PATCH."""
     created = client.post("/tournaments", json={"name": "A"}).json()
     r = client.delete(f"/tournaments/{created['id']}")
     assert r.status_code == 204
     r = client.delete(f"/tournaments/{created['id']}")
-    assert r.status_code == 404
+    assert r.status_code == 403
 
 
 # ---- Scoped state ------------------------------------------------------
@@ -175,13 +186,14 @@ def test_state_put_updates_denormalised_name_on_summary(client):
     assert summary["name"] == "Renamed via PUT"
 
 
-def test_state_put_on_missing_tournament_404(client):
+def test_state_put_on_missing_tournament_403(client):
+    """Step 5: role check runs first; missing/non-member → 403."""
     payload = _basic_state("X")
     r = client.put(
-        "/tournaments/00000000-0000-0000-0000-000000000000/state",
+        "/tournaments/00000000-0000-0000-0000-000000000001/state",
         json=payload,
     )
-    assert r.status_code == 404
+    assert r.status_code == 403
 
 
 def test_state_put_overwrites_previous(client):
@@ -273,7 +285,12 @@ def test_state_writes_do_not_leak_across_tournaments(client):
 
 
 def test_delete_cascades_backups(client):
-    """Deleting a tournament drops its backups (CASCADE on the FK)."""
+    """Deleting a tournament drops its backups (CASCADE on the FK).
+
+    Step 5: the post-delete request returns 403 because the member row
+    is gone too (CASCADE) — the caller is no longer authorized to ask
+    whether backups exist.
+    """
     created = client.post("/tournaments", json={"name": "A"}).json()
     tid = created["id"]
     client.put(f"/tournaments/{tid}/state", json=_basic_state("v1"))
@@ -281,6 +298,122 @@ def test_delete_cascades_backups(client):
     assert client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
 
     client.delete(f"/tournaments/{tid}")
-    # Backup listing on the now-missing tournament returns 404.
     r = client.get(f"/tournaments/{tid}/state/backups")
-    assert r.status_code == 404
+    assert r.status_code == 403
+
+
+# ---- Role matrix (Step 5) ---------------------------------------------
+
+
+def _set_role(role: str, tid: str) -> None:
+    """Demote (or promote) the local-dev caller to the given role for
+    direct manipulation of the membership table in role-matrix tests."""
+    from app.dependencies import LOCAL_DEV_USER_UUID
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        repo.members.set_role(uuid.UUID(tid), LOCAL_DEV_USER_UUID, role)
+    finally:
+        session.close()
+
+
+def _remove_membership(tid: str) -> None:
+    """Drop the local-dev member row entirely — simulates a request from
+    someone who has zero access to the tournament."""
+    from app.dependencies import LOCAL_DEV_USER_UUID
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        repo.members.remove_member(uuid.UUID(tid), LOCAL_DEV_USER_UUID)
+    finally:
+        session.close()
+
+
+def test_role_matrix_owner_can_read_write_delete(client):
+    """The user who POSTs ``/tournaments`` is implicitly owner."""
+    tid = client.post("/tournaments", json={"name": "A"}).json()["id"]
+    assert client.get(f"/tournaments/{tid}").status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 200
+    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 200
+    assert client.delete(f"/tournaments/{tid}").status_code == 204
+
+
+def test_role_matrix_operator_can_read_write_but_not_delete(client):
+    tid = client.post("/tournaments", json={"name": "A"}).json()["id"]
+    _set_role("operator", tid)
+
+    assert client.get(f"/tournaments/{tid}").status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 200
+    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 200
+    # DELETE / restore are owner-only.
+    assert client.delete(f"/tournaments/{tid}").status_code == 403
+
+
+def test_role_matrix_viewer_can_read_but_not_write(client):
+    tid = client.post("/tournaments", json={"name": "A"}).json()["id"]
+    _set_role("viewer", tid)
+
+    assert client.get(f"/tournaments/{tid}").status_code == 200
+    assert client.get(f"/tournaments/{tid}/state").status_code in (200, 204)
+    # Writes blocked.
+    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 403
+    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 403
+    assert client.delete(f"/tournaments/{tid}").status_code == 403
+
+
+def test_role_matrix_non_member_gets_403_everywhere(client):
+    tid = client.post("/tournaments", json={"name": "A"}).json()["id"]
+    _remove_membership(tid)
+
+    assert client.get(f"/tournaments/{tid}").status_code == 403
+    assert client.get(f"/tournaments/{tid}/state").status_code == 403
+    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 403
+    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 403
+    assert client.delete(f"/tournaments/{tid}").status_code == 403
+
+
+def test_role_matrix_owner_only_for_restore(client):
+    tid = client.post("/tournaments", json={"name": "A"}).json()["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("v1"))
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("v2"))
+    backups = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+    assert backups
+    target = backups[-1]["filename"]
+
+    # Operator can list + create backups but cannot restore.
+    _set_role("operator", tid)
+    assert client.get(f"/tournaments/{tid}/state/backups").status_code == 200
+    assert client.post(f"/tournaments/{tid}/state/backup").status_code == 200
+    assert client.post(f"/tournaments/{tid}/state/restore/{target}").status_code == 403
+
+    # Owner restore succeeds.
+    _set_role("owner", tid)
+    assert client.post(f"/tournaments/{tid}/state/restore/{target}").status_code == 200
+
+
+def test_list_tournaments_returns_only_user_memberships(client):
+    """Two tournaments exist; the caller is a member of only one."""
+    own_id = client.post("/tournaments", json={"name": "Mine"}).json()["id"]
+
+    # Create a second tournament that the local-dev user is NOT a member
+    # of (simulating a tournament owned by a different user).
+    other_uuid = uuid.uuid4()
+    from database.session import SessionLocal
+    from database.models import Tournament
+    session = SessionLocal()
+    try:
+        session.add(Tournament(id=other_uuid, data={}, name="Other"))
+        session.commit()
+    finally:
+        session.close()
+
+    listing = client.get("/tournaments").json()
+    listed_ids = {row["id"] for row in listing}
+    assert own_id in listed_ids
+    assert str(other_uuid) not in listed_ids

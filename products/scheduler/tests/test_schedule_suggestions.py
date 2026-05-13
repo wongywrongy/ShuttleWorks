@@ -134,19 +134,45 @@ def test_evict_expired_suggestions_at_exact_cutoff_survives():
 # ---------- Endpoint tests -------------------------------------------------
 
 from fastapi.testclient import TestClient
-from api.schedule_suggestions import router as suggestions_router
+
+from _helpers import isolate_test_database
 
 
-def _app_with_suggestions_router():
+@pytest.fixture
+def endpoint_app(tmp_path, monkeypatch):
+    """Endpoint-test fixture.
+
+    Step 5 added role checks to the suggestions router, so the test app
+    can no longer be a totally DB-free in-memory shell — the role check
+    reads the ``tournament_members`` table. We isolate a fresh SQLite,
+    create a tournament row + an owner member row for the local-dev
+    user against ``_TID`` (the sentinel UUID the suggestion store is
+    keyed on), then build the router. The in-memory store still owns
+    the suggestion data; only the auth check touches the DB.
+    """
+    isolate_test_database(tmp_path, monkeypatch)
+    from api.schedule_suggestions import router as suggestions_router
+    from app.dependencies import LOCAL_DEV_USER_UUID
+    from database.models import Tournament
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        session.add(Tournament(id=_TID, data={}))
+        session.commit()
+        repo = LocalRepository(session)
+        repo.members.add_member(_TID, LOCAL_DEV_USER_UUID, role="owner")
+    finally:
+        session.close()
+
     app = FastAPI()
     app.include_router(suggestions_router)
     return app
 
 
 def _seed_suggestion(app, **overrides):
-    """Drop a Suggestion directly into the store. Endpoint tests seed
-    pre-built suggestions because the actual stamping path runs the
-    real solver (covered by test_proposal_pipeline_integration)."""
+    """Drop a Suggestion directly into the in-memory store."""
     defaults = dict(
         kind="optimize", title="Re-optimize from now",
         metric="−12 min finish, 7 moves",
@@ -161,72 +187,64 @@ def _seed_suggestion(app, **overrides):
     return sug
 
 
-def test_get_suggestions_returns_empty_list():
-    app = _app_with_suggestions_router()
-    with TestClient(app) as c:
+def test_get_suggestions_returns_empty_list(endpoint_app):
+    with TestClient(endpoint_app) as c:
         r = c.get(f"/tournaments/{_TID_STR}/schedule/suggestions")
     assert r.status_code == 200
     assert r.json() == []
 
 
-def test_get_suggestions_returns_active_sorted_by_severity():
-    app = _app_with_suggestions_router()
-    _seed_suggestion(app, kind="optimize", proposalId="p1", fingerprint="f1")
-    _seed_suggestion(app, kind="repair", proposalId="p2", fingerprint="f2")
-    _seed_suggestion(app, kind="director", proposalId="p3", fingerprint="f3")
-    with TestClient(app) as c:
+def test_get_suggestions_returns_active_sorted_by_severity(endpoint_app):
+    _seed_suggestion(endpoint_app, kind="optimize", proposalId="p1", fingerprint="f1")
+    _seed_suggestion(endpoint_app, kind="repair", proposalId="p2", fingerprint="f2")
+    _seed_suggestion(endpoint_app, kind="director", proposalId="p3", fingerprint="f3")
+    with TestClient(endpoint_app) as c:
         r = c.get(f"/tournaments/{_TID_STR}/schedule/suggestions")
     body = r.json()
     assert r.status_code == 200
     assert len(body) == 3
-    # Severity tier: repair (0) > director (1) > optimize (2)
     assert [b["kind"] for b in body] == ["repair", "director", "optimize"]
 
 
-def test_get_suggestions_evicts_expired():
-    app = _app_with_suggestions_router()
-    _seed_suggestion(app, expiresAt="2000-01-01T00:00:00+00:00")
-    with TestClient(app) as c:
+def test_get_suggestions_evicts_expired(endpoint_app):
+    _seed_suggestion(endpoint_app, expiresAt="2000-01-01T00:00:00+00:00")
+    with TestClient(endpoint_app) as c:
         r = c.get(f"/tournaments/{_TID_STR}/schedule/suggestions")
     assert r.status_code == 200
     assert r.json() == []
 
 
-def test_apply_returns_410_for_unknown_suggestion():
-    app = _app_with_suggestions_router()
-    with TestClient(app) as c:
+def test_apply_returns_410_for_unknown_suggestion(endpoint_app):
+    with TestClient(endpoint_app) as c:
         r = c.post(f"/tournaments/{_TID_STR}/schedule/suggestions/nonexistent/apply")
     assert r.status_code == 410
 
 
-def test_dismiss_drops_suggestion_and_returns_dismissed():
-    app = _app_with_suggestions_router()
-    sug = _seed_suggestion(app)
-    store = _get_suggestion_store(app, _TID)
+def test_dismiss_drops_suggestion_and_returns_dismissed(endpoint_app):
+    sug = _seed_suggestion(endpoint_app)
+    store = _get_suggestion_store(endpoint_app, _TID)
     assert sug.id in store
-    with TestClient(app) as c:
+    with TestClient(endpoint_app) as c:
         r = c.post(f"/tournaments/{_TID_STR}/schedule/suggestions/{sug.id}/dismiss")
     assert r.status_code == 200
     assert r.json() == {"dismissed": True}
     assert sug.id not in store
 
 
-def test_dismiss_returns_410_for_unknown():
-    app = _app_with_suggestions_router()
-    with TestClient(app) as c:
+def test_dismiss_returns_410_for_unknown(endpoint_app):
+    with TestClient(endpoint_app) as c:
         r = c.post(f"/tournaments/{_TID_STR}/schedule/suggestions/nonexistent/dismiss")
     assert r.status_code == 410
 
 
-def test_dismiss_also_drops_underlying_proposal():
+def test_dismiss_also_drops_underlying_proposal(endpoint_app):
     """Dismiss is destructive — the proposal it referenced is also
     removed so an orphaned proposal can't be applied later."""
     from api.schedule_proposals import _get_store
-    app = _app_with_suggestions_router()
-    sug = _seed_suggestion(app, proposalId="prop-to-drop")
-    proposal_store = _get_store(app, _TID)
+    sug = _seed_suggestion(endpoint_app, proposalId="prop-to-drop")
+    proposal_store = _get_store(endpoint_app, _TID)
     proposal_store["prop-to-drop"] = "stub"
-    with TestClient(app) as c:
+    with TestClient(endpoint_app) as c:
         r = c.post(f"/tournaments/{_TID_STR}/schedule/suggestions/{sug.id}/dismiss")
     assert r.status_code == 200
     assert "prop-to-drop" not in proposal_store

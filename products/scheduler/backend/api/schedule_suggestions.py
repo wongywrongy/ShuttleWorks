@@ -18,7 +18,11 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, FastAPI, Path, Request
 
+from app.dependencies import require_tournament_access
 from repositories import LocalRepository, get_repository, open_repository
+
+_VIEWER = Depends(require_tournament_access("viewer"))
+_OPERATOR = Depends(require_tournament_access("operator"))
 
 from app.error_codes import ErrorCode, http_error
 
@@ -358,7 +362,7 @@ def build_handler(app: FastAPI) -> HandlerFn:
 _KIND_TIER = {"repair": 0, "director": 1, "optimize": 2, "candidate": 3}
 
 
-@router.get("", response_model=list[Suggestion])
+@router.get("", response_model=list[Suggestion], dependencies=[_VIEWER])
 async def list_suggestions(
     http_request: Request,
     tournament_id: uuid.UUID = Path(...),
@@ -378,7 +382,7 @@ async def list_suggestions(
         )
 
 
-@router.post("/{suggestion_id}/apply")
+@router.post("/{suggestion_id}/apply", dependencies=[_OPERATOR])
 async def apply_suggestion(
     suggestion_id: str,
     http_request: Request,
@@ -399,7 +403,7 @@ async def apply_suggestion(
     return await commit_proposal(sug.proposalId, http_request, tournament_id, repo)
 
 
-@router.post("/{suggestion_id}/dismiss")
+@router.post("/{suggestion_id}/dismiss", dependencies=[_OPERATOR])
 async def dismiss_suggestion(
     suggestion_id: str,
     http_request: Request,

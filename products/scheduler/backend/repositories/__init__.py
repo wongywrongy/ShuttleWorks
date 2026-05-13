@@ -7,15 +7,19 @@ implementing the same protocols). The concrete repository swaps based on
 Postgres.
 """
 from repositories.base import (
+    InviteLinkRepository,
     MatchStateRepository,
+    MemberRepository,
     TournamentBackupRepository,
     TournamentRepository,
 )
 from repositories.local import LocalRepository, get_repository, open_repository
 
 __all__ = [
+    "InviteLinkRepository",
     "LocalRepository",
     "MatchStateRepository",
+    "MemberRepository",
     "TournamentBackupRepository",
     "TournamentRepository",
     "get_repository",

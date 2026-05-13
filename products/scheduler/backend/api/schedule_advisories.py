@@ -24,6 +24,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Path, Request
 
+from app.dependencies import require_tournament_access
 from repositories import LocalRepository, get_repository
 
 from app.schemas import (
@@ -468,7 +469,11 @@ def collect_advisories(
 # ---------- endpoint -------------------------------------------------------
 
 
-@router.get("/advisories", response_model=List[Advisory])
+@router.get(
+    "/advisories",
+    response_model=List[Advisory],
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
 async def get_schedule_advisories(
     http_request: Request,
     tournament_id: uuid.UUID = Path(...),
