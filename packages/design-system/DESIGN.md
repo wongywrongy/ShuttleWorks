@@ -55,8 +55,12 @@ Each rule has a **why** and a **what to do instead**.
 - **Instead:** Tailwind defaults (`p-2`, `gap-4`, etc.) map to the ladder. For brand-named scale: `p-b-3` (8px), `gap-b-5` (16px), `mt-b-7` (32px). For density-aware: `py-cell`, `px-cell`, `gap-section`.
 
 ### 1.8 No `text-xl`, `text-3xl`, `text-4xl`, etc.
-- **Why:** Strict 11/12/14/16/18/24 type ladder (BRAND.md §2). Display sizes are handled by `font-display` + `clamp()`, not by ad-hoc Tailwind sizes.
-- **Instead:** `text-2xs`, `text-xs`, `text-sm`, `text-base`, `text-lg`, `text-2xl`. Display headers use `font-display text-display` (custom utility — TBD in Phase 6) or inline `style={{ fontSize: 'var(--display-min)' }}`.
+- **Why:** Strict 10/11/12/14/16/18/24 type ladder (BRAND.md §2 + `--text-3xs` added 2026-05-12 to absorb a long tail of micro-stamp arbitraries). Display sizes are handled by `font-display` + `clamp()`, not by ad-hoc Tailwind sizes.
+- **Instead:** `text-3xs` (10px micro-stamp / status pill / footnote), `text-2xs` (11px overline / eyebrow / SectionHeader), `text-xs` (12px metadata), `text-sm` (14px body), `text-base` (16px), `text-lg` (18px), `text-2xl` (24px). Display headers use `font-display text-display` (custom utility — TBD in Phase 6) or inline `style={{ fontSize: 'var(--display-min)' }}`. Below `text-3xs` is off-scale.
+
+### 1.8.b Shadows resolve to brand hard-offset only
+- **Why:** BRAND.md §6 — Gaussian drop shadows clash with the brutalist chrome. Every elevation should land on the same `0 4px 0 hsl(var(--rule))` offset in light mode, dropping to none in dark.
+- **Instead:** The Tailwind preset overrides `boxShadow.{sm, md, lg, xl, 2xl}` to resolve to `var(--shadow-hard)`. Use the utilities (`shadow-lg`, `shadow-xl`) — never `shadow-[<custom>]` arbitraries. `shadow-inner` keeps its own brand mapping for grid-cell drag highlights.
 
 ### 1.9 No new colors outside the palette
 - **Why:** A single warm accent (Signal Orange) + ink scale + status palette is the entire design space. Adding hues collapses the discipline.

@@ -152,7 +152,7 @@ export function SolverProgressLog({
       ) : (
         logs.map((entry) => (
           <div key={entry.id} className="flex gap-1.5">
-            <span className="text-muted-foreground flex-shrink-0 text-[10px]">
+            <span className="text-muted-foreground flex-shrink-0 text-3xs">
               {new Date(entry.timestamp).toLocaleTimeString('en-US', {
                 hour12: false,
                 hour: '2-digit',

@@ -438,7 +438,7 @@ export function DragGantt({
 
         {/* Live hover status */}
         <div
-          className="flex items-center justify-between border-t border-border/60 bg-muted/40 px-3 py-1.5 text-[11px]"
+          className="flex items-center justify-between border-t border-border/60 bg-muted/40 px-3 py-1.5 text-2xs"
           data-testid="drag-gantt-status"
         >
           {activeAssignment && hoverCell && validation ? (
@@ -618,7 +618,7 @@ function MatchBlock({
           className="pointer-events-none absolute -inset-[1px] rounded pin-marquee motion-safe:animate-marching-ants"
         />
       ) : null}
-      <span className="relative text-[11px] font-semibold leading-tight block truncate">
+      <span className="relative text-2xs font-semibold leading-tight block truncate">
         {matchLabel(match)}
       </span>
     </button>

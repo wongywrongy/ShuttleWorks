@@ -63,7 +63,7 @@ export function FinishedCard({
       <span className="font-semibold text-muted-foreground tabular-nums">
         {getMatchLabel(match)}
       </span>
-      <span className="tabular-nums text-[11px] text-muted-foreground">
+      <span className="tabular-nums text-2xs text-muted-foreground">
         C{assignment.courtId}
       </span>
       <span
@@ -77,7 +77,7 @@ export function FinishedCard({
           {score.sideA}–{score.sideB}
         </span>
       ) : (
-        <span className="text-[10px] text-muted-foreground">no score</span>
+        <span className="text-3xs text-muted-foreground">no score</span>
       )}
       <button
         onClick={(e) => {
@@ -85,7 +85,7 @@ export function FinishedCard({
           handleUndo();
         }}
         disabled={updating}
-        className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-[11px]`}
+        className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
         title="Undo finish — back to in progress"
         aria-label="Undo finish"
       >

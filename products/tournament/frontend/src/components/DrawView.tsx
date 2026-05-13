@@ -127,7 +127,7 @@ function BracketCell({
 
   return (
     <div className="card p-3 space-y-2">
-      <div className="flex justify-between text-[10px] text-ink-400 font-mono">
+      <div className="flex justify-between text-3xs text-ink-400 font-mono">
         <span>{pu.id}</span>
         <span>
           {assignment
@@ -183,7 +183,7 @@ function Side({
     >
       <span className="truncate">{label}</span>
       {onWin && !bye && (
-        <span className="text-[10px] text-ink-400">↵ wins</span>
+        <span className="text-3xs text-ink-400">↵ wins</span>
       )}
     </button>
   );

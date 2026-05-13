@@ -94,7 +94,7 @@ export function ScheduleView({ data, eventId, refresh }: Props) {
                   className="px-2 py-2 text-center font-mono text-xs border-b border-ink-200 min-w-[5rem]"
                 >
                   <div className="text-ink-700">slot {s.slot}</div>
-                  <div className="text-ink-400 text-[10px]">+{s.minutes}m</div>
+                  <div className="text-ink-400 text-3xs">+{s.minutes}m</div>
                 </th>
               ))}
             </tr>
@@ -212,7 +212,7 @@ function MatchCell({
       className={`h-12 rounded-md border px-2 py-1 ${cls} flex flex-col justify-center overflow-hidden`}
       title={`${puId}\n${label}`}
     >
-      <div className="text-[10px] font-mono opacity-70">{puId}</div>
+      <div className="text-3xs font-mono opacity-70">{puId}</div>
       <div className="text-xs truncate">{label}</div>
     </div>
   );

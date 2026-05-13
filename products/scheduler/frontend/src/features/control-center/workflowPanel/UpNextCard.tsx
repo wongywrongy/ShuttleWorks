@@ -153,7 +153,7 @@ export function UpNextCard({
     >
       <span className={`w-1.5 h-1.5 rounded-full ${lightStyles.dot}`} />
       <span className="font-semibold text-foreground tabular-nums">{getMatchLabel(match)}</span>
-      <span className="tabular-nums text-[11px] text-muted-foreground">
+      <span className="tabular-nums text-2xs text-muted-foreground">
         C{assignment.courtId} · {scheduledTime}
       </span>
       <span
@@ -177,7 +177,7 @@ export function UpNextCard({
                     aria-pressed={confirmed}
                     className={[
                       INTERACTIVE_BASE,
-                      'inline-flex items-center gap-0.5 rounded border px-1.5 py-0 text-[11px] font-medium',
+                      'inline-flex items-center gap-0.5 rounded border px-1.5 py-0 text-2xs font-medium',
                       confirmed
                         ? 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25'
                         : 'border-border bg-card text-foreground hover:bg-muted',
@@ -203,7 +203,7 @@ export function UpNextCard({
                       handleCheckInAll();
                     }}
                     disabled={updating}
-                    className={`${INTERACTIVE_BASE} inline-flex items-center gap-0.5 rounded bg-blue-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-blue-700`}
+                    className={`${INTERACTIVE_BASE} inline-flex items-center gap-0.5 rounded bg-blue-600 px-1.5 py-0 text-3xs font-medium text-white hover:bg-blue-700`}
                     title={`Check in all ${missingPlayers.length} remaining`}
                     aria-label="Check in all"
                   >
@@ -221,7 +221,7 @@ export function UpNextCard({
                 {p.name}
                 {p.delayCount > 0 && (
                   <span
-                    className="ml-0.5 rounded bg-yellow-100 px-1 text-[9px] font-medium text-yellow-700 dark:bg-amber-500/15 dark:text-amber-200"
+                    className="ml-0.5 rounded bg-yellow-100 px-1 text-3xs font-medium text-yellow-700 dark:bg-amber-500/15 dark:text-amber-200"
                     title={`${p.delayCount} delay(s)`}
                   >
                     {p.delayCount}
@@ -244,7 +244,7 @@ export function UpNextCard({
           );
         })()}
       </span>
-      <span className="flex items-center gap-1 whitespace-nowrap text-[10px]">
+      <span className="flex items-center gap-1 whitespace-nowrap text-3xs">
         {isCalled && matchState?.calledAt && (
           <StatusPill
             tone="blue"
@@ -271,7 +271,7 @@ export function UpNextCard({
                 handleCall();
               }}
               disabled={updating || light === 'red'}
-              className={`${ACTION_BTN} !px-2 !py-0.5 !text-[11px] ${CALL_BTN_BG[light]}`}
+              className={`${ACTION_BTN} !px-2 !py-0.5 !text-2xs ${CALL_BTN_BG[light]}`}
               title={
                 light === 'green'
                   ? 'Call match'
@@ -290,7 +290,7 @@ export function UpNextCard({
               disabled={updating}
               className={[
                 ACTION_BTN,
-                '!px-2 !py-0.5 !text-[11px]',
+                '!px-2 !py-0.5 !text-2xs',
                 matchState?.postponed
                   ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-500/15 dark:text-orange-200 dark:hover:bg-orange-500/25'
                   : 'bg-muted text-foreground hover:bg-muted/80',
@@ -310,7 +310,7 @@ export function UpNextCard({
                 handleStart();
               }}
               disabled={updating}
-              className={`${ACTION_BTN} bg-green-600 text-white hover:bg-green-700 !px-2 !py-0.5 !text-[11px]`}
+              className={`${ACTION_BTN} bg-green-600 text-white hover:bg-green-700 !px-2 !py-0.5 !text-2xs`}
               title={
                 missingPlayers.length > 0
                   ? `Start — ${missingPlayers.length} player(s) not yet checked in`
@@ -327,7 +327,7 @@ export function UpNextCard({
                 handleUndoCalled();
               }}
               disabled={updating}
-              className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-[11px]`}
+              className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
               title="Undo to scheduled"
               aria-label="Undo call"
             >

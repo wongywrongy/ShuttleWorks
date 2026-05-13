@@ -287,7 +287,7 @@ export function ScheduleDiffView({
       {/* "Who do I tell?" — compact chip row. One chip per player. */}
       {affectedPlayerRows.length > 0 && (
         <section>
-          <div className="flex items-center gap-1 mb-1 text-[11px] uppercase tracking-wide font-semibold text-fg-muted">
+          <div className="flex items-center gap-1 mb-1 text-2xs uppercase tracking-wide font-semibold text-fg-muted">
             <Users aria-hidden="true" className="h-3 w-3" />
             Notify ({affectedPlayerRows.length})
           </div>
@@ -313,7 +313,7 @@ export function ScheduleDiffView({
           "#5 MS1 · Alice (A) vs Bob (B) · 09:00·c1 → 11:00·c2 · +2h" */}
       {enrichedMoves.length > 0 && (
         <section>
-          <div className="text-[11px] uppercase tracking-wide font-semibold text-fg-muted mb-1">
+          <div className="text-2xs uppercase tracking-wide font-semibold text-fg-muted mb-1">
             Changes ({enrichedMoves.length})
           </div>
           <ul className="rounded border border-border max-h-64 overflow-auto divide-y divide-border">
@@ -436,7 +436,7 @@ function MoveRow({
         </span>
       </span>
       {/* Delta pill */}
-      <span className={`rounded border px-1 py-0 text-[10px] font-semibold whitespace-nowrap ${tone}`}>
+      <span className={`rounded border px-1 py-0 text-3xs font-semibold whitespace-nowrap ${tone}`}>
         {deltaLabel}
       </span>
     </li>

@@ -128,7 +128,7 @@ export function PlayerDetailPanel({
           {/* Two-column layout matches the rest of the Setup-style
               rows: label left at 13px / fixed width, control right. */}
           <div className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-2 items-center">
-            <label className="text-[12px] font-medium text-muted-foreground">School</label>
+            <label className="text-xs font-medium text-muted-foreground">School</label>
             <select
               value={player.groupId}
               onChange={(e) =>
@@ -144,7 +144,7 @@ export function PlayerDetailPanel({
               ))}
             </select>
 
-            <label className="text-[12px] font-medium text-muted-foreground">Availability</label>
+            <label className="text-xs font-medium text-muted-foreground">Availability</label>
             <span className="text-xs text-muted-foreground">
               {player.availability && player.availability.length > 0
                 ? `${player.availability.length} window${player.availability.length === 1 ? '' : 's'} defined`
@@ -153,7 +153,7 @@ export function PlayerDetailPanel({
 
             <label
               htmlFor="player-rest-input"
-              className="text-[12px] font-medium text-muted-foreground"
+              className="text-xs font-medium text-muted-foreground"
             >
               Min rest
             </label>
@@ -183,7 +183,7 @@ export function PlayerDetailPanel({
 
             <label
               htmlFor="player-notes-input"
-              className="text-[12px] font-medium text-muted-foreground self-start mt-1"
+              className="text-xs font-medium text-muted-foreground self-start mt-1"
             >
               Notes
             </label>
@@ -201,7 +201,7 @@ export function PlayerDetailPanel({
               style={{ width: 360 }}
             />
 
-            <label className="text-[12px] font-medium text-muted-foreground self-start mt-1">
+            <label className="text-xs font-medium text-muted-foreground self-start mt-1">
               Ranks
             </label>
             <div className="flex flex-wrap gap-1.5">
@@ -219,7 +219,7 @@ export function PlayerDetailPanel({
                       onClick={() => handleToggleRank(r)}
                       aria-pressed={isActive}
                       className={[
-                        'rounded-[6px] border px-2 py-0.5 text-[11px] font-mono font-medium tabular-nums',
+                        'rounded-[6px] border px-2 py-0.5 text-2xs font-mono font-medium tabular-nums',
                         'transition-colors duration-fast ease-brand',
                         isActive
                           ? 'border-accent bg-accent/10 text-accent'

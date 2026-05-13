@@ -30,7 +30,7 @@ export function Row({ label, control, last }: RowProps) {
         last ? '' : 'border-b border-border/60',
       ].join(' ')}
     >
-      <span className="flex-1 text-[13px] font-medium text-foreground">
+      <span className="flex-1 text-sm font-medium text-foreground">
         {label}
       </span>
       <div className="flex-shrink-0">{control}</div>

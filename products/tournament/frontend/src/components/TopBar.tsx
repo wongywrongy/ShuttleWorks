@@ -135,7 +135,7 @@ function Counters({
         <Light tone="text-status-called" label="READY" n={event.ready} />
         <Light tone="text-status-idle"   label="PEND"  n={event.pending} />
       </div>
-      <div className="text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="text-3xs uppercase tracking-wider text-ink-faint">
         ALL · {global.done}D · {global.live}L · {global.ready}R
       </div>
     </div>

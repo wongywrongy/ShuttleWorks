@@ -230,7 +230,7 @@ function CourtCard({
       >
         {/* Court number — anchor of the card */}
         <div className="flex items-baseline gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <span className="text-3xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
             Court
           </span>
           <span className={`${courtNumSize} font-black tabular-nums leading-none`}>{courtId}</span>

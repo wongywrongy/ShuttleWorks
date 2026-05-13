@@ -175,7 +175,7 @@ export function PositionGrid({
       >
         <thead>
           <tr>
-            <th className="w-12 border-b-2 border-r border-border bg-muted py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <th className="w-12 border-b-2 border-r border-border bg-muted py-1.5 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
               #
             </th>
             {events.map((ev) => {
@@ -187,7 +187,7 @@ export function PositionGrid({
                   title={label?.full}
                 >
                   {ev.prefix}
-                  <span className="ml-2 text-[10px] font-medium opacity-70">
+                  <span className="ml-2 text-3xs font-medium opacity-70">
                     {isDoubles(ev.prefix) ? 'doubles' : 'singles'}
                   </span>
                 </th>

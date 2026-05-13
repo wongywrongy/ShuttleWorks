@@ -108,7 +108,7 @@ export function PositionCell({
       ].join(' ')}
     >
       {disabled ? (
-        <span className="block px-1 py-1 text-[10px] italic opacity-50">—</span>
+        <span className="block px-1 py-1 text-3xs italic opacity-50">—</span>
       ) : (
         <button
           type="button"
@@ -128,12 +128,12 @@ export function PositionCell({
               rank={rank}
             />
             {doubles && occupants.length === 1 ? (
-              <span className="rounded-[6px] border border-dashed border-border px-2 py-0.5 text-[10px] italic text-muted-foreground">
+              <span className="rounded-[6px] border border-dashed border-border px-2 py-0.5 text-3xs italic text-muted-foreground">
                 ＋ add partner
               </span>
             ) : null}
             {occupants.length === 0 ? (
-              <span className="inline-flex items-center gap-1 text-[11px] italic text-muted-foreground">
+              <span className="inline-flex items-center gap-1 text-2xs italic text-muted-foreground">
                 <span aria-hidden>＋</span>
                 {doubles ? 'add pair' : 'add player'}
               </span>
@@ -184,7 +184,7 @@ function CellChips({
   const renderPlayerRow = (p: PlayerDTO) => (
     <div
       key={p.id}
-      className="group flex items-center justify-between gap-1 px-2 py-0.5 text-[11px] font-medium leading-tight"
+      className="group flex items-center justify-between gap-1 px-2 py-0.5 text-2xs font-medium leading-tight"
     >
       <span className="break-words">{p.name || '(unnamed)'}</span>
       <span

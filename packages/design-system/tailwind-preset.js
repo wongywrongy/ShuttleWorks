@@ -31,6 +31,7 @@ module.exports = {
       },
 
       fontSize: {
+        '3xs':  ['var(--text-3xs)',  { lineHeight: '0.875rem', letterSpacing: '0.02em' }],
         '2xs':  ['var(--text-2xs)',  { lineHeight: '1rem',   letterSpacing: '0.02em' }],
         xs:     ['var(--text-xs)',   { lineHeight: '1rem' }],
         sm:     ['var(--text-sm)',   { lineHeight: '1.25rem' }],
@@ -155,6 +156,23 @@ module.exports = {
         md: 'var(--radius-md)',           // 0
         lg: 'var(--radius-lg)',           // 0
         // Full removed (was rounded-full) — replace with rounded-none in code
+      },
+
+      // -------- Shadows (BRAND.md §6 — hard-offset only, no Gaussian) ----
+      // Tailwind's stock `shadow-lg`/`shadow-xl` are Gaussian drop shadows
+      // (`0 10px 15px -3px rgba(0,0,0,0.1)` etc.) which clash with the
+      // brutalist chrome. Override the elevation utilities so they all
+      // resolve to the brand hard-offset shadow (light mode only; dark
+      // mode drops to bare substrate per --shadow-hard's dark override).
+      boxShadow: {
+        none: 'none',
+        sm:   'var(--shadow-sm)',
+        DEFAULT: 'var(--shadow-hard)',
+        md:   'var(--shadow-md)',
+        lg:   'var(--shadow-lg)',
+        xl:   'var(--shadow-hard)',
+        '2xl':'var(--shadow-hard)',
+        inner: 'inset 0 1px 0 hsl(var(--rule) / 0.4)',
       },
 
       // -------- Brand easing + duration scale (see MOTION.md) --------

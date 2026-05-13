@@ -126,7 +126,7 @@ export function PlayerSearchPicker({
               >
                 <span className="truncate">{p.name || '(unnamed)'}</span>
                 {currentRanks.length > 0 ? (
-                  <span className="ml-2 truncate text-[10px] font-normal text-muted-foreground">
+                  <span className="ml-2 truncate text-3xs font-normal text-muted-foreground">
                     {currentRanks.slice(0, 3).join(', ')}
                     {currentRanks.length > 3 ? '…' : ''}
                   </span>
@@ -136,7 +136,7 @@ export function PlayerSearchPicker({
           })
         )}
       </div>
-      <div className="flex items-center justify-between border-t border-border/60 px-2 py-1 text-[10px] text-muted-foreground">
+      <div className="flex items-center justify-between border-t border-border/60 px-2 py-1 text-3xs text-muted-foreground">
         <span>Up/Down to navigate · Enter to pick · Esc to close</span>
         <button
           type="button"

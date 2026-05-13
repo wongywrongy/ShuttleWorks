@@ -425,7 +425,7 @@ function BulkImportSection({
             data-testid="bulk-import-textarea"
             className="w-full resize-y rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
-          <div className="flex items-center justify-between text-[11px]">
+          <div className="flex items-center justify-between text-2xs">
             <span className="text-muted-foreground tabular-nums">
               {parseNames(draft).length} name
               {parseNames(draft).length === 1 ? '' : 's'}

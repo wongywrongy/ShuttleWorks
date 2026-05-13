@@ -107,7 +107,7 @@ export function TabBar() {
                           : `${disruptions.warnings} warning${disruptions.warnings === 1 ? '' : 's'}`
                     }
                     className={[
-                      'motion-enter-icon ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums',
+                      'motion-enter-icon ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-3xs font-semibold tabular-nums',
                       disruptions.severity === 'error'
                         ? 'bg-destructive text-destructive-foreground'
                         : 'bg-status-warning/20 text-status-warning',

@@ -48,7 +48,7 @@ interface GanttChartProps {
 // room to show a 4-character event code like "MS17" without clipping.
 // 96 ÷ 2 = 48 px per half-block, which matches the pre-overlap
 // single-block width and is proven to fit a 4-char code comfortably
-// at text-[11px].
+// at text-2xs.
 // Sized to match the schedule-tab DragGantt so a director's eye doesn't
 // have to recalibrate when switching between Schedule and Live. Both
 // grids use 80×40 with a dotted grid background.
@@ -461,7 +461,7 @@ export function GanttChart({
                             it clips via overflow-hidden rather than
                             scaling. */}
                         <span
-                          className={`text-[11px] font-semibold whitespace-nowrap overflow-hidden tabular-nums ${styles.text}`}
+                          className={`text-2xs font-semibold whitespace-nowrap overflow-hidden tabular-nums ${styles.text}`}
                         >
                           {match ? getMatchLabel(match) : '?'}
                         </span>

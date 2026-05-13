@@ -71,14 +71,14 @@ export function InProgressCard({
       <span className="font-semibold text-foreground tabular-nums">
         {getMatchLabel(match)}
       </span>
-      <span className="text-[11px] text-muted-foreground">C{displayCourtId}</span>
-      <span className="tabular-nums text-[11px] text-muted-foreground">
+      <span className="text-2xs text-muted-foreground">C{displayCourtId}</span>
+      <span className="tabular-nums text-2xs text-muted-foreground">
         <ElapsedTimer startTime={matchState?.actualStartTime} />
       </span>
       <span className="truncate text-foreground" title={`${sideANames} vs ${sideBNames}`}>
         {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
         {wasMoved && (
-          <span className="ml-1 text-[10px] text-orange-500 dark:text-orange-300">
+          <span className="ml-1 text-3xs text-orange-500 dark:text-orange-300">
             (moved)
           </span>
         )}
@@ -91,7 +91,7 @@ export function InProgressCard({
               onRequestScore(assignment.matchId);
             }}
             disabled={updating}
-            className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700 !px-2 !py-0.5 !text-[11px]`}
+            className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700 !px-2 !py-0.5 !text-2xs`}
             title="Enter score — opens score editor in the rail"
             aria-label="Enter score"
           >
@@ -104,7 +104,7 @@ export function InProgressCard({
             handleUndo();
           }}
           disabled={updating}
-          className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-[11px]`}
+          className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
           title="Undo to called"
           aria-label="Undo started match"
         >

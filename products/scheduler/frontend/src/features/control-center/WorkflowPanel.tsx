@@ -152,7 +152,7 @@ export function WorkflowPanel({
                 In Progress
               </span>
             </div>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-3xs text-muted-foreground">
               {matchesByStatus.started.length} active
             </span>
           </div>
@@ -205,7 +205,7 @@ export function WorkflowPanel({
         <div className="flex-1 overflow-auto p-1.5">
           {activeTab === 'up_next' &&
             (upNextFiltered.length === 0 ? (
-              <div className="text-center text-muted-foreground text-[10px] py-4">
+              <div className="text-center text-muted-foreground text-3xs py-4">
                 {searchQuery && upNextSorted.length > 0
                   ? 'No match for current search'
                   : 'No matches pending'}

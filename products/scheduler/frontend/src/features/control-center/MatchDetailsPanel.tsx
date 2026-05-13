@@ -235,12 +235,12 @@ export function MatchDetailsPanel({
   // header uses so the panel feels like an extension of the page.
   const actionBtn =
     `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded border border-border ` +
-    `bg-card px-2 py-1 text-[11px] font-medium text-card-foreground ` +
+    `bg-card px-2 py-1 text-2xs font-medium text-card-foreground ` +
     `hover:bg-muted/40 hover:text-foreground ` +
     `disabled:cursor-not-allowed disabled:opacity-50`;
   const primaryActionBtn =
     `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded ` +
-    `bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground ` +
+    `bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground ` +
     `hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50`;
 
   return (
@@ -250,11 +250,11 @@ export function MatchDetailsPanel({
         <div className="text-sm font-bold text-foreground mb-0.5">
           {getMatchLabel(match)}
         </div>
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-3xs text-muted-foreground">
           C{displayCourtId}{courtChanged && ` (sched: C${assignment.courtId})`} · {scheduledTime}
         </div>
         {showSchools && (
-          <div className="mt-1 flex items-center gap-1 text-[11px] text-foreground">
+          <div className="mt-1 flex items-center gap-1 text-2xs text-foreground">
             <SchoolDot accent={sideASchool!} size="sm" />
             <span className="truncate">{sideASchool!.name}</span>
             <span className="text-muted-foreground">vs</span>
@@ -286,14 +286,14 @@ export function MatchDetailsPanel({
         return (
           <div className="mb-3 rounded bg-muted/40 px-2 py-2 text-xs text-foreground">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
                 Done
               </span>
               {onUpdateStatus && mode === 'idle' && (
                 <button
                   type="button"
                   onClick={() => setMode('score')}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/15`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-3xs font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/15`}
                   title="Edit score"
                   aria-label="Edit score"
                 >
@@ -304,7 +304,7 @@ export function MatchDetailsPanel({
             {winner && winnerNames ? (
               <div className="mt-1 flex items-baseline justify-between gap-2">
                 <span className="min-w-0 truncate">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Winner
                   </span>{' '}
                   <span className="font-semibold text-blue-800 dark:text-blue-300">{winnerNames}</span>
@@ -312,7 +312,7 @@ export function MatchDetailsPanel({
                 {score && (
                   <span className="font-mono text-sm font-bold tabular-nums text-foreground">
                     {score.sideA}–{score.sideB}
-                    <span className="ml-1 text-[10px] font-medium text-muted-foreground">sets</span>
+                    <span className="ml-1 text-3xs font-medium text-muted-foreground">sets</span>
                   </span>
                 )}
               </div>
@@ -326,9 +326,9 @@ export function MatchDetailsPanel({
                   return (
                     <div
                       key={i}
-                      className="flex items-center justify-between rounded bg-card px-1.5 py-0.5 font-mono text-[11px]"
+                      className="flex items-center justify-between rounded bg-card px-1.5 py-0.5 font-mono text-2xs"
                     >
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
                         Set {i + 1}
                       </span>
                       <span className="tabular-nums">
@@ -349,7 +349,7 @@ export function MatchDetailsPanel({
                 })}
               </div>
             ) : (
-              <div className="mt-1 text-[10px] text-muted-foreground">
+              <div className="mt-1 text-3xs text-muted-foreground">
                 No per-set scores recorded — tap Edit to fill them in.
               </div>
             )}
@@ -359,7 +359,7 @@ export function MatchDetailsPanel({
 
       {/* Reason for yellow/red */}
       {status === 'scheduled' && trafficLight?.reason && light !== 'green' && (
-        <div className={`px-2 py-1.5 rounded text-[10px] mb-3 ${
+        <div className={`px-2 py-1.5 rounded text-3xs mb-3 ${
           light === 'yellow'
             ? 'bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-500/15 dark:border-yellow-500/40 dark:text-yellow-200'
             : 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-500/15 dark:border-red-500/40 dark:text-red-200'
@@ -374,7 +374,7 @@ export function MatchDetailsPanel({
           popping a modal — keeps every interaction in the rail. */}
       {onUpdateStatus && mode === 'idle' && (
         <div className="mb-3">
-          <div className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
+          <div className="text-3xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
             Actions
           </div>
           <div className="flex flex-wrap gap-1">
@@ -475,7 +475,7 @@ export function MatchDetailsPanel({
 
       {/* Players */}
       <div className="mb-3">
-        <div className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
+        <div className="text-3xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
           Players
         </div>
         {(() => {
@@ -527,7 +527,7 @@ export function MatchDetailsPanel({
                 <div className="flex items-center justify-between gap-1">
                   <span className={`${sideClass(side)} inline-flex items-center gap-1.5 min-w-0`}>
                     {winner === side && (
-                      <span className="rounded bg-blue-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
+                      <span className="rounded bg-blue-100 px-1 text-3xs font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
                         Won
                       </span>
                     )}
@@ -535,7 +535,7 @@ export function MatchDetailsPanel({
                       <span
                         title={rankExpanded ?? match.eventRank}
                         aria-label={rankExpanded ?? match.eventRank}
-                        className="rounded bg-muted px-1 text-[9px] font-semibold tabular-nums tracking-wide text-muted-foreground"
+                        className="rounded bg-muted px-1 text-3xs font-semibold tabular-nums tracking-wide text-muted-foreground"
                       >
                         {match.eventRank}
                       </span>
@@ -550,7 +550,7 @@ export function MatchDetailsPanel({
                         disabled={updating}
                         title={confirmed ? 'Mark as not checked in' : 'Check in'}
                         aria-label={confirmed ? 'Mark as not checked in' : 'Check in'}
-                        className={`inline-flex items-center justify-center rounded h-4 w-4 text-[10px] ${
+                        className={`inline-flex items-center justify-center rounded h-4 w-4 text-3xs ${
                           confirmed
                             ? 'bg-green-600 text-white'
                             : 'border border-border bg-card text-muted-foreground hover:bg-muted/40'
@@ -561,7 +561,7 @@ export function MatchDetailsPanel({
                     )}
                     {restInfo ? (
                       <span
-                        className="text-[9px] text-foreground"
+                        className="text-3xs text-foreground"
                         title={`Since ${restInfo.lastMatchLabel || 'last match'}`}
                       >
                         {restInfo.restMinutes >= 60
@@ -572,13 +572,13 @@ export function MatchDetailsPanel({
                         rest
                       </span>
                     ) : (
-                      <span className="text-[9px] text-muted-foreground">1st</span>
+                      <span className="text-3xs text-muted-foreground">1st</span>
                     )}
                     {canSub && (
                       <button
                         type="button"
                         onClick={() => setSubPickingFor(isPicking ? null : playerId)}
-                        className={`rounded border border-border bg-card px-1 text-[9px] font-medium ${
+                        className={`rounded border border-border bg-card px-1 text-3xs font-medium ${
                           isPicking
                             ? 'bg-muted/40 text-foreground'
                             : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -608,8 +608,8 @@ export function MatchDetailsPanel({
                           }}
                           className={
                             armed
-                              ? 'rounded border border-red-500 bg-red-600 px-1 text-[9px] font-semibold text-white motion-safe:animate-pulse'
-                              : 'rounded border border-red-300 bg-red-50 px-1 text-[9px] text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300'
+                              ? 'rounded border border-red-500 bg-red-600 px-1 text-3xs font-semibold text-white motion-safe:animate-pulse'
+                              : 'rounded border border-red-300 bg-red-50 px-1 text-3xs text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300'
                           }
                           title={
                             armed
@@ -625,8 +625,8 @@ export function MatchDetailsPanel({
                   </span>
                 </div>
                 {isPicking && (
-                  <div className="ml-3 rounded border border-border bg-card text-[11px]">
-                    <div className="border-b border-border/60 px-1.5 py-1 text-[10px] leading-snug text-muted-foreground">
+                  <div className="ml-3 rounded border border-border bg-card text-2xs">
+                    <div className="border-b border-border/60 px-1.5 py-1 text-3xs leading-snug text-muted-foreground">
                       Replaces this player in this match only. The new player
                       appears on the TV and in live tracking; if they're
                       already in another scheduled match, a conflict will
@@ -634,7 +634,7 @@ export function MatchDetailsPanel({
                     </div>
                     <div className="max-h-32 overflow-y-auto">
                       {subCandidates.length === 0 && (
-                        <div className="px-1.5 py-1 text-[10px] text-muted-foreground">No available players.</div>
+                        <div className="px-1.5 py-1 text-3xs text-muted-foreground">No available players.</div>
                       )}
                       {subCandidates.map((p) => (
                         <button
@@ -685,7 +685,7 @@ export function MatchDetailsPanel({
           so the operator can audit waits vs. runs at a glance. */}
       {(matchState?.calledAt || matchState?.actualStartTime || matchState?.actualEndTime) && (
         <div className="mb-3">
-          <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+          <div className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
             Timing
           </div>
           <div className="space-y-0.5 text-xs">
@@ -699,11 +699,11 @@ export function MatchDetailsPanel({
                 <span className="tabular-nums text-foreground">
                   {formatIsoClock(matchState.calledAt)}
                   {matchState.actualStartTime ? (
-                    <span className="ml-1 text-[10px] text-muted-foreground">
+                    <span className="ml-1 text-3xs text-muted-foreground">
                       · waited {formatDuration(matchState.calledAt, matchState.actualStartTime)}
                     </span>
                   ) : (
-                    <span className="ml-1 text-[10px] text-blue-600">
+                    <span className="ml-1 text-3xs text-blue-600">
                       · {formatDuration(matchState.calledAt, new Date().toISOString())} ago
                     </span>
                   )}
@@ -716,7 +716,7 @@ export function MatchDetailsPanel({
                 <span className="tabular-nums text-foreground">
                   {formatIsoClock(matchState.actualStartTime)}
                   {status === 'started' && (
-                    <span className="ml-1 text-[10px] text-green-700">
+                    <span className="ml-1 text-3xs text-green-700">
                       · playing{' '}
                       <ElapsedTimer
                         startTime={matchState.actualStartTime}
@@ -732,7 +732,7 @@ export function MatchDetailsPanel({
                 <span className="text-muted-foreground">Finished</span>
                 <span className="tabular-nums text-foreground">
                   {formatIsoClock(matchState.actualEndTime)}
-                  <span className="ml-1 text-[10px] text-muted-foreground">
+                  <span className="ml-1 text-3xs text-muted-foreground">
                     · ran {formatDuration(matchState.actualStartTime, matchState.actualEndTime)}
                   </span>
                 </span>
@@ -746,7 +746,7 @@ export function MatchDetailsPanel({
           in the rail. Each row is ``<event> · <shared player>``. */}
       {analysis && analysis.directlyImpacted.length > 0 && (
         <div>
-          <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+          <div className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
             Impacted ({analysis.directlyImpacted.length})
           </div>
           <div className="divide-y divide-border/60 rounded bg-muted/40">
@@ -776,10 +776,10 @@ export function MatchDetailsPanel({
                   className="flex items-center gap-1.5 px-1.5 py-0.5 cursor-pointer hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title={sharedPlayerNames.join(', ')}
                 >
-                  <span className="text-[11px] font-medium text-foreground tabular-nums w-12 flex-shrink-0">
+                  <span className="text-2xs font-medium text-foreground tabular-nums w-12 flex-shrink-0">
                     {eventLabel}
                   </span>
-                  <span className="flex-1 truncate text-[10px] text-muted-foreground">
+                  <span className="flex-1 truncate text-3xs text-muted-foreground">
                     {sharedPlayerNames.join(', ') || '—'}
                   </span>
                   <CaretRight aria-hidden="true" className="h-3 w-3 text-muted-foreground flex-shrink-0" />
