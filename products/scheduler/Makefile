@@ -1,4 +1,4 @@
-.PHONY: build run rebuild stop logs clean dev help test-e2e test-e2e-rebuild test-e2e-dev test-e2e-install
+.PHONY: build run rebuild stop logs clean dev help test-e2e test-e2e-rebuild test-e2e-dev test-e2e-install generate-api
 
 # Default target
 help:
@@ -20,6 +20,9 @@ help:
 	@echo "  make test-e2e          - Boot stack + run smoke tests + tear down"
 	@echo "  make test-e2e-rebuild  - Force rebuild images before running tests"
 	@echo "  make test-e2e-dev      - Run tests against http://localhost:5173 (requires 'make dev')"
+	@echo ""
+	@echo "API contract:"
+	@echo "  make generate-api      - Regenerate frontend/src/api/dto.generated.ts from FastAPI OpenAPI"
 	@echo ""
 
 # === Production Commands ===
@@ -88,3 +91,22 @@ test-e2e-rebuild:
 
 test-e2e-dev:
 	cd e2e && npm install --silent && E2E_BASE_URL=http://localhost:5173 E2E_MANAGE_STACK=0 npx playwright test
+
+# === API contract generation ===
+
+# Regenerate the frontend's TS DTOs from the FastAPI OpenAPI schema.
+# Imports the FastAPI app directly via tools/generate_openapi.py — no
+# running backend required, so the target is safe to run in CI.
+#
+# Contract types in frontend/src/api/dto.ts are the curated view of
+# the auto-generated dto.generated.ts: when schemas.py changes, run
+# this target, inspect the diff in dto.generated.ts, and reconcile
+# dto.ts by hand. Frontend-private types (SSE events, internal enums)
+# stay in dto.ts and are NOT touched by this target.
+generate-api:
+	@echo "Dumping OpenAPI schema..."
+	@python tools/generate_openapi.py frontend/src/api/.openapi.json
+	@echo "Generating frontend/src/api/dto.generated.ts..."
+	@cd frontend && npx openapi-typescript ./src/api/.openapi.json --output ./src/api/dto.generated.ts
+	@rm frontend/src/api/.openapi.json
+	@echo "Done. Inspect 'git diff frontend/src/api/dto.generated.ts'."
