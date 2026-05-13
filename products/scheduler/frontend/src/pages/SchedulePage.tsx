@@ -168,27 +168,27 @@ export function SchedulePage() {
   const bestBound = hasLiveProgress ? generationProgress.best_bound : scheduleStats?.bestBound;
 
   return (
-    <div className="flex h-full w-full flex-col gap-2 px-3 py-2">
+    <div className="flex h-full w-full flex-col overflow-hidden">
       <StaleBanner />
       <SuggestionsRail />
 
-      {needsConfig && (
-        <div className="flex-shrink-0 rounded border border-status-warning/40 bg-status-warning-bg px-3 py-2 text-xs text-status-warning">
+      {needsConfig ? (
+        <div className="shrink-0 border-b border-status-warning/40 bg-status-warning/5 px-4 py-2 text-xs text-status-warning">
           <span className="font-medium">Config needed:</span>{' '}
           <Link to="/setup" className="underline">
             Tournament Setup
           </Link>
         </div>
-      )}
+      ) : null}
 
-      {error && (
-        <div className="flex-shrink-0 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+      {error ? (
+        <div className="motion-enter shrink-0 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {schedule?.status === 'infeasible' && (
-        <div className="flex-shrink-0 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs">
+      {schedule?.status === 'infeasible' ? (
+        <div className="motion-enter shrink-0 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-xs">
           <div className="mb-1 font-semibold text-destructive">
             Couldn't generate a feasible schedule
           </div>
@@ -196,7 +196,7 @@ export function SchedulePage() {
             Try adding courts, reducing default rest time, extending the day,
             or relaxing player availability windows in Setup.
           </div>
-          {schedule.infeasibleReasons && schedule.infeasibleReasons.length > 0 && (
+          {schedule.infeasibleReasons && schedule.infeasibleReasons.length > 0 ? (
             <details className="mt-2">
               <summary className="cursor-pointer text-destructive hover:underline">
                 Details ({schedule.infeasibleReasons.length})
@@ -205,19 +205,19 @@ export function SchedulePage() {
                 {schedule.infeasibleReasons.slice(0, 10).map((reason, i) => (
                   <li key={i}>{reason}</li>
                 ))}
-                {schedule.infeasibleReasons.length > 10 && (
+                {schedule.infeasibleReasons.length > 10 ? (
                   <li>…and {schedule.infeasibleReasons.length - 10} more</li>
-                )}
+                ) : null}
               </ul>
             </details>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
       {showVisualization && displayAssignments.length > 0 && config ? (
-        <div className="flex-1 min-h-0 flex bg-card rounded border border-border overflow-hidden">
-          <div className="flex-1 min-w-0 flex flex-col">
-            <div className="px-2 py-1.5 border-b border-border/60 flex items-center justify-between flex-shrink-0">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
               <LiveMetricsBar
                 elapsed={elapsed}
                 solutionCount={solutionCount}
@@ -225,7 +225,7 @@ export function SchedulePage() {
                 bestBound={bestBound}
                 status={status}
               />
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
                   onClick={() => void exportScheduleXlsx(schedule, matches, players, config)}
@@ -236,9 +236,9 @@ export function SchedulePage() {
                       ? 'Generate a schedule first'
                       : 'Download schedule as XLSX'
                   }
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground`}
+                  className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
                 >
-                  <Download aria-hidden="true" className="h-4 w-4" />
+                  <Download aria-hidden="true" className="h-3.5 w-3.5" />
                   Export XLSX
                 </button>
                 <ScheduleActions
@@ -248,9 +248,9 @@ export function SchedulePage() {
                   confirmingReplace={confirmingReplace}
                 />
               </div>
-            </div>
+            </header>
 
-            <div className="p-2 overflow-auto border-b border-border/60">
+            <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-3">
               {schedule && !isOptimizing ? (
                 <DragGantt
                   schedule={schedule}
@@ -274,16 +274,18 @@ export function SchedulePage() {
               )}
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col">
-              <div className="px-2 py-1.5 border-b border-border/60 flex items-center justify-between flex-shrink-0">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Matches
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {displayAssignments.length}/{matches.length}
-                </span>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
+                <div className="flex min-w-0 items-baseline gap-3">
+                  <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Matches
+                  </span>
+                  <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                    {displayAssignments.length} of {matches.length} scheduled
+                  </span>
+                </div>
               </div>
-              <div className="flex-1 min-h-0 p-2">
+              <div className="min-h-0 flex-1 overflow-auto">
                 <MatchesTable
                   assignments={displayAssignments}
                   matches={matches}
@@ -324,12 +326,12 @@ export function SchedulePage() {
           />
         </div>
       ) : isOptimizing && !hasLiveProgress ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 bg-card rounded border border-border">
-          <div className="w-8 h-8 border-[3px] border-border border-t-primary rounded-full animate-spin"></div>
-          <div className="text-muted-foreground text-sm">Starting optimization...</div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-2">
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-border border-t-primary" />
+          <div className="text-sm text-muted-foreground">Starting optimization…</div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-card rounded-lg border border-dashed border-border">
+        <div className="motion-enter flex flex-1 flex-col items-center justify-center gap-3">
           <CalendarBlank
             aria-hidden="true"
             className="h-10 w-10 text-muted-foreground/60"
