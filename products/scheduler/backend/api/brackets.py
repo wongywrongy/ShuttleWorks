@@ -787,11 +787,17 @@ def create_bracket(
         ]
 
         # Format generation produces the Draw (slot tree + rounds).
+        # ``play_unit_id_prefix=ev.id`` namespaces PlayUnit ids per event
+        # (``MS-R0-0`` not the constant-default ``M-R0-0``). Without it
+        # every event mints identical ids and the second event's
+        # ``register_draw`` raises on the shared TournamentState — see
+        # register_draw's "callers should namespace per event" contract.
         if ev.format == "se":
             try:
                 draw = generate_single_elimination(
                     participants,
                     event_id=ev.id,
+                    play_unit_id_prefix=ev.id,
                     seeded_count=ev.seeded_count,
                     bracket_size=ev.bracket_size,
                     duration_slots=ev.duration_slots,
@@ -805,6 +811,7 @@ def create_bracket(
                     participants,
                     rounds=ev.rr_rounds,
                     event_id=ev.id,
+                    play_unit_id_prefix=ev.id,
                     duration_slots=ev.duration_slots,
                 )
             except (ValueError, NotImplementedError) as exc:

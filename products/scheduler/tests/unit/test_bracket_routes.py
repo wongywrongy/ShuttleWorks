@@ -135,6 +135,39 @@ def test_create_bracket_rejects_duplicate_event_ids(client, tid):
     assert r.status_code == 400
 
 
+def test_create_bracket_multi_event_namespaces_play_units(client, tid):
+    """Multiple events with distinct ids must not collide play-unit ids.
+
+    Regression: ``create_bracket`` called the draw generators with
+    ``event_id`` but no ``play_unit_id_prefix``, so the prefix fell back
+    to its constant default (``"M"`` for SE, ``"RR"`` for RR) and every
+    event minted identical ids (``M-R0-0`` …). The second event's
+    ``register_draw`` then raised ``ValueError`` on the shared
+    ``TournamentState`` — unhandled in the route, surfacing as a 500.
+    """
+    payload = _se_4_body()
+    payload["events"].append(
+        {
+            "id": "WS",
+            "discipline": "Women's Singles",
+            "format": "se",
+            "participants": [
+                {"id": f"Q{i}", "name": f"Player {i}", "seed": i}
+                for i in range(1, 5)
+            ],
+            "duration_slots": 1,
+        }
+    )
+    r = client.post(_bracket_url(tid), json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert {e["id"] for e in body["events"]} == {"MS", "WS"}
+    # 4-entrant SE = 3 play units per event; two events = 6, all unique.
+    pu_ids = [p["id"] for p in body["play_units"]]
+    assert len(pu_ids) == 6
+    assert len(set(pu_ids)) == 6, f"play-unit ids collided: {sorted(pu_ids)}"
+
+
 def test_create_bracket_rejects_if_one_already_exists(client, tid):
     r1 = client.post(_bracket_url(tid), json=_se_4_body())
     assert r1.status_code == 200
