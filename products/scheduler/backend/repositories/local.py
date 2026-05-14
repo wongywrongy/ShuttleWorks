@@ -57,6 +57,10 @@ from sqlalchemy.orm import Session
 
 from app.time_utils import now_iso
 from database.models import (
+    BracketEvent,
+    BracketMatch,
+    BracketParticipant,
+    BracketResult,
     Command,
     InviteLink,
     Match,
@@ -437,6 +441,329 @@ class _LocalMatchRepo:
         return fields
 
 
+class _LocalBracketRepo:
+    """Persistence for the tournament-product bracket schema.
+
+    Backs the ``bracket_events`` / ``bracket_participants`` /
+    ``bracket_matches`` / ``bracket_results`` tables introduced by the
+    T-A migration. PR 1 of the backend-merge arc lands the
+    persistence layer only — no routes consume it yet. PR 2 retires
+    ``products/tournament/backend/state.py``'s in-memory container and
+    wires the existing tournament routes through these methods.
+
+    Method shapes mirror ``_LocalMatchRepo`` where the parallels are
+    natural (composite-key ``get``, ``list_for_*``, ``upsert``-with-
+    optimistic-concurrency). The bracket-specific surface adds
+    ``bulk_create_participants`` + ``bulk_create_matches`` (the
+    tournament product builds entire brackets in one shot from
+    ``tournament.formats.generate_single_elimination`` /
+    ``generate_round_robin``) and ``record_result`` (one row per
+    recorded outcome, no per-result version semantics — the row is
+    the result).
+
+    Sync-queue enqueue is intentionally NOT wired in this repo. PR 2
+    adds bracket entity types to ``SyncService`` and inserts the
+    enqueue calls at the same time as the route consolidation.
+    """
+
+    _MUTABLE_MATCH_FIELDS = frozenset(
+        {"slot_a", "slot_b", "side_a", "side_b", "kind", "meta"}
+    )
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    # ---- Events --------------------------------------------------------
+
+    def get_event(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> Optional[BracketEvent]:
+        return self.session.get(BracketEvent, (tournament_id, event_id))
+
+    def list_events(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[BracketEvent]:
+        return list(
+            self.session.scalars(
+                select(BracketEvent)
+                .where(BracketEvent.tournament_id == tournament_id)
+                .order_by(BracketEvent.id.asc())
+            )
+        )
+
+    def create_event(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        *,
+        discipline: str,
+        format: str,
+        duration_slots: int,
+        bracket_size: Optional[int] = None,
+        seeded_count: int = 0,
+        rr_rounds: Optional[int] = None,
+        config: Optional[dict] = None,
+    ) -> BracketEvent:
+        row = BracketEvent(
+            tournament_id=tournament_id,
+            id=event_id,
+            discipline=discipline,
+            format=format,
+            duration_slots=duration_slots,
+            bracket_size=bracket_size,
+            seeded_count=seeded_count,
+            rr_rounds=rr_rounds,
+            config=config or {},
+        )
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def delete_event(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> bool:
+        row = self.get_event(tournament_id, event_id)
+        if row is None:
+            return False
+        # CASCADE wipes participants + matches + results via FK.
+        self.session.delete(row)
+        self.session.commit()
+        return True
+
+    # ---- Participants --------------------------------------------------
+
+    def list_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> list[BracketParticipant]:
+        return list(
+            self.session.scalars(
+                select(BracketParticipant)
+                .where(
+                    BracketParticipant.tournament_id == tournament_id,
+                    BracketParticipant.bracket_event_id == event_id,
+                )
+                .order_by(BracketParticipant.id.asc())
+            )
+        )
+
+    def bulk_create_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        participants: list[dict],
+    ) -> int:
+        """Insert participants for an event in one transaction.
+
+        Each ``participants`` entry: ``id``, ``name``, ``type``,
+        optional ``member_ids``, ``seed``, ``meta``. Returns the
+        number of rows inserted.
+        """
+        if not participants:
+            return 0
+        rows = [
+            BracketParticipant(
+                tournament_id=tournament_id,
+                bracket_event_id=event_id,
+                id=p["id"],
+                name=p["name"],
+                type=p["type"],
+                member_ids=p.get("member_ids") or [],
+                seed=p.get("seed"),
+                meta=p.get("meta") or {},
+            )
+            for p in participants
+        ]
+        self.session.add_all(rows)
+        self.session.commit()
+        return len(rows)
+
+    # ---- Matches -------------------------------------------------------
+
+    def get_match(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        match_id: str,
+    ) -> Optional[BracketMatch]:
+        return self.session.get(
+            BracketMatch, (tournament_id, event_id, match_id)
+        )
+
+    def list_matches(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> list[BracketMatch]:
+        return list(
+            self.session.scalars(
+                select(BracketMatch)
+                .where(
+                    BracketMatch.tournament_id == tournament_id,
+                    BracketMatch.bracket_event_id == event_id,
+                )
+                .order_by(
+                    BracketMatch.round_index.asc(),
+                    BracketMatch.match_index.asc(),
+                )
+            )
+        )
+
+    def bulk_create_matches(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        matches: list[dict],
+    ) -> int:
+        """Insert the generated match tree for an event in one transaction.
+
+        Each ``matches`` entry mirrors the BracketMatch column shape:
+        ``id``, ``round_index``, ``match_index``, ``slot_a``,
+        ``slot_b``, ``expected_duration_slots``, plus optional
+        ``kind``, ``side_a``, ``side_b``, ``dependencies``,
+        ``duration_variance_slots``, ``child_unit_ids``, ``meta``.
+        Returns the number of rows inserted.
+        """
+        if not matches:
+            return 0
+        rows = [
+            BracketMatch(
+                tournament_id=tournament_id,
+                bracket_event_id=event_id,
+                id=m["id"],
+                round_index=m["round_index"],
+                match_index=m["match_index"],
+                kind=m.get("kind", "MATCH"),
+                slot_a=m["slot_a"],
+                slot_b=m["slot_b"],
+                side_a=m.get("side_a") or [],
+                side_b=m.get("side_b") or [],
+                dependencies=m.get("dependencies") or [],
+                expected_duration_slots=m["expected_duration_slots"],
+                duration_variance_slots=m.get("duration_variance_slots", 0),
+                child_unit_ids=m.get("child_unit_ids") or [],
+                meta=m.get("meta") or {},
+            )
+            for m in matches
+        ]
+        self.session.add_all(rows)
+        self.session.commit()
+        return len(rows)
+
+    def update_match(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        match_id: str,
+        fields: dict,
+        *,
+        expected_version: Optional[int] = None,
+    ) -> BracketMatch:
+        """Mutate selected fields on a bracket match.
+
+        Used by advancement to resolve a downstream slot once the
+        upstream winner is known. Mirrors ``_LocalMatchRepo.upsert``
+        semantics: ``expected_version`` enables optimistic concurrency,
+        and ``version`` increments by 1 on a successful write.
+        """
+        row = self.get_match(tournament_id, event_id, match_id)
+        if row is None:
+            raise KeyError((tournament_id, event_id, match_id))
+        if expected_version is not None and expected_version != row.version:
+            raise _conflict_error_class()(
+                match_id=match_id,
+                current_version=row.version,
+                seen_version=expected_version,
+                message=(
+                    f"Bracket match {event_id}/{match_id} was updated "
+                    f"since you last loaded it (current version "
+                    f"{row.version}, you sent {expected_version})."
+                ),
+            )
+        for key, value in fields.items():
+            if key in self._MUTABLE_MATCH_FIELDS:
+                setattr(row, key, value)
+        row.version = row.version + 1
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    # ---- Results -------------------------------------------------------
+
+    def get_result(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        match_id: str,
+    ) -> Optional[BracketResult]:
+        return self.session.get(
+            BracketResult, (tournament_id, event_id, match_id)
+        )
+
+    def list_results(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> list[BracketResult]:
+        return list(
+            self.session.scalars(
+                select(BracketResult)
+                .where(
+                    BracketResult.tournament_id == tournament_id,
+                    BracketResult.bracket_event_id == event_id,
+                )
+                .order_by(BracketResult.bracket_match_id.asc())
+            )
+        )
+
+    def record_result(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        match_id: str,
+        *,
+        winner_side: str,
+        score: Optional[dict] = None,
+        finished_at_slot: Optional[int] = None,
+        walkover: bool = False,
+    ) -> BracketResult:
+        """Insert (or replace) the result row for a bracket match.
+
+        A result is one-to-one with a match; re-recording overwrites
+        the prior row. The advancement code in PR 2 will own
+        re-record semantics — for now the repo just performs the
+        idempotent insert/update.
+        """
+        existing = self.get_result(tournament_id, event_id, match_id)
+        if existing is None:
+            row = BracketResult(
+                tournament_id=tournament_id,
+                bracket_event_id=event_id,
+                bracket_match_id=match_id,
+                winner_side=winner_side,
+                score=score,
+                finished_at_slot=finished_at_slot,
+                walkover=walkover,
+            )
+            self.session.add(row)
+        else:
+            existing.winner_side = winner_side
+            existing.score = score
+            existing.finished_at_slot = finished_at_slot
+            existing.walkover = walkover
+            row = existing
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+
 class _LocalMatchStateRepo:
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -738,6 +1065,7 @@ class LocalRepository:
         self.session = session
         self.tournaments = _LocalTournamentRepo(session)
         self.matches = _LocalMatchRepo(session)
+        self.brackets = _LocalBracketRepo(session)
         self.match_states = _LocalMatchStateRepo(session)
         self.commands = _LocalCommandRepo(session)
         self.backups = _LocalTournamentBackupRepo(session)

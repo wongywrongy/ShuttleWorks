@@ -13,9 +13,21 @@ The repo has two products that look like one to the operator:
   :80 / :8000.
 - **Tournament** — bracket draws + multi-event tournament
   management (single-elimination, round-robin, BWF-conformant).
-  Separate FastAPI app, in-memory state, no DB, no auth.
+  Separate FastAPI app, in-memory state, no auth.
   Lives at `products/tournament/`. Compose project `tournament`,
   ports :5174 / :8765.
+
+**Both backends run the CP-SAT solver via the shared
+`scheduler_core/` package.** The tournament product imports
+`scheduler_core.domain.models.ScheduleConfig` /
+`scheduler_core.domain.tournament.TournamentState` etc. and calls
+`scheduler_core.engine.cpsat_backend` on each `/tournament/schedule-next`.
+The engine is already unified — what's split is the persistence
+(SQLite + Supabase mirror vs in-memory `container.py`), the auth
+(Supabase JWT + role gates vs anonymous + CORS `*`), and the
+FastAPI app instance + Docker stack. That's why the merge below
+is cheaper than it looks: the expensive shared piece (the solver)
+is already common code.
 
 After commit `b55bfcb` (dashboard "New" → Meet | Tournament
 dialog), the frontend points at both products from one launchpad.
@@ -24,8 +36,9 @@ The implementation is still two stacks held together by
 
 This roadmap is the multi-step shape of merging the backends so the
 "one product" the dashboard implies is also the "one product" the
-operator actually runs. Not implemented yet — this doc captures the
-plan so a future arc can step through it cleanly.
+operator actually runs. PR 1 of the merge arc (T-A: bracket schema
++ repository) is the first concrete step — see `## Execution
+sequence` below.
 
 ---
 
@@ -44,8 +57,12 @@ Today's split has concrete costs:
   poke the tournament product. Inconsistent risk surface.
 - **Different conventions** — scheduler has SQLite + Supabase
   mirror + Alembic + repository pattern + outbox + Realtime;
-  tournament is a 5-file in-memory prototype. Each new feature
-  on the tournament side reinvents what scheduler already has.
+  tournament keeps its tournament state in an in-memory
+  `_Container` (`products/tournament/backend/state.py`) that dies
+  on container restart. The bracket logic itself is solid
+  (`tournament/draw.py`, `advancement.py`, `formats.py`) but every
+  new operator-facing feature on the tournament side has to
+  reinvent what the scheduler product already has.
 - **Deploy split** — `make scheduler` and `make tournament` are
   separate. Two `.env` files, two health probes, two restart
   policies.
@@ -320,6 +337,85 @@ What gets retired:
 
 ---
 
+## Execution sequence
+
+The eight T-A through T-H steps land across four PRs, ~2-3 weeks
+total. Faster than the original 3-4 week estimate because the
+CP-SAT engine is already shared via `scheduler_core/` — the
+expensive part is already done.
+
+### Decisions locked (2026-05-13)
+
+1. **Schema:** bracket events are children of the existing
+   `tournaments` table — `bracket_events` etc. FK to
+   `tournaments(id)`. Cheaper than renaming `tournaments` →
+   `events(kind)`; the schema is staged so the rename can land
+   later as a cosmetic cleanup if needed.
+2. **Dialog:** the dashboard's Meet | Tournament dialog stays
+   as-is through PRs 1-2 and collapses to a single "New event"
+   form in PR 3 once both kinds live in the same backend.
+3. **Auth:** bracket routes get `require_tournament_access(min_role)`
+   matching the scheduler pattern. Anonymous access on the
+   tournament product ends with the merge.
+
+### PR 1 — Schema + repository (T-A) — invisible to users
+
+- Alembic migration `f7a3c9b2e8d4_step_t_a_bracket_schema` on top
+  of `e2a5f3b8c1d6` adds `bracket_events`, `bracket_participants`,
+  `bracket_matches`, `bracket_results`.
+- SQLAlchemy models in `products/scheduler/backend/database/models.py`.
+- `_LocalBracketRepo` in `products/scheduler/backend/repositories/local.py`
+  matching the `_LocalMatchRepo` shape.
+- Supabase: equivalent Postgres DDL applied via MCP migration
+  `step_t_a_bracket_schema_and_rls` with RLS + `_select_member`
+  policies gated by `app.role_in_tournament()`.
+- Tournament product **untouched** — still runs on its own stack.
+- Test gate: 369 scheduler backend + 23 frontend tests stay
+  green; new 28 tests for `_LocalBracketRepo`.
+
+### PR 2 — Backend route merge + auth + sync (T-B + T-C + T-D)
+
+- Move `products/tournament/backend/main.py` and the
+  `products/tournament/tournament/` pure-Python package into the
+  scheduler backend.
+- Routes: `/tournament/*` → `/tournaments/{tid}/bracket/*`. Old
+  paths return 410 Gone.
+- Every bracket route wraps `require_tournament_access(min_role)`.
+- In-memory `container.py` state replaced with `_LocalBracketRepo`
+  calls.
+- Bracket writes flow through `sync_queue` (same outbox);
+  `SyncService` learns `bracket_match`, `bracket_event` entity
+  types. `bracket_*` tables added to `supabase_realtime` publication.
+- Tournament-product Docker service retired; tournament frontend
+  (still at :5174) has its apiClient pointed at :8000.
+- Test gate: all tests green; tournament-product flows now run
+  authenticated; outbox replication test extended for brackets.
+
+### PR 3 — Frontend merge + commands + dialog (T-E + T-F)
+
+- Tournament React app folds into `products/scheduler/frontend/`.
+  New `Bracket` tab in `AppShell` + matching dashboard
+  list-section.
+- Bracket actions route through `POST /tournaments/{tid}/commands`
+  with new `BracketAction` enum values; optimistic UI inherits
+  existing `commandQueue` + `ConflictBanner`.
+- Frontend subscribes to bracket changes via Supabase Realtime
+  (parallel to `subscribeToMatches`).
+- **Dashboard dialog collapses** to a single form: name + date +
+  kind selector. `VITE_TOURNAMENT_APP_URL` env var removed.
+- `products/tournament/frontend/` retired.
+
+### PR 4 — Decommission + docs (T-G + T-H)
+
+- Delete `products/tournament/` (or archive to
+  `archive/tournament-pre-merge/` for git-blame).
+- One Makefile target. `make tournament` removed.
+- `docs/tech-stack.md`, `docs/deploy/cloud.md` updated.
+- Smoke test against running `make scheduler` stack.
+- Final commit: `arch: unify scheduler + tournament backends`.
+
+---
+
 ## Cross-references
 
 - `docs/tech-stack.md` — current architecture (scheduler-only).
@@ -331,6 +427,8 @@ What gets retired:
 - `products/scheduler/README.md` — scheduler product overview.
 - `products/tournament/README.md` — tournament product overview
   (will be retired at T-G).
-- `scheduler_core/README.md` — shared CP-SAT engine. May grow
-  during T-A if bracket draw logic is genuinely sport-agnostic
-  and warrants a home there.
+- `scheduler_core/README.md` — shared CP-SAT engine. Both
+  backends import from here today; PR 2 may grow this package
+  if bracket-side draw / advancement logic is genuinely
+  sport-agnostic enough to live alongside the shared engine
+  rather than under the scheduler-product tree.

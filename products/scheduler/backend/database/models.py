@@ -40,6 +40,7 @@ from typing import Optional
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -130,6 +131,9 @@ class Tournament(Base):
         back_populates="tournament", cascade="all, delete-orphan"
     )
     invite_links: Mapped[list["InviteLink"]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan"
+    )
+    bracket_events: Mapped[list["BracketEvent"]] = relationship(
         back_populates="tournament", cascade="all, delete-orphan"
     )
 
@@ -390,3 +394,199 @@ class InviteLink(Base):
     )
 
     tournament: Mapped[Tournament] = relationship(back_populates="invite_links")
+
+
+# ---- Bracket schema (T-A, backend-merge arc) ----------------------------
+#
+# Children of ``tournaments``. A bracket "event" here means a sub-event
+# / division within a tournament (Men's Singles, Women's Doubles, etc.)
+# — NOT a meet. The naming follows ``scheduler_core/domain/tournament.py``'s
+# ``Event`` concept. Persistence is invisible in PR 1; the
+# ``_LocalBracketRepo`` introduced alongside this schema is exercised
+# by unit tests only. PR 2 wires the tournament-product routes to read
+# and write through these tables.
+
+
+class BracketEvent(Base):
+    """One sub-event within a tournament's bracket draws.
+
+    Composite PK ``(tournament_id, id)`` mirrors the ``Match`` model so
+    the ``id`` is tournament-scoped (e.g. ``"MS"`` for Men's Singles)
+    and per-tournament scans hit the PK leading column. ``format``
+    is the tournament product's ``"se"`` (single-elimination) or
+    ``"rr"`` (round-robin) tag; ``config`` is the catch-all blob for
+    format-specific knobs (randomize-seed flag, optional metadata).
+    """
+
+    __tablename__ = "bracket_events"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    discipline: Mapped[str] = mapped_column(String(200), nullable=False)
+    format: Mapped[str] = mapped_column(String(20), nullable=False)
+    duration_slots: Mapped[int] = mapped_column(Integer, nullable=False)
+    bracket_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    seeded_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rr_rounds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    tournament: Mapped[Tournament] = relationship(back_populates="bracket_events")
+    participants: Mapped[list["BracketParticipant"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
+    matches: Mapped[list["BracketMatch"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
+
+
+class BracketParticipant(Base):
+    """Seeded entrant in a bracket event.
+
+    ``type`` mirrors ``ParticipantType`` ('PLAYER' | 'TEAM'); a team
+    participant carries its member ids in ``member_ids``. ``seed`` is
+    nullable for unseeded entrants. ``meta`` holds anything the draw
+    logic wants to round-trip (e.g. club, country).
+    """
+
+    __tablename__ = "bracket_participants"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    bracket_event_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    member_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    seed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    meta: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    event: Mapped[BracketEvent] = relationship(back_populates="participants")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tournament_id", "bracket_event_id"],
+            ["bracket_events.tournament_id", "bracket_events.id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+
+class BracketMatch(Base):
+    """One PlayUnit row.
+
+    ``slot_a`` / ``slot_b`` are the BracketSlot shapes from
+    ``products/tournament/tournament/draw.py``: exactly one of
+    ``participant_id`` (concrete entrant or BYE sentinel) or
+    ``feeder_play_unit_id`` (pointer to the upstream match whose
+    winner fills this slot). ``side_a`` / ``side_b`` cache the
+    resolved participant id lists once known.
+
+    ``version`` is the optimistic-concurrency token; the advancement
+    code in PR 2 will increment it on each slot resolution / status
+    change. Index on ``(tournament_id, bracket_event_id, round_index)``
+    backs the "list this event's matches by round" query.
+    """
+
+    __tablename__ = "bracket_matches"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    bracket_event_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    round_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    match_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), default="MATCH", nullable=False)
+    slot_a: Mapped[dict] = mapped_column(JSON, nullable=False)
+    slot_b: Mapped[dict] = mapped_column(JSON, nullable=False)
+    side_a: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    side_b: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    dependencies: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    expected_duration_slots: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_variance_slots: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    child_unit_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    meta: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    event: Mapped[BracketEvent] = relationship(back_populates="matches")
+    result: Mapped[Optional["BracketResult"]] = relationship(
+        back_populates="match",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tournament_id", "bracket_event_id"],
+            ["bracket_events.tournament_id", "bracket_events.id"],
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_bracket_matches_event_round",
+            "tournament_id",
+            "bracket_event_id",
+            "round_index",
+        ),
+    )
+
+
+class BracketResult(Base):
+    """Recorded outcome of a bracket match.
+
+    One-to-one optional with ``bracket_matches``. ``winner_side``
+    follows ``WinnerSide`` ('A' | 'B' | 'NONE' for draws/walkovers).
+    ``score`` is a JSON blob — format-specific (sets, points, etc.).
+    """
+
+    __tablename__ = "bracket_results"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    bracket_event_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    bracket_match_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    winner_side: Mapped[str] = mapped_column(String(10), nullable=False)
+    score: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    finished_at_slot: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    walkover: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    match: Mapped[BracketMatch] = relationship(back_populates="result")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            [
+                "tournament_id",
+                "bracket_event_id",
+                "bracket_match_id",
+            ],
+            [
+                "bracket_matches.tournament_id",
+                "bracket_matches.bracket_event_id",
+                "bracket_matches.id",
+            ],
+            ondelete="CASCADE",
+        ),
+    )
