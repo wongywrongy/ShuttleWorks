@@ -16,7 +16,7 @@
  * ``useSuggestions``, etc.) read the same id via ``useParams`` /
  * ``useTournamentId`` — no prop drilling required.
  */
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
@@ -49,16 +49,23 @@ export function TournamentPage() {
     };
   }, [tid]);
 
-  // Sync the URL trailing segment into activeTab so deep links land
-  // on the right tab. ``location.pathname`` is something like
-  // ``/tournaments/<uuid>/bracket`` — pop the last segment and, if
-  // it's a known tab id, push it into the store.
-  useEffect(() => {
+  // Sync the URL trailing segment into activeTab + optimistic kind
+  // BEFORE the first paint, so the AppShell never flashes meet tabs
+  // on a tournament-kind page (or vice versa). ``useLayoutEffect``
+  // runs after DOM mutations but before the browser paints, so the
+  // synchronous Zustand update + re-render lands before the user
+  // sees anything. ``useTournamentKind``'s async fetch corrects the
+  // optimistic guess if the URL lies (e.g. someone hand-edits the
+  // URL to ``/bracket`` on a meet-kind tournament).
+  useLayoutEffect(() => {
     if (!tid) return;
     const segment = location.pathname.split('/').filter(Boolean).pop();
     if (segment && _TAB_SEGMENTS.has(segment as AppTab)) {
       useUiStore.getState().setActiveTab(segment as AppTab);
     }
+    const optimisticKind: 'meet' | 'bracket' =
+      segment === 'bracket' ? 'bracket' : 'meet';
+    useUiStore.getState().setActiveTournamentKind(optimisticKind);
   }, [tid, location.pathname]);
 
   if (!tid) {

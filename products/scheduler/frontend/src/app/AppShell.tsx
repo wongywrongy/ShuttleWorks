@@ -41,16 +41,11 @@ const BracketTab = lazy(() =>
 // shape matches the layout that's about to mount.
 
 export function AppShell() {
-  // Hydrate from server-side tournament.json on mount + debounced PUTs on change.
-  // Theme + density hooks live at App.tsx level so they fire on every route.
-  useTournamentState();
-  // Poll /schedule/advisories every 15s and surface warn/critical
-  // advisories as toasts. Single mount covers every page.
-  useAdvisories();
-  // Poll /schedule/suggestions every 8s and drop into appStore.
-  // The SuggestionsRail (rendered per-page directly under each
-  // AdvisoryBanner) reads from the store.
-  useSuggestions();
+  // Theme + density hooks live at App.tsx level so they fire on every
+  // route. The meet-specific polling hooks (useTournamentState +
+  // useAdvisories + useSuggestions) are gated to kind='meet' below
+  // via the ``<MeetShellHooks />`` mount so a tournament-kind page
+  // doesn't fire three unrelated GETs on every poll cycle.
   const activeTab = useUiStore((s) => s.activeTab);
   const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
   const pushToast = useUiStore((s) => s.pushToast);
@@ -136,6 +131,13 @@ export function AppShell() {
       >
         Skip to content
       </a>
+      {/* Meet-only polling hooks live inside this sibling component
+          so React doesn't fire them on bracket-kind tournaments
+          (where the JSON-blob ``/state``, ``/schedule/advisories``,
+          and ``/schedule/suggestions`` endpoints all return empty
+          junk). Mounting/unmounting on kind change is cheap because
+          ``useTournamentKind`` is the only thing that flips it. */}
+      {activeTournamentKind !== 'bracket' ? <MeetShellHooks /> : null}
       <TabBar />
       <UnsavedBannerSlot />
       <main id="main" className="flex-1 min-h-0 overflow-auto">
@@ -169,6 +171,25 @@ export function AppShell() {
       <UnlockModalHost />
     </div>
   );
+}
+
+// Meet-only polling hooks. Hosting them in a sibling component lets
+// us conditionally mount them based on tournament kind without
+// violating React's "hooks must be called in the same order every
+// render" rule. The hooks themselves don't render anything; they
+// just register polling timers and write into Zustand stores.
+function MeetShellHooks() {
+  // Hydrate from server-side tournament.json on mount + debounced
+  // PUTs on change.
+  useTournamentState();
+  // Poll /schedule/advisories every 15s and surface warn/critical
+  // advisories as toasts.
+  useAdvisories();
+  // Poll /schedule/suggestions every 8s and drop into appStore. The
+  // SuggestionsRail (rendered per-page directly under each
+  // AdvisoryBanner) reads from the store.
+  useSuggestions();
+  return null;
 }
 
 // Banner slot: collapses to zero height when no banner is visible so the
