@@ -2,6 +2,31 @@
 
 _Last updated: 2026-05-13_
 
+> **Status: 7/8 steps shipped** as of PR 4. The arc landed across
+> four PRs on branch `dev2`:
+>
+> 1. `dd2b154` — PR 1 (T-A): bracket schema + `_LocalBracketRepo`.
+> 2. `33405b5` — PR 2 prep: bracket package moved to scheduler/services/.
+> 3. `b93c794` — PR 2 (T-B + T-C + T-D): authed bracket routes + outbox + Realtime.
+> 4. `a931122` — PR 3 (T-E): frontend merge + dashboard dialog collapse.
+> 5. The arc-final commit (PR 4): tournament product archived at
+>    `archive/tournament-pre-merge/`, Makefile pruned, docs swept.
+>
+> **T-F is deliberately deferred to a follow-up PR.** Bracket
+> actions still go through direct API calls + a 2.5s polling hook
+> (`useBracket`); a follow-up adds `BracketAction` enum values to
+> the `/commands` endpoint, wires bracket UI through `commandQueue`,
+> and swaps polling for Supabase Realtime subscriptions
+> (the publication membership shipped in PR 2; the subscriber
+> wiring is what's left). The merge unifies the backends + the
+> shell — the optimistic-UI parity with the meet workflow is its
+> own next step.
+>
+> The sections below stay as the planning document the arc was
+> built against; treat them as historical context, not current
+> state. `docs/tech-stack.md` and `docs/deploy/cloud.md` have the
+> end-state.
+
 ## Context
 
 The repo has two products that look like one to the operator:

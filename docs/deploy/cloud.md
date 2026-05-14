@@ -1,15 +1,19 @@
 # ShuttleWorks Deployment Guide
-_Last updated: 2026-05-13 (post architecture-adjustment arc)_
+_Last updated: 2026-05-13 (post backend-merge arc)_
 
-This document covers deploying the post-arc system: a Tauri sidecar
-on the director's laptop, a Supabase project as the read-mirror +
-auth, and a Vercel TV display.
+This document covers deploying the post-merge system: a single
+scheduler stack (FastAPI + React + SQLite) on the director's
+laptop with Supabase as the cloud read-mirror + auth, and a Vercel
+TV display. The backend-merge arc (PRs 1–4) folded the prior
+tournament product into the scheduler — one stack now serves both
+meet schedules and bracket draws. The standalone tournament
+product is archived at `archive/tournament-pre-merge/`.
 
 The cloud-prep arc shipped a Fly.io / Render-deployable FastAPI;
-the architecture-adjustment arc replaces that with the local sidecar
-model below. Old `fly deploy` / Render web-service instructions are
-*deliberately removed* — running the backend on a cloud host is no
-longer the deployment story.
+the architecture-adjustment arc replaced that with the local
+sidecar model. Old `fly deploy` / Render web-service instructions
+are *deliberately removed* — running the backend on a cloud host
+is no longer the deployment story.
 
 ---
 
@@ -72,56 +76,64 @@ secret-hygiene audit entry in `docs/changes/`.
 ### Schema migrations on Supabase — what actually needs to land
 
 The local Alembic chain on the director's machine ends at revision
-`e2a5f3b8c1d6` (Step E's `sync_queue` table). Of the three new
-tables the arc adds, **only one needs to exist on Supabase**:
+`f7a3c9b2e8d4` (the backend-merge arc's T-A bracket schema). Of
+the seven new tables the two arcs add, **five need to exist on
+Supabase**:
 
 | Table | Local SQLite | Supabase | Why |
 |---|---|---|---|
 | `matches` | ✅ | ✅ — **required** | The outbox pushes match rows; Realtime publication needs the table; operator browsers + TV display read it |
 | `commands` | ✅ | ❌ — local-only | Audit log lives on the director's machine; no current sync path |
 | `sync_queue` | ✅ | ❌ — local-only | The outbox is by definition a local-only construct |
+| `bracket_events` | ✅ | ✅ — **required** | Bracket-tab views read it; included in `supabase_realtime` publication so operator browsers see live edits |
+| `bracket_participants` | ✅ | ✅ — **required** | RLS reads by tournament members; rides along in the event-level Realtime payload (not in the publication itself) |
+| `bracket_matches` | ✅ | ✅ — **required** | Slot tree + assignments; in the Realtime publication so advancement reflects live |
+| `bracket_results` | ✅ | ✅ — **required** | Recorded outcomes; in the Realtime publication so the bracket UI animates on result-record |
 
-The `matches` table was applied to the Supabase project on
-2026-05-13 via the MCP `apply_migration` tool as a single
-migration named `step_a_matches_table_and_rls`. It bundles three
-changes:
+Migrations applied to the Supabase project as a chain (each via
+the MCP `apply_migration` tool):
 
-1. `CREATE TABLE public.matches` with composite PK
-   `(tournament_id, id)`, FK CASCADE to `public.tournaments(id)`,
-   and the `ix_matches_tournament_status` index.
-2. `ENABLE ROW LEVEL SECURITY` + `matches_select_member` policy
-   that lets `authenticated` users read matches for tournaments
-   they're members of (reuses the `app.role_in_tournament()`
-   SECURITY DEFINER helper installed by `step8_rls_and_policies`).
-   No INSERT / UPDATE / DELETE policy — only the backend's
-   postgres role (used by the SyncService for outbox replication)
-   can write.
-3. `ALTER PUBLICATION supabase_realtime ADD TABLE public.matches`
-   so the operator browser + the public TV display see live
-   updates via `subscribeToMatches()`.
+1. `step_a_matches_table_and_rls` (architecture-adjustment arc)
+   — `matches` table + RLS `_select_member` policy +
+   `ALTER PUBLICATION supabase_realtime ADD TABLE public.matches`.
+2. `step_t_a_bracket_schema_and_rls` (backend-merge arc PR 1) —
+   the four `bracket_*` tables with composite PKs, FK CASCADEs to
+   `public.tournaments(id)`, and RLS `_select_member` policies on
+   each. No INSERT / UPDATE / DELETE policies on any table — only
+   the backend's postgres role writes (via SyncService).
+3. `step_t_d_bracket_realtime_publication` (backend-merge arc PR 2)
+   — `ALTER PUBLICATION supabase_realtime ADD TABLE` for
+   `bracket_events`, `bracket_matches`, `bracket_results`.
+   `bracket_participants` is intentionally left out (changes are
+   rare and the event-level Realtime payload covers re-renders).
 
-If you're re-applying the arc to a different Supabase project,
-run the equivalent migration via the MCP or the Supabase CLI
-before the director's sidecar boots — otherwise the SyncService's
-outbox worker will push into a non-existent table, fail,
-increment `attempts`, and eventually cap at 10.
+If you're re-applying both arcs to a different Supabase project,
+run the migrations in chain order before the director's sidecar
+boots — otherwise the SyncService's outbox worker will push into
+non-existent tables, fail, increment `attempts`, and eventually
+cap at 10.
 
-After applying, confirm via the MCP `list_tables` that `matches`
-appears under `public`; via `pg_publication_tables` that it's in
-`supabase_realtime`; and via `get_advisors` that no
-`rls_disabled_in_public` or `rls_enabled_no_policy` warnings fire
-on the new table.
+After applying, confirm via the MCP `list_tables` that all five
+synced tables appear under `public`; via `pg_publication_tables`
+that `matches`, `bracket_events`, `bracket_matches`, and
+`bracket_results` are in `supabase_realtime`; and via
+`get_advisors` that no `rls_disabled_in_public` or
+`rls_enabled_no_policy` warnings fire on any new table.
 
 ### Realtime publication
 
 The sidecar's frontend reads matches via Supabase Realtime; the
 `matches` table needs to be included in Supabase's Realtime
-publication. From the Dashboard: **Database → Publications →
-supabase_realtime → Tables** → add `matches`.
+publication, and after the backend-merge arc the three bracket
+tables join it. The `step_t_d_bracket_realtime_publication`
+migration above handles the bracket additions automatically; for
+manual cleanup or a fresh project, from the Dashboard:
+**Database → Publications → supabase_realtime → Tables** → add
+`matches`, `bracket_events`, `bracket_matches`, `bracket_results`.
 
 Optional: also add `tournaments` if you want the public TV display
-to react to tournament-level metadata changes. The sync service
-pushes to both tables.
+to react to tournament-level metadata changes (name renames, etc.).
+The sync service pushes to that table too.
 
 ### Supabase Auth providers
 

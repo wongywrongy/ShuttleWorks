@@ -1,13 +1,16 @@
 # ShuttleWorks — Tech Stack
-_Last updated: 2026-05-13 (post architecture-adjustment arc)_
+_Last updated: 2026-05-13 (post backend-merge arc)_
 
 This file describes the system as it stands at the end of the
-architecture-adjustment arc (Steps A–G in
-`docs/changes/2026-05-13.md`). The cloud-prep arc that preceded it
-shipped a Fly.io / Render-deployable FastAPI; that model is
-explicitly removed by the architecture-adjustment arc — see the
-**Architecture** section below for the local-first sidecar model
-that replaces it.
+backend-merge arc (PRs 1–4 of T-A through T-H). The arc folded the
+prior tournament product into the scheduler — one FastAPI, one
+React shell, one Supabase schema, one auth surface — and archived
+the standalone tournament backend at
+`archive/tournament-pre-merge/`. The architecture-adjustment arc
+that preceded it (Steps A–G in `docs/changes/2026-05-13.md`)
+shipped the local-first Tauri-sidecar model the backend-merge arc
+built on top of; the **Architecture** section below describes the
+current end-state.
 
 ---
 
@@ -38,6 +41,18 @@ Architecture-adjustment arc decisions (this 2026-05-13 rewrite):
 | Realtime read path | **Supabase Realtime postgres_changes on `matches`** | Operators + TV display get sub-second updates without polling |
 | Conflict UI | **Inline pending badge + auto-dismissing stale-version banner + persistent conflict banner + header connection indicator** — no modals | Operator workflow can't tolerate blocking dialogs during a tournament |
 
+Backend-merge arc decisions (this 2026-05-13 follow-on):
+
+| Decision | Choice | Reason |
+|---|---|---|
+| Bracket persistence shape | **Children of `tournaments(id)` — `bracket_events` / `bracket_participants` / `bracket_matches` / `bracket_results`** — instead of renaming `tournaments` → `events(kind)` | Cheaper migration. A tournament row now hosts a meet schedule *and/or* a bracket draw; the noun stays as the unit the operator owns |
+| Bracket repository | **`_LocalBracketRepo` mirrors `_LocalMatchRepo`** (CRUD + composite-PK + outbox enqueue + optimistic-concurrency `version`) | Reuse the architecture-adjustment arc's primitives instead of re-inventing them |
+| Bracket route surface | **`/tournaments/{tid}/bracket/*` with `require_tournament_access` gates** — replaces the legacy product's anonymous `/tournament/*` on a separate stack | Single auth realm, role-gated, lives in the scheduler backend |
+| Bracket sync | **Same outbox (`sync_queue`) the matches table uses** — bracket entity types `bracket_event` / `bracket_match` / `bracket_result` join the existing dispatch | Operators on browsers + the public TV display read bracket changes via Realtime exactly the same way they read match changes |
+| Bracket frontend | **Folded into the scheduler shell as a `Bracket` tab** — tournament-product React app retired | One app, one auth flow, one ThemeToggle, one ShuttleWorksMark |
+| Dashboard New-event dialog | **Single form: name + date + kind (Meet / Bracket) radio** — replaces the prior two-step Meet \| Tournament fork that `window.open`'d a separate stack | Both kinds create the same `tournaments` row; kind only picks the post-create landing tab |
+| Bracket pure-Python package | **Moved to `products/scheduler/backend/services/bracket/`** — relative imports internally, both backends imported it during the transition | One source of truth; archives cleanly into `archive/tournament-pre-merge/` once retired |
+
 ---
 
 ## Full stack
@@ -55,7 +70,7 @@ Architecture-adjustment arc decisions (this 2026-05-13 rewrite):
 | DB | SQLite (`./local.db`) | Source of truth |
 | Sync | `services/sync_service.py` — outbox replicator | Background daemon thread, drains `sync_queue` every 5 s |
 | Config | Pydantic `BaseSettings` | Cloud-mode (`ENVIRONMENT=cloud`) validates Supabase secrets at boot |
-| Testing | pytest (sync) | 369 tests at end of arc |
+| Testing | pytest (sync) | 415 tests at end of arc (369 from the architecture-adjustment arc + 28 bracket repo + 18 bracket route tests) |
 
 ### Operators / TV display — browser
 
@@ -68,7 +83,7 @@ Architecture-adjustment arc decisions (this 2026-05-13 rewrite):
 | Realtime client | `src/lib/realtime.ts` — Supabase postgres_changes subscription | 10 s polling fallback |
 | Conflict UX | `PendingBadge`, `ConflictBanner`, `ConnectionIndicator` | Inline; no modals |
 | Routing | React Router v6 | Same |
-| Testing | Vitest + jsdom + fake-indexeddb + RTL | 23 frontend unit tests at end of arc (was 0) |
+| Testing | Vitest + jsdom + fake-indexeddb + RTL | 23 frontend unit tests at end of arc (was 0). Bracket UI carries zero coverage from its tournament-product origins; follow-up adds vitest for bracket components |
 
 ### Infrastructure
 
@@ -114,12 +129,14 @@ FastAPI; the sync service replicates *out* from there.
 
 ---
 
-## Data model (eight tables + alembic_version)
+## Data model (twelve tables + alembic_version)
 
 All tables live in `public` and share the `tournament_id` UUID FK.
 Schema migrations live under `products/scheduler/backend/alembic/`;
 the chain at end-of-arc is `c6361600d776 → 7a473c9e7048 →
-c2e587494c07 → b7e3a9f4c8d2 → d8c4f1a7e6b2 → e2a5f3b8c1d6`.
+c2e587494c07 → b7e3a9f4c8d2 → d8c4f1a7e6b2 → e2a5f3b8c1d6 →
+f7a3c9b2e8d4` (the trailing revision is T-A, adding the four
+bracket tables).
 
 ### `tournaments`
 Per-tournament document. Cloud-prep arc table.
@@ -163,6 +180,45 @@ Outbox for SQLite → Supabase replication.
   `payload JSON`, `created_at`, `attempts Integer DEFAULT 0`,
   `last_attempt NULL`.
 - Index: `(created_at, attempts)`.
+
+### `bracket_events` (NEW — backend-merge arc T-A)
+One sub-event (Men's Singles, Women's Doubles, etc.) within a
+tournament's bracket session. Composite PK `(tournament_id, id)`.
+- `id String(100)` (tournament-scoped event id),
+  `discipline String(200)`, `format String(20)` ('se' | 'rr'),
+  `duration_slots Int`, `bracket_size Int NULL`,
+  `seeded_count Int DEFAULT 0`, `rr_rounds Int NULL`,
+  `config JSON DEFAULT '{}'`, `version Int DEFAULT 1`, timestamps.
+
+### `bracket_participants` (NEW — backend-merge arc T-A)
+Seeded entrants per event. Composite PK
+`(tournament_id, bracket_event_id, id)`.
+- `id String(100)`, `name String(255)`, `type String(20)`
+  (PLAYER | TEAM), `member_ids JSON DEFAULT '[]'`,
+  `seed Int NULL`, `meta JSON DEFAULT '{}'`, timestamps.
+
+### `bracket_matches` (NEW — backend-merge arc T-A)
+One PlayUnit row per bracket match. Composite PK
+`(tournament_id, bracket_event_id, id)`. Holds the slot tree
+(BracketSlot for slot_a / slot_b — either `participant_id` or
+`feeder_play_unit_id`) plus `dependencies` / `child_unit_ids` for
+the advancement walk.
+- `round_index Int`, `match_index Int`, `kind String(20)`
+  (MATCH | TIE | BLOCK), `slot_a JSON`, `slot_b JSON`,
+  `side_a JSON DEFAULT '[]'`, `side_b JSON DEFAULT '[]'`,
+  `dependencies JSON DEFAULT '[]'`, `expected_duration_slots Int`,
+  `duration_variance_slots Int DEFAULT 0`,
+  `child_unit_ids JSON DEFAULT '[]'`, `meta JSON DEFAULT '{}'`,
+  `version Int DEFAULT 1`, timestamps.
+- Index: `(tournament_id, bracket_event_id, round_index)` for the
+  "list matches by round" query.
+
+### `bracket_results` (NEW — backend-merge arc T-A)
+Recorded outcomes. Composite PK
+`(tournament_id, bracket_event_id, bracket_match_id)`.
+- `winner_side String(10)` ('A' | 'B' | 'NONE'), `score JSON NULL`,
+  `finished_at_slot Int NULL`, `walkover Boolean DEFAULT false`,
+  `created_at`.
 
 ### `tournament_backups`
 Opt-in snapshots of `tournaments.data`. Cloud-prep arc table.
@@ -312,8 +368,19 @@ SQLite remains canonical.
 | Arc-adjustment | E — Supabase sync + Realtime primitive | ✅ |
 | Arc-adjustment | F — Command queue (frontend primitive + hook) | ✅ |
 | Arc-adjustment | G — Conflict UI (3 components + hooks) | ✅ |
-| Arc-adjustment | H — Docs + final test pass + arc commit | ← this file is part of it |
+| Arc-adjustment | H — Docs + final test pass + arc commit | ✅ |
+| Backend-merge | T-A — Bracket schema + `_LocalBracketRepo` | ✅ (PR 1, `dd2b154`) |
+| Backend-merge | (prep) — Pure-Python bracket package moved to scheduler | ✅ (`33405b5`) |
+| Backend-merge | T-B + T-C + T-D — Authed bracket routes + outbox + Realtime | ✅ (PR 2, `b93c794`) |
+| Backend-merge | T-E — Frontend merge + dashboard dialog collapse | ✅ (PR 3, `a931122`) |
+| Backend-merge | T-G + T-H — Decommission tournament product + docs + arc commit | ← this file is part of it |
+| Backend-merge | T-F — `BracketAction` enum + commandQueue + Realtime subscription | ⏳ follow-up PR (deliberately deferred to keep PR 3 scope bounded) |
 
 Test counts at end of arc:
-- Backend: **369 passed** (`pytest products/scheduler/tests/`)
-- Frontend: **23 passed** (`npm run test:run` in `products/scheduler/frontend/`)
+- Backend: **415 passed** (`pytest products/scheduler/tests/` — was 369 at end of architecture-adjustment arc; +28 bracket repo tests, +18 bracket route tests)
+- Frontend: **23 passed** (`npm run test:run` in `products/scheduler/frontend/` — bracket components are uncovered, carried over verbatim from the tournament product which had zero frontend tests)
+
+The legacy tournament product (`products/tournament/`) is archived at
+`archive/tournament-pre-merge/` with a top-level `ARCHIVED.md`
+mapping every old path to its new home. Future cleanup PRs can
+delete the archive once nobody refers back to it.
