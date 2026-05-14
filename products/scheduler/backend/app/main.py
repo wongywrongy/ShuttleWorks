@@ -169,6 +169,39 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def close_repository_middleware(request: Request, call_next):
+    """Close the per-request DB session opened by ``get_repository``.
+
+    ``get_repository`` (``repositories/local.py``) opens a ``SessionLocal``
+    per request and stashes the repository on ``request.state.repository``
+    rather than using a generator dependency — its docstring delegates
+    cleanup to "a ``http`` middleware in ``app.main`` that calls
+    ``repo.close()``". This is that middleware; without it the session is
+    never returned to the SQLAlchemy pool.
+
+    The leak is invisible until load: the default ``QueuePool`` for a
+    file-backed SQLite URL is ``pool_size=5`` + ``max_overflow=10`` = 15
+    connections. After 15 leaked sessions every further ``SessionLocal()``
+    blocks for ``pool_timeout`` (30 s) then raises, and because each
+    blocked call is a sync route running in uvicorn's threadpool the pool
+    wedges — sync routes hang while the async ``/health`` keeps answering.
+
+    Streaming routes are unaffected: ``api/schedule.py`` is the only file
+    using ``StreamingResponse`` and it never depends on ``get_repository``,
+    so closing here (after ``call_next`` returns, before the body is
+    streamed) can't pull a session out from under an in-flight stream.
+    Requests that never touch ``get_repository`` (``/health``) have no
+    ``request.state.repository`` and are a no-op.
+    """
+    try:
+        return await call_next(request)
+    finally:
+        repo = getattr(request.state, "repository", None)
+        if repo is not None:
+            repo.close()
+
+
 # Step 4 — every data router is guarded by ``get_current_user``. The
 # ``/health`` and ``/health/deep`` endpoints are intentionally excluded
 # so liveness probes don't require a token; Step 7's
