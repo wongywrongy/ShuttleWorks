@@ -37,8 +37,7 @@ import { apiClient } from '../api/client';
 import type { TournamentStatus, TournamentSummaryDTO } from '../api/dto';
 import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
 import { ThemeToggle } from '../components/ThemeToggle';
-import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
+import { Button, Card } from '@scheduler/design-system';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';

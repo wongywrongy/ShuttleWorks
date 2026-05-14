@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { apiClient } from '../../api/client';
 import type { TournamentExportV2, MatchStateDTO } from '../../api/dto';
-import { Button } from '@/components/ui/button';
+import { Button } from '@scheduler/design-system';
 import { Section } from '../settings/SettingsPrimitives';
 import { useTournamentId } from '../../hooks/useTournamentId';
 

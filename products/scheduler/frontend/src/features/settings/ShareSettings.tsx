@@ -23,8 +23,7 @@ import type {
   TournamentSummaryDTO,
 } from '../../api/dto';
 import { useTournamentId } from '../../hooks/useTournamentId';
-import { Button } from '../../components/ui/button';
-import { Card } from '../../components/ui/card';
+import { Button, Card } from '@scheduler/design-system';
 import { SectionHeader } from './SettingsControls';
 
 function formatDate(iso: string | null): string {

@@ -12,7 +12,7 @@
  * directly without an outer SectionHeader.
  */
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@scheduler/design-system';
 import { useClearAllData } from '../../hooks/useClearAllData';
 import { BackupPanel } from '../setup/BackupPanel';
 import { TournamentFileManagement } from '../tournaments/TournamentFileManagement';
