@@ -72,9 +72,12 @@ interface RowProps {
   tournament: TournamentSummaryDTO;
   variant: 'owned' | 'shared';
   onOpen: () => void;
+  /** Only wired for the owned section — viewers / operators can't
+   *  delete tournaments they don't own. */
+  onDelete?: () => void;
 }
 
-function TournamentRow({ tournament, variant, onOpen }: RowProps) {
+function TournamentRow({ tournament, variant, onOpen, onDelete }: RowProps) {
   return (
     <div
       className="flex items-center gap-4 p-4 hover:bg-muted/40 cursor-pointer"
@@ -88,6 +91,9 @@ function TournamentRow({ tournament, variant, onOpen }: RowProps) {
           </div>
         )}
       </div>
+      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground w-20">
+        {tournament.kind === 'bracket' ? 'TOURNAMENT' : 'MEET'}
+      </span>
       {variant === 'shared' && (
         <span className="text-xs text-muted-foreground capitalize w-16 text-right">
           {tournament.role ?? '—'}
@@ -106,6 +112,20 @@ function TournamentRow({ tournament, variant, onOpen }: RowProps) {
       >
         Open
       </Button>
+      {onDelete ? (
+        <Button
+          variant="ghost"
+          aria-label={`Delete ${tournament.name || 'tournament'}`}
+          title="Delete"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="text-destructive hover:bg-destructive/10"
+        >
+          Delete
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -116,6 +136,7 @@ function Section({
   variant,
   items,
   onOpen,
+  onDelete,
   emptyHint,
 }: {
   eyebrow: string;
@@ -123,6 +144,7 @@ function Section({
   variant: 'owned' | 'shared';
   items: TournamentSummaryDTO[];
   onOpen: (id: string) => void;
+  onDelete?: (t: TournamentSummaryDTO) => void;
   emptyHint?: string;
 }) {
   if (items.length === 0 && !emptyHint) return null;
@@ -144,6 +166,7 @@ function Section({
               tournament={t}
               variant={variant}
               onOpen={() => onOpen(t.id)}
+              onDelete={onDelete ? () => onDelete(t) : undefined}
             />
           ))}
         </Card>
@@ -166,6 +189,15 @@ export function TournamentListPage() {
   const [newName, setNewName] = useState('');
   const [newDate, setNewDate] = useState('');
 
+  // Delete-confirmation state: ``deleteTarget`` is the tournament the
+  // operator clicked Delete on; ``deleting`` is the in-flight flag.
+  // Surfaced as a modal that only renders when ``deleteTarget`` is set;
+  // confirming POSTs the DELETE, refreshes the list, and closes the
+  // modal. The dashboard re-renders without the deleted row.
+  const [deleteTarget, setDeleteTarget] =
+    useState<TournamentSummaryDTO | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const closeNewDialog = useCallback(() => {
     if (creating) return;
     setShowNewDialog(false);
@@ -173,6 +205,11 @@ export function TournamentListPage() {
     setNewName('');
     setNewDate('');
   }, [creating]);
+
+  const closeDeleteDialog = useCallback(() => {
+    if (deleting) return;
+    setDeleteTarget(null);
+  }, [deleting]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -214,6 +251,26 @@ export function TournamentListPage() {
     },
     [navigate, tournaments],
   );
+
+  const handleDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await apiClient.deleteTournament(deleteTarget.id);
+      setTournaments((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      // The axios interceptor already surfaced a toast; we just clear
+      // the modal's in-flight flag and let the operator retry if they
+      // want. The list re-fetch isn't necessary — the row is still
+      // visible because the delete failed.
+      setError(
+        err instanceof Error ? err.message : 'Failed to delete tournament',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteTarget]);
 
   const handleCreate = useCallback(async () => {
     setCreating(true);
@@ -288,6 +345,7 @@ export function TournamentListPage() {
               variant="owned"
               items={owned}
               onOpen={openTournament}
+              onDelete={(t) => setDeleteTarget(t)}
               emptyHint="You don't own any tournaments yet."
             />
             <Section
@@ -300,6 +358,55 @@ export function TournamentListPage() {
           </>
         )}
       </div>
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-modal flex items-center justify-center bg-black/50"
+          onClick={closeDeleteDialog}
+        >
+          <div
+            className="bg-card text-card-foreground rounded-lg shadow-lg p-6 w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-tournament-heading"
+          >
+            <div className="mb-4 space-y-0.5">
+              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-destructive">
+                DELETE {deleteTarget.kind === 'bracket' ? 'TOURNAMENT' : 'MEET'}
+              </span>
+              <h2
+                id="delete-tournament-heading"
+                className="text-base font-semibold text-foreground"
+              >
+                Delete &ldquo;{deleteTarget.name || 'Untitled'}&rdquo;?
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                This permanently removes the {deleteTarget.kind === 'bracket' ? 'tournament' : 'meet'},
+                its members, invites, and{' '}
+                {deleteTarget.kind === 'bracket' ? 'bracket events + matches + results' : 'matches + match-states + backups'}.
+                Can&rsquo;t be undone.
+              </p>
+            </div>
+            <div className="mt-6 flex justify-between">
+              <Button
+                variant="ghost"
+                onClick={closeDeleteDialog}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:opacity-90"
+              >
+                {deleting ? 'Deleting…' : 'Delete permanently'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showNewDialog && (
         <div

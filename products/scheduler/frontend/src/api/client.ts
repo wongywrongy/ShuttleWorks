@@ -47,6 +47,32 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV ? '/api' : 'http://localhost:8000');
 
+// Toast-dedupe window. With four polling hooks running concurrently
+// (useAdvisories every 15s, useSuggestions every 8s, useBracket every
+// 2.5s, useLiveTracking every 5s) a single backend hiccup or a
+// tournament-deleted-elsewhere produces a sticky error toast on every
+// poll. Sticky toasts pile up forever — operators reported "the screen
+// fills with red toasts". The interceptor now suppresses a toast if
+// the same ``status:message`` pair was surfaced within this window.
+const _ERROR_TOAST_DEDUPE_MS = 30_000;
+const _recentErrorToasts = new Map<string, number>();
+function _shouldSuppressErrorToast(key: string): boolean {
+  const now = Date.now();
+  // Garbage-collect entries older than the window so the map doesn't
+  // grow unbounded over a long session.
+  for (const [k, ts] of _recentErrorToasts) {
+    if (now - ts > _ERROR_TOAST_DEDUPE_MS) {
+      _recentErrorToasts.delete(k);
+    }
+  }
+  const last = _recentErrorToasts.get(key);
+  if (last !== undefined && now - last < _ERROR_TOAST_DEDUPE_MS) {
+    return true;
+  }
+  _recentErrorToasts.set(key, now);
+  return false;
+}
+
 interface GenerateScheduleRequest {
   config: TournamentConfig;
   players: PlayerDTO[];
@@ -219,21 +245,32 @@ class ApiClient {
 
         // Surface the failure exactly once, at the edge, so every hook /
         // component gets consistent UI without needing to handle it.
-        try {
-          useUiStore.getState().pushToast({
-            level: 'error',
-            message,
-            detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
-          });
-        } catch {
-          // The store may not be ready during very-early-lifecycle calls —
-          // fall through to the thrown error below.
+        // Dedupe identical (status, message) pairs within a 30s window
+        // so polling hooks don't pile up sticky error toasts forever
+        // when the backend returns the same error every poll cycle.
+        const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
+        const suppress = _shouldSuppressErrorToast(dedupeKey);
+        if (!suppress) {
+          try {
+            useUiStore.getState().pushToast({
+              level: 'error',
+              message,
+              detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
+            });
+          } catch {
+            // The store may not be ready during very-early-lifecycle calls —
+            // fall through to the thrown error below.
+          }
         }
 
         const err = new Error(message) as Error & {
           requestId?: string;
           code?: string;
           status?: number;
+          /** Set by this interceptor so the global
+           *  ``window.onunhandledrejection`` handler in ``AppShell``
+           *  doesn't surface a second toast for the same error. */
+          __handled?: boolean;
         };
         if (requestId) err.requestId = requestId;
         if (code) err.code = code;
@@ -242,6 +279,7 @@ class ApiClient {
         // backend-merge arc's ``useBracket`` hook needs this to tell
         // "no bracket configured yet" (404) from a real server error.
         if (error.response?.status) err.status = error.response.status;
+        err.__handled = true;
         throw err;
       }
     );

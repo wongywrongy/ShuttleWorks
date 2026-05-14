@@ -73,6 +73,18 @@ export function AppShell() {
   useEffect(() => {
     const onRejection = (ev: PromiseRejectionEvent) => {
       const reason = ev.reason;
+      // The axios response interceptor on ``apiClient.client`` stamps
+      // ``__handled = true`` on every error it surfaces (including the
+      // deduped toasts). Re-toasting those here just creates a second
+      // pop-up for an already-shown failure. Console-log only.
+      if (
+        reason &&
+        typeof reason === 'object' &&
+        (reason as { __handled?: boolean }).__handled
+      ) {
+        console.error('[unhandledrejection — already toasted]', reason);
+        return;
+      }
       const msg = reason instanceof Error ? reason.message : String(reason ?? 'Unknown error');
       // Keep the full stack in the console for debugging.
       console.error('[unhandledrejection]', reason);
