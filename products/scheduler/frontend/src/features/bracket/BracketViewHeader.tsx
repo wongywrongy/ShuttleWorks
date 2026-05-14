@@ -2,11 +2,12 @@ import { useMemo } from "react";
 import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
 import { Button, StatusBar } from "@scheduler/design-system";
+import type { BracketView } from "../../lib/bracketTabs";
 
 interface Props {
   /** Bare view name — drives the eyebrow. Derived from ``activeTab``
    *  by ``BracketTabBody`` (``bracket-draw`` -> ``draw``). */
-  view: "draw" | "schedule" | "live";
+  view: BracketView;
   data: TournamentDTO;
   eventId: string;
   onEventId: (id: string) => void;

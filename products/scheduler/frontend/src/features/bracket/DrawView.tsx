@@ -20,14 +20,10 @@ export function DrawView({ data, eventId, onChange }: Props) {
   if (!event) {
     return <p className="text-sm text-ink-500">No event selected.</p>;
   }
-  return (
-    <>
-      {event.format === "se" ? (
-        <BracketView data={data} eventId={eventId} onChange={onChange} />
-      ) : (
-        <RoundRobinView data={data} eventId={eventId} onChange={onChange} />
-      )}
-    </>
+  return event.format === "se" ? (
+    <BracketView data={data} eventId={eventId} onChange={onChange} />
+  ) : (
+    <RoundRobinView data={data} eventId={eventId} onChange={onChange} />
   );
 }
 

@@ -21,16 +21,14 @@ import { useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
-import { normalizeActiveTab } from '../lib/bracketTabs';
+import { normalizeActiveTab, MEET_TAB_IDS } from '../lib/bracketTabs';
 
+// URL-routable trailing segments: the meet tabs plus the bare
+// ``bracket`` segment. (The ``bracket-*`` sub-tab ids are never URL
+// segments — the bracket surface has the single ``/bracket`` route.)
 const _TAB_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
-  'setup',
-  'roster',
-  'matches',
-  'schedule',
-  'live',
+  ...MEET_TAB_IDS,
   'bracket',
-  'tv',
 ]);
 
 export function TournamentPage() {
@@ -62,7 +60,15 @@ export function TournamentPage() {
     if (!tid) return;
     const segment = location.pathname.split('/').filter(Boolean).pop();
     if (segment && _TAB_SEGMENTS.has(segment as AppTab)) {
-      useUiStore.getState().setActiveTab(segment as AppTab);
+      // The bracket URL segment is the bare ``/bracket``; map it
+      // straight to ``bracket-draw`` so the TabBar shows the right
+      // active tab on the first paint (the post-paint normalization
+      // effect would otherwise leave one frame with no active tab).
+      useUiStore
+        .getState()
+        .setActiveTab(
+          segment === 'bracket' ? 'bracket-draw' : (segment as AppTab),
+        );
     }
     const optimisticKind: 'meet' | 'bracket' =
       segment === 'bracket' ? 'bracket' : 'meet';

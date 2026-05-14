@@ -38,7 +38,13 @@ export function BracketTab() {
     );
   }
   return (
-    <BracketApiProvider tournamentId={params.id}>
+    // ``key`` on the tournament id so navigating bracket-A -> bracket-B
+    // remounts the provider + ``useBracket`` + ``BracketTabBody``.
+    // The route is keyless ``/tournaments/:id/*``, so React Router
+    // otherwise reuses the instance and ``useBracket``'s ``data`` (and
+    // the ``bracketDataReady`` flag derived from it) stay stale from
+    // tournament A until B's first poll resolves.
+    <BracketApiProvider key={params.id} tournamentId={params.id}>
       <BracketTabBody />
     </BracketApiProvider>
   );

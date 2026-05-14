@@ -24,27 +24,31 @@ export const BRACKET_TABS: { id: BracketTabId; label: string }[] = [
   { id: 'bracket-live', label: 'Live' },
 ];
 
-/** Meet tab ids — used only to detect a stale ``activeTab`` when a
- *  meet-kind tournament loads. Kept module-private. */
-const MEET_TAB_IDS: readonly string[] = [
+/** Meet tab ids — the single source of truth for the meet-kind tab
+ *  set. ``TabBar`` builds its ``MEET_TABS`` rows from this and
+ *  ``TournamentPage`` builds its routable-segment set from it, so the
+ *  list is defined in exactly one place. */
+export const MEET_TAB_IDS = [
   'setup',
   'roster',
   'matches',
   'schedule',
   'live',
   'tv',
-];
+] as const;
+
+export type MeetTabId = (typeof MEET_TAB_IDS)[number];
+
+/** The bare view name a ``bracket-`` tab maps to — drives the
+ *  ``BracketViewHeader`` eyebrow and the content switch. */
+export type BracketView = 'draw' | 'schedule' | 'live';
 
 export function isBracketTab(tab: AppTab): tab is BracketTabId {
   return (BRACKET_TAB_IDS as readonly string[]).includes(tab);
 }
 
-/** The bare view name a ``bracket-`` tab id maps to — drives the
- *  ``BracketViewHeader`` eyebrow and the content switch. */
-export function bracketTabView(
-  tab: BracketTabId,
-): 'draw' | 'schedule' | 'live' {
-  return tab.slice('bracket-'.length) as 'draw' | 'schedule' | 'live';
+export function bracketTabView(tab: BracketTabId): BracketView {
+  return tab.slice('bracket-'.length) as BracketView;
 }
 
 /**
@@ -62,6 +66,7 @@ export function normalizeActiveTab(
   kind: 'meet' | 'bracket' | null,
 ): AppTab | null {
   if (kind === 'bracket' && !isBracketTab(activeTab)) return 'bracket-draw';
-  if (kind === 'meet' && !MEET_TAB_IDS.includes(activeTab)) return 'setup';
+  if (kind === 'meet' && !(MEET_TAB_IDS as readonly string[]).includes(activeTab))
+    return 'setup';
   return null;
 }

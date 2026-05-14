@@ -6,20 +6,28 @@ import { AppStatusPopover } from '../components/AppStatusPopover';
 import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
 import { useDisruptions } from '../hooks/useDisruptions';
 import { INTERACTIVE_BASE } from '../lib/utils';
-import { BRACKET_TABS } from '../lib/bracketTabs';
+import { BRACKET_TABS, MEET_TAB_IDS, type MeetTabId } from '../lib/bracketTabs';
 
 type TabDef = { id: AppTab; label: string; hint?: string };
 
+/** Display labels for the meet tabs. Ids come from the shared
+ *  ``MEET_TAB_IDS`` source — only the labels live here, so the tab-id
+ *  list isn't duplicated across TabBar / bracketTabs / TournamentPage. */
+const MEET_TAB_LABELS: Record<MeetTabId, string> = {
+  setup: 'Setup',
+  roster: 'Roster',
+  matches: 'Matches',
+  schedule: 'Schedule',
+  live: 'Live',
+  tv: 'TV',
+};
+
 /** Tabs shown for a ``kind='meet'`` tournament — the intercollegiate
  *  dual / tri-meet workflow. */
-const MEET_TABS: TabDef[] = [
-  { id: 'setup', label: 'Setup' },
-  { id: 'roster', label: 'Roster' },
-  { id: 'matches', label: 'Matches' },
-  { id: 'schedule', label: 'Schedule' },
-  { id: 'live', label: 'Live' },
-  { id: 'tv', label: 'TV' },
-];
+const MEET_TABS: TabDef[] = MEET_TAB_IDS.map((id) => ({
+  id,
+  label: MEET_TAB_LABELS[id],
+}));
 
 /** Tabs that surface match-level state — the disruption count badge
  *  rides along on these so an operator on Schedule / Live can see at a
@@ -27,6 +35,17 @@ const MEET_TABS: TabDef[] = [
  *  Matches. The badge counts the SAME disruptions on all three tabs;
  *  it's a global feed, not a per-tab one. */
 const DISRUPTION_TABS = new Set<AppTab>(['matches', 'schedule', 'live']);
+
+/** Tooltip for a disabled tab — names the unmet prerequisite. */
+function disabledTabTitle(
+  tabId: AppTab,
+  kind: 'meet' | 'bracket' | null,
+): string | undefined {
+  if (kind === 'bracket') return 'Generate a draw first';
+  if (tabId === 'matches') return 'Add players first';
+  if (tabId === 'schedule' || tabId === 'live') return 'Create matches first';
+  return undefined;
+}
 
 export function TabBar() {
   const activeTab = useUiStore((s) => s.activeTab);
@@ -114,23 +133,17 @@ export function TabBar() {
                 aria-disabled={isDisabled || undefined}
                 title={
                   isDisabled
-                    ? activeTournamentKind === 'bracket'
-                      ? 'Generate a draw first'
-                      : tab.id === 'matches'
-                        ? 'Add players first'
-                        : tab.id === 'schedule' || tab.id === 'live'
-                          ? 'Create matches first'
-                          : undefined
+                    ? disabledTabTitle(tab.id, activeTournamentKind)
                     : undefined
                 }
                 data-testid={`tab-${tab.id}`}
                 className={[
                   INTERACTIVE_BASE,
                   'relative rounded-none px-3 py-2 text-sm font-medium tracking-tight',
-                  isActive
-                    ? 'text-accent font-semibold'
-                    : isDisabled
-                      ? 'text-muted-foreground/50'
+                  isDisabled
+                    ? 'text-muted-foreground/50'
+                    : isActive
+                      ? 'text-accent font-semibold'
                       : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
                 ].join(' ')}
               >
@@ -163,7 +176,7 @@ export function TabBar() {
                   className={[
                     'absolute inset-x-2 -bottom-[1px] h-0.5 origin-center bg-accent',
                     'transition-transform duration-300 ease-brand',
-                    isActive ? 'scale-x-100' : 'scale-x-0',
+                    isActive && !isDisabled ? 'scale-x-100' : 'scale-x-0',
                   ].join(' ')}
                 />
               </button>
