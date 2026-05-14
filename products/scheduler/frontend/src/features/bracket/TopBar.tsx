@@ -1,10 +1,7 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft } from "@phosphor-icons/react";
 import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
-import { ShuttleWorksMark } from "../../components/ShuttleWorksMark";
-import { Button, StatusPill } from "@scheduler/design-system";
+import { Button } from "@scheduler/design-system";
 
 interface Props {
   data: TournamentDTO;
@@ -13,6 +10,10 @@ interface Props {
   onReset: () => void;
 }
 
+// Bracket context bar. The brand chrome (back-to-dashboard + wordmark +
+// TOURNAMENT eyebrow + app-status pill) is owned by the AppShell's
+// TabBar — this bar carries only the bracket-scoped controls so the
+// surface doesn't render the chrome lockup twice.
 export function TopBar({
   data,
   eventId,
@@ -28,29 +29,8 @@ export function TopBar({
     selectedEvent?.format === "se" ? "Single Elim" : "Round Robin";
 
   return (
-    <header className="sticky top-0 z-chrome flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
       <div className="flex min-w-0 items-center gap-3">
-        <Link
-          to="/"
-          aria-label="Back to dashboard"
-          title="Back to dashboard"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-        >
-          <ArrowLeft size={14} aria-hidden="true" />
-        </Link>
-        <Link
-          to="/"
-          aria-label="Back to dashboard"
-          title="Back to dashboard"
-          className="hidden sm:inline-flex"
-        >
-          <ShuttleWorksMark />
-        </Link>
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          TOURNAMENT
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
         <select
           value={eventId}
           onChange={(e) => onEventId(e.target.value)}
@@ -67,10 +47,11 @@ export function TopBar({
             {formatLabel}
           </span>
         )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
         <Counters event={eventCounts} global={globalCounts} />
         <ExportMenu api={api} />
         <Button variant="outline" size="sm" onClick={onReset}>Reset</Button>
-        <StatusPill tone="idle">Idle</StatusPill>
       </div>
     </header>
   );
