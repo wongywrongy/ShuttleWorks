@@ -47,14 +47,14 @@ from scheduler_core.domain.tournament import (
     WinnerSide,
 )
 
-from tournament.advancement import record_result
-from tournament.draw import Draw
-from tournament.formats import (
+from .advancement import record_result
+from .draw import Draw
+from .formats import (
     generate_round_robin,
     generate_single_elimination,
 )
-from tournament.scheduler import TournamentDriver
-from tournament.state import register_draw
+from .scheduler import TournamentDriver
+from .state import register_draw
 
 
 def _make_demo_participants(n: int) -> List[Participant]:

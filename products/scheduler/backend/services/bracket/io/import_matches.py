@@ -34,9 +34,9 @@ from scheduler_core.domain.tournament import (
     TournamentState,
 )
 
-from tournament.draw import BracketSlot, Draw
-from tournament.scheduler import TournamentDriver
-from tournament.state import register_draw
+from ..draw import BracketSlot, Draw
+from ..scheduler import TournamentDriver
+from ..state import register_draw
 
 
 def parse_json_payload(body) -> "TournamentSlot":  # type: ignore[name-defined]

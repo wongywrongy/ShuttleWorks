@@ -14,8 +14,8 @@ from scheduler_core.domain.tournament import (
     TournamentState,
 )
 
-from tournament.advancement import auto_walkover_byes
-from tournament.draw import Draw
+from .advancement import auto_walkover_byes
+from .draw import Draw
 
 
 def register_draw(state: TournamentState, draw: Draw) -> None:

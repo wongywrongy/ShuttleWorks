@@ -27,7 +27,7 @@ from scheduler_core.domain.tournament import (
     WinnerSide,
 )
 
-from tournament.draw import BYE, BracketSlot, Draw
+from .draw import BYE, BracketSlot, Draw
 
 
 DrawSource = Union[Draw, Mapping[str, Draw]]

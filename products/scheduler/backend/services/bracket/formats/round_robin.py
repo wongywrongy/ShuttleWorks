@@ -22,7 +22,7 @@ from scheduler_core.domain.tournament import (
     PlayUnitKind,
 )
 
-from tournament.draw import BYE, BracketSlot, Draw
+from ..draw import BYE, BracketSlot, Draw
 
 
 def generate_round_robin(

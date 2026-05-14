@@ -16,13 +16,13 @@ dataclasses at the boundary and translates assignments back.
 """
 from __future__ import annotations
 
-from tournament.draw import BYE, BracketSlot, Draw
-from tournament.formats import (
+from .draw import BYE, BracketSlot, Draw
+from .formats import (
     generate_round_robin,
     generate_single_elimination,
 )
-from tournament.advancement import record_result
-from tournament.scheduler import RoundResult, TournamentDriver
+from .advancement import record_result
+from .scheduler import RoundResult, TournamentDriver
 
 __all__ = [
     "BYE",

@@ -44,19 +44,19 @@ from backend.schemas import (
 )
 from backend.serializers import serialize_tournament
 from backend.state import EventMeta, TournamentSlot, container
-from tournament.advancement import record_result
-from tournament.draw import Draw
-from tournament.formats import (
+from services.bracket.advancement import record_result
+from services.bracket.draw import Draw
+from services.bracket.formats import (
     generate_round_robin,
     generate_single_elimination,
 )
-from tournament.io.export_schedule import to_csv, to_ics
-from tournament.io.import_matches import (
+from services.bracket.io.export_schedule import to_csv, to_ics
+from services.bracket.io.import_matches import (
     parse_csv_payload,
     parse_json_payload,
 )
-from tournament.scheduler import TournamentDriver
-from tournament.state import register_draw
+from services.bracket.scheduler import TournamentDriver
+from services.bracket.state import register_draw
 
 app = FastAPI(title="Tournament Prototype API", version="0.2.0")
 app.add_middleware(

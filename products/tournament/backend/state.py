@@ -13,8 +13,8 @@ from typing import Dict, Optional
 from scheduler_core.domain.models import ScheduleConfig
 from scheduler_core.domain.tournament import TournamentState
 
-from tournament.draw import Draw
-from tournament.scheduler import TournamentDriver
+from services.bracket.draw import Draw
+from services.bracket.scheduler import TournamentDriver
 
 
 @dataclass

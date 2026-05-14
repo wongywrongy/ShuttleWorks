@@ -30,7 +30,7 @@ from scheduler_core.domain.tournament import (
     PlayUnitKind,
 )
 
-from tournament.draw import BYE, BracketSlot, Draw
+from ..draw import BYE, BracketSlot, Draw
 
 _BRACKET_SIZES = (2, 4, 8, 16, 32, 64, 128, 256)
 

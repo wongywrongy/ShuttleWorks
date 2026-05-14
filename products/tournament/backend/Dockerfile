@@ -17,9 +17,14 @@ WORKDIR /build
 
 # Build context is the repo root (set in products/tournament/docker-compose.yml)
 # so this Dockerfile can COPY the shared engine sibling-to the product tree.
+# PR 2 of the backend-merge arc moved the bracket package from
+# ``products/tournament/tournament/`` to
+# ``products/scheduler/backend/services/bracket/``; the Dockerfile follows
+# the move so the tournament backend can still import ``services.bracket.X``
+# from inside ``/app``.
 COPY products/tournament/pyproject.toml products/tournament/README.md products/tournament/USAGE.md ./
 COPY scheduler_core/ ./scheduler_core/
-COPY products/tournament/tournament/ ./tournament/
+COPY products/scheduler/backend/services/bracket/ ./services/bracket/
 
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     pip install --prefix=/install ".[backend]"
@@ -36,7 +41,7 @@ COPY --from=builder /install /usr/local
 # without bind mounts — dev compose overlays mounts on top for HMR).
 COPY products/tournament/pyproject.toml products/tournament/README.md products/tournament/USAGE.md ./
 COPY scheduler_core/ ./scheduler_core/
-COPY products/tournament/tournament/ ./tournament/
+COPY products/scheduler/backend/services/bracket/ ./services/bracket/
 COPY products/tournament/backend/ ./backend/
 
 RUN useradd --create-home --uid 1001 app && chown -R app:app /app

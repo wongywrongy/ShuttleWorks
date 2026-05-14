@@ -23,8 +23,8 @@ from scheduler_core.domain.tournament import (
     TournamentState,
 )
 
-from tournament.adapter import advance_current_slot, build_problem
-from tournament.state import find_ready_play_units
+from .adapter import advance_current_slot, build_problem
+from .state import find_ready_play_units
 
 
 @dataclass
