@@ -23,7 +23,10 @@ export type AppTab =
   | 'schedule'
   | 'live'
   | 'bracket'
-  | 'tv';
+  | 'tv'
+  | 'bracket-draw'
+  | 'bracket-schedule'
+  | 'bracket-live';
 
 export type SolverPhase = 'presolve' | 'search' | 'proving' | null;
 
@@ -121,6 +124,15 @@ interface UiState {
   activeTournamentKind: 'meet' | 'bracket' | null;
   setActiveTournamentKind: (kind: 'meet' | 'bracket' | null) => void;
 
+  // Whether the active bracket-kind tournament has a generated draw.
+  // Written by ``BracketTab`` from ``useBracket().data``; ``null`` when
+  // no bracket surface is mounted (meet kind / dashboard). ``TabBar``
+  // reads this to disable the Draw/Schedule/Live tabs until a draw
+  // exists — ``TabBar`` lives outside ``BracketApiProvider`` so it
+  // can't call ``useBracket`` itself.
+  bracketDataReady: boolean | null;
+  setBracketDataReady: (ready: boolean | null) => void;
+
   // Solver HUD
   solverHud: SolverHudState;
   setSolverHud: (patch: Partial<SolverHudState>) => void;
@@ -187,6 +199,7 @@ const INITIAL: Pick<
   | 'activeTab'
   | 'activeTournamentId'
   | 'activeTournamentKind'
+  | 'bracketDataReady'
   | 'solverHud'
   | 'pendingPin'
   | 'lastValidation'
@@ -208,6 +221,7 @@ const INITIAL: Pick<
   activeTab: 'setup',
   activeTournamentId: null,
   activeTournamentKind: null,
+  bracketDataReady: null,
   solverHud: DEFAULT_SOLVER_HUD,
   pendingPin: null,
   lastValidation: null,
@@ -233,6 +247,7 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
   setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
+  setBracketDataReady: (bracketDataReady) => set({ bracketDataReady }),
 
   setSolverHud: (patch) =>
     set((state) => ({ solverHud: { ...state.solverHud, ...patch } })),
