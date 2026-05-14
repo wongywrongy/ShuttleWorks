@@ -34,37 +34,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
-import type { TournamentStatus, TournamentSummaryDTO } from '../api/dto';
+import type { TournamentSummaryDTO } from '../api/dto';
 import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
 import { ThemeToggle } from '../components/ThemeToggle';
-import { Button, Card } from '@scheduler/design-system';
+import { Button, Card, Modal, PageHeader, StatusPill } from '@scheduler/design-system';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString();
-}
-
-function StatusPill({ status }: { status: TournamentStatus }) {
-  // Routes through the design system's --status-* palette so the
-  // dashboard sits on the same hue ladder as the operator pills.
-  // ``active`` is live-green; ``draft`` and ``archived`` use the
-  // neutral done/idle tones so attention stays on actually-running
-  // events.
-  const tone =
-    status === 'active'
-      ? 'bg-status-live-bg text-status-live border-status-live/40'
-      : status === 'archived'
-        ? 'bg-status-idle-bg text-status-idle border-status-idle/40'
-        : 'bg-status-done-bg text-status-done border-status-done/40';
-  return (
-    <span
-      className={`inline-block rounded border px-2 py-0.5 text-xs tabular-nums ${tone}`}
-    >
-      {status}
-    </span>
-  );
 }
 
 interface RowProps {
@@ -101,7 +80,17 @@ function TournamentRow({ tournament, variant, onOpen, onDelete }: RowProps) {
       <span className="text-xs text-muted-foreground tabular-nums w-24 text-right">
         {formatDate(tournament.tournamentDate)}
       </span>
-      <StatusPill status={tournament.status} />
+      <StatusPill
+          tone={
+            tournament.status === 'active'
+              ? 'green'
+              : tournament.status === 'archived'
+                ? 'idle'
+                : 'done'
+          }
+        >
+          {tournament.status}
+        </StatusPill>
       <Button
         variant="ghost"
         onClick={(e) => {
@@ -305,18 +294,12 @@ export function TournamentListPage() {
       </header>
 
       <div className="mx-auto max-w-4xl space-y-8 px-6 py-10">
-        <section className="flex items-end justify-between gap-4">
-          <div className="space-y-0.5">
-            <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              DASHBOARD
-            </span>
-            <h1 className="text-xl font-semibold tracking-tight">Your events</h1>
-            <p className="text-sm text-muted-foreground">
-              Meets and tournaments you own or have been invited to.
-            </p>
-          </div>
-          <Button onClick={() => setShowNewDialog(true)}>New</Button>
-        </section>
+        <PageHeader
+          eyebrow="DASHBOARD"
+          title="Your events"
+          description="Meets and tournaments you own or have been invited to."
+          actions={<Button onClick={() => setShowNewDialog(true)}>New</Button>}
+        />
 
         {error && (
           <div
@@ -359,17 +342,8 @@ export function TournamentListPage() {
       </div>
 
       {deleteTarget && (
-        <div
-          className="fixed inset-0 z-modal flex items-center justify-center bg-black/50"
-          onClick={closeDeleteDialog}
-        >
-          <div
-            className="bg-card text-card-foreground rounded-lg shadow-lg p-6 w-full max-w-md mx-4"
-            onClick={(e) => e.stopPropagation()}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-tournament-heading"
-          >
+        <Modal onClose={closeDeleteDialog} titleId="delete-tournament-heading">
+          <div className="p-6">
             <div className="mb-4 space-y-0.5">
               <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-destructive">
                 DELETE {deleteTarget.kind === 'bracket' ? 'TOURNAMENT' : 'MEET'}
@@ -396,26 +370,20 @@ export function TournamentListPage() {
                 Cancel
               </Button>
               <Button
+                variant="destructive"
                 onClick={handleDelete}
                 disabled={deleting}
-                className="bg-destructive text-destructive-foreground hover:opacity-90"
               >
                 {deleting ? 'Deleting…' : 'Delete permanently'}
               </Button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {showNewDialog && (
-        <div
-          className="fixed inset-0 z-modal flex items-center justify-center bg-black/50"
-          onClick={closeNewDialog}
-        >
-          <div
-            className="bg-card text-card-foreground rounded-lg shadow-lg p-6 w-full max-w-md mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <Modal onClose={closeNewDialog} titleId="new-event-heading">
+          <div className="p-6">
             <NewEventForm
               kind={newKind}
               name={newName}
@@ -428,7 +396,7 @@ export function TournamentListPage() {
               onSubmit={handleCreate}
             />
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -472,7 +440,7 @@ function NewEventForm({
         <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           NEW EVENT
         </span>
-        <h2 className="text-base font-semibold text-foreground">
+        <h2 id="new-event-heading" className="text-base font-semibold text-foreground">
           Name + date + kind
         </h2>
         <p className="text-xs text-muted-foreground">
@@ -565,7 +533,7 @@ function KindOption({
       disabled={disabled}
       aria-pressed={selected}
       className={[
-        'rounded border p-3 text-left transition-colors',
+        'border p-3 text-left transition-colors',
         selected
           ? 'border-foreground bg-muted/30 text-foreground'
           : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground',
