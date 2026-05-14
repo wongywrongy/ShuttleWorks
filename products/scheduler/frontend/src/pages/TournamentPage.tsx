@@ -19,6 +19,7 @@
 import { useEffect } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '../app/AppShell';
+import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
 
 const _TAB_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
@@ -35,6 +36,11 @@ export function TournamentPage() {
   const params = useParams<{ id?: string }>();
   const location = useLocation();
   const tid = params.id ?? null;
+
+  // Load the tournament's kind so the AppShell + TabBar can render
+  // meet-style or bracket-style chrome. The hook is a no-op when tid
+  // is null and clears the store on unmount.
+  useTournamentKind(tid);
 
   useEffect(() => {
     useUiStore.getState().setActiveTournamentId(tid);

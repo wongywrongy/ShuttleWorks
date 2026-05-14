@@ -113,6 +113,14 @@ interface UiState {
   activeTournamentId: string | null;
   setActiveTournamentId: (id: string | null) => void;
 
+  // Active tournament's kind (meet | bracket). Fetched on mount by
+  // ``useTournamentKind`` via the summary endpoint; ``null`` while
+  // loading or when the request fails (the AppShell falls back to
+  // meet-style chrome in that case). The TabBar reads this to filter
+  // out meet-only tabs on a bracket-kind tournament and vice versa.
+  activeTournamentKind: 'meet' | 'bracket' | null;
+  setActiveTournamentKind: (kind: 'meet' | 'bracket' | null) => void;
+
   // Solver HUD
   solverHud: SolverHudState;
   setSolverHud: (patch: Partial<SolverHudState>) => void;
@@ -178,6 +186,7 @@ const INITIAL: Pick<
   UiState,
   | 'activeTab'
   | 'activeTournamentId'
+  | 'activeTournamentKind'
   | 'solverHud'
   | 'pendingPin'
   | 'lastValidation'
@@ -198,6 +207,7 @@ const INITIAL: Pick<
 > = {
   activeTab: 'setup',
   activeTournamentId: null,
+  activeTournamentKind: null,
   solverHud: DEFAULT_SOLVER_HUD,
   pendingPin: null,
   lastValidation: null,
@@ -222,6 +232,7 @@ export const useUiStore = create<UiState>((set) => ({
 
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
+  setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
 
   setSolverHud: (patch) =>
     set((state) => ({ solverHud: { ...state.solverHud, ...patch } })),

@@ -48,10 +48,16 @@ class TournamentSummaryDTO(BaseModel):
     tournament; always non-null in the list response because the list
     is filtered to memberships) and ``ownerName`` (the owner's email,
     denormalised at create time — see ``Tournament.owner_email``).
+
+    Backend-merge follow-up added ``kind`` so the frontend can render
+    different chrome for meets vs brackets (a meet's TabBar shows
+    Setup/Roster/Matches/Schedule/Live/TV; a bracket-kind tournament
+    hides the strip and renders BracketTab directly).
     """
     id: str
     name: Optional[str] = None
     status: TournamentStatus = "draft"
+    kind: str = "meet"
     tournamentDate: Optional[str] = None
     createdAt: str
     updatedAt: str
@@ -61,6 +67,7 @@ class TournamentSummaryDTO(BaseModel):
 
 class TournamentCreateDTO(BaseModel):
     name: Optional[str] = Field(default=None, max_length=200)
+    kind: str = Field(default="meet", max_length=20)
     tournamentDate: Optional[str] = Field(default=None, max_length=32)
 
 
@@ -97,6 +104,7 @@ def _to_summary(
         id=str(row.id),
         name=row.name,
         status=row.status,  # type: ignore[arg-type]
+        kind=getattr(row, "kind", "meet"),
         tournamentDate=row.tournament_date,
         createdAt=row.created_at.isoformat() if row.created_at else "",
         updatedAt=row.updated_at.isoformat() if row.updated_at else "",
@@ -174,8 +182,15 @@ def create_tournament(
     tournament belongs to without a Supabase auth join.
     """
     user_uuid = user.as_uuid()
+    if body.kind not in ("meet", "bracket"):
+        raise http_error(
+            400,
+            ErrorCode.VALIDATION_FAILED,
+            f"kind must be 'meet' or 'bracket', got {body.kind!r}",
+        )
     row = repo.tournaments.create(
         name=body.name,
+        kind=body.kind,
         tournament_date=body.tournamentDate,
         owner_id=user_uuid,
         owner_email=user.email,

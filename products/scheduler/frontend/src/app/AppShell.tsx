@@ -52,6 +52,7 @@ export function AppShell() {
   // AdvisoryBanner) reads from the store.
   useSuggestions();
   const activeTab = useUiStore((s) => s.activeTab);
+  const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
   const pushToast = useUiStore((s) => s.pushToast);
   const setActiveProposal = useUiStore((s) => s.setActiveProposal);
 
@@ -127,19 +128,28 @@ export function AppShell() {
       <UnsavedBannerSlot />
       <main id="main" className="flex-1 min-h-0 overflow-auto">
         <Suspense fallback={<TabSkeleton tab={activeTab} />}>
-          {/* Re-keying on activeTab forces a remount and re-runs the
-              animate-block-in entry so each tab switch reads as a
-              deliberate arrival, not a flash. The keyframe is GPU-safe
-              (translateY + opacity), gated by prefers-reduced-motion. */}
-          <div key={activeTab} className="h-full animate-block-in">
-            {activeTab === 'setup' ? <TournamentSetupPage /> : null}
-            {activeTab === 'roster' ? <RosterTab /> : null}
-            {activeTab === 'matches' ? <MatchesTab /> : null}
-            {activeTab === 'schedule' ? <SchedulePage /> : null}
-            {activeTab === 'live' ? <MatchControlCenterPage /> : null}
-            {activeTab === 'bracket' ? <BracketTab /> : null}
-            {activeTab === 'tv' ? <TvPreviewTab /> : null}
-          </div>
+          {/* Bracket-kind tournaments skip the activeTab dispatch and
+              render BracketTab directly — the meet tabs aren't
+              relevant. ``activeTournamentKind`` is loaded by
+              ``useTournamentKind`` on mount; while it's ``null`` the
+              shell falls back to the meet-style tab dispatch below. */}
+          {activeTournamentKind === 'bracket' ? (
+            <div key="bracket" className="h-full animate-block-in">
+              <BracketTab />
+            </div>
+          ) : (
+            // Re-keying on activeTab forces a remount and re-runs the
+            // animate-block-in entry so each tab switch reads as a
+            // deliberate arrival, not a flash.
+            <div key={activeTab} className="h-full animate-block-in">
+              {activeTab === 'setup' ? <TournamentSetupPage /> : null}
+              {activeTab === 'roster' ? <RosterTab /> : null}
+              {activeTab === 'matches' ? <MatchesTab /> : null}
+              {activeTab === 'schedule' ? <SchedulePage /> : null}
+              {activeTab === 'live' ? <MatchControlCenterPage /> : null}
+              {activeTab === 'tv' ? <TvPreviewTab /> : null}
+            </div>
+          )}
         </Suspense>
       </main>
       <SolverHud />

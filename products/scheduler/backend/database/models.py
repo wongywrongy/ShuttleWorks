@@ -100,6 +100,14 @@ class Tournament(Base):
     # pill. Stored as plain string for ease of evolution; enforcement
     # lives at the application layer.
     status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    # ``meet`` (default — intercollegiate dual / tri-meet workflow,
+    # uses the Setup / Roster / Matches / Schedule / Live / TV tabs)
+    # or ``bracket`` (single-elimination / round-robin draws, uses the
+    # standalone Bracket surface). Added in the backend-merge arc
+    # follow-up after the user pushed back on showing meet tabs on
+    # a bracket-only tournament. Stored as plain string; the dashboard
+    # writes one of the two literals on create.
+    kind: Mapped[str] = mapped_column(String(20), default="meet", nullable=False)
     # ISO date string ("2026-02-15") preserved as-is. Stored as String,
     # not Date, to mirror the on-the-wire shape in TournamentConfig.
     tournament_date: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)

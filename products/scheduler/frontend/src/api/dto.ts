@@ -567,10 +567,20 @@ export type TournamentStatus = 'draft' | 'active' | 'archived';
 
 export type TournamentRole = 'owner' | 'operator' | 'viewer';
 
+/** Top-level kind of event a tournament row represents. ``meet`` is
+ *  the intercollegiate dual / tri-meet workflow (Setup / Roster /
+ *  Matches / Schedule / Live / TV tabs); ``bracket`` is a single-
+ *  elimination or round-robin draw (BracketTab surface only, meet
+ *  tabs hidden). User-facing copy calls ``bracket`` a "Tournament";
+ *  the wire-format keeps ``bracket`` for code symmetry with the
+ *  bracket_* table family. */
+export type TournamentKind = 'meet' | 'bracket';
+
 export interface TournamentSummaryDTO {
   id: string;
   name: string | null;
   status: TournamentStatus;
+  kind: TournamentKind;
   tournamentDate: string | null;
   createdAt: string;
   updatedAt: string;
@@ -584,6 +594,7 @@ export interface TournamentSummaryDTO {
 
 export interface TournamentCreateDTO {
   name?: string | null;
+  kind?: TournamentKind;
   tournamentDate?: string | null;
 }
 

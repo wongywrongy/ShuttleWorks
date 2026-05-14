@@ -202,8 +202,17 @@ export function TournamentListPage() {
   }, [tournaments]);
 
   const openTournament = useCallback(
-    (id: string) => navigate(`/tournaments/${id}/setup`),
-    [navigate],
+    (id: string) => {
+      // Route to /bracket landing for bracket-kind tournaments so
+      // the operator doesn't bounce off the meet Setup page when
+      // they click into a tournament they created as a bracket.
+      // AppShell will render BracketTab on either URL — the
+      // segment just decides which one we *show* in the browser.
+      const t = tournaments.find((row) => row.id === id);
+      const segment = t?.kind === 'bracket' ? 'bracket' : 'setup';
+      navigate(`/tournaments/${id}/${segment}`);
+    },
+    [navigate, tournaments],
   );
 
   const handleCreate = useCallback(async () => {
@@ -211,11 +220,14 @@ export function TournamentListPage() {
     try {
       const created = await apiClient.createTournament({
         name: newName.trim() || null,
+        kind: newKind,
         tournamentDate: newDate || null,
       });
-      // Same backend row regardless of kind — the operator just
-      // lands on a different tab. Meet → Setup (roster builder /
-      // CP-SAT meet scheduler). Bracket → Bracket (draw + advance).
+      // The two kinds run on the same backend row but show different
+      // chrome — the AppShell's TabBar reads ``kind`` and either
+      // shows the 6 meet tabs (kind='meet') or hides the strip and
+      // renders BracketTab directly (kind='bracket'). URL segment
+      // is informational; AppShell decides what to render.
       const destination = newKind === 'bracket' ? 'bracket' : 'setup';
       navigate(`/tournaments/${created.id}/${destination}`);
     } catch (err) {
@@ -401,8 +413,8 @@ function NewEventForm({
               value="bracket"
               current={kind}
               onSelect={onKindChange}
-              title="Bracket"
-              hint="Single-elimination or round-robin draws with seeded placement."
+              title="Tournament"
+              hint="Single-elimination or round-robin bracket draws with seeded placement. No meet tabs — bracket surface only."
               disabled={creating}
             />
           </div>
@@ -413,7 +425,11 @@ function NewEventForm({
           Cancel
         </Button>
         <Button onClick={onSubmit} disabled={creating}>
-          {creating ? 'Creating…' : `Create ${kind}`}
+          {creating
+            ? 'Creating…'
+            : kind === 'bracket'
+              ? 'Create tournament'
+              : 'Create meet'}
         </Button>
       </div>
     </>
