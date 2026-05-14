@@ -16,14 +16,21 @@ from typing import Optional
 
 from scheduler_core.domain.tournament import ParticipantType, TournamentState
 
-from backend.state import TournamentSlot
 
+def to_csv(
+    state: TournamentState,
+    *,
+    interval_minutes: int,
+    start_time: Optional[datetime] = None,
+) -> str:
+    """Return an order-of-play CSV body. Unassigned PlayUnits are skipped.
 
-def to_csv(slot: TournamentSlot) -> str:
-    """Return an order-of-play CSV body. Unassigned PlayUnits are skipped."""
-    state = slot.state
-    interval = slot.config.interval_minutes
-    start_time = slot.start_time
+    PR 2 of the backend-merge arc dropped this function's dependency on
+    the tournament product's ``TournamentSlot`` — both the tournament
+    backend and the scheduler backend now pass the engine state +
+    interval explicitly so the helper has no per-product coupling.
+    """
+    interval = interval_minutes
 
     out = io.StringIO()
     writer = csv.writer(out)
@@ -53,11 +60,15 @@ def to_csv(slot: TournamentSlot) -> str:
     return out.getvalue()
 
 
-def to_ics(slot: TournamentSlot) -> str:
+def to_ics(
+    state: TournamentState,
+    *,
+    interval_minutes: int,
+    start_time: Optional[datetime] = None,
+) -> str:
     """Return an RFC-5545 VCALENDAR feed."""
-    state = slot.state
-    interval = slot.config.interval_minutes
-    start_time = slot.start_time or datetime.now(timezone.utc)
+    interval = interval_minutes
+    start_time = start_time or datetime.now(timezone.utc)
     stamp = _ics_dt(datetime.now(timezone.utc))
 
     lines = [

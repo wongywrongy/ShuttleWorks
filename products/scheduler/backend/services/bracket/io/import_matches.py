@@ -35,18 +35,21 @@ from scheduler_core.domain.tournament import (
 )
 
 from ..draw import BracketSlot, Draw
-from ..scheduler import TournamentDriver
-from ..state import register_draw
+from ..state import BracketSession, EventMeta, register_draw
 
 
-def parse_json_payload(body) -> "TournamentSlot":  # type: ignore[name-defined]
-    """Build a TournamentSlot from a typed import body.
+def parse_json_payload(body) -> BracketSession:
+    """Build a BracketSession from a typed import body.
 
-    `body` is a ``backend.schemas.ImportTournamentIn`` instance.
+    ``body`` is any object exposing the ``ImportTournamentIn`` shape
+    (events list + courts / total_slots / interval_minutes /
+    rest_between_rounds / start_time). The Pydantic class can live
+    in either product backend — both shapes round-trip through here
+    because the function only touches attribute access.
+
+    Returns a lightweight ``BracketSession`` (no driver) — the caller
+    builds whatever driver wrapper they need.
     """
-    # Imported lazily to avoid a backend<->tournament cycle.
-    from backend.state import EventMeta, TournamentSlot
-
     if not body.events:
         raise ValueError("at least one event is required")
 
@@ -72,20 +75,13 @@ def parse_json_payload(body) -> "TournamentSlot":  # type: ignore[name-defined]
         court_count=body.courts,
         interval_minutes=body.interval_minutes,
     )
-    driver = TournamentDriver(
-        state=state,
-        config=config,
-        solver_options=SolverOptions(time_limit_seconds=body.time_limit_seconds),
-        rest_between_rounds=body.rest_between_rounds,
-    )
-    return TournamentSlot(
+    return BracketSession(
         state=state,
         draws=draws,
-        driver=driver,
         config=config,
-        events=events_meta,
         rest_between_rounds=body.rest_between_rounds,
         start_time=body.start_time,
+        events=events_meta,
     )
 
 
@@ -98,15 +94,13 @@ def parse_csv_payload(
     rest_between_rounds: int,
     start_time: Optional[str],
     time_limit_seconds: float,
-) -> "TournamentSlot":  # type: ignore[name-defined]
-    """Build a TournamentSlot from a flat CSV payload.
+) -> BracketSession:
+    """Build a BracketSession from a flat CSV payload.
 
     Required columns: ``event_id, format, round, match_index, side_a,
     side_b, feeder_a, feeder_b, duration_slots``. ``side_a``/``side_b``
     use ``|`` to separate doubles partners.
     """
-    from backend.state import EventMeta, TournamentSlot
-
     reader = csv.DictReader(io.StringIO(text))
     expected = {
         "event_id", "format", "round", "match_index",
@@ -150,23 +144,16 @@ def parse_csv_payload(
         court_count=courts,
         interval_minutes=interval_minutes,
     )
-    driver = TournamentDriver(
-        state=state,
-        config=config,
-        solver_options=SolverOptions(time_limit_seconds=time_limit_seconds),
-        rest_between_rounds=rest_between_rounds,
-    )
     parsed_start = (
         datetime.fromisoformat(start_time) if start_time else None
     )
-    return TournamentSlot(
+    return BracketSession(
         state=state,
         draws=draws,
-        driver=driver,
         config=config,
-        events=events_meta,
         rest_between_rounds=rest_between_rounds,
         start_time=parsed_start,
+        events=events_meta,
     )
 
 
@@ -380,7 +367,7 @@ def _slot_from_side(
 ) -> BracketSlot:
     """Build a BracketSlot for a round-0 side. None / [] -> BYE."""
     if not side_ids:
-        from tournament.draw import BYE
+        from ..draw import BYE
 
         return BracketSlot.of_participant(BYE)
     head = side_ids[0]

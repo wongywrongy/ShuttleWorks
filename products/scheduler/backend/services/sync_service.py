@@ -40,7 +40,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings as default_settings
-from database.models import Match, SyncQueue, Tournament
+from database.models import (
+    BracketEvent,
+    BracketMatch,
+    BracketResult,
+    Match,
+    SyncQueue,
+    Tournament,
+)
 from database.session import SessionLocal
 
 log = logging.getLogger("scheduler.sync")
@@ -110,6 +117,45 @@ class SyncService:
             entity_type="tournament",
             entity_id=str(tournament.id),
             payload=_tournament_to_payload(tournament),
+        )
+        session.add(row)
+        return row
+
+    @staticmethod
+    def enqueue_bracket_event(
+        session: Session, event: BracketEvent
+    ) -> SyncQueue:
+        """Stage a bracket-event write for sync. Caller commits."""
+        row = SyncQueue(
+            entity_type="bracket_event",
+            entity_id=event.id,
+            payload=_bracket_event_to_payload(event),
+        )
+        session.add(row)
+        return row
+
+    @staticmethod
+    def enqueue_bracket_match(
+        session: Session, match: BracketMatch
+    ) -> SyncQueue:
+        """Stage a bracket-match write for sync. Caller commits."""
+        row = SyncQueue(
+            entity_type="bracket_match",
+            entity_id=match.id,
+            payload=_bracket_match_to_payload(match),
+        )
+        session.add(row)
+        return row
+
+    @staticmethod
+    def enqueue_bracket_result(
+        session: Session, result: BracketResult
+    ) -> SyncQueue:
+        """Stage a bracket-result write for sync. Caller commits."""
+        row = SyncQueue(
+            entity_type="bracket_result",
+            entity_id=result.bracket_match_id,
+            payload=_bracket_result_to_payload(result),
         )
         session.add(row)
         return row
@@ -197,6 +243,22 @@ class SyncService:
             elif row.entity_type == "tournament":
                 client.table("tournaments").upsert(
                     row.payload, on_conflict="id"
+                ).execute()
+            elif row.entity_type == "bracket_event":
+                client.table("bracket_events").upsert(
+                    row.payload, on_conflict="tournament_id,id"
+                ).execute()
+            elif row.entity_type == "bracket_match":
+                client.table("bracket_matches").upsert(
+                    row.payload,
+                    on_conflict="tournament_id,bracket_event_id,id",
+                ).execute()
+            elif row.entity_type == "bracket_result":
+                client.table("bracket_results").upsert(
+                    row.payload,
+                    on_conflict=(
+                        "tournament_id,bracket_event_id,bracket_match_id"
+                    ),
                 ).execute()
             else:
                 # Unknown entity type — log + cap so it isn't retried forever.
@@ -297,6 +359,62 @@ def _tournament_to_payload(tournament: Tournament) -> dict:
         "schema_version": tournament.schema_version,
         "created_at": _isoformat(tournament.created_at),
         "updated_at": _isoformat(tournament.updated_at),
+    }
+
+
+def _bracket_event_to_payload(event: BracketEvent) -> dict:
+    """Serialise a BracketEvent row for Supabase upsert."""
+    return {
+        "tournament_id": str(event.tournament_id),
+        "id": event.id,
+        "discipline": event.discipline,
+        "format": event.format,
+        "duration_slots": event.duration_slots,
+        "bracket_size": event.bracket_size,
+        "seeded_count": event.seeded_count,
+        "rr_rounds": event.rr_rounds,
+        "config": event.config,
+        "version": event.version,
+        "created_at": _isoformat(event.created_at),
+        "updated_at": _isoformat(event.updated_at),
+    }
+
+
+def _bracket_match_to_payload(match: BracketMatch) -> dict:
+    """Serialise a BracketMatch row for Supabase upsert."""
+    return {
+        "tournament_id": str(match.tournament_id),
+        "bracket_event_id": match.bracket_event_id,
+        "id": match.id,
+        "round_index": match.round_index,
+        "match_index": match.match_index,
+        "kind": match.kind,
+        "slot_a": match.slot_a,
+        "slot_b": match.slot_b,
+        "side_a": match.side_a,
+        "side_b": match.side_b,
+        "dependencies": match.dependencies,
+        "expected_duration_slots": match.expected_duration_slots,
+        "duration_variance_slots": match.duration_variance_slots,
+        "child_unit_ids": match.child_unit_ids,
+        "meta": match.meta,
+        "version": match.version,
+        "created_at": _isoformat(match.created_at),
+        "updated_at": _isoformat(match.updated_at),
+    }
+
+
+def _bracket_result_to_payload(result: BracketResult) -> dict:
+    """Serialise a BracketResult row for Supabase upsert."""
+    return {
+        "tournament_id": str(result.tournament_id),
+        "bracket_event_id": result.bracket_event_id,
+        "bracket_match_id": result.bracket_match_id,
+        "winner_side": result.winner_side,
+        "score": result.score,
+        "finished_at_slot": result.finished_at_slot,
+        "walkover": result.walkover,
+        "created_at": _isoformat(result.created_at),
     }
 
 

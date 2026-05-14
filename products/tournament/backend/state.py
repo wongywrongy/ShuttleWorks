@@ -2,6 +2,13 @@
 
 The prototype keeps a single tournament in memory. On reset the slot
 is cleared. No persistence — this is a prototype harness.
+
+PR 2 of the backend-merge arc moved ``EventMeta`` into the shared
+``services.bracket.state`` so both this product and the scheduler
+backend describe events with the same shape. ``TournamentSlot`` (with
+its driver field) stays here because it's the per-product wrapper —
+the scheduler backend uses ``_BracketSession`` from
+``api.brackets`` instead, which omits the driver.
 """
 from __future__ import annotations
 
@@ -15,18 +22,7 @@ from scheduler_core.domain.tournament import TournamentState
 
 from services.bracket.draw import Draw
 from services.bracket.scheduler import TournamentDriver
-
-
-@dataclass
-class EventMeta:
-    """Per-event metadata held alongside the Draw."""
-
-    id: str
-    discipline: str
-    format: str  # "se" or "rr"
-    duration_slots: int
-    bracket_size: Optional[int] = None
-    participant_count: int = 0
+from services.bracket.state import EventMeta  # re-exported below
 
 
 @dataclass

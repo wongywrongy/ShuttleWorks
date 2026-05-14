@@ -56,7 +56,7 @@ from services.bracket.io.import_matches import (
     parse_json_payload,
 )
 from services.bracket.scheduler import TournamentDriver
-from services.bracket.state import register_draw
+from services.bracket.state import BracketSession, register_draw
 
 app = FastAPI(title="Tournament Prototype API", version="0.2.0")
 app.add_middleware(
@@ -317,9 +317,10 @@ def match_action(body: MatchActionIn) -> TournamentOut:
 @app.post("/tournament/import", response_model=TournamentOut)
 def import_matches_json(body: ImportTournamentIn) -> TournamentOut:
     try:
-        slot = parse_json_payload(body)
+        session = parse_json_payload(body)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    slot = _session_to_slot(session, time_limit_seconds=body.time_limit_seconds)
     container.set(slot)
     return serialize_tournament(slot)
 
@@ -329,7 +330,7 @@ async def import_matches_csv(request: Request) -> TournamentOut:
     raw = (await request.body()).decode("utf-8")
     params = request.query_params
     try:
-        slot = parse_csv_payload(
+        session = parse_csv_payload(
             raw,
             courts=int(params.get("courts", "2")),
             total_slots=int(params.get("total_slots", "128")),
@@ -340,6 +341,10 @@ async def import_matches_csv(request: Request) -> TournamentOut:
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
+    slot = _session_to_slot(
+        session,
+        time_limit_seconds=float(params.get("time_limit_seconds", "5.0")),
+    )
     container.set(slot)
     return serialize_tournament(slot)
 
@@ -356,7 +361,11 @@ def export_json() -> TournamentOut:
 @app.get("/tournament/export.csv")
 def export_csv() -> Response:
     slot = _slot_or_404()
-    body = to_csv(slot)
+    body = to_csv(
+        slot.state,
+        interval_minutes=slot.config.interval_minutes,
+        start_time=slot.start_time,
+    )
     return Response(
         content=body,
         media_type="text/csv; charset=utf-8",
@@ -367,7 +376,11 @@ def export_csv() -> Response:
 @app.get("/tournament/export.ics")
 def export_ics() -> Response:
     slot = _slot_or_404()
-    body = to_ics(slot)
+    body = to_ics(
+        slot.state,
+        interval_minutes=slot.config.interval_minutes,
+        start_time=slot.start_time,
+    )
     return Response(
         content=body,
         media_type="text/calendar; charset=utf-8",
@@ -383,3 +396,29 @@ def _slot_or_404() -> TournamentSlot:
         return container.get()
     except LookupError:
         raise HTTPException(404, "no tournament loaded")
+
+
+def _session_to_slot(
+    session: BracketSession, *, time_limit_seconds: float
+) -> TournamentSlot:
+    """Wrap a parsed BracketSession in a TournamentSlot (driver + meta).
+
+    The shared parser returns a driver-free shape because the scheduler
+    backend doesn't keep a long-lived driver per request; this product
+    still wants one for the in-memory container model.
+    """
+    driver = TournamentDriver(
+        state=session.state,
+        config=session.config,
+        solver_options=SolverOptions(time_limit_seconds=time_limit_seconds),
+        rest_between_rounds=session.rest_between_rounds,
+    )
+    return TournamentSlot(
+        state=session.state,
+        draws=session.draws,
+        driver=driver,
+        config=session.config,
+        events=session.events,
+        rest_between_rounds=session.rest_between_rounds,
+        start_time=session.start_time,
+    )

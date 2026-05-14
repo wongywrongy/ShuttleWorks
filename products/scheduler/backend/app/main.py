@@ -20,6 +20,7 @@ from api import (
     schedule_suggestions,
     invites,  # Step 7 — invite-link generate / resolve / accept / revoke
     commands,  # Arch-adjustment Step C — idempotent operator command log
+    brackets,  # Backend-merge arc PR 2 — bracket draws / advancement / I/O
 )
 from app.config import settings
 from app.dependencies import get_current_user
@@ -184,6 +185,7 @@ app.include_router(schedule_director.router, dependencies=_AUTH_DEP)
 app.include_router(schedule_suggestions.router, dependencies=_AUTH_DEP)
 app.include_router(match_state.router, dependencies=_AUTH_DEP)
 app.include_router(commands.router, dependencies=_AUTH_DEP)
+app.include_router(brackets.router, dependencies=_AUTH_DEP)
 app.include_router(tournaments.router, dependencies=_AUTH_DEP)
 # Invites: registered WITHOUT the router-level auth dep so the public
 # ``GET /invites/{token}`` resolve endpoint stays unauthenticated. The

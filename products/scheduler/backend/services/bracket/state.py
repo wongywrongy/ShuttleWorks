@@ -6,9 +6,21 @@ to walk-over any R1 PlayUnit with a BYE side. Multiple draws can be
 registered into the same state (multi-event tournaments); each event's
 PlayUnits keep their `event_id` so the scheduler and serializers can
 filter accordingly.
+
+PR 2 of the backend-merge arc also lifts the two small dataclasses
+``EventMeta`` and ``BracketSession`` out of the tournament product's
+``backend/state.py`` and into this shared module so the io / export
+helpers can describe their shape without importing from a
+product-specific location. The tournament backend's
+``TournamentSlot`` keeps its driver field and just reuses these here.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, Optional
+
+from scheduler_core.domain.models import ScheduleConfig
 from scheduler_core.domain.tournament import (
     PlayUnitId,
     TournamentState,
@@ -16,6 +28,42 @@ from scheduler_core.domain.tournament import (
 
 from .advancement import auto_walkover_byes
 from .draw import Draw
+
+
+@dataclass
+class EventMeta:
+    """Per-event metadata held alongside the Draw.
+
+    ``format`` is ``"se"`` (single-elimination) or ``"rr"`` (round-robin).
+    ``bracket_size`` is set for SE only; round-robin events leave it
+    ``None``. Lifted here from the tournament product so both backends
+    talk about events with the same shape.
+    """
+
+    id: str
+    discipline: str
+    format: str
+    duration_slots: int
+    bracket_size: Optional[int] = None
+    participant_count: int = 0
+
+
+@dataclass
+class BracketSession:
+    """Driver-free session container.
+
+    Returned by ``parse_json_payload`` / ``parse_csv_payload`` and
+    consumed by ``to_csv`` / ``to_ics`` after the PR 2 refactor that
+    decoupled the io helpers from the tournament product's
+    ``TournamentSlot`` (which keeps its driver field locally).
+    """
+
+    state: TournamentState
+    draws: Dict[str, Draw]
+    config: ScheduleConfig
+    rest_between_rounds: int
+    start_time: Optional[datetime]
+    events: Dict[str, EventMeta] = field(default_factory=dict)
 
 
 def register_draw(state: TournamentState, draw: Draw) -> None:

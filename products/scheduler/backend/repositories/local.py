@@ -461,9 +461,11 @@ class _LocalBracketRepo:
     recorded outcome, no per-result version semantics — the row is
     the result).
 
-    Sync-queue enqueue is intentionally NOT wired in this repo. PR 2
-    adds bracket entity types to ``SyncService`` and inserts the
-    enqueue calls at the same time as the route consolidation.
+    Every write path stages an outbox row via the same SyncService
+    pattern matches and tournaments use — guarantees the queue entry
+    exists iff the data committed. Operator browsers + the public TV
+    display read bracket changes from the matching Supabase Realtime
+    channels added in this PR.
     """
 
     _MUTABLE_MATCH_FIELDS = frozenset(
@@ -519,6 +521,8 @@ class _LocalBracketRepo:
             config=config or {},
         )
         self.session.add(row)
+        self.session.flush()
+        SyncService.enqueue_bracket_event(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -582,6 +586,10 @@ class _LocalBracketRepo:
             for p in participants
         ]
         self.session.add_all(rows)
+        # Participants don't get their own outbox channel — they
+        # round-trip as part of the parent event's payload on bracket
+        # reads. The event row's outbox entry already triggered the
+        # operator-side resubscribe.
         self.session.commit()
         return len(rows)
 
@@ -654,6 +662,9 @@ class _LocalBracketRepo:
             for m in matches
         ]
         self.session.add_all(rows)
+        self.session.flush()
+        for row in rows:
+            SyncService.enqueue_bracket_match(self.session, row)
         self.session.commit()
         return len(rows)
 
@@ -691,6 +702,8 @@ class _LocalBracketRepo:
             if key in self._MUTABLE_MATCH_FIELDS:
                 setattr(row, key, value)
         row.version = row.version + 1
+        self.session.flush()
+        SyncService.enqueue_bracket_match(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -759,6 +772,8 @@ class _LocalBracketRepo:
             existing.finished_at_slot = finished_at_slot
             existing.walkover = walkover
             row = existing
+        self.session.flush()
+        SyncService.enqueue_bracket_result(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
