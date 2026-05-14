@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Sliders, ListBullets, Lightning } from '@phosphor-icons/react';
+import { Button } from '@scheduler/design-system';
 import { useBracketApi } from "../../api/bracketClient";
 import type {
   CreateTournamentIn,
@@ -12,6 +14,7 @@ import {
   defaultStartTime,
 } from "./setupForm/helpers";
 import { EventEditor, Field, NumInput } from "./setupForm/EventEditor";
+import { SettingsShell, type SettingsSectionDef } from '../settings/SettingsShell';
 
 interface Props {
   disabled?: boolean;
@@ -146,104 +149,119 @@ export function SetupForm({ disabled, onCreated }: Props) {
     }
   };
 
+  const sections: SettingsSectionDef[] = [
+    {
+      id: 'configuration',
+      label: 'Configuration',
+      icon: Sliders,
+      render: () => (
+        <div className="space-y-6 py-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Courts">
+              <NumInput value={courts} setValue={setCourts} min={1} max={32} />
+            </Field>
+            <Field label="Total slots">
+              <NumInput value={totalSlots} setValue={setTotalSlots} min={4} max={1024} />
+            </Field>
+            <Field label="Slot length (minutes)">
+              <NumInput value={intervalMinutes} setValue={setIntervalMinutes} min={5} max={240} />
+            </Field>
+            <Field label="Rest between rounds">
+              <NumInput value={restBetweenRounds} setValue={setRestBetweenRounds} min={0} max={32} />
+            </Field>
+            <Field label="Start time (local)">
+              <input
+                type="datetime-local"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </Field>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'events',
+      label: 'Events',
+      icon: ListBullets,
+      render: () => (
+        <div className="space-y-3 py-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Events ({events.length})
+            </h3>
+            <Button variant="outline" size="sm" onClick={addEvent}>+ Add event</Button>
+          </div>
+          {events.map((ev, i) => (
+            <EventEditor
+              key={i}
+              value={ev}
+              onChange={(patch) => updateEvent(i, patch)}
+              onRemove={events.length > 1 ? () => removeEvent(i) : undefined}
+            />
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'generate',
+      label: 'Generate',
+      icon: Lightning,
+      render: () => {
+        const participantCount = events.reduce(
+          (sum, e) => sum + e.participantsText.split('\n').filter((s) => s.trim()).length,
+          0,
+        );
+        return (
+          <div className="space-y-6 py-6">
+            <div className="text-sm text-muted-foreground">
+              <p>
+                {events.length} event{events.length === 1 ? '' : 's'} ·{' '}
+                {participantCount} participant{participantCount === 1 ? '' : 's'} ·{' '}
+                {totalSlots} slots × {intervalMinutes} min
+              </p>
+            </div>
+            {error && (
+              <div className="text-sm text-status-blocked bg-status-blocked-bg border border-status-blocked/40 rounded-sm px-3 py-2">
+                {error}
+              </div>
+            )}
+            <div className="flex flex-wrap justify-end gap-2 items-center">
+              <label className="cursor-pointer">
+                <Button variant="ghost" asChild>
+                  <span>Import draw…</span>
+                </Button>
+                <input
+                  type="file"
+                  accept=".json,.csv,application/json,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleImport(f);
+                  }}
+                />
+              </label>
+              <Button
+                variant="brand"
+                disabled={disabled || submitting}
+                onClick={submit}
+              >
+                {submitting ? 'Creating…' : 'Generate draws'}
+              </Button>
+            </div>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
-    <div className="card p-6 space-y-6">
-      <div>
-        <h2 className="text-base font-semibold">New bracket draw</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure one or more events for this tournament's bracket. For
-          doubles, write{" "}
-          <code className="text-xs bg-muted/40 px-1 rounded">Name1 / Name2</code>{" "}
-          per line.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Field label="Courts">
-          <NumInput value={courts} setValue={setCourts} min={1} max={32} />
-        </Field>
-        <Field label="Total slots">
-          <NumInput
-            value={totalSlots}
-            setValue={setTotalSlots}
-            min={4}
-            max={1024}
-          />
-        </Field>
-        <Field label="Slot length (minutes)">
-          <NumInput
-            value={intervalMinutes}
-            setValue={setIntervalMinutes}
-            min={5}
-            max={240}
-          />
-        </Field>
-        <Field label="Rest between rounds">
-          <NumInput
-            value={restBetweenRounds}
-            setValue={setRestBetweenRounds}
-            min={0}
-            max={32}
-          />
-        </Field>
-        <Field label="Start time (local)">
-          <input
-            type="datetime-local"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            className="w-56 rounded-sm border border-ink-300 bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </Field>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
-            Events
-          </h3>
-          <button className="btn-outline" onClick={addEvent}>
-            + Add event
-          </button>
-        </div>
-
-        {events.map((ev, i) => (
-          <EventEditor
-            key={i}
-            value={ev}
-            onChange={(patch) => updateEvent(i, patch)}
-            onRemove={events.length > 1 ? () => removeEvent(i) : undefined}
-          />
-        ))}
-      </div>
-
-      {error && (
-        <div className="text-sm text-status-blocked bg-status-blocked-bg border border-status-blocked/40 rounded-sm px-3 py-2">
-          {error}
-        </div>
-      )}
-
-      <div className="flex flex-wrap justify-end gap-2 items-center">
-        <label className="btn-ghost cursor-pointer">
-          Import draw…
-          <input
-            type="file"
-            accept=".json,.csv,application/json,text/csv"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleImport(f);
-            }}
-          />
-        </label>
-        <button
-          className="btn-primary"
-          disabled={disabled || submitting}
-          onClick={submit}
-        >
-          {submitting ? "Creating…" : "Generate draws"}
-        </button>
-      </div>
-    </div>
+    <SettingsShell
+      sections={sections}
+      defaultSectionId="configuration"
+      eyebrow="NEW BRACKET"
+    />
   );
 }
 

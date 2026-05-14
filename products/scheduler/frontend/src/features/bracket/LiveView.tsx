@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Button, Card, StatusPill } from "@scheduler/design-system";
 import { useBracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
 
@@ -15,7 +16,13 @@ export function LiveView({ data, eventId, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="card p-4">
+      <div className="px-4 pt-4">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          LIVE
+        </span>
+      </div>
+
+      <Card variant="frame" className="p-4">
         <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wide">
           Live ops — event {eventId}
         </h3>
@@ -27,9 +34,9 @@ export function LiveView({ data, eventId, onChange }: Props) {
           events at once, so cross-event player conflicts are respected
           automatically.
         </p>
-      </div>
+      </Card>
 
-      <div className="card overflow-auto">
+      <Card variant="frame" className="overflow-auto">
         <table className="w-full text-sm">
           <thead className="bg-ink-100 text-ink-600">
             <tr>
@@ -62,8 +69,8 @@ export function LiveView({ data, eventId, onChange }: Props) {
                 </td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
                   {row.canStart && (
-                    <button
-                      className="btn-outline"
+                    <Button
+                      variant="outline"
                       onClick={async () => {
                         onChange(
                           await api.matchAction({
@@ -74,11 +81,12 @@ export function LiveView({ data, eventId, onChange }: Props) {
                       }}
                     >
                       Start
-                    </button>
+                    </Button>
                   )}
                   {row.canFinish && (
-                    <button
-                      className="btn-outline ml-1"
+                    <Button
+                      variant="outline"
+                      className="ml-1"
                       onClick={async () => {
                         onChange(
                           await api.matchAction({
@@ -89,11 +97,12 @@ export function LiveView({ data, eventId, onChange }: Props) {
                       }}
                     >
                       Finish
-                    </button>
+                    </Button>
                   )}
                   {row.canResetActuals && (
-                    <button
-                      className="btn-ghost ml-1"
+                    <Button
+                      variant="ghost"
+                      className="ml-1"
                       onClick={async () => {
                         onChange(
                           await api.matchAction({
@@ -104,12 +113,12 @@ export function LiveView({ data, eventId, onChange }: Props) {
                       }}
                     >
                       Reset
-                    </button>
+                    </Button>
                   )}
                   {row.canRecordResult && (
                     <span className="ml-2 inline-flex gap-1">
-                      <button
-                        className="btn-outline"
+                      <Button
+                        variant="outline"
                         onClick={async () => {
                           onChange(
                             await api.recordResult({
@@ -121,9 +130,9 @@ export function LiveView({ data, eventId, onChange }: Props) {
                         }}
                       >
                         A wins
-                      </button>
-                      <button
-                        className="btn-outline"
+                      </Button>
+                      <Button
+                        variant="outline"
                         onClick={async () => {
                           onChange(
                             await api.recordResult({
@@ -135,7 +144,7 @@ export function LiveView({ data, eventId, onChange }: Props) {
                         }}
                       >
                         B wins
-                      </button>
+                      </Button>
                     </span>
                   )}
                 </td>
@@ -143,7 +152,7 @@ export function LiveView({ data, eventId, onChange }: Props) {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -151,15 +160,17 @@ export function LiveView({ data, eventId, onChange }: Props) {
 function StatePill({ state }: { state: RowState }) {
   switch (state) {
     case "done":
-      return (
-        <span className="pill bg-status-done-bg text-status-done">Done</span>
-      );
+      return <StatusPill tone="done">Done</StatusPill>;
     case "live":
-      return <span className="pill bg-status-warning-bg text-status-warning">Live</span>;
+      return <StatusPill tone="yellow">Live</StatusPill>;
     case "ready":
-      return <span className="pill bg-status-called-bg text-status-called">Ready</span>;
+      return <StatusPill tone="amber">Ready</StatusPill>;
     case "pending":
-      return <span className="pill bg-ink-100 text-ink-600">Pending</span>;
+      return (
+        <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Pending
+        </span>
+      );
   }
 }
 

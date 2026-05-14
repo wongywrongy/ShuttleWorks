@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { Button, Card } from '@scheduler/design-system';
+
 import {
   type EventDraft,
   SAMPLE_8,
@@ -23,21 +25,21 @@ interface EventEditorProps {
 
 export function EventEditor({ value, onChange, onRemove }: EventEditorProps) {
   return (
-    <div className="card border-ink-200 p-4 space-y-4">
+    <Card variant="frame" className="border-ink-200 p-4 space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Event id">
           <input
             type="text"
             value={value.id}
             onChange={(e) => onChange({ id: e.target.value.trim() || 'E' })}
-            className="w-24 rounded-sm border border-ink-300 bg-bg-elev px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-24 rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </Field>
         <Field label="Discipline">
           <select
             value={value.discipline}
             onChange={(e) => onChange({ discipline: e.target.value })}
-            className="rounded-sm border border-ink-300 bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {['MS', 'WS', 'MD', 'WD', 'XD', 'GEN'].map((d) => (
               <option key={d} value={d}>
@@ -47,7 +49,7 @@ export function EventEditor({ value, onChange, onRemove }: EventEditorProps) {
           </select>
         </Field>
         <Field label="Format">
-          <div className="inline-flex rounded-sm border border-ink-300 overflow-hidden">
+          <div className="inline-flex rounded-sm border border-border overflow-hidden">
             {(['se', 'rr'] as const).map((f) => (
               <button
                 key={f}
@@ -95,12 +97,13 @@ export function EventEditor({ value, onChange, onRemove }: EventEditorProps) {
           </Field>
         )}
         {onRemove && (
-          <button
-            className="btn-ghost ml-auto text-status-blocked"
+          <Button
+            variant="ghost"
+            className="ml-auto text-status-blocked"
             onClick={onRemove}
           >
             Remove
-          </button>
+          </Button>
         )}
       </div>
 
@@ -109,32 +112,35 @@ export function EventEditor({ value, onChange, onRemove }: EventEditorProps) {
           value={value.participantsText}
           onChange={(e) => onChange({ participantsText: e.target.value })}
           rows={8}
-          className="w-full font-mono text-sm rounded-sm border border-ink-300 bg-bg-elev px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full font-mono text-sm rounded-sm border border-border bg-bg-elev px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
           spellCheck={false}
         />
       </Field>
 
       <div className="flex gap-2 text-xs">
-        <button
-          className="btn-ghost text-xs"
+        <Button
+          variant="ghost"
+          className="text-xs"
           onClick={() => onChange({ participantsText: SAMPLE_8 })}
         >
           Sample 8 singles
-        </button>
-        <button
-          className="btn-ghost text-xs"
+        </Button>
+        <Button
+          variant="ghost"
+          className="text-xs"
           onClick={() => onChange({ participantsText: SAMPLE_32 })}
         >
           Sample 32 singles
-        </button>
-        <button
-          className="btn-ghost text-xs"
+        </Button>
+        <Button
+          variant="ghost"
+          className="text-xs"
           onClick={() => onChange({ participantsText: SAMPLE_DOUBLES })}
         >
           Sample 4 pairs
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -171,7 +177,7 @@ export function NumInput({
       min={min}
       max={max}
       onChange={(e) => setValue(Number(e.target.value))}
-      className="w-28 rounded-sm border border-ink-300 bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      className="w-28 rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
     />
   );
 }

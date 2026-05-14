@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useBracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
+import { Button, Card } from "@scheduler/design-system";
 
 interface Props {
   data: TournamentDTO;
@@ -57,6 +58,11 @@ export function ScheduleView({ data, eventId, refresh }: Props) {
 
   return (
     <div className="space-y-4">
+      <div className="px-4 pt-4">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          SCHEDULE
+        </span>
+      </div>
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm text-ink-500">
           {eventAssignments.length} of {eventPUCount} matches scheduled in{" "}
@@ -72,17 +78,13 @@ export function ScheduleView({ data, eventId, refresh }: Props) {
               {error}
             </span>
           )}
-          <button
-            className="btn-primary"
-            disabled={busy}
-            onClick={onScheduleNext}
-          >
+          <Button variant="brand" disabled={busy} onClick={onScheduleNext}>
             {busy ? "Scheduling…" : "Schedule next round"}
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="card overflow-auto">
+      <Card variant="frame" className="overflow-auto">
         <table className="w-full text-sm border-collapse">
           <thead className="bg-ink-100 text-ink-600">
             <tr>
@@ -119,7 +121,7 @@ export function ScheduleView({ data, eventId, refresh }: Props) {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }

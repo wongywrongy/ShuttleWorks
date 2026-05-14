@@ -1,11 +1,13 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { ArrowLeft } from "@phosphor-icons/react";
 import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
+import { ShuttleWorksMark } from "../../components/ShuttleWorksMark";
+import { Button, StatusPill } from "@scheduler/design-system";
 
 interface Props {
   data: TournamentDTO;
-  tab: "draw" | "schedule" | "live";
-  onTab: (t: "draw" | "schedule" | "live") => void;
   eventId: string;
   onEventId: (id: string) => void;
   onReset: () => void;
@@ -13,8 +15,6 @@ interface Props {
 
 export function TopBar({
   data,
-  tab,
-  onTab,
   eventId,
   onEventId,
   onReset,
@@ -28,53 +28,49 @@ export function TopBar({
     selectedEvent?.format === "se" ? "Single Elim" : "Round Robin";
 
   return (
-    <header className="border-b border-border bg-card">
-      <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3 min-w-0">
-          <select
-            value={eventId}
-            onChange={(e) => onEventId(e.target.value)}
-            className="rounded-sm border border-ink-300 bg-bg-elev px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            {data.events.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.id} · {e.discipline}
-              </option>
-            ))}
-          </select>
-          {selectedEvent && (
-            <span className="pill bg-ink-100 text-ink-700 uppercase whitespace-nowrap">
-              {formatLabel}
-            </span>
-          )}
-          <span className="text-xs text-ink-500 whitespace-nowrap">
-            {selectedEvent?.participant_count ?? 0} entries ·{" "}
-            {data.courts} courts · {data.interval_minutes}-min slots
-          </span>
-        </div>
-        <nav className="flex items-center gap-1">
-          {(["draw", "schedule", "live"] as const).map((t) => (
-            <button
-              key={t}
-              className={
-                "btn " +
-                (tab === t
-                  ? "bg-ink text-bg"
-                  : "btn-ghost text-ink-muted")
-              }
-              onClick={() => onTab(t)}
-            >
-              {t[0].toUpperCase() + t.slice(1)}
-            </button>
+    <header className="sticky top-0 z-chrome flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <Link
+          to="/"
+          aria-label="Back to dashboard"
+          title="Back to dashboard"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+        >
+          <ArrowLeft size={14} aria-hidden="true" />
+        </Link>
+        <Link
+          to="/"
+          aria-label="Back to dashboard"
+          title="Back to dashboard"
+          className="hidden sm:inline-flex"
+        >
+          <ShuttleWorksMark />
+        </Link>
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          TOURNAMENT
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <select
+          value={eventId}
+          onChange={(e) => onEventId(e.target.value)}
+          className="rounded-sm border border-border bg-bg-elev px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          {data.events.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.id} · {e.discipline}
+            </option>
           ))}
-        </nav>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Counters event={eventCounts} global={globalCounts} />
-          <ExportMenu api={api} />
-          <button className="btn-outline" onClick={onReset}>
-            Reset
-          </button>
-        </div>
+        </select>
+        {selectedEvent && (
+          <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {formatLabel}
+          </span>
+        )}
+        <Counters event={eventCounts} global={globalCounts} />
+        <ExportMenu api={api} />
+        <Button variant="outline" size="sm" onClick={onReset}>Reset</Button>
+        <StatusPill tone="idle">Idle</StatusPill>
       </div>
     </header>
   );

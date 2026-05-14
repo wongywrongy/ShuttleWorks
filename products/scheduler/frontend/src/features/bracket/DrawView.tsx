@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Card } from "@scheduler/design-system";
 import { useBracketApi } from "../../api/bracketClient";
 import type {
   AssignmentDTO,
@@ -19,10 +20,20 @@ export function DrawView({ data, eventId, onChange }: Props) {
   if (!event) {
     return <p className="text-sm text-ink-500">No event selected.</p>;
   }
-  if (event.format === "se") {
-    return <BracketView data={data} eventId={eventId} onChange={onChange} />;
-  }
-  return <RoundRobinView data={data} eventId={eventId} onChange={onChange} />;
+  return (
+    <>
+      <div className="px-4 pt-4">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          DRAW
+        </span>
+      </div>
+      {event.format === "se" ? (
+        <BracketView data={data} eventId={eventId} onChange={onChange} />
+      ) : (
+        <RoundRobinView data={data} eventId={eventId} onChange={onChange} />
+      )}
+    </>
+  );
 }
 
 function BracketView({
@@ -127,7 +138,7 @@ function BracketCell({
   const canRecord = !!pu.side_a && !!pu.side_b && !result;
 
   return (
-    <div className="card p-3 space-y-2">
+    <Card variant="frame" className="p-3 space-y-2">
       <div className="flex justify-between text-3xs text-ink-400 font-mono">
         <span>{pu.id}</span>
         <span>
@@ -150,7 +161,7 @@ function BracketCell({
         bye={pu.side_b === null}
         onWin={canRecord ? () => onResult("B") : undefined}
       />
-    </div>
+    </Card>
   );
 }
 
@@ -242,7 +253,7 @@ function RoundRobinView({
   return (
     <div className="space-y-6">
       {event.rounds.map((round, ri) => (
-        <div key={ri} className="card p-4">
+        <Card key={ri} variant="frame" className="p-4">
           <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wide mb-3">
             Round {ri + 1}
           </h3>
@@ -276,7 +287,7 @@ function RoundRobinView({
               );
             })}
           </div>
-        </div>
+        </Card>
       ))}
     </div>
   );
