@@ -6,6 +6,7 @@ import { AppStatusPopover } from '../components/AppStatusPopover';
 import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
 import { useDisruptions } from '../hooks/useDisruptions';
 import { INTERACTIVE_BASE } from '../lib/utils';
+import { BRACKET_TABS } from '../lib/bracketTabs';
 
 type TabDef = { id: AppTab; label: string; hint?: string };
 
@@ -20,15 +21,6 @@ const MEET_TABS: TabDef[] = [
   { id: 'tv', label: 'TV' },
 ];
 
-/** Tabs shown for a ``kind='bracket'`` tournament — the bracket-draw
- *  workflow. Empty: the bracket surface is the only tab and has its
- *  own internal sub-tab strip (draw / schedule / live) inside
- *  ``BracketTab``, so the top-level TabBar shows just chrome (back
- *  arrow + wordmark + status). The AppShell renders BracketTab
- *  directly when ``activeTournamentKind === 'bracket'`` regardless of
- *  the URL segment / active tab in the store. */
-const BRACKET_TABS: TabDef[] = [];
-
 /** Tabs that surface match-level state — the disruption count badge
  *  rides along on these so an operator on Schedule / Live can see at a
  *  glance that there are pending issues without first navigating to
@@ -40,20 +32,34 @@ export function TabBar() {
   const activeTab = useUiStore((s) => s.activeTab);
   const setActiveTab = useUiStore((s) => s.setActiveTab);
   const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
+  const bracketDataReady = useUiStore((s) => s.bracketDataReady);
   const matches = useTournamentStore((s) => s.matches);
   const players = useTournamentStore((s) => s.players);
   const disruptions = useDisruptions();
 
   // Default to meet tabs while ``activeTournamentKind`` is loading
   // (it's null on first mount before useTournamentKind resolves).
-  // Brackets show no top-level tabs — BracketTab's own internal
-  // sub-tab strip carries the navigation inside that surface.
-  const tabs = activeTournamentKind === 'bracket' ? BRACKET_TABS : MEET_TABS;
+  // Bracket-kind tournaments navigate Draw / Schedule / Live through
+  // this same TabBar — same markup, same accent underline.
+  const tabs: TabDef[] =
+    activeTournamentKind === 'bracket' ? BRACKET_TABS : MEET_TABS;
 
   const disabledTabs = new Set<AppTab>();
-  if (players.length === 0) disabledTabs.add('matches');
-  if (matches.length === 0) disabledTabs.add('schedule');
-  if (matches.length === 0) disabledTabs.add('live');
+  if (activeTournamentKind === 'bracket') {
+    // Draw / Schedule / Live stay disabled until a draw exists — the
+    // operator is on the SetupForm wizard until then. ``bracketDataReady``
+    // is written by ``BracketTab``; TabBar lives outside
+    // ``BracketApiProvider`` and can't call ``useBracket`` itself.
+    if (bracketDataReady !== true) {
+      disabledTabs.add('bracket-draw');
+      disabledTabs.add('bracket-schedule');
+      disabledTabs.add('bracket-live');
+    }
+  } else {
+    if (players.length === 0) disabledTabs.add('matches');
+    if (matches.length === 0) disabledTabs.add('schedule');
+    if (matches.length === 0) disabledTabs.add('live');
+  }
 
   return (
     <nav
@@ -88,90 +94,82 @@ export function TabBar() {
         >
           <ShuttleWorksMark />
         </Link>
-        {tabs.length > 0 ? (
-          <div
-            role="tablist"
-            aria-label="Sections"
-            className="flex items-center gap-0.5"
-          >
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              const isDisabled = disabledTabs.has(tab.id);
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  disabled={isDisabled}
-                  onClick={() => setActiveTab(tab.id)}
-                  aria-current={isActive ? 'page' : undefined}
-                  aria-selected={isActive}
-                  aria-disabled={isDisabled || undefined}
-                  title={
-                    isDisabled
-                      ? tab.id === 'matches'
+        <div
+          role="tablist"
+          aria-label="Sections"
+          className="flex items-center gap-0.5"
+        >
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const isDisabled = disabledTabs.has(tab.id);
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                disabled={isDisabled}
+                onClick={() => setActiveTab(tab.id)}
+                aria-current={isActive ? 'page' : undefined}
+                aria-selected={isActive}
+                aria-disabled={isDisabled || undefined}
+                title={
+                  isDisabled
+                    ? activeTournamentKind === 'bracket'
+                      ? 'Generate a draw first'
+                      : tab.id === 'matches'
                         ? 'Add players first'
                         : tab.id === 'schedule' || tab.id === 'live'
                           ? 'Create matches first'
                           : undefined
-                      : undefined
-                  }
-                  data-testid={`tab-${tab.id}`}
-                  className={[
-                    INTERACTIVE_BASE,
-                    'relative rounded-none px-3 py-2 text-sm font-medium tracking-tight',
-                    isActive
-                      ? 'text-accent font-semibold'
-                      : isDisabled
-                        ? 'text-muted-foreground/50'
-                        : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-                  ].join(' ')}
-                >
-                  {tab.label}
-                  {DISRUPTION_TABS.has(tab.id) &&
-                  disruptions.total > 0 &&
-                  !isDisabled ? (
-                    <span
-                      key={`${disruptions.total}-${disruptions.severity}`}
-                      aria-label={`${disruptions.total} disruption${disruptions.total === 1 ? '' : 's'}`}
-                      title={
-                        disruptions.errors > 0 && disruptions.warnings > 0
-                          ? `${disruptions.errors} error${disruptions.errors === 1 ? '' : 's'}, ${disruptions.warnings} warning${disruptions.warnings === 1 ? '' : 's'}`
-                          : disruptions.errors > 0
-                            ? `${disruptions.errors} error${disruptions.errors === 1 ? '' : 's'}`
-                            : `${disruptions.warnings} warning${disruptions.warnings === 1 ? '' : 's'}`
-                      }
-                      className={[
-                        'motion-enter-icon ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-3xs font-semibold tabular-nums',
-                        disruptions.severity === 'error'
-                          ? 'bg-destructive text-destructive-foreground'
-                          : 'bg-status-warning/20 text-status-warning',
-                      ].join(' ')}
-                    >
-                      {disruptions.total}
-                    </span>
-                  ) : null}
+                    : undefined
+                }
+                data-testid={`tab-${tab.id}`}
+                className={[
+                  INTERACTIVE_BASE,
+                  'relative rounded-none px-3 py-2 text-sm font-medium tracking-tight',
+                  isActive
+                    ? 'text-accent font-semibold'
+                    : isDisabled
+                      ? 'text-muted-foreground/50'
+                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                ].join(' ')}
+              >
+                {tab.label}
+                {DISRUPTION_TABS.has(tab.id) &&
+                disruptions.total > 0 &&
+                !isDisabled ? (
                   <span
-                    aria-hidden
+                    key={`${disruptions.total}-${disruptions.severity}`}
+                    aria-label={`${disruptions.total} disruption${disruptions.total === 1 ? '' : 's'}`}
+                    title={
+                      disruptions.errors > 0 && disruptions.warnings > 0
+                        ? `${disruptions.errors} error${disruptions.errors === 1 ? '' : 's'}, ${disruptions.warnings} warning${disruptions.warnings === 1 ? '' : 's'}`
+                        : disruptions.errors > 0
+                          ? `${disruptions.errors} error${disruptions.errors === 1 ? '' : 's'}`
+                          : `${disruptions.warnings} warning${disruptions.warnings === 1 ? '' : 's'}`
+                    }
                     className={[
-                      'absolute inset-x-2 -bottom-[1px] h-0.5 origin-center bg-accent',
-                      'transition-transform duration-300 ease-brand',
-                      isActive ? 'scale-x-100' : 'scale-x-0',
+                      'motion-enter-icon ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-3xs font-semibold tabular-nums',
+                      disruptions.severity === 'error'
+                        ? 'bg-destructive text-destructive-foreground'
+                        : 'bg-status-warning/20 text-status-warning',
                     ].join(' ')}
-                  />
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          // Bracket-kind tournament — no top-level tabs. Render an
-          // unobtrusive "Tournament" label so the operator knows
-          // which kind of event they're inside, since the URL segment
-          // (``/bracket``) is hidden from the chrome.
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Tournament
-          </span>
-        )}
+                  >
+                    {disruptions.total}
+                  </span>
+                ) : null}
+                <span
+                  aria-hidden
+                  className={[
+                    'absolute inset-x-2 -bottom-[1px] h-0.5 origin-center bg-accent',
+                    'transition-transform duration-300 ease-brand',
+                    isActive ? 'scale-x-100' : 'scale-x-0',
+                  ].join(' ')}
+                />
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <AppStatusPopover />

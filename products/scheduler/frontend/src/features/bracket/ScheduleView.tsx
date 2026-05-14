@@ -58,11 +58,6 @@ export function ScheduleView({ data, eventId, refresh }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="px-4 pt-4">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          SCHEDULE
-        </span>
-      </div>
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm text-ink-500">
           {eventAssignments.length} of {eventPUCount} matches scheduled in{" "}

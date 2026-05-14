@@ -16,12 +16,6 @@ export function LiveView({ data, eventId, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="px-4 pt-4">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          LIVE
-        </span>
-      </div>
-
       <Card variant="frame" className="p-4">
         <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wide">
           Live ops — event {eventId}

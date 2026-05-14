@@ -22,11 +22,6 @@ export function DrawView({ data, eventId, onChange }: Props) {
   }
   return (
     <>
-      <div className="px-4 pt-4">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          DRAW
-        </span>
-      </div>
       {event.format === "se" ? (
         <BracketView data={data} eventId={eventId} onChange={onChange} />
       ) : (

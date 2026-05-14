@@ -21,6 +21,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
+import { normalizeActiveTab } from '../lib/bracketTabs';
 
 const _TAB_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   'setup',
@@ -67,6 +68,20 @@ export function TournamentPage() {
       segment === 'bracket' ? 'bracket' : 'meet';
     useUiStore.getState().setActiveTournamentKind(optimisticKind);
   }, [tid, location.pathname]);
+
+  // Once the active tournament kind is known, snap ``activeTab`` onto a
+  // tab that's valid for that kind. The URL segment for a bracket is
+  // the bare ``/bracket`` (-> activeTab 'bracket', not a renderable
+  // section), and ``activeTab`` can also be stale from a prior
+  // tournament of the other kind. Runs after the layout effect above
+  // sets the optimistic kind, and again when ``useTournamentKind``'s
+  // async fetch corrects it.
+  const activeTab = useUiStore((s) => s.activeTab);
+  const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
+  useEffect(() => {
+    const next = normalizeActiveTab(activeTab, activeTournamentKind);
+    if (next) useUiStore.getState().setActiveTab(next);
+  }, [activeTab, activeTournamentKind]);
 
   if (!tid) {
     return (
