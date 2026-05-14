@@ -25,11 +25,18 @@
  * tournaments live in their own (stateless) backend. No charts, no
  * activity feed, no onboarding — the spec explicitly scopes v1 to
  * the functional cockpit.
+ *
+ * Visual language is the same as the operator surfaces: boxed
+ * ShuttleWorks wordmark + ThemeToggle in a sticky header, semantic
+ * status tokens (``--status-live`` / ``--status-idle``), eyebrow
+ * micro-tags above each section heading.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import type { TournamentStatus, TournamentSummaryDTO } from '../api/dto';
+import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 
@@ -41,14 +48,21 @@ function formatDate(iso: string | null): string {
 }
 
 function StatusPill({ status }: { status: TournamentStatus }) {
+  // Routes through the design system's --status-* palette so the
+  // dashboard sits on the same hue ladder as the operator pills.
+  // ``active`` is live-green; ``draft`` and ``archived`` use the
+  // neutral done/idle tones so attention stays on actually-running
+  // events.
   const tone =
     status === 'active'
-      ? 'bg-green-50 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800'
+      ? 'bg-status-live-bg text-status-live border-status-live/40'
       : status === 'archived'
-        ? 'bg-stone-100 text-stone-500 border-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:border-stone-700'
-        : 'bg-stone-50 text-stone-700 border-stone-200 dark:bg-stone-900 dark:text-stone-300 dark:border-stone-700';
+        ? 'bg-status-idle-bg text-status-idle border-status-idle/40'
+        : 'bg-status-done-bg text-status-done border-status-done/40';
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs border tabular-nums ${tone}`}>
+    <span
+      className={`inline-block rounded border px-2 py-0.5 text-xs tabular-nums ${tone}`}
+    >
       {status}
     </span>
   );
@@ -97,12 +111,14 @@ function TournamentRow({ tournament, variant, onOpen }: RowProps) {
 }
 
 function Section({
+  eyebrow,
   title,
   variant,
   items,
   onOpen,
   emptyHint,
 }: {
+  eyebrow: string;
   title: string;
   variant: 'owned' | 'shared';
   items: TournamentSummaryDTO[];
@@ -111,10 +127,13 @@ function Section({
 }) {
   if (items.length === 0 && !emptyHint) return null;
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-        {title}
-      </h2>
+    <section className="space-y-3">
+      <div className="space-y-0.5">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          {eyebrow}
+        </span>
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+      </div>
       {items.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground">{emptyHint}</Card>
       ) : (
@@ -215,17 +234,34 @@ export function TournamentListPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-4xl px-6 py-12 space-y-8">
-        <header className="flex items-baseline justify-between">
-          <div>
-            <h1 className="text-3xl font-medium tracking-tight">ShuttleWorks</h1>
-            <p className="text-sm text-muted-foreground mt-1">Tournaments</p>
+      {/* Page header — same lockup as the operator surfaces:
+          boxed wordmark on the left, chrome controls on the right. */}
+      <header className="sticky top-0 z-chrome flex h-12 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur">
+        <ShuttleWorksMark />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-4xl space-y-8 px-6 py-10">
+        <section className="flex items-end justify-between gap-4">
+          <div className="space-y-0.5">
+            <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              DASHBOARD
+            </span>
+            <h1 className="text-xl font-semibold tracking-tight">Your events</h1>
+            <p className="text-sm text-muted-foreground">
+              Meets and tournaments you own or have been invited to.
+            </p>
           </div>
           <Button onClick={() => setShowNewDialog(true)}>New</Button>
-        </header>
+        </section>
 
         {error && (
-          <div className="p-3 rounded border border-red-200 bg-red-50 text-sm text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300">
+          <div
+            role="alert"
+            className="rounded border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          >
             {error}
           </div>
         )}
@@ -234,22 +270,24 @@ export function TournamentListPage() {
           <div className="text-sm text-muted-foreground">Loading…</div>
         ) : tournaments.length === 0 ? (
           <Card className="p-8 text-center">
-            <p className="text-muted-foreground">No tournaments yet.</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
+            <p className="text-muted-foreground">No events yet.</p>
+            <p className="mt-1 text-xs text-muted-foreground/70">
               Click <em>New</em> to create a meet or open the tournament app.
             </p>
           </Card>
         ) : (
           <>
             <Section
-              title="Your Tournaments"
+              eyebrow="YOU OWN"
+              title="Your tournaments"
               variant="owned"
               items={owned}
               onOpen={openTournament}
               emptyHint="You don't own any tournaments yet."
             />
             <Section
-              title="Shared with You"
+              eyebrow="SHARED WITH YOU"
+              title="Collaborating on"
               variant="shared"
               items={shared}
               onOpen={openTournament}
@@ -260,7 +298,7 @@ export function TournamentListPage() {
 
       {showNewDialog && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-modal flex items-center justify-center bg-black/50"
           onClick={closeNewDialog}
         >
           <div
@@ -312,18 +350,22 @@ function KindPicker({
 }) {
   return (
     <>
-      <h2 className="text-lg font-medium mb-1">New</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Pick what you're running today.
-      </p>
+      <div className="mb-4 space-y-0.5">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          NEW EVENT
+        </span>
+        <h2 className="text-base font-semibold text-foreground">
+          Pick what you're running today
+        </h2>
+      </div>
       <div className="grid grid-cols-1 gap-3">
         <button
           type="button"
           onClick={onPickMeet}
-          className="text-left p-4 rounded border border-input hover:bg-muted/40 transition-colors"
+          className="rounded border border-border p-4 text-left transition-colors hover:bg-muted/40 hover:border-foreground/30"
         >
-          <div className="font-medium">Meet</div>
-          <div className="text-xs text-muted-foreground mt-1">
+          <div className="font-medium text-foreground">Meet</div>
+          <div className="mt-1 text-xs text-muted-foreground">
             Intercollegiate inter-school dual / tri-meet. CP-SAT-optimised
             schedule, drag-to-reschedule, live operator cockpit.
           </div>
@@ -331,16 +373,16 @@ function KindPicker({
         <button
           type="button"
           onClick={onPickTournament}
-          className="text-left p-4 rounded border border-input hover:bg-muted/40 transition-colors"
+          className="rounded border border-border p-4 text-left transition-colors hover:bg-muted/40 hover:border-foreground/30"
         >
-          <div className="font-medium">Tournament</div>
-          <div className="text-xs text-muted-foreground mt-1">
+          <div className="font-medium text-foreground">Tournament</div>
+          <div className="mt-1 text-xs text-muted-foreground">
             Bracket draws — single-elimination or round-robin. Opens the
             tournament app in a new tab.
           </div>
         </button>
       </div>
-      <div className="flex justify-end mt-6">
+      <div className="mt-6 flex justify-end">
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
@@ -370,10 +412,17 @@ function MeetForm({
 }) {
   return (
     <>
-      <h2 className="text-lg font-medium mb-1">New meet</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        You can leave both fields blank and rename later.
-      </p>
+      <div className="mb-4 space-y-0.5">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          NEW MEET
+        </span>
+        <h2 className="text-base font-semibold text-foreground">
+          Name + date (optional)
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          You can leave both blank and rename later.
+        </p>
+      </div>
       <div className="space-y-3">
         <label className="block">
           <span className="text-sm text-muted-foreground">Name</span>
@@ -382,7 +431,7 @@ function MeetForm({
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
             placeholder="e.g. Spring Invitational"
-            className="mt-1 w-full px-3 py-2 rounded border border-input bg-background text-foreground"
+            className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
             disabled={creating}
             autoFocus
           />
@@ -393,12 +442,12 @@ function MeetForm({
             type="date"
             value={date}
             onChange={(e) => onDateChange(e.target.value)}
-            className="mt-1 w-full px-3 py-2 rounded border border-input bg-background text-foreground"
+            className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
             disabled={creating}
           />
         </label>
       </div>
-      <div className="flex justify-between mt-6">
+      <div className="mt-6 flex justify-between">
         <Button variant="ghost" onClick={onBack} disabled={creating}>
           Back
         </Button>
@@ -427,12 +476,18 @@ function TournamentInfo({
   };
   return (
     <>
-      <h2 className="text-lg font-medium mb-1">Open the tournament app</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Brackets live in a separate app on its own stack. It opens in a
-        new tab.
-      </p>
-      <div className="rounded border border-input bg-muted/30 p-3 text-xs text-muted-foreground space-y-2">
+      <div className="mb-4 space-y-0.5">
+        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          OPEN TOURNAMENT APP
+        </span>
+        <h2 className="text-base font-semibold text-foreground">
+          Brackets live in a separate app
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          It opens in a new tab.
+        </p>
+      </div>
+      <div className="space-y-2 rounded border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
         <div>
           <span className="font-medium text-foreground">URL:</span>{' '}
           <code className="tabular-nums">{appUrl}</code>
@@ -443,7 +498,7 @@ function TournamentInfo({
           repo root if you're on the same machine.
         </div>
       </div>
-      <div className="flex justify-between mt-6">
+      <div className="mt-6 flex justify-between">
         <Button variant="ghost" onClick={onBack}>
           Back
         </Button>

@@ -2,8 +2,6 @@ import { lazy, Suspense, useEffect } from 'react';
 import { ArrowSquareOut, GearSix } from '@phosphor-icons/react';
 import { useUiStore } from '../store/uiStore';
 import { useTournamentState } from '../hooks/useTournamentState';
-import { useAppliedTheme } from '../hooks/useAppliedTheme';
-import { useAppliedDensity } from '../hooks/useAppliedDensity';
 import { useAdvisories } from '../hooks/useAdvisories';
 import { useSuggestions } from '../hooks/useSuggestions';
 import { TabBar } from './TabBar';
@@ -41,11 +39,8 @@ const PublicDisplayPage = lazy(() =>
 
 export function AppShell() {
   // Hydrate from server-side tournament.json on mount + debounced PUTs on change.
+  // Theme + density hooks live at App.tsx level so they fire on every route.
   useTournamentState();
-  // Apply the user's theme preference to <html> (adds/removes `.dark`).
-  useAppliedTheme();
-  // Apply the user's density preference to <html> (sets data-density).
-  useAppliedDensity();
   // Poll /schedule/advisories every 15s and surface warn/critical
   // advisories as toasts. Single mount covers every page.
   useAdvisories();

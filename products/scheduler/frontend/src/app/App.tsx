@@ -3,6 +3,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { IconContext } from '@phosphor-icons/react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { AuthProvider } from '../context/AuthContext';
+import { useAppliedTheme } from '../hooks/useAppliedTheme';
+import { useAppliedDensity } from '../hooks/useAppliedDensity';
 import { AuthGuard } from './AuthGuard';
 
 const ICON_DEFAULTS = { weight: 'light' as const, size: '1em' as const, mirrored: false };
@@ -28,6 +30,12 @@ function Fallback() {
 }
 
 function App() {
+  // Theme + density apply to <html> and must run on every route —
+  // including the public ones (login, invite, display) and the dashboard
+  // at `/`, which sit outside the AppShell. Mounted here so a fresh load
+  // to any route honors the user's stored preference (or system pref).
+  useAppliedTheme();
+  useAppliedDensity();
   return (
     <ErrorBoundary>
       <IconContext.Provider value={ICON_DEFAULTS}>

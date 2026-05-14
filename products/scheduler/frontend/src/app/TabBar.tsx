@@ -1,6 +1,7 @@
 import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore, type AppTab } from '../store/uiStore';
 import { AppStatusPopover } from '../components/AppStatusPopover';
+import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
 import { useDisruptions } from '../hooks/useDisruptions';
 import { INTERACTIVE_BASE } from '../lib/utils';
 
@@ -40,16 +41,9 @@ export function TabBar() {
       className="sticky top-0 z-chrome flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4"
     >
       <div className="flex min-w-0 items-center gap-3">
-        {/* Boxed wordmark. The 1px frame *is* the mark — no separate
-            glyph. Sizes match the design system's TabBar lockup
-            (26px tall · 13px Geist SemiBold · 4px radius). */}
-        <span
-          aria-label="ShuttleWorks"
-          title="ShuttleWorks"
-          className="hidden h-[26px] items-center rounded-[4px] border border-foreground px-[9px] text-[13px] font-semibold leading-none tracking-[-0.005em] text-foreground sm:inline-flex"
-        >
-          ShuttleWorks
-        </span>
+        {/* Boxed wordmark. Hidden on narrow viewports so it doesn't
+            compete with the tab strip. */}
+        <ShuttleWorksMark className="hidden sm:inline-flex" />
         <div role="tablist" aria-label="Sections" className="flex items-center gap-0.5">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
