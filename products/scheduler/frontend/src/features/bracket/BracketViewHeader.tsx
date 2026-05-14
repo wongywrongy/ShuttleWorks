@@ -69,7 +69,7 @@ export function BracketViewHeader({
           </span>
         )}
       </div>
-      <div className="flex flex-shrink-0 items-center gap-3">
+      <div className="flex flex-shrink-0 items-center gap-2">
         <Counters event={eventCounts} global={globalCounts} />
         <ExportMenu api={api} />
         <Button variant="outline" size="sm" onClick={onReset}>
