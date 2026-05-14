@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { api } from "../api";
-import type { TournamentDTO } from "../types";
+import { useBracketApi } from "../../api/bracketClient";
+import type { TournamentDTO } from "../../api/bracketDto";
 
 interface Props {
   data: TournamentDTO;
@@ -10,6 +10,7 @@ interface Props {
 }
 
 export function LiveView({ data, eventId, onChange }: Props) {
+  const api = useBracketApi();
   const rows = useMemo(() => buildRows(data, eventId), [data, eventId]);
 
   return (
@@ -18,12 +19,13 @@ export function LiveView({ data, eventId, onChange }: Props) {
         <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wide">
           Live ops — event {eventId}
         </h3>
-        <p className="text-sm text-ink-600 mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           Mark matches as started or finished as they happen on court.
           Recording a result here advances the bracket; click{" "}
-          <em>Schedule next round</em> on the Schedule tab once R0 feeders
-          are in. The solver schedules across all events at once, so
-          cross-event player conflicts are respected automatically.
+          <em>Schedule next round</em> on the <em>Schedule</em> sub-tab
+          above once R0 feeders are in. The solver schedules across all
+          events at once, so cross-event player conflicts are respected
+          automatically.
         </p>
       </div>
 

@@ -36,6 +36,12 @@ import type {
   CommandResponseDTO,
   CommandConflictDTO,
 } from './dto';
+import type {
+  BracketCreateIn,
+  BracketTournamentDTO,
+  BracketScheduleNextOut,
+  BracketImportCsvParams,
+} from './bracketDto';
 
 // Use /api proxy in dev, or explicit URL in production
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
@@ -849,6 +855,117 @@ class ApiClient {
       matchStates,
     );
     return response.data;
+  }
+
+  // ---- Brackets (backend-merge arc PR 2/3) -----------------------------
+  // Tournament-product routes folded into the scheduler backend under
+  // /tournaments/{tid}/bracket/*. Auth + role gating fire via the same
+  // interceptor as every other method on this class — no separate client.
+
+  async getBracket(tid: string): Promise<BracketTournamentDTO> {
+    const response = await this.client.get(`/tournaments/${tid}/bracket`);
+    return response.data;
+  }
+
+  async createBracket(
+    tid: string,
+    body: BracketCreateIn,
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket`,
+      body,
+    );
+    return response.data;
+  }
+
+  async deleteBracket(tid: string): Promise<{ ok: boolean }> {
+    const response = await this.client.delete(`/tournaments/${tid}/bracket`);
+    return response.data;
+  }
+
+  async scheduleNextBracketRound(
+    tid: string,
+  ): Promise<BracketScheduleNextOut> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/schedule-next`,
+    );
+    return response.data;
+  }
+
+  async recordBracketResult(
+    tid: string,
+    body: {
+      play_unit_id: string;
+      winner_side: 'A' | 'B';
+      finished_at_slot?: number | null;
+      walkover?: boolean;
+    },
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/results`,
+      body,
+    );
+    return response.data;
+  }
+
+  async bracketMatchAction(
+    tid: string,
+    body: {
+      play_unit_id: string;
+      action: 'start' | 'finish' | 'reset';
+      slot?: number;
+    },
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/match-action`,
+      body,
+    );
+    return response.data;
+  }
+
+  async importBracketJson(
+    tid: string,
+    body: unknown,
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/import`,
+      body,
+    );
+    return response.data;
+  }
+
+  async importBracketCsv(
+    tid: string,
+    text: string,
+    params: BracketImportCsvParams,
+  ): Promise<BracketTournamentDTO> {
+    const usp = new URLSearchParams();
+    usp.set('courts', String(params.courts));
+    usp.set('total_slots', String(params.total_slots));
+    usp.set('interval_minutes', String(params.interval_minutes));
+    usp.set('rest_between_rounds', String(params.rest_between_rounds));
+    if (params.start_time) usp.set('start_time', params.start_time);
+    if (params.time_limit_seconds !== undefined) {
+      usp.set('time_limit_seconds', String(params.time_limit_seconds));
+    }
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/import.csv?${usp.toString()}`,
+      text,
+      { headers: { 'Content-Type': 'text/csv' } },
+    );
+    return response.data;
+  }
+
+  bracketExportJsonUrl(tid: string): string {
+    return `${API_BASE_URL}/tournaments/${tid}/bracket/export.json`;
+  }
+
+  bracketExportCsvUrl(tid: string): string {
+    return `${API_BASE_URL}/tournaments/${tid}/bracket/export.csv`;
+  }
+
+  bracketExportIcsUrl(tid: string): string {
+    return `${API_BASE_URL}/tournaments/${tid}/bracket/export.ics`;
   }
 }
 

@@ -1,11 +1,11 @@
 import { useMemo } from "react";
-import { api } from "../api";
+import { useBracketApi } from "../../api/bracketClient";
 import type {
   AssignmentDTO,
   PlayUnitDTO,
   ResultDTO,
   TournamentDTO,
-} from "../types";
+} from "../../api/bracketDto";
 
 interface Props {
   data: TournamentDTO;
@@ -34,6 +34,7 @@ function BracketView({
   eventId: string;
   onChange: (t: TournamentDTO) => void;
 }) {
+  const api = useBracketApi();
   const event = data.events.find((e) => e.id === eventId)!;
   const idMap = useMemo(
     () =>
@@ -223,6 +224,7 @@ function RoundRobinView({
   eventId: string;
   onChange: (t: TournamentDTO) => void;
 }) {
+  const api = useBracketApi();
   const event = data.events.find((e) => e.id === eventId)!;
   const nameById = Object.fromEntries(
     data.participants.map((p) => [p.id, p.name])

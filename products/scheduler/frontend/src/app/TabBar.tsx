@@ -13,6 +13,7 @@ const TABS: TabDef[] = [
   { id: 'matches', label: 'Matches' },
   { id: 'schedule', label: 'Schedule' },
   { id: 'live', label: 'Live' },
+  { id: 'bracket', label: 'Bracket' },
   { id: 'tv', label: 'TV' },
 ];
 

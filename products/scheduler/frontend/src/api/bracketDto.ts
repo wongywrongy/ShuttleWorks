@@ -1,3 +1,13 @@
+/**
+ * Bracket-side DTOs — types that round-trip the
+ * ``/tournaments/{tid}/bracket/*`` API surface added in PR 2 of the
+ * backend-merge arc. Moved from ``products/tournament/frontend/src/types.ts``
+ * in PR 3 of the same arc; the tournament-product frontend is retired in
+ * this PR. The historical type names (CreateTournamentIn / TournamentDTO /
+ * ScheduleNextOut) are kept as aliases for the bracket-prefixed ones so
+ * any in-flight imports from before the move don't break — new code
+ * should prefer the prefixed names.
+ */
 export type WinnerSide = "A" | "B" | "none";
 
 export interface Participant {
@@ -99,4 +109,21 @@ export interface ScheduleNextOut {
   started_at_current_slot: number;
   runtime_ms: number;
   infeasible_reasons: string[];
+}
+
+// Bracket-prefixed aliases (new names for the same shapes — used by the
+// scheduler-backend client; the legacy names above stay for the ported
+// components that still ``import { TournamentDTO } from "../types"`` and
+// friends until they're modernised).
+export type BracketCreateIn = CreateTournamentIn;
+export type BracketTournamentDTO = TournamentDTO;
+export type BracketScheduleNextOut = ScheduleNextOut;
+
+export interface BracketImportCsvParams {
+  courts: number;
+  total_slots: number;
+  interval_minutes: number;
+  rest_between_rounds: number;
+  start_time?: string;
+  time_limit_seconds?: number;
 }

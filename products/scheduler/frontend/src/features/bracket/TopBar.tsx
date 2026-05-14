@@ -1,7 +1,6 @@
 import { useMemo } from "react";
-import { api } from "../api";
-import type { TournamentDTO } from "../types";
-import { ThemeToggle } from "./ThemeToggle";
+import { useBracketApi, type BracketApi } from "../../api/bracketClient";
+import type { TournamentDTO } from "../../api/bracketDto";
 
 interface Props {
   data: TournamentDTO;
@@ -20,6 +19,7 @@ export function TopBar({
   onEventId,
   onReset,
 }: Props) {
+  const api = useBracketApi();
   const eventCounts = useMemo(() => buckets(data, eventId), [data, eventId]);
   const globalCounts = useMemo(() => buckets(data, null), [data]);
 
@@ -28,12 +28,9 @@ export function TopBar({
     selectedEvent?.format === "se" ? "Single Elim" : "Round Robin";
 
   return (
-    <header className="border-b border-ink-200 bg-bg-elev sticky top-0 z-10">
+    <header className="border-b border-border bg-card">
       <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          <h1 className="text-base font-semibold tracking-tight whitespace-nowrap">
-            Tournament Prototype
-          </h1>
           <select
             value={eventId}
             onChange={(e) => onEventId(e.target.value)}
@@ -73,37 +70,36 @@ export function TopBar({
         </nav>
         <div className="flex items-center gap-3 flex-wrap">
           <Counters event={eventCounts} global={globalCounts} />
-          <ExportMenu />
+          <ExportMenu api={api} />
           <button className="btn-outline" onClick={onReset}>
             Reset
           </button>
-          <ThemeToggle />
         </div>
       </div>
     </header>
   );
 }
 
-function ExportMenu() {
+function ExportMenu({ api }: { api: BracketApi }) {
   return (
-    <div className="inline-flex rounded-sm border border-ink-300 overflow-hidden text-xs">
+    <div className="inline-flex rounded-sm border border-border overflow-hidden text-xs">
       <a
         href={api.exportJsonUrl()}
         target="_blank"
         rel="noreferrer"
-        className="px-2 py-1 hover:bg-ink-100"
+        className="px-2 py-1 hover:bg-muted/40"
       >
         JSON
       </a>
       <a
         href={api.exportCsvUrl()}
-        className="px-2 py-1 border-l border-ink-300 hover:bg-ink-100"
+        className="px-2 py-1 border-l border-border hover:bg-muted/40"
       >
         CSV
       </a>
       <a
         href={api.exportIcsUrl()}
-        className="px-2 py-1 border-l border-ink-300 hover:bg-ink-100"
+        className="px-2 py-1 border-l border-border hover:bg-muted/40"
       >
         ICS
       </a>

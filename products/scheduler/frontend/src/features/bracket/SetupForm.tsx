@@ -1,6 +1,10 @@
 import { useState } from "react";
-import { api } from "../api";
-import type { CreateTournamentIn, EventIn, TournamentDTO } from "../types";
+import { useBracketApi } from "../../api/bracketClient";
+import type {
+  CreateTournamentIn,
+  EventIn,
+  TournamentDTO,
+} from "../../api/bracketDto";
 import {
   type EventDraft,
   emptyEvent,
@@ -15,6 +19,7 @@ interface Props {
 }
 
 export function SetupForm({ disabled, onCreated }: Props) {
+  const api = useBracketApi();
   const [events, setEvents] = useState<EventDraft[]>([emptyEvent("MS", "MS")]);
   const [courts, setCourts] = useState(2);
   const [totalSlots, setTotalSlots] = useState(64);
@@ -144,10 +149,11 @@ export function SetupForm({ disabled, onCreated }: Props) {
   return (
     <div className="card p-6 space-y-6">
       <div>
-        <h2 className="text-base font-semibold">New tournament</h2>
-        <p className="text-sm text-ink-500 mt-1">
-          Configure one or more events. For doubles, write{" "}
-          <code className="text-xs bg-ink-100 px-1 rounded">Name1 / Name2</code>{" "}
+        <h2 className="text-base font-semibold">New bracket draw</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Configure one or more events for this tournament's bracket. For
+          doubles, write{" "}
+          <code className="text-xs bg-muted/40 px-1 rounded">Name1 / Name2</code>{" "}
           per line.
         </p>
       </div>

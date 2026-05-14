@@ -16,7 +16,14 @@ import type {
   Suggestion,
 } from '../api/dto';
 
-export type AppTab = 'setup' | 'roster' | 'matches' | 'schedule' | 'live' | 'tv';
+export type AppTab =
+  | 'setup'
+  | 'roster'
+  | 'matches'
+  | 'schedule'
+  | 'live'
+  | 'bracket'
+  | 'tv';
 
 export type SolverPhase = 'presolve' | 'search' | 'proving' | null;
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { api } from "../api";
-import type { TournamentDTO } from "../types";
+import { useBracketApi } from "../../api/bracketClient";
+import type { TournamentDTO } from "../../api/bracketDto";
 
 interface Props {
   data: TournamentDTO;
@@ -10,6 +10,7 @@ interface Props {
 }
 
 export function ScheduleView({ data, eventId, refresh }: Props) {
+  const api = useBracketApi();
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

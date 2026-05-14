@@ -2,11 +2,10 @@
   "name": "cp-sat-scheduling-engine",
   "private": true,
   "version": "0.0.0",
-  "description": "Two-product monorepo: scheduler + tournament + shared design-system.",
+  "description": "Scheduler product (meet + bracket draws) + shared design-system. The legacy two-product layout was unified in the backend-merge arc (PRs 1-3).",
   "workspaces": [
     "packages/*",
-    "products/scheduler/frontend",
-    "products/tournament/frontend"
+    "products/scheduler/frontend"
   ],
   "overrides": {
     "@types/react": "^19.2.5",
@@ -14,10 +13,8 @@
   },
   "scripts": {
     "dev:scheduler": "npm run -w products/scheduler/frontend dev",
-    "dev:tournament": "npm run -w products/tournament/frontend dev",
     "build:scheduler": "npm run -w products/scheduler/frontend build",
-    "build:tournament": "npm run -w products/tournament/frontend build",
-    "build:all": "npm run build:scheduler && npm run build:tournament",
+    "build:all": "npm run build:scheduler",
     "lint:scheduler": "npm run -w products/scheduler/frontend lint"
   }
 }

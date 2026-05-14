@@ -33,6 +33,9 @@ const MatchControlCenterPage = lazy(() =>
 const PublicDisplayPage = lazy(() =>
   import('../pages/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
 );
+const BracketTab = lazy(() =>
+  import('../features/bracket/BracketTab').then((m) => ({ default: m.BracketTab })),
+);
 
 // FALLBACK is now built per-tab via TabSkeleton so the Suspense
 // shape matches the layout that's about to mount.
@@ -134,6 +137,7 @@ export function AppShell() {
             {activeTab === 'matches' ? <MatchesTab /> : null}
             {activeTab === 'schedule' ? <SchedulePage /> : null}
             {activeTab === 'live' ? <MatchControlCenterPage /> : null}
+            {activeTab === 'bracket' ? <BracketTab /> : null}
             {activeTab === 'tv' ? <TvPreviewTab /> : null}
           </div>
         </Suspense>

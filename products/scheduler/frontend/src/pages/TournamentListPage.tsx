@@ -152,18 +152,7 @@ function Section({
   );
 }
 
-/**
- * Tournament-product app URL. Read at build time via Vite. Operators
- * picking "Tournament" from the New dialog get redirected here in a
- * new tab. The tournament product is a separate stack (different
- * Docker project, different ports) — make sure ``make tournament``
- * is running on the same machine, or set this to the deployed URL.
- */
-const TOURNAMENT_APP_URL =
-  (import.meta.env.VITE_TOURNAMENT_APP_URL as string | undefined) ??
-  'http://localhost:5174';
-
-type NewEventKind = 'meet' | 'tournament';
+type NewEventKind = 'meet' | 'bracket';
 
 export function TournamentListPage() {
   const navigate = useNavigate();
@@ -172,7 +161,7 @@ export function TournamentListPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [selectedKind, setSelectedKind] = useState<NewEventKind | null>(null);
+  const [newKind, setNewKind] = useState<NewEventKind>('meet');
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDate, setNewDate] = useState('');
@@ -180,7 +169,7 @@ export function TournamentListPage() {
   const closeNewDialog = useCallback(() => {
     if (creating) return;
     setShowNewDialog(false);
-    setSelectedKind(null);
+    setNewKind('meet');
     setNewName('');
     setNewDate('');
   }, [creating]);
@@ -224,13 +213,17 @@ export function TournamentListPage() {
         name: newName.trim() || null,
         tournamentDate: newDate || null,
       });
-      navigate(`/tournaments/${created.id}/setup`);
+      // Same backend row regardless of kind — the operator just
+      // lands on a different tab. Meet → Setup (roster builder /
+      // CP-SAT meet scheduler). Bracket → Bracket (draw + advance).
+      const destination = newKind === 'bracket' ? 'bracket' : 'setup';
+      navigate(`/tournaments/${created.id}/${destination}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create tournament');
     } finally {
       setCreating(false);
     }
-  }, [newName, newDate, navigate]);
+  }, [newName, newDate, newKind, navigate]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -305,31 +298,17 @@ export function TournamentListPage() {
             className="bg-card text-card-foreground rounded-lg shadow-lg p-6 w-full max-w-md mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            {selectedKind === null && (
-              <KindPicker
-                onPickMeet={() => setSelectedKind('meet')}
-                onPickTournament={() => setSelectedKind('tournament')}
-                onCancel={closeNewDialog}
-              />
-            )}
-            {selectedKind === 'meet' && (
-              <MeetForm
-                name={newName}
-                date={newDate}
-                creating={creating}
-                onNameChange={setNewName}
-                onDateChange={setNewDate}
-                onBack={() => setSelectedKind(null)}
-                onSubmit={handleCreate}
-              />
-            )}
-            {selectedKind === 'tournament' && (
-              <TournamentInfo
-                appUrl={TOURNAMENT_APP_URL}
-                onBack={() => setSelectedKind(null)}
-                onClose={closeNewDialog}
-              />
-            )}
+            <NewEventForm
+              kind={newKind}
+              name={newName}
+              date={newDate}
+              creating={creating}
+              onKindChange={setNewKind}
+              onNameChange={setNewName}
+              onDateChange={setNewDate}
+              onCancel={closeNewDialog}
+              onSubmit={handleCreate}
+            />
           </div>
         </div>
       )}
@@ -337,16 +316,37 @@ export function TournamentListPage() {
   );
 }
 
-// ---- New-event dialog: step 1 (pick kind) -----------------------------
+// ---- New-event dialog: single form -----------------------------------
+//
+// PR 3 of the backend-merge arc collapsed the prior two-step
+// Meet | Tournament dialog into a single form with a kind selector.
+// Both kinds create the same ``tournaments`` row in the scheduler
+// backend (the tournament product's separate stack is retired in
+// this PR); the only difference is which tab the operator lands on
+// after create:
+//   meet    → /tournaments/:id/setup   (roster builder + meet schedule)
+//   bracket → /tournaments/:id/bracket (single-elim / round-robin draws)
 
-function KindPicker({
-  onPickMeet,
-  onPickTournament,
+function NewEventForm({
+  kind,
+  name,
+  date,
+  creating,
+  onKindChange,
+  onNameChange,
+  onDateChange,
   onCancel,
+  onSubmit,
 }: {
-  onPickMeet: () => void;
-  onPickTournament: () => void;
+  kind: NewEventKind;
+  name: string;
+  date: string;
+  creating: boolean;
+  onKindChange: (k: NewEventKind) => void;
+  onNameChange: (v: string) => void;
+  onDateChange: (v: string) => void;
   onCancel: () => void;
+  onSubmit: () => void;
 }) {
   return (
     <>
@@ -355,72 +355,12 @@ function KindPicker({
           NEW EVENT
         </span>
         <h2 className="text-base font-semibold text-foreground">
-          Pick what you're running today
-        </h2>
-      </div>
-      <div className="grid grid-cols-1 gap-3">
-        <button
-          type="button"
-          onClick={onPickMeet}
-          className="rounded border border-border p-4 text-left transition-colors hover:bg-muted/40 hover:border-foreground/30"
-        >
-          <div className="font-medium text-foreground">Meet</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            Intercollegiate inter-school dual / tri-meet. CP-SAT-optimised
-            schedule, drag-to-reschedule, live operator cockpit.
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={onPickTournament}
-          className="rounded border border-border p-4 text-left transition-colors hover:bg-muted/40 hover:border-foreground/30"
-        >
-          <div className="font-medium text-foreground">Tournament</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            Bracket draws — single-elimination or round-robin. Opens the
-            tournament app in a new tab.
-          </div>
-        </button>
-      </div>
-      <div className="mt-6 flex justify-end">
-        <Button variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </>
-  );
-}
-
-// ---- New-event dialog: step 2 — meet form ------------------------------
-
-function MeetForm({
-  name,
-  date,
-  creating,
-  onNameChange,
-  onDateChange,
-  onBack,
-  onSubmit,
-}: {
-  name: string;
-  date: string;
-  creating: boolean;
-  onNameChange: (v: string) => void;
-  onDateChange: (v: string) => void;
-  onBack: () => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <>
-      <div className="mb-4 space-y-0.5">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          NEW MEET
-        </span>
-        <h2 className="text-base font-semibold text-foreground">
-          Name + date (optional)
+          Name + date + kind
         </h2>
         <p className="text-xs text-muted-foreground">
-          You can leave both blank and rename later.
+          Both kinds run on the same CP-SAT engine — kind just picks the
+          tab you land on after create. You can rename and switch kinds
+          inside the tournament later.
         </p>
       </div>
       <div className="space-y-3">
@@ -446,64 +386,81 @@ function MeetForm({
             disabled={creating}
           />
         </label>
+        <fieldset className="block">
+          <legend className="text-sm text-muted-foreground">Kind</legend>
+          <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <KindOption
+              value="meet"
+              current={kind}
+              onSelect={onKindChange}
+              title="Meet"
+              hint="Intercollegiate dual / tri-meet — roster + CP-SAT schedule + live cockpit."
+              disabled={creating}
+            />
+            <KindOption
+              value="bracket"
+              current={kind}
+              onSelect={onKindChange}
+              title="Bracket"
+              hint="Single-elimination or round-robin draws with seeded placement."
+              disabled={creating}
+            />
+          </div>
+        </fieldset>
       </div>
       <div className="mt-6 flex justify-between">
-        <Button variant="ghost" onClick={onBack} disabled={creating}>
-          Back
+        <Button variant="ghost" onClick={onCancel} disabled={creating}>
+          Cancel
         </Button>
         <Button onClick={onSubmit} disabled={creating}>
-          {creating ? 'Creating…' : 'Create meet'}
+          {creating ? 'Creating…' : `Create ${kind}`}
         </Button>
       </div>
     </>
   );
 }
 
-// ---- New-event dialog: step 2 — tournament info -----------------------
-
-function TournamentInfo({
-  appUrl,
-  onBack,
-  onClose,
+function KindOption({
+  value,
+  current,
+  onSelect,
+  title,
+  hint,
+  disabled,
 }: {
-  appUrl: string;
-  onBack: () => void;
-  onClose: () => void;
+  value: NewEventKind;
+  current: NewEventKind;
+  onSelect: (v: NewEventKind) => void;
+  title: string;
+  hint: string;
+  disabled?: boolean;
 }) {
-  const openApp = () => {
-    window.open(appUrl, '_blank', 'noopener,noreferrer');
-    onClose();
-  };
+  const selected = value === current;
   return (
-    <>
-      <div className="mb-4 space-y-0.5">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          OPEN TOURNAMENT APP
-        </span>
-        <h2 className="text-base font-semibold text-foreground">
-          Brackets live in a separate app
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          It opens in a new tab.
-        </p>
-      </div>
-      <div className="space-y-2 rounded border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-        <div>
-          <span className="font-medium text-foreground">URL:</span>{' '}
-          <code className="tabular-nums">{appUrl}</code>
-        </div>
-        <div>
-          Make sure the tournament stack is running —{' '}
-          <code className="tabular-nums">make tournament</code> from the
-          repo root if you're on the same machine.
-        </div>
-      </div>
-      <div className="mt-6 flex justify-between">
-        <Button variant="ghost" onClick={onBack}>
-          Back
-        </Button>
-        <Button onClick={openApp}>Open tournament app</Button>
-      </div>
-    </>
+    <button
+      type="button"
+      onClick={() => onSelect(value)}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={[
+        'rounded border p-3 text-left transition-colors',
+        selected
+          ? 'border-foreground bg-muted/30 text-foreground'
+          : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+        disabled ? 'cursor-not-allowed opacity-60' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <div className="text-sm font-medium">{title}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
+    </button>
   );
 }
+
+// PR 3 of the backend-merge arc removed the prior ``TournamentInfo``
+// component that did ``window.open(VITE_TOURNAMENT_APP_URL)``. Both
+// meet and bracket kinds now live in the same scheduler shell — the
+// bracket kind just routes to the Bracket tab after create. See
+// commit b55bfcb for the original Meet | Tournament fork, b44f32a
+// for the dashboard restyle, and the PR 3 commit for this collapse.

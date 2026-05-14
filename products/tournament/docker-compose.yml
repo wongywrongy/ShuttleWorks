@@ -1,13 +1,11 @@
 # Tournament prototype — prod-style compose.
 #
-# Brings up the nginx-served frontend and the FastAPI backend on the
-# host ports configured in .env (defaults: 5174 frontend, 8765
-# backend). Project name defaults to `tournament` so containers /
-# networks / volumes are namespaced and the BTP stack (`btp`) can run
-# alongside this one.
-#
-# Hot-reload during dev: use `make dev`, which layers
-# `docker-compose.dev.yml` over this file.
+# PR 3 of the backend-merge arc retired this product's frontend; the
+# bracket UI now lives inside the scheduler shell at the ``Bracket``
+# tab (``products/scheduler/frontend/src/features/bracket/``). The
+# backend stays alive on :8765 with its old open routes until PR 4
+# deletes the product entirely. ``make tournament`` from the repo
+# root now just brings up the FastAPI service.
 
 name: ${COMPOSE_PROJECT_NAME:-tournament}
 
@@ -30,18 +28,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
-  frontend:
-    build:
-      # Context = repo root (matches backend) so the Dockerfile can copy
-      # workspace root metadata + the shared packages/design-system tree.
-      # Phase 2a consolidated to a root-only lockfile; building from the
-      # frontend dir alone can't run `npm ci` without it.
-      context: ../..
-      dockerfile: products/tournament/frontend/Dockerfile
-    ports:
-      - "${FRONTEND_HOST_PORT:-5174}:8080"
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
