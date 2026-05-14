@@ -10,10 +10,12 @@ import { cn } from '../lib/utils';
  *
  * Tone mapping to the design system's --status-* palette:
  *   green  → status-live    (emerald — match in progress)
- *   blue   → status-started (sky      — operator started clock)
- *   amber  → status-called  (amber    — called to court)
- *   yellow → status-warning (amber    — soft violation)
- *   red    → status-blocked (red      — hard rule conflict)
+ *   blue   → status-started (sky     — operator started clock)
+ *   amber  → status-called  (amber   — called to court)
+ *   yellow → status-warning (amber   — soft violation)
+ *   red    → status-blocked (red     — hard rule conflict)
+ *   idle   → status-idle    (slate-muted — scheduled but not yet active)
+ *   done   → status-done    (slate   — finished / archived)
  *
  * Routing through `--status-*` keeps every pill on the same hue ladder
  * as the Gantt blocks, toast borders, and TabBar app-status chip.
@@ -24,7 +26,7 @@ import { cn } from '../lib/utils';
  * with `<StatusPill>` in Phase 6.
  */
 
-export type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber';
+export type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber' | 'idle' | 'done';
 
 const TONE_BG: Record<PillTone, string> = {
   green:  'bg-status-live-bg text-status-live border border-status-live/40',
@@ -32,6 +34,8 @@ const TONE_BG: Record<PillTone, string> = {
   red:    'bg-status-blocked-bg text-status-blocked border border-status-blocked/40',
   blue:   'bg-status-started-bg text-status-started border border-status-started/40',
   amber:  'bg-status-called-bg text-status-called border border-status-called/40',
+  idle:   'bg-status-idle-bg text-status-idle border border-status-idle/40',
+  done:   'bg-status-done-bg text-status-done border border-status-done/40',
 };
 
 const TONE_DOT: Record<PillTone, string> = {
@@ -40,6 +44,8 @@ const TONE_DOT: Record<PillTone, string> = {
   red:    'bg-status-blocked',
   blue:   'bg-status-started',
   amber:  'bg-status-called',
+  idle:   'bg-status-idle',
+  done:   'bg-status-done',
 };
 
 interface Props {
