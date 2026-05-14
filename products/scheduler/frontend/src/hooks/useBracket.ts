@@ -38,20 +38,17 @@ export function useBracket() {
     setError(null);
     setLoading(true);
     try {
+      // ``api.get()`` returns ``null`` for the not-yet-configured
+      // case (the underlying ``apiClient.getBracket`` accepts a 404
+      // as a non-error, so the shared axios interceptor doesn't fire
+      // a toast every poll cycle while the operator is on a fresh
+      // tournament). Real network / auth failures still throw.
       const d = await api.get();
       lastTouched.current = Date.now();
       setDataInner(d);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      // 404 is the "no bracket configured yet" signal — keep ``data``
-      // null and let the UI render the SetupForm rather than treating
-      // it as an error.
-      if (msg.includes('404')) {
-        lastTouched.current = Date.now();
-        setDataInner(null);
-      } else {
-        setError(msg);
-      }
+      setError(msg);
     } finally {
       setLoading(false);
     }

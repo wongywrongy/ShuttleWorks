@@ -200,11 +200,20 @@ def upgrade() -> None:
         sa.Column("winner_side", sa.String(length=10), nullable=False),
         sa.Column("score", sa.JSON(), nullable=True),
         sa.Column("finished_at_slot", sa.Integer(), nullable=True),
-        # ``walkover`` default is handled by the ORM (Mapped[bool] =
-        # mapped_column(Boolean, default=False, ...)) rather than a
-        # DB-level DEFAULT, because Postgres rejects ``DEFAULT 0`` for
-        # boolean columns and SQLite has no native bool type.
-        sa.Column("walkover", sa.Boolean(), nullable=False),
+        # ``sa.text("false")`` is portable: Postgres parses it as the
+        # boolean literal ``false`` and SQLite (which has no native
+        # boolean type) accepts it as an expression that evaluates to
+        # 0. The matching ``DEFAULT false`` was already added to the
+        # Supabase table via the ``step_t_a_bracket_schema_and_rls``
+        # MCP migration; PR 4 brings the Alembic file back in sync
+        # so a fresh ``alembic upgrade head`` against Postgres
+        # produces a column with the same default.
+        sa.Column(
+            "walkover",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             [

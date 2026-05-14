@@ -22,7 +22,8 @@ import type {
 } from './bracketDto';
 
 export interface BracketApi {
-  get: () => Promise<BracketTournamentDTO>;
+  /** Resolves to ``null`` when no bracket is configured (404). */
+  get: () => Promise<BracketTournamentDTO | null>;
   create: (body: BracketCreateIn) => Promise<BracketTournamentDTO>;
   remove: () => Promise<{ ok: boolean }>;
   scheduleNext: () => Promise<BracketScheduleNextOut>;

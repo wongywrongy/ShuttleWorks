@@ -43,6 +43,7 @@ from app.config import settings as default_settings
 from database.models import (
     BracketEvent,
     BracketMatch,
+    BracketParticipant,
     BracketResult,
     Match,
     SyncQueue,
@@ -160,6 +161,52 @@ class SyncService:
         session.add(row)
         return row
 
+    @staticmethod
+    def enqueue_bracket_participant(
+        session: Session, participant: BracketParticipant
+    ) -> SyncQueue:
+        """Stage a bracket-participant write for sync. Caller commits.
+
+        PR 4 audit found that the prior "rides along in the parent
+        event payload" comment was wishful thinking — participants
+        weren't synced at all, leaving Supabase's bracket_participants
+        table permanently empty. Each participant now gets its own
+        outbox row.
+        """
+        row = SyncQueue(
+            entity_type="bracket_participant",
+            entity_id=participant.id,
+            payload=_bracket_participant_to_payload(participant),
+        )
+        session.add(row)
+        return row
+
+    @staticmethod
+    def enqueue_bracket_delete(
+        session: Session,
+        *,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> SyncQueue:
+        """Tombstone outbox row for a bracket-event cascade delete.
+
+        ``delete_event`` cascades CASCADE-delete in local SQLite but
+        Supabase has no concept of "the local row went away" unless
+        we tell it. This tombstone is processed by ``_process_row``
+        which issues a DELETE against bracket_events (children
+        CASCADE on the Supabase side too via the FK).
+        """
+        row = SyncQueue(
+            entity_type="bracket_event_delete",
+            entity_id=event_id,
+            payload={
+                "tournament_id": str(tournament_id),
+                "id": event_id,
+            },
+        )
+        session.add(row)
+        return row
+
     # ---- worker lifecycle ----------------------------------------------
 
     def start(self) -> None:
@@ -260,6 +307,19 @@ class SyncService:
                         "tournament_id,bracket_event_id,bracket_match_id"
                     ),
                 ).execute()
+            elif row.entity_type == "bracket_participant":
+                client.table("bracket_participants").upsert(
+                    row.payload,
+                    on_conflict=(
+                        "tournament_id,bracket_event_id,id"
+                    ),
+                ).execute()
+            elif row.entity_type == "bracket_event_delete":
+                # Cascade via FK on the Supabase side too — children
+                # (participants, matches, results) go with the parent.
+                client.table("bracket_events").delete().eq(
+                    "tournament_id", row.payload["tournament_id"]
+                ).eq("id", row.payload["id"]).execute()
             else:
                 # Unknown entity type — log + cap so it isn't retried forever.
                 log.warning(
@@ -401,6 +461,22 @@ def _bracket_match_to_payload(match: BracketMatch) -> dict:
         "version": match.version,
         "created_at": _isoformat(match.created_at),
         "updated_at": _isoformat(match.updated_at),
+    }
+
+
+def _bracket_participant_to_payload(p: BracketParticipant) -> dict:
+    """Serialise a BracketParticipant row for Supabase upsert."""
+    return {
+        "tournament_id": str(p.tournament_id),
+        "bracket_event_id": p.bracket_event_id,
+        "id": p.id,
+        "name": p.name,
+        "type": p.type,
+        "member_ids": p.member_ids,
+        "seed": p.seed,
+        "meta": p.meta,
+        "created_at": _isoformat(p.created_at),
+        "updated_at": _isoformat(p.updated_at),
     }
 
 

@@ -233,9 +233,15 @@ class ApiClient {
         const err = new Error(message) as Error & {
           requestId?: string;
           code?: string;
+          status?: number;
         };
         if (requestId) err.requestId = requestId;
         if (code) err.code = code;
+        // Promote the HTTP status so callers can branch on it without
+        // pattern-matching the rebuilt ``message`` string. The
+        // backend-merge arc's ``useBracket`` hook needs this to tell
+        // "no bracket configured yet" (404) from a real server error.
+        if (error.response?.status) err.status = error.response.status;
         throw err;
       }
     );
@@ -862,8 +868,18 @@ class ApiClient {
   // /tournaments/{tid}/bracket/*. Auth + role gating fire via the same
   // interceptor as every other method on this class — no separate client.
 
-  async getBracket(tid: string): Promise<BracketTournamentDTO> {
-    const response = await this.client.get(`/tournaments/${tid}/bracket`);
+  async getBracket(tid: string): Promise<BracketTournamentDTO | null> {
+    // 404 on this route means "no bracket configured yet" — that's
+    // the operator's expected state on a brand-new tournament, NOT
+    // an error. Tell axios to accept 404 as a non-error so the
+    // shared interceptor doesn't surface a toast every 2.5s while
+    // the polling hook is waiting for the operator to create the
+    // bracket. Callers receive ``null`` for the not-yet-configured
+    // case and the DTO for everything else.
+    const response = await this.client.get(`/tournaments/${tid}/bracket`, {
+      validateStatus: (s) => s === 200 || s === 404,
+    });
+    if (response.status === 404) return null;
     return response.data;
   }
 

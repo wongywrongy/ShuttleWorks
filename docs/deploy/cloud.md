@@ -368,9 +368,15 @@ If any step fails, check:
   succeeded (no import errors at sidecar startup).
 - `CORS_ORIGINS` in `backend/.env` includes the operator's browser
   origin.
-- The Supabase project has the arc's three new tables (matches,
-  commands, sync_queue) — re-run the migration prerequisite above.
-- The `matches` table is in Supabase's Realtime publication.
+- The Supabase project has the five synced tables that need to land
+  there: `matches` (architecture-adjustment arc), and `bracket_events`
+  / `bracket_participants` / `bracket_matches` / `bracket_results`
+  (backend-merge arc). `commands` and `sync_queue` are local-only by
+  design — don't look for them on Supabase. Re-run the migrations in
+  the Schema migrations section above if any are missing.
+- `matches`, `bracket_events`, `bracket_matches`, and `bracket_results`
+  are in Supabase's Realtime publication (`bracket_participants` is
+  intentionally excluded — see the Realtime section above).
 
 ---
 
@@ -412,9 +418,11 @@ arc and are migrating to the post-arc sidecar model:
    project on 2026-05-13).
 4. **Configure Realtime publication** on `matches` (also done).
 5. **Boot the sidecar** on the director's laptop via Docker
-   Compose (`make scheduler` from `products/scheduler/`) with the
+   Compose (`make scheduler` from the repo root) with the
    cloud-mode `.env`. The sidecar's Alembic step builds the local
-   SQLite schema from scratch at revision `e2a5f3b8c1d6`.
+   SQLite schema from scratch up to head revision `f7a3c9b2e8d4`
+   (T-A bracket schema — the chain runs all prior migrations in
+   order so a fresh install gets all tables).
 6. **Import the tournament state** via the Setup → Backups → Import
    flow. The local DB is now seeded; the sync worker pushes
    everything to Supabase within a minute.

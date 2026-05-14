@@ -535,8 +535,20 @@ class _LocalBracketRepo:
         row = self.get_event(tournament_id, event_id)
         if row is None:
             return False
-        # CASCADE wipes participants + matches + results via FK.
+        # CASCADE wipes participants + matches + results via FK locally
+        # AND on Supabase (the bracket_events Supabase FKs are
+        # ON DELETE CASCADE). Stage a tombstone outbox row so the
+        # SyncService issues the DELETE against bracket_events; the
+        # Supabase FK cascade handles the rest. Without this row,
+        # Supabase keeps the rows forever and Realtime subscribers
+        # see ghost matches after the operator wipes.
         self.session.delete(row)
+        self.session.flush()
+        SyncService.enqueue_bracket_delete(
+            self.session,
+            tournament_id=tournament_id,
+            event_id=event_id,
+        )
         self.session.commit()
         return True
 
@@ -586,10 +598,14 @@ class _LocalBracketRepo:
             for p in participants
         ]
         self.session.add_all(rows)
-        # Participants don't get their own outbox channel — they
-        # round-trip as part of the parent event's payload on bracket
-        # reads. The event row's outbox entry already triggered the
-        # operator-side resubscribe.
+        # PR 4 audit fix: participants need their own outbox rows.
+        # The earlier "rides along in the parent event payload"
+        # comment was wishful — the parent payload only carries
+        # scalar event columns, so Supabase's bracket_participants
+        # table was never populated.
+        self.session.flush()
+        for row in rows:
+            SyncService.enqueue_bracket_participant(self.session, row)
         self.session.commit()
         return len(rows)
 

@@ -316,11 +316,14 @@ def _hydrate_session(
 
         # Engine Event placeholder (the format generators set this up
         # when first run; we keep it consistent here for round-trip).
+        # ``event_row.config`` round-trips any format-specific knobs
+        # the original generator stored (randomize-seed flag, etc.) so
+        # the rebuilt state matches the original.
         engine_event = EngineEvent(
             id=event_row.id,
             type_tags=[],
             format_plugin_name=event_row.format,
-            parameters={},
+            parameters=dict(event_row.config or {}),
         )
         state.events[event_row.id] = engine_event
 

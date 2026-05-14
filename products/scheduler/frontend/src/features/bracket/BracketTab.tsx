@@ -52,13 +52,19 @@ function BracketTabBody() {
   const [eventId, setEventId] = useState<string>('');
 
   const handleReset = useCallback(async () => {
+    // Only clear the local copy after the server-side DELETE
+    // succeeds. The prior version cleared on failure too — but the
+    // polling hook re-fetches every 2.5s and would see the bracket
+    // still there, snapping it back into ``data`` and confusing the
+    // operator who thought the reset failed. The shared axios
+    // interceptor already surfaces a toast on the failure, so the
+    // ``catch`` is a no-op here; the bracket stays visible and the
+    // operator can retry.
     try {
       await api.remove();
-    } finally {
-      // Even on a transient delete failure, drop the client copy so
-      // the operator can either re-generate (via SetupForm) or hit
-      // the dashboard's tournament-level delete.
       setData(null);
+    } catch {
+      // Interceptor already toasted; nothing more to do.
     }
   }, [api, setData]);
 
