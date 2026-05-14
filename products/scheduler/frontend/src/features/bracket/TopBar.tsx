@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
-import { Button } from "@scheduler/design-system";
+import { Button, StatusBar } from "@scheduler/design-system";
 
 interface Props {
   data: TournamentDTO;
@@ -91,49 +91,26 @@ function Counters({
   event: ReturnType<typeof buckets>;
   global: ReturnType<typeof buckets>;
 }) {
-  // Status colors now route through the canonical --status-* palette
-  // (shared with scheduler), so the same semantic state reads the same
-  // color in both products. Mapping intentionally matches scheduler:
-  //   done    → status-done   (slate, settled)
-  //   live    → status-live   (emerald, in progress)
-  //   ready   → status-called (amber, cued to play)
-  //   pending → status-idle   (slate-muted, not yet scheduled)
-  // Old mapping (emerald=done, amber=live, sky=ready) was inverted vs
-  // scheduler and pulled raw Tailwind palette colors (BRAND.md §1.10).
+  // Bracket state → shared StatusBar tones. Mapping matches scheduler so
+  // the same semantic state reads the same color across both surfaces:
+  //   done    → done  (slate, settled)
+  //   live    → green (status-live — in progress)
+  //   ready   → amber (status-called — cued to play)
+  //   pending → idle  (status-idle — not yet scheduled)
   return (
     <div className="flex flex-col items-end font-mono">
-      <div className="flex items-center gap-2">
-        <Light tone="text-status-done"   label="DONE"  n={event.done} />
-        <Light tone="text-status-live"   label="LIVE"  n={event.live} />
-        <Light tone="text-status-called" label="READY" n={event.ready} />
-        <Light tone="text-status-idle"   label="PEND"  n={event.pending} />
-      </div>
+      <StatusBar
+        items={[
+          { tone: "done",  label: "DONE",  count: event.done },
+          { tone: "green", label: "LIVE",  count: event.live },
+          { tone: "amber", label: "READY", count: event.ready },
+          { tone: "idle",  label: "PEND",  count: event.pending },
+        ]}
+      />
       <div className="text-3xs uppercase tracking-wider text-ink-faint">
         ALL · {global.done}D · {global.live}L · {global.ready}R
       </div>
     </div>
-  );
-}
-
-function Light({
-  tone,
-  label,
-  n,
-}: {
-  tone: string;
-  label: string;
-  n: number;
-}) {
-  // Brutalist counter cell: mono uppercase tracking-wider label colored
-  // by --status-* token, then the count in tabular-nums. No rounded
-  // dot — typography carries the state, color is the secondary cue.
-  return (
-    <span className="inline-flex items-baseline gap-1">
-      <span className={`text-2xs font-semibold uppercase tracking-wider ${tone}`}>
-        {label}
-      </span>
-      <span className="tabular-nums text-xs text-ink">{n}</span>
-    </span>
   );
 }
 

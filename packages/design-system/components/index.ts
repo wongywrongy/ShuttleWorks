@@ -27,6 +27,11 @@ export { Label } from './Label';
 export { Separator } from './Separator';
 export { PageHeader } from './PageHeader';
 export { StatusPill, type PillTone } from './StatusPill';
+export {
+  StatusBar,
+  StatusCount,
+  type StatusCountItem,
+} from './StatusBar';
 export { Modal } from './Modal';
 export { Hint, useHint } from './Hint';
 export { Toast, ToastStack, type ToastData, type ToastLevel } from './Toast';
