@@ -187,9 +187,6 @@ function BracketTabBody() {
         {view === 'schedule' && (
           <ScheduleView
             data={data}
-            eventId={eventId}
-            onChange={setData}
-            refresh={refresh}
           />
         )}
         {view === 'live' && (
