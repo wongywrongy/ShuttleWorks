@@ -197,6 +197,32 @@ def create_tournament(
     )
     if user_uuid is not None:
         repo.members.add_member(row.id, user_uuid, role="owner")
+    # Seed a fully-valid config so SetupTab reads the dashboard name + date
+    # on first open instead of blank fields, AND so the first frontend PUT
+    # (which snapshots the Zustand store) passes Pydantic validation on all
+    # required TournamentConfig fields (intervalMinutes, dayStart, etc.).
+    # ``commit_tournament_state`` skips the backup snapshot when data is
+    # still empty (the freshly-created default), so this is a cheap
+    # upsert-only path.  Only seed when the caller supplied at least a name
+    # or date; an anonymous create stays at 204 / no state.
+    if body.name or body.tournamentDate:
+        seeded_config: dict = {
+            "intervalMinutes": 30,
+            "dayStart": "09:00",
+            "dayEnd": "18:00",
+            "breaks": [],
+            "courtCount": 4,
+            "defaultRestMinutes": 0,
+            "freezeHorizonSlots": 0,
+        }
+        if body.name:
+            seeded_config["tournamentName"] = body.name
+        if body.tournamentDate:
+            seeded_config["tournamentDate"] = body.tournamentDate
+        repo.commit_tournament_state(
+            row.id,
+            {"config": seeded_config},
+        )
     return _to_summary(row, role="owner")
 
 

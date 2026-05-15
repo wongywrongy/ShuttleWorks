@@ -28,21 +28,41 @@ const DEBOUNCE_MS = 500;
 // Module-level timer so `forceSaveNow()` can flush from anywhere.
 let moduleTimer: number | null = null;
 let flushPromise: Promise<void> | null = null;
+// Set to true by the subscribe handler when state changes WHILE a PUT is
+// in flight.  The in-flight finally-block checks this and re-arms the
+// debounce so the dirty changes get a follow-up save.  Reset to false at
+// the START of every flush (not the end) so a concurrent change after
+// the snapshot is taken but before the PUT resolves is still captured.
+let pendingFollowup = false;
 
 /** Cancel any pending debounced save and flush immediately.
  *
  * Reads the active tournament id from ``useUiStore`` (set by
  * ``TournamentPage`` on mount). No-ops when no tournament is active —
  * the public display and the tournament-list page have nothing to save.
+ *
+ * Race-safety: if a PUT is already in flight when this is called we
+ * record a follow-up flag and return the in-flight promise.  The
+ * finally-block of the in-flight PUT re-arms the debounce timer if the
+ * flag is set, guaranteeing that any state changes made during the
+ * in-flight PUT are not silently dropped.
  */
 export async function forceSaveNow(): Promise<void> {
   if (moduleTimer !== null) {
     window.clearTimeout(moduleTimer);
     moduleTimer = null;
   }
-  if (flushPromise) return flushPromise;
+  if (flushPromise) {
+    // A PUT is already in flight.  Signal that a follow-up is needed so
+    // the in-flight finally-block re-arms the debounce when it lands.
+    pendingFollowup = true;
+    return flushPromise;
+  }
   const tid = useUiStore.getState().activeTournamentId;
   if (!tid) return;
+  // Reset the followup flag BEFORE taking the snapshot so any concurrent
+  // mutation that arrives after the snapshot triggers another save.
+  pendingFollowup = false;
   flushPromise = (async () => {
     const ui = useUiStore.getState();
     ui.setPersistStatus('saving');
@@ -58,9 +78,32 @@ export async function forceSaveNow(): Promise<void> {
       throw err;
     } finally {
       flushPromise = null;
+      // If state changed during the in-flight PUT, re-arm the debounce
+      // so the dirty changes are not silently dropped.
+      if (pendingFollowup) {
+        pendingFollowup = false;
+        if (moduleTimer === null) {
+          moduleTimer = window.setTimeout(() => {
+            moduleTimer = null;
+            forceSaveNow().catch((err) => {
+              console.error('[useTournamentState] followup put failed:', err);
+            });
+          }, DEBOUNCE_MS);
+        }
+      }
     }
   })();
   return flushPromise;
+}
+
+/** Exposed for unit tests only — resets all module-level save state. */
+export function _resetSaveStateForTests(): void {
+  if (moduleTimer !== null) {
+    window.clearTimeout(moduleTimer);
+    moduleTimer = null;
+  }
+  flushPromise = null;
+  pendingFollowup = false;
 }
 
 function snapshot(
@@ -200,6 +243,13 @@ export function useTournamentState(): void {
       // the debounced flush fires.
       const ui = useUiStore.getState();
       if (ui.persistStatus !== 'saving') ui.setPersistStatus('dirty');
+
+      // If a PUT is already in flight, record that state changed so the
+      // in-flight finally-block knows to re-save after it lands.
+      if (flushPromise !== null) {
+        pendingFollowup = true;
+        return;
+      }
 
       if (moduleTimer !== null) window.clearTimeout(moduleTimer);
       moduleTimer = window.setTimeout(() => {

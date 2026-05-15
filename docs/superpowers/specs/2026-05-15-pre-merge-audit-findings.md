@@ -614,8 +614,8 @@ branch); they are excluded from all deferred tracking above.
 
 | Fix | Finding | Description | Commit |
 |-----|---------|-------------|--------|
-| FIX-1 | Name save bug (Audit A) | `forceSaveNow` race condition in `SetupTab`; uncontrolled input wired to explicit save; create-tournament default name handling | `<FIX-1 SHA>` |
-| FIX-2 | bracket_session wipe (Audit B) | `_stamp_payload` overwrote the `bracket_session` key on every `PUT /state`; fixed to preserve the key when present | `<FIX-2 SHA>` |
+| FIX-1 | Name save bug (Audit A) | `forceSaveNow` race condition in `SetupTab`; uncontrolled input wired to explicit save; create-tournament default name handling | `71e1b7f` |
+| FIX-2 | bracket_session wipe (Audit B) | `_stamp_payload` overwrote the `bracket_session` key on every `PUT /state`; fixed to preserve the key when present | `27fd860` |
 
 Placeholders will be replaced with actual commit SHAs once FIX-1 and FIX-2
 branches land.

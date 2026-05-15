@@ -158,9 +158,63 @@ def test_delete_returns_204_then_403(client):
 
 
 def test_state_get_returns_204_on_empty(client):
-    created = client.post("/tournaments", json={"name": "A"}).json()
+    """Tournament created without a name has no seeded config → still 204."""
+    created = client.post("/tournaments", json={}).json()
     r = client.get(f"/tournaments/{created['id']}/state")
     assert r.status_code == 204
+
+
+def test_create_seeds_config_with_name_and_date(client):
+    """create_tournament seeds config.tournamentName + config.tournamentDate
+    so SetupTab reads the dashboard name on first open instead of blank fields."""
+    r = client.post(
+        "/tournaments",
+        json={"name": "Spring Open", "tournamentDate": "2026-06-01"},
+    )
+    assert r.status_code == 201
+    tid = r.json()["id"]
+    state = client.get(f"/tournaments/{tid}/state")
+    assert state.status_code == 200
+    cfg = state.json()["config"]
+    assert cfg["tournamentName"] == "Spring Open"
+    assert cfg["tournamentDate"] == "2026-06-01"
+
+
+def test_create_without_date_seeds_only_name(client):
+    """Seeded config includes all required defaults regardless of date."""
+    r = client.post("/tournaments", json={"name": "No Date Open"})
+    assert r.status_code == 201
+    tid = r.json()["id"]
+    state = client.get(f"/tournaments/{tid}/state")
+    assert state.status_code == 200
+    cfg = state.json()["config"]
+    assert cfg["tournamentName"] == "No Date Open"
+    # tournamentDate absent or None is fine — not seeded
+    assert cfg.get("tournamentDate") is None
+    # Required fields must be present so the first frontend PUT doesn't 422.
+    assert cfg["intervalMinutes"] == 30
+    assert cfg["courtCount"] == 4
+
+
+def test_create_seeded_config_survives_put_roundtrip(client):
+    """The seeded config must be Pydantic-valid so the first frontend PUT
+    (which snapshots Zustand state) doesn't return 422.
+
+    Simulates the frontend flow: GET seeded state → mutate name → PUT back.
+    """
+    r = client.post("/tournaments", json={"name": "X"}).json()
+    tid = r["id"]
+    state = client.get(f"/tournaments/{tid}/state").json()
+    # Mutate as the frontend would (name change), then PUT the full blob back.
+    state["config"]["tournamentName"] = "Y"
+    state.setdefault("version", 2)
+    state.setdefault("scheduleStats", None)
+    state.setdefault("scheduleIsStale", False)
+    state.setdefault("scheduleVersion", 0)
+    state.setdefault("scheduleHistory", [])
+    put = client.put(f"/tournaments/{tid}/state", json=state)
+    assert put.status_code == 200, put.text
+    assert put.json()["config"]["tournamentName"] == "Y"
 
 
 def test_state_put_then_get_roundtrip(client):
@@ -250,7 +304,10 @@ def test_restore_backup_replaces_state(client):
     client.put(f"/tournaments/{tid}/state", json=_basic_state("FIRST"))
     client.put(f"/tournaments/{tid}/state", json=_basic_state("SECOND"))
     backups = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
-    target = backups[-1]["filename"]  # snapshot of FIRST
+    # Backups are newest-first. Since create now seeds the config with name
+    # "A", the PUT("FIRST") backs up the seeded "A" data (oldest), and
+    # PUT("SECOND") backs up "FIRST" (newest). Use backups[0] for "FIRST".
+    target = backups[0]["filename"]  # snapshot of FIRST (newest backup)
     r = client.post(f"/tournaments/{tid}/state/restore/{target}")
     assert r.status_code == 200
     live = client.get(f"/tournaments/{tid}/state").json()
