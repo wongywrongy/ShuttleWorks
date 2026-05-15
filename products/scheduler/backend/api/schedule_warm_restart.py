@@ -28,9 +28,11 @@ from app.schemas import (
     TournamentConfig,
 )
 from api.match_state import MatchStateDTO
-from scheduler_core.domain.models import Assignment
+from scheduler_core.domain.models import Assignment, LockedAssignment
 from scheduler_core.engine.cancel_token import CancelToken
 from scheduler_core.engine.warm_start import solve_warm_start
+
+from typing import Sequence
 
 from adapters.badminton import (
     matches_from_dto,
@@ -65,7 +67,11 @@ class WarmRestartResponse(BaseModel):
     movedMatchIds: List[str]
 
 
-def _run_warm_restart(request: WarmRestartRequest) -> tuple[ScheduleDTO, List[str]]:
+def _run_warm_restart(
+    request: WarmRestartRequest,
+    *,
+    locked_assignments: Optional[Sequence[LockedAssignment]] = None,
+) -> tuple[ScheduleDTO, List[str]]:
     """Pure solver-call body: returns (new schedule, movedMatchIds).
 
     Extracted from the endpoint so callers (director-action proposals,
@@ -73,6 +79,12 @@ def _run_warm_restart(request: WarmRestartRequest) -> tuple[ScheduleDTO, List[st
     response-model Pydantic round-trip — that round-trip otherwise
     fails when sys.modules churn results in `ScheduleDTO` having
     different class identities at validation time.
+
+    Tournament-scoped callers populate ``locked_assignments`` via
+    ``services.match_state.build_locked_assignments(repo, tid)`` so
+    state-machine-locked matches stay pinned regardless of the stay-
+    close weight; the public stateless ``POST /schedule/warm-restart``
+    route leaves it None.
     """
     finished: set[str] = set()
     for m_id, state in request.matchStates.items():
@@ -104,6 +116,7 @@ def _run_warm_restart(request: WarmRestartRequest) -> tuple[ScheduleDTO, List[st
             finished_match_ids=finished,
             stay_close_weight=request.stayCloseWeight,
             solver_options=solver_options,
+            locked_assignments=locked_assignments,
         )
     except Exception:
         log.exception("warm-restart failed")
@@ -133,6 +146,7 @@ def _run_warm_restart_with_cancel(
     request: WarmRestartRequest,
     *,
     cancel_token: CancelToken,
+    locked_assignments: Optional[Sequence[LockedAssignment]] = None,
 ) -> tuple[ScheduleDTO, List[str]]:
     """Cancel-aware variant of `_run_warm_restart` for speculative solves.
 
@@ -168,6 +182,7 @@ def _run_warm_restart_with_cancel(
         stay_close_weight=request.stayCloseWeight,
         solver_options=solver_options,
         cancel_token=cancel_token,
+        locked_assignments=locked_assignments,
     )
     new_schedule = result_to_dto(result)
     moved: List[str] = []

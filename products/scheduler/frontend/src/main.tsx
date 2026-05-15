@@ -8,18 +8,6 @@ import '@fontsource-variable/jetbrains-mono'
 import './index.css'
 import App from './app/App.tsx'
 
-// One-time cleanup of the pre-store-split localStorage key. The combined
-// useAppStore used to persist a subset of fields here; the three new
-// stores rely on the server snapshot instead, so any leftover blob is
-// stale on every machine.
-try {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('scheduler-storage');
-  }
-} catch {
-  // ignore (private-mode, quota, etc.)
-}
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

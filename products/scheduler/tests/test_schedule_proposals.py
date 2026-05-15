@@ -21,6 +21,7 @@ for _cached in [k for k in list(sys.modules) if k == "app" or k.startswith("app.
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from _helpers import seed_tournament
 
 
 @pytest.fixture
@@ -32,17 +33,8 @@ def client(tmp_path, monkeypatch):
     returns instances of the *previous* `Impact` class while `Proposal`
     expects the *current* one (Pydantic class identity is strict).
     """
-    monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
-    sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
-    for _cached in [
-        k for k in list(sys.modules)
-        if k == "app" or k.startswith("app.")
-        or k == "services" or k.startswith("services.")
-        or k == "adapters" or k.startswith("adapters.")
-        or k.startswith("api.")
-    ]:
-        del sys.modules[_cached]
+    from _helpers import isolate_test_database, seed_tournament
+    isolate_test_database(tmp_path, monkeypatch)
 
     from api import (
         match_state,
@@ -50,7 +42,7 @@ def client(tmp_path, monkeypatch):
         schedule_proposals,
         schedule_repair,
         schedule_warm_restart,
-        tournament_state,
+        tournaments,
     )
 
     app_ = FastAPI()
@@ -59,7 +51,7 @@ def client(tmp_path, monkeypatch):
     app_.include_router(schedule_proposals.router)
     app_.include_router(schedule_advisories.router)
     app_.include_router(match_state.router)
-    app_.include_router(tournament_state.router)
+    app_.include_router(tournaments.router)
     # Proposal store now lives on app.state — fresh per fixture instance.
     yield TestClient(app_)
 
@@ -124,9 +116,9 @@ def _warm_restart_request(state: dict, stayCloseWeight: int = 10) -> dict:
     }
 
 
-def _seed_state(client, scheduleVersion: int = 0) -> dict:
+def _seed_state(client, tid: str, scheduleVersion: int = 0) -> dict:
     state = _basic_state(scheduleVersion)
-    r = client.put("/tournament/state", json=state)
+    r = client.put(f"/tournaments/{tid}/state", json=state)
     assert r.status_code == 200, r.text
     return state
 
@@ -135,9 +127,10 @@ def _seed_state(client, scheduleVersion: int = 0) -> dict:
 
 
 def test_warm_restart_proposal_creates_with_impact(client):
-    state = _seed_state(client)
+    tid = seed_tournament(client)
+    state = _seed_state(client, tid)
     r = client.post(
-        "/schedule/proposals/warm-restart",
+        f"/tournaments/{tid}/schedule/proposals/warm-restart",
         json=_warm_restart_request(state),
     )
     assert r.status_code == 200, r.text
@@ -152,7 +145,8 @@ def test_warm_restart_proposal_creates_with_impact(client):
 
 
 def test_repair_proposal_with_withdrawal_creates_proposal(client):
-    state = _seed_state(client)
+    tid = seed_tournament(client)
+    state = _seed_state(client, tid)
     repair_request = {
         "originalSchedule": state["schedule"],
         "config": state["config"],
@@ -161,7 +155,7 @@ def test_repair_proposal_with_withdrawal_creates_proposal(client):
         "matchStates": {},
         "disruption": {"type": "withdrawal", "playerId": "p1"},
     }
-    r = client.post("/schedule/proposals/repair", json=repair_request)
+    r = client.post(f"/tournaments/{tid}/schedule/proposals/repair", json=repair_request)
     assert r.status_code == 200, r.text
     proposal = r.json()
     assert proposal["kind"] == "repair"
@@ -174,18 +168,20 @@ def test_repair_proposal_with_withdrawal_creates_proposal(client):
 
 
 def test_get_proposal_returns_stored_record(client):
-    state = _seed_state(client)
+    tid = seed_tournament(client)
+    state = _seed_state(client, tid)
     create_r = client.post(
-        "/schedule/proposals/warm-restart", json=_warm_restart_request(state)
+        f"/tournaments/{tid}/schedule/proposals/warm-restart", json=_warm_restart_request(state)
     )
     pid = create_r.json()["id"]
-    fetch_r = client.get(f"/schedule/proposals/{pid}")
+    fetch_r = client.get(f"/tournaments/{tid}/schedule/proposals/{pid}")
     assert fetch_r.status_code == 200
     assert fetch_r.json()["id"] == pid
 
 
 def test_get_unknown_proposal_returns_410(client):
-    r = client.get("/schedule/proposals/no-such-id")
+    tid = seed_tournament(client)
+    r = client.get(f"/tournaments/{tid}/schedule/proposals/no-such-id")
     assert r.status_code == 410
     assert r.json()["detail"]["code"] == "PROPOSAL_EXPIRED"
 
@@ -194,29 +190,31 @@ def test_get_unknown_proposal_returns_410(client):
 
 
 def test_cancel_proposal_drops_from_store(client):
-    state = _seed_state(client)
+    tid = seed_tournament(client)
+    state = _seed_state(client, tid)
     create_r = client.post(
-        "/schedule/proposals/warm-restart", json=_warm_restart_request(state)
+        f"/tournaments/{tid}/schedule/proposals/warm-restart", json=_warm_restart_request(state)
     )
     pid = create_r.json()["id"]
-    r = client.delete(f"/schedule/proposals/{pid}")
+    r = client.delete(f"/tournaments/{tid}/schedule/proposals/{pid}")
     assert r.status_code == 200
     assert r.json()["cancelled"] is True
     # Now a fetch should 410.
-    assert client.get(f"/schedule/proposals/{pid}").status_code == 410
+    assert client.get(f"/tournaments/{tid}/schedule/proposals/{pid}").status_code == 410
 
 
 # ---------- commit ---------------------------------------------------------
 
 
 def test_commit_proposal_atomically_swaps_committed_state(client):
-    state = _seed_state(client, scheduleVersion=0)
+    tid = seed_tournament(client)
+    state = _seed_state(client, tid, scheduleVersion=0)
     create_r = client.post(
-        "/schedule/proposals/warm-restart", json=_warm_restart_request(state)
+        f"/tournaments/{tid}/schedule/proposals/warm-restart", json=_warm_restart_request(state)
     )
     pid = create_r.json()["id"]
 
-    commit_r = client.post(f"/schedule/proposals/{pid}/commit")
+    commit_r = client.post(f"/tournaments/{tid}/schedule/proposals/{pid}/commit")
     assert commit_r.status_code == 200, commit_r.text
     body = commit_r.json()
 
@@ -229,56 +227,59 @@ def test_commit_proposal_atomically_swaps_committed_state(client):
     assert history["schedule"] is not None  # snapshot of the previous schedule
 
     # The persisted state reflects the swap on the next GET.
-    persisted = client.get("/tournament/state").json()
+    persisted = client.get(f"/tournaments/{tid}/state").json()
     assert persisted["scheduleVersion"] == 1
     assert len(persisted["scheduleHistory"]) == 1
 
 
 def test_commit_consumes_proposal(client):
-    state = _seed_state(client)
+    tid = seed_tournament(client)
+    state = _seed_state(client, tid)
     create_r = client.post(
-        "/schedule/proposals/warm-restart", json=_warm_restart_request(state)
+        f"/tournaments/{tid}/schedule/proposals/warm-restart", json=_warm_restart_request(state)
     )
     pid = create_r.json()["id"]
-    client.post(f"/schedule/proposals/{pid}/commit")
+    client.post(f"/tournaments/{tid}/schedule/proposals/{pid}/commit")
     # Same proposal cannot be committed twice.
-    second = client.post(f"/schedule/proposals/{pid}/commit")
+    second = client.post(f"/tournaments/{tid}/schedule/proposals/{pid}/commit")
     assert second.status_code == 410
 
 
 def test_commit_409_when_committed_version_advanced(client):
-    state = _seed_state(client, scheduleVersion=0)
+    tid = seed_tournament(client)
+    state = _seed_state(client, tid, scheduleVersion=0)
     # Create proposal A based on version 0.
     create_a = client.post(
-        "/schedule/proposals/warm-restart", json=_warm_restart_request(state)
+        f"/tournaments/{tid}/schedule/proposals/warm-restart", json=_warm_restart_request(state)
     )
     pid_a = create_a.json()["id"]
     # Create + commit proposal B first → bumps version to 1.
     create_b = client.post(
-        "/schedule/proposals/warm-restart", json=_warm_restart_request(state)
+        f"/tournaments/{tid}/schedule/proposals/warm-restart", json=_warm_restart_request(state)
     )
     pid_b = create_b.json()["id"]
-    commit_b = client.post(f"/schedule/proposals/{pid_b}/commit")
+    commit_b = client.post(f"/tournaments/{tid}/schedule/proposals/{pid_b}/commit")
     assert commit_b.status_code == 200
     # Now A's fromScheduleVersion (0) lags the persisted (1).
-    commit_a = client.post(f"/schedule/proposals/{pid_a}/commit")
+    commit_a = client.post(f"/tournaments/{tid}/schedule/proposals/{pid_a}/commit")
     assert commit_a.status_code == 409
     assert commit_a.json()["detail"]["code"] == "SCHEDULE_VERSION_CONFLICT"
 
 
 def test_history_capped_at_5(client):
-    state = _seed_state(client)
+    tid = seed_tournament(client)
+    state = _seed_state(client, tid)
     for _ in range(7):
         # Each commit produces a new history entry.
         create = client.post(
-            "/schedule/proposals/warm-restart", json=_warm_restart_request(state)
+            f"/tournaments/{tid}/schedule/proposals/warm-restart", json=_warm_restart_request(state)
         )
         pid = create.json()["id"]
-        commit = client.post(f"/schedule/proposals/{pid}/commit")
+        commit = client.post(f"/tournaments/{tid}/schedule/proposals/{pid}/commit")
         assert commit.status_code == 200
         # Refresh state for the next iteration so version field tracks.
-        state = client.get("/tournament/state").json()
-    final = client.get("/tournament/state").json()
+        state = client.get(f"/tournaments/{tid}/state").json()
+    final = client.get(f"/tournaments/{tid}/state").json()
     assert final["scheduleVersion"] == 7
     assert len(final["scheduleHistory"]) == 5  # capped
 
@@ -287,15 +288,19 @@ def test_history_capped_at_5(client):
 
 
 def test_proposal_evicted_after_ttl(client):
-    state = _seed_state(client)
+    tid = seed_tournament(client)
+    state = _seed_state(client, tid)
     create_r = client.post(
-        "/schedule/proposals/warm-restart", json=_warm_restart_request(state)
+        f"/tournaments/{tid}/schedule/proposals/warm-restart", json=_warm_restart_request(state)
     )
     pid = create_r.json()["id"]
 
-    # The proposal store lives on the FastAPI app's state — backdate the
-    # entry directly so the next endpoint call evicts it.
-    store = client.app.state.proposals
+    # The proposal store lives on the FastAPI app's state, now keyed by
+    # tournament_id — backdate the entry directly so the next endpoint
+    # call evicts it.
+    import uuid
+    tid_uuid = uuid.UUID(tid)
+    store = client.app.state.proposals[tid_uuid]
     proposal = store[pid]
     expired = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat().replace(
         "+00:00", "Z"
@@ -303,7 +308,7 @@ def test_proposal_evicted_after_ttl(client):
     store[pid] = proposal.model_copy(update={"expiresAt": expired})
 
     # Any subsequent endpoint should evict and 410.
-    r = client.get(f"/schedule/proposals/{pid}")
+    r = client.get(f"/tournaments/{tid}/schedule/proposals/{pid}")
     assert r.status_code == 410
 
 
@@ -311,7 +316,9 @@ def test_proposal_evicted_after_ttl(client):
 
 
 def test_existing_warm_restart_endpoint_unaffected(client):
-    state = _seed_state(client)
+    """The pathless /schedule/warm-restart is stateless compute and
+    doesn't need a tournament; takes the full problem in the body."""
+    state = _basic_state()
     r = client.post("/schedule/warm-restart", json=_warm_restart_request(state))
     assert r.status_code == 200
     body = r.json()
@@ -320,7 +327,8 @@ def test_existing_warm_restart_endpoint_unaffected(client):
 
 
 def test_existing_repair_endpoint_unaffected(client):
-    state = _seed_state(client)
+    """Same: stateless compute, no tournament needed."""
+    state = _basic_state()
     r = client.post(
         "/schedule/repair",
         json={

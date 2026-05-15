@@ -133,6 +133,9 @@ class TournamentConfig(BaseModel):
     # of 30 min costs no re-solve. Cleared back to 0 on schedule
     # reset.
     clockShiftMinutes: Optional[int] = Field(0, ge=0, le=24 * 60)
+    # ---- Bracket-kind settings -----------------------------------
+    # Slots of forced rest between bracket rounds. Bracket-side only.
+    restBetweenRounds: int = Field(default=1, ge=0)
 
 
 # Availability
@@ -157,6 +160,18 @@ class PlayerDTO(BaseModel):
     availability: List[AvailabilityWindow] = Field(default_factory=list)
     minRestMinutes: Optional[int] = None  # If not provided, uses config.defaultRestMinutes
     notes: Optional[str] = None
+
+
+class BracketPlayerDTO(BaseModel):
+    """Roster entry for bracket-kind tournaments.
+
+    ``id`` is the stable slug produced by the frontend ``playerSlug()``
+    helper; matches ``bracket_participants.member_ids`` after migration.
+    """
+    id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    notes: Optional[str] = None
+    restSlots: Optional[int] = Field(default=None, ge=0)
 
 
 class RosterImportDTO(BaseModel):
@@ -483,6 +498,8 @@ class TournamentStateDTO(BaseModel):
     # ``scheduleHistory`` is the rolling-revert pool, capped at 5.
     scheduleVersion: int = 0
     scheduleHistory: List[ScheduleHistoryEntry] = Field(default_factory=list)
+    bracketPlayers: List[BracketPlayerDTO] = Field(default_factory=list)
+    bracketRosterMigrated: Optional[bool] = None
 
 
 class SolverOptionsDTO(BaseModel):
@@ -490,3 +507,58 @@ class SolverOptionsDTO(BaseModel):
     timeLimitSeconds: Optional[float] = None
     numWorkers: Optional[int] = None
     randomSeed: Optional[int] = None
+
+
+# ---- Commands (Step C) ------------------------------------------------
+
+
+class CommandRequest(BaseModel):
+    """Body of ``POST /tournaments/{tournament_id}/commands``.
+
+    ``id`` is the *client-generated* UUID used as the idempotency key.
+    The same id resubmitted gets the original outcome (200 on a
+    previously-applied command, 409 on a previously-rejected one).
+    ``seen_version`` is the ``matches.version`` the client observed
+    when it composed the command — the processor rejects with 409
+    ``stale_version`` if the row has moved on.
+
+    ``action`` is typed as ``MatchAction`` so Pydantic validates the
+    string at the parse boundary; unknown values yield a 422 before
+    the route handler runs.
+    """
+
+    id: uuid.UUID
+    match_id: str = Field(..., min_length=1, max_length=100)
+    action: "MatchAction"
+    payload: Optional[Dict[str, Any]] = None
+    seen_version: int = Field(..., ge=0)
+
+
+# Forward reference resolution — ``MatchAction`` is defined in
+# ``app.constants`` which itself imports ``MatchStatus`` from
+# ``database.models``. Importing it at the top of this module would
+# create a cycle (schemas → constants → database → schemas via
+# Pydantic introspection of forward refs). Resolving here keeps the
+# import order clean.
+from app.constants import MatchAction  # noqa: E402
+CommandRequest.model_rebuild()
+
+
+class CommandResponse(BaseModel):
+    """200 body for a successful apply or an idempotent replay.
+
+    Carries the *current* match state, not the post-original-apply
+    state. On a replay where another operator moved the match in the
+    interim, the response reflects current reality — that's the
+    contract the operator UX wants ("here's the canonical state
+    after your action; render from this").
+    """
+
+    command_id: uuid.UUID
+    match_id: str
+    status: str
+    version: int
+    court_id: Optional[int] = None
+    time_slot: Optional[int] = None
+    applied_at: str   # ISO-8601 UTC
+    replay: bool      # True on idempotent replay, False on fresh apply

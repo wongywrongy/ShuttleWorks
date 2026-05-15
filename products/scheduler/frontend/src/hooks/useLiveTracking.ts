@@ -19,6 +19,7 @@ import { useMatchStateStore } from '../store/matchStateStore';
 import { useUiStore } from '../store/uiStore';
 import { apiClient } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
+import { useTournamentId } from './useTournamentId';
 
 /**
  * Valid state transitions for match state machine
@@ -43,6 +44,7 @@ function isValidTransition(
 }
 
 export function useLiveTracking() {
+  const tid = useTournamentId();
   const schedule = useTournamentStore((state) => state.schedule);
   const config = useTournamentStore((state) => state.config);
   const matches = useTournamentStore((state) => state.matches);
@@ -55,7 +57,7 @@ export function useLiveTracking() {
 
   const loadMatchStates = useCallback(async () => {
     try {
-      const backendStates = await apiClient.getMatchStates();
+      const backendStates = await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
 
       // Merge backend with local, preserving local-only fields
@@ -84,7 +86,7 @@ export function useLiveTracking() {
 
   const syncMatchStates = useCallback(async () => {
     try {
-      const backendStates = await apiClient.getMatchStates();
+      const backendStates = await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
 
       // Merge backend with local, preserving local-only fields
@@ -194,7 +196,7 @@ export function useLiveTracking() {
       // (and can replay it). Silent failures were hiding real data-loss
       // events in prior builds.
       try {
-        await apiClient.updateMatchState(matchId, newState);
+        await apiClient.updateMatchState(tid, matchId, newState);
       } catch (apiError) {
         console.error('Failed to sync match status to backend:', apiError);
         const detail = apiError instanceof Error ? apiError.message : 'Network error';
@@ -209,7 +211,7 @@ export function useLiveTracking() {
               // on another failure, capped to one-per-match by id.
               void (async () => {
                 try {
-                  await apiClient.updateMatchState(matchId, newState);
+                  await apiClient.updateMatchState(tid, matchId, newState);
                 } catch {
                   /* a second failure will be caught by the Retry loop */
                 }
@@ -232,7 +234,7 @@ export function useLiveTracking() {
     notes?: string
   ) => {
     try {
-      const updated = await apiClient.updateMatchState(matchId, {
+      const updated = await apiClient.updateMatchState(tid, matchId, {
         matchId,
         status: 'finished',
         score,
@@ -275,7 +277,7 @@ export function useLiveTracking() {
 
       // Sync to backend
       try {
-        await apiClient.updateMatchState(matchId, newState);
+        await apiClient.updateMatchState(tid, matchId, newState);
       } catch (apiError) {
         console.error('Failed to sync player confirmation to backend:', apiError);
         // Don't revert - local state is still valid for this session
@@ -288,7 +290,7 @@ export function useLiveTracking() {
 
   const exportStates = useCallback(async () => {
     try {
-      const blob = await apiClient.exportMatchStates();
+      const blob = await apiClient.exportMatchStates(tid);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -305,7 +307,7 @@ export function useLiveTracking() {
 
   const importStates = useCallback(async (file: File) => {
     try {
-      const result = await apiClient.importMatchStates(file);
+      const result = await apiClient.importMatchStates(tid, file);
       await loadMatchStates(); // Reload after import
       return result;
     } catch (error) {
@@ -316,7 +318,7 @@ export function useLiveTracking() {
 
   const resetStates = useCallback(async () => {
     try {
-      await apiClient.resetMatchStates();
+      await apiClient.resetMatchStates(tid);
       setMatchStates({});
     } catch (error) {
       console.error('Failed to reset match states:', error);

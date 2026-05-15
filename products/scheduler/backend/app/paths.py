@@ -1,20 +1,21 @@
-"""Shared filesystem helpers for the backend API routes.
+"""Shared filesystem helpers.
 
-Both ``match_state.py`` and ``tournament_state.py`` need the same
-``data_dir()`` lookup (env-var honored, default ``/app/data``) and
-the ``ensure_data_dir()`` mkdir; centralising them here removes a
-small but exact duplication.
+After Step 3 the data directory is resolved from
+``app.config.settings.data_dir``; ``BACKEND_DATA_DIR`` is honoured as a
+legacy alias by ``Settings`` itself via the field's env alias (case-
+insensitive name match) so existing dockerfiles / make targets keep
+working.
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
+
+from app.config import settings
 
 
 def data_dir() -> Path:
-    """Resolve the data directory. ``BACKEND_DATA_DIR`` overrides the
-    container default of ``/app/data``."""
-    return Path(os.environ.get("BACKEND_DATA_DIR", "/app/data"))
+    """Return the configured data directory as a ``Path``."""
+    return Path(settings.data_dir)
 
 
 def ensure_data_dir() -> Path:

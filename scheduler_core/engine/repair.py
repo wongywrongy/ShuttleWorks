@@ -17,6 +17,7 @@ from typing import Mapping, Optional, Sequence, Set
 
 from scheduler_core.domain.models import (
     Assignment,
+    LockedAssignment,
     Match,
     Player,
     PreviousAssignment,
@@ -55,6 +56,7 @@ def solve_repair(
     *,
     solver_options: Optional[SolverOptions] = None,
     cancel_token: Optional[CancelToken] = None,
+    locked_assignments: Optional[Sequence[LockedAssignment]] = None,
 ) -> ScheduleResult:
     """Re-solve only the free slice, holding everything else fixed.
 
@@ -62,6 +64,14 @@ def solve_repair(
     surviving match (every ``match.id`` not in
     ``repair.forbid_match_ids``). Already-pinned matches are unchanged
     in the output; free matches may have moved.
+
+    ``locked_assignments`` (Step B) is the state-machine's hard-pin
+    set — matches whose status is in ``LOCKED_STATUSES``. The engine
+    fixes their court + time slot inside ``CPSATScheduler.solve``,
+    overriding any slice rule that would otherwise let them move.
+    The slice rule is still authoritative for ``free_match_ids`` /
+    ``forbid_match_ids``; ``locked_assignments`` adds an
+    independently-enforced floor on top.
 
     The default solver options trim ``time_limit_seconds`` to 5 (the
     repair problem is small and warm-started, so it converges fast)
@@ -106,6 +116,8 @@ def solve_repair(
     scheduler.add_matches(surviving)
     scheduler.add_players(players)
     scheduler.set_previous_assignments(previous)
+    if locked_assignments:
+        scheduler.set_locked_assignments(list(locked_assignments))
     scheduler.build()
 
     # Warm-start: hint free matches at their original slot+court. CP-SAT

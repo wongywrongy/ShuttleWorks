@@ -17,17 +17,66 @@ import type {
   ProposedMove,
   ValidationResponseDTO,
   TournamentStateDTO,
+  TournamentSummaryDTO,
+  TournamentCreateDTO,
+  TournamentUpdateDTO,
+  TournamentMemberDTO,
   BackupListDTO,
   BackupCreatedDTO,
   Advisory,
   Proposal,
   ScheduleHistoryEntry,
   Suggestion,
+  InviteCreateDTO,
+  InviteCreatedDTO,
+  InviteSummaryDTO,
+  InviteResolveDTO,
+  InviteAcceptedDTO,
+  CommandRequestDTO,
+  CommandResponseDTO,
+  CommandConflictDTO,
 } from './dto';
+import type {
+  BracketCreateIn,
+  BracketTournamentDTO,
+  BracketScheduleNextOut,
+  BracketImportCsvParams,
+  BracketValidateIn,
+  BracketPinIn,
+  BracketValidationOut,
+  BracketEventUpsertIn,
+  BracketEventGenerateIn,
+} from './bracketDto';
 
 // Use /api proxy in dev, or explicit URL in production
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV ? '/api' : 'http://localhost:8000');
+
+// Toast-dedupe window. With four polling hooks running concurrently
+// (useAdvisories every 15s, useSuggestions every 8s, useBracket every
+// 2.5s, useLiveTracking every 5s) a single backend hiccup or a
+// tournament-deleted-elsewhere produces a sticky error toast on every
+// poll. Sticky toasts pile up forever — operators reported "the screen
+// fills with red toasts". The interceptor now suppresses a toast if
+// the same ``status:message`` pair was surfaced within this window.
+const _ERROR_TOAST_DEDUPE_MS = 30_000;
+const _recentErrorToasts = new Map<string, number>();
+function _shouldSuppressErrorToast(key: string): boolean {
+  const now = Date.now();
+  // Garbage-collect entries older than the window so the map doesn't
+  // grow unbounded over a long session.
+  for (const [k, ts] of _recentErrorToasts) {
+    if (now - ts > _ERROR_TOAST_DEDUPE_MS) {
+      _recentErrorToasts.delete(k);
+    }
+  }
+  const last = _recentErrorToasts.get(key);
+  if (last !== undefined && now - last < _ERROR_TOAST_DEDUPE_MS) {
+    return true;
+  }
+  _recentErrorToasts.set(key, now);
+  return false;
+}
 
 interface GenerateScheduleRequest {
   config: TournamentConfig;
@@ -135,6 +184,23 @@ class ApiClient {
       timeout: 300000, // 5 minutes for large schedules
     });
 
+    // Attach the Supabase JWT to every outgoing request. ``getSession``
+    // returns the current cached session (Supabase handles automatic
+    // refresh, so we read at request time rather than caching here).
+    // When the Supabase client is null (no env config — local dev /
+    // pytest), the backend's ``get_current_user`` is in synthetic-user
+    // mode and doesn't need a header.
+    this.client.interceptors.request.use(async (config) => {
+      const { supabase } = await import('../lib/supabase');
+      if (!supabase) return config;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (token) {
+        config.headers.set?.('Authorization', `Bearer ${token}`);
+      }
+      return config;
+    });
+
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
@@ -184,35 +250,143 @@ class ApiClient {
 
         // Surface the failure exactly once, at the edge, so every hook /
         // component gets consistent UI without needing to handle it.
-        try {
-          useUiStore.getState().pushToast({
-            level: 'error',
-            message,
-            detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
-          });
-        } catch {
-          // The store may not be ready during very-early-lifecycle calls —
-          // fall through to the thrown error below.
+        // Dedupe identical (status, message) pairs within a 30s window
+        // so polling hooks don't pile up sticky error toasts forever
+        // when the backend returns the same error every poll cycle.
+        const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
+        const suppress = _shouldSuppressErrorToast(dedupeKey);
+        if (!suppress) {
+          try {
+            useUiStore.getState().pushToast({
+              level: 'error',
+              message,
+              detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
+            });
+          } catch {
+            // The store may not be ready during very-early-lifecycle calls —
+            // fall through to the thrown error below.
+          }
         }
 
         const err = new Error(message) as Error & {
           requestId?: string;
           code?: string;
+          status?: number;
+          /** Set by this interceptor so the global
+           *  ``window.onunhandledrejection`` handler in ``AppShell``
+           *  doesn't surface a second toast for the same error. */
+          __handled?: boolean;
         };
         if (requestId) err.requestId = requestId;
         if (code) err.code = code;
+        // Promote the HTTP status so callers can branch on it without
+        // pattern-matching the rebuilt ``message`` string. The
+        // backend-merge arc's ``useBracket`` hook needs this to tell
+        // "no bracket configured yet" (404) from a real server error.
+        if (error.response?.status) err.status = error.response.status;
+        err.__handled = true;
         throw err;
       }
     );
   }
 
   /**
-   * Generate optimized schedule
-   * This is the only API call - backend is stateless
+   * Generate optimized schedule.
+   * Stateless compute — no tournament_id needed; the full problem is in the body.
    */
   async generateSchedule(request: GenerateScheduleRequest): Promise<ScheduleDTO> {
     const response = await this.client.post<ScheduleDTO>('/schedule', request);
     return response.data;
+  }
+
+  // ---- Multi-tournament CRUD (Step 2) ----------------------------------
+
+  /** List all tournaments (newest first). */
+  async listTournaments(): Promise<TournamentSummaryDTO[]> {
+    const response = await this.client.get<TournamentSummaryDTO[]>('/tournaments');
+    return response.data;
+  }
+
+  /** Create an empty tournament. Returns the summary row including the new id. */
+  async createTournament(body: TournamentCreateDTO): Promise<TournamentSummaryDTO> {
+    const response = await this.client.post<TournamentSummaryDTO>('/tournaments', body);
+    return response.data;
+  }
+
+  /** Fetch a tournament's summary (id, name, status, dates). */
+  async getTournament(tid: string): Promise<TournamentSummaryDTO> {
+    const response = await this.client.get<TournamentSummaryDTO>(`/tournaments/${tid}`);
+    return response.data;
+  }
+
+  /** Partial update: name / status / tournamentDate. */
+  async updateTournament(
+    tid: string,
+    body: TournamentUpdateDTO,
+  ): Promise<TournamentSummaryDTO> {
+    const response = await this.client.patch<TournamentSummaryDTO>(
+      `/tournaments/${tid}`,
+      body,
+    );
+    return response.data;
+  }
+
+  /** Delete a tournament. CASCADE wipes match-states + backups. */
+  async deleteTournament(tid: string): Promise<void> {
+    await this.client.delete(`/tournaments/${tid}`);
+  }
+
+  // ---- Invite links (Step 7) -------------------------------------------
+
+  /** Owner-only. Generates an invite link granting ``role``. */
+  async createInvite(
+    tid: string,
+    body: InviteCreateDTO,
+  ): Promise<InviteCreatedDTO> {
+    const r = await this.client.post<InviteCreatedDTO>(
+      `/tournaments/${tid}/invites`,
+      body,
+    );
+    return r.data;
+  }
+
+  /** Owner-only. Lists every invite (active + revoked + expired). */
+  async listInvites(tid: string): Promise<InviteSummaryDTO[]> {
+    const r = await this.client.get<InviteSummaryDTO[]>(
+      `/tournaments/${tid}/invites`,
+    );
+    return r.data;
+  }
+
+  /** Viewer-level. Lists every member of the tournament. */
+  async listMembers(tid: string): Promise<TournamentMemberDTO[]> {
+    const r = await this.client.get<TournamentMemberDTO[]>(
+      `/tournaments/${tid}/members`,
+    );
+    return r.data;
+  }
+
+  /** Public lookup. Returns tournament name + role + valid flag. The
+   *  call goes through the same axios instance so the interceptor
+   *  still tries to attach an Authorization header when a session
+   *  exists — backend ignores it on this route. */
+  async resolveInvite(token: string): Promise<InviteResolveDTO> {
+    const r = await this.client.get<InviteResolveDTO>(`/invites/${token}`);
+    return r.data;
+  }
+
+  /** Auth required. Adds the current user to the tournament with the
+   *  invite's role (idempotent; never downgrades). */
+  async acceptInvite(token: string): Promise<InviteAcceptedDTO> {
+    const r = await this.client.post<InviteAcceptedDTO>(
+      `/invites/${token}/accept`,
+    );
+    return r.data;
+  }
+
+  /** Owner-only. Stamps ``revoked_at`` on the invite. */
+  async revokeInvite(token: string): Promise<void> {
+    await this.client.delete(`/invites/${token}`);
   }
 
   // ---- Two-phase commit (proposal pipeline) ----------------------------
@@ -220,18 +394,21 @@ class ApiClient {
   /** Create a warm-restart proposal — same body as warm-restart, but
    *  the result is stashed server-side for review and not committed
    *  until ``commitProposal`` is called. */
-  async createWarmRestartProposal(request: WarmRestartRequest): Promise<Proposal> {
+  async createWarmRestartProposal(
+    tid: string,
+    request: WarmRestartRequest,
+  ): Promise<Proposal> {
     const response = await this.client.post<Proposal>(
-      '/schedule/proposals/warm-restart',
+      `/tournaments/${tid}/schedule/proposals/warm-restart`,
       request,
     );
     return response.data;
   }
 
   /** Create a repair proposal for a given disruption. */
-  async createRepairProposal(request: RepairRequest): Promise<Proposal> {
+  async createRepairProposal(tid: string, request: RepairRequest): Promise<Proposal> {
     const response = await this.client.post<Proposal>(
-      '/schedule/proposals/repair',
+      `/tournaments/${tid}/schedule/proposals/repair`,
       request,
     );
     return response.data;
@@ -239,18 +416,24 @@ class ApiClient {
 
   /** Manual-edit proposal (drag-drop). Pins one match to a new
    *  slot/court via warm-restart with a high stay-close weight. */
-  async createManualEditProposal(request: ManualEditProposalRequest): Promise<Proposal> {
+  async createManualEditProposal(
+    tid: string,
+    request: ManualEditProposalRequest,
+  ): Promise<Proposal> {
     const response = await this.client.post<Proposal>(
-      '/schedule/proposals/manual-edit',
+      `/tournaments/${tid}/schedule/proposals/manual-edit`,
       request,
     );
     return response.data;
   }
 
   /** Director-action proposal: delay_start, insert_blackout, remove_blackout. */
-  async createDirectorActionProposal(request: DirectorActionRequest): Promise<Proposal> {
+  async createDirectorActionProposal(
+    tid: string,
+    request: DirectorActionRequest,
+  ): Promise<Proposal> {
     const response = await this.client.post<Proposal>(
-      '/schedule/director-action',
+      `/tournaments/${tid}/schedule/director-action`,
       request,
     );
     return response.data;
@@ -258,54 +441,53 @@ class ApiClient {
 
   /** Atomically apply a proposal. 409 if the committed schedule has
    *  advanced since the proposal was created (operator must re-review). */
-  async commitProposal(id: string): Promise<CommitProposalResponse> {
+  async commitProposal(tid: string, id: string): Promise<CommitProposalResponse> {
     const response = await this.client.post<CommitProposalResponse>(
-      `/schedule/proposals/${id}/commit`,
+      `/tournaments/${tid}/schedule/proposals/${id}/commit`,
     );
     return response.data;
   }
 
   /** Discard a proposal without committing. */
-  async cancelProposal(id: string): Promise<void> {
-    await this.client.delete(`/schedule/proposals/${id}`);
+  async cancelProposal(tid: string, id: string): Promise<void> {
+    await this.client.delete(`/tournaments/${tid}/schedule/proposals/${id}`);
   }
 
-  /** Fetch a single proposal by id (used by SuggestionPreview to load the
-   *  impact diff without committing). */
-  async getProposal(id: string): Promise<Proposal> {
-    const response = await this.client.get<Proposal>(`/schedule/proposals/${id}`);
-    return response.data;
-  }
-
-  /** Live-operations advisories (overruns, no-shows, running-behind, etc.).
-   *  Polled on a 15s cadence by the useAdvisories hook. */
-  async getAdvisories(): Promise<Advisory[]> {
-    const response = await this.client.get<Advisory[]>('/schedule/advisories');
-    return response.data;
-  }
-
-  /** Pre-computed re-optimization proposals from the SuggestionsWorker.
-   *  Polled every 8s by the useSuggestions hook; rendered in the
-   *  SuggestionsRail. */
-  async getSuggestions(): Promise<Suggestion[]> {
-    const response = await this.client.get<Suggestion[]>('/schedule/suggestions');
-    return response.data;
-  }
-
-  /** Apply a suggestion — commits the underlying proposal atomically.
-   *  Returns the same shape as proposal commit. 409/410 surface as
-   *  axios errors with response.status set; the rail handles them. */
-  async applySuggestion(id: string): Promise<CommitProposalResponse> {
-    const response = await this.client.post<CommitProposalResponse>(
-      `/schedule/suggestions/${id}/apply`,
+  /** Fetch a single proposal by id (used by SuggestionPreview). */
+  async getProposal(tid: string, id: string): Promise<Proposal> {
+    const response = await this.client.get<Proposal>(
+      `/tournaments/${tid}/schedule/proposals/${id}`,
     );
     return response.data;
   }
 
-  /** Dismiss a suggestion — drops it from the inbox and cancels the
-   *  underlying proposal so it can't be applied later. */
-  async dismissSuggestion(id: string): Promise<void> {
-    await this.client.post(`/schedule/suggestions/${id}/dismiss`);
+  /** Live-operations advisories. Polled on a 15s cadence by useAdvisories. */
+  async getAdvisories(tid: string): Promise<Advisory[]> {
+    const response = await this.client.get<Advisory[]>(
+      `/tournaments/${tid}/schedule/advisories`,
+    );
+    return response.data;
+  }
+
+  /** Pre-computed re-optimization proposals from the SuggestionsWorker. */
+  async getSuggestions(tid: string): Promise<Suggestion[]> {
+    const response = await this.client.get<Suggestion[]>(
+      `/tournaments/${tid}/schedule/suggestions`,
+    );
+    return response.data;
+  }
+
+  /** Apply a suggestion — commits the underlying proposal atomically. */
+  async applySuggestion(tid: string, id: string): Promise<CommitProposalResponse> {
+    const response = await this.client.post<CommitProposalResponse>(
+      `/tournaments/${tid}/schedule/suggestions/${id}/apply`,
+    );
+    return response.data;
+  }
+
+  /** Dismiss a suggestion — drops it and cancels the underlying proposal. */
+  async dismissSuggestion(tid: string, id: string): Promise<void> {
+    await this.client.post(`/tournaments/${tid}/schedule/suggestions/${id}/dismiss`);
   }
 
   /**
@@ -498,116 +680,404 @@ class ApiClient {
   }
 
   /**
-   * Fetch the server-side tournament state.
-   * Returns `null` when the server has no state yet (HTTP 204).
+   * Fetch a tournament's persisted state blob.
+   * Returns `null` when the row exists but has no data yet (HTTP 204).
    */
-  async getTournamentState(): Promise<TournamentStateDTO | null> {
+  async getTournamentState(tid: string): Promise<TournamentStateDTO | null> {
     const response = await this.client.get<TournamentStateDTO>(
-      '/tournament/state',
+      `/tournaments/${tid}/state`,
       { validateStatus: (s) => s === 200 || s === 204 },
     );
     if (response.status === 204) return null;
     return response.data;
   }
 
-  /** Overwrite the tournament state file. Returns the stamped state. */
-  async putTournamentState(state: TournamentStateDTO): Promise<TournamentStateDTO> {
+  /** Overwrite a tournament's state blob. Returns the stamped state. */
+  async putTournamentState(
+    tid: string,
+    state: TournamentStateDTO,
+  ): Promise<TournamentStateDTO> {
     const response = await this.client.put<TournamentStateDTO>(
-      '/tournament/state',
+      `/tournaments/${tid}/state`,
       state,
     );
     return response.data;
   }
 
-  /** List rolling backups of the tournament state (newest first). */
-  async listTournamentBackups(): Promise<BackupListDTO> {
-    const res = await this.client.get<BackupListDTO>('/tournament/state/backups');
-    return res.data;
-  }
-
-  /** Snapshot the live file into the backup pool right now. */
-  async createTournamentBackup(): Promise<BackupCreatedDTO> {
-    const res = await this.client.post<BackupCreatedDTO>('/tournament/state/backup');
-    return res.data;
-  }
-
-  /** Replace the live file with the named backup. Returns the newly-current state. */
-  async restoreTournamentBackup(filename: string): Promise<TournamentStateDTO> {
-    const res = await this.client.post<TournamentStateDTO>(
-      `/tournament/state/restore/${encodeURIComponent(filename)}`,
+  /** List rolling backups (newest first). */
+  async listTournamentBackups(tid: string): Promise<BackupListDTO> {
+    const res = await this.client.get<BackupListDTO>(
+      `/tournaments/${tid}/state/backups`,
     );
     return res.data;
   }
 
-  // Match State Management (File-based)
+  /** Snapshot the current state into the backup pool. */
+  async createTournamentBackup(tid: string): Promise<BackupCreatedDTO> {
+    const res = await this.client.post<BackupCreatedDTO>(
+      `/tournaments/${tid}/state/backup`,
+    );
+    return res.data;
+  }
 
-  /**
-   * Get all match states from the JSON file
-   */
-  async getMatchStates(): Promise<Record<string, MatchStateDTO>> {
-    const response = await this.client.get<Record<string, MatchStateDTO>>('/match-states');
+  /** Restore from a named backup. Returns the newly-current state. */
+  async restoreTournamentBackup(
+    tid: string,
+    filename: string,
+  ): Promise<TournamentStateDTO> {
+    const res = await this.client.post<TournamentStateDTO>(
+      `/tournaments/${tid}/state/restore/${encodeURIComponent(filename)}`,
+    );
+    return res.data;
+  }
+
+  // ---- Match State Management ------------------------------------------
+
+  /** Get all match states for the tournament. */
+  async getMatchStates(tid: string): Promise<Record<string, MatchStateDTO>> {
+    const response = await this.client.get<Record<string, MatchStateDTO>>(
+      `/tournaments/${tid}/match-states`,
+    );
+    return response.data;
+  }
+
+  /** Get a single match state, or a synthetic 'scheduled' default. */
+  async getMatchState(tid: string, matchId: string): Promise<MatchStateDTO> {
+    const response = await this.client.get<MatchStateDTO>(
+      `/tournaments/${tid}/match-states/${matchId}`,
+    );
     return response.data;
   }
 
   /**
-   * Get a single match state
+   * Read the canonical ``matches.version`` for a match via the legacy
+   * match-state route's ETag header. Returns 0 when the match has
+   * never been written (the implicit pre-write convention from Step D).
+   *
+   * The command queue's submit path uses this on first interaction
+   * with each match — subsequent commands read the version from the
+   * Zustand cache (populated by CommandResponse.version). One
+   * roundtrip per never-before-seen match; sub-millisecond cache hits
+   * after.
    */
-  async getMatchState(matchId: string): Promise<MatchStateDTO> {
-    const response = await this.client.get<MatchStateDTO>(`/match-states/${matchId}`);
+  async getMatchVersion(tid: string, matchId: string): Promise<number> {
+    const response = await this.client.get(
+      `/tournaments/${tid}/match-states/${matchId}`,
+      { validateStatus: () => true },
+    );
+    if (response.status >= 200 && response.status < 300) {
+      const etag = response.headers['etag'] ?? response.headers['ETag'];
+      if (typeof etag === 'string') {
+        const stripped = etag.replace(/^W\//, '').replace(/^"|"$/g, '');
+        const parsed = parseInt(stripped, 10);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+    return 0;
+  }
+
+  /** Update a match state. */
+  async updateMatchState(
+    tid: string,
+    matchId: string,
+    update: Partial<MatchStateDTO>,
+  ): Promise<MatchStateDTO> {
+    const response = await this.client.put<MatchStateDTO>(
+      `/tournaments/${tid}/match-states/${matchId}`,
+      { matchId, ...update },
+    );
     return response.data;
   }
 
+  /** Reset all match states for the tournament. */
+  async resetMatchStates(tid: string): Promise<void> {
+    await this.client.post(`/tournaments/${tid}/match-states/reset`);
+  }
+
   /**
-   * Update a match state in the file
+   * Shallow health probe. Used by Step G's reachability hook to drive
+   * the ConnectionIndicator. Returns true when the backend responds
+   * 2xx, false otherwise (any error, any non-2xx). Doesn't throw —
+   * the caller wants a boolean, not exception handling.
    */
-  async updateMatchState(matchId: string, update: Partial<MatchStateDTO>): Promise<MatchStateDTO> {
-    const response = await this.client.put<MatchStateDTO>(`/match-states/${matchId}`, {
-      matchId,
-      ...update,
-    });
+  async healthCheck(): Promise<boolean> {
+    try {
+      const r = await this.client.get('/health', { timeout: 3000 });
+      return r.status >= 200 && r.status < 300;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Step F: submit an idempotent operator command.
+   *
+   * Returns a discriminated-union normalised against the four
+   * outcomes the prompt's spec calls out: ``ok`` (200 with current
+   * state), ``staleVersion`` and ``conflict`` (both 409, different
+   * recovery), and ``networkError`` (anything else). The command
+   * queue's flush loop branches on ``kind`` to pick its rollback /
+   * retry behaviour.
+   */
+  async submitCommand(
+    tid: string,
+    body: CommandRequestDTO,
+  ): Promise<
+    | {
+        kind: 'ok';
+        matchStatus: string;
+        matchVersion: number;
+        courtId: number | null;
+        timeSlot: number | null;
+      }
+    | { kind: 'staleVersion'; message: string }
+    | { kind: 'conflict'; message: string }
+    | { kind: 'networkError'; message: string }
+  > {
+    try {
+      const response = await this.client.post<CommandResponseDTO>(
+        `/tournaments/${tid}/commands`,
+        body,
+      );
+      const r = response.data;
+      return {
+        kind: 'ok',
+        matchStatus: r.status,
+        matchVersion: r.version,
+        courtId: r.court_id,
+        timeSlot: r.time_slot,
+      };
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: CommandConflictDTO };
+        message?: string;
+      };
+      const status = axiosErr.response?.status;
+      const data = axiosErr.response?.data;
+      if (status === 409 && data) {
+        if (data.error === 'stale_version') {
+          return { kind: 'staleVersion', message: data.message };
+        }
+        if (data.error === 'conflict') {
+          return { kind: 'conflict', message: data.message };
+        }
+      }
+      return {
+        kind: 'networkError',
+        message: axiosErr.message ?? 'submit failed',
+      };
+    }
+  }
+
+  /** Download match states as a JSON file. */
+  async exportMatchStates(tid: string): Promise<Blob> {
+    const response = await this.client.get(
+      `/tournaments/${tid}/match-states/export/download`,
+      { responseType: 'blob' },
+    );
     return response.data;
   }
 
-  /**
-   * Reset all match states (clear the file)
-   */
-  async resetMatchStates(): Promise<void> {
-    await this.client.post('/match-states/reset');
-  }
-
-  /**
-   * Export tournament state as downloadable JSON file
-   */
-  async exportMatchStates(): Promise<Blob> {
-    const response = await this.client.get('/match-states/export/download', {
-      responseType: 'blob',
-    });
-    return response.data;
-  }
-
-  /**
-   * Import tournament state from JSON file
-   */
-  async importMatchStates(file: File): Promise<{ message: string; matchCount: number }> {
+  /** Import match states from an uploaded JSON file. */
+  async importMatchStates(
+    tid: string,
+    file: File,
+  ): Promise<{ message: string; matchCount: number }> {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await this.client.post('/match-states/import/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    const response = await this.client.post(
+      `/tournaments/${tid}/match-states/import/upload`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return response.data;
+  }
+
+  /** Bulk import match states from a dictionary (used for v2.0 export). */
+  async importMatchStatesBulk(
+    tid: string,
+    matchStates: Record<string, MatchStateDTO>,
+  ): Promise<{ message: string; importedCount: number }> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/match-states/import-bulk`,
+      matchStates,
+    );
+    return response.data;
+  }
+
+  // ---- Brackets (backend-merge arc PR 2/3) -----------------------------
+  // Tournament-product routes folded into the scheduler backend under
+  // /tournaments/{tid}/bracket/*. Auth + role gating fire via the same
+  // interceptor as every other method on this class — no separate client.
+
+  async getBracket(tid: string): Promise<BracketTournamentDTO | null> {
+    // 404 on this route means "no bracket configured yet" — that's
+    // the operator's expected state on a brand-new tournament, NOT
+    // an error. Tell axios to accept 404 as a non-error so the
+    // shared interceptor doesn't surface a toast every 2.5s while
+    // the polling hook is waiting for the operator to create the
+    // bracket. Callers receive ``null`` for the not-yet-configured
+    // case and the DTO for everything else.
+    const response = await this.client.get(`/tournaments/${tid}/bracket`, {
+      validateStatus: (s) => s === 200 || s === 404,
     });
+    if (response.status === 404) return null;
     return response.data;
   }
 
-  /**
-   * Bulk import match states from a dictionary (used for v2.0 tournament export)
-   */
-  async importMatchStatesBulk(matchStates: Record<string, MatchStateDTO>): Promise<{ message: string; importedCount: number }> {
-    const response = await this.client.post('/match-states/import-bulk', matchStates);
+  async createBracket(
+    tid: string,
+    body: BracketCreateIn,
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket`,
+      body,
+    );
     return response.data;
   }
 
+  async deleteBracket(tid: string): Promise<{ ok: boolean }> {
+    const response = await this.client.delete(`/tournaments/${tid}/bracket`);
+    return response.data;
+  }
+
+  async scheduleNextBracketRound(
+    tid: string,
+  ): Promise<BracketScheduleNextOut> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/schedule-next`,
+    );
+    return response.data;
+  }
+
+  async recordBracketResult(
+    tid: string,
+    body: {
+      play_unit_id: string;
+      winner_side: 'A' | 'B';
+      finished_at_slot?: number | null;
+      walkover?: boolean;
+    },
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/results`,
+      body,
+    );
+    return response.data;
+  }
+
+  async bracketMatchAction(
+    tid: string,
+    body: {
+      play_unit_id: string;
+      action: 'start' | 'finish' | 'reset';
+      slot?: number;
+    },
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/match-action`,
+      body,
+    );
+    return response.data;
+  }
+
+  async validateBracketMove(
+    tid: string,
+    body: BracketValidateIn,
+  ): Promise<BracketValidationOut> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/validate`,
+      body,
+    );
+    return response.data;
+  }
+
+  async pinBracketMatch(
+    tid: string,
+    body: BracketPinIn,
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/pin`,
+      body,
+    );
+    return response.data;
+  }
+
+  async importBracketJson(
+    tid: string,
+    body: unknown,
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/import`,
+      body,
+    );
+    return response.data;
+  }
+
+  async importBracketCsv(
+    tid: string,
+    text: string,
+    params: BracketImportCsvParams,
+  ): Promise<BracketTournamentDTO> {
+    const usp = new URLSearchParams();
+    usp.set('courts', String(params.courts));
+    usp.set('total_slots', String(params.total_slots));
+    usp.set('interval_minutes', String(params.interval_minutes));
+    usp.set('rest_between_rounds', String(params.rest_between_rounds));
+    if (params.start_time) usp.set('start_time', params.start_time);
+    if (params.time_limit_seconds !== undefined) {
+      usp.set('time_limit_seconds', String(params.time_limit_seconds));
+    }
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/import.csv?${usp.toString()}`,
+      text,
+      { headers: { 'Content-Type': 'text/csv' } },
+    );
+    return response.data;
+  }
+
+  async bracketEventUpsert(
+    tid: string,
+    eventId: string,
+    body: BracketEventUpsertIn,
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}`,
+      body,
+    );
+    return data;
+  }
+
+  async bracketEventGenerate(
+    tid: string,
+    eventId: string,
+    body: BracketEventGenerateIn,
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}/generate`,
+      body,
+    );
+    return data;
+  }
+
+  async bracketEventDelete(tid: string, eventId: string): Promise<void> {
+    await this.client.delete(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}`,
+    );
+  }
+
+  bracketExportJsonUrl(tid: string): string {
+    return `${API_BASE_URL}/tournaments/${tid}/bracket/export.json`;
+  }
+
+  bracketExportCsvUrl(tid: string): string {
+    return `${API_BASE_URL}/tournaments/${tid}/bracket/export.csv`;
+  }
+
+  bracketExportIcsUrl(tid: string): string {
+    return `${API_BASE_URL}/tournaments/${tid}/bracket/export.ics`;
+  }
 }
 
 export const apiClient = new ApiClient();

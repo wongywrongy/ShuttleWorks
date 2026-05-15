@@ -34,22 +34,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from _helpers import isolate_test_database, seed_tournament
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
-    sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
-    for _cached in [
-        k for k in list(sys.modules)
-        if k == "app" or k.startswith("app.")
-        or "tournament_state" in k
-    ]:
-        del sys.modules[_cached]
-    import api.tournament_state as ts_module
+    isolate_test_database(tmp_path, monkeypatch)
+    from api import tournaments
 
     app_ = FastAPI()
-    app_.include_router(ts_module.router)
+    app_.include_router(tournaments.router)
     return TestClient(app_)
 
 
@@ -70,6 +64,7 @@ def _config(**overrides) -> dict:
 def test_clock_shift_defaults_to_zero(client):
     """Existing tournaments saved before the new field continue to load
     cleanly; absent ``clockShiftMinutes`` defaults to 0."""
+    tid = seed_tournament(client)
     payload = {
         "version": 2,
         "config": _config(),
@@ -78,13 +73,14 @@ def test_clock_shift_defaults_to_zero(client):
         "matches": [],
         "scheduleIsStale": False,
     }
-    r = client.put("/tournament/state", json=payload)
+    r = client.put(f"/tournaments/{tid}/state", json=payload)
     assert r.status_code == 200
-    body = client.get("/tournament/state").json()
+    body = client.get(f"/tournaments/{tid}/state").json()
     assert body["config"]["clockShiftMinutes"] == 0
 
 
 def test_clock_shift_round_trips(client):
+    tid = seed_tournament(client)
     payload = {
         "version": 2,
         "config": _config(clockShiftMinutes=25),
@@ -93,13 +89,14 @@ def test_clock_shift_round_trips(client):
         "matches": [],
         "scheduleIsStale": False,
     }
-    r = client.put("/tournament/state", json=payload)
+    r = client.put(f"/tournaments/{tid}/state", json=payload)
     assert r.status_code == 200
-    body = client.get("/tournament/state").json()
+    body = client.get(f"/tournaments/{tid}/state").json()
     assert body["config"]["clockShiftMinutes"] == 25
 
 
 def test_clock_shift_rejects_negative(client):
+    tid = seed_tournament(client)
     payload = {
         "version": 2,
         "config": _config(clockShiftMinutes=-15),
@@ -108,12 +105,13 @@ def test_clock_shift_rejects_negative(client):
         "matches": [],
         "scheduleIsStale": False,
     }
-    r = client.put("/tournament/state", json=payload)
+    r = client.put(f"/tournaments/{tid}/state", json=payload)
     assert r.status_code == 422
 
 
 def test_clock_shift_rejects_excessively_large_values(client):
     """Cap at 24h — anything larger is almost certainly an operator error."""
+    tid = seed_tournament(client)
     payload = {
         "version": 2,
         "config": _config(clockShiftMinutes=24 * 60 + 1),
@@ -122,11 +120,12 @@ def test_clock_shift_rejects_excessively_large_values(client):
         "matches": [],
         "scheduleIsStale": False,
     }
-    r = client.put("/tournament/state", json=payload)
+    r = client.put(f"/tournaments/{tid}/state", json=payload)
     assert r.status_code == 422
 
 
 def test_breaks_are_part_of_persisted_config(client):
+    tid = seed_tournament(client)
     """Director ``insert_blackout`` actions append to ``config.breaks``.
     The engine already enforces ``breaks`` via ``_allowed_starts``
     (covered by `test_repair.py` and `test_warm_start.py`), so this
@@ -141,14 +140,15 @@ def test_breaks_are_part_of_persisted_config(client):
         "matches": [],
         "scheduleIsStale": False,
     }
-    r = client.put("/tournament/state", json=payload)
+    r = client.put(f"/tournaments/{tid}/state", json=payload)
     assert r.status_code == 200
-    body = client.get("/tournament/state").json()
+    body = client.get(f"/tournaments/{tid}/state").json()
     assert body["config"]["breaks"] == [{"start": "12:00", "end": "13:00"}]
 
 
 def test_breaks_can_be_added_at_runtime_without_schema_changes(client):
     """Operator-inserted blackouts append to the existing breaks list."""
+    tid = seed_tournament(client)
     initial = {
         "version": 2,
         "config": _config(breaks=[]),
@@ -157,12 +157,12 @@ def test_breaks_can_be_added_at_runtime_without_schema_changes(client):
         "matches": [],
         "scheduleIsStale": False,
     }
-    client.put("/tournament/state", json=initial)
+    client.put(f"/tournaments/{tid}/state", json=initial)
     # Re-PUT with a runtime-inserted blackout (mirrors what the
     # director-action endpoint will do).
-    state = client.get("/tournament/state").json()
+    state = client.get(f"/tournaments/{tid}/state").json()
     state["config"]["breaks"] = [{"start": "12:00", "end": "13:00"}]
-    r = client.put("/tournament/state", json=state)
+    r = client.put(f"/tournaments/{tid}/state", json=state)
     assert r.status_code == 200
-    body = client.get("/tournament/state").json()
+    body = client.get(f"/tournaments/{tid}/state").json()
     assert len(body["config"]["breaks"]) == 1

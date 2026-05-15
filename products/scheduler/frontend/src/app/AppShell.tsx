@@ -2,8 +2,6 @@ import { lazy, Suspense, useEffect } from 'react';
 import { ArrowSquareOut, GearSix } from '@phosphor-icons/react';
 import { useUiStore } from '../store/uiStore';
 import { useTournamentState } from '../hooks/useTournamentState';
-import { useAppliedTheme } from '../hooks/useAppliedTheme';
-import { useAppliedDensity } from '../hooks/useAppliedDensity';
 import { useAdvisories } from '../hooks/useAdvisories';
 import { useSuggestions } from '../hooks/useSuggestions';
 import { TabBar } from './TabBar';
@@ -35,25 +33,22 @@ const MatchControlCenterPage = lazy(() =>
 const PublicDisplayPage = lazy(() =>
   import('../pages/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
 );
+const BracketTab = lazy(() =>
+  import('../features/bracket/BracketTab').then((m) => ({ default: m.BracketTab })),
+);
 
 // FALLBACK is now built per-tab via TabSkeleton so the Suspense
 // shape matches the layout that's about to mount.
 
 export function AppShell() {
-  // Hydrate from server-side tournament.json on mount + debounced PUTs on change.
-  useTournamentState();
-  // Apply the user's theme preference to <html> (adds/removes `.dark`).
-  useAppliedTheme();
-  // Apply the user's density preference to <html> (sets data-density).
-  useAppliedDensity();
-  // Poll /schedule/advisories every 15s and surface warn/critical
-  // advisories as toasts. Single mount covers every page.
-  useAdvisories();
-  // Poll /schedule/suggestions every 8s and drop into appStore.
-  // The SuggestionsRail (rendered per-page directly under each
-  // AdvisoryBanner) reads from the store.
-  useSuggestions();
+  // Theme + density hooks live at App.tsx level so they fire on every
+  // route. ``useTournamentState`` runs for ALL tournament kinds (meet +
+  // bracket) via ``<SharedStateHooks />``. The meet-only polling hooks
+  // (``useAdvisories`` + ``useSuggestions``) are gated to kind='meet'
+  // below via ``<MeetOnlyPollingHooks />`` so a bracket tournament
+  // doesn't fire two unrelated GETs on every poll cycle.
   const activeTab = useUiStore((s) => s.activeTab);
+  const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
   const pushToast = useUiStore((s) => s.pushToast);
   const setActiveProposal = useUiStore((s) => s.setActiveProposal);
 
@@ -74,6 +69,18 @@ export function AppShell() {
   useEffect(() => {
     const onRejection = (ev: PromiseRejectionEvent) => {
       const reason = ev.reason;
+      // The axios response interceptor on ``apiClient.client`` stamps
+      // ``__handled = true`` on every error it surfaces (including the
+      // deduped toasts). Re-toasting those here just creates a second
+      // pop-up for an already-shown failure. Console-log only.
+      if (
+        reason &&
+        typeof reason === 'object' &&
+        (reason as { __handled?: boolean }).__handled
+      ) {
+        console.error('[unhandledrejection — already toasted]', reason);
+        return;
+      }
       const msg = reason instanceof Error ? reason.message : String(reason ?? 'Unknown error');
       // Keep the full stack in the console for debugging.
       console.error('[unhandledrejection]', reason);
@@ -125,22 +132,40 @@ export function AppShell() {
       >
         Skip to content
       </a>
+      {/* useTournamentState runs for BOTH meet and bracket kinds —
+          brackets persist their Setup + Roster + Events config
+          through the same ``/tournaments/{id}/state`` endpoint. */}
+      <SharedStateHooks />
+      {/* Meet-only polling hooks: advisories + suggestions are meet-specific
+          and should not fire on bracket-kind tournaments where those
+          endpoints have no meaningful data. */}
+      {activeTournamentKind !== 'bracket' ? <MeetOnlyPollingHooks /> : null}
       <TabBar />
       <UnsavedBannerSlot />
       <main id="main" className="flex-1 min-h-0 overflow-auto">
         <Suspense fallback={<TabSkeleton tab={activeTab} />}>
-          {/* Re-keying on activeTab forces a remount and re-runs the
-              animate-block-in entry so each tab switch reads as a
-              deliberate arrival, not a flash. The keyframe is GPU-safe
-              (translateY + opacity), gated by prefers-reduced-motion. */}
-          <div key={activeTab} className="h-full animate-block-in">
-            {activeTab === 'setup' ? <TournamentSetupPage /> : null}
-            {activeTab === 'roster' ? <RosterTab /> : null}
-            {activeTab === 'matches' ? <MatchesTab /> : null}
-            {activeTab === 'schedule' ? <SchedulePage /> : null}
-            {activeTab === 'live' ? <MatchControlCenterPage /> : null}
-            {activeTab === 'tv' ? <TvPreviewTab /> : null}
-          </div>
+          {/* Bracket-kind tournaments skip the activeTab dispatch and
+              render BracketTab directly — the meet tabs aren't
+              relevant. ``activeTournamentKind`` is loaded by
+              ``useTournamentKind`` on mount; while it's ``null`` the
+              shell falls back to the meet-style tab dispatch below. */}
+          {activeTournamentKind === 'bracket' ? (
+            <div key="bracket" className="h-full animate-block-in">
+              <BracketTab />
+            </div>
+          ) : (
+            // Re-keying on activeTab forces a remount and re-runs the
+            // animate-block-in entry so each tab switch reads as a
+            // deliberate arrival, not a flash.
+            <div key={activeTab} className="h-full animate-block-in">
+              {activeTab === 'setup' ? <TournamentSetupPage /> : null}
+              {activeTab === 'roster' ? <RosterTab /> : null}
+              {activeTab === 'matches' ? <MatchesTab /> : null}
+              {activeTab === 'schedule' ? <SchedulePage /> : null}
+              {activeTab === 'live' ? <MatchControlCenterPage /> : null}
+              {activeTab === 'tv' ? <TvPreviewTab /> : null}
+            </div>
+          )}
         </Suspense>
       </main>
       <SolverHud />
@@ -148,6 +173,30 @@ export function AppShell() {
       <UnlockModalHost />
     </div>
   );
+}
+
+// Shared hooks that run for both meet-kind AND bracket-kind tournaments.
+// Hydrates from and persists to the server-side ``/tournaments/{id}/state``
+// endpoint so both surfaces round-trip their config through the same path.
+function SharedStateHooks() {
+  useTournamentState();
+  return null;
+}
+
+// Meet-only polling hooks. Hosting them in a sibling component lets
+// us conditionally mount them based on tournament kind without
+// violating React's "hooks must be called in the same order every
+// render" rule. The hooks themselves don't render anything; they
+// just register polling timers and write into Zustand stores.
+function MeetOnlyPollingHooks() {
+  // Poll /schedule/advisories every 15s and surface warn/critical
+  // advisories as toasts.
+  useAdvisories();
+  // Poll /schedule/suggestions every 8s and drop into appStore. The
+  // SuggestionsRail (rendered per-page directly under each
+  // AdvisoryBanner) reads from the store.
+  useSuggestions();
+  return null;
 }
 
 // Banner slot: collapses to zero height when no banner is visible so the

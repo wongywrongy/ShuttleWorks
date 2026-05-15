@@ -13,10 +13,12 @@ import { useState } from 'react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { apiClient } from '../../api/client';
 import type { TournamentExportV2, MatchStateDTO } from '../../api/dto';
-import { Button } from '@/components/ui/button';
+import { Button } from '@scheduler/design-system';
 import { Section } from '../settings/SettingsPrimitives';
+import { useTournamentId } from '../../hooks/useTournamentId';
 
 export function TournamentFileManagement() {
+  const tid = useTournamentId();
   const config = useTournamentStore((state) => state.config);
   const players = useTournamentStore((state) => state.players);
   const matches = useTournamentStore((state) => state.matches);
@@ -38,7 +40,7 @@ export function TournamentFileManagement() {
       // Fetch match states from backend (if they exist)
       let matchStates: Record<string, MatchStateDTO> = {};
       try {
-        matchStates = await apiClient.getMatchStates();
+        matchStates = await apiClient.getMatchStates(tid);
       } catch (err) {
         // Match states might not exist yet - that's okay
         console.warn('Could not fetch match states:', err);
@@ -106,7 +108,7 @@ export function TournamentFileManagement() {
       // Import match states to backend (if they exist)
       if (data.matchStates && Object.keys(data.matchStates).length > 0) {
         try {
-          await apiClient.importMatchStatesBulk(data.matchStates);
+          await apiClient.importMatchStatesBulk(tid, data.matchStates);
         } catch (err) {
           console.warn('Could not import match states:', err);
         }

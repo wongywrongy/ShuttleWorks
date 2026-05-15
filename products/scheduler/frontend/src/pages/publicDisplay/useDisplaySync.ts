@@ -14,6 +14,7 @@
  *   - syncError:  most-recent error message (null when healthy).
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import { useTournamentStore } from '../../store/tournamentStore';
 
@@ -35,15 +36,21 @@ export interface UseDisplaySyncResult {
 }
 
 export function useDisplaySync(now: Date): UseDisplaySyncResult {
+  const [searchParams] = useSearchParams();
+  const tid = searchParams.get('id');
   const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!tid) {
+      setSyncError('Missing ?id=<tournament-id> query parameter');
+      return;
+    }
     let cancelled = false;
 
     const pull = async () => {
       try {
-        const remote = await apiClient.getTournamentState();
+        const remote = await apiClient.getTournamentState(tid);
         if (cancelled) return;
         if (remote) {
           useTournamentStore.setState({
@@ -67,15 +74,13 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
       }
     };
 
-    // Kick off immediately so a fresh /display tab doesn't stare at
-    // an empty screen for 10 s waiting for the first interval tick.
     void pull();
     const t = window.setInterval(() => void pull(), TOURNAMENT_POLL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, []);
+  }, [tid]);
 
   // Derive liveness from the last SUCCESSFUL sync (not the most-recent
   // attempt) — that way a single flaky request doesn't flash "Offline"

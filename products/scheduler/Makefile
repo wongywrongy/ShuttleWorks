@@ -28,10 +28,10 @@ help:
 # === Production Commands ===
 
 build:
-	docker-compose build
+	docker compose build
 
 run:
-	docker-compose up -d --build
+	docker compose up -d --build
 	@echo ""
 	@echo "Application starting..."
 	@echo "  Frontend: http://localhost"
@@ -45,9 +45,9 @@ run:
 # Also forces you to hard-refresh the browser — nginx is configured to
 # send no-cache on index.html so a simple reload is enough going forward.
 rebuild:
-	docker-compose down --rmi local --remove-orphans || true
-	docker-compose build --no-cache
-	docker-compose up -d
+	docker compose down --rmi local --remove-orphans || true
+	docker compose build --no-cache
+	docker compose up -d
 	@echo ""
 	@echo "Fresh rebuild complete."
 	@echo "  Frontend: http://localhost  (hard-refresh the browser: Cmd+Shift+R)"
@@ -55,13 +55,13 @@ rebuild:
 	@echo ""
 
 stop:
-	docker-compose down
+	docker compose down
 
 logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 clean:
-	docker-compose down -v --rmi local
+	docker compose down -v --rmi local
 	@echo "Cleaned up containers and images"
 
 # === Development Commands ===
@@ -70,7 +70,7 @@ dev:
 	@echo "Starting development environment..."
 	@echo "Backend: Docker | Frontend: npm dev server"
 	@echo ""
-	docker-compose up -d --build backend
+	docker compose up -d --build backend
 	@echo "Waiting for backend..."
 	@sleep 5
 	@curl -s http://localhost:8000/health > /dev/null && echo "Backend ready!" || echo "Backend starting..."

@@ -13,11 +13,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Path, Request
 
-from services.persistence import PersistenceService, get_persistence
+from app.dependencies import require_tournament_access
+from repositories import LocalRepository, get_repository, open_repository
+
+_VIEWER = Depends(require_tournament_access("viewer"))
+_OPERATOR = Depends(require_tournament_access("operator"))
 
 from app.error_codes import ErrorCode, http_error
 
@@ -43,13 +48,17 @@ from api.schedule_warm_restart import (
     _run_warm_restart_with_cancel,
 )
 from scheduler_core.engine.cancel_token import CancelToken
+from services.match_state import build_locked_assignments
 from services.suggestions_worker import (
     HandlerFn,
     TriggerEvent,
     TriggerKind,
 )
 
-router = APIRouter(prefix="/schedule/suggestions", tags=["schedule-suggestions"])
+router = APIRouter(
+    prefix="/tournaments/{tournament_id}/schedule/suggestions",
+    tags=["schedule-suggestions"],
+)
 log = logging.getLogger("scheduler.suggestions")
 
 
@@ -99,22 +108,29 @@ async def _handle_optimize(
     stay-close objective, so we'd need a second solve at higher
     weight to evaluate it.
     """
-    svc: PersistenceService = app.state.persistence
-    persisted = await _read_persisted_state(svc)
-    if persisted is None or persisted.schedule is None or persisted.config is None:
-        log.debug("suggestions: no persisted schedule to optimize against")
+    tournament_id = event.tournament_id
+    if tournament_id is None:
+        log.warning("suggestions: optimize trigger missing tournament_id")
         return
-
-    # Match states live in a separate persistence file.
-    try:
-        ms_data = await svc.read_match_states()
-        from api.match_state import MatchStateDTO
-        match_states = {
-            mid: MatchStateDTO(**ms) for mid, ms in (ms_data.get("matchStates") or {}).items()
-        }
-    except Exception:
-        log.exception("suggestions: failed to read match_states")
-        match_states = {}
+    # Open a short-lived session to load both the tournament and live
+    # match states; close it before the long-running solve.
+    with open_repository() as repo:
+        persisted = await _read_persisted_state(repo, tournament_id)
+        if persisted is None or persisted.schedule is None or persisted.config is None:
+            log.debug("suggestions: no persisted schedule to optimize against")
+            return
+        match_states: dict = {}
+        try:
+            rows = repo.match_states.list_for_tournament(tournament_id)
+            from api.match_state import _row_to_dto
+            match_states = {row.match_id: _row_to_dto(row) for row in rows}
+        except Exception:
+            log.exception("suggestions: failed to read match_states")
+            match_states = {}
+        # Resolve locked matches inside the session — the helper reads
+        # from the ``matches`` table. We materialise the list into plain
+        # dataclasses so the solver can use it after the session closes.
+        locked_assignments = build_locked_assignments(repo, tournament_id)
 
     wr_req = WarmRestartRequest(
         originalSchedule=persisted.schedule,
@@ -132,7 +148,11 @@ async def _handle_optimize(
     loop = asyncio.get_running_loop()
 
     def _solve_sync():
-        return _run_warm_restart_with_cancel(wr_req, cancel_token=token)
+        return _run_warm_restart_with_cancel(
+            wr_req,
+            cancel_token=token,
+            locked_assignments=locked_assignments,
+        )
 
     try:
         new_schedule, moved = await loop.run_in_executor(None, _solve_sync)
@@ -159,8 +179,8 @@ async def _handle_optimize(
         return
 
     # Stamp the proposal + suggestion.
-    store = _get_store(app)
-    suggestion_store = _get_suggestion_store(app)
+    store = _get_store(app, tournament_id)
+    suggestion_store = _get_suggestion_store(app, tournament_id)
     lock = _get_lock(app)
     async with lock:
         _evict_expired(store)
@@ -238,20 +258,23 @@ async def _handle_repair(
         log.warning("repair handler: missing disruption.type in %s", event.fingerprint)
         return
 
-    svc: PersistenceService = app.state.persistence
-    persisted = await _read_persisted_state(svc)
-    if persisted is None or persisted.schedule is None or persisted.config is None:
+    tournament_id = event.tournament_id
+    if tournament_id is None:
+        log.warning("suggestions: repair trigger missing tournament_id")
         return
-
-    try:
-        ms_data = await svc.read_match_states()
-        from api.match_state import MatchStateDTO
-        match_states = {
-            mid: MatchStateDTO(**ms) for mid, ms in (ms_data.get("matchStates") or {}).items()
-        }
-    except Exception:
-        log.exception("suggestions: failed to read match_states")
-        match_states = {}
+    with open_repository() as repo:
+        persisted = await _read_persisted_state(repo, tournament_id)
+        if persisted is None or persisted.schedule is None or persisted.config is None:
+            return
+        match_states: dict = {}
+        try:
+            rows = repo.match_states.list_for_tournament(tournament_id)
+            from api.match_state import _row_to_dto
+            match_states = {row.match_id: _row_to_dto(row) for row in rows}
+        except Exception:
+            log.exception("suggestions: failed to read match_states")
+            match_states = {}
+        locked_assignments = build_locked_assignments(repo, tournament_id)
 
     from api.schedule_repair import RepairRequest, _run_repair_with_cancel, Disruption
     try:
@@ -273,7 +296,11 @@ async def _handle_repair(
     loop = asyncio.get_running_loop()
 
     def _solve_sync():
-        return _run_repair_with_cancel(rr, cancel_token=token)
+        return _run_repair_with_cancel(
+            rr,
+            cancel_token=token,
+            locked_assignments=locked_assignments,
+        )
 
     try:
         new_schedule, _ = await loop.run_in_executor(None, _solve_sync)
@@ -288,8 +315,8 @@ async def _handle_repair(
         persisted.schedule, new_schedule, persisted.config,
     )
 
-    store = _get_store(app)
-    suggestion_store = _get_suggestion_store(app)
+    store = _get_store(app, tournament_id)
+    suggestion_store = _get_suggestion_store(app, tournament_id)
     lock = _get_lock(app)
     async with lock:
         _evict_expired(store)
@@ -349,14 +376,17 @@ def build_handler(app: FastAPI) -> HandlerFn:
 _KIND_TIER = {"repair": 0, "director": 1, "optimize": 2, "candidate": 3}
 
 
-@router.get("", response_model=list[Suggestion])
-async def list_suggestions(http_request: Request) -> list[Suggestion]:
-    """Active suggestions, sorted by severity then creation time.
+@router.get("", response_model=list[Suggestion], dependencies=[_VIEWER])
+async def list_suggestions(
+    http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
+) -> list[Suggestion]:
+    """Active suggestions for this tournament, sorted by severity then time.
 
     Drops expired entries before returning. The frontend polls this
     endpoint every ~8s and rebuilds the rail from the response.
     """
-    store = _get_suggestion_store(http_request.app)
+    store = _get_suggestion_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     async with lock:
         _evict_expired_suggestions(store)
@@ -366,15 +396,15 @@ async def list_suggestions(http_request: Request) -> list[Suggestion]:
         )
 
 
-@router.post("/{suggestion_id}/apply")
-async def apply_suggestion(suggestion_id: str, http_request: Request):
-    """Commit the proposal underlying a suggestion.
-
-    Drops the suggestion before invoking commit so a 409 (stale
-    version) doesn't leave a dead entry in the inbox — the
-    frontend's next poll will reconcile.
-    """
-    store = _get_suggestion_store(http_request.app)
+@router.post("/{suggestion_id}/apply", dependencies=[_OPERATOR])
+async def apply_suggestion(
+    suggestion_id: str,
+    http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Commit the proposal underlying a suggestion."""
+    store = _get_suggestion_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     async with lock:
         _evict_expired_suggestions(store)
@@ -384,14 +414,18 @@ async def apply_suggestion(suggestion_id: str, http_request: Request):
             410, ErrorCode.PROPOSAL_EXPIRED,
             "suggestion expired or not found",
         )
-    return await commit_proposal(sug.proposalId, http_request)
+    return await commit_proposal(sug.proposalId, http_request, tournament_id, repo)
 
 
-@router.post("/{suggestion_id}/dismiss")
-async def dismiss_suggestion(suggestion_id: str, http_request: Request) -> dict:
+@router.post("/{suggestion_id}/dismiss", dependencies=[_OPERATOR])
+async def dismiss_suggestion(
+    suggestion_id: str,
+    http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
+) -> dict:
     """Drop a suggestion and cancel its underlying proposal."""
-    store = _get_suggestion_store(http_request.app)
-    proposal_store = _get_store(http_request.app)
+    store = _get_suggestion_store(http_request.app, tournament_id)
+    proposal_store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     async with lock:
         _evict_expired_suggestions(store)

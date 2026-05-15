@@ -47,6 +47,7 @@ from api.schedule_advisories import (
     detect_running_behind,
     detect_start_delay,
 )
+from _helpers import seed_tournament
 
 
 def _config(**overrides) -> TournamentConfig:
@@ -391,32 +392,35 @@ def test_collect_advisories_returns_empty_when_no_schedule():
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
-    sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
-    for _cached in [
-        k for k in list(sys.modules)
-        if k == "app" or k.startswith("app.") or "tournament_state" in k
-        or "match_state" in k or "schedule_advisories" in k
-    ]:
-        del sys.modules[_cached]
+    from _helpers import isolate_test_database, seed_tournament
+    isolate_test_database(tmp_path, monkeypatch)
 
-    from api import schedule_advisories, match_state, tournament_state
+    from api import schedule_advisories, match_state, tournaments
+    from app.exceptions import ConflictError, PreconditionFailedError
+    from app.main import _conflict_error_handler, _precondition_failed_handler
 
     app_ = FastAPI()
     app_.include_router(schedule_advisories.router)
     app_.include_router(match_state.router)
-    app_.include_router(tournament_state.router)
+    app_.include_router(tournaments.router)
+    # Audit-pass fix: register the same exception handlers app.main does,
+    # so 409 ConflictError and 412 PreconditionFailedError surface as
+    # the flat structured body the production app emits — not the
+    # default 500.
+    app_.add_exception_handler(ConflictError, _conflict_error_handler)
+    app_.add_exception_handler(PreconditionFailedError, _precondition_failed_handler)
     return TestClient(app_)
 
 
 def test_advisories_endpoint_returns_empty_when_no_state(client):
-    r = client.get("/schedule/advisories")
+    tid = seed_tournament(client)
+    r = client.get(f"/tournaments/{tid}/schedule/advisories")
     assert r.status_code == 200
     assert r.json() == []
 
 
 def test_advisories_endpoint_returns_overrun_from_persisted_state(client, tmp_path):
+    tid = seed_tournament(client)
     # 1) PUT a tournament state with one match and a schedule
     payload = {
         "version": 2,
@@ -446,24 +450,36 @@ def test_advisories_endpoint_returns_overrun_from_persisted_state(client, tmp_pa
         "scheduleStats": None,
         "scheduleIsStale": False,
     }
-    r = client.put("/tournament/state", json=payload)
+    r = client.put(f"/tournaments/{tid}/state", json=payload)
     assert r.status_code == 200
 
-    # 2) PUT a match-state row that puts m_late 50 min over a 30-min match
+    # 2) PUT a match-state row that puts m_late 50 min over a 30-min match.
+    # The Step A state machine requires going through ``called`` first
+    # before ``started`` is a legal transition. Step D requires an
+    # ``If-Match`` header; the schedule commit above projected the
+    # ``matches`` table at version 1 for every match.
     started_dt = datetime.now(timezone.utc) - timedelta(minutes=80)
     started = started_dt.isoformat().replace("+00:00", "Z")
+    r1 = client.put(
+        f"/tournaments/{tid}/match-states/m_late",
+        json={"matchId": "m_late", "status": "called"},
+        headers={"If-Match": '"1"'},
+    )
+    assert r1.status_code == 200
+    next_etag = r1.headers["ETag"].strip('"')
     r = client.put(
-        "/match-states/m_late",
+        f"/tournaments/{tid}/match-states/m_late",
         json={
             "matchId": "m_late",
             "status": "started",
             "actualStartTime": started,
         },
+        headers={"If-Match": f'"{next_etag}"'},
     )
     assert r.status_code == 200
 
     # 3) GET advisories — expect one critical overrun
-    r = client.get("/schedule/advisories")
+    r = client.get(f"/tournaments/{tid}/schedule/advisories")
     assert r.status_code == 200
     advisories = r.json()
     assert len(advisories) >= 1

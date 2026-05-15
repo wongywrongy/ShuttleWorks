@@ -32,9 +32,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
 from pydantic import BaseModel
 
+from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
 from app.schemas import (
     Impact,
@@ -55,11 +56,18 @@ from app.time_utils import now_iso
 from api.match_state import MatchStateDTO
 from api.schedule_repair import RepairRequest, _run_repair
 from api.schedule_warm_restart import WarmRestartRequest, _run_warm_restart
-from services.persistence import PersistenceService, get_persistence
+from repositories import LocalRepository, get_repository
+from services.match_state import build_locked_assignments
 
 
-router = APIRouter(prefix="/schedule/proposals", tags=["schedule-proposals"])
+router = APIRouter(
+    prefix="/tournaments/{tournament_id}/schedule/proposals",
+    tags=["schedule-proposals"],
+)
 log = logging.getLogger("scheduler.proposals")
+
+_VIEWER = Depends(require_tournament_access("viewer"))
+_OPERATOR = Depends(require_tournament_access("operator"))
 
 
 # Proposal TTL: review windows of >30 min imply the operator walked
@@ -69,33 +77,36 @@ PROPOSAL_TTL = timedelta(minutes=30)
 HISTORY_CAP = 5
 
 
-# Per-app proposal store. Lives on `request.app.state.proposals` so it
-# survives any module-reload churn the test suite triggers (the previous
-# module-global approach silently spawned multiple `_PROPOSALS` dicts
-# under sys.modules churn, and one half of the create/commit pipeline
-# would write to a different dict than the other half read from).
-#
-# Single-worker uvicorn deployment is the assumption; multi-worker
-# would require shared storage (Redis or similar).
+# Per-app proposal/suggestion stores. Step 2 nests them by tournament_id
+# so two tournaments running in the same uvicorn process keep their
+# pipelines isolated. The outer dict + the lock stay on app.state for the
+# same reasons as before (survives test sys.modules churn; single-worker
+# uvicorn is the deployment assumption — multi-worker would require
+# shared storage like Redis).
 _STATE_KEY = "proposals"
 _LOCK_KEY = "proposals_lock"
+_SUGGESTION_STATE_KEY = "suggestions"
 
 
-def _get_store(app: FastAPI) -> Dict[str, Proposal]:
-    store = getattr(app.state, _STATE_KEY, None)
-    if store is None:
-        store = {}
-        setattr(app.state, _STATE_KEY, store)
-    return store
+def _get_store(app: FastAPI, tournament_id: uuid.UUID) -> Dict[str, Proposal]:
+    outer = getattr(app.state, _STATE_KEY, None)
+    if outer is None:
+        outer = {}
+        setattr(app.state, _STATE_KEY, outer)
+    inner = outer.get(tournament_id)
+    if inner is None:
+        inner = {}
+        outer[tournament_id] = inner
+    return inner
 
 
 def _get_lock(app: FastAPI) -> asyncio.Lock:
-    """Per-app asyncio.Lock guarding the proposal store mutations.
+    """Single app-wide ``asyncio.Lock`` guarding all proposal-store mutations.
 
-    Two concurrent commits on the same proposal id would otherwise both
-    pass the existence check and both attempt the `del store[id]`,
-    racing on the persisted-state read/write too. Hold this lock across
-    each endpoint's read-modify-write window.
+    A per-tournament lock would let two concurrent commits on the same
+    proposal id race; the app-wide lock is sub-ms-cheap under single
+    uvicorn worker and removes that risk. If we ever shard tournaments
+    across workers, the lock becomes per-process anyway.
     """
     lock = getattr(app.state, _LOCK_KEY, None)
     if lock is None:
@@ -104,22 +115,26 @@ def _get_lock(app: FastAPI) -> asyncio.Lock:
     return lock
 
 
-_SUGGESTION_STATE_KEY = "suggestions"
+def _get_suggestion_store(
+    app: FastAPI,
+    tournament_id: uuid.UUID,
+) -> Dict[str, Suggestion]:
+    outer = getattr(app.state, _SUGGESTION_STATE_KEY, None)
+    if outer is None:
+        outer = {}
+        setattr(app.state, _SUGGESTION_STATE_KEY, outer)
+    inner = outer.get(tournament_id)
+    if inner is None:
+        inner = {}
+        outer[tournament_id] = inner
+    return inner
 
 
-def _get_suggestion_store(app: FastAPI) -> Dict[str, Suggestion]:
-    """Per-app suggestion dict, mirrors the proposal store layout.
-
-    Suggestions reference proposals by id; the suggestion's TTL is
-    typically shorter than its proposal's so an unapplied suggestion
-    can fall off the inbox while the underlying proposal stays live
-    in case the operator opens a Disruption dialog the same kind.
-    """
-    store = getattr(app.state, _SUGGESTION_STATE_KEY, None)
-    if store is None:
-        store = {}
-        setattr(app.state, _SUGGESTION_STATE_KEY, store)
-    return store
+def _all_suggestion_stores(app: FastAPI) -> Dict[uuid.UUID, Dict[str, Suggestion]]:
+    """Used by the worker hook in ``schedule_suggestions.py`` when it
+    needs to fan out across tournaments (rare; today only the advisories
+    endpoint uses this)."""
+    return getattr(app.state, _SUGGESTION_STATE_KEY, None) or {}
 
 
 def _evict_expired_suggestions(
@@ -146,6 +161,7 @@ def _evict_expired_suggestions(
 
 # Public alias for tests that want to clear the store between runs.
 def reset_store(app: FastAPI) -> None:
+    """Reset both proposal + suggestion store top-levels and the lock."""
     setattr(app.state, _STATE_KEY, {})
     setattr(app.state, _LOCK_KEY, asyncio.Lock())
     setattr(app.state, _SUGGESTION_STATE_KEY, {})
@@ -178,28 +194,34 @@ def _new_proposal_id() -> str:
     return uuid.uuid4().hex
 
 
-async def _read_persisted_state(svc: PersistenceService) -> Optional[TournamentStateDTO]:
-    """Load the current committed tournament state, or None if absent."""
+async def _read_persisted_state(
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
+) -> Optional[TournamentStateDTO]:
+    """Load the committed tournament state for ``tournament_id``, or None."""
     try:
-        data, _ = await svc.read_tournament_state()
+        tournament = repo.tournaments.get_by_id(tournament_id)
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001
         log.warning("proposals: state unreadable: %s", e)
         return None
-    if data is None:
+    if tournament is None or not tournament.data:
         return None
-    return TournamentStateDTO(**{k: v for k, v in data.items() if k != "_integrity"})
+    return TournamentStateDTO(
+        **{k: v for k, v in tournament.data.items() if k != "_integrity"}
+    )
 
 
 async def _persist_committed_state(
-    svc: PersistenceService,
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
     state: TournamentStateDTO,
     new_schedule: ScheduleDTO,
     history_entry: ScheduleHistoryEntry,
     new_config: Optional[TournamentConfig] = None,
 ) -> TournamentStateDTO:
-    """Atomically apply a committed schedule (and optional config) to disk."""
+    """Apply a committed schedule (and optional config) to the DB."""
     new_history = list(state.scheduleHistory) + [history_entry]
     if len(new_history) > HISTORY_CAP:
         new_history = new_history[-HISTORY_CAP:]
@@ -214,13 +236,19 @@ async def _persist_committed_state(
         update_payload["config"] = new_config
     updated = state.model_copy(update=update_payload)
     try:
-        stamped = await svc.write_tournament_state(updated.model_dump())
-    except OSError as e:
+        row = repo.commit_tournament_state(tournament_id, updated.model_dump())
+    except KeyError:
+        raise http_error(
+            404,
+            ErrorCode.STATE_CORRUPT,
+            f"tournament not found: {tournament_id}",
+        )
+    except Exception as e:
         log.error("proposals: write failed: %s", e)
         raise http_error(
             500, ErrorCode.STATE_WRITE_FAILED, "could not persist schedule commit"
         )
-    return TournamentStateDTO(**{k: v for k, v in stamped.items() if k != "_integrity"})
+    return TournamentStateDTO(**{k: v for k, v in row.data.items() if k != "_integrity"})
 
 
 def _build_proposal(
@@ -333,19 +361,23 @@ class CommitResponse(BaseModel):
 # ---------- endpoints ------------------------------------------------------
 
 
-@router.post("/warm-restart", response_model=Proposal)
+@router.post("/warm-restart", response_model=Proposal, dependencies=[_OPERATOR])
 async def create_warm_restart_proposal(
     request: WarmRestartRequest,
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
 ) -> Proposal:
     """Run a stay-close warm-restart and stash the result as a proposal."""
-    store = _get_store(http_request.app)
+    store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
-    new_schedule, _moved = _run_warm_restart(request)
+    locked_assignments = build_locked_assignments(repo, tournament_id)
+    new_schedule, _moved = _run_warm_restart(
+        request, locked_assignments=locked_assignments
+    )
     async with lock:
         _evict_expired(store)
-        persisted = await _read_persisted_state(svc)
+        persisted = await _read_persisted_state(repo, tournament_id)
         from_version = persisted.scheduleVersion if persisted else 0
         groups = list(persisted.groups) if persisted else []
         return _build_proposal(
@@ -360,11 +392,12 @@ async def create_warm_restart_proposal(
         )
 
 
-@router.post("/repair", response_model=Proposal)
+@router.post("/repair", response_model=Proposal, dependencies=[_OPERATOR])
 async def create_repair_proposal(
     request: RepairRequest,
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
 ) -> Proposal:
     """Run a slice-based repair and stash the result as a proposal.
 
@@ -374,10 +407,12 @@ async def create_repair_proposal(
     onto the closed court. Commit persists both schedule + config
     atomically.
     """
-    store = _get_store(http_request.app)
+    store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
-    new_schedule, _ = _run_repair(request)
-    _ = svc  # ensure dependency stays in scope; used in inner block below
+    locked_assignments = build_locked_assignments(repo, tournament_id)
+    new_schedule, _ = _run_repair(
+        request, locked_assignments=locked_assignments
+    )
 
     # If this is a court-closure disruption, propose a config update
     # that pins the closure into TournamentConfig so it survives the
@@ -426,7 +461,7 @@ async def create_repair_proposal(
 
     async with lock:
         _evict_expired(store)
-        persisted = await _read_persisted_state(svc)
+        persisted = await _read_persisted_state(repo, tournament_id)
         from_version = persisted.scheduleVersion if persisted else 0
         groups = list(persisted.groups) if persisted else []
         return _build_proposal(
@@ -443,18 +478,19 @@ async def create_repair_proposal(
         )
 
 
-@router.post("/manual-edit", response_model=Proposal)
+@router.post("/manual-edit", response_model=Proposal, dependencies=[_OPERATOR])
 async def create_manual_edit_proposal(
     request: ManualEditRequest,
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
 ) -> Proposal:
     """Pin one match to a new slot/court via warm-restart, high stay-close.
 
     The drag-and-drop UX feeds this endpoint. Other matches only move
     when the pinned target makes their existing positions infeasible.
     """
-    store = _get_store(http_request.app)
+    store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
 
     # Splice the pin into the originalSchedule so warm-restart honors it.
@@ -488,10 +524,13 @@ async def create_manual_edit_proposal(
         matchStates=request.matchStates,
         stayCloseWeight=10,
     )
-    new_schedule, _ = _run_warm_restart(wr_request)
+    locked_assignments = build_locked_assignments(repo, tournament_id)
+    new_schedule, _ = _run_warm_restart(
+        wr_request, locked_assignments=locked_assignments
+    )
     async with lock:
         _evict_expired(store)
-        persisted = await _read_persisted_state(svc)
+        persisted = await _read_persisted_state(repo, tournament_id)
         from_version = persisted.scheduleVersion if persisted else 0
         groups = list(persisted.groups) if persisted else []
         return _build_proposal(
@@ -506,10 +545,14 @@ async def create_manual_edit_proposal(
         )
 
 
-@router.get("/{proposal_id}", response_model=Proposal)
-async def get_proposal(proposal_id: str, http_request: Request) -> Proposal:
+@router.get("/{proposal_id}", response_model=Proposal, dependencies=[_VIEWER])
+async def get_proposal(
+    proposal_id: str,
+    http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
+) -> Proposal:
     """Re-fetch a proposal by id (e.g., after a page reload)."""
-    store = _get_store(http_request.app)
+    store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     async with lock:
         _evict_expired(store)
@@ -521,10 +564,14 @@ async def get_proposal(proposal_id: str, http_request: Request) -> Proposal:
     return proposal
 
 
-@router.delete("/{proposal_id}")
-async def cancel_proposal(proposal_id: str, http_request: Request) -> dict:
+@router.delete("/{proposal_id}", dependencies=[_OPERATOR])
+async def cancel_proposal(
+    proposal_id: str,
+    http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
+) -> dict:
     """Discard a proposal without committing."""
-    store = _get_store(http_request.app)
+    store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     async with lock:
         _evict_expired(store)
@@ -533,11 +580,16 @@ async def cancel_proposal(proposal_id: str, http_request: Request) -> dict:
     return {"cancelled": True}
 
 
-@router.post("/{proposal_id}/commit", response_model=CommitResponse)
+@router.post(
+    "/{proposal_id}/commit",
+    response_model=CommitResponse,
+    dependencies=[_OPERATOR],
+)
 async def commit_proposal(
     proposal_id: str,
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
 ) -> CommitResponse:
     """Atomically apply a proposal to the persisted tournament state.
 
@@ -549,7 +601,7 @@ async def commit_proposal(
     prevents a second concurrent commit on the same proposal id from
     seeing it exist, advancing the version, and double-committing.
     """
-    store = _get_store(http_request.app)
+    store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     async with lock:
         _evict_expired(store)
@@ -558,7 +610,7 @@ async def commit_proposal(
             raise http_error(
                 410, ErrorCode.PROPOSAL_EXPIRED, "proposal expired or not found"
             )
-        persisted = await _read_persisted_state(svc)
+        persisted = await _read_persisted_state(repo, tournament_id)
         if persisted is None:
             raise http_error(
                 409, ErrorCode.NO_COMMITTED_SCHEDULE,
@@ -580,7 +632,8 @@ async def commit_proposal(
             schedule=persisted.schedule,
         )
         updated = await _persist_committed_state(
-            svc,
+            repo,
+            tournament_id,
             persisted,
             proposal.proposedSchedule,
             history_entry,
@@ -593,7 +646,7 @@ async def commit_proposal(
 
         # Drop any suggestions that were built against the pre-commit
         # version — their proposalId now refers to a stale fork.
-        suggestion_store = _get_suggestion_store(http_request.app)
+        suggestion_store = _get_suggestion_store(http_request.app, tournament_id)
         new_version = updated.scheduleVersion
         stale_sids = [
             sid for sid, sug in suggestion_store.items()
@@ -612,7 +665,8 @@ async def commit_proposal(
         try:
             await worker.post(TriggerEvent(
                 kind=TriggerKind.OPTIMIZE,
-                fingerprint=f"opt:post-commit:{updated.scheduleVersion}",
+                fingerprint=f"opt:post-commit:{tournament_id}:{updated.scheduleVersion}",
+                tournament_id=tournament_id,
             ))
         except Exception:
             log.exception("post-commit OPTIMIZE trigger failed")

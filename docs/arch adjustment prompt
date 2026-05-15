@@ -1,0 +1,754 @@
+# ShuttleWorks — Architecture Adjustment Prompt
+
+Read ALL of the following before touching any file:
+- `docs/tech-stack.md`
+- `docs/deploy/cloud.md`
+- `products/scheduler/BACKEND.md`
+- `products/scheduler/FRONTEND.md`
+- `scheduler_core/README.md`
+- Every file in `docs/changes/`
+
+This prompt replaces the cloud-backend deployment model with a
+**local-first sidecar architecture** and adds a **rock-solid conflict
+detection and sync layer**. It is the largest structural change since
+the cloud-prep arc. Do not start writing code until you have read
+everything above and posted a brief summary of what you understood the
+current architecture to be. I will confirm before you proceed.
+
+---
+
+## Rules
+
+- Append a dated entry to `docs/changes/YYYY-MM-DD.md` after each
+  meaningful change or decision.
+- Log ambiguities or contradictions in `docs/changes/questions.md`
+  and stop until I answer.
+- Do not relitigate decisions marked "do not relitigate" in this
+  prompt or in `docs/tech-stack.md`.
+- Every step has a defined test gate. All existing tests (currently
+  287) must remain green throughout. New code requires new tests.
+- Do not start the next step until I explicitly say so.
+
+---
+
+## Architecture overview (new model)
+
+```
+Director's laptop — Tauri desktop app
+  ├── FastAPI sidecar (uvicorn, local port)
+  │     ├── CP-SAT solver (OR-Tools, unchanged)
+  │     ├── SQLite via SQLAlchemy (source of truth)
+  │     └── Sync service → Supabase Postgres (when online)
+  │
+  └── Tauri WebView (React frontend)
+        └── Talks to local FastAPI only
+
+Operators / assistants — browser on any device
+  └── Talk to Supabase directly (read via REST/Realtime)
+        └── Write actions → local FastAPI via internet
+              (director's machine must be reachable)
+
+Public TV display — Vercel
+  └── Reads Supabase Realtime (read-only, no auth required)
+
+Supabase
+  ├── Auth (identity for all users)
+  ├── Postgres (cloud mirror of SQLite — not primary)
+  └── Realtime (broadcasts writes to operators and TV)
+```
+
+**Do not relitigate this model.** Fly.io, Render, and a standalone
+cloud FastAPI host are explicitly removed. FastAPI runs only on the
+director's machine.
+
+---
+
+## Step A — State machine (do this first)
+
+The state machine is the backbone of all conflict detection. Nothing
+else in this prompt is safe to build until it is airtight.
+
+### A1 — Database changes
+
+Add two columns to the `matches` table via a new Alembic migration:
+
+```
+status   VARCHAR  NOT NULL DEFAULT 'scheduled'
+version  INTEGER  NOT NULL DEFAULT 1
+```
+
+Valid status values (add as a Python `Enum` in
+`backend/database/models.py`):
+
+```python
+class MatchStatus(str, Enum):
+    SCHEDULED  = 'scheduled'   # solver assigned, not yet acted on
+    CALLED     = 'called'      # players called to court
+    PLAYING    = 'playing'     # match in progress
+    FINISHED   = 'finished'    # score recorded — terminal
+    RETIRED    = 'retired'     # walkover / retirement — terminal
+```
+
+`version` increments by 1 on every write to that match row. Use a
+SQLAlchemy event listener or an explicit increment in the repository
+— do not rely on the caller to increment it.
+
+### A2 — Transition guard
+
+Create `backend/services/match_state.py`. It must contain:
+
+```python
+VALID_TRANSITIONS: dict[MatchStatus, list[MatchStatus]] = {
+    MatchStatus.SCHEDULED: [MatchStatus.CALLED],
+    MatchStatus.CALLED:    [MatchStatus.PLAYING, MatchStatus.SCHEDULED],
+    MatchStatus.PLAYING:   [MatchStatus.FINISHED, MatchStatus.RETIRED],
+    MatchStatus.FINISHED:  [],
+    MatchStatus.RETIRED:   [],
+}
+
+def assert_valid_transition(
+    match_id: UUID,
+    current: MatchStatus,
+    next_status: MatchStatus,
+) -> None:
+    """Raise ConflictError if the transition is not permitted."""
+    if next_status not in VALID_TRANSITIONS[current]:
+        raise ConflictError(
+            match_id=match_id,
+            current=current,
+            attempted=next_status,
+            message=f"Cannot transition match {match_id} "
+                    f"from '{current}' to '{next_status}'"
+        )
+```
+
+`ConflictError` is a new domain exception in
+`backend/app/exceptions.py`. It must be caught at the route boundary
+and returned as HTTP 409 with a structured JSON body:
+
+```json
+{
+  "error": "conflict",
+  "match_id": "...",
+  "current_status": "finished",
+  "attempted_status": "called",
+  "message": "Cannot transition match ... from 'finished' to 'called'"
+}
+```
+
+Every existing route that mutates a match must call
+`assert_valid_transition` before writing to SQLite. Find them all —
+do not leave any unguarded.
+
+### A3 — Locked matches definition
+
+A match is **locked** if its status is `called`, `playing`,
+`finished`, or `retired`. Add this helper to `match_state.py`:
+
+```python
+LOCKED_STATUSES = {
+    MatchStatus.CALLED,
+    MatchStatus.PLAYING,
+    MatchStatus.FINISHED,
+    MatchStatus.RETIRED,
+}
+
+def is_locked(status: MatchStatus) -> bool:
+    return status in LOCKED_STATUSES
+```
+
+### A4 — Tests
+
+Create `backend/tests/unit/test_match_state.py`. Cover:
+
+- Every valid transition succeeds (no exception raised)
+- Every invalid transition raises `ConflictError` with the correct
+  fields
+- `is_locked` returns correct values for all five statuses
+- The version column increments on every repository write
+- A write with a stale version is rejected (see Step D for the full
+  ETag implementation — write the test now, implement in Step D)
+
+All tests must pass before Step B.
+
+---
+
+## Step B — Solver locking
+
+The CP-SAT solver must never reassign a locked match. This is a
+surgical addition to `scheduler_core/` — do not restructure anything
+else in that package.
+
+### B1 — ScheduleRequest extension
+
+Add one field to `ScheduleRequest` in
+`scheduler_core/domain/models.py`:
+
+```python
+@dataclass
+class LockedAssignment:
+    match_id: str
+    court_id: str
+    time_slot: int   # same unit as existing time slots
+
+@dataclass
+class ScheduleRequest:
+    # ... existing fields unchanged ...
+    locked_assignments: list[LockedAssignment] = field(default_factory=list)
+```
+
+This is additive. No existing field changes. No existing caller breaks
+because `locked_assignments` defaults to empty.
+
+### B2 — Solver constraint
+
+In `scheduler_core/engine/cpsat_backend.py`, add one method:
+
+```python
+def _add_locked_constraints(
+    self,
+    model: cp_model.CpModel,
+    locked: list[LockedAssignment],
+    court_vars: dict,
+    time_vars: dict,
+) -> None:
+    """Fix court and time for every locked match before solving."""
+    for assignment in locked:
+        mid = assignment.match_id
+        if mid not in court_vars or mid not in time_vars:
+            # Match not in this solve scope — skip silently
+            continue
+        model.Add(court_vars[mid] == self._court_index(assignment.court_id))
+        model.Add(time_vars[mid] == assignment.time_slot)
+```
+
+Call `_add_locked_constraints` in the solve method immediately before
+`model.Solve(...)`. It must be called after all other constraints are
+added so nothing can override the locks.
+
+Do not modify any other method in `cpsat_backend.py`.
+
+### B3 — Service layer wiring
+
+In the scheduling service (wherever `ScheduleRequest` is built before
+calling the solver), add:
+
+```python
+# Query locked matches from SQLite before building ScheduleRequest
+locked_matches = match_repo.get_by_statuses(LOCKED_STATUSES)
+locked_assignments = [
+    LockedAssignment(
+        match_id=str(m.id),
+        court_id=str(m.court_id),
+        time_slot=m.time_slot,
+    )
+    for m in locked_matches
+    if m.court_id is not None and m.time_slot is not None
+]
+request = ScheduleRequest(
+    ...,  # existing fields
+    locked_assignments=locked_assignments,
+)
+```
+
+### B4 — Tests
+
+Create `backend/tests/unit/test_solver_locking.py`. Cover:
+
+- A locked match's court and time are unchanged after a solve that
+  would otherwise move it
+- An unlocked match adjacent to a locked match is still optimized
+- A locked match with no court/time assignment (edge case) is skipped
+  without error
+- `ScheduleRequest` with empty `locked_assignments` behaves
+  identically to the previous behavior (regression guard)
+
+All tests must pass before Step C.
+
+---
+
+## Step C — Idempotency and command log
+
+Every mutating action from an operator must be idempotent and
+auditable.
+
+### C1 — Commands table
+
+Add via Alembic migration:
+
+```sql
+CREATE TABLE commands (
+    id              UUID PRIMARY KEY,      -- idempotency key, client-generated
+    tournament_id   UUID NOT NULL REFERENCES tournaments(id),
+    match_id        UUID REFERENCES matches(id),
+    action          VARCHAR NOT NULL,
+    payload         JSONB,
+    submitted_by    UUID NOT NULL,          -- Supabase user id
+    created_at      TIMESTAMP NOT NULL DEFAULT now(),
+    applied_at      TIMESTAMP,             -- null = not yet applied
+    rejected_at     TIMESTAMP,             -- null = not rejected
+    rejection_reason TEXT
+);
+CREATE INDEX ON commands(match_id, applied_at);
+CREATE INDEX ON commands(submitted_by, created_at);
+```
+
+### C2 — Command processing endpoint
+
+Add `POST /tournaments/{tournament_id}/commands` to the backend API.
+
+Request body:
+
+```json
+{
+  "id": "<uuid — client-generated idempotency key>",
+  "match_id": "<uuid>",
+  "action": "call_to_court | start_match | finish_match | retire_match | uncall",
+  "payload": { ... },
+  "seen_version": 14
+}
+```
+
+Processing logic (in this exact order, inside a single transaction):
+
+1. **Idempotency check:** if a row exists in `commands` with this
+   `id` and `applied_at IS NOT NULL`, return 200 with the original
+   result. Do not process again.
+
+2. **Duplicate rejection check:** if a row exists with this `id` and
+   `rejected_at IS NOT NULL`, return 409 with the original rejection
+   reason. Do not process again.
+
+3. **Version check (ETag):** fetch `matches.version` for `match_id`.
+   If `seen_version != current_version`, insert a `commands` row with
+   `rejected_at = now()` and `rejection_reason = 'stale_version'`,
+   then return 409:
+   ```json
+   {
+     "error": "stale_version",
+     "match_id": "...",
+     "seen_version": 14,
+     "current_version": 15,
+     "message": "Match was updated since you last loaded it. Reload and retry."
+   }
+   ```
+
+4. **Transition guard:** call `assert_valid_transition`. If it raises
+   `ConflictError`, insert a `commands` row with `rejected_at` and
+   the conflict message, return 409.
+
+5. **Apply:** execute the state transition, increment `version`,
+   write to SQLite. Insert a `commands` row with `applied_at = now()`.
+   Return 200 with the updated match.
+
+All five steps inside one `BEGIN / COMMIT`. If any step fails after
+the transaction opens, roll back and return the appropriate error.
+
+### C3 — Action enum
+
+Define valid actions in `backend/app/constants.py`:
+
+```python
+class MatchAction(str, Enum):
+    CALL_TO_COURT = 'call_to_court'   # scheduled → called
+    START_MATCH   = 'start_match'     # called → playing
+    FINISH_MATCH  = 'finish_match'    # playing → finished
+    RETIRE_MATCH  = 'retire_match'    # playing → retired
+    UNCALL        = 'uncall'          # called → scheduled
+```
+
+Each action maps to exactly one valid transition. The command
+processor looks up the target status from the action — the caller
+does not specify `next_status` directly.
+
+### C4 — Tests
+
+Create `backend/tests/unit/test_commands.py`. Cover:
+
+- Happy path: command applied, version incremented, `applied_at` set
+- Idempotent replay: same command id submitted twice → second returns
+  200 with the original result, no double-write
+- Stale version: command rejected with 409 `stale_version`
+- Invalid transition: command rejected with 409 conflict body
+- Rejected command replayed: second submission returns 409 with
+  original rejection reason
+- All five steps inside a single transaction (mock a mid-transaction
+  failure, confirm rollback)
+
+All tests must pass before Step D.
+
+---
+
+## Step D — ETag enforcement on all write endpoints
+
+Every existing route that mutates a match (outside the new commands
+endpoint) must also enforce versioning. This covers any internal
+routes the director's frontend uses directly.
+
+### D1 — Version header pattern
+
+For routes that mutate a match, require `If-Match: <version>` header.
+If the header is missing or the version does not match, return 412
+Precondition Failed:
+
+```json
+{
+  "error": "precondition_failed",
+  "match_id": "...",
+  "message": "If-Match header required for match mutations"
+}
+```
+
+Return `ETag: <version>` on every match GET response so the frontend
+always has the current version to send back.
+
+### D2 — Repository version increment
+
+Confirm the version increment from Step A is working correctly for
+all repository write paths. Run the test written in A4 now — it must
+pass here.
+
+### D3 — Tests
+
+Extend `backend/tests/unit/test_repositories.py`:
+
+- GET match response includes current version in ETag header
+- PUT/PATCH with correct If-Match succeeds and increments version
+- PUT/PATCH with stale If-Match returns 412
+- PUT/PATCH with missing If-Match returns 412
+
+All tests must pass before Step E.
+
+---
+
+## Step E — Supabase sync and Realtime
+
+The sync service pushes every SQLite write to Supabase Postgres.
+Operators and the TV display read from Supabase via Realtime.
+
+### E1 — Sync service
+
+Create `backend/services/sync_service.py`:
+
+```python
+class SyncService:
+    """
+    Pushes SQLite writes to Supabase Postgres.
+    Runs as a background thread. Non-blocking — if Supabase is
+    unreachable, changes are queued in a local sync_queue table
+    and retried. The tournament never blocks on sync.
+    """
+
+    def push_match(self, match: Match) -> None: ...
+    def push_tournament(self, tournament: Tournament) -> None: ...
+    def flush_queue(self) -> None: ...   # called on reconnect
+```
+
+Add a `sync_queue` table via Alembic:
+
+```sql
+CREATE TABLE sync_queue (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_type VARCHAR NOT NULL,   -- 'match' | 'tournament'
+    entity_id   UUID NOT NULL,
+    payload     JSONB NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT now(),
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    last_attempt TIMESTAMP
+);
+```
+
+Push strategy:
+- On every SQLite write, call `sync_service.push_match(...)` (or
+  equivalent) in a background thread — never in the request path.
+- If the push succeeds, done.
+- If it fails (network error, Supabase unreachable), write to
+  `sync_queue` and return. The tournament continues unaffected.
+- A background thread runs `flush_queue()` every 30 seconds. It
+  processes `sync_queue` rows in `created_at` order, retrying each.
+  On success, delete the row. On failure, increment `attempts` and
+  move on.
+- After 10 failed attempts, log a warning and leave the row for
+  manual inspection. Do not delete it.
+
+### E2 — Supabase Realtime wiring (frontend)
+
+In the operator-facing frontend (browser, not Tauri):
+
+1. Install `@supabase/supabase-js` if not already present.
+2. Create `src/lib/realtime.ts`. Subscribe to Supabase Realtime
+   changes on the `matches` table, filtered by `tournament_id`.
+3. On receiving a change, update the Zustand match store directly.
+   Do not re-fetch the full state — apply the delta.
+4. Implement the polling fallback: if the Realtime websocket has not
+   received a message in 10 seconds, fall back to
+   `GET /rest/v1/matches?tournament_id=eq.<id>` against Supabase
+   REST. Resume Realtime when the socket reconnects.
+
+```typescript
+// src/lib/realtime.ts
+export function subscribeToMatches(
+  tournamentId: string,
+  onUpdate: (match: Match) => void,
+): () => void {  // returns unsubscribe function
+  const channel = supabase
+    .channel(`matches:${tournamentId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'matches',
+      filter: `tournament_id=eq.${tournamentId}`,
+    }, payload => onUpdate(payload.new as Match))
+    .subscribe()
+
+  // Polling fallback
+  let lastMessage = Date.now()
+  const poll = setInterval(async () => {
+    if (Date.now() - lastMessage > 10_000) {
+      const { data } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+      data?.forEach(onUpdate)
+    }
+  }, 10_000)
+
+  return () => {
+    supabase.removeChannel(channel)
+    clearInterval(poll)
+  }
+}
+```
+
+### E3 — Tests
+
+Create `backend/tests/unit/test_sync_service.py`. Cover:
+
+- Successful push: Supabase receives the correct payload
+- Failed push: row written to `sync_queue`, no exception propagated
+- Flush queue: queued rows sent in order, deleted on success
+- Flush queue partial failure: failed rows retain their entry,
+  successful rows are deleted
+- 10-attempt cap: over-limit rows are logged, not deleted, not retried
+
+Mock the Supabase client in all tests — do not make real network calls.
+
+All tests must pass before Step F.
+
+---
+
+## Step F — Command queue (frontend)
+
+Operators send commands to the director's FastAPI. If FastAPI is
+unreachable, commands are queued locally and flushed on reconnect.
+
+### F1 — IndexedDB command queue
+
+Create `src/lib/commandQueue.ts`:
+
+```typescript
+interface QueuedCommand {
+  id: string            // client-generated UUID (idempotency key)
+  tournamentId: string
+  matchId: string
+  action: MatchAction
+  payload: Record<string, unknown>
+  seenVersion: number
+  createdAt: number     // Date.now()
+  attempts: number
+  status: 'pending' | 'applied' | 'rejected' | 'conflict'
+  rejectionReason?: string
+}
+```
+
+Operations:
+- `enqueue(command)` — write to IndexedDB, return the command id
+- `flush()` — send all `pending` commands to FastAPI in
+  `createdAt` order, one at a time (not parallel — order matters)
+- `markApplied(id)` — update status
+- `markRejected(id, reason)` — update status + reason
+- `getPending()` — return all pending commands
+
+### F2 — Optimistic UI
+
+When an operator takes an action:
+
+1. Generate a UUID as the idempotency key.
+2. Apply the action optimistically to the Zustand match store
+   (status changes immediately in the UI).
+3. Add a `pending` indicator to that match in the UI (subtle badge —
+   not a blocking spinner).
+4. Enqueue the command in IndexedDB.
+5. Attempt to flush immediately (in background).
+
+On flush result:
+- **200 applied:** remove pending indicator, update match from
+  server response (authoritative version).
+- **409 stale_version:** roll back the optimistic update, show
+  conflict notice: *"Match was updated by someone else. Reloading."*
+  Refetch the match from Supabase, clear the pending indicator.
+- **409 conflict (invalid transition):** roll back the optimistic
+  update, show error: *"[rejection_reason from server]"* Clear from
+  queue (do not retry — this is a permanent rejection).
+- **Network error / timeout:** leave optimistic update and pending
+  indicator in place. Retry every 30 seconds. Show a subtle
+  *"Changes pending — waiting for connection"* indicator in the
+  header.
+
+### F3 — Reconnect flush
+
+In the director's machine reachability check (ping `GET /health` on
+the local FastAPI URL), when transitioning from unreachable →
+reachable, immediately call `commandQueue.flush()`.
+
+Also attempt flush on:
+- App foreground (Tauri window focus event)
+- Supabase Realtime reconnect (already has a hook from Step E)
+
+### F4 — Tests
+
+Create `src/lib/__tests__/commandQueue.test.ts`. Cover:
+
+- Enqueue writes to IndexedDB correctly
+- Flush sends commands in `createdAt` order
+- 200 response: command marked applied, pending indicator removed
+- 409 stale_version: optimistic update rolled back, match refetched
+- 409 conflict: rolled back, error shown, command not retried
+- Network error: command stays pending, retry scheduled
+- Idempotency: same command id flushed twice sends only one request
+
+All tests must pass before Step G.
+
+---
+
+## Step G — Conflict UI
+
+Surface conflict states cleanly to operators. No blocking modals —
+all conflict feedback is inline and dismissible.
+
+### G1 — Pending badge
+
+On any match card in the workflow queue and Gantt where a command is
+`pending` in the queue:
+
+- Show a small pulsing dot (amber, same amber as the existing
+  "yellow" traffic light) in the top-right corner of the match block.
+- Tooltip on hover: *"Change pending — waiting for connection"*
+- The match is still interactable — do not disable it.
+
+### G2 — Conflict notice
+
+When a command is rejected with `stale_version`:
+
+- Show an inline banner directly on the match card:
+  *"Updated by someone else — reloaded"*
+- Auto-dismiss after 4 seconds.
+- Do not show a modal.
+
+When a command is rejected with an invalid transition:
+
+- Show an inline banner: *"[rejection_reason]"*
+- Persist until dismissed (× button).
+
+### G3 — Connection status indicator
+
+In the app header (operator view only, not TV display):
+
+- Green dot: FastAPI reachable, Supabase Realtime connected.
+- Amber dot + *"Reconnecting..."*: either FastAPI or Realtime
+  temporarily unreachable, commands queued.
+- Red dot + *"Offline"*: both unreachable for > 60 seconds.
+
+Do not use a toast for this — it is persistent status, not a
+one-time event.
+
+### G4 — Tests
+
+Create `src/features/liveOps/__tests__/conflictUI.test.tsx`. Cover:
+
+- Pending badge renders when command status is `pending`
+- Pending badge absent when command status is `applied`
+- Stale version banner appears and auto-dismisses after 4 seconds
+- Conflict banner persists until dismissed
+- Connection indicator shows correct state for all three conditions
+
+All tests must pass. Run the full suite (`pytest` + `make test-e2e`)
+before declaring this step complete.
+
+---
+
+## Step H — Update tech stack doc and deploy docs
+
+Once all steps A–G are complete and all tests pass:
+
+1. Update `docs/tech-stack.md` to reflect the final architecture:
+   - Remove Fly.io / Render references entirely
+   - Add sync service description
+   - Add command queue description
+   - Add conflict detection layer
+   - Update the architecture diagram
+
+2. Update `docs/deploy/cloud.md`:
+   - Remove backend cloud deployment section
+   - Add Tauri sidecar startup instructions
+   - Add Supabase Realtime configuration steps
+   - Keep Vercel TV display deployment section unchanged
+
+3. Update `docs/changes/YYYY-MM-DD.md` with a summary of the full
+   arc: what changed, what was removed, what was added, and why.
+
+4. Run the full test suite one final time. All tests must pass.
+
+5. Commit with message:
+   `arch: local-first sidecar + conflict detection + sync layer`
+
+---
+
+## What does not change
+
+- The CP-SAT solver internals (only `ScheduleRequest` gets one new
+  optional field and one new method is added to the backend class)
+- The director's Tauri app structure
+- The traffic light / workflow queue UX
+- Supabase Auth
+- The Vercel TV display
+- The conventions prompt (`docs/shuttleworks-conventions-prompt.md`)
+- The 287 existing tests — all must still pass at the end
+
+---
+
+## Summary of new files
+
+```
+backend/
+  services/
+    match_state.py          # transition guard, locked status helpers
+    sync_service.py         # SQLite → Supabase push + queue
+  app/
+    exceptions.py           # ConflictError domain exception
+    constants.py            # MatchAction enum (additions)
+  tests/unit/
+    test_match_state.py
+    test_solver_locking.py
+    test_commands.py
+    test_sync_service.py
+
+scheduler_core/
+  domain/
+    models.py               # LockedAssignment added to ScheduleRequest
+  engine/
+    cpsat_backend.py        # _add_locked_constraints() added
+
+frontend/src/
+  lib/
+    realtime.ts             # Supabase Realtime subscription + fallback
+    commandQueue.ts         # IndexedDB queue + flush logic
+  features/liveOps/
+    __tests__/
+      conflictUI.test.tsx
+
+Alembic migrations:
+  - status + version columns on matches
+  - commands table
+  - sync_queue table
+```

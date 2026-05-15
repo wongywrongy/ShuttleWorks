@@ -29,21 +29,13 @@ for _cached in [
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from _helpers import seed_tournament
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
-    sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
-    for _cached in [
-        k for k in list(sys.modules)
-        if k == "app" or k.startswith("app.")
-        or k == "services" or k.startswith("services.")
-        or k == "adapters" or k.startswith("adapters.")
-        or k.startswith("api.")
-    ]:
-        del sys.modules[_cached]
+    from _helpers import isolate_test_database, seed_tournament
+    isolate_test_database(tmp_path, monkeypatch)
     from api import (
         match_state,
         schedule,
@@ -52,7 +44,7 @@ def client(tmp_path, monkeypatch):
         schedule_proposals,
         schedule_repair,
         schedule_warm_restart,
-        tournament_state,
+        tournaments,
     )
 
     app_ = FastAPI()
@@ -63,7 +55,7 @@ def client(tmp_path, monkeypatch):
     app_.include_router(schedule_director.router)
     app_.include_router(schedule_advisories.router)
     app_.include_router(match_state.router)
-    app_.include_router(tournament_state.router)
+    app_.include_router(tournaments.router)
     return TestClient(app_)
 
 
@@ -157,8 +149,9 @@ def test_validate_flags_drop_onto_closed_court(client):
 
 
 def test_court_closed_disruption_commit_persists_closure(client):
+    tid = seed_tournament(client)
     state = _basic_state()
-    assert client.put("/tournament/state", json=state).status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     repair_body = {
         "originalSchedule": state["schedule"],
@@ -168,18 +161,19 @@ def test_court_closed_disruption_commit_persists_closure(client):
         "matchStates": {},
         "disruption": {"type": "court_closed", "courtId": 1},
     }
-    proposal = client.post("/schedule/proposals/repair", json=repair_body).json()
+    proposal = client.post(f"/tournaments/{tid}/schedule/proposals/repair", json=repair_body).json()
     assert proposal["proposedConfig"]["closedCourts"] == [1]
 
-    commit = client.post(f"/schedule/proposals/{proposal['id']}/commit")
+    commit = client.post(f"/tournaments/{tid}/schedule/proposals/{proposal['id']}/commit")
     assert commit.status_code == 200
-    persisted = client.get("/tournament/state").json()
+    persisted = client.get(f"/tournaments/{tid}/state").json()
     assert persisted["config"]["closedCourts"] == [1]
 
 
 def test_reopen_court_director_action_clears_closure(client):
+    tid = seed_tournament(client)
     state = _basic_state(closed=[1, 2])
-    assert client.put("/tournament/state", json=state).status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     body = {
         "action": {"kind": "reopen_court", "courtId": 1},
@@ -189,18 +183,19 @@ def test_reopen_court_director_action_clears_closure(client):
         "originalSchedule": state["schedule"],
         "matchStates": {},
     }
-    r = client.post("/schedule/director-action", json=body)
+    r = client.post(f"/tournaments/{tid}/schedule/director-action", json=body)
     assert r.status_code == 200, r.text
     proposal = r.json()
     assert proposal["proposedConfig"]["closedCourts"] == [2]
 
-    commit = client.post(f"/schedule/proposals/{proposal['id']}/commit")
+    commit = client.post(f"/tournaments/{tid}/schedule/proposals/{proposal['id']}/commit")
     assert commit.status_code == 200
-    persisted = client.get("/tournament/state").json()
+    persisted = client.get(f"/tournaments/{tid}/state").json()
     assert persisted["config"]["closedCourts"] == [2]
 
 
 def test_reopen_unclosed_court_returns_404(client):
+    tid = seed_tournament(client)
     state = _basic_state()
     body = {
         "action": {"kind": "reopen_court", "courtId": 1},
@@ -210,7 +205,7 @@ def test_reopen_unclosed_court_returns_404(client):
         "originalSchedule": state["schedule"],
         "matchStates": {},
     }
-    r = client.post("/schedule/director-action", json=body)
+    r = client.post(f"/tournaments/{tid}/schedule/director-action", json=body)
     assert r.status_code == 404
 
 
@@ -220,8 +215,9 @@ def test_reopen_unclosed_court_returns_404(client):
 def test_court_closed_disruption_with_time_bounds_persists_window(client):
     """A disruption with fromTime/toTime stores a CourtClosure entry
     in ``courtClosures`` rather than the legacy all-day list."""
+    tid = seed_tournament(client)
     state = _basic_state()
-    assert client.put("/tournament/state", json=state).status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     repair_body = {
         "originalSchedule": state["schedule"],
@@ -237,7 +233,7 @@ def test_court_closed_disruption_with_time_bounds_persists_window(client):
             "reason": "Equipment swap",
         },
     }
-    proposal = client.post("/schedule/proposals/repair", json=repair_body).json()
+    proposal = client.post(f"/tournaments/{tid}/schedule/proposals/repair", json=repair_body).json()
     cfg = proposal["proposedConfig"]
     # Time-bounded closures don't pollute the legacy list.
     assert cfg["closedCourts"] == []
@@ -249,8 +245,8 @@ def test_court_closed_disruption_with_time_bounds_persists_window(client):
     assert closure["reason"] == "Equipment swap"
 
     # Commit persists; subsequent GET reflects the windowed closure.
-    client.post(f"/schedule/proposals/{proposal['id']}/commit")
-    persisted = client.get("/tournament/state").json()
+    client.post(f"/tournaments/{tid}/schedule/proposals/{proposal['id']}/commit")
+    persisted = client.get(f"/tournaments/{tid}/state").json()
     assert persisted["config"]["courtClosures"][0]["fromTime"] == "12:00"
 
 
@@ -298,12 +294,13 @@ def test_validate_passes_drop_outside_time_bounded_closure(client):
 
 
 def test_reopen_court_clears_both_legacy_and_windowed_closures(client):
+    tid = seed_tournament(client)
     state = _basic_state(closed=[1])
     state["config"]["courtClosures"] = [
         {"courtId": 1, "fromTime": "12:00", "toTime": "13:00"},
         {"courtId": 2, "fromTime": "14:00", "toTime": "15:00"},
     ]
-    assert client.put("/tournament/state", json=state).status_code == 200
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
 
     body = {
         "action": {"kind": "reopen_court", "courtId": 1},
@@ -313,7 +310,7 @@ def test_reopen_court_clears_both_legacy_and_windowed_closures(client):
         "originalSchedule": state["schedule"],
         "matchStates": {},
     }
-    r = client.post("/schedule/director-action", json=body)
+    r = client.post(f"/tournaments/{tid}/schedule/director-action", json=body)
     assert r.status_code == 200, r.text
     proposed = r.json()["proposedConfig"]
     assert proposed["closedCourts"] == []

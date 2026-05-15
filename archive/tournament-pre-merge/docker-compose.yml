@@ -1,0 +1,30 @@
+# Tournament prototype — prod-style compose.
+#
+# PR 3 of the backend-merge arc retired this product's frontend; the
+# bracket UI now lives inside the scheduler shell at the ``Bracket``
+# tab (``products/scheduler/frontend/src/features/bracket/``). The
+# backend stays alive on :8765 with its old open routes until PR 4
+# deletes the product entirely. ``make tournament`` from the repo
+# root now just brings up the FastAPI service.
+
+name: ${COMPOSE_PROJECT_NAME:-tournament}
+
+services:
+  backend:
+    build:
+      # Context = repo root so the Dockerfile can COPY the shared
+      # scheduler_core/ tree alongside the product files.
+      context: ../..
+      dockerfile: products/tournament/backend/Dockerfile
+      # Pin the prod multi-stage target; the Dockerfile defines a `dev`
+      # stage AFTER `runtime` (so dev would otherwise be the default).
+      target: runtime
+    ports:
+      - "${BACKEND_HOST_PORT:-8765}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

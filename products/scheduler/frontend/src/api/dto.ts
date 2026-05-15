@@ -122,6 +122,8 @@ export interface TournamentConfig {
   // click when reality (overrun, withdrawal, court closure) makes
   // the chosen plan no longer fit — no re-solve needed. Default 5.
   candidatePoolSize?: number;
+  /** Slots of forced rest between bracket rounds. Bracket-side only. */
+  restBetweenRounds?: number;
 }
 
 export interface CourtClosure {
@@ -312,6 +314,14 @@ export interface RosterImportDTO {
   csv: string; // CSV content
 }
 
+/** Roster entry for bracket-kind tournaments. */
+export interface BracketPlayerDTO {
+  id: string;
+  name: string;
+  notes?: string;
+  restSlots?: number;
+}
+
 // Match Type - used for UI selection mode and match categorization
 export type MatchType = 'individual' | 'roster_vs_roster' | 'roster_match' | 'auto_generated';
 
@@ -431,6 +441,10 @@ export interface TournamentStateDTO {
   scheduleVersion?: number;
   /** Schema v2: rolling history of replaced committed schedules (capped server-side at 5). */
   scheduleHistory?: ScheduleHistoryEntry[];
+  /** Bracket-kind roster. Empty for meet-kind tournaments. */
+  bracketPlayers?: BracketPlayerDTO[];
+  /** Set true once the first-load reconcile from `bracket_participants` has run. */
+  bracketRosterMigrated?: boolean;
 }
 
 // ---- Proposal pipeline (two-phase commit) -------------------------------
@@ -560,6 +574,150 @@ export interface BackupListDTO {
 export interface BackupCreatedDTO {
   created: boolean;
   filename: string | null;
+}
+
+// Multi-tournament CRUD (Step 2; widened in Step 6)
+export type TournamentStatus = 'draft' | 'active' | 'archived';
+
+export type TournamentRole = 'owner' | 'operator' | 'viewer';
+
+/** Top-level kind of event a tournament row represents. ``meet`` is
+ *  the intercollegiate dual / tri-meet workflow (Setup / Roster /
+ *  Matches / Schedule / Live / TV tabs); ``bracket`` is a single-
+ *  elimination or round-robin draw (BracketTab surface only, meet
+ *  tabs hidden). User-facing copy calls ``bracket`` a "Tournament";
+ *  the wire-format keeps ``bracket`` for code symmetry with the
+ *  bracket_* table family. */
+export type TournamentKind = 'meet' | 'bracket';
+
+export interface TournamentSummaryDTO {
+  id: string;
+  name: string | null;
+  status: TournamentStatus;
+  kind: TournamentKind;
+  tournamentDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Caller's role on this tournament — non-null in list responses
+   *  because the list is filtered to the caller's memberships. */
+  role: TournamentRole | null;
+  /** Owner's email, denormalised at tournament-create time. Used by
+   *  the "Shared with You" dashboard section. */
+  ownerName: string | null;
+}
+
+export interface TournamentCreateDTO {
+  name?: string | null;
+  kind?: TournamentKind;
+  tournamentDate?: string | null;
+}
+
+export interface TournamentUpdateDTO {
+  name?: string | null;
+  status?: TournamentStatus;
+  tournamentDate?: string | null;
+}
+
+// Invite links (Step 7)
+export type InviteRole = 'operator' | 'viewer';
+
+export interface InviteCreateDTO {
+  role: InviteRole;
+}
+
+export interface InviteCreatedDTO {
+  token: string;
+  /** Relative path — frontend prepends ``window.location.origin``. */
+  url: string;
+  tournamentId: string;
+  role: InviteRole;
+  createdAt: string;
+}
+
+export interface InviteSummaryDTO {
+  token: string;
+  tournamentId: string;
+  role: InviteRole;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  valid: boolean;
+}
+
+export interface InviteResolveDTO {
+  token: string;
+  tournamentId: string;
+  tournamentName: string | null;
+  role: InviteRole;
+  valid: boolean;
+  expiresAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface InviteAcceptedDTO {
+  tournamentId: string;
+  role: string;
+  alreadyMember: boolean;
+}
+
+export interface TournamentMemberDTO {
+  userId: string;
+  role: string;
+  joinedAt: string;
+}
+
+// ---- Operator commands (Step F of the architecture-adjustment arc) -------
+
+export type MatchAction =
+  | 'call_to_court'
+  | 'start_match'
+  | 'finish_match'
+  | 'retire_match'
+  | 'uncall';
+
+/**
+ * Body of ``POST /tournaments/{tid}/commands``. The ``id`` is the
+ * client-generated UUID used as the idempotency key; the same id
+ * resubmitted gets the original outcome.
+ */
+export interface CommandRequestDTO {
+  id: string;
+  match_id: string;
+  action: MatchAction;
+  payload: Record<string, unknown> | null;
+  seen_version: number;
+}
+
+/**
+ * Successful (200) response body — carries the *current* match
+ * state. Replay after a third-party update returns the current
+ * (mutated) state, not the post-original-apply state.
+ */
+export interface CommandResponseDTO {
+  command_id: string;
+  match_id: string;
+  status: 'scheduled' | 'called' | 'playing' | 'finished' | 'retired';
+  version: number;
+  court_id: number | null;
+  time_slot: number | null;
+  applied_at: string;
+  replay: boolean;
+}
+
+/**
+ * Body shape for 409 (state-machine conflict or stale version).
+ * ``error`` discriminates between the two flavours; the frontend
+ * branches on it to choose between "refetch and retry" and "show
+ * permanent rejection."
+ */
+export interface CommandConflictDTO {
+  error: 'conflict' | 'stale_version';
+  match_id: string;
+  message: string;
+  current_status?: string;
+  attempted_status?: string;
+  current_version?: number;
+  seen_version?: number;
 }
 
 // Constraint Visualization Types

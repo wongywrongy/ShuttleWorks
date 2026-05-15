@@ -16,7 +16,20 @@ import type {
   Suggestion,
 } from '../api/dto';
 
-export type AppTab = 'setup' | 'roster' | 'matches' | 'schedule' | 'live' | 'tv';
+export type AppTab =
+  | 'setup'
+  | 'roster'
+  | 'matches'
+  | 'schedule'
+  | 'live'
+  | 'bracket'
+  | 'tv'
+  | 'bracket-setup'
+  | 'bracket-roster'
+  | 'bracket-events'
+  | 'bracket-draw'
+  | 'bracket-schedule'
+  | 'bracket-live';
 
 export type SolverPhase = 'presolve' | 'search' | 'proving' | null;
 
@@ -99,6 +112,30 @@ interface UiState {
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
 
+  // URL-derived tournament id. Set by ``TournamentPage`` on mount; read
+  // by ``forceSaveNow`` and other module-level helpers that don't have
+  // direct access to React Router params. NOT persisted — refreshing
+  // the page re-derives it from the URL.
+  activeTournamentId: string | null;
+  setActiveTournamentId: (id: string | null) => void;
+
+  // Active tournament's kind (meet | bracket). Fetched on mount by
+  // ``useTournamentKind`` via the summary endpoint; ``null`` while
+  // loading or when the request fails (the AppShell falls back to
+  // meet-style chrome in that case). The TabBar reads this to filter
+  // out meet-only tabs on a bracket-kind tournament and vice versa.
+  activeTournamentKind: 'meet' | 'bracket' | null;
+  setActiveTournamentKind: (kind: 'meet' | 'bracket' | null) => void;
+
+  // Whether the active bracket-kind tournament has a generated draw.
+  // Written by ``BracketTab`` from ``useBracket().data``; ``null`` when
+  // no bracket surface is mounted (meet kind / dashboard). ``TabBar``
+  // reads this to disable the Draw/Schedule/Live tabs until a draw
+  // exists — ``TabBar`` lives outside ``BracketApiProvider`` so it
+  // can't call ``useBracket`` itself.
+  bracketDataReady: boolean | null;
+  setBracketDataReady: (ready: boolean | null) => void;
+
   // Solver HUD
   solverHud: SolverHudState;
   setSolverHud: (patch: Partial<SolverHudState>) => void;
@@ -155,6 +192,16 @@ interface UiState {
   unlockModalState: UnlockModalState | null;
   setUnlockModalState: (state: UnlockModalState | null) => void;
 
+  // Bracket Live tab — selected match id for MatchDetailPanel.
+  bracketSelectedMatchId: string | null;
+  setBracketSelectedMatchId: (id: string | null) => void;
+
+  // Bracket Schedule + Live filter strip — per-event enabled flag.
+  // Empty map (default) means every event is on.  Only entries
+  // explicitly set to ``false`` are dimmed.
+  bracketScheduleEventFilter: Record<string, boolean>;
+  setBracketScheduleEventFilter: (filter: Record<string, boolean>) => void;
+
   // Hard reset — called by the `useClearAllData` hook so the three
   // stores reset together when the operator wipes the tournament.
   reset: () => void;
@@ -163,6 +210,9 @@ interface UiState {
 const INITIAL: Pick<
   UiState,
   | 'activeTab'
+  | 'activeTournamentId'
+  | 'activeTournamentKind'
+  | 'bracketDataReady'
   | 'solverHud'
   | 'pendingPin'
   | 'lastValidation'
@@ -180,8 +230,13 @@ const INITIAL: Pick<
   | 'suggestions'
   | 'pendingAdvisoryReview'
   | 'unlockModalState'
+  | 'bracketSelectedMatchId'
+  | 'bracketScheduleEventFilter'
 > = {
   activeTab: 'setup',
+  activeTournamentId: null,
+  activeTournamentKind: null,
+  bracketDataReady: null,
   solverHud: DEFAULT_SOLVER_HUD,
   pendingPin: null,
   lastValidation: null,
@@ -199,12 +254,17 @@ const INITIAL: Pick<
   suggestions: [],
   pendingAdvisoryReview: null,
   unlockModalState: null,
+  bracketSelectedMatchId: null,
+  bracketScheduleEventFilter: {},
 };
 
 export const useUiStore = create<UiState>((set) => ({
   ...INITIAL,
 
   setActiveTab: (activeTab) => set({ activeTab }),
+  setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
+  setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
+  setBracketDataReady: (bracketDataReady) => set({ bracketDataReady }),
 
   setSolverHud: (patch) =>
     set((state) => ({ solverHud: { ...state.solverHud, ...patch } })),
@@ -256,6 +316,9 @@ export const useUiStore = create<UiState>((set) => ({
   setPendingAdvisoryReview: (pendingAdvisoryReview) =>
     set({ pendingAdvisoryReview }),
   setUnlockModalState: (unlockModalState) => set({ unlockModalState }),
+
+  setBracketSelectedMatchId: (bracketSelectedMatchId) => set({ bracketSelectedMatchId }),
+  setBracketScheduleEventFilter: (bracketScheduleEventFilter) => set({ bracketScheduleEventFilter }),
 
   reset: () => set({ ...INITIAL }),
 }));

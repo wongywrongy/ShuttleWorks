@@ -16,6 +16,7 @@ import { apiClient } from '../../../api/client';
 import type { Suggestion } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useUiStore } from '../../../store/uiStore';
+import { useTournamentId } from '../../../hooks/useTournamentId';
 
 export interface SuggestionActions {
   /** Which suggestion id is currently being committed, or null. */
@@ -25,6 +26,7 @@ export interface SuggestionActions {
 }
 
 export function useSuggestionActions(): SuggestionActions {
+  const tid = useTournamentId();
   const [applyingId, setApplyingId] = useState<string | null>(null);
 
   const apply = useCallback(async (s: Suggestion) => {
@@ -32,7 +34,7 @@ export function useSuggestionActions(): SuggestionActions {
     const ts = useTournamentStore.getState();
     const ui = useUiStore.getState();
     try {
-      const r = await apiClient.applySuggestion(s.id);
+      const r = await apiClient.applySuggestion(tid, s.id);
       ts.setSchedule(r.state.schedule ?? null);
       ts.setScheduleVersion(r.state.scheduleVersion ?? 0);
       ts.setScheduleHistory(r.state.scheduleHistory ?? []);
@@ -78,7 +80,7 @@ export function useSuggestionActions(): SuggestionActions {
     } finally {
       setApplyingId(null);
     }
-  }, []);
+  }, [tid]);
 
   const dismiss = useCallback(async (s: Suggestion) => {
     // Drop the row first; reading fresh state at call time so a parallel
@@ -87,11 +89,11 @@ export function useSuggestionActions(): SuggestionActions {
       useUiStore.getState().suggestions.filter((x) => x.id !== s.id),
     );
     try {
-      await apiClient.dismissSuggestion(s.id);
+      await apiClient.dismissSuggestion(tid, s.id);
     } catch {
       // best-effort; the next poll will reconcile
     }
-  }, []);
+  }, [tid]);
 
   return { applyingId, apply, dismiss };
 }

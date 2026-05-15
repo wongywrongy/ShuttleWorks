@@ -10,9 +10,23 @@ services:
       dockerfile: products/scheduler/backend/Dockerfile
     ports:
       - "${BACKEND_HOST_PORT:-8000}:8000"
+    # Optional: pass-through env file. Copy backend/.env.example to
+    # backend/.env and fill in SUPABASE_URL / SUPABASE_ANON_KEY /
+    # ENVIRONMENT=cloud to flip the stack from local-only (default)
+    # into cloud-mirroring mode. ``required: false`` so the stack
+    # still boots when the file is absent — the defaults in the
+    # ``environment:`` block below cover the local-only case. Values
+    # in ``.env`` override the inline defaults if present.
+    env_file:
+      - path: backend/.env
+        required: false
     environment:
       - LOG_LEVEL=info
-      - BACKEND_DATA_DIR=/app/data
+      - DATA_DIR=/app/data
+      # SQLite file lives inside the writable volume mount. Step 3 made
+      # the URL explicit so the read-only root filesystem doesn't trip
+      # the default ``./local.db`` path.
+      - DATABASE_URL=sqlite:////app/data/local.db
     volumes:
       - ./data:/app/data
     restart: unless-stopped

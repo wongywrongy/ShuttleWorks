@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 
 import { apiClient } from '../../../api/client';
 import type { Impact } from '../../../api/dto';
+import { useTournamentId } from '../../../hooks/useTournamentId';
 
 export interface ProposalImpactState {
   impact: Impact | null;
@@ -15,18 +16,16 @@ export interface ProposalImpactState {
 }
 
 export function useProposalImpact(proposalId: string): ProposalImpactState {
+  const tid = useTournamentId();
   const [impact, setImpact] = useState<Impact | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    // Reset on proposalId change so a stale impact never lingers when
-    // the operator collapses one row and expands another quickly.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setImpact(null);
     setError(null);
     apiClient
-      .getProposal(proposalId)
+      .getProposal(tid, proposalId)
       .then((p) => {
         if (!cancelled) setImpact(p.impact);
       })
@@ -36,7 +35,7 @@ export function useProposalImpact(proposalId: string): ProposalImpactState {
     return () => {
       cancelled = true;
     };
-  }, [proposalId]);
+  }, [tid, proposalId]);
 
   return { impact, error };
 }

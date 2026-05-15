@@ -16,7 +16,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { isValidTime } from '../../lib/time';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
-import { Button } from '@/components/ui/button';
+import { Button } from '@scheduler/design-system';
 import { IconDone } from '@scheduler/design-system';
 import {
   Row,

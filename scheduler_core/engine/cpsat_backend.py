@@ -48,6 +48,7 @@ from ortools.sat.python import cp_model
 
 from scheduler_core.domain.models import (
     Assignment,
+    LockedAssignment,
     Match,
     Player,
     PreviousAssignment,
@@ -367,6 +368,12 @@ class CPSATScheduler:
 
         self.infeasible_reasons: List[str] = []
         self.locked_matches: Set[str] = set()
+        # Step B: hard pins from the state-machine (matches whose status
+        # is in LOCKED_STATUSES). Distinct from ``locked_matches`` above,
+        # which is the legacy ``PreviousAssignment.locked`` set used by
+        # the ``locks_and_pins`` constraint plugin. Both mechanisms add
+        # pins; they coexist until the cutover finishes.
+        self.locked_assignments: List[LockedAssignment] = []
 
         # Lightweight model stats for logging + SSE.
         self._num_no_overlap_groups = 0
@@ -392,6 +399,19 @@ class CPSATScheduler:
             self.previous_assignments[assignment.match_id] = assignment
             if assignment.locked:
                 self.locked_matches.add(assignment.match_id)
+
+    def set_locked_assignments(
+        self, assignments: List[LockedAssignment]
+    ) -> None:
+        """Register hard pins from the state machine.
+
+        Stored verbatim; the constraints fire from inside ``solve()``
+        after ``build()`` has created the decision variables. Idempotent
+        — calling twice replaces the previous list.
+        """
+        self.locked_assignments = list(assignments)
+        for assignment in assignments:
+            self.locked_matches.add(assignment.match_id)
 
     # ---- model construction --------------------------------------------------
 
@@ -519,6 +539,29 @@ class CPSATScheduler:
 
         log_build_end(len(self.matches))
 
+    def _add_locked_constraints(
+        self,
+        model: cp_model.CpModel,
+        locked: List[LockedAssignment],
+        court_vars: Dict[str, cp_model.IntVar],
+        time_vars: Dict[str, cp_model.IntVar],
+    ) -> None:
+        """Fix court + time for every state-machine-locked match.
+
+        Called from ``solve()`` after every constraint plugin has run,
+        so the locks override any soft penalty that would otherwise
+        let the solver move a locked match. Matches not present in
+        ``court_vars`` / ``time_vars`` (e.g. dropped from the solve
+        scope by a repair slice rule) are skipped silently — that's
+        the desired behaviour for the dual-mechanism period.
+        """
+        for assignment in locked:
+            mid = assignment.match_id
+            if mid not in court_vars or mid not in time_vars:
+                continue
+            model.Add(court_vars[mid] == assignment.court_id)
+            model.Add(time_vars[mid] == assignment.time_slot)
+
     def _compute_model_stats(self) -> Dict[str, int]:
         player_match_count: Dict[str, int] = defaultdict(int)
         for match in self.matches.values():
@@ -581,6 +624,19 @@ class CPSATScheduler:
             1 if self.solver_options.deterministic else self.solver_options.num_workers
         )
         effective_seed = self.solver_options.random_seed
+
+        # Step B: pin every state-machine-locked match to its known
+        # court + slot. This runs AFTER every constraint plugin so the
+        # locks override any soft penalty the plugins set up; running
+        # it here (in solve, not build) means the pins survive even
+        # if a caller adds constraints between ``build()`` and
+        # ``solve()`` (warm-start hints are an example).
+        self._add_locked_constraints(
+            self.model,
+            self.locked_assignments,
+            self.svars.court,
+            self.svars.start,
+        )
 
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = self.solver_options.time_limit_seconds

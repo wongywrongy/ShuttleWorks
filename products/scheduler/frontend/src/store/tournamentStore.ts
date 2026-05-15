@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand';
 import type {
+  BracketPlayerDTO,
   MatchDTO,
   PlayerDTO,
   RosterGroupDTO,
@@ -35,6 +36,15 @@ interface TournamentState {
   deletePlayer: (id: string) => void;
   importPlayers: (players: PlayerDTO[]) => void;
   setPlayers: (players: PlayerDTO[]) => void;
+
+  // Bracket roster — separate from meet's ``players`` (data isolation per spec).
+  bracketPlayers: BracketPlayerDTO[];
+  setBracketPlayers: (players: BracketPlayerDTO[]) => void;
+  addBracketPlayer: (player: BracketPlayerDTO) => void;
+  updateBracketPlayer: (id: string, updates: Partial<BracketPlayerDTO>) => void;
+  deleteBracketPlayer: (id: string) => void;
+  bracketRosterMigrated: boolean;
+  setBracketRosterMigrated: (v: boolean) => void;
 
   // Matches
   matches: MatchDTO[];
@@ -88,6 +98,8 @@ const INITIAL = {
   config: DEFAULT_CONFIG as TournamentConfig | null,
   groups: [] as RosterGroupDTO[],
   players: [] as PlayerDTO[],
+  bracketPlayers: [] as BracketPlayerDTO[],
+  bracketRosterMigrated: false,
   matches: [] as MatchDTO[],
   schedule: null as ScheduleDTO | null,
   scheduleIsStale: false,
@@ -161,6 +173,19 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     })),
   importPlayers: (players) => set({ players, scheduleIsStale: true }),
   setPlayers: (players) => set({ players, scheduleIsStale: true }),
+
+  setBracketPlayers: (bracketPlayers) => set({ bracketPlayers }),
+  addBracketPlayer: (p) =>
+    set((s) => ({ bracketPlayers: [...s.bracketPlayers, p] })),
+  updateBracketPlayer: (id, updates) =>
+    set((s) => ({
+      bracketPlayers: s.bracketPlayers.map((p) =>
+        p.id === id ? { ...p, ...updates } : p,
+      ),
+    })),
+  deleteBracketPlayer: (id) =>
+    set((s) => ({ bracketPlayers: s.bracketPlayers.filter((p) => p.id !== id) })),
+  setBracketRosterMigrated: (bracketRosterMigrated) => set({ bracketRosterMigrated }),
 
   addMatch: (match) =>
     set((state) => {

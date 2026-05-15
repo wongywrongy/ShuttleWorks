@@ -16,7 +16,7 @@ import type { TournamentConfig } from '../../api/dto';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useTournament } from '../../hooks/useTournament';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
-import { Button } from '@/components/ui/button';
+import { Button } from '@scheduler/design-system';
 import { IconDone } from '@scheduler/design-system';
 import {
   Row,

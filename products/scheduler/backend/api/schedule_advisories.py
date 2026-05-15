@@ -18,12 +18,14 @@ The endpoint never mutates state; clients poll it.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Path, Request
 
-from services.persistence import PersistenceService, get_persistence
+from app.dependencies import require_tournament_access
+from repositories import LocalRepository, get_repository
 
 from app.schemas import (
     Advisory,
@@ -41,7 +43,10 @@ NO_SHOW_THRESHOLD_MINUTES = 3      # called for > this without start → no_show
 RUNNING_BEHIND_THRESHOLD_MIN = 10  # actual cadence trails scheduled by >= this → running_behind
 
 
-router = APIRouter(prefix="/schedule", tags=["schedule-advisories"])
+router = APIRouter(
+    prefix="/tournaments/{tournament_id}/schedule",
+    tags=["schedule-advisories"],
+)
 log = logging.getLogger("scheduler.advisories")
 
 
@@ -464,41 +469,46 @@ def collect_advisories(
 # ---------- endpoint -------------------------------------------------------
 
 
-@router.get("/advisories", response_model=List[Advisory])
+@router.get(
+    "/advisories",
+    response_model=List[Advisory],
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
 async def get_schedule_advisories(
     http_request: Request,
-    svc: PersistenceService = Depends(get_persistence),
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
 ) -> List[Advisory]:
     """Return current advisories computed from tournament + match state.
 
-    Reads both files via the existing helpers in tournament_state /
-    match_state. Returns ``[]`` when nothing actionable is detected (or
-    when the tournament hasn't been configured yet).
+    Returns ``[]`` when nothing actionable is detected, or when the
+    tournament's state is still empty / the row doesn't exist.
 
-    Also posts REPAIR triggers to the SuggestionsWorker for any advisory
+    Posts REPAIR triggers to the SuggestionsWorker for any advisory
     whose suggestedAction.kind is 'repair', and attaches a ``suggestionId``
     to advisories that already have a pre-baked suggestion stamped by the
     worker.
     """
-    # Tournament state — may be None when nothing has been saved yet.
     state: Optional[TournamentStateDTO] = None
+    tournament_row = None
     try:
-        data, _ = await svc.read_tournament_state()
-        if data is not None:
+        tournament_row = repo.tournaments.get_by_id(tournament_id)
+        if tournament_row is not None and tournament_row.data:
             state = TournamentStateDTO(**{
-                k: v for k, v in data.items() if k != "_integrity"
+                k: v for k, v in tournament_row.data.items() if k != "_integrity"
             })
     except Exception as e:  # noqa: BLE001 — advisor must never 500 on read failure
         log.warning("advisories: tournament state unreadable: %s", e)
         return []
 
-    if state is None:
+    if state is None or tournament_row is None:
         return []
 
-    # Match states — empty dict when no live state file yet.
+    match_states_dict: dict = {}
     try:
-        ms_data = await svc.read_match_states()
-        match_states_dict = ms_data.get("matchStates", {}) or {}
+        rows = repo.match_states.list_for_tournament(tournament_row.id)
+        from api.match_state import _row_to_dto
+        match_states_dict = {row.match_id: _row_to_dto(row).model_dump() for row in rows}
     except Exception as e:  # noqa: BLE001
         log.warning("advisories: match state unreadable: %s", e)
         match_states_dict = {}
@@ -509,10 +519,10 @@ async def get_schedule_advisories(
     # a pre-baked suggestion. Index the suggestion store once so we
     # don't run an O(advisories × suggestions) scan.
     from api.schedule_proposals import _get_suggestion_store
-    suggestion_store = _get_suggestion_store(http_request.app)
+    suggestion_store = _get_suggestion_store(http_request.app, tournament_id)
     sug_by_fingerprint = {s.fingerprint: s.id for s in suggestion_store.values()}
     for a in advisories:
-        sug_id = sug_by_fingerprint.get(f"repair:{a.id}")
+        sug_id = sug_by_fingerprint.get(f"repair:{tournament_id}:{a.id}")
         if sug_id is not None:
             a.suggestionId = sug_id
 
@@ -532,8 +542,9 @@ async def get_schedule_advisories(
                 try:
                     await worker.post(TriggerEvent(
                         kind=TriggerKind.REPAIR,
-                        fingerprint=f"repair:{a.id}",
+                        fingerprint=f"repair:{tournament_id}:{a.id}",
                         payload={"suggestedAction": a.suggestedAction.model_dump()},
+                        tournament_id=tournament_id,
                     ))
                 except Exception:
                     log.exception("advisories: post REPAIR trigger failed")

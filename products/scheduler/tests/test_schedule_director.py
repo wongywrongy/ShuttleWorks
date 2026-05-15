@@ -24,21 +24,13 @@ for _cached in [
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from _helpers import seed_tournament
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
-    sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
-    for _cached in [
-        k for k in list(sys.modules)
-        if k == "app" or k.startswith("app.")
-        or k == "services" or k.startswith("services.")
-        or k == "adapters" or k.startswith("adapters.")
-        or k.startswith("api.")
-    ]:
-        del sys.modules[_cached]
+    from _helpers import isolate_test_database, seed_tournament
+    isolate_test_database(tmp_path, monkeypatch)
 
     from api import (
         match_state,
@@ -47,7 +39,7 @@ def client(tmp_path, monkeypatch):
         schedule_proposals,
         schedule_repair,
         schedule_warm_restart,
-        tournament_state,
+        tournaments,
     )
     app_ = FastAPI()
     app_.include_router(schedule_warm_restart.router)
@@ -56,7 +48,7 @@ def client(tmp_path, monkeypatch):
     app_.include_router(schedule_director.router)
     app_.include_router(schedule_advisories.router)
     app_.include_router(match_state.router)
-    app_.include_router(tournament_state.router)
+    app_.include_router(tournaments.router)
     # Proposal store now lives on app.state — fresh per fixture instance.
     yield TestClient(app_)
 
@@ -119,9 +111,9 @@ def _action_request(state: dict, action: dict) -> dict:
     }
 
 
-def _seed(client) -> dict:
+def _seed(client, tid: str) -> dict:
     state = _basic_state()
-    r = client.put("/tournament/state", json=state)
+    r = client.put(f"/tournaments/{tid}/state", json=state)
     assert r.status_code == 200
     return state
 
@@ -130,9 +122,10 @@ def _seed(client) -> dict:
 
 
 def test_delay_start_produces_proposal_with_clock_shift_and_no_moves(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     r = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {"kind": "delay_start", "minutes": 25}),
     )
     assert r.status_code == 200, r.text
@@ -145,15 +138,16 @@ def test_delay_start_produces_proposal_with_clock_shift_and_no_moves(client):
 
 
 def test_delay_start_commit_applies_clock_shift(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     create = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {"kind": "delay_start", "minutes": 30}),
     )
     pid = create.json()["id"]
-    commit = client.post(f"/schedule/proposals/{pid}/commit")
+    commit = client.post(f"/tournaments/{tid}/schedule/proposals/{pid}/commit")
     assert commit.status_code == 200, commit.text
-    body = client.get("/tournament/state").json()
+    body = client.get(f"/tournaments/{tid}/state").json()
     assert body["config"]["clockShiftMinutes"] == 30
     assert body["scheduleVersion"] == 1
     history = body["scheduleHistory"][-1]
@@ -161,11 +155,12 @@ def test_delay_start_commit_applies_clock_shift(client):
 
 
 def test_delay_start_accumulates_with_existing_shift(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     state["config"]["clockShiftMinutes"] = 15
-    client.put("/tournament/state", json=state)
+    client.put(f"/tournaments/{tid}/state", json=state)
     r = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {"kind": "delay_start", "minutes": 20}),
     )
     p = r.json()
@@ -173,9 +168,10 @@ def test_delay_start_accumulates_with_existing_shift(client):
 
 
 def test_delay_start_rejects_zero_minutes(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     r = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {"kind": "delay_start", "minutes": 0}),
     )
     assert r.status_code == 422
@@ -185,9 +181,10 @@ def test_delay_start_rejects_zero_minutes(client):
 
 
 def test_insert_blackout_produces_proposal_with_break_added(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     r = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {
             "kind": "insert_blackout",
             "fromTime": "12:00",
@@ -205,9 +202,10 @@ def test_insert_blackout_produces_proposal_with_break_added(client):
 
 
 def test_insert_blackout_commit_persists_break(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     create = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {
             "kind": "insert_blackout",
             "fromTime": "12:00",
@@ -215,17 +213,18 @@ def test_insert_blackout_commit_persists_break(client):
         }),
     )
     pid = create.json()["id"]
-    commit = client.post(f"/schedule/proposals/{pid}/commit")
+    commit = client.post(f"/tournaments/{tid}/schedule/proposals/{pid}/commit")
     assert commit.status_code == 200
-    body = client.get("/tournament/state").json()
+    body = client.get(f"/tournaments/{tid}/state").json()
     assert len(body["config"]["breaks"]) == 1
     assert body["config"]["breaks"][0]["start"] == "12:00"
 
 
 def test_insert_blackout_rejects_inverted_window(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     r = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {
             "kind": "insert_blackout",
             "fromTime": "13:00",
@@ -236,9 +235,10 @@ def test_insert_blackout_rejects_inverted_window(client):
 
 
 def test_insert_blackout_rejects_missing_times(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     r = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {
             "kind": "insert_blackout",
             "fromTime": "12:00",
@@ -251,14 +251,15 @@ def test_insert_blackout_rejects_missing_times(client):
 
 
 def test_remove_blackout_drops_indexed_break(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     state["config"]["breaks"] = [
         {"start": "12:00", "end": "13:00"},
         {"start": "15:00", "end": "15:30"},
     ]
-    client.put("/tournament/state", json=state)
+    client.put(f"/tournaments/{tid}/state", json=state)
     r = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {
             "kind": "remove_blackout",
             "blackoutIndex": 0,
@@ -272,9 +273,10 @@ def test_remove_blackout_drops_indexed_break(client):
 
 
 def test_remove_blackout_rejects_invalid_index(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     r = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {
             "kind": "remove_blackout",
             "blackoutIndex": 5,  # out of range
@@ -287,9 +289,10 @@ def test_remove_blackout_rejects_invalid_index(client):
 
 
 def test_unknown_kind_rejected_at_validation(client):
-    state = _seed(client)
+    tid = seed_tournament(client)
+    state = _seed(client, tid)
     r = client.post(
-        "/schedule/director-action",
+        f"/tournaments/{tid}/schedule/director-action",
         json=_action_request(state, {"kind": "magic"}),
     )
     # Pydantic's Literal validator catches this at the request layer.

@@ -28,9 +28,11 @@ from app.schemas import (
     TournamentConfig,
 )
 from api.match_state import MatchStateDTO
-from scheduler_core.domain.models import Assignment
+from scheduler_core.domain.models import Assignment, LockedAssignment
 from scheduler_core.engine.cancel_token import CancelToken
 from scheduler_core.engine.repair import RepairSpec, solve_repair
+
+from typing import Sequence
 
 from adapters.badminton import (
     matches_from_dto,
@@ -207,7 +209,11 @@ def _slice_for(
     )
 
 
-def _run_repair(request: RepairRequest) -> tuple[ScheduleDTO, List[str]]:
+def _run_repair(
+    request: RepairRequest,
+    *,
+    locked_assignments: Optional[Sequence[LockedAssignment]] = None,
+) -> tuple[ScheduleDTO, List[str]]:
     """Pure solver-call body for the repair endpoint.
 
     Extracted so internal callers (proposal pipeline, director-action)
@@ -215,6 +221,10 @@ def _run_repair(request: RepairRequest) -> tuple[ScheduleDTO, List[str]]:
     Pydantic round-trip — that round-trip can fail under sys.modules
     churn when ``ScheduleDTO`` ends up with two distinct class
     identities at validation time.
+
+    Tournament-scoped callers populate ``locked_assignments`` via
+    ``services.match_state.build_locked_assignments(repo, tid)``; the
+    public stateless ``POST /schedule/repair`` route leaves it None.
     """
     assignments_by_match = {
         a.matchId: a for a in request.originalSchedule.assignments
@@ -236,6 +246,7 @@ def _run_repair(request: RepairRequest) -> tuple[ScheduleDTO, List[str]]:
             matches,
             repair,
             solver_options=solver_options,
+            locked_assignments=locked_assignments,
         )
     except Exception:
         log.exception("schedule repair failed")
@@ -261,6 +272,7 @@ def _run_repair_with_cancel(
     request: RepairRequest,
     *,
     cancel_token: CancelToken,
+    locked_assignments: Optional[Sequence[LockedAssignment]] = None,
 ) -> tuple[ScheduleDTO, List[str]]:
     """Cancel-aware variant of `_run_repair` for speculative solves.
 
@@ -282,6 +294,7 @@ def _run_repair_with_cancel(
         schedule_config, players, matches, repair,
         solver_options=solver_options,
         cancel_token=cancel_token,
+        locked_assignments=locked_assignments,
     )
     new_schedule = result_to_dto(result)
     repaired_ids: List[str] = []
