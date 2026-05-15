@@ -23,6 +23,7 @@ import { useBracket } from '../../hooks/useBracket';
 import { useUiStore } from '../../store/uiStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
 import { SetupForm } from './SetupForm';
+import { SetupTab } from './SetupTab';
 import { BracketViewHeader } from './BracketViewHeader';
 import { DrawView } from './DrawView';
 import { ScheduleView } from './ScheduleView';
@@ -151,7 +152,7 @@ function BracketTabBody() {
         key={view}
         className="min-h-0 flex-1 overflow-auto animate-block-in"
       >
-        {view === 'setup' && <div>Setup (A.6)</div>}
+        {view === 'setup' && <SetupTab />}
         {view === 'roster' && <div>Roster (A.7)</div>}
         {view === 'events' && <div>Events (A.8)</div>}
         {view === 'draw' && (
