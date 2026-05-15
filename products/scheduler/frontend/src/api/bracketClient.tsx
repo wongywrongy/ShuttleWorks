@@ -54,6 +54,9 @@ export interface BracketApi {
 }
 
 const BracketApiContext = createContext<BracketApi | null>(null);
+/** Exported only for the optional context-check in BracketRosterTab — not
+ *  part of the public hook surface (use useBracketApi inside a provider). */
+export { BracketApiContext };
 
 export function BracketApiProvider({
   tournamentId,
