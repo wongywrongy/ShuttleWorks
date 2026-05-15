@@ -7,6 +7,72 @@ import { useMemo, useCallback } from 'react';
 import { GanttTimeline, type Placement, type GanttBlockBox } from '@scheduler/design-system';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { getEventColor } from '../schedule/eventColors';
+import { useCurrentSlot } from '../../hooks/useCurrentSlot';
+
+// ---- State-ring vocabulary ------------------------------------------------
+
+export type ChipState = 'scheduled' | 'called' | 'started' | 'finished' | 'late';
+
+/**
+ * Derives the lifecycle state of a play-unit chip from the DTO data.
+ *
+ * Priority: finished → started → late → scheduled.
+ * 'called' is kept in the type for forward-compat but is not emitted
+ * in B.2 — bracket has no distinct "called" state from the DTO yet.
+ */
+export function deriveChipState(
+  pu_id: string,
+  data: BracketTournamentDTO,
+  currentSlot: number,
+): ChipState {
+  const result = data.results.find((r) => r.play_unit_id === pu_id);
+  const assignment = data.assignments.find((a) => a.play_unit_id === pu_id);
+  if (result) return 'finished';
+  if (assignment?.actual_start_slot != null) return 'started';
+  // 'called' would map to a separate match-state — defer to the
+  // existing matchStateStore if needed. For now use 'scheduled'.
+  if (assignment && currentSlot >= assignment.slot_id + 1) return 'late';
+  return 'scheduled';
+}
+
+// Ring class per state (subset of GanttChart vocabulary — no selected/blocked/impacted).
+// scheduled → no ring; started → green live ring; finished → muted ring (done);
+// late → yellow; called → amber (forward-compat; not emitted in B.2).
+const CHIP_RING: Record<ChipState, string> = {
+  scheduled: '',
+  called:    'ring-2 ring-inset ring-status-called',
+  started:   'ring-2 ring-inset ring-status-live',
+  finished:  'ring-2 ring-inset ring-status-done',
+  late:      'ring-2 ring-inset ring-yellow-400',
+};
+
+// ---- Tooltip builder -------------------------------------------------------
+
+function buildTooltip(
+  pu: BracketTournamentDTO['play_units'][number],
+  data: BracketTournamentDTO,
+  state: ChipState,
+): string {
+  const event = data.events.find((e) => e.id === pu.event_id);
+  const discipline = event?.discipline ?? pu.event_id;
+
+  // Resolve participant names from side_a / side_b slot ids or feeder ids.
+  const resolveSide = (ids: string[] | null): string => {
+    if (!ids || ids.length === 0) return 'TBD';
+    return ids
+      .map((id) => data.participants.find((p) => p.id === id)?.name ?? id)
+      .join(' / ');
+  };
+
+  const sideA = resolveSide(pu.side_a);
+  const sideB = resolveSide(pu.side_b);
+  const round = `R${pu.round_index + 1}`;
+  const match = `M${pu.match_index + 1}`;
+
+  return `${discipline} — ${round} ${match} — ${sideA} vs ${sideB} [${state}]`;
+}
+
+// ---- Component ------------------------------------------------------------
 
 interface Props {
   data: BracketTournamentDTO;
@@ -16,6 +82,8 @@ interface Props {
 }
 
 export function LiveView({ data }: Props) {
+  const currentSlot = useCurrentSlot();
+
   const placements: Placement[] = useMemo(() => {
     // Renders all events; event color is the discriminator (event-filter removed in B.1).
     // Only events with status generated/started have assignments;
@@ -52,17 +120,29 @@ export function LiveView({ data }: Props) {
   const renderBlock = useCallback(
     (placement: Placement, _box: GanttBlockBox) => {
       const pu = puById[placement.key];
-      const eventId = pu?.event_id ?? 'GEN';
-      const color = getEventColor(eventId);
+      // B.2 fix: look up discipline from events to get the correct color prefix
+      // (e.g. "MS" → blue, "WD" → purple). Falls back to DEFAULT_EVENT_COLOR
+      // for unrecognised discipline strings.
+      const discipline = pu
+        ? data.events.find((e) => e.id === pu.event_id)?.discipline
+        : undefined;
+      const color = getEventColor(discipline);
+
+      const state = pu ? deriveChipState(pu.id, data, currentSlot) : 'scheduled';
+      const ringClass = CHIP_RING[state];
+
+      const tooltip = pu ? buildTooltip(pu, data, state) : '';
+
       return (
         <div
-          className={`h-full w-full rounded-sm border px-2 py-1 ${color.bg} ${color.border}`}
+          className={`h-full w-full rounded-sm border px-2 py-1 ${color.bg} ${color.border} ${ringClass}`}
+          title={tooltip}
         >
-          <div className="text-2xs font-mono truncate">{pu?.id}</div>
+          <div className="text-2xs font-mono truncate tracking-[0.18em]">{pu?.id}</div>
         </div>
       );
     },
-    [puById],
+    [puById, data, currentSlot],
   );
 
   if (placements.length === 0) {
