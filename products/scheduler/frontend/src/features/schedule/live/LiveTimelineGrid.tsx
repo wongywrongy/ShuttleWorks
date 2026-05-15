@@ -7,6 +7,7 @@ import { calculateTotalSlots, formatSlotTime } from '../../../lib/time';
 import { indexById } from '../../../lib/indexById';
 import type { ScheduleAssignment, MatchDTO, PlayerDTO, TournamentConfig } from '../../../api/dto';
 import { EVENT_COLORS, DEFAULT_EVENT_COLOR } from '../eventColors';
+import { GANTT_GEOMETRY } from '../ganttGeometry';
 
 interface LiveTimelineGridProps {
   assignments: ScheduleAssignment[];
@@ -15,9 +16,6 @@ interface LiveTimelineGridProps {
   config: TournamentConfig;
   status?: 'solving' | 'complete' | 'error';
 }
-
-const SLOT_WIDTH = 48;
-const ROW_HEIGHT = 32;
 
 const DEFAULT_COLOR = DEFAULT_EVENT_COLOR;
 
@@ -28,6 +26,8 @@ export function LiveTimelineGrid({
   config,
   status = 'solving',
 }: LiveTimelineGridProps) {
+  const geom = GANTT_GEOMETRY.compact;
+
   // Track which assignments are "new" for animation purposes
   const [animatedIds, setAnimatedIds] = useState<Set<string>>(new Set());
   const prevAssignmentsRef = useRef<string[]>([]);
@@ -189,11 +189,11 @@ export function LiveTimelineGrid({
         <div className="min-w-max">
           {/* Time header */}
           <div className="flex border-b border-border/60">
-            <div className="w-12 flex-shrink-0 px-1 py-0.5 bg-muted/40 text-xs text-muted-foreground" />
+            <div className="flex-shrink-0 px-1 py-0.5 bg-muted/40 text-xs text-muted-foreground" style={{ width: geom.label }} />
             {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
               <div
                 key={slot}
-                style={{ width: SLOT_WIDTH }}
+                style={{ width: geom.slot }}
                 className="flex-shrink-0 px-0.5 py-0.5 text-center text-xs border-l border-border/60 bg-muted/40 text-muted-foreground"
               >
                 {i % 2 === 0 ? slotLabels[slot] : ''}
@@ -204,17 +204,17 @@ export function LiveTimelineGrid({
           {/* Court rows */}
           {courts.map(courtId => (
             <div key={courtId} className="flex border-b border-border/60">
-              <div className="w-12 flex-shrink-0 px-1 bg-muted/40 text-xs font-medium text-muted-foreground flex items-center">
+              <div className="flex-shrink-0 px-1 bg-muted/40 text-xs font-medium text-muted-foreground flex items-center" style={{ width: geom.label }}>
                 C{courtId}
               </div>
-              <div className="flex-1 relative" style={{ height: ROW_HEIGHT }}>
+              <div className="flex-1 relative" style={{ height: geom.row }}>
                 {/* Slot grid lines — match DragGantt's lighter mesh:
                     every-other slot only, /30 weight. */}
                 <div className="absolute inset-0 flex">
                   {Array.from({ length: visibleSlots }, (_, i) => minSlot + i).map((slot, i) => (
                     <div
                       key={slot}
-                      style={{ width: SLOT_WIDTH }}
+                      style={{ width: geom.slot }}
                       className={`flex-shrink-0 ${i % 2 === 0 ? 'border-l border-border/30' : ''}`}
                     />
                   ))}
@@ -227,8 +227,8 @@ export function LiveTimelineGrid({
                   const isAnimated = animatedIds.has(assignment.matchId);
 
                   // Calculate position relative to visible range
-                  const left = (assignment.slotId - minSlot) * SLOT_WIDTH;
-                  const width = assignment.durationSlots * SLOT_WIDTH - 2;
+                  const left = (assignment.slotId - minSlot) * geom.slot;
+                  const width = assignment.durationSlots * geom.slot - 2;
 
                   return (
                     <div
@@ -237,7 +237,7 @@ export function LiveTimelineGrid({
                         ${colors.bg} ${colors.border}
                         transition-[opacity,transform] duration-fast ease-brand
                         ${isAnimated ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
-                      style={{ left, width, height: ROW_HEIGHT - 4 }}
+                      style={{ left, width, height: geom.row - 4 }}
                       title={getMatchTooltip(assignment.matchId, assignment)}
                     >
                       <div className="px-1 h-full flex items-center overflow-hidden">
