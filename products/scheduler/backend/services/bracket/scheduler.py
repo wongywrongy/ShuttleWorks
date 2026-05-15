@@ -25,7 +25,7 @@ from scheduler_core.domain.tournament import (
 )
 
 from .adapter import advance_current_slot, build_problem
-from .state import find_ready_play_units
+from .state import find_ready_play_units, is_assignment_locked
 
 
 @dataclass
@@ -140,16 +140,7 @@ class TournamentDriver:
 
         current_slot = self.config.current_slot
 
-        def _is_locked(a: TournamentAssignment) -> bool:
-            if a.play_unit_id in self.state.results:
-                return True
-            if a.actual_start_slot is not None:
-                return True
-            if a.slot_id + a.duration_slots <= current_slot:
-                return True
-            return False
-
-        if _is_locked(assignment):
+        if is_assignment_locked(assignment, self.state.results, current_slot):
             raise ValueError(
                 f"play unit {play_unit_id!r} is locked "
                 f"(played / started / past); cannot re-pin"
@@ -167,7 +158,7 @@ class TournamentDriver:
                         pinned_court_id=court_id,
                     )
                 )
-            elif _is_locked(a):
+            elif is_assignment_locked(a, self.state.results, current_slot):
                 previous_assignments.append(
                     PreviousAssignment(
                         match_id=pu_id,
@@ -190,6 +181,9 @@ class TournamentDriver:
         result = schedule(problem, options=self.solver_options)
 
         if result.status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE):
+            # Physical-history fields (actual_*) carry over; scheduling-
+            # decision metadata (locked/pinned_*) deliberately resets —
+            # pins are transient (the re-solve IS the new scheduling decision).
             for solved in result.assignments:
                 existing = self.state.assignments.get(solved.match_id)
                 self.state.assignments[solved.match_id] = TournamentAssignment(

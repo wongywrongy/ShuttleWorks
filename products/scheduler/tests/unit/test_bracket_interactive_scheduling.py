@@ -350,12 +350,13 @@ def test_validate_feasible_move(client, tid):
     body = _schedule_round_one(client, tid)
     assignments = sorted(body["assignments"], key=lambda a: a["court_id"])
     target = assignments[0]
-    # Move it to a clearly empty cell far from everything.
+    # Move it to a slot guaranteed clear of every current assignment.
+    safe_slot = max(a["slot_id"] + a["duration_slots"] for a in body["assignments"]) + 10
     r = client.post(
         _bracket_url(tid, "validate"),
         json={
             "play_unit_id": target["play_unit_id"],
-            "slot_id": 20,
+            "slot_id": safe_slot,
             "court_id": target["court_id"],
         },
     )
@@ -491,6 +492,7 @@ def test_pin_keeps_locked_match_fixed(client, tid):
         if a["play_unit_id"] == free_pu["play_unit_id"]
     )
     assert free_after["slot_id"] == 7
+    assert free_after["court_id"] == free_pu["court_id"]
 
 
 def test_pin_409_when_play_unit_locked(client, tid):

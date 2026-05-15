@@ -19,6 +19,8 @@ Routes (all tournament-scoped via the path's ``tournament_id``):
   POST   /tournaments/{tid}/bracket/results    — record result
   POST   /tournaments/{tid}/bracket/match-action
                                                — start / finish / reset
+  POST   /tournaments/{tid}/bracket/validate   — feasibility check (drag)
+  POST   /tournaments/{tid}/bracket/pin        — re-pin + re-solve
   POST   /tournaments/{tid}/bracket/import     — import pre-paired (JSON)
   POST   /tournaments/{tid}/bracket/import.csv — import pre-paired (CSV)
   GET    /tournaments/{tid}/bracket/export.json
@@ -78,7 +80,12 @@ from services.bracket.io.import_matches import (
     parse_csv_payload,
     parse_json_payload,
 )
-from services.bracket.state import BracketSession, EventMeta, register_draw
+from services.bracket.state import (
+    BracketSession,
+    EventMeta,
+    is_assignment_locked,
+    register_draw,
+)
 from services.bracket.validation import BracketConflict, validate_bracket_move
 
 router = APIRouter(
@@ -695,17 +702,14 @@ def _bracket_locked_play_unit_ids(
 ) -> Set[str]:
     """PlayUnits whose assignment is locked: played (has a result) ∪
     started (``actual_start_slot`` set) ∪ past (ends at or before
-    ``current_slot``). Mirrors the partition rule in
+    ``current_slot``). Delegates to ``is_assignment_locked`` — the
+    single source of truth shared with
     ``TournamentDriver.repin_and_resolve``."""
-    locked: Set[str] = set()
-    for a in state.assignments.values():
-        if a.play_unit_id in state.results:
-            locked.add(a.play_unit_id)
-        elif a.actual_start_slot is not None:
-            locked.add(a.play_unit_id)
-        elif a.slot_id + a.duration_slots <= current_slot:
-            locked.add(a.play_unit_id)
-    return locked
+    return {
+        a.play_unit_id
+        for a in state.assignments.values()
+        if is_assignment_locked(a, state.results, current_slot)
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1295,8 +1299,11 @@ def pin_bracket_match(
         )
     except ValueError as exc:
         # repin_and_resolve raises ValueError for an unscheduled or
-        # locked play_unit. The locked case is caught above; an
-        # unscheduled real play_unit (e.g. the final, awaiting feeders)
+        # locked play_unit. The locked case is caught above (409 before
+        # this point), so every ValueError here originates from the
+        # unscheduled-play_unit entry guard. build_problem and schedule()
+        # do not raise ValueError in this call path.
+        # An unscheduled real play_unit (e.g. the final, awaiting feeders)
         # cannot be pinned — surface it as infeasible.
         raise HTTPException(
             status_code=409,

@@ -23,6 +23,8 @@ from typing import Dict, Optional
 from scheduler_core.domain.models import ScheduleConfig
 from scheduler_core.domain.tournament import (
     PlayUnitId,
+    Result,
+    TournamentAssignment,
     TournamentState,
 )
 
@@ -105,3 +107,20 @@ def find_ready_play_units(state: TournamentState) -> list[PlayUnitId]:
             continue
         ready.append(pu_id)
     return ready
+
+
+def is_assignment_locked(
+    assignment: TournamentAssignment,
+    results: Dict[PlayUnitId, Result],
+    current_slot: int,
+) -> bool:
+    """An assignment is locked — immovable by a re-pin re-solve — when it
+    is played (has a result), started (``actual_start_slot`` set), or
+    past (ends at or before ``current_slot``)."""
+    if assignment.play_unit_id in results:
+        return True
+    if assignment.actual_start_slot is not None:
+        return True
+    if assignment.slot_id + assignment.duration_slots <= current_slot:
+        return True
+    return False

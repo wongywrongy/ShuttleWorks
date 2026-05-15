@@ -117,6 +117,11 @@ def validate_bracket_move(
     # PlayUnit's existing entry.
     core_assignments: List[CoreAssignment] = []
     for assigned_id, assignment in state.assignments.items():
+        assigned_pu = state.play_units.get(assigned_id)
+        if assigned_pu is None:
+            continue
+        if not assigned_pu.side_a or not assigned_pu.side_b:
+            continue
         if assigned_id == play_unit_id:
             core_assignments.append(
                 CoreAssignment(
