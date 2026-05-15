@@ -25,6 +25,7 @@ import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
 import { SetupForm } from './SetupForm';
 import { SetupTab } from './SetupTab';
 import { BracketRosterTab } from './BracketRosterTab';
+import { EventsTab } from './EventsTab';
 import { BracketViewHeader } from './BracketViewHeader';
 import { DrawView } from './DrawView';
 import { ScheduleView } from './ScheduleView';
@@ -155,7 +156,7 @@ function BracketTabBody() {
       >
         {view === 'setup' && <SetupTab />}
         {view === 'roster' && <BracketRosterTab />}
-        {view === 'events' && <div>Events (A.8)</div>}
+        {view === 'events' && <EventsTab />}
         {view === 'draw' && (
           <DrawView
             data={data}

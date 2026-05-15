@@ -21,6 +21,8 @@ import type {
   BracketValidateIn,
   BracketPinIn,
   BracketValidationOut,
+  BracketEventUpsertIn,
+  BracketEventGenerateIn,
   WinnerSide,
 } from './bracketDto';
 
@@ -51,6 +53,9 @@ export interface BracketApi {
   exportJsonUrl: () => string;
   exportCsvUrl: () => string;
   exportIcsUrl: () => string;
+  eventUpsert: (eventId: string, body: BracketEventUpsertIn) => Promise<BracketTournamentDTO>;
+  eventGenerate: (eventId: string, body: BracketEventGenerateIn) => Promise<BracketTournamentDTO>;
+  eventDelete: (eventId: string) => Promise<void>;
 }
 
 const BracketApiContext = createContext<BracketApi | null>(null);
@@ -82,6 +87,9 @@ export function BracketApiProvider({
       exportJsonUrl: () => apiClient.bracketExportJsonUrl(tournamentId),
       exportCsvUrl: () => apiClient.bracketExportCsvUrl(tournamentId),
       exportIcsUrl: () => apiClient.bracketExportIcsUrl(tournamentId),
+      eventUpsert: (eventId, body) => apiClient.bracketEventUpsert(tournamentId, eventId, body),
+      eventGenerate: (eventId, body) => apiClient.bracketEventGenerate(tournamentId, eventId, body),
+      eventDelete: (eventId) => apiClient.bracketEventDelete(tournamentId, eventId),
     }),
     [tournamentId],
   );

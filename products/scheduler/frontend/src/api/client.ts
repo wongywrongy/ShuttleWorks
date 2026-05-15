@@ -44,6 +44,8 @@ import type {
   BracketValidateIn,
   BracketPinIn,
   BracketValidationOut,
+  BracketEventUpsertIn,
+  BracketEventGenerateIn,
 } from './bracketDto';
 
 // Use /api proxy in dev, or explicit URL in production
@@ -1033,6 +1035,36 @@ class ApiClient {
       { headers: { 'Content-Type': 'text/csv' } },
     );
     return response.data;
+  }
+
+  async bracketEventUpsert(
+    tid: string,
+    eventId: string,
+    body: BracketEventUpsertIn,
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}`,
+      body,
+    );
+    return data;
+  }
+
+  async bracketEventGenerate(
+    tid: string,
+    eventId: string,
+    body: BracketEventGenerateIn,
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}/generate`,
+      body,
+    );
+    return data;
+  }
+
+  async bracketEventDelete(tid: string, eventId: string): Promise<void> {
+    await this.client.delete(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}`,
+    );
   }
 
   bracketExportJsonUrl(tid: string): string {

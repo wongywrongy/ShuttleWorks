@@ -88,6 +88,9 @@ export interface EventDTO {
   bracket_size: number | null;
   participant_count: number;
   rounds: string[][];
+  /** Per-event status sent by the backend since A.4. Optional for
+   *  backwards compat — old draws without the column default to 'draft'. */
+  status?: BracketEventStatus;
 }
 
 export interface TournamentDTO {
@@ -157,4 +160,30 @@ export interface BracketValidationConflict {
 export interface BracketValidationOut {
   feasible: boolean;
   conflicts: BracketValidationConflict[];
+}
+
+// ---- Per-event status + upsert/generate DTOs (sub-project A.8) ----------
+
+/** Per-event lifecycle status. */
+export type BracketEventStatus = 'draft' | 'generated' | 'started';
+
+/** POST /tournaments/{tid}/bracket/events/{event_id} body. */
+export interface BracketEventUpsertIn {
+  discipline: string;
+  format: 'se' | 'rr';
+  bracket_size?: number | null;
+  seeded_count?: number;
+  rr_rounds?: number;
+  duration_slots?: number;
+  participants: Array<{
+    id: string;
+    name: string;
+    members?: string[];
+    seed?: number;
+  }>;
+}
+
+/** POST /tournaments/{tid}/bracket/events/{event_id}/generate body. */
+export interface BracketEventGenerateIn {
+  wipe?: boolean;
 }
