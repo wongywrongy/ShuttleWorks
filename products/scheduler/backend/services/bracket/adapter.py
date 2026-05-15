@@ -13,6 +13,7 @@ from typing import Iterable, List, Sequence
 from scheduler_core.domain.models import (
     Match,
     Player,
+    PreviousAssignment,
     ScheduleConfig,
     ScheduleRequest,
     SolverOptions,
@@ -30,6 +31,7 @@ def build_problem(
     *,
     config: ScheduleConfig,
     solver_options: SolverOptions | None = None,
+    previous_assignments: List[PreviousAssignment] | None = None,
 ) -> ScheduleRequest:
     """Assemble a SchedulingProblem for the engine.
 
@@ -37,6 +39,11 @@ def build_problem(
     multi-event tournaments the state already holds everyone across
     events, so the engine sees one global match + player set per
     solve and player-no-overlap covers cross-event conflicts.
+
+    `previous_assignments` carries the locked/pinned partition for a
+    re-pin solve (see `TournamentDriver.repin_and_resolve`); when
+    `None` it defaults to `[]`, preserving the append-only
+    `schedule_next_round` behaviour.
     """
     if not ready_play_unit_ids:
         raise ValueError("no ready play units to schedule")
@@ -53,8 +60,8 @@ def build_problem(
                 f"play unit {pu_id!r} has unresolved sides; cannot schedule"
             )
 
-        side_a = _expand_side(pu.side_a, state.participants)
-        side_b = _expand_side(pu.side_b, state.participants)
+        side_a = expand_side(pu.side_a, state.participants)
+        side_b = expand_side(pu.side_b, state.participants)
         if not side_a or not side_b:
             raise ValueError(
                 f"play unit {pu_id!r} expanded to empty side"
@@ -73,7 +80,7 @@ def build_problem(
         referenced_player_ids.update(side_b)
 
     availability_window = (config.current_slot, config.total_slots)
-    players = _build_players(
+    players = build_players(
         referenced_player_ids,
         state.participants,
         availability_window=availability_window,
@@ -83,12 +90,12 @@ def build_problem(
         config=config,
         players=players,
         matches=matches,
-        previous_assignments=[],
+        previous_assignments=list(previous_assignments or []),
         solver_options=solver_options,
     )
 
 
-def _expand_side(
+def expand_side(
     side: Iterable[str], participants: dict
 ) -> List[str]:
     """Expand a side's participant ids to player ids.
@@ -111,7 +118,7 @@ def _expand_side(
     return expanded
 
 
-def _build_players(
+def build_players(
     player_ids: set[str],
     participants: dict,
     *,
