@@ -35,3 +35,14 @@ export {
 export { Modal } from './Modal';
 export { Hint, useHint } from './Hint';
 export { Toast, ToastStack, type ToastData, type ToastLevel } from './Toast';
+export {
+  GanttTimeline,
+  GANTT_GEOMETRY,
+  placementBox,
+  type GanttDensity,
+  type GanttGeometryTier,
+  type Placement,
+  type GanttCell,
+  type GanttBlockBox,
+  type GanttTimelineProps,
+} from './GanttTimeline';
