@@ -1,244 +1,89 @@
-import { useMemo } from "react";
-import { Button, Card, StatusPill } from "@scheduler/design-system";
-import { useBracketApi } from "../../api/bracketClient";
-import type { TournamentDTO } from "../../api/bracketDto";
+/**
+ * LiveView — GanttTimeline operator surface. Court×time with chips
+ * coloured by event and ringed by lifecycle state. Right-rail
+ * MatchDetailPanel arrives in B.3.
+ */
+import { useMemo, useCallback } from 'react';
+import { GanttTimeline, type Placement, type GanttBlockBox } from '@scheduler/design-system';
+import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { getEventColor } from '../schedule/eventColors';
 
 interface Props {
-  data: TournamentDTO;
-  eventId: string;
-  onChange: (t: TournamentDTO) => void;
+  data: BracketTournamentDTO;
+  // onChange and refresh: forwarded to MatchDetailPanel in B.3
+  onChange: (t: BracketTournamentDTO) => void;
   refresh: () => Promise<void>;
 }
 
-export function LiveView({ data, eventId, onChange }: Props) {
-  const api = useBracketApi();
-  const rows = useMemo(() => buildRows(data, eventId), [data, eventId]);
+export function LiveView({ data }: Props) {
+  const placements: Placement[] = useMemo(() => {
+    // Renders all events; event color is the discriminator (event-filter removed in B.1).
+    // Only events with status generated/started have assignments;
+    // a draft event's assignments are absent by construction.
+    // NOTE: court_id values outside [1, data.courts] are silently clamped to index 0
+    // by Math.max(0, a.court_id - 1) — out-of-range assignments appear on court 1.
+    return data.assignments.map<Placement>((a) => ({
+      courtIndex: Math.max(0, a.court_id - 1),
+      startSlot: a.slot_id,
+      span: a.duration_slots,
+      key: `live-${a.play_unit_id}`,
+    }));
+  }, [data.assignments]);
+
+  const courts = useMemo(
+    () => Array.from({ length: data.courts }, (_, i) => i + 1),
+    [data.courts],
+  );
+
+  const { minSlot, slotCount } = useMemo(() => {
+    if (placements.length === 0) return { minSlot: 0, slotCount: 1 };
+    const lo = placements.reduce((m, p) => Math.min(m, p.startSlot), Number.POSITIVE_INFINITY);
+    const hi = placements.reduce((m, p) => Math.max(m, p.startSlot + p.span), 0);
+    return { minSlot: lo, slotCount: Math.max(1, hi - lo) };
+  }, [placements]);
+
+  // Keyed by the prefixed placement key ('live-' + pu.id) so renderBlock
+  // can look up directly without stripping the prefix.
+  const puById = useMemo(
+    () => Object.fromEntries(data.play_units.map((pu) => [`live-${pu.id}`, pu])),
+    [data.play_units],
+  );
+
+  const renderBlock = useCallback(
+    (placement: Placement, _box: GanttBlockBox) => {
+      const pu = puById[placement.key];
+      const eventId = pu?.event_id ?? 'GEN';
+      const color = getEventColor(eventId);
+      return (
+        <div
+          className={`h-full w-full rounded-sm border px-2 py-1 ${color.bg} ${color.border}`}
+        >
+          <div className="text-2xs font-mono truncate">{pu?.id}</div>
+        </div>
+      );
+    },
+    [puById],
+  );
+
+  if (placements.length === 0) {
+    return (
+      // TODO B.3: wire tab-switch callback for "Go to Events" button
+      <div className="p-6 text-sm text-muted-foreground">
+        No draws generated yet — see the <strong>Events</strong> tab.
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      <Card variant="frame" className="p-4">
-        <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wide">
-          Live ops — event {eventId}
-        </h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Mark matches as started or finished as they happen on court.
-          Recording a result here advances the bracket; click{" "}
-          <em>Schedule next round</em> on the <em>Schedule</em> sub-tab
-          above once R0 feeders are in. The solver schedules across all
-          events at once, so cross-event player conflicts are respected
-          automatically.
-        </p>
-      </Card>
-
-      <Card variant="frame" className="overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-ink-100 text-ink-600">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium">Match</th>
-              <th className="px-3 py-2 text-left font-medium">Side A</th>
-              <th className="px-3 py-2 text-left font-medium">Side B</th>
-              <th className="px-3 py-2 text-left font-medium">Court</th>
-              <th className="px-3 py-2 text-left font-medium">Slot</th>
-              <th className="px-3 py-2 text-left font-medium">State</th>
-              <th className="px-3 py-2 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.id}
-                className="border-t border-ink-100 hover:bg-ink-50"
-              >
-                <td className="px-3 py-2 font-mono text-xs text-ink-500">
-                  {row.id}
-                </td>
-                <td className="px-3 py-2">{row.sideA}</td>
-                <td className="px-3 py-2">{row.sideB}</td>
-                <td className="px-3 py-2">{row.court ?? "—"}</td>
-                <td className="px-3 py-2 font-mono text-xs">
-                  {row.slot ?? "—"}
-                </td>
-                <td className="px-3 py-2">
-                  <StatePill state={row.state} />
-                </td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">
-                  {row.canStart && (
-                    <Button
-                      variant="outline"
-                      onClick={async () => {
-                        onChange(
-                          await api.matchAction({
-                            play_unit_id: row.id,
-                            action: "start",
-                          })
-                        );
-                      }}
-                    >
-                      Start
-                    </Button>
-                  )}
-                  {row.canFinish && (
-                    <Button
-                      variant="outline"
-                      className="ml-1"
-                      onClick={async () => {
-                        onChange(
-                          await api.matchAction({
-                            play_unit_id: row.id,
-                            action: "finish",
-                          })
-                        );
-                      }}
-                    >
-                      Finish
-                    </Button>
-                  )}
-                  {row.canResetActuals && (
-                    <Button
-                      variant="ghost"
-                      className="ml-1"
-                      onClick={async () => {
-                        onChange(
-                          await api.matchAction({
-                            play_unit_id: row.id,
-                            action: "reset",
-                          })
-                        );
-                      }}
-                    >
-                      Reset
-                    </Button>
-                  )}
-                  {row.canRecordResult && (
-                    <span className="ml-2 inline-flex gap-1">
-                      <Button
-                        variant="outline"
-                        onClick={async () => {
-                          onChange(
-                            await api.recordResult({
-                              play_unit_id: row.id,
-                              winner_side: "A",
-                              finished_at_slot: row.finishSlot,
-                            })
-                          );
-                        }}
-                      >
-                        A wins
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={async () => {
-                          onChange(
-                            await api.recordResult({
-                              play_unit_id: row.id,
-                              winner_side: "B",
-                              finished_at_slot: row.finishSlot,
-                            })
-                          );
-                        }}
-                      >
-                        B wins
-                      </Button>
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+    <div className="p-4">
+      <GanttTimeline
+        courts={courts}
+        minSlot={minSlot}
+        slotCount={slotCount}
+        density="standard"
+        placements={placements}
+        renderBlock={renderBlock}
+      />
     </div>
-  );
-}
-
-function StatePill({ state }: { state: RowState }) {
-  switch (state) {
-    case "done":
-      return <StatusPill tone="done">Done</StatusPill>;
-    case "live":
-      return <StatusPill tone="yellow">Live</StatusPill>;
-    case "ready":
-      return <StatusPill tone="amber">Ready</StatusPill>;
-    case "pending":
-      return (
-        <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Pending
-        </span>
-      );
-  }
-}
-
-type RowState = "pending" | "ready" | "live" | "done";
-interface Row {
-  id: string;
-  sideA: string;
-  sideB: string;
-  court: number | null;
-  slot: number | null;
-  state: RowState;
-  canStart: boolean;
-  canFinish: boolean;
-  canResetActuals: boolean;
-  canRecordResult: boolean;
-  finishSlot: number | null;
-}
-
-function buildRows(data: TournamentDTO, eventId: string): Row[] {
-  const nameById = Object.fromEntries(
-    data.participants.map((p) => [p.id, p.name])
-  );
-  const resultByPu = Object.fromEntries(
-    data.results.map((r) => [r.play_unit_id, r])
-  );
-  const assignmentByPu = Object.fromEntries(
-    data.assignments.map((a) => [a.play_unit_id, a])
-  );
-
-  const filtered = data.play_units.filter((pu) => pu.event_id === eventId);
-
-  const rows: Row[] = filtered.map((pu) => {
-    const r = resultByPu[pu.id];
-    const a = assignmentByPu[pu.id];
-    let state: RowState = "pending";
-    if (r) state = "done";
-    else if (a?.started && !a.finished) state = "live";
-    else if (a) state = "ready";
-
-    const sideA = pu.side_a
-      ? pu.side_a.map((id) => nameById[id] ?? id).join("/")
-      : pu.slot_a.feeder_play_unit_id
-      ? `Winner of ${pu.slot_a.feeder_play_unit_id}`
-      : "Bye";
-    const sideB = pu.side_b
-      ? pu.side_b.map((id) => nameById[id] ?? id).join("/")
-      : pu.slot_b.feeder_play_unit_id
-      ? `Winner of ${pu.slot_b.feeder_play_unit_id}`
-      : "Bye";
-
-    return {
-      id: pu.id,
-      sideA,
-      sideB,
-      court: a?.court_id ?? null,
-      slot: a?.slot_id ?? null,
-      state,
-      canStart: !!a && !a.started && !r,
-      canFinish: !!a && a.started && !a.finished && !r,
-      canResetActuals: !!a && (a.started || a.finished) && !r,
-      canRecordResult: !!a && !r && !!pu.side_a && !!pu.side_b,
-      finishSlot: a ? a.slot_id + a.duration_slots : null,
-    };
-  });
-
-  const stateRank: Record<RowState, number> = {
-    live: 0,
-    ready: 1,
-    pending: 2,
-    done: 3,
-  };
-  return rows.sort(
-    (x, y) =>
-      stateRank[x.state] - stateRank[y.state] ||
-      (x.slot ?? 999) - (y.slot ?? 999)
   );
 }

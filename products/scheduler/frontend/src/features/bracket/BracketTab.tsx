@@ -195,7 +195,6 @@ function BracketTabBody() {
         {view === 'live' && (
           <LiveView
             data={data}
-            eventId={eventId}
             onChange={setData}
             refresh={refresh}
           />
