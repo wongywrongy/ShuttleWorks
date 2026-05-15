@@ -127,3 +127,34 @@ export interface BracketImportCsvParams {
   start_time?: string;
   time_limit_seconds?: number;
 }
+
+// ---- Interactive scheduling (sub-project #1) -------------------------------
+// Wire types for POST /tournaments/{tid}/bracket/validate and /pin.
+// Snake_case to match the bracket API surface (see api/brackets.py).
+
+export interface BracketValidateIn {
+  play_unit_id: string;
+  slot_id: number;
+  court_id: number;
+}
+
+export interface BracketPinIn {
+  play_unit_id: string;
+  slot_id: number;
+  court_id: number;
+}
+
+export interface BracketValidationConflict {
+  type: string;
+  description: string;
+  play_unit_id: string | null;
+  other_play_unit_id: string | null;
+  player_id: string | null;
+  court_id: number | null;
+  slot_id: number | null;
+}
+
+export interface BracketValidationOut {
+  feasible: boolean;
+  conflicts: BracketValidationConflict[];
+}

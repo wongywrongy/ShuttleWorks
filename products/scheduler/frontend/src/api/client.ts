@@ -41,6 +41,9 @@ import type {
   BracketTournamentDTO,
   BracketScheduleNextOut,
   BracketImportCsvParams,
+  BracketValidateIn,
+  BracketPinIn,
+  BracketValidationOut,
 } from './bracketDto';
 
 // Use /api proxy in dev, or explicit URL in production
@@ -972,6 +975,28 @@ class ApiClient {
   ): Promise<BracketTournamentDTO> {
     const response = await this.client.post(
       `/tournaments/${tid}/bracket/match-action`,
+      body,
+    );
+    return response.data;
+  }
+
+  async validateBracketMove(
+    tid: string,
+    body: BracketValidateIn,
+  ): Promise<BracketValidationOut> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/validate`,
+      body,
+    );
+    return response.data;
+  }
+
+  async pinBracketMatch(
+    tid: string,
+    body: BracketPinIn,
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/pin`,
       body,
     );
     return response.data;

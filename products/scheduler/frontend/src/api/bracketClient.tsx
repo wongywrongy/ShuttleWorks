@@ -18,6 +18,9 @@ import type {
   BracketTournamentDTO,
   BracketScheduleNextOut,
   BracketImportCsvParams,
+  BracketValidateIn,
+  BracketPinIn,
+  BracketValidationOut,
   WinnerSide,
 } from './bracketDto';
 
@@ -38,6 +41,8 @@ export interface BracketApi {
     action: 'start' | 'finish' | 'reset';
     slot?: number;
   }) => Promise<BracketTournamentDTO>;
+  validateMove: (body: BracketValidateIn) => Promise<BracketValidationOut>;
+  pinMatch: (body: BracketPinIn) => Promise<BracketTournamentDTO>;
   importJson: (body: unknown) => Promise<BracketTournamentDTO>;
   importCsv: (
     text: string,
@@ -66,6 +71,8 @@ export function BracketApiProvider({
       recordResult: (body) =>
         apiClient.recordBracketResult(tournamentId, body),
       matchAction: (body) => apiClient.bracketMatchAction(tournamentId, body),
+      validateMove: (body) => apiClient.validateBracketMove(tournamentId, body),
+      pinMatch: (body) => apiClient.pinBracketMatch(tournamentId, body),
       importJson: (body) => apiClient.importBracketJson(tournamentId, body),
       importCsv: (text, params) =>
         apiClient.importBracketCsv(tournamentId, text, params),
