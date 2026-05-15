@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { GANTT_GEOMETRY, placementBox } from '@scheduler/design-system/components';
 import type { Placement } from '@scheduler/design-system/components';

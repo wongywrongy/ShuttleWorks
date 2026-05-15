@@ -279,7 +279,7 @@ export function GanttTimeline({
             box.left (which is relative to the mesh, not the full grid)
             aligns correctly. */}
         <div className="relative" style={{ width: gridWidth, height: bodyHeight }}>
-          {courts.map((courtId, courtIndex) => (
+          {courts.map((courtId) => (
             <div
               key={courtId}
               className="relative flex border-b border-border/60"
