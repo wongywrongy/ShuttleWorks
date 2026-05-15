@@ -122,6 +122,8 @@ export interface TournamentConfig {
   // click when reality (overrun, withdrawal, court closure) makes
   // the chosen plan no longer fit — no re-solve needed. Default 5.
   candidatePoolSize?: number;
+  /** Slots of forced rest between bracket rounds. Bracket-side only. */
+  restBetweenRounds?: number;
 }
 
 export interface CourtClosure {
@@ -312,6 +314,14 @@ export interface RosterImportDTO {
   csv: string; // CSV content
 }
 
+/** Roster entry for bracket-kind tournaments. */
+export interface BracketPlayerDTO {
+  id: string;
+  name: string;
+  notes?: string;
+  restSlots?: number;
+}
+
 // Match Type - used for UI selection mode and match categorization
 export type MatchType = 'individual' | 'roster_vs_roster' | 'roster_match' | 'auto_generated';
 
@@ -431,6 +441,10 @@ export interface TournamentStateDTO {
   scheduleVersion?: number;
   /** Schema v2: rolling history of replaced committed schedules (capped server-side at 5). */
   scheduleHistory?: ScheduleHistoryEntry[];
+  /** Bracket-kind roster. Empty for meet-kind tournaments. */
+  bracketPlayers?: BracketPlayerDTO[];
+  /** Set true once the first-load reconcile from `bracket_participants` has run. */
+  bracketRosterMigrated?: boolean;
 }
 
 // ---- Proposal pipeline (two-phase commit) -------------------------------

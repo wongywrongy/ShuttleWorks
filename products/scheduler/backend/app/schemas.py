@@ -133,6 +133,9 @@ class TournamentConfig(BaseModel):
     # of 30 min costs no re-solve. Cleared back to 0 on schedule
     # reset.
     clockShiftMinutes: Optional[int] = Field(0, ge=0, le=24 * 60)
+    # ---- Bracket-kind settings -----------------------------------
+    # Slots of forced rest between bracket rounds. Bracket-side only.
+    restBetweenRounds: int = Field(default=1, ge=0)
 
 
 # Availability
@@ -157,6 +160,18 @@ class PlayerDTO(BaseModel):
     availability: List[AvailabilityWindow] = Field(default_factory=list)
     minRestMinutes: Optional[int] = None  # If not provided, uses config.defaultRestMinutes
     notes: Optional[str] = None
+
+
+class BracketPlayerDTO(BaseModel):
+    """Roster entry for bracket-kind tournaments.
+
+    ``id`` is the stable slug produced by the frontend ``playerSlug()``
+    helper; matches ``bracket_participants.member_ids`` after migration.
+    """
+    id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    notes: Optional[str] = None
+    restSlots: Optional[int] = Field(default=None, ge=0)
 
 
 class RosterImportDTO(BaseModel):
@@ -483,6 +498,8 @@ class TournamentStateDTO(BaseModel):
     # ``scheduleHistory`` is the rolling-revert pool, capped at 5.
     scheduleVersion: int = 0
     scheduleHistory: List[ScheduleHistoryEntry] = Field(default_factory=list)
+    bracketPlayers: List[BracketPlayerDTO] = Field(default_factory=list)
+    bracketRosterMigrated: Optional[bool] = None
 
 
 class SolverOptionsDTO(BaseModel):

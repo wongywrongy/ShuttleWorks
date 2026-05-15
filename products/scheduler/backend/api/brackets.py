@@ -304,6 +304,18 @@ class ImportTournamentIn(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _pick(camel_cfg: dict, session_cfg: dict, camel_key: str, legacy_key: str, default):
+    """Resolve a config value from camelCase TournamentConfig (preferred)
+    or the legacy bracket_session blob, falling back to *default*.
+
+    Priority: ``camel_cfg[camel_key]`` (if present and not None) >
+    ``session_cfg[legacy_key]`` > *default*.
+    """
+    if camel_key in camel_cfg and camel_cfg[camel_key] is not None:
+        return camel_cfg[camel_key]
+    return session_cfg.get(legacy_key, default)
+
+
 def _hydrate_session(
     repo: LocalRepository, tournament_id: uuid.UUID
 ) -> Optional[BracketSession]:
@@ -316,15 +328,22 @@ def _hydrate_session(
         return None
 
     tournament = repo.tournaments.get_by_id(tournament_id)
-    session_cfg = (
-        (tournament.data or {}).get("bracket_session") if tournament else None
-    ) or {}
+    data_blob = (tournament.data or {}) if tournament else {}
+    camel_cfg = data_blob.get("config") or {}
+    session_cfg = data_blob.get("bracket_session") or {}
+
+    court_count = int(_pick(camel_cfg, session_cfg, "courtCount", "courts", 2))
+    interval_minutes = int(_pick(camel_cfg, session_cfg, "intervalMinutes", "interval_minutes", 30))
+    # total_slots is a derived scheduler constant, not a TournamentConfig field — bracket_session only
+    total_slots = int(session_cfg.get("total_slots", 128))
+    rest = int(_pick(camel_cfg, session_cfg, "restBetweenRounds", "rest_between_rounds", 1))
+
     config = ScheduleConfig(
-        total_slots=session_cfg.get("total_slots", 128),
-        court_count=session_cfg.get("courts", 2),
-        interval_minutes=session_cfg.get("interval_minutes", 30),
+        total_slots=total_slots,
+        court_count=court_count,
+        interval_minutes=interval_minutes,
     )
-    rest = int(session_cfg.get("rest_between_rounds", 1))
+
     start_time_iso = session_cfg.get("start_time")
     start_time = (
         datetime.fromisoformat(start_time_iso)
