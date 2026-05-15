@@ -1,7 +1,7 @@
 """step_t_b: add status enum to bracket_events.
 
 Revision ID: g9d4e2a3b7c1
-Revises: f7a3c9b2e8d4
+Revises: a8b2d5e9f1c3
 Create Date: 2026-05-14 00:00:00.000000
 """
 from __future__ import annotations
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "g9d4e2a3b7c1"
-down_revision = "f7a3c9b2e8d4"
+down_revision = "a8b2d5e9f1c3"
 branch_labels = None
 depends_on = None
 
