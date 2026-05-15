@@ -35,13 +35,15 @@ The partition:
 
 The re-solve uses the session's existing `current_slot` **unchanged** — a re-pin re-optimises the *already-scheduled* set; it does not advance to a new round (that remains `schedule-next`'s job). The `(current_slot, total_slots)` player-availability window therefore keeps free matches from being re-placed into the past.
 
-If `play_unit_id` is in the locked set, reject with `409` — a played/started/past match cannot be re-pinned.
+If `play_unit_id` is in the locked set, reject with `409` **before** running the partition or any feasibility check — a played/started/past match cannot be re-pinned, and the frontend should get an unambiguous `409` rather than an `infeasible` response to disambiguate.
 
 ## The validate↔pin contract
 
 `/validate` is the cheap pure-Python predictor; `/pin` is the CP-SAT authority. `/validate` checks the proposed position against the **full current assignment set**; if the cell is clear, dependency-ordering holds, and no player conflict exists, it returns `feasible: true`.
 
 The guarantee: **`feasible: true` reliably means `/pin` will succeed.** A position clear of *all* current matches is necessarily clear of the *locked* subset, and `/pin` then only has to fit the *free* matches around the pin — which had at least as much room before the drag (the dragged match vacated its old cell). `/validate` is deliberately **conservative, not a re-solve**: it cannot see that a re-solve would vacate an occupied cell, so it reports `feasible: false` there even when `/pin` could have worked — the same accepted behaviour as the meet's `/validate`. The asymmetry that must **never** happen is the reverse — `feasible: true` on a position `/pin` then rejects.
+
+A solver *timeout* on `/pin` is a separate failure mode, not a contract violation: it is reported as `infeasible` and surfaced to the operator. The contract is over `feasible: true` → *the solver agrees it is feasible*, not over solver runtime.
 
 ## Dependency ordering is forward-only
 
@@ -69,6 +71,7 @@ Only the forward check applies: proposed slot ≥ every feeder's end-slot. The r
 pytest (`products/scheduler/tests/`):
 - `/validate` — a feasible move, plus one infeasible case per conflict type: court overlap, player double-booking, player rest, dependency ordering, and a locked-match drag.
 - `/pin` — re-solve correctness: locked matches keep their exact `(slot, court)`, the pinned match lands at its target, free matches re-optimise; and a `409` when `play_unit_id` is locked.
+- **The validate↔pin contract** — drag a match onto a currently-empty cell that conflicts *only* with a *movable* match: `/validate` returns `feasible: false` (correct over-conservatism), yet `/pin` for the same move *succeeds* (the re-solve relocates the movable match). This is the test that makes the meet-faithful conservatism a guarantee rather than a comment.
 - The existing bracket pytest suite stays green.
 
 ## Decisions log
