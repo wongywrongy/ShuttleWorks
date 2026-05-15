@@ -31,7 +31,6 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   GanttTimeline,
-  GANTT_GEOMETRY,
   type Placement,
   type GanttCell,
   type GanttBlockBox,
@@ -57,7 +56,6 @@ import type {
 import { getEventColor, EVENT_COLORS } from './eventColors';
 
 const VALIDATE_DEBOUNCE_MS = 80;
-const STANDARD = GANTT_GEOMETRY.standard;
 
 interface DragGanttProps {
   schedule: ScheduleDTO;
@@ -592,7 +590,7 @@ function MatchBlock({
         position: 'absolute',
         left: 0,
         top: 4,
-        width: Math.max(STANDARD.slot - 4, box.width - 4),
+        width: box.width - 4,
         height: box.height - 8,
         transform: transformStyle,
         zIndex: isDragging ? 30 : isSelected ? 20 : isPinned ? 15 : 10,
