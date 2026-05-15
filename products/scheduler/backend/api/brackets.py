@@ -1221,6 +1221,108 @@ def validate_bracket_move_route(
     )
 
 
+@router.post(
+    "/pin", response_model=TournamentOut, dependencies=[_OPERATOR]
+)
+def pin_bracket_match(
+    body: BracketPinIn,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Re-pin one already-scheduled PlayUnit and re-solve the
+    already-scheduled set around it via the shared CP-SAT engine.
+
+    Partitions ``state.assignments`` into locked / pinned / free,
+    re-solves with ``current_slot`` unchanged, writes the resulting
+    assignments back, persists, and returns the serialized session
+    (same shape ``/results`` and ``/match-action`` return).
+
+    A *locked* (played / started / past) ``play_unit_id`` is rejected
+    with ``409 {"error": "locked"}`` **before** the partition. A
+    solver INFEASIBLE / UNKNOWN result (including timeout) is reported
+    as ``409 {"error": "infeasible"}`` — surfaced to the operator, not
+    a crash.
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+    if body.play_unit_id not in session.state.play_units:
+        raise HTTPException(
+            status_code=404,
+            detail=f"play_unit {body.play_unit_id!r} not found",
+        )
+
+    # Reject a locked play_unit BEFORE the partition / feasibility
+    # check so the frontend gets an unambiguous 409 rather than an
+    # `infeasible` response.
+    locked_ids = _bracket_locked_play_unit_ids(
+        session.state, session.config.current_slot
+    )
+    if body.play_unit_id in locked_ids:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "locked",
+                "message": (
+                    f"play_unit {body.play_unit_id!r} is locked "
+                    f"(played / started / past) and cannot be re-pinned"
+                ),
+            },
+        )
+
+    tournament = repo.tournaments.get_by_id(tournament_id)
+    session_cfg = (
+        (tournament.data or {}).get("bracket_session") if tournament else None
+    ) or {}
+    time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
+
+    driver = TournamentDriver(
+        state=session.state,
+        config=session.config,
+        solver_options=SolverOptions(
+            time_limit_seconds=time_limit_seconds,
+        ),
+        rest_between_rounds=session.rest_between_rounds,
+    )
+    try:
+        result = driver.repin_and_resolve(
+            body.play_unit_id,
+            slot_id=body.slot_id,
+            court_id=body.court_id,
+        )
+    except ValueError as exc:
+        # repin_and_resolve raises ValueError for an unscheduled or
+        # locked play_unit. The locked case is caught above; an
+        # unscheduled real play_unit (e.g. the final, awaiting feeders)
+        # cannot be pinned — surface it as infeasible.
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "infeasible", "reasons": [str(exc)]},
+        )
+
+    if not result.scheduled:
+        reasons = (
+            list(result.schedule_result.infeasible_reasons)
+            if result.schedule_result is not None
+            else []
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "infeasible",
+                "reasons": reasons or [
+                    f"solver returned {result.status.value}"
+                ],
+            },
+        )
+
+    _persist_session_metadata(repo, tournament_id, session=session)
+    return _serialize_session(session)
+
+
 @router.post("/import", response_model=TournamentOut, dependencies=[_OPERATOR])
 def import_tournament_json(
     body: ImportTournamentIn,

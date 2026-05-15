@@ -424,3 +424,171 @@ def test_validate_404_for_unknown_play_unit(client, tid):
         json={"play_unit_id": "GHOST", "slot_id": 0, "court_id": 1},
     )
     assert r.status_code == 404
+
+
+# ---- POST /bracket/pin ----------------------------------------------------
+
+
+def test_pin_lands_target_and_persists(client, tid):
+    body = _schedule_round_one(client, tid)
+    assignments = sorted(body["assignments"], key=lambda a: a["court_id"])
+    target = assignments[0]
+    r = client.post(
+        _bracket_url(tid, "pin"),
+        json={
+            "play_unit_id": target["play_unit_id"],
+            "slot_id": 10,
+            "court_id": target["court_id"],
+        },
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    pinned = next(
+        a for a in payload["assignments"]
+        if a["play_unit_id"] == target["play_unit_id"]
+    )
+    assert pinned["slot_id"] == 10
+    assert pinned["court_id"] == target["court_id"]
+    # Persisted: a fresh GET sees the re-pin.
+    after = client.get(_bracket_url(tid)).json()
+    pinned_after = next(
+        a for a in after["assignments"]
+        if a["play_unit_id"] == target["play_unit_id"]
+    )
+    assert pinned_after["slot_id"] == 10
+
+
+def test_pin_keeps_locked_match_fixed(client, tid):
+    body = _schedule_round_one(client, tid)
+    assignments = sorted(body["assignments"], key=lambda a: a["court_id"])
+    locked_pu, free_pu = assignments[0], assignments[1]
+    # Record a result for locked_pu → locked.
+    client.post(
+        _bracket_url(tid, "results"),
+        json={"play_unit_id": locked_pu["play_unit_id"], "winner_side": "A"},
+    )
+    locked_slot = locked_pu["slot_id"]
+    locked_court = locked_pu["court_id"]
+    # Re-pin the *free* match elsewhere.
+    r = client.post(
+        _bracket_url(tid, "pin"),
+        json={
+            "play_unit_id": free_pu["play_unit_id"],
+            "slot_id": 7,
+            "court_id": free_pu["court_id"],
+        },
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    locked_after = next(
+        a for a in payload["assignments"]
+        if a["play_unit_id"] == locked_pu["play_unit_id"]
+    )
+    assert locked_after["slot_id"] == locked_slot
+    assert locked_after["court_id"] == locked_court
+    free_after = next(
+        a for a in payload["assignments"]
+        if a["play_unit_id"] == free_pu["play_unit_id"]
+    )
+    assert free_after["slot_id"] == 7
+
+
+def test_pin_409_when_play_unit_locked(client, tid):
+    body = _schedule_round_one(client, tid)
+    sf = body["assignments"][0]
+    client.post(
+        _bracket_url(tid, "results"),
+        json={"play_unit_id": sf["play_unit_id"], "winner_side": "A"},
+    )
+    r = client.post(
+        _bracket_url(tid, "pin"),
+        json={"play_unit_id": sf["play_unit_id"], "slot_id": 12, "court_id": 1},
+    )
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["error"] == "locked"
+
+
+def test_pin_404_when_no_bracket(client, tid):
+    r = client.post(
+        _bracket_url(tid, "pin"),
+        json={"play_unit_id": "M1", "slot_id": 0, "court_id": 1},
+    )
+    assert r.status_code == 404
+
+
+def test_pin_404_for_unknown_play_unit(client, tid):
+    _schedule_round_one(client, tid)
+    r = client.post(
+        _bracket_url(tid, "pin"),
+        json={"play_unit_id": "GHOST", "slot_id": 0, "court_id": 1},
+    )
+    assert r.status_code == 404
+
+
+def test_pin_409_for_unscheduled_play_unit(client, tid):
+    """A real PlayUnit that isn't in state.assignments yet (e.g. the
+    final, awaiting feeders) cannot be pinned — it is not on the
+    Gantt. repin_and_resolve raises ValueError → 409 infeasible."""
+    body = _schedule_round_one(client, tid)
+    final = next(
+        p for p in body["play_units"] if p["round_index"] == 1
+    )
+    assert final["id"] not in {
+        a["play_unit_id"] for a in body["assignments"]
+    }
+    r = client.post(
+        _bracket_url(tid, "pin"),
+        json={"play_unit_id": final["id"], "slot_id": 30, "court_id": 1},
+    )
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["error"] == "infeasible"
+
+
+# ---- The validate <-> pin contract ----------------------------------------
+
+
+def test_validate_pin_contract_conservative_but_sound(client, tid):
+    """Drag a match onto a cell occupied only by a *movable* match:
+    /validate reports feasible:false (correct over-conservatism — it
+    cannot see that a re-solve would vacate the cell), yet /pin for the
+    same move *succeeds* (the re-solve relocates the movable match).
+
+    This is the test that makes the meet-faithful conservatism a
+    guarantee rather than a comment: the asymmetry that must never
+    happen is the reverse — feasible:true that /pin then rejects."""
+    body = _schedule_round_one(client, tid)
+    assignments = sorted(body["assignments"], key=lambda a: a["court_id"])
+    a0, a1 = assignments[0], assignments[1]
+    # a0 and a1 share no players (distinct semifinals), so a0's cell is
+    # blocked for a1 only by a *movable* match.
+    move = {
+        "play_unit_id": a1["play_unit_id"],
+        "slot_id": a0["slot_id"],
+        "court_id": a0["court_id"],
+    }
+
+    # /validate: conservative → infeasible (court_conflict with a0).
+    v = client.post(_bracket_url(tid, "validate"), json=move)
+    assert v.status_code == 200, v.text
+    v_payload = v.json()
+    assert v_payload["feasible"] is False
+    assert any(c["type"] == "court_conflict" for c in v_payload["conflicts"])
+
+    # /pin: the same move succeeds — the re-solve relocates a0.
+    p = client.post(_bracket_url(tid, "pin"), json=move)
+    assert p.status_code == 200, p.text
+    p_payload = p.json()
+    pinned = next(
+        a for a in p_payload["assignments"]
+        if a["play_unit_id"] == a1["play_unit_id"]
+    )
+    assert pinned["slot_id"] == a0["slot_id"]
+    assert pinned["court_id"] == a0["court_id"]
+    # a0 was relocated off its old cell (movable, no result).
+    moved = next(
+        a for a in p_payload["assignments"]
+        if a["play_unit_id"] == a0["play_unit_id"]
+    )
+    assert (moved["slot_id"], moved["court_id"]) != (
+        a0["slot_id"], a0["court_id"]
+    )
