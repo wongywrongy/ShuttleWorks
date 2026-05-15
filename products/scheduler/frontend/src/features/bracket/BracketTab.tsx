@@ -7,22 +7,21 @@
  * threading the id through props. Holds the selected event id.
  *
  * When no bracket is configured (``data === null`` from the polling
- * hook), renders ``SetupForm`` — the operator can generate a new draw
- * or import a pre-paired CSV / JSON. After create, the bracket
- * navigates Draw / Schedule / Live through the shell's top ``TabBar``
- * (``activeTab`` is a ``bracket-*`` id), with a ``BracketViewHeader``
- * strip above the active view.
+ * hook), shows a status-aware empty-state CTA. After create, the
+ * bracket navigates Draw / Schedule / Live through the shell's top
+ * ``TabBar`` (``activeTab`` is a ``bracket-*`` id), with a
+ * ``BracketViewHeader`` strip above the active view.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { BracketApiProvider, useBracketApi } from '../../api/bracketClient';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
 
 import { useBracket } from '../../hooks/useBracket';
 import { useUiStore } from '../../store/uiStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
-import { SetupForm } from './SetupForm';
+import { reconcileBracketRoster } from './bracketMigration';
 import { SetupTab } from './SetupTab';
 import { BracketRosterTab } from './BracketRosterTab';
 import { EventsTab } from './EventsTab';
@@ -104,6 +103,28 @@ function BracketTabBody() {
     }
   }, [data, eventId]);
 
+  // First-load migration: if we have a legacy bracket with participants
+  // but no bracketPlayers in store yet, extract them once.
+  // The ``bracketRosterMigrated`` flag in the store ensures this runs
+  // at most once per bracket load and does NOT re-fire on every 2.5s
+  // poll (``data`` reference changes but the flag stays true).
+  const bracketPlayers = useTournamentStore((s) => s.bracketPlayers);
+  const setBracketPlayers = useTournamentStore((s) => s.setBracketPlayers);
+  const bracketRosterMigrated = useTournamentStore((s) => s.bracketRosterMigrated);
+  const setBracketRosterMigrated = useTournamentStore((s) => s.setBracketRosterMigrated);
+
+  useEffect(() => {
+    if (!data) return;
+    if (bracketRosterMigrated) return;
+    if (bracketPlayers.length > 0) return;
+    if (data.participants.length === 0) return;
+    const derived = reconcileBracketRoster(data);
+    if (derived.length > 0) {
+      setBracketPlayers(derived);
+    }
+    setBracketRosterMigrated(true);
+  }, [data, bracketPlayers.length, bracketRosterMigrated, setBracketPlayers, setBracketRosterMigrated]);
+
   if (!data) {
     return (
       <div className="min-h-full bg-background">
@@ -113,12 +134,10 @@ function BracketTabBody() {
               {error}
             </div>
           )}
-          <SetupForm
-            onCreated={(t: BracketTournamentDTO) => {
-              setData(t);
-              if (t.events[0]) setEventId(t.events[0].id);
-            }}
-          />
+          <p className="text-sm text-muted-foreground">
+            No events yet. Open the <strong>Events</strong> tab to add one,
+            and the <strong>Setup</strong> tab to set the venue + schedule.
+          </p>
         </main>
       </div>
     );

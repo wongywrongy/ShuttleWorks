@@ -8,7 +8,7 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { BracketApiContext } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
-import { playerSlug } from './setupForm/helpers';
+import { playerSlug } from '../../lib/playerSlug';
 
 export function BracketRosterTab() {
   // Use context presence check to determine if we're inside a provider.

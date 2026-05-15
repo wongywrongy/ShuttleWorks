@@ -20,6 +20,13 @@ export function DrawView({ data, eventId, onChange }: Props) {
   if (!event) {
     return <p className="text-sm text-ink-500">No event selected.</p>;
   }
+  if (data.play_units.filter((p) => p.event_id === eventId).length === 0) {
+    return (
+      <div className="p-6 text-sm text-muted-foreground">
+        No draws generated yet — go to the <strong>Events</strong> tab and click Generate.
+      </div>
+    );
+  }
   return event.format === "se" ? (
     <BracketView data={data} eventId={eventId} onChange={onChange} />
   ) : (
