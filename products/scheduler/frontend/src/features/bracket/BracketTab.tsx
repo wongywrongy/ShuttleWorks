@@ -125,7 +125,15 @@ function BracketTabBody() {
     setBracketRosterMigrated(true);
   }, [data, bracketPlayers.length, bracketRosterMigrated, setBracketPlayers, setBracketRosterMigrated]);
 
-  if (!data) {
+  // ``activeTab`` is normalized to a ``bracket-*`` id by
+  // ``TournamentPage`` once kind resolves; fall back to 'setup'
+  // defensively for the first render before that effect runs.
+  const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : 'setup';
+
+  // Setup, Roster, and Events do NOT depend on bracket-events data.
+  // Draw/Schedule/Live render the events' draws/Gantts; they need data.
+  const needsBracketData = view === 'draw' || view === 'schedule' || view === 'live';
+  if (needsBracketData && !data) {
     return (
       <div className="min-h-full bg-background">
         <main className="mx-auto max-w-4xl px-6 py-8">
@@ -135,7 +143,7 @@ function BracketTabBody() {
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            No events yet. Open the <strong>Events</strong> tab to add one,
+            No draws generated yet. Open the <strong>Events</strong> tab to add events,
             and the <strong>Setup</strong> tab to set the venue + schedule.
           </p>
         </main>
@@ -143,20 +151,17 @@ function BracketTabBody() {
     );
   }
 
-  // ``activeTab`` is normalized to a ``bracket-*`` id by
-  // ``TournamentPage`` once kind resolves; fall back to 'setup'
-  // defensively for the first render before that effect runs.
-  const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : 'setup';
-
   return (
     <div className="flex h-full flex-col bg-background">
-      <BracketViewHeader
-        view={view}
-        data={data}
-        eventId={eventId}
-        onEventId={setEventId}
-        onReset={handleReset}
-      />
+      {data && (
+        <BracketViewHeader
+          view={view}
+          data={data}
+          eventId={eventId}
+          onEventId={setEventId}
+          onReset={handleReset}
+        />
+      )}
       {error && (
         <div className="mx-4 mt-4 rounded-sm border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
@@ -176,7 +181,7 @@ function BracketTabBody() {
         {view === 'setup' && <SetupTab />}
         {view === 'roster' && <BracketRosterTab />}
         {view === 'events' && <EventsTab />}
-        {view === 'draw' && (
+        {view === 'draw' && data && (
           <DrawView
             data={data}
             eventId={eventId}
@@ -184,12 +189,12 @@ function BracketTabBody() {
             refresh={refresh}
           />
         )}
-        {view === 'schedule' && (
+        {view === 'schedule' && data && (
           <ScheduleView
             data={data}
           />
         )}
-        {view === 'live' && (
+        {view === 'live' && data && (
           <LiveView
             data={data}
             onChange={setData}
