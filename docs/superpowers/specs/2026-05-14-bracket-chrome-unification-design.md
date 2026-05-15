@@ -69,7 +69,7 @@ const BRACKET_TABS: TabDef[] = [
 
 `activeTab` defaults to `'setup'` and may be stale from prior meet use (e.g. `'roster'`). When `activeTournamentKind` resolves to `'bracket'`, a small effect normalizes: if `activeTab` is not one of the `bracket-*` ids, snap it to `'bracket-draw'`. A symmetric guard handles bracket→meet (if `activeTab` is a `bracket-*` id when kind is `meet`, snap to `'setup'`).
 
-This effect lives in `BracketTab` (not `useTournamentKind`, which stays a pure fetch-and-cache hook).
+This effect lives in `pages/TournamentPage.tsx` (not `useTournamentKind`, which stays a pure fetch-and-cache hook). *(Updated 2026-05-14: the spec originally said `BracketTab`; the implementation placed it in `TournamentPage` instead — `BracketTab` only mounts for bracket-kind tournaments and so cannot catch the bracket→meet transition. The implementation plan's header documents this as an explicit "Deviation from spec".)*
 
 ### Pre-creation tab disabling
 

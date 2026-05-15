@@ -56,6 +56,7 @@ Only the forward check applies: proposed slot ≥ every feeder's end-slot. The r
 | `services/bracket/validation.py` *(new)* | The pure-Python bracket feasibility check — reuses `scheduler_core` `find_conflicts`, adds the dependency-ordering check, maps results to the `ValidationConflict` response shape. |
 | `services/bracket/adapter.py` | `build_problem` — extend to accept the locked/pinned/free partition and emit `PreviousAssignment`s accordingly (currently hardcodes `previous_assignments=[]`). This is the load-bearing change; the engine's `LocksAndPins` plugin already does the rest. |
 | `services/bracket/scheduler.py` | `TournamentDriver` — add `repin_and_resolve(play_unit_id, slot_id, court_id)`: partition `state.assignments`, build the problem, solve, write back. Sits alongside the existing append-only `schedule_next_round()`. |
+| `services/bracket/state.py` | *(added during review follow-up)* `is_assignment_locked(assignment, results, current_slot)` — the shared locked predicate (played ∪ started ∪ past), used by both `repin_and_resolve` and the `/validate` + `/pin` routes so the two definitions never diverge. |
 | `api/brackets.py` | The two new routes + their request/response Pydantic models. |
 | `frontend/src/api/bracketClient.tsx` + `bracketDto.ts` | Two new client methods (`validateMove`, `pinMatch`) + DTO types — wiring only, no UI (UI is #3). |
 

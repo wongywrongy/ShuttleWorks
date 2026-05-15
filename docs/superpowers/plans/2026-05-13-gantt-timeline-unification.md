@@ -8,6 +8,8 @@
 
 **Explicitly out of scope:** `products/scheduler/frontend/src/features/bracket/ScheduleView.tsx`. It is a `<table>`/`colSpan` grid over the bracket `TournamentDTO` domain (slots, not time) — a different paradigm and a different data model. Folding it in would force a lowest-common-denominator API that helps no one. It stays as-is; revisit only if a fourth time-axis consumer appears.
 
+> **⚠ Superseded note (2026-05-14):** the "revisit if a fourth time-axis consumer appears" condition has been met. `docs/superpowers/specs/2026-05-14-bracket-court-time-views-decomposition.md` makes the bracket Schedule + Live views the 4th and 5th consumers of this scaffold. This plan still executes **as written** for the meet's 3 consumers; the bracket consumers are sub-projects #3 (Schedule Gantt) and #4 (Live Gantt) in that decomposition and slot in afterward — sub-project #1 (the bracket interactive-scheduling backend they depend on) is already implemented.
+
 ---
 
 ## Current state

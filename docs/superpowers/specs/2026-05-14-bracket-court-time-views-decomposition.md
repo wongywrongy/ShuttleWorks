@@ -33,7 +33,7 @@ The bracket backend (`api/brackets.py`) has **no per-match validate, pin, or res
 | # | Sub-project | Depends on | Status |
 |---|---|---|---|
 | 2 | **`GanttTimeline` shared scaffold** — extract the court×time scaffold, migrate the meet's 3 Gantts (`LiveTimelineGrid`, `GanttChart`, `DragGantt`) onto it | — | **Plan exists** (`docs/superpowers/plans/2026-05-13-gantt-timeline-unification.md`), assessed execute-ready: the scaffold API is consumer-agnostic — the bracket consumers' needs match the meet consumers' (bracket Schedule ≈ `DragGantt`, bracket Live ≈ `GanttChart`); data-adaptation + chip-rendering stay consumer-side. That plan's "out of scope: bracket" / "revisit if a 4th consumer appears" notes are superseded by this decomposition. |
-| 1 | **Bracket interactive-scheduling backend** — a per-match `/validate` endpoint + pin-and-re-solve, mirroring the meet's `/schedule/validate` + `pinAndResolve` | — | Needs brainstorm → spec → plan |
+| 1 | **Bracket interactive-scheduling backend** — a per-match `/validate` endpoint + pin-and-re-solve, mirroring the meet's `/schedule/validate` + `pinAndResolve` | — | **Done (2026-05-14)** — spec + plan committed, backend implemented & reviewed (`d524767`…`c6a722d`). See the working log: `docs/superpowers/progress/2026-05-14-bracket-court-time-views.md`. |
 | 4 | **Bracket Live Gantt** — `LiveView` list → click-select court×time Gantt with bracket state visualisation; this is a full rebuild | #2 | Needs brainstorm → spec → plan |
 | 3 | **Bracket Schedule Gantt** — `ScheduleView` table → interactive (drag / validate / pin) court×time Gantt, all events on shared courts | #1, #2 | Needs brainstorm → spec → plan |
 
