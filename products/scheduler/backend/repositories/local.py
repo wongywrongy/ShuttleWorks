@@ -510,6 +510,7 @@ class _LocalBracketRepo:
         seeded_count: int = 0,
         rr_rounds: Optional[int] = None,
         config: Optional[dict] = None,
+        status: str = "draft",
     ) -> BracketEvent:
         row = BracketEvent(
             tournament_id=tournament_id,
@@ -521,8 +522,31 @@ class _LocalBracketRepo:
             seeded_count=seeded_count,
             rr_rounds=rr_rounds,
             config=config or {},
+            status=status,
         )
         self.session.add(row)
+        self.session.flush()
+        SyncService.enqueue_bracket_event(self.session, row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def set_event_status(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        status: str,
+    ) -> Optional[BracketEvent]:
+        """Update the status column of a bracket event.
+
+        Stages an outbox row so operator browsers see the status change
+        via Supabase Realtime. Returns None if the event does not exist.
+        """
+        row = self.get_event(tournament_id, event_id)
+        if row is None:
+            return None
+        row.status = status
+        row.version = row.version + 1
         self.session.flush()
         SyncService.enqueue_bracket_event(self.session, row)
         self.session.commit()

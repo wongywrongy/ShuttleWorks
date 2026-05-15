@@ -231,7 +231,14 @@ class TournamentDriver:
         if not event_pu_ids:
             return RoundResult(play_unit_ids=[], status=SolverStatus.UNKNOWN)
 
-        if any(pu_id in self.state.results for pu_id in event_pu_ids):
+        # BYE walkovers are auto-recorded by register_draw/auto_walkover_byes
+        # and do not indicate the event has been played.  Only non-walkover
+        # results (i.e. real match outcomes) mean the event is started.
+        if any(
+            pu_id in self.state.results
+            and not self.state.results[pu_id].walkover
+            for pu_id in event_pu_ids
+        ):
             raise ValueError(
                 f"event {event_id!r} has results; cannot generate (event is started)"
             )
