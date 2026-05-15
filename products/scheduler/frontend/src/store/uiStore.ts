@@ -196,6 +196,12 @@ interface UiState {
   bracketSelectedMatchId: string | null;
   setBracketSelectedMatchId: (id: string | null) => void;
 
+  // Bracket Schedule + Live filter strip — per-event enabled flag.
+  // Empty map (default) means every event is on.  Only entries
+  // explicitly set to ``false`` are dimmed.
+  bracketScheduleEventFilter: Record<string, boolean>;
+  setBracketScheduleEventFilter: (filter: Record<string, boolean>) => void;
+
   // Hard reset — called by the `useClearAllData` hook so the three
   // stores reset together when the operator wipes the tournament.
   reset: () => void;
@@ -225,6 +231,7 @@ const INITIAL: Pick<
   | 'pendingAdvisoryReview'
   | 'unlockModalState'
   | 'bracketSelectedMatchId'
+  | 'bracketScheduleEventFilter'
 > = {
   activeTab: 'setup',
   activeTournamentId: null,
@@ -248,6 +255,7 @@ const INITIAL: Pick<
   pendingAdvisoryReview: null,
   unlockModalState: null,
   bracketSelectedMatchId: null,
+  bracketScheduleEventFilter: {},
 };
 
 export const useUiStore = create<UiState>((set) => ({
@@ -310,6 +318,7 @@ export const useUiStore = create<UiState>((set) => ({
   setUnlockModalState: (unlockModalState) => set({ unlockModalState }),
 
   setBracketSelectedMatchId: (bracketSelectedMatchId) => set({ bracketSelectedMatchId }),
+  setBracketScheduleEventFilter: (bracketScheduleEventFilter) => set({ bracketScheduleEventFilter }),
 
   reset: () => set({ ...INITIAL }),
 }));

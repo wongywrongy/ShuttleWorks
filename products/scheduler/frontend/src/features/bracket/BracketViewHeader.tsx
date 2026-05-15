@@ -3,6 +3,7 @@ import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
 import { Button, StatusBar } from "@scheduler/design-system";
 import type { BracketView } from "../../lib/bracketTabs";
+import { EventsFilterStrip } from "./EventsFilterStrip";
 
 interface Props {
   /** Bare view name — drives the eyebrow. Derived from ``activeTab``
@@ -75,6 +76,8 @@ export function BracketViewHeader({
               </span>
             )}
           </>
+        ) : (view === 'schedule' || view === 'live') ? (
+          <EventsFilterStrip />
         ) : null}
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">

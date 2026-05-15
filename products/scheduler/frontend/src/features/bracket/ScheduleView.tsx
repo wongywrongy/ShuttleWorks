@@ -10,6 +10,7 @@ import { useMemo, useCallback } from 'react';
 import { GanttTimeline, type Placement } from '@scheduler/design-system';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { getEventColor } from '../schedule/eventColors';
+import { useUiStore } from '../../store/uiStore';
 
 // ---- Tooltip builder -------------------------------------------------------
 
@@ -42,6 +43,8 @@ interface Props {
 }
 
 export function ScheduleView({ data }: Props) {
+  const eventFilter = useUiStore((s) => s.bracketScheduleEventFilter);
+
   const placements: Placement[] = useMemo(
     () =>
       data.assignments.map<Placement>((a) => ({
@@ -81,16 +84,20 @@ export function ScheduleView({ data }: Props) {
       const color = getEventColor(discipline);
       const tooltip = pu ? buildTooltip(pu, data) : '';
 
+      // C.2: dim chips whose event is explicitly disabled in the filter strip.
+      // Missing key → on (default-on semantics).
+      const dimmed = pu ? eventFilter[pu.event_id] === false : false;
+
       return (
         <div
-          className={`h-full w-full rounded-sm border px-2 py-1 ${color.bg} ${color.border}`}
+          className={`h-full w-full rounded-sm border px-2 py-1 ${color.bg} ${color.border}${dimmed ? ' opacity-40' : ''}`}
           title={tooltip}
         >
           <div className="text-2xs font-mono truncate tracking-[0.18em]">{pu?.id}</div>
         </div>
       );
     },
-    [puById, data],
+    [puById, data, eventFilter],
   );
 
   if (placements.length === 0) {

@@ -90,6 +90,7 @@ interface Props {
 export function LiveView({ data, onChange }: Props) {
   const currentSlot = useCurrentSlot();
   const setBracketSelectedMatchId = useUiStore((s) => s.setBracketSelectedMatchId);
+  const eventFilter = useUiStore((s) => s.bracketScheduleEventFilter);
 
   const placements: Placement[] = useMemo(() => {
     // Renders all events; event color is the discriminator (event-filter removed in B.1).
@@ -140,11 +141,15 @@ export function LiveView({ data, onChange }: Props) {
 
       const tooltip = pu ? buildTooltip(pu, data, state) : '';
 
+      // C.2: dim chips whose event is explicitly disabled in the filter strip.
+      // Missing key → on (default-on semantics).
+      const dimmed = pu ? eventFilter[pu.event_id] === false : false;
+
       return (
         <div
           role="button"
           tabIndex={0}
-          className={`h-full w-full cursor-pointer rounded-sm border px-2 py-1 ${color.bg} ${color.border} ${ringClass}`}
+          className={`h-full w-full cursor-pointer rounded-sm border px-2 py-1 ${color.bg} ${color.border} ${ringClass}${dimmed ? ' opacity-40' : ''}`}
           title={tooltip}
           onClick={() => pu && setBracketSelectedMatchId(pu.id)}
           onKeyDown={(e) => {
@@ -158,7 +163,7 @@ export function LiveView({ data, onChange }: Props) {
         </div>
       );
     },
-    [puById, data, currentSlot, setBracketSelectedMatchId],
+    [puById, data, currentSlot, setBracketSelectedMatchId, eventFilter],
   );
 
   if (placements.length === 0) {
