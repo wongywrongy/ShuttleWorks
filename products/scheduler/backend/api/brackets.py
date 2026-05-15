@@ -1201,6 +1201,21 @@ def validate_bracket_move_route(
             ],
         )
 
+    if body.play_unit_id not in session.state.assignments:
+        return BracketValidationOut(
+            feasible=False,
+            conflicts=[
+                BracketValidationConflictOut(
+                    type="unscheduled",
+                    description=(
+                        f"Play unit {body.play_unit_id} is not scheduled "
+                        f"and cannot be re-pinned"
+                    ),
+                    play_unit_id=body.play_unit_id,
+                )
+            ],
+        )
+
     conflicts: List[BracketConflict] = validate_bracket_move(
         session.state,
         session.config,

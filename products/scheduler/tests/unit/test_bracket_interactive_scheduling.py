@@ -427,6 +427,27 @@ def test_validate_404_for_unknown_play_unit(client, tid):
     assert r.status_code == 404
 
 
+def test_validate_unscheduled_play_unit_is_infeasible(client, tid):
+    """A ready-but-unscheduled play_unit (e.g. the final, awaiting the
+    next schedule-next) is not on the Gantt and cannot be dragged.
+    /validate must report feasible:false — mirroring /pin's 409 — so
+    the feasible:true => /pin-succeeds invariant holds."""
+    body = _schedule_round_one(client, tid)
+    # The final exists in play_units but is not yet in assignments.
+    final = next(p for p in body["play_units"] if p["round_index"] == 1)
+    assert final["id"] not in {
+        a["play_unit_id"] for a in body["assignments"]
+    }
+    r = client.post(
+        _bracket_url(tid, "validate"),
+        json={"play_unit_id": final["id"], "slot_id": 30, "court_id": 1},
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["feasible"] is False
+    assert any(c["type"] == "unscheduled" for c in payload["conflicts"])
+
+
 # ---- POST /bracket/pin ----------------------------------------------------
 
 
