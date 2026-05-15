@@ -609,13 +609,15 @@ These are all self-contained schema or middleware changes with low risk.
 
 ## What WAS Fixed
 
-The following two findings were resolved inline during this session (dev2
-branch); they are excluded from all deferred tracking above.
+The following four findings were resolved inline during this session
+(dev2 branch); they are excluded from all deferred tracking above.
 
 | Fix | Finding | Description | Commit |
 |-----|---------|-------------|--------|
-| FIX-1 | Name save bug (Audit A) | `forceSaveNow` race condition in `SetupTab`; uncontrolled input wired to explicit save; create-tournament default name handling | `71e1b7f` |
+| FIX-1 | Name save bug (Audit A) | `forceSaveNow` race condition + `SetupTab` uncontrolled input + `create_tournament` config seeding (3 sub-fixes) | `6a19cb9` |
 | FIX-2 | bracket_session wipe (Audit B) | `_stamp_payload` overwrote the `bracket_session` key on every `PUT /state`; fixed to preserve the key when present | `27fd860` |
+| FIX-3 | A.1 alembic chain misaligned (visual sweep) | `down_revision` pointed at `f7a3c9b2e8d4` but the actual head was `a8b2d5e9f1c3` — TWO heads, migration never applied in deployments. Tests passed via SQLAlchemy `create_all` bypass. | `f2ea200` |
+| FIX-4 | BracketTab `!data` blocked Setup/Roster/Events (visual sweep) | Empty-state CTA fired on tournaments with no events yet, hiding Setup form. Scoped the short-circuit to Draw/Schedule/Live only. | `8554f77` |
 
 Placeholders will be replaced with actual commit SHAs once FIX-1 and FIX-2
 branches land.
