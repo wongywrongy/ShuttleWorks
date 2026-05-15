@@ -439,6 +439,7 @@ class BracketEvent(Base):
     seeded_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     rr_rounds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False

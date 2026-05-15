@@ -16,10 +16,14 @@ product-specific location. The tournament backend's
 """
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Optional
 
+from sqlalchemy.orm import Session
+
+from database.models import BracketResult
 from scheduler_core.domain.models import ScheduleConfig
 from scheduler_core.domain.tournament import (
     PlayUnitId,
@@ -124,3 +128,20 @@ def is_assignment_locked(
     if assignment.slot_id + assignment.duration_slots <= current_slot:
         return True
     return False
+
+
+def is_event_started(
+    session: Session,
+    tournament_id: uuid.UUID,
+    event_id: str,
+) -> bool:
+    """True iff any bracket_results row exists for this (tournament, event)."""
+    row = (
+        session.query(BracketResult)
+        .filter(
+            BracketResult.tournament_id == tournament_id,
+            BracketResult.bracket_event_id == event_id,
+        )
+        .first()
+    )
+    return row is not None
