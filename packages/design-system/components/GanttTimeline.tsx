@@ -14,7 +14,7 @@
  * the composition).
  *
  * Perf: each positioned block's pixel box is precomputed inside the
- * `byCourtIndex` memo, and `PositionedBlock` is wrapped in `React.memo`
+ * `placementsWithBoxes` memo, and `PositionedBlock` is wrapped in `React.memo`
  * — so a parent re-render that leaves a placement's identity, its
  * precomputed box reference, and the `renderBlock` reference untouched
  * skips that subtree (default shallow compare succeeds on all three
@@ -129,7 +129,7 @@ export interface GanttTimelineProps {
 
 /**
  * Pure (courtIndex, startSlot, span) → pixel box. Unit-tested in
- * `ganttTimeline.test.ts`. `laneIndex`/`laneCount` apply horizontal
+ * `ganttTimeline.test.tsx`. `laneIndex`/`laneCount` apply horizontal
  * sub-lane packing: a 2-lane block is half width and offset by its
  * lane; a 1-lane block keeps full slot width. `span` is clamped to
  * >= 1 so a zero/garbage span still renders a visible block.
@@ -161,7 +161,7 @@ interface PositionedBlockProps {
 /** Wraps one absolutely-positioned block. Wrapped in `React.memo` with
  *  the default shallow compare over `{ placement, box, renderBlock }`.
  *  The `box` reference is supplied identity-stable from the parent's
- *  `byCourtIndex` memo (recomputed only when placements, minSlot, or
+ *  `placementsWithBoxes` memo (recomputed only when placements, minSlot, or
  *  the geometry tier changes), so a parent re-render that touches none
  *  of those AND keeps a stable `renderBlock` reference skips this
  *  subtree entirely. `placement.key` is the React reconciler key, NOT
