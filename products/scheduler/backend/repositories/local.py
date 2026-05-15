@@ -1162,7 +1162,16 @@ class LocalRepository:
                 filename=_backup_filename(prior.data),
             )
             self.backups.rotate(tournament_id, keep=self.BACKUP_KEEP)
-        result = self.tournaments.upsert_data(tournament_id, payload)
+        # Preserve server-managed keys that the meet-side frontend payload
+        # never includes. Without this merge, a PUT /state from the meet
+        # UI would silently erase bracket scheduling state because
+        # TournamentStateDTO has no ``bracket_session`` field.
+        merged = dict(payload)
+        if prior.data:
+            for key in ("bracket_session",):
+                if key in prior.data and key not in merged:
+                    merged[key] = prior.data[key]
+        result = self.tournaments.upsert_data(tournament_id, merged)
         self._project_matches_from_payload(tournament_id, payload)
         return result
 

@@ -356,3 +356,84 @@ def test_schedule_next_returns_status(client, tid):
     body = r.json()
     assert "status" in body
     assert isinstance(body["play_unit_ids"], list)
+
+
+# ---- bracket_session preservation across meet-side state writes -------------
+
+
+def test_meet_side_put_state_preserves_bracket_session(client, tid):
+    """Regression: PUT /tournaments/{id}/state must NOT wipe bracket_session.
+
+    Before the fix, ``commit_tournament_state`` called ``upsert_data``
+    with the raw ``TournamentStateDTO`` payload, which has no
+    ``bracket_session`` key. ``_stamp_payload`` replaced ``row.data``
+    unconditionally, silently erasing every bracket assignment.
+
+    The critical payload inside bracket_session is ``assignments`` — the
+    per-play-unit court/slot scheduling state. We inject a synthetic
+    assignment directly into the DB so the test doesn't depend on the
+    solver finding a solution within a time limit.
+    """
+    from sqlalchemy import select
+    from database.models import Tournament
+    from database.session import SessionLocal
+
+    # 1. Create a bracket — this writes bracket_session into tournaments.data.
+    r = client.post(_bracket_url(tid), json=_se_4_body())
+    assert r.status_code == 200, r.text
+
+    # Retrieve the play-unit id of the first semifinal so we can anchor
+    # the synthetic assignment.
+    bracket_state = r.json()
+    first_pu_id = bracket_state["play_units"][0]["id"]
+
+    # 2. Inject a synthetic assignment into bracket_session["assignments"]
+    #    to simulate what the scheduler persists after schedule-next runs.
+    with SessionLocal() as session:
+        row = session.scalar(select(Tournament).where(Tournament.id == uuid.UUID(tid)))
+        assert row is not None
+        assert "bracket_session" in (row.data or {}), (
+            "bracket_session should be set after bracket creation"
+        )
+        data = dict(row.data)
+        bs = dict(data["bracket_session"])
+        bs["assignments"] = [
+            {
+                "play_unit_id": first_pu_id,
+                "slot_id": 0,
+                "court_id": 1,
+                "duration_slots": 1,
+                "actual_start_slot": 0,
+                "actual_end_slot": 1,
+            }
+        ]
+        data["bracket_session"] = bs
+        row.data = data
+        session.commit()
+
+    # 3. Do a meet-side PUT /state with a minimal payload (no bracket_session).
+    minimal_state = {
+        "version": 1,
+        "matches": [],
+        "groups": [],
+        "players": [],
+    }
+    r2 = client.put(f"/tournaments/{tid}/state", json=minimal_state)
+    assert r2.status_code == 200, r2.text
+
+    # 4. GET /bracket — verify bracket_session survived with assignments intact.
+    r3 = client.get(_bracket_url(tid))
+    assert r3.status_code == 200, (
+        f"GET /bracket returned {r3.status_code} after meet-side PUT — "
+        "bracket_session was wiped"
+    )
+    body = r3.json()
+    assert body["courts"] == 2
+    assert len(body["events"]) == 1
+    assert len(body["play_units"]) == 3
+    # The synthetic assignment must survive the meet-side PUT.
+    assert len(body["assignments"]) == 1, (
+        f"Expected 1 assignment but got {len(body['assignments'])} — "
+        "bracket_session['assignments'] was wiped by the meet-side PUT"
+    )
+    assert body["assignments"][0]["play_unit_id"] == first_pu_id
