@@ -179,6 +179,7 @@ const PositionedBlock = memo(function PositionedBlock({
         top: box.top,
         width: box.width,
         height: box.height,
+        pointerEvents: 'auto',
       }}
     >
       {renderBlock(placement, box)}
@@ -228,27 +229,22 @@ export function GanttTimeline({
 }: GanttTimelineProps) {
   const tier = GANTT_GEOMETRY[density];
   const gridWidth = tier.label + slotCount * tier.slot;
+  const bodyHeight = courts.length * tier.row;
 
-  // Absolute slot ids for the visible window, computed once per range.
   const slotIds = useMemo(
     () => Array.from({ length: slotCount }, (_, i) => minSlot + i),
     [minSlot, slotCount],
   );
 
-  // Group placements by court row AND precompute each block's pixel box
-  // once. The precomputed box references are identity-stable across
-  // renders for unchanged (placement, minSlot, tier) — which is what
-  // makes PositionedBlock's React.memo bail out (default shallow compare
-  // sees the same `box` reference rather than a fresh object literal).
-  const byCourtIndex = useMemo(() => {
-    const map = new Map<number, { placement: Placement; box: GanttBlockBox }[]>();
-    for (let i = 0; i < courts.length; i++) map.set(i, []);
-    for (const p of placements) {
-      const row = map.get(p.courtIndex);
-      if (row) row.push({ placement: p, box: placementBox(p, minSlot, tier) });
-    }
-    return map;
-  }, [placements, courts.length, minSlot, tier]);
+  // Single flat list of (placement, precomputed box). The precomputed
+  // box references stay identity-stable across renders for unchanged
+  // (placement, minSlot, tier), which is what lets `PositionedBlock`'s
+  // `React.memo` bail out — the default shallow compare sees the same
+  // `box` reference across renders.
+  const placementsWithBoxes = useMemo(
+    () => placements.map((p) => ({ placement: p, box: placementBox(p, minSlot, tier) })),
+    [placements, minSlot, tier],
+  );
 
   return (
     <div className={cn('overflow-x-auto', className)} {...rest}>
@@ -277,56 +273,75 @@ export function GanttTimeline({
           ))}
         </div>
 
-        {/* Court rows */}
-        {courts.map((courtId, courtIndex) => (
-          <div
-            key={courtId}
-            className="relative flex border-b border-border/60"
-            style={{ height: tier.row }}
-          >
-            {/* Left court-label column */}
+        {/* Grid body: court rows (bg + mesh + renderRow) + overlay for blocks.
+            The body wrapper is position: relative so the overlay positions
+            against it; the overlay starts after the label column so
+            box.left (which is relative to the mesh, not the full grid)
+            aligns correctly. */}
+        <div className="relative" style={{ width: gridWidth, height: bodyHeight }}>
+          {courts.map((courtId) => (
             <div
-              style={{ width: tier.label, height: tier.row }}
-              className="flex-shrink-0 bg-muted/30"
+              key={courtId}
+              className="relative flex border-b border-border/60"
+              style={{ height: tier.row }}
             >
-              {renderCourtLabel(courtId)}
-            </div>
-
-            {/* Mesh + blocks */}
-            <div className="relative gantt-grid" style={{ flex: '1 1 auto' }}>
-              {/* Cell mesh */}
-              <div className="absolute inset-0 flex">
-                {slotIds.map((slotId, slotIndex) => (
-                  <div
-                    key={slotId}
-                    style={{ width: tier.slot }}
-                    className="flex-shrink-0"
-                    onClick={
-                      onCellClick
-                        ? () => onCellClick(courtId, slotId)
-                        : undefined
-                    }
-                  >
-                    {renderCell({ courtId, slotId, slotIndex })}
-                  </div>
-                ))}
+              {/* Left court-label column */}
+              <div
+                style={{ width: tier.label, height: tier.row }}
+                className="flex-shrink-0 bg-muted/30"
+              >
+                {renderCourtLabel(courtId)}
               </div>
 
-              {/* Per-row decoration behind blocks */}
-              {renderRow ? renderRow(courtId) : null}
+              {/* Mesh */}
+              <div className="relative gantt-grid" style={{ flex: '1 1 auto' }}>
+                <div className="absolute inset-0 flex">
+                  {slotIds.map((slotId, slotIndex) => (
+                    <div
+                      key={slotId}
+                      style={{ width: tier.slot }}
+                      className="flex-shrink-0"
+                      onClick={
+                        onCellClick
+                          ? () => onCellClick(courtId, slotId)
+                          : undefined
+                      }
+                    >
+                      {renderCell({ courtId, slotId, slotIndex })}
+                    </div>
+                  ))}
+                </div>
 
-              {/* Positioned blocks for this court */}
-              {(byCourtIndex.get(courtIndex) ?? []).map(({ placement, box }) => (
-                <PositionedBlock
-                  key={placement.key}
-                  placement={placement}
-                  box={box}
-                  renderBlock={renderBlock}
-                />
-              ))}
+                {/* Per-row decoration BEHIND the blocks */}
+                {renderRow ? renderRow(courtId) : null}
+              </div>
             </div>
+          ))}
+
+          {/* Positioned blocks — one overlay for the whole grid body.
+              `left: tier.label` skips the court-label column so
+              `box.left` (relative to the mesh) lands correctly without
+              extra math. `pointer-events: none` keeps cell clicks alive;
+              each PositionedBlock re-enables pointer events on itself. */}
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              top: 0,
+              left: tier.label,
+              right: 0,
+              bottom: 0,
+            }}
+          >
+            {placementsWithBoxes.map(({ placement, box }) => (
+              <PositionedBlock
+                key={placement.key}
+                placement={placement}
+                box={box}
+                renderBlock={renderBlock}
+              />
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );

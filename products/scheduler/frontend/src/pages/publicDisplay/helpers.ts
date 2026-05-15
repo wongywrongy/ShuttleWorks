@@ -17,6 +17,7 @@ export function formatTournamentDate(
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleDateString(undefined, {
+    timeZone: 'UTC',
     weekday: 'short',
     month: 'short',
     day: 'numeric',
