@@ -187,17 +187,36 @@ export function useLiveOperations() {
         [field]: time,
       };
 
-      // Update local state immediately
       setMatchState(matchId, updated);
 
-      // Sync to backend
+      // Resolve canonical version (same pattern as useLiveTracking).
+      const store = useMatchStateStore.getState();
+      let version = store.canonicalVersionsByMatchId[matchId];
+      if (version === undefined) {
+        try {
+          version = await apiClient.getMatchVersion(tid, matchId);
+        } catch {
+          version = 0;
+        }
+        store.setMatchVersion(matchId, version);
+      }
+
       try {
-        await apiClient.updateMatchState(tid, matchId, updated);
+        const { state, version: newVersion } = await apiClient.updateMatchState(
+          tid,
+          matchId,
+          updated,
+          version,
+        );
+        setMatchState(matchId, state);
+        useMatchStateStore.getState().setMatchVersion(matchId, newVersion);
       } catch (err) {
         console.error('Failed to sync match state:', err);
+        // Existing UX: don't surface a toast; operator's manual edit
+        // stays in the UI. A subsequent status mutation will rehydrate.
       }
     },
-    [matchStates, setMatchState]
+    [matchStates, setMatchState, tid],
   );
 
   // Trigger re-optimization with frozen horizon

@@ -172,6 +172,21 @@ export interface WarmRestartRequest {
   nowIso?: string;
 }
 
+/** Thrown when the server rejects a match-state mutation due to a
+ *  stale or missing If-Match version (HTTP 412) or a state-machine
+ *  transition conflict (HTTP 409). Callers can branch on `name` to
+ *  decide whether to refetch + retry or roll back optimistic state. */
+export class MatchVersionMismatch extends Error {
+  override name = 'MatchVersionMismatch';
+  constructor(
+    public readonly status: 412 | 409,
+    message: string,
+    public readonly currentVersion?: number,
+  ) {
+    super(message);
+  }
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -776,17 +791,57 @@ class ApiClient {
     return 0;
   }
 
-  /** Update a match state. */
+  /**
+   * Update a match state. Sends `If-Match: "<version>"` (RFC 7232
+   * quoted form, matches the backend's `_parse_if_match_header`).
+   *
+   * Returns `{ state, version }` — `version` is the NEW canonical
+   * version parsed from the response ETag. Cache it via
+   * `matchStateStore.setMatchVersion` so the next mutation on the
+   * same match doesn't pay the cold-read roundtrip.
+   *
+   * Throws `MatchVersionMismatch` on 412 (header missing or stale)
+   * or 409 (state-machine conflict). All other failures propagate
+   * via the axios interceptor's toast pipeline.
+   */
   async updateMatchState(
     tid: string,
     matchId: string,
     update: Partial<MatchStateDTO>,
-  ): Promise<MatchStateDTO> {
-    const response = await this.client.put<MatchStateDTO>(
-      `/tournaments/${tid}/match-states/${matchId}`,
-      { matchId, ...update },
-    );
-    return response.data;
+    version: number,
+  ): Promise<{ state: MatchStateDTO; version: number }> {
+    try {
+      const response = await this.client.put<MatchStateDTO>(
+        `/tournaments/${tid}/match-states/${matchId}`,
+        { matchId, ...update },
+        { headers: { 'If-Match': `"${version}"` } },
+      );
+      const etag = response.headers['etag'] ?? response.headers['ETag'];
+      let newVersion = version + 1;
+      if (typeof etag === 'string') {
+        const stripped = etag.replace(/^W\//, '').replace(/^"|"$/g, '');
+        const parsed = parseInt(stripped, 10);
+        if (Number.isFinite(parsed)) newVersion = parsed;
+      }
+      return { state: response.data, version: newVersion };
+    } catch (err) {
+      // The axios response interceptor rewrites errors into a plain
+      // ``Error`` with ``status`` promoted to a top-level field (see
+      // client.ts response-interceptor). Tests, however, mock the raw
+      // axios shape with ``err.response.status``. Check both forms so
+      // both code paths reach the MatchVersionMismatch branch.
+      const status =
+        (err as { status?: number }).status ??
+        (err as { response?: { status?: number } }).response?.status;
+      if (status === 412 || status === 409) {
+        const msg =
+          (err as { response?: { data?: { message?: string } } }).response?.data?.message ??
+          (err as { message?: string }).message ??
+          'Match version mismatch';
+        throw new MatchVersionMismatch(status, msg);
+      }
+      throw err;
+    }
   }
 
   /** Reset all match states for the tournament. */
