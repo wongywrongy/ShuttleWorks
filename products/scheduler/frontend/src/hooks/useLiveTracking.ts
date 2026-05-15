@@ -13,11 +13,11 @@
  * reason attached. See VALID_TRANSITIONS below for the authoritative
  * table.
  */
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useMatchStateStore } from '../store/matchStateStore';
 import { useUiStore } from '../store/uiStore';
-import { apiClient } from '../api/client';
+import { apiClient, MatchVersionMismatch } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
 import { useTournamentId } from './useTournamentId';
 
@@ -145,60 +145,108 @@ export function useLiveTracking() {
     return () => clearInterval(interval);
   }, [setCurrentTime]);
 
+  // Self-ref so the toast `onAction` retry can invoke the latest
+  // `updateMatchStatus` without tripping React's temporal-dead-zone
+  // lint rule (`react-hooks/immutability`). The ref is wired up by
+  // the assignment after the useCallback definition.
+  const updateMatchStatusRef = useRef<
+    (matchId: string, status: MatchStateDTO['status'], additionalData?: Partial<MatchStateDTO>) => Promise<void>
+  >(async () => {});
+
   const updateMatchStatus = useCallback(async (
     matchId: string,
     status: MatchStateDTO['status'],
     additionalData?: Partial<MatchStateDTO>
   ) => {
     try {
-      // Get fresh state from store to avoid stale closures
       const freshMatchStates = useMatchStateStore.getState().matchStates;
       const currentState = freshMatchStates[matchId] || { matchId, status: 'scheduled' };
       const currentStatus = currentState.status || 'scheduled';
 
-      // Validate state transition
       if (!isValidTransition(currentStatus, status)) {
         console.warn(`Invalid state transition: ${currentStatus} to ${status} for match ${matchId}`);
         throw new Error(`Invalid state transition: cannot go from '${currentStatus}' to '${status}'`);
       }
 
-      // ISO-8601 UTC — parsed by parseMatchStartMs on every reader.
-      // Do NOT switch to a locale-dependent format: ElapsedTimer and the
-      // TV PublicDisplayPage both assume a canonical timestamp shape.
       const now = new Date().toISOString();
-
       const newState: MatchStateDTO = {
         ...currentState,
         matchId,
         status,
         ...additionalData,
       };
+      if (status === 'called' && !currentState.calledAt) newState.calledAt = now;
+      if (status === 'started' && !currentState.actualStartTime) newState.actualStartTime = now;
+      if (status === 'finished' && !currentState.actualEndTime) newState.actualEndTime = now;
 
-      // Set timestamps based on status transitions. Each is stamped
-      // on the FIRST transition only; if the operator undoes and
-      // re-fires, the original timestamp stays so "Called Xm ago" is
-      // an audit field, not a derived one that resets.
-      if (status === 'called' && !currentState.calledAt) {
-        newState.calledAt = now;
-      }
-      if (status === 'started' && !currentState.actualStartTime) {
-        newState.actualStartTime = now;
-      }
-      if (status === 'finished' && !currentState.actualEndTime) {
-        newState.actualEndTime = now;
+      // ─── Resolve the canonical match version ───────────────────────
+      // Read from the Zustand cache first; cold-fetch via the legacy
+      // GET (which carries ETag) on miss. If even the cold-fetch fails
+      // (offline / 5xx), fall back to 0 — the server will 412 and we
+      // recover via the catch block below. Mirrors the commandQueue
+      // submit path (useCommandQueue.ts:99-110).
+      const store = useMatchStateStore.getState();
+      let version = store.canonicalVersionsByMatchId[matchId];
+      if (version === undefined) {
+        try {
+          version = await apiClient.getMatchVersion(tid, matchId);
+        } catch {
+          version = 0;
+        }
+        store.setMatchVersion(matchId, version);
       }
 
-      // Update local state immediately for responsive UI
+      // Capture previous status BEFORE the optimistic apply so we can
+      // roll back precisely on a 412 if the refetch fails.
+      const previousStatus = currentStatus;
+
+      // Optimistic local apply (unchanged behaviour).
       setMatchState(matchId, newState);
 
-      // Sync to backend. On failure, surface a sticky error toast with
-      // a Retry action so the operator knows the change didn't land
-      // (and can replay it). Silent failures were hiding real data-loss
-      // events in prior builds.
       try {
-        await apiClient.updateMatchState(tid, matchId, newState);
+        const { state: serverState, version: newVersion } =
+          await apiClient.updateMatchState(tid, matchId, newState, version);
+        // Authoritative server state — overwrite the optimistic apply
+        // so timestamps the server stamped (e.g. actualStartTime) win.
+        setMatchState(matchId, serverState);
+        // Cache the new canonical version so the next mutation skips
+        // the cold-read roundtrip.
+        useMatchStateStore.getState().setMatchVersion(matchId, newVersion);
       } catch (apiError) {
         console.error('Failed to sync match status to backend:', apiError);
+
+        // ── 412 / 409: refetch + rollback ─────────────────────────
+        if (apiError instanceof MatchVersionMismatch) {
+          try {
+            const fresh = await apiClient.getMatchState(tid, matchId);
+            setMatchState(matchId, fresh);
+            try {
+              const v = await apiClient.getMatchVersion(tid, matchId);
+              useMatchStateStore.getState().setMatchVersion(matchId, v);
+            } catch { /* best-effort */ }
+          } catch {
+            // Refetch failed (transient). Roll back the optimistic
+            // apply explicitly so the operator UX doesn't show a
+            // status the server will never confirm.
+            useMatchStateStore.getState().applyOptimisticStatus(matchId, previousStatus);
+          }
+          // Surface a sticky toast so the operator knows the change
+          // didn't land. Retry replays with the fresh version.
+          try {
+            useUiStore.getState().pushToast({
+              level: 'error',
+              message: `Match ${matchId.slice(0, 8)}… version mismatch`,
+              detail: apiError.message,
+              actionLabel: 'Retry',
+              onAction: () => {
+                void updateMatchStatusRef.current(matchId, status, additionalData);
+              },
+            });
+          } catch { /* toast store unavailable */ }
+          return;
+        }
+
+        // ── Anything else: keep the existing sticky-toast retry path
         const detail = apiError instanceof Error ? apiError.message : 'Network error';
         try {
           useUiStore.getState().pushToast({
@@ -207,26 +255,23 @@ export function useLiveTracking() {
             detail,
             actionLabel: 'Retry',
             onAction: () => {
-              // Replay the same transition; the hook will re-push a toast
-              // on another failure, capped to one-per-match by id.
-              void (async () => {
-                try {
-                  await apiClient.updateMatchState(tid, matchId, newState);
-                } catch {
-                  /* a second failure will be caught by the Retry loop */
-                }
-              })();
+              void updateMatchStatusRef.current(matchId, status, additionalData);
             },
           });
-        } catch {
-          /* toast store unavailable — never block the UI on telemetry */
-        }
+        } catch { /* toast store unavailable */ }
       }
     } catch (error) {
       console.error('Failed to update match status:', error);
       throw error;
     }
-  }, [setMatchState]);
+  }, [setMatchState, tid]);
+
+  // Keep the ref pointed at the latest closure so retry callbacks
+  // invoke the freshest version. Assignment lives in an effect so
+  // we don't write a ref during render (react-hooks/refs).
+  useEffect(() => {
+    updateMatchStatusRef.current = updateMatchStatus;
+  }, [updateMatchStatus]);
 
   const setMatchScore = useCallback(async (
     matchId: string,
@@ -234,19 +279,35 @@ export function useLiveTracking() {
     notes?: string
   ) => {
     try {
-      const updated = await apiClient.updateMatchState(tid, matchId, {
+      const store = useMatchStateStore.getState();
+      let version = store.canonicalVersionsByMatchId[matchId];
+      if (version === undefined) {
+        try {
+          version = await apiClient.getMatchVersion(tid, matchId);
+        } catch {
+          version = 0;
+        }
+        store.setMatchVersion(matchId, version);
+      }
+      const { state: updated, version: newVersion } = await apiClient.updateMatchState(
+        tid,
         matchId,
-        status: 'finished',
-        score,
-        notes,
-        actualEndTime: new Date().toISOString(),
-      });
+        {
+          matchId,
+          status: 'finished',
+          score,
+          notes,
+          actualEndTime: new Date().toISOString(),
+        },
+        version,
+      );
       setMatchState(matchId, updated);
+      useMatchStateStore.getState().setMatchVersion(matchId, newVersion);
     } catch (error) {
       console.error('Failed to set match score:', error);
       throw error;
     }
-  }, [setMatchState]);
+  }, [setMatchState, tid]);
 
   /**
    * Confirm a player has arrived at the court for a called match
@@ -257,7 +318,6 @@ export function useLiveTracking() {
     confirmed: boolean
   ) => {
     try {
-      // Get fresh state from store to avoid stale closures
       const freshMatchStates = useMatchStateStore.getState().matchStates;
       const currentState = freshMatchStates[matchId] || { matchId, status: 'called' };
       const currentConfirmations = currentState.playerConfirmations || {};
@@ -272,21 +332,36 @@ export function useLiveTracking() {
         playerConfirmations: updatedConfirmations,
       };
 
-      // Update local state immediately for responsive UI
       setMatchState(matchId, newState);
 
-      // Sync to backend
+      // Resolve canonical version (same cold-fetch fallback as updateMatchStatus)
+      const store = useMatchStateStore.getState();
+      let version = store.canonicalVersionsByMatchId[matchId];
+      if (version === undefined) {
+        try {
+          version = await apiClient.getMatchVersion(tid, matchId);
+        } catch {
+          version = 0;
+        }
+        store.setMatchVersion(matchId, version);
+      }
+
       try {
-        await apiClient.updateMatchState(tid, matchId, newState);
+        const { state: serverState, version: newVersion } =
+          await apiClient.updateMatchState(tid, matchId, newState, version);
+        setMatchState(matchId, serverState);
+        useMatchStateStore.getState().setMatchVersion(matchId, newVersion);
       } catch (apiError) {
         console.error('Failed to sync player confirmation to backend:', apiError);
-        // Don't revert - local state is still valid for this session
+        // Existing UX: don't revert local state — operator's confirmation
+        // stays in the UI for the session. If it was a version mismatch,
+        // a subsequent updateMatchStatus call will refetch and overwrite.
       }
     } catch (error) {
       console.error('Failed to confirm player:', error);
       throw error;
     }
-  }, [setMatchState]);
+  }, [setMatchState, tid]);
 
   const exportStates = useCallback(async () => {
     try {
