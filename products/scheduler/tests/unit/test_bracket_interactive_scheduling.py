@@ -329,3 +329,98 @@ def test_repin_rejects_locked_play_unit():
     )
     with pytest.raises(ValueError, match="locked"):
         driver.repin_and_resolve("M1", slot_id=9, court_id=1)
+
+
+# ---- POST /bracket/validate -----------------------------------------------
+
+
+def _schedule_round_one(client, tid) -> dict:
+    """Create a 4-entrant SE bracket and solve round one. Returns the
+    TournamentDTO after schedule-next."""
+    assert client.post(_bracket_url(tid), json=_se_4_body()).status_code == 200
+    r = client.post(_bracket_url(tid, "schedule-next"))
+    assert r.status_code == 200, r.text
+    body = client.get(_bracket_url(tid)).json()
+    # Two semifinals should now be assigned.
+    assert len(body["assignments"]) == 2, body["assignments"]
+    return body
+
+
+def test_validate_feasible_move(client, tid):
+    body = _schedule_round_one(client, tid)
+    assignments = sorted(body["assignments"], key=lambda a: a["court_id"])
+    target = assignments[0]
+    # Move it to a clearly empty cell far from everything.
+    r = client.post(
+        _bracket_url(tid, "validate"),
+        json={
+            "play_unit_id": target["play_unit_id"],
+            "slot_id": 20,
+            "court_id": target["court_id"],
+        },
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["feasible"] is True
+    assert payload["conflicts"] == []
+
+
+def test_validate_court_overlap(client, tid):
+    body = _schedule_round_one(client, tid)
+    assignments = sorted(body["assignments"], key=lambda a: a["court_id"])
+    a0, a1 = assignments[0], assignments[1]
+    # Drag a1 onto a0's exact (slot, court).
+    r = client.post(
+        _bracket_url(tid, "validate"),
+        json={
+            "play_unit_id": a1["play_unit_id"],
+            "slot_id": a0["slot_id"],
+            "court_id": a0["court_id"],
+        },
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["feasible"] is False
+    assert any(c["type"] == "court_conflict" for c in payload["conflicts"])
+
+
+def test_validate_locked_match_is_infeasible(client, tid):
+    """A played match is locked → /validate returns feasible:false with
+    a `locked` conflict (locked matches are not draggable)."""
+    body = _schedule_round_one(client, tid)
+    sf = body["assignments"][0]
+    # Record a result for that semifinal → it is now locked.
+    rec = client.post(
+        _bracket_url(tid, "results"),
+        json={"play_unit_id": sf["play_unit_id"], "winner_side": "A"},
+    )
+    assert rec.status_code == 200, rec.text
+    r = client.post(
+        _bracket_url(tid, "validate"),
+        json={
+            "play_unit_id": sf["play_unit_id"],
+            "slot_id": 30,
+            "court_id": 1,
+        },
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["feasible"] is False
+    assert any(c["type"] == "locked" for c in payload["conflicts"])
+
+
+def test_validate_404_when_no_bracket(client, tid):
+    r = client.post(
+        _bracket_url(tid, "validate"),
+        json={"play_unit_id": "M1", "slot_id": 0, "court_id": 1},
+    )
+    assert r.status_code == 404
+
+
+def test_validate_404_for_unknown_play_unit(client, tid):
+    _schedule_round_one(client, tid)
+    r = client.post(
+        _bracket_url(tid, "validate"),
+        json={"play_unit_id": "GHOST", "slot_id": 0, "court_id": 1},
+    )
+    assert r.status_code == 404

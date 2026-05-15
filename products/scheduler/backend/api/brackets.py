@@ -79,6 +79,7 @@ from services.bracket.io.import_matches import (
     parse_json_payload,
 )
 from services.bracket.state import BracketSession, EventMeta, register_draw
+from services.bracket.validation import BracketConflict, validate_bracket_move
 
 router = APIRouter(
     prefix="/tournaments/{tournament_id}/bracket",
@@ -218,6 +219,40 @@ class MatchActionIn(BaseModel):
     play_unit_id: str
     action: Literal["start", "finish", "reset"]
     slot: Optional[int] = None
+
+
+class BracketValidateIn(BaseModel):
+    """A single proposed drag target evaluated by /bracket/validate."""
+    play_unit_id: str
+    slot_id: int
+    court_id: int
+
+
+class BracketPinIn(BaseModel):
+    """A single proposed drag target committed by /bracket/pin."""
+    play_unit_id: str
+    slot_id: int
+    court_id: int
+
+
+class BracketValidationConflictOut(BaseModel):
+    """One reason a proposed bracket move is infeasible.
+
+    Snake-case sibling of the meet's ``ValidationConflict`` — the
+    bracket API surface is snake_case throughout.
+    """
+    type: str
+    description: str
+    play_unit_id: Optional[str] = None
+    other_play_unit_id: Optional[str] = None
+    player_id: Optional[str] = None
+    court_id: Optional[int] = None
+    slot_id: Optional[int] = None
+
+
+class BracketValidationOut(BaseModel):
+    feasible: bool
+    conflicts: List[BracketValidationConflictOut] = Field(default_factory=list)
 
 
 class ImportPlayUnitIn(BaseModel):
@@ -653,6 +688,24 @@ def _started_play_unit_ids(state: TournamentState) -> Set[str]:
 
 def _finished_play_unit_ids(state: TournamentState) -> Set[str]:
     return set(state.results.keys())
+
+
+def _bracket_locked_play_unit_ids(
+    state: TournamentState, current_slot: int
+) -> Set[str]:
+    """PlayUnits whose assignment is locked: played (has a result) ∪
+    started (``actual_start_slot`` set) ∪ past (ends at or before
+    ``current_slot``). Mirrors the partition rule in
+    ``TournamentDriver.repin_and_resolve``."""
+    locked: Set[str] = set()
+    for a in state.assignments.values():
+        if a.play_unit_id in state.results:
+            locked.add(a.play_unit_id)
+        elif a.actual_start_slot is not None:
+            locked.add(a.play_unit_id)
+        elif a.slot_id + a.duration_slots <= current_slot:
+            locked.add(a.play_unit_id)
+    return locked
 
 
 # ---------------------------------------------------------------------------
@@ -1095,6 +1148,77 @@ def match_action(
 
     _persist_session_metadata(repo, tournament_id, session=session)
     return _serialize_session(session)
+
+
+@router.post(
+    "/validate", response_model=BracketValidationOut, dependencies=[_VIEWER]
+)
+def validate_bracket_move_route(
+    body: BracketValidateIn,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> BracketValidationOut:
+    """Cheap (pure-Python) feasibility check for a drag-to-reschedule
+    move on the bracket Schedule Gantt.
+
+    No CP-SAT invocation — splices the proposed ``(slot_id, court_id)``
+    for ``play_unit_id`` into the session's current assignment set and
+    runs ``validate_bracket_move``. A *locked* (played / started / past)
+    PlayUnit is not draggable: it returns ``feasible: false`` with a
+    ``locked`` conflict rather than running the full check.
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+    if body.play_unit_id not in session.state.play_units:
+        raise HTTPException(
+            status_code=404,
+            detail=f"play_unit {body.play_unit_id!r} not found",
+        )
+
+    locked_ids = _bracket_locked_play_unit_ids(
+        session.state, session.config.current_slot
+    )
+    if body.play_unit_id in locked_ids:
+        return BracketValidationOut(
+            feasible=False,
+            conflicts=[
+                BracketValidationConflictOut(
+                    type="locked",
+                    description=(
+                        f"Play unit {body.play_unit_id} is locked "
+                        f"(played / started / past) and cannot be moved"
+                    ),
+                    play_unit_id=body.play_unit_id,
+                )
+            ],
+        )
+
+    conflicts: List[BracketConflict] = validate_bracket_move(
+        session.state,
+        session.config,
+        play_unit_id=body.play_unit_id,
+        slot_id=body.slot_id,
+        court_id=body.court_id,
+    )
+    return BracketValidationOut(
+        feasible=not conflicts,
+        conflicts=[
+            BracketValidationConflictOut(
+                type=c.type,
+                description=c.description,
+                play_unit_id=c.play_unit_id,
+                other_play_unit_id=c.other_play_unit_id,
+                player_id=c.player_id,
+                court_id=c.court_id,
+                slot_id=c.slot_id,
+            )
+            for c in conflicts
+        ],
+    )
 
 
 @router.post("/import", response_model=TournamentOut, dependencies=[_OPERATOR])
