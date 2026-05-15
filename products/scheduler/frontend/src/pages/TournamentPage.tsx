@@ -61,13 +61,13 @@ export function TournamentPage() {
     const segment = location.pathname.split('/').filter(Boolean).pop();
     if (segment && _TAB_SEGMENTS.has(segment as AppTab)) {
       // The bracket URL segment is the bare ``/bracket``; map it
-      // straight to ``bracket-draw`` so the TabBar shows the right
+      // straight to ``bracket-setup`` so the TabBar shows the right
       // active tab on the first paint (the post-paint normalization
       // effect would otherwise leave one frame with no active tab).
       useUiStore
         .getState()
         .setActiveTab(
-          segment === 'bracket' ? 'bracket-draw' : (segment as AppTab),
+          segment === 'bracket' ? 'bracket-setup' : (segment as AppTab),
         );
     }
     const optimisticKind: 'meet' | 'bracket' =

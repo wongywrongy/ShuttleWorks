@@ -122,9 +122,9 @@ function BracketTabBody() {
   }
 
   // ``activeTab`` is normalized to a ``bracket-*`` id by
-  // ``TournamentPage`` once kind resolves; fall back to 'draw'
+  // ``TournamentPage`` once kind resolves; fall back to 'setup'
   // defensively for the first render before that effect runs.
-  const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : 'draw';
+  const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : 'setup';
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -151,6 +151,9 @@ function BracketTabBody() {
         key={view}
         className="min-h-0 flex-1 overflow-auto animate-block-in"
       >
+        {view === 'setup' && <div>Setup (A.6)</div>}
+        {view === 'roster' && <div>Roster (A.7)</div>}
+        {view === 'events' && <div>Events (A.8)</div>}
         {view === 'draw' && (
           <DrawView
             data={data}

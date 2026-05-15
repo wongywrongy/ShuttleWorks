@@ -24,6 +24,9 @@ export type AppTab =
   | 'live'
   | 'bracket'
   | 'tv'
+  | 'bracket-setup'
+  | 'bracket-roster'
+  | 'bracket-events'
   | 'bracket-draw'
   | 'bracket-schedule'
   | 'bracket-live';

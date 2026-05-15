@@ -15,6 +15,9 @@ interface Props {
 }
 
 const VIEW_LABEL: Record<Props["view"], string> = {
+  setup: "SETUP",
+  roster: "ROSTER",
+  events: "EVENTS",
   draw: "DRAW",
   schedule: "SCHEDULE",
   live: "LIVE",

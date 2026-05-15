@@ -42,10 +42,11 @@ const BracketTab = lazy(() =>
 
 export function AppShell() {
   // Theme + density hooks live at App.tsx level so they fire on every
-  // route. The meet-specific polling hooks (useTournamentState +
-  // useAdvisories + useSuggestions) are gated to kind='meet' below
-  // via the ``<MeetShellHooks />`` mount so a tournament-kind page
-  // doesn't fire three unrelated GETs on every poll cycle.
+  // route. ``useTournamentState`` runs for ALL tournament kinds (meet +
+  // bracket) via ``<SharedStateHooks />``. The meet-only polling hooks
+  // (``useAdvisories`` + ``useSuggestions``) are gated to kind='meet'
+  // below via ``<MeetOnlyPollingHooks />`` so a bracket tournament
+  // doesn't fire two unrelated GETs on every poll cycle.
   const activeTab = useUiStore((s) => s.activeTab);
   const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
   const pushToast = useUiStore((s) => s.pushToast);
@@ -131,13 +132,14 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      {/* Meet-only polling hooks live inside this sibling component
-          so React doesn't fire them on bracket-kind tournaments
-          (where the JSON-blob ``/state``, ``/schedule/advisories``,
-          and ``/schedule/suggestions`` endpoints all return empty
-          junk). Mounting/unmounting on kind change is cheap because
-          ``useTournamentKind`` is the only thing that flips it. */}
-      {activeTournamentKind !== 'bracket' ? <MeetShellHooks /> : null}
+      {/* useTournamentState runs for BOTH meet and bracket kinds —
+          brackets persist their Setup + Roster + Events config
+          through the same ``/tournaments/{id}/state`` endpoint. */}
+      <SharedStateHooks />
+      {/* Meet-only polling hooks: advisories + suggestions are meet-specific
+          and should not fire on bracket-kind tournaments where those
+          endpoints have no meaningful data. */}
+      {activeTournamentKind !== 'bracket' ? <MeetOnlyPollingHooks /> : null}
       <TabBar />
       <UnsavedBannerSlot />
       <main id="main" className="flex-1 min-h-0 overflow-auto">
@@ -173,15 +175,20 @@ export function AppShell() {
   );
 }
 
+// Shared hooks that run for both meet-kind AND bracket-kind tournaments.
+// Hydrates from and persists to the server-side ``/tournaments/{id}/state``
+// endpoint so both surfaces round-trip their config through the same path.
+function SharedStateHooks() {
+  useTournamentState();
+  return null;
+}
+
 // Meet-only polling hooks. Hosting them in a sibling component lets
 // us conditionally mount them based on tournament kind without
 // violating React's "hooks must be called in the same order every
 // render" rule. The hooks themselves don't render anything; they
 // just register polling timers and write into Zustand stores.
-function MeetShellHooks() {
-  // Hydrate from server-side tournament.json on mount + debounced
-  // PUTs on change.
-  useTournamentState();
+function MeetOnlyPollingHooks() {
   // Poll /schedule/advisories every 15s and surface warn/critical
   // advisories as toasts.
   useAdvisories();

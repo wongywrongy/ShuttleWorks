@@ -83,6 +83,8 @@ function snapshot(
     scheduleIsStale: state.scheduleIsStale,
     scheduleVersion: state.scheduleVersion,
     scheduleHistory: state.scheduleHistory,
+    bracketPlayers: state.bracketPlayers,
+    bracketRosterMigrated: state.bracketRosterMigrated,
   };
 }
 
@@ -104,6 +106,10 @@ function hydrate(s: TournamentStateDTO): void {
     // — otherwise the next config edit silently invalidates it
     // without prompting the unlock modal.
     isScheduleLocked: s.schedule != null,
+    // Bracket roster fields — empty for meet-kind; populated by bracket
+    // roster hydration from ``bracket_participants`` on first load.
+    bracketPlayers: s.bracketPlayers ?? [],
+    bracketRosterMigrated: s.bracketRosterMigrated ?? false,
   });
 }
 
@@ -118,6 +124,8 @@ function resetToDefaults(): void {
     scheduleVersion: 0,
     scheduleHistory: [],
     isScheduleLocked: false,
+    bracketPlayers: [],
+    bracketRosterMigrated: false,
   });
 }
 
@@ -183,7 +191,9 @@ export function useTournamentState(): void {
         state.players !== prev.players ||
         state.matches !== prev.matches ||
         state.schedule !== prev.schedule ||
-        state.scheduleIsStale !== prev.scheduleIsStale;
+        state.scheduleIsStale !== prev.scheduleIsStale ||
+        state.bracketPlayers !== prev.bracketPlayers ||
+        state.bracketRosterMigrated !== prev.bracketRosterMigrated;
       if (!changed) return;
 
       // Mark dirty immediately so the unsaved-changes UI can react before

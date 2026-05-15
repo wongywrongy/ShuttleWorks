@@ -9,6 +9,9 @@
 import type { AppTab } from '../store/uiStore';
 
 export const BRACKET_TAB_IDS = [
+  'bracket-setup',
+  'bracket-roster',
+  'bracket-events',
   'bracket-draw',
   'bracket-schedule',
   'bracket-live',
@@ -19,6 +22,9 @@ export type BracketTabId = (typeof BRACKET_TAB_IDS)[number];
 /** ``{ id, label }`` rows for ``TabBar``'s bracket-kind tab list.
  *  Structurally compatible with ``TabBar``'s local ``TabDef`` type. */
 export const BRACKET_TABS: { id: BracketTabId; label: string }[] = [
+  { id: 'bracket-setup', label: 'Setup' },
+  { id: 'bracket-roster', label: 'Roster' },
+  { id: 'bracket-events', label: 'Events' },
   { id: 'bracket-draw', label: 'Draw' },
   { id: 'bracket-schedule', label: 'Schedule' },
   { id: 'bracket-live', label: 'Live' },
@@ -41,7 +47,13 @@ export type MeetTabId = (typeof MEET_TAB_IDS)[number];
 
 /** The bare view name a ``bracket-`` tab maps to — drives the
  *  ``BracketViewHeader`` eyebrow and the content switch. */
-export type BracketView = 'draw' | 'schedule' | 'live';
+export type BracketView =
+  | 'setup'
+  | 'roster'
+  | 'events'
+  | 'draw'
+  | 'schedule'
+  | 'live';
 
 export function isBracketTab(tab: AppTab): tab is BracketTabId {
   return (BRACKET_TAB_IDS as readonly string[]).includes(tab);
@@ -65,7 +77,7 @@ export function normalizeActiveTab(
   activeTab: AppTab,
   kind: 'meet' | 'bracket' | null,
 ): AppTab | null {
-  if (kind === 'bracket' && !isBracketTab(activeTab)) return 'bracket-draw';
+  if (kind === 'bracket' && !isBracketTab(activeTab)) return 'bracket-setup';
   if (kind === 'meet' && !(MEET_TAB_IDS as readonly string[]).includes(activeTab))
     return 'setup';
   return null;

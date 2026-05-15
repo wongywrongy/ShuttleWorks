@@ -65,8 +65,10 @@ export function TabBar() {
 
   const disabledTabs = new Set<AppTab>();
   if (activeTournamentKind === 'bracket') {
-    // Draw / Schedule / Live stay disabled until a draw exists — the
-    // operator is on the SetupForm wizard until then. ``bracketDataReady``
+    // Bracket entry tabs (Setup, Roster, Events) stay enabled at all times —
+    // they're how the operator builds the bracket. Draw / Schedule / Live
+    // stay disabled until at least one event has been Generated, since
+    // those tabs render bracket_matches that don't exist yet. ``bracketDataReady``
     // is written by ``BracketTab``; TabBar lives outside
     // ``BracketApiProvider`` and can't call ``useBracket`` itself.
     if (bracketDataReady !== true) {
