@@ -206,6 +206,107 @@ class TournamentDriver:
             started_at_current_slot=current_slot,
         )
 
+    def generate_event(
+        self,
+        event_id: str,
+        wipe: bool = False,
+    ) -> RoundResult:
+        """Schedule one event's matches in isolation while respecting
+        other events' already-generated/started assignments.
+
+        - Find PlayUnits with ``pu.event_id == event_id``.
+        - If ``wipe`` is True: drop their existing assignments first.
+        - If any of those PlayUnits has a result, refuse with ValueError
+          (matches Phase A's Started lifecycle gate).
+        - Build the CP-SAT problem with the event's ready PlayUnits as
+          the variable set, and emit one ``PreviousAssignment(locked=True)``
+          per OTHER event's existing assignment so the solver picks
+          (slot, court) cells that don't collide.
+        - Write resulting assignments back into ``state.assignments``.
+        """
+        event_pu_ids = [
+            pu_id for pu_id, pu in self.state.play_units.items()
+            if pu.event_id == event_id
+        ]
+        if not event_pu_ids:
+            return RoundResult(play_unit_ids=[], status=SolverStatus.UNKNOWN)
+
+        if any(pu_id in self.state.results for pu_id in event_pu_ids):
+            raise ValueError(
+                f"event {event_id!r} has results; cannot generate (event is started)"
+            )
+
+        if wipe:
+            for pu_id in event_pu_ids:
+                self.state.assignments.pop(pu_id, None)
+
+        # Ready set inside the target event: dependency satisfied + both sides known.
+        ready: List[PlayUnitId] = []
+        for pu_id in event_pu_ids:
+            pu = self.state.play_units[pu_id]
+            if pu_id in self.state.assignments:
+                continue
+            if not pu.side_a or not pu.side_b:
+                continue
+            if any(dep not in self.state.results for dep in pu.dependencies):
+                continue
+            ready.append(pu_id)
+
+        if not ready:
+            return RoundResult(play_unit_ids=[], status=SolverStatus.UNKNOWN)
+
+        # Collect other-events' existing assignments as locked phantom matches.
+        # They are included in the solve as full Match entries so that
+        # CourtCapacity's AddNoOverlap spans both events' matches.
+        # LocksAndPins then hard-fixes their (slot, court) so they cannot move.
+        # Without this, LocksAndPins silently skips them (match_id not in
+        # ctx.matches) and the solver sees an empty court for MS.
+        locked_pu_ids: List[PlayUnitId] = []
+        previous_assignments: List[PreviousAssignment] = []
+        for pu_id, a in self.state.assignments.items():
+            pu = self.state.play_units.get(pu_id)
+            if pu is None or pu.event_id == event_id:
+                continue
+            locked_pu_ids.append(pu_id)
+            previous_assignments.append(
+                PreviousAssignment(
+                    match_id=pu_id,
+                    slot_id=a.slot_id,
+                    court_id=a.court_id,
+                    locked=True,
+                )
+            )
+
+        problem = build_problem(
+            self.state,
+            ready + locked_pu_ids,
+            config=self.config,
+            solver_options=self.solver_options,
+            previous_assignments=previous_assignments,
+        )
+        result = schedule(problem, options=self.solver_options)
+
+        ready_set = set(ready)
+        if result.status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE):
+            for assignment in result.assignments:
+                if assignment.match_id not in ready_set:
+                    continue  # locked phantom — did not change
+                self.state.assignments[assignment.match_id] = (
+                    TournamentAssignment(
+                        play_unit_id=assignment.match_id,
+                        slot_id=assignment.slot_id,
+                        court_id=assignment.court_id,
+                        duration_slots=assignment.duration_slots,
+                    )
+                )
+
+        return RoundResult(
+            play_unit_ids=ready,
+            status=result.status,
+            schedule_result=result,
+            started_at_current_slot=self.config.current_slot,
+        )
+
     def schedule_until_blocked(self, max_rounds: int = 32) -> List[RoundResult]:
         """Run rounds until no more ready PlayUnits exist or max_rounds hit."""
         results: List[RoundResult] = []
