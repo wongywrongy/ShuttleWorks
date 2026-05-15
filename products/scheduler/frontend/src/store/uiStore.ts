@@ -192,6 +192,10 @@ interface UiState {
   unlockModalState: UnlockModalState | null;
   setUnlockModalState: (state: UnlockModalState | null) => void;
 
+  // Bracket Live tab — selected match id for MatchDetailPanel.
+  bracketSelectedMatchId: string | null;
+  setBracketSelectedMatchId: (id: string | null) => void;
+
   // Hard reset — called by the `useClearAllData` hook so the three
   // stores reset together when the operator wipes the tournament.
   reset: () => void;
@@ -220,6 +224,7 @@ const INITIAL: Pick<
   | 'suggestions'
   | 'pendingAdvisoryReview'
   | 'unlockModalState'
+  | 'bracketSelectedMatchId'
 > = {
   activeTab: 'setup',
   activeTournamentId: null,
@@ -242,6 +247,7 @@ const INITIAL: Pick<
   suggestions: [],
   pendingAdvisoryReview: null,
   unlockModalState: null,
+  bracketSelectedMatchId: null,
 };
 
 export const useUiStore = create<UiState>((set) => ({
@@ -302,6 +308,8 @@ export const useUiStore = create<UiState>((set) => ({
   setPendingAdvisoryReview: (pendingAdvisoryReview) =>
     set({ pendingAdvisoryReview }),
   setUnlockModalState: (unlockModalState) => set({ unlockModalState }),
+
+  setBracketSelectedMatchId: (bracketSelectedMatchId) => set({ bracketSelectedMatchId }),
 
   reset: () => set({ ...INITIAL }),
 }));

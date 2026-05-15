@@ -55,23 +55,27 @@ export function BracketViewHeader({
         <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {VIEW_LABEL[view]}
         </span>
-        <select
-          value={eventId}
-          onChange={(e) => onEventId(e.target.value)}
-          aria-label="Event"
-          className="rounded-sm border border-border bg-bg-elev px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          {data.events.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.id} · {e.discipline}
-            </option>
-          ))}
-        </select>
-        {selectedEvent && (
-          <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {formatLabel}
-          </span>
-        )}
+        {view === 'draw' ? (
+          <>
+            <select
+              value={eventId}
+              onChange={(e) => onEventId(e.target.value)}
+              aria-label="Event"
+              className="rounded-sm border border-border bg-bg-elev px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {data.events.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.id} · {e.discipline}
+                </option>
+              ))}
+            </select>
+            {selectedEvent && (
+              <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {formatLabel}
+              </span>
+            )}
+          </>
+        ) : null}
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">
         <Counters event={eventCounts} global={globalCounts} />

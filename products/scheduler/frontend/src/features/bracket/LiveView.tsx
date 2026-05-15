@@ -1,13 +1,15 @@
 /**
  * LiveView — GanttTimeline operator surface. Court×time with chips
  * coloured by event and ringed by lifecycle state. Right-rail
- * MatchDetailPanel arrives in B.3.
+ * MatchDetailPanel shows details for the selected chip.
  */
 import { useMemo, useCallback } from 'react';
-import { GanttTimeline, type Placement, type GanttBlockBox } from '@scheduler/design-system';
+import { GanttTimeline, type Placement } from '@scheduler/design-system';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { getEventColor } from '../schedule/eventColors';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
+import { useUiStore } from '../../store/uiStore';
+import { MatchDetailPanel } from './MatchDetailPanel';
 
 // ---- State-ring vocabulary ------------------------------------------------
 
@@ -19,7 +21,11 @@ export type ChipState = 'scheduled' | 'called' | 'started' | 'finished' | 'late'
  * Priority: finished → started → late → scheduled.
  * 'called' is kept in the type for forward-compat but is not emitted
  * in B.2 — bracket has no distinct "called" state from the DTO yet.
+ *
+ * Exported for testing (LiveView.test.tsx imports this alongside the
+ * component — react-refresh/only-export-components is suppressed here).
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function deriveChipState(
   pu_id: string,
   data: BracketTournamentDTO,
@@ -81,8 +87,9 @@ interface Props {
   refresh: () => Promise<void>;
 }
 
-export function LiveView({ data }: Props) {
+export function LiveView({ data, onChange }: Props) {
   const currentSlot = useCurrentSlot();
+  const setBracketSelectedMatchId = useUiStore((s) => s.setBracketSelectedMatchId);
 
   const placements: Placement[] = useMemo(() => {
     // Renders all events; event color is the discriminator (event-filter removed in B.1).
@@ -118,7 +125,7 @@ export function LiveView({ data }: Props) {
   );
 
   const renderBlock = useCallback(
-    (placement: Placement, _box: GanttBlockBox) => {
+    (placement: Placement) => {
       const pu = puById[placement.key];
       // B.2 fix: look up discipline from events to get the correct color prefix
       // (e.g. "MS" → blue, "WD" → purple). Falls back to DEFAULT_EVENT_COLOR
@@ -135,14 +142,23 @@ export function LiveView({ data }: Props) {
 
       return (
         <div
-          className={`h-full w-full rounded-sm border px-2 py-1 ${color.bg} ${color.border} ${ringClass}`}
+          role="button"
+          tabIndex={0}
+          className={`h-full w-full cursor-pointer rounded-sm border px-2 py-1 ${color.bg} ${color.border} ${ringClass}`}
           title={tooltip}
+          onClick={() => pu && setBracketSelectedMatchId(pu.id)}
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && pu) {
+              e.preventDefault();
+              setBracketSelectedMatchId(pu.id);
+            }
+          }}
         >
           <div className="text-2xs font-mono truncate tracking-[0.18em]">{pu?.id}</div>
         </div>
       );
     },
-    [puById, data, currentSlot],
+    [puById, data, currentSlot, setBracketSelectedMatchId],
   );
 
   if (placements.length === 0) {
@@ -155,15 +171,18 @@ export function LiveView({ data }: Props) {
   }
 
   return (
-    <div className="p-4">
-      <GanttTimeline
-        courts={courts}
-        minSlot={minSlot}
-        slotCount={slotCount}
-        density="standard"
-        placements={placements}
-        renderBlock={renderBlock}
-      />
+    <div className="flex h-full min-h-0">
+      <div className="flex-1 overflow-auto p-4">
+        <GanttTimeline
+          courts={courts}
+          minSlot={minSlot}
+          slotCount={slotCount}
+          density="standard"
+          placements={placements}
+          renderBlock={renderBlock}
+        />
+      </div>
+      <MatchDetailPanel data={data} onChange={onChange} />
     </div>
   );
 }

@@ -1,8 +1,21 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { useUiStore } from '../../store/uiStore';
 import { LiveView } from '../../features/bracket/LiveView';
 import { deriveChipState } from '../../features/bracket/LiveView';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
+
+// A.8 module-mock — MatchDetailPanel (now inside LiveView) calls useBracketApi().
+// Without this the hook throws when LiveView is rendered outside a provider.
+vi.mock('../../api/bracketClient', () => ({
+  useBracketApi: () => ({
+    matchAction: vi.fn(),
+    recordResult: vi.fn(),
+  }),
+  BracketApiContext: {
+    Provider: ({ children }: { children: React.ReactNode }) => children,
+  },
+}));
 
 const EMPTY: BracketTournamentDTO = {
   courts: 4, total_slots: 32, rest_between_rounds: 1, interval_minutes: 30,
@@ -28,6 +41,10 @@ const BASE: BracketTournamentDTO = {
 };
 
 describe('LiveView', () => {
+  beforeEach(() => {
+    useUiStore.setState({ bracketSelectedMatchId: null });
+  });
+
   it('renders empty-state CTA when no events are generated', () => {
     render(<LiveView data={EMPTY} onChange={() => {}} refresh={async () => {}} />);
     expect(screen.getByText(/No draws generated yet/i)).toBeInTheDocument();
@@ -36,6 +53,15 @@ describe('LiveView', () => {
   it('renders play_unit chip when an assignment exists', () => {
     render(<LiveView data={WITH_ONE_ASSIGNMENT} onChange={() => {}} refresh={async () => {}} />);
     expect(screen.getByText('pu-1')).toBeInTheDocument();
+  });
+
+  it('sets bracketSelectedMatchId when a chip is clicked', () => {
+    useUiStore.setState({ bracketSelectedMatchId: null });
+    render(<LiveView data={WITH_ONE_ASSIGNMENT} onChange={() => {}} refresh={async () => {}} />);
+    // The chip text is inside the clickable div — click the parent (role=button)
+    const chipText = screen.getByText('pu-1');
+    fireEvent.click(chipText.parentElement!);
+    expect(useUiStore.getState().bracketSelectedMatchId).toBe('pu-1');
   });
 });
 
