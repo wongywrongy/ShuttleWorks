@@ -224,3 +224,108 @@ def test_validate_move_dependency_ordering():
         state, config, play_unit_id="M3", slot_id=1, court_id=2
     )
     assert not any(c.type == "dependency_order" for c in ok)
+
+
+# ---- TournamentDriver.repin_and_resolve -----------------------------------
+
+
+def _driver_state_two_assigned():
+    """State with M1 (P1 vs P2) at (0,1) and M2 (P3 vs P4) at (0,2),
+    both scheduled, no results."""
+    from scheduler_core.domain.tournament import (
+        Participant,
+        ParticipantType,
+        PlayUnit,
+        TournamentAssignment,
+        TournamentState,
+    )
+
+    state = TournamentState()
+    for pid in ("P1", "P2", "P3", "P4"):
+        state.participants[pid] = Participant(
+            id=pid, name=pid, type=ParticipantType.PLAYER
+        )
+    state.play_units["M1"] = PlayUnit(
+        id="M1", event_id="MS", side_a=["P1"], side_b=["P2"],
+        expected_duration_slots=1,
+    )
+    state.play_units["M2"] = PlayUnit(
+        id="M2", event_id="MS", side_a=["P3"], side_b=["P4"],
+        expected_duration_slots=1,
+    )
+    state.assignments["M1"] = TournamentAssignment(
+        play_unit_id="M1", slot_id=0, court_id=1, duration_slots=1
+    )
+    state.assignments["M2"] = TournamentAssignment(
+        play_unit_id="M2", slot_id=0, court_id=2, duration_slots=1
+    )
+    return state
+
+
+def test_repin_pins_target_and_reoptimises_free():
+    from scheduler_core.domain.models import (
+        ScheduleConfig,
+        SolverOptions,
+        SolverStatus,
+    )
+    from services.bracket.scheduler import TournamentDriver
+
+    state = _driver_state_two_assigned()
+    driver = TournamentDriver(
+        state=state,
+        config=ScheduleConfig(total_slots=64, court_count=2),
+        solver_options=SolverOptions(time_limit_seconds=2.0),
+    )
+    # Pin M2 to (slot=3, court=1). M1 is free (no result, not started,
+    # not past) — the solver re-places it.
+    result = driver.repin_and_resolve("M2", slot_id=3, court_id=1)
+    assert result.status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE)
+    # M2 landed at its pinned target.
+    assert state.assignments["M2"].slot_id == 3
+    assert state.assignments["M2"].court_id == 1
+    # M1 is still scheduled (re-optimised, exact cell solver's choice).
+    assert "M1" in state.assignments
+
+
+def test_repin_keeps_locked_match_fixed():
+    from scheduler_core.domain.models import (
+        ScheduleConfig,
+        SolverOptions,
+        SolverStatus,
+    )
+    from scheduler_core.domain.tournament import Result, WinnerSide
+    from services.bracket.scheduler import TournamentDriver
+
+    state = _driver_state_two_assigned()
+    # M1 has a result → locked. Its (slot, court) must not move.
+    state.results["M1"] = Result(winner_side=WinnerSide.A)
+    locked_slot = state.assignments["M1"].slot_id
+    locked_court = state.assignments["M1"].court_id
+
+    driver = TournamentDriver(
+        state=state,
+        config=ScheduleConfig(total_slots=64, court_count=2),
+        solver_options=SolverOptions(time_limit_seconds=2.0),
+    )
+    result = driver.repin_and_resolve("M2", slot_id=5, court_id=2)
+    assert result.status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE)
+    assert state.assignments["M1"].slot_id == locked_slot
+    assert state.assignments["M1"].court_id == locked_court
+    assert state.assignments["M2"].slot_id == 5
+    assert state.assignments["M2"].court_id == 2
+
+
+def test_repin_rejects_locked_play_unit():
+    from scheduler_core.domain.models import ScheduleConfig, SolverOptions
+    from scheduler_core.domain.tournament import Result, WinnerSide
+    from services.bracket.scheduler import TournamentDriver
+
+    state = _driver_state_two_assigned()
+    state.results["M1"] = Result(winner_side=WinnerSide.A)  # M1 locked
+    driver = TournamentDriver(
+        state=state,
+        config=ScheduleConfig(total_slots=64, court_count=2),
+        solver_options=SolverOptions(time_limit_seconds=2.0),
+    )
+    with pytest.raises(ValueError, match="locked"):
+        driver.repin_and_resolve("M1", slot_id=9, court_id=1)
