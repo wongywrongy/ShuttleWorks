@@ -1,10 +1,11 @@
 import { ArrowLeft } from '@phosphor-icons/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore, type AppTab } from '../store/uiStore';
 import { AppStatusPopover } from '../components/AppStatusPopover';
 import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
 import { useDisruptions } from '../hooks/useDisruptions';
+import { useTournamentId } from '../hooks/useTournamentId';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import { BRACKET_TABS, MEET_TAB_IDS, type MeetTabId } from '../lib/bracketTabs';
 
@@ -55,6 +56,8 @@ export function TabBar() {
   const matches = useTournamentStore((s) => s.matches);
   const players = useTournamentStore((s) => s.players);
   const disruptions = useDisruptions();
+  const navigate = useNavigate();
+  const tid = useTournamentId();
 
   // Default to meet tabs while ``activeTournamentKind`` is loading
   // (it's null on first mount before useTournamentKind resolves).
@@ -129,7 +132,12 @@ export function TabBar() {
                 type="button"
                 role="tab"
                 disabled={isDisabled}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  if (tid) {
+                    navigate(`/tournaments/${tid}/${tab.id}`, { replace: true });
+                  }
+                  setActiveTab(tab.id);
+                }}
                 aria-current={isActive ? 'page' : undefined}
                 aria-selected={isActive}
                 aria-disabled={isDisabled || undefined}
