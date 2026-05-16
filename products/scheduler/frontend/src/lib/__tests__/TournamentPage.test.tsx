@@ -7,7 +7,7 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { TournamentPage } from '../../pages/TournamentPage';
 import { useUiStore } from '../../store/uiStore';
 
@@ -62,5 +62,49 @@ describe('TournamentPage URL → store sync', () => {
     mountAt('/tournaments/t1/tv');
     expect(useUiStore.getState().activeTab).toBe('tv');
     expect(useUiStore.getState().activeTournamentKind).toBe('meet');
+  });
+});
+
+describe('legacy /bracket redirect', () => {
+  // We need a different test scaffold here because the redirect lives
+  // in App.tsx's Routes, not in TournamentPage itself. The page-level
+  // tests above mount TournamentPage directly; this test mounts an
+  // App-style routing setup that includes the legacy route.
+  it('mounting at /tournaments/:id/bracket lands on /bracket-setup', () => {
+    function LocationProbe({ refObj }: { refObj: { current: string } }) {
+      const loc = useLocation();
+      refObj.current = loc.pathname;
+      return null;
+    }
+    // Helper component that reads :id from params and redirects to an
+    // absolute path so React Router resolves it without ambiguity.
+    // (A bare relative <Navigate to="bracket-setup"> would append to
+    // the matched segment and produce /bracket/bracket-setup instead.)
+    function BracketLegacyRedirect() {
+      const { id } = useParams<{ id: string }>();
+      return <Navigate to={`/tournaments/${id}/bracket-setup`} replace />;
+    }
+    const locRef = { current: '' };
+    render(
+      <MemoryRouter initialEntries={['/tournaments/t1/bracket']}>
+        <Routes>
+          <Route
+            path="/tournaments/:id/bracket"
+            element={<BracketLegacyRedirect />}
+          />
+          <Route
+            path="/tournaments/:id/*"
+            element={
+              <>
+                <TournamentPage />
+                <LocationProbe refObj={locRef} />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(locRef.current).toBe('/tournaments/t1/bracket-setup');
+    expect(useUiStore.getState().activeTab).toBe('bracket-setup');
   });
 });
