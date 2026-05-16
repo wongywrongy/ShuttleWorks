@@ -11,16 +11,18 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { BracketTab } from '../../features/bracket/BracketTab';
 import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
+import { useBracket } from '../../hooks/useBracket';
+import type { BracketTournamentDTO } from '../../api/bracketDto';
 
 // --- Mock useBracket so the component doesn't start polling ---
 vi.mock('../../hooks/useBracket', () => ({
-  useBracket: () => ({
+  useBracket: vi.fn(() => ({
     data: null,
     setData: vi.fn(),
     loading: false,
     error: null,
     refresh: vi.fn(),
-  }),
+  })),
 }));
 
 // --- Mock bracketClient so BracketApiProvider never calls the real API ---
@@ -53,6 +55,14 @@ function renderBracketTab() {
 }
 
 beforeEach(() => {
+  // Reset useBracket to the default null-data return value.
+  vi.mocked(useBracket).mockReturnValue({
+    data: null,
+    setData: vi.fn(),
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  });
   // Reset stores to known defaults.
   useUiStore.setState({ activeTab: 'bracket-setup' });
   useTournamentStore.setState({
@@ -116,5 +126,58 @@ describe('BracketTab — fresh tournament (data === null)', () => {
     useUiStore.setState({ activeTab: 'bracket-live' });
     renderBracketTab();
     expect(screen.getByText(/No draws generated yet/i)).toBeInTheDocument();
+  });
+});
+
+function makePopulatedBracket(): BracketTournamentDTO {
+  return {
+    courts: 2,
+    total_slots: 4,
+    rest_between_rounds: 1,
+    interval_minutes: 30,
+    start_time: '09:00',
+    events: [{
+      id: 'MS-1', discipline: 'MS', format: 'se',
+      bracket_size: 2, participant_count: 2, rounds: [], status: 'generated',
+    }],
+    participants: [
+      { id: 'p1', name: 'Alice' },
+      { id: 'p2', name: 'Bob' },
+    ],
+    play_units: [{
+      id: 'pu1', event_id: 'MS-1', round_index: 0, match_index: 0,
+      side_a: ['p1'], side_b: ['p2'], duration_slots: 1, dependencies: [],
+      slot_a: { participant_id: 'p1', feeder_play_unit_id: null },
+      slot_b: { participant_id: 'p2', feeder_play_unit_id: null },
+    }],
+    assignments: [{
+      play_unit_id: 'pu1', slot_id: 0, court_id: 1, duration_slots: 1,
+      actual_start_slot: null, actual_end_slot: null, started: false, finished: false,
+    }],
+    results: [],
+  };
+}
+
+describe('BracketTab — Schedule chrome (data populated)', () => {
+  it('renders header + table + sidebar on bracket-schedule tab', () => {
+    // Override the default null-data mock for this test only.
+    vi.mocked(useBracket).mockReturnValue({
+      data: makePopulatedBracket(),
+      setData: vi.fn(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    useUiStore.setState({ activeTab: 'bracket-schedule' });
+    renderBracketTab();
+
+    // Header: play-unit count summary.
+    expect(screen.getByText(/play unit.*scheduled across/i)).toBeInTheDocument();
+
+    // Table: the "X of Y scheduled" header strip.
+    expect(screen.getByText(/of 1 scheduled/i)).toBeInTheDocument();
+
+    // Sidebar: empty hint by default (nothing selected).
+    expect(screen.getByText(/click a match to see details/i)).toBeInTheDocument();
   });
 });

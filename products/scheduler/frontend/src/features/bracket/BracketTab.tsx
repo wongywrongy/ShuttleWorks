@@ -29,6 +29,9 @@ import { BracketViewHeader } from './BracketViewHeader';
 import { DrawView } from './DrawView';
 import { ScheduleView } from './ScheduleView';
 import { LiveView } from './LiveView';
+import { BracketScheduleHeader } from './BracketScheduleHeader';
+import { BracketMatchesTable } from './BracketMatchesTable';
+import { BracketScheduleSidebar } from './BracketScheduleSidebar';
 
 export function BracketTab() {
   const params = useParams<{ id: string }>();
@@ -102,6 +105,15 @@ function BracketTabBody() {
       setEventId(data.events[0].id);
     }
   }, [data, eventId]);
+
+  const [selectedPlayUnitId, setSelectedPlayUnitId] = useState<string | null>(null);
+
+  // Reset selection when the bracket data identity changes (regenerate,
+  // event switch). `data` is replaced wholesale by the setData callback,
+  // not mutated in place, so a reference check is sufficient.
+  useEffect(() => {
+    setSelectedPlayUnitId(null);
+  }, [data]);
 
   // First-load migration: if we have a legacy bracket with participants
   // but no bracketPlayers in store yet, extract them once.
@@ -190,9 +202,29 @@ function BracketTabBody() {
           />
         )}
         {view === 'schedule' && data && (
-          <ScheduleView
-            data={data}
-          />
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <BracketScheduleHeader data={data} />
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="shrink-0 overflow-x-auto px-4 py-3">
+                  <ScheduleView
+                    data={data}
+                    selectedId={selectedPlayUnitId}
+                    onSelect={setSelectedPlayUnitId}
+                  />
+                </div>
+                <BracketMatchesTable
+                  data={data}
+                  selectedId={selectedPlayUnitId}
+                  onSelect={setSelectedPlayUnitId}
+                />
+              </div>
+              <BracketScheduleSidebar
+                data={data}
+                selectedId={selectedPlayUnitId}
+              />
+            </div>
+          </div>
         )}
         {view === 'live' && data && (
           <LiveView
