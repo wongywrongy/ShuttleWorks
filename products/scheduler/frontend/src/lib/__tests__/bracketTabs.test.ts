@@ -81,6 +81,13 @@ describe('normalizeActiveTab', () => {
     expect(normalizeActiveTab('setup', null)).toBeNull();
     expect(normalizeActiveTab('bracket-draw', null)).toBeNull();
   });
+  it('normalizes the legacy "bracket" activeTab to "bracket-setup" on bracket kind', () => {
+    // The bare 'bracket' value is reserved as a stale sentinel only —
+    // post-Bundle-3 the legacy URL redirects to /bracket-setup, but
+    // any code path that still sets activeTab='bracket' (e.g. from a
+    // very old stored UI state) must snap to a valid bracket sub-tab.
+    expect(normalizeActiveTab('bracket', 'bracket')).toBe('bracket-setup');
+  });
 });
 
 describe('BRACKET_TAB_IDS — extended for entry tabs (#5)', () => {
