@@ -21,14 +21,14 @@ import { useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
-import { normalizeActiveTab, MEET_TAB_IDS } from '../lib/bracketTabs';
+import { normalizeActiveTab, MEET_TAB_IDS, BRACKET_TAB_IDS } from '../lib/bracketTabs';
 
-// URL-routable trailing segments: the meet tabs plus the bare
-// ``bracket`` segment. (The ``bracket-*`` sub-tab ids are never URL
-// segments — the bracket surface has the single ``/bracket`` route.)
+// URL-routable trailing segments: every meet tab id + every bracket tab id.
+// Legacy `/bracket` is handled by an explicit <Navigate> route in App.tsx;
+// by the time we reach this layoutEffect the URL is already /bracket-setup.
 const _TAB_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   ...MEET_TAB_IDS,
-  'bracket',
+  ...BRACKET_TAB_IDS,
 ]);
 
 export function TournamentPage() {
@@ -60,18 +60,15 @@ export function TournamentPage() {
     if (!tid) return;
     const segment = location.pathname.split('/').filter(Boolean).pop();
     if (segment && _TAB_SEGMENTS.has(segment as AppTab)) {
-      // The bracket URL segment is the bare ``/bracket``; map it
-      // straight to ``bracket-setup`` so the TabBar shows the right
-      // active tab on the first paint (the post-paint normalization
-      // effect would otherwise leave one frame with no active tab).
-      useUiStore
-        .getState()
-        .setActiveTab(
-          segment === 'bracket' ? 'bracket-setup' : (segment as AppTab),
-        );
+      // Segment IS the tab id, 1:1. No translation.
+      useUiStore.getState().setActiveTab(segment as AppTab);
     }
+    // Optimistic kind: any bracket-* segment → bracket; otherwise meet.
+    // ``useTournamentKind``'s async fetch corrects the optimistic guess
+    // if the URL lies (e.g. someone hand-edits the URL to a bracket tab
+    // on a meet-kind tournament).
     const optimisticKind: 'meet' | 'bracket' =
-      segment === 'bracket' ? 'bracket' : 'meet';
+      segment && segment.startsWith('bracket-') ? 'bracket' : 'meet';
     useUiStore.getState().setActiveTournamentKind(optimisticKind);
   }, [tid, location.pathname]);
 
