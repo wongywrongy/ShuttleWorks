@@ -40,9 +40,11 @@ function buildTooltip(
 
 interface Props {
   data: BracketTournamentDTO;
+  selectedId?: string | null;
+  onSelect?: (playUnitId: string) => void;
 }
 
-export function ScheduleView({ data }: Props) {
+export function ScheduleView({ data, selectedId, onSelect }: Props) {
   const eventFilter = useUiStore((s) => s.bracketScheduleEventFilter);
 
   const placements: Placement[] = useMemo(
@@ -87,17 +89,27 @@ export function ScheduleView({ data }: Props) {
       // C.2: dim chips whose event is explicitly disabled in the filter strip.
       // Missing key → on (default-on semantics).
       const dimmed = pu ? eventFilter[pu.event_id] === false : false;
+      const isSelected = pu?.id === selectedId;
+
+      const baseClasses = `h-full w-full rounded-sm border px-2 py-1 ${color.bg} ${color.border}`;
+      const stateClasses = [
+        dimmed ? 'opacity-40' : '',
+        isSelected ? 'ring-2 ring-accent ring-offset-1' : '',
+        onSelect ? 'cursor-pointer' : '',
+      ].filter(Boolean).join(' ');
 
       return (
         <div
-          className={`h-full w-full rounded-sm border px-2 py-1 ${color.bg} ${color.border}${dimmed ? ' opacity-40' : ''}`}
+          data-testid={pu ? `bracket-block-${pu.id}` : undefined}
+          className={`${baseClasses} ${stateClasses}`}
           title={tooltip}
+          onClick={pu && onSelect ? () => onSelect(pu.id) : undefined}
         >
           <div className="text-2xs font-mono truncate tracking-[0.18em]">{pu?.id}</div>
         </div>
       );
     },
-    [puById, data, eventFilter],
+    [puById, data, eventFilter, selectedId, onSelect],
   );
 
   if (placements.length === 0) {

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ScheduleView } from '../../features/bracket/ScheduleView';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 
@@ -26,6 +26,35 @@ const WITH_TWO_ASSIGNMENTS: BracketTournamentDTO = {
   ],
 };
 
+function makeBracketDataWithOneAssignment() {
+  return {
+    courts: 2,
+    total_slots: 4,
+    rest_between_rounds: 1,
+    interval_minutes: 30,
+    start_time: '09:00',
+    events: [{
+      id: 'MS-1', discipline: 'MS', format: 'se' as const,
+      bracket_size: 2, participant_count: 2, rounds: [], status: 'generated' as const,
+    }],
+    participants: [
+      { id: 'p1', name: 'Alice' },
+      { id: 'p2', name: 'Bob' },
+    ],
+    play_units: [{
+      id: 'pu1', event_id: 'MS-1', round_index: 0, match_index: 0,
+      side_a: ['p1'], side_b: ['p2'], duration_slots: 1, dependencies: [],
+      slot_a: { participant_id: 'p1', feeder_play_unit_id: null },
+      slot_b: { participant_id: 'p2', feeder_play_unit_id: null },
+    }],
+    assignments: [{
+      play_unit_id: 'pu1', slot_id: 0, court_id: 1, duration_slots: 1,
+      actual_start_slot: null, actual_end_slot: null, started: false, finished: false,
+    }],
+    results: [],
+  };
+}
+
 describe('ScheduleView', () => {
   it('renders empty-state CTA when no assignments exist', () => {
     render(<ScheduleView data={EMPTY} />);
@@ -50,5 +79,25 @@ describe('ScheduleView', () => {
     // display-only — no buttons in the gantt block area
     const buttons = screen.queryAllByRole('button');
     expect(buttons).toHaveLength(0);
+  });
+
+  it('fires onSelect with the play_unit_id when a block is clicked', () => {
+    const onSelect = vi.fn();
+    const data = makeBracketDataWithOneAssignment();
+    const { container } = render(<ScheduleView data={data} onSelect={onSelect} />);
+    const block = container.querySelector('[data-testid^="bracket-block-"]');
+    expect(block).not.toBeNull();
+    fireEvent.click(block!);
+    expect(onSelect).toHaveBeenCalledWith(data.play_units[0].id);
+  });
+
+  it('renders a selection ring when selectedId matches a block', () => {
+    const data = makeBracketDataWithOneAssignment();
+    const { container } = render(
+      <ScheduleView data={data} selectedId={data.play_units[0].id} />,
+    );
+    const block = container.querySelector('[data-testid^="bracket-block-"]');
+    expect(block).not.toBeNull();
+    expect(block?.className).toMatch(/ring-/);
   });
 });
