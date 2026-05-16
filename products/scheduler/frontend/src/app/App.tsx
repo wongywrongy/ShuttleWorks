@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { IconContext } from '@phosphor-icons/react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { AuthProvider } from '../context/AuthContext';
@@ -27,6 +27,16 @@ const InvitePage = lazy(() =>
 
 function Fallback() {
   return <div className="p-4 text-sm text-muted-foreground">Loading…</div>;
+}
+
+/** Legacy redirect: pre-Bundle-3 URLs pointed at the bare /bracket
+ *  segment. Redirect them to /bracket-setup so bookmarks and shared
+ *  links don't 404. Uses an absolute target so React Router resolves
+ *  the path correctly (a bare relative "bracket-setup" would append
+ *  to the matched segment and produce /bracket/bracket-setup). */
+function BracketLegacyRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/tournaments/${id}/bracket-setup`} replace />;
 }
 
 function App() {
@@ -92,6 +102,15 @@ function App() {
                     </Suspense>
                   </AuthGuard>
                 }
+              />
+
+              {/* Legacy redirect: pre-Bundle-3 URLs pointed at the bare /bracket
+                  segment. Redirect them to /bracket-setup so bookmarks and shared
+                  links don't 404. Replace semantics so the operator's history
+                  stays clean (no back-button stop on the dead legacy URL). */}
+              <Route
+                path="/tournaments/:id/bracket"
+                element={<BracketLegacyRedirect />}
               />
 
               {/* Authenticated: per-tournament shell. */}

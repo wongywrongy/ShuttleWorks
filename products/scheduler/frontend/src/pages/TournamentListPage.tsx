@@ -234,7 +234,7 @@ export function TournamentListPage() {
       // AppShell will render BracketTab on either URL — the
       // segment just decides which one we *show* in the browser.
       const t = tournaments.find((row) => row.id === id);
-      const segment = t?.kind === 'bracket' ? 'bracket' : 'setup';
+      const segment = t?.kind === 'bracket' ? 'bracket-setup' : 'setup';
       navigate(`/tournaments/${id}/${segment}`);
     },
     [navigate, tournaments],
@@ -273,7 +273,7 @@ export function TournamentListPage() {
       // shows the 6 meet tabs (kind='meet') or hides the strip and
       // renders BracketTab directly (kind='bracket'). URL segment
       // is informational; AppShell decides what to render.
-      const destination = newKind === 'bracket' ? 'bracket' : 'setup';
+      const destination = newKind === 'bracket' ? 'bracket-setup' : 'setup';
       navigate(`/tournaments/${created.id}/${destination}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create tournament');

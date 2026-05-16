@@ -4,13 +4,14 @@
  * module-level helpers (``forceSaveNow``) can resolve the active
  * tournament, then renders the existing ``AppShell``.
  *
- * Also syncs the URL trailing segment (``/setup``, ``/bracket``, …)
- * into ``uiStore.activeTab`` so deep links land on the right tab —
- * without this the dashboard's ``navigate('/tournaments/X/bracket')``
- * silently lands on the default `setup` tab. The reverse direction
- * (tab clicks updating the URL) is intentionally NOT wired here —
- * it's nice-to-have but introduces back/forward-button surprise; a
- * follow-up PR can add it once the operator UX has stabilised.
+ * Syncs the URL trailing segment into ``uiStore.activeTab`` so deep
+ * links and refresh land on the right tab. Bundle 3 made this 1:1 —
+ * every tab id is a URL segment (``/setup``, ``/bracket-events``, …);
+ * the reverse direction (tab click → URL) is wired in ``TabBar.tsx``
+ * with ``{ replace: true }`` semantics so back-button doesn't
+ * accumulate per-tab stops. Legacy ``/bracket`` URLs are handled by a
+ * ``<Navigate>`` route in ``App.tsx`` that redirects to ``/bracket-setup``
+ * before this page mounts.
  *
  * Hooks inside ``AppShell`` (``useTournamentState``, ``useAdvisories``,
  * ``useSuggestions``, etc.) read the same id via ``useParams`` /
@@ -21,14 +22,14 @@ import { useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
-import { normalizeActiveTab, MEET_TAB_IDS } from '../lib/bracketTabs';
+import { normalizeActiveTab, MEET_TAB_IDS, BRACKET_TAB_IDS } from '../lib/bracketTabs';
 
-// URL-routable trailing segments: the meet tabs plus the bare
-// ``bracket`` segment. (The ``bracket-*`` sub-tab ids are never URL
-// segments — the bracket surface has the single ``/bracket`` route.)
+// URL-routable trailing segments: every meet tab id + every bracket tab id.
+// Legacy `/bracket` is handled by an explicit <Navigate> route in App.tsx;
+// by the time we reach this layoutEffect the URL is already /bracket-setup.
 const _TAB_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   ...MEET_TAB_IDS,
-  'bracket',
+  ...BRACKET_TAB_IDS,
 ]);
 
 export function TournamentPage() {
@@ -60,28 +61,26 @@ export function TournamentPage() {
     if (!tid) return;
     const segment = location.pathname.split('/').filter(Boolean).pop();
     if (segment && _TAB_SEGMENTS.has(segment as AppTab)) {
-      // The bracket URL segment is the bare ``/bracket``; map it
-      // straight to ``bracket-setup`` so the TabBar shows the right
-      // active tab on the first paint (the post-paint normalization
-      // effect would otherwise leave one frame with no active tab).
-      useUiStore
-        .getState()
-        .setActiveTab(
-          segment === 'bracket' ? 'bracket-setup' : (segment as AppTab),
-        );
+      // Segment IS the tab id, 1:1. No translation.
+      useUiStore.getState().setActiveTab(segment as AppTab);
     }
+    // Optimistic kind: any bracket-* segment → bracket; otherwise meet.
+    // ``useTournamentKind``'s async fetch corrects the optimistic guess
+    // if the URL lies (e.g. someone hand-edits the URL to a bracket tab
+    // on a meet-kind tournament).
     const optimisticKind: 'meet' | 'bracket' =
-      segment === 'bracket' ? 'bracket' : 'meet';
+      segment && segment.startsWith('bracket-') ? 'bracket' : 'meet';
     useUiStore.getState().setActiveTournamentKind(optimisticKind);
   }, [tid, location.pathname]);
 
   // Once the active tournament kind is known, snap ``activeTab`` onto a
-  // tab that's valid for that kind. The URL segment for a bracket is
-  // the bare ``/bracket`` (-> activeTab 'bracket', not a renderable
-  // section), and ``activeTab`` can also be stale from a prior
-  // tournament of the other kind. Runs after the layout effect above
-  // sets the optimistic kind, and again when ``useTournamentKind``'s
-  // async fetch corrects it.
+  // tab that's valid for that kind. ``activeTab`` can be stale from a
+  // prior tournament of the other kind, OR it can be the bare ``'bracket'``
+  // sentinel left in ``AppTab`` for backwards compat (no production code
+  // path emits it post-Bundle-3, but the normalizer still snaps it to
+  // ``'bracket-setup'``). Runs after the layout effect above sets the
+  // optimistic kind, and again when ``useTournamentKind``'s async fetch
+  // corrects it.
   const activeTab = useUiStore((s) => s.activeTab);
   const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
   useEffect(() => {
