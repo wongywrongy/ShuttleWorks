@@ -12,8 +12,9 @@
  * ``TabBar`` (``activeTab`` is a ``bracket-*`` id), with a
  * ``BracketViewHeader`` strip above the active view.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Sliders, Database, Share as ShareIcon } from '@phosphor-icons/react';
 
 import { BracketApiProvider, useBracketApi } from '../../api/bracketClient';
 
@@ -22,7 +23,10 @@ import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
 import { reconcileBracketRoster } from './bracketMigration';
-import { SetupTab } from './SetupTab';
+import { SettingsShell, type SettingsSectionDef } from '../settings/SettingsShell';
+import { ShareSettings } from '../settings/ShareSettings';
+import { BracketTournamentSection } from './BracketTournamentSection';
+import { BracketDataSection } from './BracketDataSection';
 import { BracketRosterTab } from './BracketRosterTab';
 import { EventsTab } from './EventsTab';
 import { BracketViewHeader } from './BracketViewHeader';
@@ -142,6 +146,30 @@ function BracketTabBody() {
   // defensively for the first render before that effect runs.
   const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : 'setup';
 
+  const bracketSetupSections = useMemo<SettingsSectionDef[]>(
+    () => [
+      {
+        id: 'tournament',
+        label: 'Tournament',
+        icon: Sliders,
+        render: () => <BracketTournamentSection />,
+      },
+      {
+        id: 'data',
+        label: 'Tournament data',
+        icon: Database,
+        render: () => <BracketDataSection />,
+      },
+      {
+        id: 'share',
+        label: 'Share',
+        icon: ShareIcon,
+        render: () => <ShareSettings />,
+      },
+    ],
+    [],
+  );
+
   // Setup, Roster, and Events do NOT depend on bracket-events data.
   // Draw/Schedule/Live render the events' draws/Gantts; they need data.
   const needsBracketData = view === 'draw' || view === 'schedule' || view === 'live';
@@ -190,7 +218,12 @@ function BracketTabBody() {
         key={view}
         className="min-h-0 flex-1 overflow-auto animate-block-in"
       >
-        {view === 'setup' && <SetupTab />}
+        {view === 'setup' && (
+          <SettingsShell
+            sections={bracketSetupSections}
+            defaultSectionId="tournament"
+          />
+        )}
         {view === 'roster' && <BracketRosterTab />}
         {view === 'events' && <EventsTab />}
         {view === 'draw' && data && (
