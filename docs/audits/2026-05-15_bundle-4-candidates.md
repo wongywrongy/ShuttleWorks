@@ -31,7 +31,7 @@
 
 ## Larger candidates (deferred, separate brainstorm)
 
-- **Bracket Setup chrome parity.** Extend Bundle 2's pattern (header + content + sidebar) to the bracket Setup tab so its full-screen layout matches meet's Setup. Originally part of the user's "not everything is full screen" complaint; only the Schedule tab was addressed in Bundle 2.
+- ~~**Bracket Setup chrome parity.**~~ ✅ **Shipped as Bundle 5** (2026-05-17, merge `9fc1f89`). `BracketTab.Setup` now renders the same `SettingsShell` chrome the meet uses with three sections (Tournament / Tournament data / Share). See `docs/superpowers/specs/2026-05-15-bundle-5-bracket-setup-chrome-design.md`.
 - **Decompose `BracketTab` into per-route components.** Today `BracketTab` internally dispatches to its six sub-views; AppShell still has `if kind === 'bracket' ? <BracketTab /> : meet-tabs-dispatch`. Decomposing makes the dispatch pattern uniform but is a meaningful refactor — explicitly out of scope for Bundle 3 per the user's call.
 
 ## Notes on scoping
