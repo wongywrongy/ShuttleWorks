@@ -181,3 +181,23 @@ describe('BracketTab — Schedule chrome (data populated)', () => {
     expect(screen.getByText(/click a match to see details/i)).toBeInTheDocument();
   });
 });
+
+describe('BracketTab — Setup chrome', () => {
+  it('renders the three Setup sections in the SettingsShell nav', () => {
+    // Default mock (null data) is fine — Setup doesn't depend on bracket data.
+    useUiStore.setState({ activeTab: 'bracket-setup' });
+    renderBracketTab();
+    // The SettingsNav renders a button per section in the left rail.
+    // The three section labels must all be present.
+    expect(screen.getByRole('button', { name: /^Tournament$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Tournament data$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Share$/i })).toBeInTheDocument();
+  });
+
+  it('renders the Tournament section content by default', () => {
+    useUiStore.setState({ activeTab: 'bracket-setup' });
+    renderBracketTab();
+    // Tournament section shows the name field
+    expect(screen.getByLabelText(/Tournament name/i)).toBeInTheDocument();
+  });
+});
