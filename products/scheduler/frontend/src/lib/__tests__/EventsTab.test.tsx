@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { EventsTab } from '../../features/bracket/EventsTab';
 import { useTournamentStore } from '../../store/tournamentStore';
 
@@ -80,7 +80,7 @@ beforeEach(() => {
 });
 
 describe('EventsTab', () => {
-  it('renders a composed empty state when no events exist', () => {
+  it('keeps spreadsheet headers and opens the new event row from the empty state', () => {
     mockBracketData = {
       courts: 2,
       total_slots: 64,
@@ -96,8 +96,16 @@ describe('EventsTab', () => {
 
     render(<EventsTab />);
 
-    expect(screen.getByRole('heading', { name: 'No bracket events yet' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Add event/i }).length).toBeGreaterThan(0);
+    expect(screen.getByText('ID')).toBeInTheDocument();
+    const emptyStateHeading = screen.getByRole('heading', { name: 'No bracket events yet' });
+    expect(emptyStateHeading).toBeInTheDocument();
+
+    const emptyState = emptyStateHeading.closest('section');
+    expect(emptyState).not.toBeNull();
+    fireEvent.click(within(emptyState!).getByRole('button', { name: /Add event/i }));
+
+    expect(screen.getByPlaceholderText('MS')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'No bracket events yet' })).not.toBeInTheDocument();
   });
 
   it('renders the spreadsheet header columns', () => {

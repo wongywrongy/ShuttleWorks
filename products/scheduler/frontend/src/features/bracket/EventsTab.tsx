@@ -54,7 +54,12 @@ export function EventsTab() {
               Draw events
             </h2>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setAddingRow(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="+ Add event"
+            onClick={() => setAddingRow(true)}
+          >
             Add event
           </Button>
         </div>
@@ -67,110 +72,108 @@ export function EventsTab() {
             onAction={() => setAddingRow(true)}
           />
         ) : null}
-        {events.length > 0 || addingRow ? (
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-ink-100 text-ink-600">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium border-b border-ink-200">ID</th>
-                <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Discipline</th>
-                <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Format</th>
-                <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Size</th>
-                <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Participants</th>
-                <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Status</th>
-                <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((ev) => {
-                const status: BracketEventStatus = ev.status ?? 'draft';
-                const partCount = ev.participant_count ?? 0;
-                const targetSize = ev.bracket_size ?? partCount;
-                const pickerOpen = openPickerFor === ev.id;
-                const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
-                return (
-                  <Fragment key={ev.id}>
-                    <tr className="border-b border-ink-100">
-                      <td className="px-3 py-2 font-mono text-xs">{ev.id}</td>
-                      <td className="px-3 py-2">{ev.discipline}</td>
-                      <td className="px-3 py-2">{ev.format.toUpperCase()}</td>
-                      <td className="px-3 py-2">{targetSize}</td>
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => setOpenPickerFor(pickerOpen ? null : ev.id)}
-                          className="text-xs hover:underline"
-                        >
-                          {partCount} entered
-                        </button>
-                      </td>
-                      <td className="px-3 py-2"><StatusPillFor status={status} /></td>
-                      <td className="px-3 py-2">
-                        <ActionCell
-                          status={status}
-                          eventReady={partCount > 0 && partCount === targetSize}
-                          onGenerate={() => handleGenerate(ev.id, false)}
-                          onRegenerate={() => handleGenerate(ev.id, true)}
+        <table className="w-full border-collapse text-sm">
+          <thead className="bg-ink-100 text-ink-600">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">ID</th>
+              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Discipline</th>
+              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Format</th>
+              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Size</th>
+              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Participants</th>
+              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Status</th>
+              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {events.map((ev) => {
+              const status: BracketEventStatus = ev.status ?? 'draft';
+              const partCount = ev.participant_count ?? 0;
+              const targetSize = ev.bracket_size ?? partCount;
+              const pickerOpen = openPickerFor === ev.id;
+              const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
+              return (
+                <Fragment key={ev.id}>
+                  <tr className="border-b border-ink-100">
+                    <td className="px-3 py-2 font-mono text-xs">{ev.id}</td>
+                    <td className="px-3 py-2">{ev.discipline}</td>
+                    <td className="px-3 py-2">{ev.format.toUpperCase()}</td>
+                    <td className="px-3 py-2">{targetSize}</td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => setOpenPickerFor(pickerOpen ? null : ev.id)}
+                        className="text-xs hover:underline"
+                      >
+                        {partCount} entered
+                      </button>
+                    </td>
+                    <td className="px-3 py-2"><StatusPillFor status={status} /></td>
+                    <td className="px-3 py-2">
+                      <ActionCell
+                        status={status}
+                        eventReady={partCount > 0 && partCount === targetSize}
+                        onGenerate={() => handleGenerate(ev.id, false)}
+                        onRegenerate={() => handleGenerate(ev.id, true)}
+                      />
+                    </td>
+                  </tr>
+                  {pickerOpen && (
+                    <tr>
+                      <td colSpan={7} className="bg-bg-elev p-2">
+                        <ParticipantPicker
+                          mode={isDoubles ? 'doubles' : 'singles'}
+                          eventId={ev.id}
+                          players={players}
+                          initialIds={[]}
+                          onCommit={async (picks) => {
+                            const participants = isDoubles
+                              ? (picks as PickedPair[]).map((p) => ({
+                                  id: p.id, name: p.name, members: p.members,
+                                }))
+                              : (picks as PickedSingle[]).map((p) => ({
+                                  id: p.id, name: p.name,
+                                }));
+                            try {
+                              const next = await api.eventUpsert(ev.id, {
+                                discipline: ev.discipline,
+                                format: ev.format,
+                                bracket_size: ev.bracket_size,
+                                duration_slots: 1,
+                                participants,
+                              });
+                              setData(next);
+                            } finally {
+                              setOpenPickerFor(null);
+                            }
+                          }}
+                          onCancel={() => setOpenPickerFor(null)}
                         />
                       </td>
                     </tr>
-                    {pickerOpen && (
-                      <tr>
-                        <td colSpan={7} className="bg-bg-elev p-2">
-                          <ParticipantPicker
-                            mode={isDoubles ? 'doubles' : 'singles'}
-                            eventId={ev.id}
-                            players={players}
-                            initialIds={[]}
-                            onCommit={async (picks) => {
-                              const participants = isDoubles
-                                ? (picks as PickedPair[]).map((p) => ({
-                                    id: p.id, name: p.name, members: p.members,
-                                  }))
-                                : (picks as PickedSingle[]).map((p) => ({
-                                    id: p.id, name: p.name,
-                                  }));
-                              try {
-                                const next = await api.eventUpsert(ev.id, {
-                                  discipline: ev.discipline,
-                                  format: ev.format,
-                                  bracket_size: ev.bracket_size,
-                                  duration_slots: 1,
-                                  participants,
-                                });
-                                setData(next);
-                              } finally {
-                                setOpenPickerFor(null);
-                              }
-                            }}
-                            onCancel={() => setOpenPickerFor(null)}
-                          />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-              {addingRow && (
-                <NewEventRow
-                  onCommit={async (body) => {
-                    try {
-                      const next = await api.eventUpsert(body.id, {
-                        discipline: body.discipline,
-                        format: body.format,
-                        duration_slots: 1,
-                        participants: [],
-                      });
-                      setData(next);
-                    } finally {
-                      setAddingRow(false);
-                    }
-                  }}
-                  onCancel={() => setAddingRow(false)}
-                />
-              )}
-            </tbody>
-          </table>
-        ) : null}
+                  )}
+                </Fragment>
+              );
+            })}
+            {addingRow && (
+              <NewEventRow
+                onCommit={async (body) => {
+                  try {
+                    const next = await api.eventUpsert(body.id, {
+                      discipline: body.discipline,
+                      format: body.format,
+                      duration_slots: 1,
+                      participants: [],
+                    });
+                    setData(next);
+                  } finally {
+                    setAddingRow(false);
+                  }
+                }}
+                onCancel={() => setAddingRow(false)}
+              />
+            )}
+          </tbody>
+        </table>
       </main>
     </div>
   );
