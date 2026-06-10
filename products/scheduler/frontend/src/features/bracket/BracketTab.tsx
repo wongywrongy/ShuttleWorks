@@ -36,6 +36,8 @@ import { LiveView } from './LiveView';
 import { BracketScheduleHeader } from './BracketScheduleHeader';
 import { BracketMatchesTable } from './BracketMatchesTable';
 import { BracketScheduleSidebar } from './BracketScheduleSidebar';
+import { BracketEmptyState } from './BracketEmptyState';
+import { BracketInlineNotice } from './BracketInlineNotice';
 
 export function BracketTab() {
   const params = useParams<{ id: string }>();
@@ -176,17 +178,18 @@ function BracketTabBody() {
   if (needsBracketData && !data) {
     return (
       <div className="min-h-full bg-background">
-        <main className="mx-auto max-w-4xl px-6 py-8">
-          {error && (
-            <div className="mb-6 rounded-sm border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-          <p className="text-sm text-muted-foreground">
-            No draws generated yet. Open the <strong>Events</strong> tab to add events,
-            and the <strong>Setup</strong> tab to set the venue + schedule.
-          </p>
-        </main>
+        {error ? (
+          <BracketInlineNotice
+            tone="error"
+            title="Bracket data is unavailable"
+            message={error}
+          />
+        ) : null}
+        <BracketEmptyState
+          eyebrow={view}
+          title="No draws generated"
+          body="Open Events to add events and generate draws. Setup controls the venue and schedule settings for those draws."
+        />
       </div>
     );
   }
@@ -203,9 +206,11 @@ function BracketTabBody() {
         />
       )}
       {error && (
-        <div className="mx-4 mt-4 rounded-sm border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </div>
+        <BracketInlineNotice
+          tone="error"
+          title="Bracket data is unavailable"
+          message={error}
+        />
       )}
       {/* Re-key on the active view so each sub-tab switch re-runs the
           ``animate-block-in`` entry — matches the meet's per-tab

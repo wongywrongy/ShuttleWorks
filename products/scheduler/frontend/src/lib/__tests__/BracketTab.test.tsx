@@ -108,10 +108,11 @@ describe('BracketTab — fresh tournament (data === null)', () => {
     expect(screen.queryByText(/No draws generated yet/i)).not.toBeInTheDocument();
   });
 
-  it('shows the empty-state CTA (not a crash) on bracket-draw tab', () => {
+  it('renders a composed empty state when draw-dependent views have no bracket data', () => {
     useUiStore.setState({ activeTab: 'bracket-draw' });
     renderBracketTab();
-    expect(screen.getByText(/No draws generated yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No draws generated' })).toBeInTheDocument();
+    expect(screen.getByText(/Open Events to add events and generate draws/i)).toBeInTheDocument();
     // Should not render the Draw content or Setup form
     expect(screen.queryByLabelText(/Tournament name/i)).not.toBeInTheDocument();
   });
@@ -119,13 +120,28 @@ describe('BracketTab — fresh tournament (data === null)', () => {
   it('shows the empty-state CTA on bracket-schedule tab', () => {
     useUiStore.setState({ activeTab: 'bracket-schedule' });
     renderBracketTab();
-    expect(screen.getByText(/No draws generated yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No draws generated' })).toBeInTheDocument();
   });
 
   it('shows the empty-state CTA on bracket-live tab', () => {
     useUiStore.setState({ activeTab: 'bracket-live' });
     renderBracketTab();
-    expect(screen.getByText(/No draws generated yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No draws generated' })).toBeInTheDocument();
+  });
+
+  it('renders bracket load errors as inline alerts', () => {
+    vi.mocked(useBracket).mockReturnValue({
+      data: null,
+      setData: vi.fn(),
+      loading: false,
+      error: 'Network failed',
+      refresh: vi.fn(),
+    });
+    useUiStore.setState({ activeTab: 'bracket-draw' });
+    renderBracketTab();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Bracket data is unavailable');
+    expect(screen.getByRole('alert')).toHaveTextContent('Network failed');
   });
 });
 
