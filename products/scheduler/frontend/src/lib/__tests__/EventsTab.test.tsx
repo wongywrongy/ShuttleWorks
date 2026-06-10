@@ -80,6 +80,26 @@ beforeEach(() => {
 });
 
 describe('EventsTab', () => {
+  it('renders a composed empty state when no events exist', () => {
+    mockBracketData = {
+      courts: 2,
+      total_slots: 64,
+      rest_between_rounds: 1,
+      interval_minutes: 30,
+      start_time: null,
+      events: [],
+      participants: [],
+      play_units: [],
+      assignments: [],
+      results: [],
+    };
+
+    render(<EventsTab />);
+
+    expect(screen.getByRole('heading', { name: 'No bracket events yet' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Add event/i }).length).toBeGreaterThan(0);
+  });
+
   it('renders the spreadsheet header columns', () => {
     render(<EventsTab />);
     expect(screen.getByText('ID')).toBeInTheDocument();
@@ -307,7 +327,7 @@ describe('EventsTab', () => {
 
   it('shows the new event row when + Add event is clicked', () => {
     render(<EventsTab />);
-    fireEvent.click(screen.getByRole('button', { name: /\+ Add event/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add event/i }));
     expect(screen.getByPlaceholderText('MS')).toBeInTheDocument();
   });
 
@@ -316,7 +336,7 @@ describe('EventsTab', () => {
     const mockTournament = { ...mockBracketData! };
     mockEventUpsert.mockResolvedValue(mockTournament);
     render(<EventsTab />);
-    fireEvent.click(screen.getByRole('button', { name: /\+ Add event/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add event/i }));
     const idInput = screen.getByPlaceholderText('MS');
     fireEvent.change(idInput, { target: { value: 'WS' } });
     fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
