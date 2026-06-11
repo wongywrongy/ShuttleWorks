@@ -809,6 +809,65 @@ def _clear_bracket(repo: LocalRepository, tournament_id: uuid.UUID) -> None:
             repo.tournaments.upsert_data(tournament_id, payload)
 
 
+def _persist_result_advancement(
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
+    session: BracketSession,
+    play_unit_id: str,
+    affected: List[str],
+) -> None:
+    """Persist a recorded result plus any downstream advancement rows."""
+    pu = session.state.play_units[play_unit_id]
+    recorded = session.state.results[play_unit_id]
+    repo.brackets.record_result(
+        tournament_id,
+        pu.event_id,
+        play_unit_id,
+        winner_side=recorded.winner_side.value,
+        score=recorded.score,
+        finished_at_slot=recorded.finished_at_slot,
+        walkover=recorded.walkover,
+    )
+    # First result on a Generated event flips its status to 'started'.
+    ev_row = repo.brackets.get_event(tournament_id, pu.event_id)
+    if ev_row is not None and ev_row.status == "generated":
+        repo.brackets.set_event_status(tournament_id, pu.event_id, "started")
+    # Persist the downstream match-row slot updates (and any cascading
+    # walkover results triggered by _sweep_walkovers).
+    for downstream_id in affected:
+        downstream_pu = session.state.play_units[downstream_id]
+        ev_id = downstream_pu.event_id
+        slot_a, slot_b = session.draws[ev_id].slots[downstream_id]
+        repo.brackets.update_match(
+            tournament_id,
+            ev_id,
+            downstream_id,
+            {
+                "slot_a": _slot_to_dict(slot_a),
+                "slot_b": _slot_to_dict(slot_b),
+                "side_a": list(downstream_pu.side_a)
+                if downstream_pu.side_a
+                else [],
+                "side_b": list(downstream_pu.side_b)
+                if downstream_pu.side_b
+                else [],
+            },
+        )
+        # If the sweep auto-walkovered this downstream PlayUnit too,
+        # its result is in state.results now and needs persisting.
+        if downstream_id in session.state.results:
+            r = session.state.results[downstream_id]
+            repo.brackets.record_result(
+                tournament_id,
+                ev_id,
+                downstream_id,
+                winner_side=r.winner_side.value,
+                score=r.score,
+                finished_at_slot=r.finished_at_slot,
+                walkover=r.walkover,
+            )
+
+
 # ---------------------------------------------------------------------------
 # Routes.
 # ---------------------------------------------------------------------------
@@ -1424,12 +1483,17 @@ def record_match_result(
 
     existing = session.state.results.get(body.play_unit_id)
     if existing is not None:
-        if existing.winner_side.value == body.winner_side:
-            return _serialize_session(session)
-        raise HTTPException(
-            status_code=409,
-            detail="Result already recorded for this match",
+        is_exact_replay = (
+            existing.winner_side.value == body.winner_side
+            and existing.finished_at_slot == body.finished_at_slot
+            and existing.walkover == body.walkover
         )
+        if not is_exact_replay:
+            raise HTTPException(
+                status_code=409,
+                detail="Result already recorded for this match",
+            )
+        session.state.results.pop(body.play_unit_id)
 
     try:
         affected = record_result(
@@ -1443,55 +1507,13 @@ def record_match_result(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # Persist the result row.
-    recorded = session.state.results[body.play_unit_id]
-    repo.brackets.record_result(
+    _persist_result_advancement(
+        repo,
         tournament_id,
-        pu.event_id,
+        session,
         body.play_unit_id,
-        winner_side=recorded.winner_side.value,
-        score=recorded.score,
-        finished_at_slot=recorded.finished_at_slot,
-        walkover=recorded.walkover,
+        affected,
     )
-    # First result on a Generated event flips its status to 'started'.
-    ev_row = repo.brackets.get_event(tournament_id, pu.event_id)
-    if ev_row is not None and ev_row.status == "generated":
-        repo.brackets.set_event_status(tournament_id, pu.event_id, "started")
-    # Persist the downstream match-row slot updates (and any cascading
-    # walkover results triggered by _sweep_walkovers).
-    for downstream_id in affected:
-        downstream_pu = session.state.play_units[downstream_id]
-        ev_id = downstream_pu.event_id
-        slot_a, slot_b = session.draws[ev_id].slots[downstream_id]
-        repo.brackets.update_match(
-            tournament_id,
-            ev_id,
-            downstream_id,
-            {
-                "slot_a": _slot_to_dict(slot_a),
-                "slot_b": _slot_to_dict(slot_b),
-                "side_a": list(downstream_pu.side_a)
-                if downstream_pu.side_a
-                else [],
-                "side_b": list(downstream_pu.side_b)
-                if downstream_pu.side_b
-                else [],
-            },
-        )
-        # If the sweep auto-walkovered this downstream PlayUnit too,
-        # its result is in state.results now and needs persisting.
-        if downstream_id in session.state.results:
-            r = session.state.results[downstream_id]
-            repo.brackets.record_result(
-                tournament_id,
-                ev_id,
-                downstream_id,
-                winner_side=r.winner_side.value,
-                score=r.score,
-                finished_at_slot=r.finished_at_slot,
-                walkover=r.walkover,
-            )
 
     return _serialize_session(session)
 

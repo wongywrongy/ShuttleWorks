@@ -269,6 +269,130 @@ def test_record_result_replay_does_not_duplicate_or_corrupt_advancement(client, 
     sched = client.post(_bracket_url(tid, "schedule-next"))
     assert sched.status_code == 200, sched.text
     first_match = sched.json()["play_unit_ids"][0]
+    initial_state = client.get(_bracket_url(tid)).json()
+    first_play_unit = next(
+        p for p in initial_state["play_units"] if p["id"] == first_match
+    )
+    final = next(p for p in initial_state["play_units"] if p["round_index"] == 1)
+
+    r1 = client.post(
+        _bracket_url(tid, "results"),
+        json={
+            "play_unit_id": first_match,
+            "winner_side": "A",
+            "finished_at_slot": 4,
+            "walkover": False,
+        },
+    )
+    assert r1.status_code == 200, r1.text
+
+    from database.models import BracketEvent, BracketMatch
+    from database.session import SessionLocal
+
+    tournament_id = uuid.UUID(tid)
+    with SessionLocal() as session:
+        event = session.get(BracketEvent, (tournament_id, "MS"))
+        assert event is not None
+        event.status = "generated"
+        final_row = session.get(BracketMatch, (tournament_id, "MS", final["id"]))
+        assert final_row is not None
+        final_row.slot_a = {
+            "participant_id": None,
+            "feeder_play_unit_id": first_match,
+        }
+        final_row.side_a = []
+        session.commit()
+
+    r2 = client.post(
+        _bracket_url(tid, "results"),
+        json={
+            "play_unit_id": first_match,
+            "winner_side": "A",
+            "finished_at_slot": 4,
+            "walkover": False,
+        },
+    )
+    assert r2.status_code == 200, r2.text
+
+    state = client.get(_bracket_url(tid))
+    assert state.status_code == 200
+    body = state.json()
+    matching_results = [r for r in body["results"] if r["play_unit_id"] == first_match]
+    assert len(matching_results) == 1
+    assert matching_results[0]["winner_side"] == "A"
+    assert matching_results[0]["finished_at_slot"] == 4
+    assert matching_results[0]["walkover"] is False
+
+    repaired_final = next(p for p in body["play_units"] if p["id"] == final["id"])
+    assert repaired_final["slot_a"]["participant_id"] == first_play_unit["side_a"][0]
+    assert repaired_final["slot_a"]["feeder_play_unit_id"] is None
+    assert repaired_final["side_a"] == first_play_unit["side_a"]
+
+    with SessionLocal() as session:
+        event = session.get(BracketEvent, (tournament_id, "MS"))
+        assert event is not None
+        assert event.status == "started"
+
+
+def test_record_result_replay_rejects_changed_metadata(client, tid):
+    client.post(_bracket_url(tid), json=_se_4_body())
+    sched = client.post(_bracket_url(tid, "schedule-next"))
+    assert sched.status_code == 200, sched.text
+    first_match = sched.json()["play_unit_ids"][0]
+
+    r1 = client.post(
+        _bracket_url(tid, "results"),
+        json={
+            "play_unit_id": first_match,
+            "winner_side": "A",
+            "finished_at_slot": 4,
+            "walkover": False,
+        },
+    )
+    assert r1.status_code == 200, r1.text
+
+    changed_slot = client.post(
+        _bracket_url(tid, "results"),
+        json={
+            "play_unit_id": first_match,
+            "winner_side": "A",
+            "finished_at_slot": 5,
+            "walkover": False,
+        },
+    )
+    assert changed_slot.status_code == 409, changed_slot.text
+
+    changed_walkover = client.post(
+        _bracket_url(tid, "results"),
+        json={
+            "play_unit_id": first_match,
+            "winner_side": "A",
+            "finished_at_slot": 4,
+            "walkover": True,
+        },
+    )
+    assert changed_walkover.status_code == 409, changed_walkover.text
+
+    state = client.get(_bracket_url(tid))
+    assert state.status_code == 200
+    matching_results = [
+        r for r in state.json()["results"] if r["play_unit_id"] == first_match
+    ]
+    assert matching_results == [
+        {
+            "play_unit_id": first_match,
+            "winner_side": "A",
+            "walkover": False,
+            "finished_at_slot": 4,
+        }
+    ]
+
+
+def test_record_result_replay_rejects_changed_winner(client, tid):
+    client.post(_bracket_url(tid), json=_se_4_body())
+    sched = client.post(_bracket_url(tid, "schedule-next"))
+    assert sched.status_code == 200, sched.text
+    first_match = sched.json()["play_unit_ids"][0]
 
     r1 = client.post(
         _bracket_url(tid, "results"),
@@ -278,9 +402,9 @@ def test_record_result_replay_does_not_duplicate_or_corrupt_advancement(client, 
 
     r2 = client.post(
         _bracket_url(tid, "results"),
-        json={"play_unit_id": first_match, "winner_side": "A"},
+        json={"play_unit_id": first_match, "winner_side": "B"},
     )
-    assert r2.status_code in (200, 409), r2.text
+    assert r2.status_code == 409, r2.text
 
     state = client.get(_bracket_url(tid))
     assert state.status_code == 200
