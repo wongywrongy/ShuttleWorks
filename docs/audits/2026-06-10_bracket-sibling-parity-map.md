@@ -51,3 +51,17 @@
 - Meet redesign.
 - Full frontend commandQueue migration.
 - Cloud-scale or multi-worker redesign.
+
+## Outcome
+
+- Bracket UI parity pass landed reusable primitives for inline notices and empty states, then applied them across Events, Draw, Schedule, and Live states without changing the bracket workflow.
+- Backend hardening landed behavior-compatible route fixes and regression coverage for duplicate result replay and invalid match action transitions.
+
+## Verification results
+
+- Frontend focused bracket suite: PASS (`npm test -- src/lib/__tests__/BracketTab.test.tsx src/lib/__tests__/EventsTab.test.tsx src/lib/__tests__/DrawView.test.tsx src/lib/__tests__/LiveView.test.tsx src/lib/__tests__/BracketEmptyState.test.tsx src/lib/__tests__/BracketInlineNotice.test.tsx --run`) - 6 files passed, 43 tests passed. Existing React `act(...)` warnings appeared in three `EventsTab.test.tsx` cases: singles participant commit, doubles pair commit, and saving a new event row.
+- Backend focused bracket suite: PASS (`pytest tests/unit/test_bracket_routes.py tests/unit/test_bracket_event_routes.py tests/unit/test_bracket_interactive_scheduling.py -q`) - 62 passed.
+
+## Command bridge decision
+
+The first pass keeps frontend commandQueue migration deferred. Backend hardening landed as behavior-compatible route fixes and regression tests. A command bridge should be planned only after reviewing the result/action semantics with the UI pending/conflict states.
