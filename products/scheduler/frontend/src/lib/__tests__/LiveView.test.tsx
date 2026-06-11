@@ -45,9 +45,10 @@ describe('LiveView', () => {
     useUiStore.setState({ bracketSelectedMatchId: null });
   });
 
-  it('renders empty-state CTA when no events are generated', () => {
+  it('renders a composed empty state when no bracket matches are scheduled live', () => {
     render(<LiveView data={EMPTY} onChange={() => {}} refresh={async () => {}} />);
-    expect(screen.getByText(/No draws generated yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No scheduled bracket matches' })).toBeInTheDocument();
+    expect(screen.getByText(/Schedule a round before running live play/i)).toBeInTheDocument();
   });
 
   it('renders play_unit chip when an assignment exists', () => {

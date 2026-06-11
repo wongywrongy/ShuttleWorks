@@ -9,6 +9,7 @@ import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { getEventColor } from '../schedule/eventColors';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
 import { useUiStore } from '../../store/uiStore';
+import { BracketEmptyState } from './BracketEmptyState';
 import { MatchDetailPanel } from './MatchDetailPanel';
 
 // ---- State-ring vocabulary ------------------------------------------------
@@ -168,10 +169,11 @@ export function LiveView({ data, onChange }: Props) {
 
   if (placements.length === 0) {
     return (
-      // TODO B.3: wire tab-switch callback for "Go to Events" button
-      <div className="p-6 text-sm text-muted-foreground">
-        No draws generated yet — see the <strong>Events</strong> tab.
-      </div>
+      <BracketEmptyState
+        eyebrow="Live"
+        title="No scheduled bracket matches"
+        body="Schedule a round before running live play. Once matches are assigned to courts, live status and result actions appear here."
+      />
     );
   }
 

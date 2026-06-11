@@ -7,6 +7,7 @@ import type {
   ResultDTO,
   TournamentDTO,
 } from "../../api/bracketDto";
+import { BracketEmptyState } from "./BracketEmptyState";
 
 interface Props {
   data: TournamentDTO;
@@ -22,9 +23,11 @@ export function DrawView({ data, eventId, onChange }: Props) {
   }
   if (data.play_units.filter((p) => p.event_id === eventId).length === 0) {
     return (
-      <div className="p-6 text-sm text-muted-foreground">
-        No draws generated yet — go to the <strong>Events</strong> tab and click Generate.
-      </div>
+      <BracketEmptyState
+        eyebrow="Draw"
+        title="No draw generated"
+        body="Open Events, enter participants for this event, then generate the draw."
+      />
     );
   }
   return event.format === "se" ? (
