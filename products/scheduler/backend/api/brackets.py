@@ -1551,6 +1551,11 @@ def match_action(
         )
         assignment.actual_end_slot = None
     elif body.action == "finish":
+        if assignment.actual_start_slot is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot finish a bracket match before it has started",
+            )
         assignment.actual_end_slot = (
             body.slot
             if body.slot is not None

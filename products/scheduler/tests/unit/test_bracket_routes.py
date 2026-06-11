@@ -415,6 +415,20 @@ def test_record_result_replay_rejects_changed_winner(client, tid):
     assert matching_results[0]["winner_side"] == "A"
 
 
+def test_bracket_match_action_rejects_finish_before_start(client, tid):
+    client.post(_bracket_url(tid), json=_se_4_body())
+    sched = client.post(_bracket_url(tid, "schedule-next"))
+    assert sched.status_code == 200, sched.text
+    match_id = sched.json()["play_unit_ids"][0]
+
+    r = client.post(
+        _bracket_url(tid, "match-action"),
+        json={"play_unit_id": match_id, "action": "finish"},
+    )
+
+    assert r.status_code == 409
+
+
 def test_record_result_stages_result_and_match_sync_rows(client, tid):
     client.post(_bracket_url(tid), json=_se_4_body())
     state = client.get(_bracket_url(tid)).json()
