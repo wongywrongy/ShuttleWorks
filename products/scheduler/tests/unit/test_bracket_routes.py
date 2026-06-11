@@ -264,6 +264,33 @@ def test_record_result_advances_downstream_slot(client, tid):
     )
 
 
+def test_record_result_replay_does_not_duplicate_or_corrupt_advancement(client, tid):
+    client.post(_bracket_url(tid), json=_se_4_body())
+    sched = client.post(_bracket_url(tid, "schedule-next"))
+    assert sched.status_code == 200, sched.text
+    first_match = sched.json()["play_unit_ids"][0]
+
+    r1 = client.post(
+        _bracket_url(tid, "results"),
+        json={"play_unit_id": first_match, "winner_side": "A"},
+    )
+    assert r1.status_code == 200, r1.text
+
+    r2 = client.post(
+        _bracket_url(tid, "results"),
+        json={"play_unit_id": first_match, "winner_side": "A"},
+    )
+    assert r2.status_code in (200, 409), r2.text
+
+    state = client.get(_bracket_url(tid))
+    assert state.status_code == 200
+    matching_results = [
+        r for r in state.json()["results"] if r["play_unit_id"] == first_match
+    ]
+    assert len(matching_results) == 1
+    assert matching_results[0]["winner_side"] == "A"
+
+
 def test_record_result_stages_result_and_match_sync_rows(client, tid):
     client.post(_bracket_url(tid), json=_se_4_body())
     state = client.get(_bracket_url(tid)).json()

@@ -1422,6 +1422,15 @@ def record_match_result(
             status_code=404, detail=f"play_unit {body.play_unit_id!r} not found"
         )
 
+    existing = session.state.results.get(body.play_unit_id)
+    if existing is not None:
+        if existing.winner_side.value == body.winner_side:
+            return _serialize_session(session)
+        raise HTTPException(
+            status_code=409,
+            detail="Result already recorded for this match",
+        )
+
     try:
         affected = record_result(
             session.state,
