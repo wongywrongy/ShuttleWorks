@@ -14,12 +14,13 @@
  * table.
  */
 import { useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useMatchStateStore } from '../store/matchStateStore';
 import { useUiStore } from '../store/uiStore';
 import { apiClient, MatchVersionMismatch } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
-import { useTournamentId } from './useTournamentId';
+import { useTournamentIdOrNull } from './useTournamentId';
 
 /**
  * Valid state transitions for match state machine
@@ -44,7 +45,15 @@ function isValidTransition(
 }
 
 export function useLiveTracking() {
-  const tid = useTournamentId();
+  // Resolve the tournament id from the route when mounted under
+  // /tournaments/:id, or from the ?id= query param on the public
+  // /display route (which sits outside the tournament shell). The
+  // standalone TV page used to crash here via the throwing
+  // useTournamentId() variant. With no id at all (e.g. /display
+  // opened without a query string) every server call below no-ops.
+  const routeTid = useTournamentIdOrNull();
+  const [searchParams] = useSearchParams();
+  const tid = routeTid ?? searchParams.get('id') ?? '';
   const schedule = useTournamentStore((state) => state.schedule);
   const config = useTournamentStore((state) => state.config);
   const matches = useTournamentStore((state) => state.matches);
@@ -56,6 +65,7 @@ export function useLiveTracking() {
   const setLastSynced = useMatchStateStore((state) => state.setLastSynced);
 
   const loadMatchStates = useCallback(async () => {
+    if (!tid) return;
     try {
       const backendStates = await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
@@ -82,9 +92,10 @@ export function useLiveTracking() {
     } catch (error) {
       console.error('Failed to load match states:', error);
     }
-  }, [setMatchStates]);
+  }, [setMatchStates, tid]);
 
   const syncMatchStates = useCallback(async () => {
+    if (!tid) return;
     try {
       const backendStates = await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
@@ -115,7 +126,7 @@ export function useLiveTracking() {
     } catch (error) {
       console.error('Failed to sync match states:', error);
     }
-  }, [setMatchStates, setLastSynced]);
+  }, [setMatchStates, setLastSynced, tid]);
 
   // Lifecycle wiring — declared AFTER `loadMatchStates` / `syncMatchStates`
   // so the useEffect callbacks don't hit the temporal dead zone on the

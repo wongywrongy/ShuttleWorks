@@ -6,7 +6,7 @@
  * navigates to /tournaments/:id/<tab.id> with replace semantics so
  * refresh + share work and the back button doesn't accumulate.
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { TabBar } from '../../app/TabBar';

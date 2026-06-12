@@ -178,12 +178,12 @@ export interface WarmRestartRequest {
  *  decide whether to refetch + retry or roll back optimistic state. */
 export class MatchVersionMismatch extends Error {
   override name = 'MatchVersionMismatch';
-  constructor(
-    public readonly status: 412 | 409,
-    message: string,
-    public readonly currentVersion?: number,
-  ) {
+  readonly status: 412 | 409;
+  readonly currentVersion?: number;
+  constructor(status: 412 | 409, message: string, currentVersion?: number) {
     super(message);
+    this.status = status;
+    this.currentVersion = currentVersion;
   }
 }
 
