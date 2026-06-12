@@ -31,6 +31,16 @@ export interface ToastData {
   level: ToastLevel;
   message: string;
   detail?: string;
+  /**
+   * Optional stable error code (e.g. SOLVE_INFEASIBLE,
+   * BRACKET_NOT_FOUND). Renders as a small monospace label above the
+   * message so the operator can reference it in support without
+   * having to read the small grey detail line. Lives at the top of
+   * the toast body, not in the title bar, so the visual hierarchy of
+   * level-icon → code → message → detail stays consistent across
+   * info / warn / error toasts.
+   */
+  code?: string;
   /** Milliseconds before auto-dismiss. `null` or `undefined` = sticky. */
   durationMs?: number | null;
   actionLabel?: string;
@@ -83,9 +93,14 @@ export function Toast({ toast, onDismiss }: ToastProps) {
       ) : null}
       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="min-w-0 flex-1 text-xs leading-snug">
+        {toast.code && (
+          <div className="font-mono text-[10px] uppercase tracking-wide opacity-90 mb-0.5">
+            {toast.code}
+          </div>
+        )}
         <div>{toast.message}</div>
         {toast.detail && (
-          <div className="mt-0.5 text-[10px] opacity-70 truncate">
+          <div className="mt-0.5 text-[10px] opacity-60 truncate">
             {toast.detail}
           </div>
         )}
