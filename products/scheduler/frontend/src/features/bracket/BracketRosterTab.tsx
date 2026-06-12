@@ -4,7 +4,9 @@
  * derived read-only display sourced from the EventsTab participants.
  */
 import { useState, useMemo, useContext } from 'react';
+import { MagnifyingGlass } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import { BracketApiContext } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
@@ -94,126 +96,159 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
   };
 
   return (
-    <div className="min-h-full bg-background">
-      <main className="mx-auto max-w-4xl px-6 py-8 space-y-6">
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Players ({players.length})
-            </h2>
-            <div className="flex gap-2 items-center">
-              <input
-                type="search"
-                placeholder="Search…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="rounded-sm border border-border bg-bg-elev px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <button
-                type="button"
-                onClick={() => setAdding(true)}
-                className="rounded-sm border border-border bg-bg-elev px-3 py-1 text-sm hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                + Add player
-              </button>
-            </div>
+    <div className="flex min-h-full flex-col bg-background">
+      {/* Operator header — single baseline; mirrors MatchesTab's
+          eyebrow + bold count + search/add cluster so the bracket
+          Roster reads with the same chrome rhythm as the meet's. */}
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Roster
+          </span>
+          <span className="text-sm font-semibold text-foreground tabular-nums">
+            {players.length} player{players.length === 1 ? '' : 's'}
+          </span>
+          {query.trim() && filtered.length !== players.length ? (
+            <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+              · showing {filtered.length}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="relative">
+            <MagnifyingGlass
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search players…"
+              aria-label="Search players"
+              className="h-7 w-56 rounded-sm border border-border bg-card pl-7 pr-2 text-xs outline-none transition-colors duration-fast ease-brand placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/30"
+            />
           </div>
-          <ul className="divide-y divide-border border border-border rounded-sm">
-            {filtered.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between px-3 py-2 hover:bg-muted/30 cursor-pointer"
-                onClick={() => setSelectedId(p.id)}
-              >
-                <span className="text-sm">{p.name}</span>
-                <span className="text-2xs font-mono uppercase tracking-[0.18em] text-muted-foreground flex-1 px-2">
-                  {(eventsByPlayerId.get(p.id) ?? []).join(' · ')}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deletePlayer(p.id);
-                    if (selectedId === p.id) setSelectedId(null);
-                  }}
-                  aria-label="Delete"
-                  className="text-2xs text-destructive hover:underline"
-                >
-                  Delete
-                </button>
-              </li>
-            ))}
-            {adding && (
-              <li className="px-3 py-2">
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="New player name…"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onBlur={commitAdd}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitAdd();
-                    if (e.key === 'Escape') {
-                      setAdding(false);
-                      setDraft('');
-                    }
-                  }}
-                  className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </li>
-            )}
-          </ul>
-        </section>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-2.5 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent`}
+          >
+            ＋ Add player
+          </button>
+        </div>
+      </header>
 
-        {selected && (
-          <section>
-            <h2 className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-3">
-              Player detail · {selected.name}
-            </h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Notes
-                </span>
-                <input
-                  key={selected.id + '-notes'}
-                  type="text"
-                  defaultValue={selected.notes ?? ''}
-                  onBlur={(e) => {
-                    if (e.target.value !== (selected.notes ?? '')) {
-                      updatePlayer(selected.id, { notes: e.target.value });
-                    }
-                  }}
-                  className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Rest constraint (slots)
-                </span>
-                <input
-                  key={selected.id + '-rest'}
-                  type="number"
-                  min={0}
-                  defaultValue={selected.restSlots ?? 0}
-                  onBlur={(e) => {
-                    const next = Number(e.target.value);
-                    if (next !== (selected.restSlots ?? 0)) {
-                      updatePlayer(selected.id, { restSlots: next });
-                    }
-                  }}
-                  className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </label>
-            </div>
-            <p className="mt-3 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Events:{' '}
-              {(eventsByPlayerId.get(selected.id) ?? []).join(', ') || '—'}
-            </p>
-          </section>
+      {/* Column-label row — same vocabulary as the meet's flat tables. */}
+      <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <span className="flex-1">Player</span>
+        <span className="flex-1">Events</span>
+        <span className="w-16 text-right">Actions</span>
+      </div>
+
+      <ul className="divide-y divide-border">
+        {filtered.map((p) => (
+          <li
+            key={p.id}
+            className={`flex cursor-pointer items-center gap-3 px-4 py-2 hover:bg-muted/30 ${
+              selectedId === p.id ? 'bg-muted/40' : ''
+            }`}
+            onClick={() => setSelectedId(p.id)}
+          >
+            <span className="flex-1 text-sm text-foreground">{p.name}</span>
+            <span className="flex-1 text-2xs font-mono uppercase tracking-[0.18em] text-muted-foreground">
+              {(eventsByPlayerId.get(p.id) ?? []).join(' · ')}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                deletePlayer(p.id);
+                if (selectedId === p.id) setSelectedId(null);
+              }}
+              aria-label="Delete"
+              className="w-16 text-right text-2xs text-destructive hover:underline"
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+        {adding && (
+          <li className="px-4 py-2">
+            <input
+              autoFocus
+              type="text"
+              placeholder="New player name…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitAdd}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitAdd();
+                if (e.key === 'Escape') {
+                  setAdding(false);
+                  setDraft('');
+                }
+              }}
+              className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </li>
         )}
-      </main>
+        {filtered.length === 0 && !adding && (
+          <li className="px-4 py-6 text-sm text-muted-foreground">
+            {players.length === 0
+              ? 'No players yet — add the first one.'
+              : 'No players match the search.'}
+          </li>
+        )}
+      </ul>
+
+      {selected && (
+        <section className="border-t border-border bg-card px-4 py-3">
+          <h2 className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-3">
+            Player detail · {selected.name}
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Notes
+              </span>
+              <input
+                key={selected.id + '-notes'}
+                type="text"
+                defaultValue={selected.notes ?? ''}
+                onBlur={(e) => {
+                  if (e.target.value !== (selected.notes ?? '')) {
+                    updatePlayer(selected.id, { notes: e.target.value });
+                  }
+                }}
+                className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Rest constraint (slots)
+              </span>
+              <input
+                key={selected.id + '-rest'}
+                type="number"
+                min={0}
+                defaultValue={selected.restSlots ?? 0}
+                onBlur={(e) => {
+                  const next = Number(e.target.value);
+                  if (next !== (selected.restSlots ?? 0)) {
+                    updatePlayer(selected.id, { restSlots: next });
+                  }
+                }}
+                className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+          </div>
+          <p className="mt-3 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Events:{' '}
+            {(eventsByPlayerId.get(selected.id) ?? []).join(', ') || '—'}
+          </p>
+        </section>
+      )}
     </div>
   );
 }

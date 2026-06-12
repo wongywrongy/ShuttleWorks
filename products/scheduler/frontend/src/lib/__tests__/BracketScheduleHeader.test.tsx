@@ -1,18 +1,13 @@
 /**
- * Tests for BracketScheduleHeader — the controls strip above the
- * bracket Schedule grid. Renders the play-unit count summary and
- * three Export buttons (JSON / CSV / ICS) linked to the api-client
- * URL builders.
+ * Tests for BracketScheduleHeader — the count strip above the bracket
+ * Schedule grid. Exports moved to the per-view header (Schedule) and
+ * Setup → Tournament data, so this strip renders the play-unit count
+ * summary only.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BracketScheduleHeader } from '../../features/bracket/BracketScheduleHeader';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
-
-// Mock useTournamentId so the header sees a stable tid in the test.
-vi.mock('../../hooks/useTournamentId', () => ({
-  useTournamentId: () => 't1',
-}));
 
 function makeData(assignments: number, courts: number): BracketTournamentDTO {
   return {
@@ -43,13 +38,8 @@ describe('<BracketScheduleHeader />', () => {
     expect(screen.getByText(/8 play units scheduled across 4 courts/i)).toBeInTheDocument();
   });
 
-  it('renders three Export buttons with the correct hrefs', () => {
+  it('renders no export links — exports live in the view header and Setup', () => {
     render(<BracketScheduleHeader data={makeData(8, 4)} />);
-    const json = screen.getByRole('link', { name: /export json/i });
-    const csv = screen.getByRole('link', { name: /export csv/i });
-    const ics = screen.getByRole('link', { name: /export ics/i });
-    expect(json.getAttribute('href')).toMatch(/\/t1\/.*\.json/i);
-    expect(csv.getAttribute('href')).toMatch(/\/t1\/.*\.csv/i);
-    expect(ics.getAttribute('href')).toMatch(/\/t1\/.*\.ics/i);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });

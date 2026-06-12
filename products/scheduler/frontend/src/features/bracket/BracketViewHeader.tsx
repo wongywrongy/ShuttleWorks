@@ -1,24 +1,28 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
-import { Button, StatusBar } from "@scheduler/design-system";
+import { Select, StatusBar } from "@scheduler/design-system";
 import type { BracketView } from "../../lib/bracketTabs";
+import { useUiStore } from "../../store/uiStore";
+import { INTERACTIVE_BASE } from "../../lib/utils";
 import { EventsFilterStrip } from "./EventsFilterStrip";
 
 interface Props {
   /** Bare view name — drives the eyebrow. Derived from ``activeTab``
-   *  by ``BracketTabBody`` (``bracket-draw`` -> ``draw``). */
-  view: BracketView;
+   *  by ``BracketTabBody`` (``bracket-draw`` -> ``draw``). Only the
+   *  draw / schedule / live views render this header — Setup, Roster
+   *  and Events own their header strips (SettingsShell / tab-local),
+   *  mirroring how each meet tab owns its single header baseline. */
+  view: Extract<BracketView, "draw" | "schedule" | "live">;
   data: TournamentDTO;
   eventId: string;
   onEventId: (id: string) => void;
-  onReset: () => void;
+  /** Re-fetch the bracket after a server-side mutation (schedule-next
+   *  returns a solver summary, not the tournament DTO). */
+  onRefresh: () => Promise<void>;
 }
 
 const VIEW_LABEL: Record<Props["view"], string> = {
-  setup: "SETUP",
-  roster: "ROSTER",
-  events: "EVENTS",
   draw: "DRAW",
   schedule: "SCHEDULE",
   live: "LIVE",
@@ -31,20 +35,68 @@ const VIEW_LABEL: Record<Props["view"], string> = {
  * the left, control cluster on the right) so the bracket surface
  * reads with the same chrome rhythm as every meet tab.
  *
- * Rendered once by ``BracketTabBody`` above the Draw/Schedule/Live
- * content switch, parameterised by ``view`` — so the event selector
- * and counters have a single instance and a single ``eventId`` source.
+ * Per-view right cluster, like the meet (each tab header carries only
+ * the controls that act on that tab):
+ *   draw     -> event-scoped status counts
+ *   schedule -> global status counts + JSON/CSV/ICS exports
+ *   live     -> global status counts
+ * Reset lives in Setup → Tournament data (destructive actions don't
+ * ride along on every view).
  */
-export function BracketViewHeader({
-  view,
-  data,
-  eventId,
-  onEventId,
-  onReset,
-}: Props) {
+export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }: Props) {
   const api = useBracketApi();
-  const eventCounts = useMemo(() => buckets(data, eventId), [data, eventId]);
-  const globalCounts = useMemo(() => buckets(data, null), [data]);
+  const pushToast = useUiStore((s) => s.pushToast);
+  const [scheduling, setScheduling] = useState(false);
+  const counts = useMemo(
+    () => buckets(data, view === "draw" ? eventId : null),
+    [data, view, eventId],
+  );
+
+  // Matches whose sides are fully resolved (winners propagated) but
+  // that have no court/slot yet — exactly what schedule-next solves.
+  // Mirrors the backend's ``find_ready_play_units`` predicate (no
+  // result, no assignment, non-empty sides, all dependencies played)
+  // so the button never shows when the solver would do nothing.
+  // Without this affordance the day dead-ends after round 1.
+  const schedulableCount = useMemo(() => {
+    const assigned = new Set(data.assignments.map((a) => a.play_unit_id));
+    const done = new Set(data.results.map((r) => r.play_unit_id));
+    return data.play_units.filter(
+      (pu) =>
+        !assigned.has(pu.id) &&
+        !done.has(pu.id) &&
+        pu.side_a != null &&
+        pu.side_a.length > 0 &&
+        pu.side_b != null &&
+        pu.side_b.length > 0 &&
+        pu.dependencies.every((dep) => done.has(dep)),
+    ).length;
+  }, [data]);
+
+  const handleScheduleNext = async () => {
+    setScheduling(true);
+    try {
+      const out = await api.scheduleNext();
+      if (out.play_unit_ids.length > 0) {
+        pushToast({
+          level: 'success',
+          message: `Scheduled ${out.play_unit_ids.length} match${out.play_unit_ids.length === 1 ? '' : 'es'}`,
+          detail: out.play_unit_ids.join(', '),
+        });
+      } else {
+        pushToast({
+          level: 'warn',
+          message: 'No matches could be scheduled',
+          detail: out.infeasible_reasons.join('; ') || `Solver status: ${out.status}`,
+        });
+      }
+      await onRefresh();
+    } catch {
+      // Shared axios interceptor already surfaced a toast.
+    } finally {
+      setScheduling(false);
+    }
+  };
 
   const selectedEvent = data.events.find((e) => e.id === eventId);
   const formatLabel =
@@ -56,36 +108,51 @@ export function BracketViewHeader({
         <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {VIEW_LABEL[view]}
         </span>
-        {view === 'draw' ? (
+        {view === "draw" ? (
           <>
-            <select
+            <Select
               value={eventId}
-              onChange={(e) => onEventId(e.target.value)}
-              aria-label="Event"
-              className="rounded-sm border border-border bg-bg-elev px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {data.events.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.id} · {e.discipline}
-                </option>
-              ))}
-            </select>
+              onValueChange={(v) => v && onEventId(v)}
+              ariaLabel="Event"
+              size="sm"
+              mono
+              options={data.events.map((e) => ({
+                value: e.id,
+                label: `${e.id} · ${e.discipline}`,
+              }))}
+            />
             {selectedEvent && (
               <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {formatLabel}
               </span>
             )}
           </>
-        ) : (view === 'schedule' || view === 'live') ? (
+        ) : (
           <EventsFilterStrip />
-        ) : null}
+        )}
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">
-        <Counters event={eventCounts} global={globalCounts} />
-        <ExportMenu api={api} />
-        <Button variant="outline" size="sm" onClick={onReset}>
-          Reset
-        </Button>
+        <span className="font-mono">
+          <StatusBar
+            items={[
+              { tone: "done", label: "DONE", count: counts.done },
+              { tone: "green", label: "LIVE", count: counts.live },
+              { tone: "amber", label: "READY", count: counts.ready },
+              { tone: "idle", label: "PEND", count: counts.pending },
+            ]}
+          />
+        </span>
+        {view === "schedule" && <ExportMenu api={api} />}
+        {(view === "schedule" || view === "live") && schedulableCount > 0 && (
+          <button
+            type="button"
+            onClick={() => void handleScheduleNext()}
+            disabled={scheduling}
+            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            {scheduling ? 'Scheduling…' : `Schedule next round (${schedulableCount})`}
+          </button>
+        )}
       </div>
     </header>
   );
@@ -114,37 +181,6 @@ function ExportMenu({ api }: { api: BracketApi }) {
       >
         ICS
       </a>
-    </div>
-  );
-}
-
-function Counters({
-  event,
-  global,
-}: {
-  event: ReturnType<typeof buckets>;
-  global: ReturnType<typeof buckets>;
-}) {
-  // Bracket state -> shared StatusBar tones. Mapping matches scheduler
-  // so the same semantic state reads the same color across both
-  // surfaces:
-  //   done    -> done  (slate, settled)
-  //   live    -> green (status-live — in progress)
-  //   ready   -> amber (status-called — cued to play)
-  //   pending -> idle  (status-idle — not yet scheduled)
-  return (
-    <div className="flex flex-col items-end font-mono">
-      <StatusBar
-        items={[
-          { tone: "done", label: "DONE", count: event.done },
-          { tone: "green", label: "LIVE", count: event.live },
-          { tone: "amber", label: "READY", count: event.ready },
-          { tone: "idle", label: "PEND", count: event.pending },
-        ]}
-      />
-      <div className="text-3xs uppercase tracking-wider text-ink-faint">
-        ALL · {global.done}D · {global.live}L · {global.ready}R
-      </div>
     </div>
   );
 }

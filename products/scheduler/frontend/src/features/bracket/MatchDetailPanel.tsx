@@ -82,11 +82,14 @@ export function MatchDetailPanel({ data, onChange }: Props) {
       {/* Result summary (when finished) */}
       {result && (
         <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Done — side {result.winner_side} wins
+          Done — {result.winner_side === 'A' ? labelA : labelB} wins
         </div>
       )}
 
-      {/* Operator actions */}
+      {/* Operator actions. Recording a winner is irreversible in the
+          bracket API (results reject overwrites with 409), so both win
+          buttons confirm() first; the buttons carry the player names so
+          the operator never has to map A/B to sides in their head. */}
       <div className="flex flex-wrap gap-2">
         {/* Start — available when assigned, not yet started, no result */}
         {assignment && !assignment.started && !result && (
@@ -108,6 +111,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
               type="button"
               className={actionBtn}
               onClick={async () => {
+                if (!window.confirm(`Record ${labelA} as the winner? This cannot be undone.`)) return;
                 onChange(
                   await api.recordResult({
                     play_unit_id: matchId,
@@ -117,12 +121,13 @@ export function MatchDetailPanel({ data, onChange }: Props) {
                 );
               }}
             >
-              A wins
+              {labelA} wins
             </button>
             <button
               type="button"
               className={actionBtn}
               onClick={async () => {
+                if (!window.confirm(`Record ${labelB} as the winner? This cannot be undone.`)) return;
                 onChange(
                   await api.recordResult({
                     play_unit_id: matchId,
@@ -132,7 +137,18 @@ export function MatchDetailPanel({ data, onChange }: Props) {
                 );
               }}
             >
-              B wins
+              {labelB} wins
+            </button>
+            {/* Undo a mis-pressed Start: clears actual_start/end on the
+                assignment (the only reversible step in the lifecycle). */}
+            <button
+              type="button"
+              className={actionBtn}
+              onClick={async () => {
+                onChange(await api.matchAction({ play_unit_id: matchId, action: 'reset' }));
+              }}
+            >
+              Undo start
             </button>
           </>
         )}

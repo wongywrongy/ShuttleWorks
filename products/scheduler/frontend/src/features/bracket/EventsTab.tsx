@@ -16,6 +16,7 @@ import { useBracketApi } from '../../api/bracketClient';
 import { useTournamentStore } from '../../store/tournamentStore';
 import type { BracketEventStatus } from '../../api/bracketDto';
 import { Button, StatusPill } from '@scheduler/design-system';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
 import { BracketEmptyState } from './BracketEmptyState';
 
@@ -43,47 +44,49 @@ export function EventsTab() {
   );
 
   return (
-    <div className="min-h-full bg-background">
-      <main className="mx-auto max-w-6xl px-6 py-8 space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
-          <div>
-            <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Events
-            </p>
-            <h2 className="mt-1 text-base font-semibold text-foreground">
-              Draw events
-            </h2>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label="+ Add event"
-            onClick={() => setAddingRow(true)}
-          >
-            Add event
-          </Button>
+    <div className="flex min-h-full flex-col bg-background">
+      {/* Operator header — single baseline; mirrors MatchesTab's
+          eyebrow + bold count + add cluster so the bracket Events tab
+          reads with the same chrome rhythm as the meet's tabs. */}
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Events
+          </span>
+          <span className="text-sm font-semibold text-foreground tabular-nums">
+            {events.length} event{events.length === 1 ? '' : 's'}
+          </span>
         </div>
-        {events.length === 0 && !addingRow ? (
-          <BracketEmptyState
-            eyebrow="Events"
-            title="No bracket events yet"
-            body="Add the first event, choose the draw format, then enter participants before generating the draw."
-            actionLabel="Add event"
-            onAction={() => setAddingRow(true)}
-          />
-        ) : null}
-        <table className="w-full border-collapse text-sm">
-          <thead className="bg-ink-100 text-ink-600">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">ID</th>
-              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Discipline</th>
-              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Format</th>
-              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Size</th>
-              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Participants</th>
-              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Status</th>
-              <th className="px-3 py-2 text-left font-medium border-b border-ink-200">Action</th>
-            </tr>
-          </thead>
+        <button
+          type="button"
+          aria-label="+ Add event"
+          onClick={() => setAddingRow(true)}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-2.5 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent`}
+        >
+          ＋ Add event
+        </button>
+      </header>
+      {events.length === 0 && !addingRow ? (
+        <BracketEmptyState
+          eyebrow="Events"
+          title="No bracket events yet"
+          body="Add the first event, choose the draw format, then enter participants before generating the draw."
+          actionLabel="Add event"
+          onAction={() => setAddingRow(true)}
+        />
+      ) : null}
+      <table className="w-full border-collapse text-sm">
+        <thead className="bg-muted/40">
+          <tr className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <th className="px-4 py-1.5 text-left font-semibold border-b border-border">ID</th>
+            <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Discipline</th>
+            <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Format</th>
+            <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Size</th>
+            <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Participants</th>
+            <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Status</th>
+            <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Action</th>
+          </tr>
+        </thead>
           <tbody>
             {events.map((ev) => {
               const status: BracketEventStatus = ev.status ?? 'draft';
@@ -93,8 +96,8 @@ export function EventsTab() {
               const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
               return (
                 <Fragment key={ev.id}>
-                  <tr className="border-b border-ink-100">
-                    <td className="px-3 py-2 font-mono text-xs">{ev.id}</td>
+                  <tr className="border-b border-border/60 hover:bg-muted/30">
+                    <td className="px-4 py-2 font-mono text-xs">{ev.id}</td>
                     <td className="px-3 py-2">{ev.discipline}</td>
                     <td className="px-3 py-2">{ev.format.toUpperCase()}</td>
                     <td className="px-3 py-2">{targetSize}</td>
@@ -174,7 +177,6 @@ export function EventsTab() {
             )}
           </tbody>
         </table>
-      </main>
     </div>
   );
 }
@@ -252,7 +254,7 @@ function NewEventRow({
   const [discipline, setDiscipline] = useState('MS');
   const [format, setFormat] = useState<'se' | 'rr'>('se');
   return (
-    <tr className="border-b border-ink-100 bg-bg-elev">
+    <tr className="border-b border-border/60 bg-bg-elev">
       <td className="px-3 py-2">
         <input
           type="text"

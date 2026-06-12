@@ -1,8 +1,9 @@
 /**
  * Tests for BracketDataSection — the 'Tournament data' section inside
- * bracket Setup. Bundle 5 ships exports-only (no import/backup/reset);
- * three plain <a href download> links to the apiClient.bracketExport*Url
- * builders, wrapped in SettingsPrimitives chrome.
+ * bracket Setup. Three plain <a href download> links to the
+ * apiClient.bracketExport*Url builders plus the destructive "Reset
+ * bracket" action (moved here from the per-view header), wrapped in
+ * SettingsPrimitives chrome.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -10,6 +11,12 @@ import { BracketDataSection } from '../../features/bracket/BracketDataSection';
 
 vi.mock('../../hooks/useTournamentId', () => ({
   useTournamentId: () => 't1',
+}));
+vi.mock('../../api/bracketClient', () => ({
+  useBracketApi: () => ({ remove: vi.fn() }),
+}));
+vi.mock('../../hooks/useBracket', () => ({
+  useBracket: () => ({ setData: vi.fn() }),
 }));
 
 describe('<BracketDataSection />', () => {
@@ -26,5 +33,11 @@ describe('<BracketDataSection />', () => {
   it('renders a section header', () => {
     render(<BracketDataSection />);
     expect(screen.getByText(/^Export$/i)).toBeInTheDocument();
+  });
+
+  it('renders the Reset bracket action in the danger zone', () => {
+    render(<BracketDataSection />);
+    expect(screen.getByText(/danger zone/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reset bracket/i })).toBeInTheDocument();
   });
 });

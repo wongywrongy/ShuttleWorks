@@ -15,7 +15,9 @@ beforeEach(() => {
 describe('BracketRosterTab', () => {
   it('renders the player count and list of player names', () => {
     render(<BracketRosterTab />);
-    expect(screen.getByText(/PLAYERS \(2\)/i)).toBeInTheDocument();
+    // Meet-style header strip: eyebrow "Roster" + bold "2 players" count.
+    expect(screen.getByText(/^Roster$/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 players/i)).toBeInTheDocument();
     expect(screen.getByText('Alex Tan')).toBeInTheDocument();
     expect(screen.getByText('Ben Carter')).toBeInTheDocument();
   });

@@ -11,6 +11,7 @@ import { useCurrentSlot } from '../../hooks/useCurrentSlot';
 import { useUiStore } from '../../store/uiStore';
 import { BracketEmptyState } from './BracketEmptyState';
 import { MatchDetailPanel } from './MatchDetailPanel';
+import { LiveMatchList } from './LiveMatchList';
 
 // ---- State-ring vocabulary ------------------------------------------------
 
@@ -168,28 +169,80 @@ export function LiveView({ data, onChange }: Props) {
   );
 
   if (placements.length === 0) {
+    // No court assignments yet. If draws exist, the day starts here:
+    // show the Waiting queue so the operator sees what's pending and
+    // can use the header's "Schedule next round" to promote it. Only
+    // a bracket with no play units at all gets the empty state.
+    if (data.play_units.length > 0) {
+      return (
+        <div className="flex h-full min-h-0">
+          <div className="flex min-w-0 flex-1 flex-col overflow-auto">
+            <LiveMatchList data={data} onChange={onChange} />
+          </div>
+          <MatchDetailPanel data={data} onChange={onChange} />
+        </div>
+      );
+    }
     return (
       <BracketEmptyState
         eyebrow="Live"
         title="No scheduled bracket matches"
-        body="Schedule a round before running live play. Once matches are assigned to courts, live status and result actions appear here."
+        body="Generate draws in Events first. Once matches are assigned to courts, live status and result actions appear here."
       />
     );
   }
 
   return (
     <div className="flex h-full min-h-0">
-      <div className="flex-1 overflow-auto p-4">
-        <GanttTimeline
-          courts={courts}
-          minSlot={minSlot}
-          slotCount={slotCount}
-          density="standard"
-          placements={placements}
-          renderBlock={renderBlock}
-        />
+      <div className="flex min-w-0 flex-1 flex-col overflow-auto">
+        <ChipStateLegend />
+        <div className="shrink-0 overflow-x-auto p-4">
+          <GanttTimeline
+            courts={courts}
+            minSlot={minSlot}
+            slotCount={slotCount}
+            density="standard"
+            placements={placements}
+            renderBlock={renderBlock}
+          />
+        </div>
+        {/* The working queue — rows with names + Start / winner actions.
+            The Gantt above is the spatial map; this is where the
+            operator runs the day (mirrors the meet Live list). */}
+        <LiveMatchList data={data} onChange={onChange} />
       </div>
       <MatchDetailPanel data={data} onChange={onChange} />
+    </div>
+  );
+}
+
+/**
+ * Compact ring-state legend — mirrors the meet Live tab's GanttLegend
+ * strip (same eyebrow + swatch vocabulary) for the bracket's chip
+ * lifecycle rings. Fills are event colors here, so only the ring
+ * states need explaining.
+ */
+function ChipStateLegend() {
+  const items: Array<{ ring: string; label: string; title: string }> = [
+    { ring: '', label: 'Scheduled', title: 'On the plan, not yet started' },
+    { ring: 'ring-2 ring-inset ring-status-live', label: 'Started', title: 'Match is being played' },
+    { ring: 'ring-2 ring-inset ring-status-done', label: 'Finished', title: 'Result recorded' },
+    { ring: 'ring-2 ring-inset ring-yellow-400', label: 'Late', title: 'Past its scheduled slot without starting' },
+  ];
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-1.5">
+      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        Status
+      </span>
+      {items.map((item) => (
+        <span key={item.label} className="inline-flex items-center gap-1.5" title={item.title}>
+          <span
+            aria-hidden="true"
+            className={`h-3 w-3 rounded-[2px] border border-border bg-card ${item.ring}`}
+          />
+          <span className="text-xs text-muted-foreground">{item.label}</span>
+        </span>
+      ))}
     </div>
   );
 }

@@ -12,11 +12,11 @@
  * ``TabBar`` (``activeTab`` is a ``bracket-*`` id), with a
  * ``BracketViewHeader`` strip above the active view.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Sliders, Database, Share as ShareIcon } from '@phosphor-icons/react';
 
-import { BracketApiProvider, useBracketApi } from '../../api/bracketClient';
+import { BracketApiProvider } from '../../api/bracketClient';
 
 import { useBracket } from '../../hooks/useBracket';
 import { useUiStore } from '../../store/uiStore';
@@ -63,7 +63,6 @@ export function BracketTab() {
 
 function BracketTabBody() {
   const { data, setData, error, refresh } = useBracket();
-  const api = useBracketApi();
   const [eventId, setEventId] = useState<string>('');
   const activeTab = useUiStore((s) => s.activeTab);
   const setBracketDataReady = useUiStore((s) => s.setBracketDataReady);
@@ -85,20 +84,6 @@ function BracketTabBody() {
   // each poll and defeat the guard above). A later meet-kind
   // tournament must not inherit a stale ready flag.
   useEffect(() => () => setBracketDataReady(null), [setBracketDataReady]);
-
-  const handleReset = useCallback(async () => {
-    // Only clear the local copy after the server-side DELETE succeeds.
-    // The polling hook re-fetches every 2.5s; clearing on failure
-    // would let the next poll snap the bracket back into ``data``.
-    // The shared axios interceptor already surfaces a toast on
-    // failure, so the ``catch`` is a no-op here.
-    try {
-      await api.remove();
-      setData(null);
-    } catch {
-      // Interceptor already toasted; nothing more to do.
-    }
-  }, [api, setData]);
 
   // Keep the selected event valid as data changes (new tournament,
   // event deleted, etc.).
@@ -196,13 +181,16 @@ function BracketTabBody() {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {data && (
+      {/* Setup / Roster / Events own their header strips (SettingsShell
+          or tab-local) — rendering the view header there produced a
+          double-header stack the meet never shows. */}
+      {data && (view === 'draw' || view === 'schedule' || view === 'live') && (
         <BracketViewHeader
           view={view}
           data={data}
           eventId={eventId}
           onEventId={setEventId}
-          onReset={handleReset}
+          onRefresh={refresh}
         />
       )}
       {error && (
@@ -232,12 +220,14 @@ function BracketTabBody() {
         {view === 'roster' && <BracketRosterTab />}
         {view === 'events' && <EventsTab />}
         {view === 'draw' && data && (
-          <DrawView
-            data={data}
-            eventId={eventId}
-            onChange={setData}
-            refresh={refresh}
-          />
+          <div className="p-4">
+            <DrawView
+              data={data}
+              eventId={eventId}
+              onChange={setData}
+              refresh={refresh}
+            />
+          </div>
         )}
         {view === 'schedule' && data && (
           <div className="flex h-full min-h-0 flex-col overflow-hidden">

@@ -45,22 +45,35 @@ describe('LiveView', () => {
     useUiStore.setState({ bracketSelectedMatchId: null });
   });
 
-  it('renders a composed empty state when no bracket matches are scheduled live', () => {
+  it('renders a composed empty state when the bracket has no play units at all', () => {
     render(<LiveView data={EMPTY} onChange={() => {}} refresh={async () => {}} />);
     expect(screen.getByRole('heading', { name: 'No scheduled bracket matches' })).toBeInTheDocument();
-    expect(screen.getByText(/Schedule a round before running live play/i)).toBeInTheDocument();
+    expect(screen.getByText(/Generate draws in Events first/i)).toBeInTheDocument();
   });
 
-  it('renders play_unit chip when an assignment exists', () => {
+  it('renders the Waiting queue (not the empty state) when draws exist but nothing is assigned', () => {
+    const unassigned: BracketTournamentDTO = {
+      ...WITH_ONE_ASSIGNMENT,
+      assignments: [],
+    };
+    render(<LiveView data={unassigned} onChange={() => {}} refresh={async () => {}} />);
+    expect(screen.queryByRole('heading', { name: 'No scheduled bracket matches' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Waiting · 1/i)).toBeInTheDocument();
+  });
+
+  it('renders play_unit chip + list row when an assignment exists', () => {
     render(<LiveView data={WITH_ONE_ASSIGNMENT} onChange={() => {}} refresh={async () => {}} />);
-    expect(screen.getByText('pu-1')).toBeInTheDocument();
+    // pu-1 appears twice by design: the Gantt chip and the queue row.
+    expect(screen.getAllByText('pu-1')).toHaveLength(2);
+    expect(screen.getByText(/Up next · 1/i)).toBeInTheDocument();
   });
 
   it('sets bracketSelectedMatchId when a chip is clicked', () => {
     useUiStore.setState({ bracketSelectedMatchId: null });
     render(<LiveView data={WITH_ONE_ASSIGNMENT} onChange={() => {}} refresh={async () => {}} />);
-    // The chip text is inside the clickable div — click the parent (role=button)
-    const chipText = screen.getByText('pu-1');
+    // The chip text is inside the clickable div — click the parent (role=button).
+    // getAllByText: index 0 is the Gantt chip (renders before the list).
+    const chipText = screen.getAllByText('pu-1')[0];
     fireEvent.click(chipText.parentElement!);
     expect(useUiStore.getState().bracketSelectedMatchId).toBe('pu-1');
   });
