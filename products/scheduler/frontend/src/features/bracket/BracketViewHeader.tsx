@@ -77,7 +77,15 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
     setScheduling(true);
     try {
       const out = await api.scheduleNext();
-      if (out.play_unit_ids.length > 0) {
+      // The backend returns ``play_unit_ids`` = the ready set REGARDLESS
+      // of solver outcome, but only writes assignments when the solve is
+      // optimal/feasible. Keying the success toast off the id count alone
+      // reported "Scheduled N matches" on an infeasible / timed-out solve
+      // where nothing was actually scheduled. Gate on status instead.
+      const scheduled =
+        (out.status === 'optimal' || out.status === 'feasible') &&
+        out.play_unit_ids.length > 0;
+      if (scheduled) {
         pushToast({
           level: 'success',
           message: `Scheduled ${out.play_unit_ids.length} match${out.play_unit_ids.length === 1 ? '' : 'es'}`,
@@ -87,7 +95,11 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
         pushToast({
           level: 'warn',
           message: 'No matches could be scheduled',
-          detail: out.infeasible_reasons.join('; ') || `Solver status: ${out.status}`,
+          detail:
+            out.infeasible_reasons.join('; ') ||
+            (out.play_unit_ids.length > 0
+              ? `Solver could not place ${out.play_unit_ids.length} ready match${out.play_unit_ids.length === 1 ? '' : 'es'} (status: ${out.status})`
+              : `Solver status: ${out.status}`),
         });
       }
       await onRefresh();

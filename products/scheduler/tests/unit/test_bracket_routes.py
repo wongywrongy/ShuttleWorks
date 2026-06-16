@@ -429,6 +429,75 @@ def test_bracket_match_action_rejects_finish_before_start(client, tid):
     assert r.status_code == 409
 
 
+def _schedule_and_start_first(client, tid) -> str:
+    """Schedule the first round and start its first match. Returns the
+    started play_unit id."""
+    sched = client.post(_bracket_url(tid, "schedule-next"))
+    assert sched.status_code == 200, sched.text
+    match_id = sched.json()["play_unit_ids"][0]
+    started = client.post(
+        _bracket_url(tid, "match-action"),
+        json={"play_unit_id": match_id, "action": "start"},
+    )
+    assert started.status_code == 200, started.text
+    return match_id
+
+
+def test_bracket_match_action_rejects_start_after_result(client, tid):
+    """Regression (M4): 'start' on a match that already has a result is
+    rejected — it would otherwise wipe ``actual_end_slot`` and shift the
+    next round's scheduling baseline."""
+    client.post(_bracket_url(tid), json=_se_4_body())
+    match_id = _schedule_and_start_first(client, tid)
+    rec = client.post(
+        _bracket_url(tid, "results"),
+        json={"play_unit_id": match_id, "winner_side": "A", "finished_at_slot": 1},
+    )
+    assert rec.status_code == 200, rec.text
+
+    r = client.post(
+        _bracket_url(tid, "match-action"),
+        json={"play_unit_id": match_id, "action": "start"},
+    )
+    assert r.status_code == 409, r.text
+
+
+def test_bracket_match_action_rejects_reset_after_result(client, tid):
+    """Regression (M5): 'reset' on a resulted match is rejected — reset
+    does not un-advance the winner, so it would leave the bracket in an
+    inconsistent state with no recovery path."""
+    client.post(_bracket_url(tid), json=_se_4_body())
+    match_id = _schedule_and_start_first(client, tid)
+    rec = client.post(
+        _bracket_url(tid, "results"),
+        json={"play_unit_id": match_id, "winner_side": "A", "finished_at_slot": 1},
+    )
+    assert rec.status_code == 200, rec.text
+
+    r = client.post(
+        _bracket_url(tid, "match-action"),
+        json={"play_unit_id": match_id, "action": "reset"},
+    )
+    assert r.status_code == 409, r.text
+
+
+def test_bracket_match_action_reset_clears_start_before_result(client, tid):
+    """A started-but-not-resulted match can still be reset (the Undo
+    Start affordance) — the guard only blocks reset once a result exists."""
+    client.post(_bracket_url(tid), json=_se_4_body())
+    match_id = _schedule_and_start_first(client, tid)
+    r = client.post(
+        _bracket_url(tid, "match-action"),
+        json={"play_unit_id": match_id, "action": "reset"},
+    )
+    assert r.status_code == 200, r.text
+    a = next(
+        a for a in r.json()["assignments"] if a["play_unit_id"] == match_id
+    )
+    assert a["actual_start_slot"] is None
+    assert a["started"] is False
+
+
 def test_record_result_stages_result_and_match_sync_rows(client, tid):
     client.post(_bracket_url(tid), json=_se_4_body())
     state = client.get(_bracket_url(tid)).json()
@@ -521,6 +590,102 @@ def test_schedule_next_returns_status(client, tid):
     body = r.json()
     assert "status" in body
     assert isinstance(body["play_unit_ids"], list)
+
+
+# ---- Deep walkover-cascade persistence (regression for H1) ------------------
+
+
+def _two_layer_bye_import_body() -> dict:
+    """Crafted import: a real QF + a double-bye QF feeding the same SF,
+    whose winner feeds the final.
+
+    Top half:  QF0 (P1 vs P2, real) and QF1 (bye vs bye) feed SF0.
+    Bottom half: SF1 (P3 vs P4, real, no byes) so it never cascades.
+    Final F0 feeds from SF0 and SF1.
+
+    At import, QF1's double-bye auto-walkovers and propagates a BYE into
+    SF0.side_b. SF0.side_a stays a feeder on the real QF0. Recording QF0
+    then unblocks a TWO-layer cascade: SF0 walks over (side_b is a bye)
+    and SF0's winner must propagate into F0.side_a — a unit two layers
+    below the recorded match, and NOT a direct dependent of QF0.
+    """
+    return {
+        "courts": 2,
+        "total_slots": 64,
+        "rest_between_rounds": 1,
+        "interval_minutes": 30,
+        "time_limit_seconds": 1.0,
+        "events": [
+            {
+                "id": "MS",
+                "discipline": "Men's Singles",
+                "format": "se",
+                "participants": [
+                    {"id": f"P{i}", "name": f"Player {i}"} for i in range(1, 5)
+                ],
+                "rounds": [
+                    [
+                        {"id": "QF0", "side_a": ["P1"], "side_b": ["P2"]},
+                        {"id": "QF1", "side_a": None, "side_b": None},
+                        {"id": "QF2", "side_a": ["P3"], "side_b": ["P4"]},
+                        {"id": "QF3", "side_a": None, "side_b": None},
+                    ],
+                    [
+                        {"id": "SF0", "feeder_a": "QF0", "feeder_b": "QF1"},
+                        {"id": "SF1", "feeder_a": "QF2", "feeder_b": "QF3"},
+                    ],
+                    [{"id": "F0", "feeder_a": "SF0", "feeder_b": "SF1"}],
+                ],
+            }
+        ],
+    }
+
+
+def _pu(body: dict, pu_id: str) -> dict:
+    return next(p for p in body["play_units"] if p["id"] == pu_id)
+
+
+def test_record_result_persists_deep_walkover_cascade(client, tid):
+    """Regression (H1): recording a result that unblocks a multi-layer
+    bye cascade must PERSIST the winner two layers down, not just the
+    direct dependent.
+
+    The bug: ``_persist_result_advancement`` only writes rows for the
+    ids returned by ``record_result``, which (before the fix) excluded
+    units touched by ``_sweep_walkovers`` beyond the first dependency
+    layer. The in-memory POST response looked correct, but a fresh GET
+    (re-hydrated from the DB) showed the final's slot still empty — the
+    champion's path was silently lost on reload.
+    """
+    imp = client.post(_bracket_url(tid, "import"), json=_two_layer_bye_import_body())
+    assert imp.status_code == 200, imp.text
+
+    # Sanity on the imported shape: SF0's bye side resolved at import,
+    # but F0's top slot is still an (unresolved) feeder on SF0.
+    state = imp.json()
+    assert _pu(state, "F0")["slot_a"]["feeder_play_unit_id"] == "SF0"
+    assert _pu(state, "F0")["slot_a"]["participant_id"] is None
+
+    # Record the real QF0 (P1 wins). This unblocks SF0 (its other side
+    # is a bye) which must auto-advance P1 into F0.side_a.
+    r = client.post(
+        _bracket_url(tid, "results"),
+        json={"play_unit_id": "QF0", "winner_side": "A", "finished_at_slot": 1},
+    )
+    assert r.status_code == 200, r.text
+    # The POST response (in-memory) advances P1 into F0 correctly.
+    assert _pu(r.json(), "F0")["slot_a"]["participant_id"] == "P1"
+
+    # The real assertion: a FRESH GET re-hydrates from the DB. If the
+    # cascade was persisted, F0.side_a is P1 here too. Before the fix
+    # this was None — the final was never schedulable on reload.
+    fresh = client.get(_bracket_url(tid)).json()
+    f0 = _pu(fresh, "F0")
+    assert f0["slot_a"]["participant_id"] == "P1", (
+        "deep walkover cascade was not persisted: F0.slot_a is "
+        f"{f0['slot_a']} after reload"
+    )
+    assert f0["side_a"] == ["P1"]
 
 
 # ---- bracket_session preservation across meet-side state writes -------------

@@ -1545,7 +1545,19 @@ def match_action(
             detail=f"no assignment for play_unit {body.play_unit_id!r}",
         )
 
+    # A recorded result locks the physical lifecycle: 'start' would
+    # silently wipe ``actual_end_slot`` (and so move the next round's
+    # scheduling baseline), and 'reset' would clear the clock while
+    # leaving the result + its downstream advancement in place — an
+    # inconsistent state with no un-record path. Block both; redoing a
+    # played match means resetting the bracket.
+    has_result = body.play_unit_id in session.state.results
     if body.action == "start":
+        if has_result:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot start a bracket match that already has a result",
+            )
         assignment.actual_start_slot = (
             body.slot if body.slot is not None else assignment.slot_id
         )
@@ -1562,6 +1574,14 @@ def match_action(
             else (assignment.slot_id + assignment.duration_slots)
         )
     elif body.action == "reset":
+        if has_result:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Cannot reset a bracket match with a recorded result; "
+                    "reset the bracket to redo a played match"
+                ),
+            )
         assignment.actual_start_slot = None
         assignment.actual_end_slot = None
 

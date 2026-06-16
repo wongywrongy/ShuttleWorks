@@ -7,7 +7,7 @@ import { useMemo, useCallback } from 'react';
 import { GanttTimeline, type Placement } from '@scheduler/design-system';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { getEventColor } from '../schedule/eventColors';
-import { useCurrentSlot } from '../../hooks/useCurrentSlot';
+import { useBracketCurrentSlot } from './bracketTime';
 import { useUiStore } from '../../store/uiStore';
 import { BracketEmptyState } from './BracketEmptyState';
 import { MatchDetailPanel } from './MatchDetailPanel';
@@ -90,7 +90,8 @@ interface Props {
 }
 
 export function LiveView({ data, onChange }: Props) {
-  const currentSlot = useCurrentSlot();
+  // Derive "late" from the bracket's OWN schedule, not the meet config.
+  const currentSlot = useBracketCurrentSlot(data.start_time, data.interval_minutes);
   const setBracketSelectedMatchId = useUiStore((s) => s.setBracketSelectedMatchId);
   const eventFilter = useUiStore((s) => s.bracketScheduleEventFilter);
 

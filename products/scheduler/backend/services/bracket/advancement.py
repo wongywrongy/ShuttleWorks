@@ -83,8 +83,23 @@ def record_result(
         walkover=walkover,
         score=score,
     )
-    _sweep_walkovers(state, draw_map)
-    return resolved
+    swept = _sweep_walkovers(state, draw_map)
+    # Return the FULL frontier of changed units, not just the recorded
+    # match's direct dependents. ``_sweep_walkovers`` resolves byes
+    # several layers deep; every unit it records a walkover for or
+    # propagates a winner into must reach the caller, because the API's
+    # ``_persist_result_advancement`` only writes rows for the ids
+    # returned here. Omitting the deep frontier silently dropped those
+    # slot/result updates from the DB — correct in the live response,
+    # lost on the next reload. Dedupe while preserving order (resolved
+    # first, then the sweep frontier).
+    affected: List[PlayUnitId] = list(resolved)
+    seen = set(resolved)
+    for pu_id in swept:
+        if pu_id not in seen:
+            seen.add(pu_id)
+            affected.append(pu_id)
+    return affected
 
 
 def auto_walkover_byes(state: TournamentState, draw: Draw) -> None:
@@ -162,14 +177,20 @@ def _record_and_propagate(
 
 def _sweep_walkovers(
     state: TournamentState, draw_map: Dict[str, Draw]
-) -> None:
+) -> List[PlayUnitId]:
     """Cascade walkovers across the whole state until stable.
 
     A PlayUnit becomes auto-walkover-eligible when all its
     dependencies are resolved AND at least one of its sides is now
     empty (one feeder walked over to a BYE, the other already absent).
     The loop runs until no further PlayUnits are recorded.
+
+    Returns every PlayUnit id the sweep changed: each auto-walkovered
+    unit plus the downstream units its winner propagated into. Callers
+    need the full set so the persistence layer writes every changed row
+    (see ``record_result``).
     """
+    touched: List[PlayUnitId] = []
     changed = True
     while changed:
         changed = False
@@ -193,7 +214,7 @@ def _sweep_walkovers(
                 w = WinnerSide.B
             else:
                 w = WinnerSide.A
-            _record_and_propagate(
+            downstream = _record_and_propagate(
                 state,
                 draw,
                 pu_id,
@@ -202,7 +223,12 @@ def _sweep_walkovers(
                 walkover=True,
                 score=None,
             )
+            # The unit itself got a (walkover) result, and its winner
+            # may have advanced into deeper units — both must be persisted.
+            touched.append(pu_id)
+            touched.extend(downstream)
             changed = True
+    return touched
 
 
 def _winner_participant_id(
