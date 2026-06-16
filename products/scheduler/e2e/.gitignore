@@ -3,4 +3,5 @@ playwright-report/
 test-results/
 blob-report/
 .playwright/
+shots/
 *.log
