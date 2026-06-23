@@ -19,7 +19,7 @@ import {
   useTournamentBackups,
 } from './hooks/useTournamentBackups';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-import { Section } from '../settings/SettingsPrimitives';
+import { Section } from '../../platform/settings/SettingsPrimitives';
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;

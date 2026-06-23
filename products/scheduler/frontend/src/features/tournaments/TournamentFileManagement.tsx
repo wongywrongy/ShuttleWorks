@@ -14,7 +14,7 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { apiClient } from '../../api/client';
 import type { TournamentExportV2, MatchStateDTO } from '../../api/dto';
 import { Button } from '@scheduler/design-system';
-import { Section } from '../settings/SettingsPrimitives';
+import { Section } from '../../platform/settings/SettingsPrimitives';
 import { useTournamentId } from '../../hooks/useTournamentId';
 
 export function TournamentFileManagement() {

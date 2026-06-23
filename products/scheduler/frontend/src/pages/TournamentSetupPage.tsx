@@ -17,11 +17,11 @@ import { useLockGuard } from '../hooks/useLockGuard';
 import { TournamentConfigForm } from '../features/tournaments/TournamentConfigForm';
 import { ScheduleLockIndicator } from '../components/status/ScheduleLockIndicator';
 import { PublicDisplaySettings } from '../features/tournaments/PublicDisplaySettings';
-import { SettingsShell, type SettingsSectionDef } from '../features/settings/SettingsShell';
+import { SettingsShell, type SettingsSectionDef } from '../platform/settings/SettingsShell';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { EngineSettings } from '../features/settings/EngineSettings';
 import { DataSettings } from '../features/settings/DataSettings';
-import { ShareSettings } from '../features/settings/ShareSettings';
+import { ShareSettings } from '../platform/settings/ShareSettings';
 import type { TournamentConfig } from '../api/dto';
 
 export function TournamentSetupPage() {

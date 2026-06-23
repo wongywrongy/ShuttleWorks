@@ -23,7 +23,7 @@ import {
   Toggle,
   NumberWithSuffix,
   RangeSlider,
-} from './SettingsControls';
+} from '../../platform/settings/SettingsControls';
 
 export function EngineSettings() {
   const { config, updateConfig } = useTournament();

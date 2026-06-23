@@ -2,7 +2,7 @@
  * TournamentConfigForm — section 01 (Tournament) of the Setup tab.
  *
  * Every field goes through the shared `<Row label control [last] />`
- * wrapper from features/settings/SettingsControls. No descriptions,
+ * wrapper from platform/settings/SettingsControls. No descriptions,
  * no one-off layouts. Sections demarcated by SectionHeader.
  *
  * Existing dirty-check state model preserved verbatim so an autosave
@@ -29,7 +29,7 @@ import {
   NumberInput,
   NumberWithSuffix,
   SelectInput,
-} from '../settings/SettingsControls';
+} from '../../platform/settings/SettingsControls';
 
 interface TournamentConfigFormProps {
   config: TournamentConfig;

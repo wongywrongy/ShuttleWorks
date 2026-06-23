@@ -16,7 +16,7 @@ import { Button } from '@scheduler/design-system';
 import { useClearAllData } from '../../hooks/useClearAllData';
 import { BackupPanel } from '../setup/BackupPanel';
 import { TournamentFileManagement } from '../tournaments/TournamentFileManagement';
-import { Row, SectionHeader } from './SettingsControls';
+import { Row, SectionHeader } from '../../platform/settings/SettingsControls';
 
 export function DataSettings() {
   const clearAllData = useClearAllData();

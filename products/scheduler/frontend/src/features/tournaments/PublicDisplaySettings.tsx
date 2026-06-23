@@ -24,7 +24,7 @@ import {
   Seg,
   Toggle,
   ColorSwatchRow,
-} from '../settings/SettingsControls';
+} from '../../platform/settings/SettingsControls';
 import {
   DISPLAY_PRESETS,
   DEFAULT_PRESET_ID,

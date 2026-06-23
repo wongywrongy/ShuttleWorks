@@ -14,7 +14,7 @@ import { apiClient } from '../../api/client';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import { useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
-import { Row, SectionHeader } from '../../features/settings/SettingsControls';
+import { Row, SectionHeader } from '../../platform/settings/SettingsControls';
 
 const LINK_CLASSES =
   'inline-flex items-center rounded-sm border border-border bg-card px-3 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40';
