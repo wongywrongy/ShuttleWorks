@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import type { TournamentConfig } from '../../api/dto';
-import { Row, SectionHeader } from '../settings/SettingsControls';
+import { Row, SectionHeader } from '../../features/settings/SettingsControls';
 
 interface DraftState {
   tournamentName: string;

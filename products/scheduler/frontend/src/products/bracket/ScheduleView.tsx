@@ -9,7 +9,7 @@
 import { useMemo, useCallback } from 'react';
 import { GanttTimeline, type Placement } from '@scheduler/design-system';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
-import { getEventColor } from '../schedule/eventColors';
+import { getEventColor } from '../../features/schedule/eventColors';
 import { useUiStore } from '../../store/uiStore';
 
 // ---- Tooltip builder -------------------------------------------------------

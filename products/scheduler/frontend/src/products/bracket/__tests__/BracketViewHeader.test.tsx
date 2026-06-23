@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { useUiStore } from '../../store/uiStore';
-import { BracketViewHeader } from '../../features/bracket/BracketViewHeader';
-import type { BracketTournamentDTO, ScheduleNextOut } from '../../api/bracketDto';
+import { useUiStore } from '../../../store/uiStore';
+import { BracketViewHeader } from '../BracketViewHeader';
+import type { BracketTournamentDTO, ScheduleNextOut } from '../../../api/bracketDto';
 
 // The header calls useBracketApi().scheduleNext(); the strip it renders
 // for the live view (EventsFilterStrip) calls useBracket(). Mock both so
@@ -11,7 +11,7 @@ import type { BracketTournamentDTO, ScheduleNextOut } from '../../api/bracketDto
 let scheduleNextResult: ScheduleNextOut;
 const scheduleNext = vi.fn(() => Promise.resolve(scheduleNextResult));
 
-vi.mock('../../api/bracketClient', () => ({
+vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({
     scheduleNext,
     exportJsonUrl: () => '/j',
@@ -19,7 +19,7 @@ vi.mock('../../api/bracketClient', () => ({
     exportIcsUrl: () => '/i',
   }),
 }));
-vi.mock('../../hooks/useBracket', () => ({
+vi.mock('../../../hooks/useBracket', () => ({
   useBracket: () => ({ data: FIXTURE }),
 }));
 

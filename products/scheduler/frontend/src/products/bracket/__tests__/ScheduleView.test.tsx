@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ScheduleView } from '../../features/bracket/ScheduleView';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { ScheduleView } from '../ScheduleView';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 const EMPTY: BracketTournamentDTO = {
   courts: 4, total_slots: 32, rest_between_rounds: 1, interval_minutes: 30,

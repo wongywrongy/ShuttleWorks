@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { EventsTab } from '../../features/bracket/EventsTab';
-import { useTournamentStore } from '../../store/tournamentStore';
+import { EventsTab } from '../EventsTab';
+import { useTournamentStore } from '../../../store/tournamentStore';
 
 // --- Mock useBracket so the component doesn't start polling ---
 const mockEventUpsert = vi.fn();
@@ -10,7 +10,7 @@ const mockEventDelete = vi.fn();
 const mockSetData = vi.fn();
 const mockRefresh = vi.fn();
 
-vi.mock('../../api/bracketClient', () => ({
+vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({
     eventUpsert: mockEventUpsert,
     eventGenerate: mockEventGenerate,
@@ -22,7 +22,7 @@ vi.mock('../../api/bracketClient', () => ({
 }));
 
 // Stub useBracket — controls the data the EventsTab renders from.
-vi.mock('../../hooks/useBracket', () => ({
+vi.mock('../../../hooks/useBracket', () => ({
   useBracket: () => ({
     data: mockBracketData,
     setData: mockSetData,

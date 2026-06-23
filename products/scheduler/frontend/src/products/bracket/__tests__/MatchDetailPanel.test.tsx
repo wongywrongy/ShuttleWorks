@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MatchDetailPanel } from '../../features/bracket/MatchDetailPanel';
-import { useUiStore } from '../../store/uiStore';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { MatchDetailPanel } from '../MatchDetailPanel';
+import { useUiStore } from '../../../store/uiStore';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 // A.8 pattern — module-level mock so the hook doesn't throw
 // "useBracketApi must be used inside a <BracketApiProvider>" when
@@ -10,7 +10,7 @@ import type { BracketTournamentDTO } from '../../api/bracketDto';
 const mockMatchAction = vi.fn();
 const mockRecordResult = vi.fn();
 
-vi.mock('../../api/bracketClient', () => ({
+vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({
     matchAction: mockMatchAction,
     recordResult: mockRecordResult,

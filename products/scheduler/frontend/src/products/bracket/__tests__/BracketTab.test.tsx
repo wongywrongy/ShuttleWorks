@@ -8,14 +8,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { BracketTab } from '../../features/bracket/BracketTab';
-import { useUiStore } from '../../store/uiStore';
-import { useTournamentStore } from '../../store/tournamentStore';
-import { useBracket } from '../../hooks/useBracket';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { BracketTab } from '../BracketTab';
+import { useUiStore } from '../../../store/uiStore';
+import { useTournamentStore } from '../../../store/tournamentStore';
+import { useBracket } from '../../../hooks/useBracket';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 // --- Mock useBracket so the component doesn't start polling ---
-vi.mock('../../hooks/useBracket', () => ({
+vi.mock('../../../hooks/useBracket', () => ({
   useBracket: vi.fn(() => ({
     data: null,
     setData: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock('../../hooks/useBracket', () => ({
 }));
 
 // --- Mock bracketClient so BracketApiProvider never calls the real API ---
-vi.mock('../../api/bracketClient', async () => {
+vi.mock('../../../api/bracketClient', async () => {
   const React = await import('react');
   // Minimal context so BracketRosterTab's context-check doesn't throw.
   const BracketApiContext = React.createContext<object | null>(null);

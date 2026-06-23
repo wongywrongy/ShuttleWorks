@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { reconcileBracketRoster } from '../../features/bracket/bracketMigration';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { reconcileBracketRoster } from '../bracketMigration';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 describe('reconcileBracketRoster', () => {
   it('extracts unique players from PLAYER participants', () => {

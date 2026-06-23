@@ -9,8 +9,8 @@
  */
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { BracketTournamentSection } from '../../features/bracket/BracketTournamentSection';
-import { useTournamentStore } from '../../store/tournamentStore';
+import { BracketTournamentSection } from '../BracketTournamentSection';
+import { useTournamentStore } from '../../../store/tournamentStore';
 
 function resetStore() {
   useTournamentStore.setState({

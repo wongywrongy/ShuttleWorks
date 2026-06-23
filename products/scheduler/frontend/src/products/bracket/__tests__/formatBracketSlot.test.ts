@@ -8,7 +8,7 @@
  * the helper returns the absolute-slot fallback `"Slot {n}"`.
  */
 import { describe, expect, it } from 'vitest';
-import { formatBracketSlot } from '../../features/bracket/formatBracketSlot';
+import { formatBracketSlot } from '../formatBracketSlot';
 
 describe('formatBracketSlot', () => {
   it('formats slot 0 against a 09:00 start in 30-min intervals', () => {

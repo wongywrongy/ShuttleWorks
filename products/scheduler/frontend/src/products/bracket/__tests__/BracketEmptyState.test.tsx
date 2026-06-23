@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { BracketEmptyState } from '../../features/bracket/BracketEmptyState';
+import { BracketEmptyState } from '../BracketEmptyState';
 
 describe('BracketEmptyState', () => {
   it('renders title, body, and primary action when provided', () => {

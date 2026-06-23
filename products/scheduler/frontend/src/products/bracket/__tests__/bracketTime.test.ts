@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bracketCurrentSlot } from '../../features/bracket/bracketTime';
+import { bracketCurrentSlot } from '../bracketTime';
 
 describe('bracketCurrentSlot', () => {
   it('returns 0 when no start_time is pinned (so nothing is ever "late")', () => {

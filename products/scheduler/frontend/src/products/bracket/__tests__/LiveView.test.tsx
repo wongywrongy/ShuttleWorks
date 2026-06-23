@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { useUiStore } from '../../store/uiStore';
-import { LiveView } from '../../features/bracket/LiveView';
-import { deriveChipState } from '../../features/bracket/LiveView';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { useUiStore } from '../../../store/uiStore';
+import { LiveView } from '../LiveView';
+import { deriveChipState } from '../LiveView';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 // A.8 module-mock — MatchDetailPanel (now inside LiveView) calls useBracketApi().
 // Without this the hook throws when LiveView is rendered outside a provider.
-vi.mock('../../api/bracketClient', () => ({
+vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({
     matchAction: vi.fn(),
     recordResult: vi.fn(),

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { useUiStore } from '../../store/uiStore';
-import { EventsFilterStrip } from '../../features/bracket/EventsFilterStrip';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { useUiStore } from '../../../store/uiStore';
+import { EventsFilterStrip } from '../EventsFilterStrip';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 // EventsFilterStrip calls useBracket() which internally calls useBracketApi().
 // Mock the hook so we don't need a real provider or network.
-vi.mock('../../hooks/useBracket', () => ({
+vi.mock('../../../hooks/useBracket', () => ({
   useBracket: () => ({ data: FIXTURE }),
 }));
 
@@ -96,7 +96,7 @@ describe('EventsFilterStrip', () => {
 // Re-use the existing ScheduleView fixture pattern to verify that
 // eventFilter=false causes the chip to carry opacity-40.
 
-import { ScheduleView } from '../../features/bracket/ScheduleView';
+import { ScheduleView } from '../ScheduleView';
 
 const SCHED_DATA: BracketTournamentDTO = {
   courts: 4,

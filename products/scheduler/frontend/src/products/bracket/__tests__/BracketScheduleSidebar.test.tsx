@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { BracketScheduleSidebar } from '../../features/bracket/BracketScheduleSidebar';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { BracketScheduleSidebar } from '../BracketScheduleSidebar';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 function makeData(): BracketTournamentDTO {
   return {

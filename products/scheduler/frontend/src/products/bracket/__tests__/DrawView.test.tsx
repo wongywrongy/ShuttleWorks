@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { DrawView } from '../../features/bracket/DrawView';
-import type { TournamentDTO } from '../../api/bracketDto';
+import { DrawView } from '../DrawView';
+import type { TournamentDTO } from '../../../api/bracketDto';
 
-vi.mock('../../api/bracketClient', () => ({
+vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({
     recordResult: vi.fn(),
   }),

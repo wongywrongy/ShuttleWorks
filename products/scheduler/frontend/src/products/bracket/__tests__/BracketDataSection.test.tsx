@@ -7,15 +7,15 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { BracketDataSection } from '../../features/bracket/BracketDataSection';
+import { BracketDataSection } from '../BracketDataSection';
 
-vi.mock('../../hooks/useTournamentId', () => ({
+vi.mock('../../../hooks/useTournamentId', () => ({
   useTournamentId: () => 't1',
 }));
-vi.mock('../../api/bracketClient', () => ({
+vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({ remove: vi.fn() }),
 }));
-vi.mock('../../hooks/useBracket', () => ({
+vi.mock('../../../hooks/useBracket', () => ({
   useBracket: () => ({ setData: vi.fn() }),
 }));
 

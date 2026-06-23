@@ -4,7 +4,7 @@ import { TabSkeleton } from '../../components/TabSkeleton';
 import { useUiStore } from '../../store/uiStore';
 
 const BracketTab = lazy(() =>
-  import('../../features/bracket/BracketTab').then((m) => ({ default: m.BracketTab })),
+  import('./BracketTab').then((m) => ({ default: m.BracketTab })),
 );
 
 /** Bracket product mode: the bracket tab strip + the bracket surface. */

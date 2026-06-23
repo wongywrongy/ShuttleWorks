@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { BracketInlineNotice } from '../../features/bracket/BracketInlineNotice';
+import { BracketInlineNotice } from '../BracketInlineNotice';
 
 describe('BracketInlineNotice', () => {
   it('renders an error notice with alert semantics', () => {

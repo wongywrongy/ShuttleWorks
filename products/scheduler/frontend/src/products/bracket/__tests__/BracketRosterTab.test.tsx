@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { BracketRosterTab } from '../../features/bracket/BracketRosterTab';
-import { useTournamentStore } from '../../store/tournamentStore';
+import { BracketRosterTab } from '../BracketRosterTab';
+import { useTournamentStore } from '../../../store/tournamentStore';
 
 beforeEach(() => {
   useTournamentStore.setState({

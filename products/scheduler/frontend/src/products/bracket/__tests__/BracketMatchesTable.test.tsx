@@ -5,8 +5,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { BracketMatchesTable } from '../../features/bracket/BracketMatchesTable';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { BracketMatchesTable } from '../BracketMatchesTable';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 function makeTwoMatchData(): BracketTournamentDTO {
   return {

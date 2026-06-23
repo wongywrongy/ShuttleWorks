@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { BracketScheduleHeader } from '../../features/bracket/BracketScheduleHeader';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { BracketScheduleHeader } from '../BracketScheduleHeader';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 function makeData(assignments: number, courts: number): BracketTournamentDTO {
   return {
