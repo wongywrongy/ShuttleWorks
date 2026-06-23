@@ -127,6 +127,15 @@ interface UiState {
   activeTournamentKind: 'meet' | 'bracket' | null;
   setActiveTournamentKind: (kind: 'meet' | 'bracket' | null) => void;
 
+  // Active tournament's lifecycle status (draft | active | archived).
+  // Fetched alongside ``kind`` by ``useTournamentKind`` from the summary
+  // endpoint; ``null`` while loading or on failure. The Workspace Shell
+  // reads this to show a status badge.
+  activeTournamentStatus: 'draft' | 'active' | 'archived' | null;
+  setActiveTournamentStatus: (
+    status: 'draft' | 'active' | 'archived' | null,
+  ) => void;
+
   // Whether the active bracket-kind tournament has a generated draw.
   // Written by ``BracketTab`` from ``useBracket().data``; ``null`` when
   // no bracket surface is mounted (meet kind / dashboard). ``TabBar``
@@ -212,6 +221,7 @@ const INITIAL: Pick<
   | 'activeTab'
   | 'activeTournamentId'
   | 'activeTournamentKind'
+  | 'activeTournamentStatus'
   | 'bracketDataReady'
   | 'solverHud'
   | 'pendingPin'
@@ -236,6 +246,7 @@ const INITIAL: Pick<
   activeTab: 'setup',
   activeTournamentId: null,
   activeTournamentKind: null,
+  activeTournamentStatus: null,
   bracketDataReady: null,
   solverHud: DEFAULT_SOLVER_HUD,
   pendingPin: null,
@@ -264,6 +275,7 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
   setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
+  setActiveTournamentStatus: (activeTournamentStatus) => set({ activeTournamentStatus }),
   setBracketDataReady: (bracketDataReady) => set({ bracketDataReady }),
 
   setSolverHud: (patch) =>
