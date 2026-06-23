@@ -33,12 +33,12 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiClient } from '../api/client';
-import type { TournamentSummaryDTO } from '../api/dto';
-import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
-import { ThemeToggle } from '../components/ThemeToggle';
+import { apiClient } from '../../api/client';
+import type { TournamentSummaryDTO } from '../../api/dto';
+import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
+import { ThemeToggle } from '../../components/ThemeToggle';
 import { Button, Card, Modal, PageHeader, StatusPill } from '@scheduler/design-system';
-import { workspaceCopy } from '../platform/domain/workspace';
+import { workspaceCopy } from '../../platform/domain/workspace';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -166,7 +166,7 @@ function Section({
 
 type NewEventKind = 'meet' | 'bracket';
 
-export function TournamentListPage() {
+export function HubPage() {
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<TournamentSummaryDTO[]>([]);
   const [loading, setLoading] = useState(true);

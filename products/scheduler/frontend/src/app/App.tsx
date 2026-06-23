@@ -12,8 +12,8 @@ const ICON_DEFAULTS = { weight: 'light' as const, size: '1em' as const, mirrored
 const PublicDisplayPage = lazy(() =>
   import('../pages/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
 );
-const TournamentListPage = lazy(() =>
-  import('../pages/TournamentListPage').then((m) => ({ default: m.TournamentListPage })),
+const HubPage = lazy(() =>
+  import('../products/hub/HubPage').then((m) => ({ default: m.HubPage })),
 );
 const TournamentPage = lazy(() =>
   import('../pages/TournamentPage').then((m) => ({ default: m.TournamentPage })),
@@ -98,7 +98,7 @@ function App() {
                 element={
                   <AuthGuard>
                     <Suspense fallback={<Fallback />}>
-                      <TournamentListPage />
+                      <HubPage />
                     </Suspense>
                   </AuthGuard>
                 }

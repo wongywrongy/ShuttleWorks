@@ -5,10 +5,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { TournamentListPage } from '../../pages/TournamentListPage';
-import { apiClient } from '../../api/client';
+import { HubPage } from '../HubPage';
+import { apiClient } from '../../../api/client';
 
-vi.mock('../../api/client', () => ({
+vi.mock('../../../api/client', () => ({
   apiClient: {
     listTournaments: vi.fn(),
     createTournament: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('../../api/client', () => ({
 
 // Auth gate / theme / density hooks are no-ops here — we mount the
 // page directly without AuthGuard or the wider AppShell.
-vi.mock('../../context/AuthContext', () => ({
+vi.mock('../../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1', email: 'op@example.com' } }),
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -37,7 +37,7 @@ function mount(refObj: { current: string }) {
           path="/"
           element={
             <>
-              <TournamentListPage />
+              <HubPage />
               <LocationProbe refObj={refObj} />
             </>
           }
@@ -62,7 +62,7 @@ beforeEach(() => {
   ] as never);
 });
 
-describe('TournamentListPage navigation', () => {
+describe('HubPage navigation', () => {
   it('Open on a bracket tournament navigates to /bracket-setup', async () => {
     const loc = { current: '' };
     mount(loc);
