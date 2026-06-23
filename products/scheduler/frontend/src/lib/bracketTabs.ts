@@ -45,6 +45,14 @@ export const MEET_TAB_IDS = [
 
 export type MeetTabId = (typeof MEET_TAB_IDS)[number];
 
+/** The meet tabs the TabBar renders. Excludes ``tv`` — TV is reached
+ *  through the Workspace Shell's Display product mode, not the tab strip —
+ *  while ``tv`` stays in ``MEET_TAB_IDS`` so the ``/tournaments/:id/tv``
+ *  route and ``normalizeActiveTab`` keep treating it as valid. */
+export const MEET_OPERATOR_TAB_IDS = MEET_TAB_IDS.filter(
+  (id) => id !== 'tv',
+) as Exclude<MeetTabId, 'tv'>[];
+
 /** The bare view name a ``bracket-`` tab maps to — drives the
  *  ``BracketViewHeader`` eyebrow and the content switch. */
 export type BracketView =

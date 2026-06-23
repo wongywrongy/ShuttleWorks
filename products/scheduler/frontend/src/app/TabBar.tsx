@@ -1,13 +1,11 @@
-import { ArrowLeft } from '@phosphor-icons/react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore, type AppTab } from '../store/uiStore';
 import { AppStatusPopover } from '../components/AppStatusPopover';
-import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
 import { useDisruptions } from '../hooks/useDisruptions';
 import { useTournamentId } from '../hooks/useTournamentId';
 import { INTERACTIVE_BASE } from '../lib/utils';
-import { BRACKET_TABS, MEET_TAB_IDS, type MeetTabId } from '../lib/bracketTabs';
+import { BRACKET_TABS, MEET_OPERATOR_TAB_IDS, type MeetTabId } from '../lib/bracketTabs';
 import { workspaceCopy } from '../platform/domain/workspace';
 
 type TabDef = { id: AppTab; label: string; hint?: string };
@@ -26,7 +24,7 @@ const MEET_TAB_LABELS: Record<MeetTabId, string> = {
 
 /** Tabs shown for a ``kind='meet'`` tournament — the intercollegiate
  *  dual / tri-meet workflow. */
-const MEET_TABS: TabDef[] = MEET_TAB_IDS.map((id) => ({
+const MEET_TABS: TabDef[] = MEET_OPERATOR_TAB_IDS.map((id) => ({
   id,
   label: MEET_TAB_LABELS[id],
 }));
@@ -92,33 +90,6 @@ export function TabBar() {
       className="sticky top-0 z-chrome flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4"
     >
       <div className="flex min-w-0 items-center gap-3">
-        {/* Back-to-dashboard control: an arrow icon-button paired with
-            a clickable wordmark. Both navigate to ``/``; redundancy is
-            deliberate — the arrow is the discoverable affordance,
-            the wordmark click matches web convention (logo = home). */}
-        <Link
-          to="/"
-          aria-label="Back to dashboard"
-          title="Back to dashboard"
-          className={[
-            INTERACTIVE_BASE,
-            'inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border text-muted-foreground',
-            'hover:bg-muted/40 hover:text-foreground',
-          ].join(' ')}
-        >
-          <ArrowLeft size={14} aria-hidden="true" />
-        </Link>
-        {/* Boxed wordmark — also a Link to the dashboard for parity
-            with web-app convention. Hidden on narrow viewports so it
-            doesn't compete with the tab strip. */}
-        <Link
-          to="/"
-          aria-label="Back to dashboard"
-          title="Back to dashboard"
-          className={`${INTERACTIVE_BASE} hidden sm:inline-flex`}
-        >
-          <ShuttleWorksMark />
-        </Link>
         <div
           role="tablist"
           aria-label="Sections"
