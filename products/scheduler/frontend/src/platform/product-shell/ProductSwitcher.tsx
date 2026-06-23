@@ -25,7 +25,7 @@ export function ProductSwitcher({ products, active, onSelect }: ProductSwitcherP
             title={!p.available ? p.disabledReason : undefined}
             data-testid={`product-${p.id}`}
             onClick={() => {
-              if (p.available) onSelect(p.id);
+              if (p.available && p.id !== active) onSelect(p.id);
             }}
             className={[
               INTERACTIVE_BASE,

@@ -32,4 +32,19 @@ describe('ProductSwitcher', () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith('display');
   });
+
+  it('does not fire onSelect when clicking the already-active product', async () => {
+    const onSelect = vi.fn();
+    render(<ProductSwitcher products={items} active="meet" onSelect={onSelect} />);
+    await userEvent.click(screen.getByTestId('product-meet'));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('fires onSelect when switching from the active product to a different available product', async () => {
+    const onSelect = vi.fn();
+    render(<ProductSwitcher products={items} active="meet" onSelect={onSelect} />);
+    await userEvent.click(screen.getByTestId('product-display'));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith('display');
+  });
 });
