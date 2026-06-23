@@ -1,44 +1,23 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { ArrowSquareOut, GearSix } from '@phosphor-icons/react';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUiStore } from '../store/uiStore';
 import { useTournamentState } from '../hooks/useTournamentState';
 import { useAdvisories } from '../hooks/useAdvisories';
 import { useSuggestions } from '../hooks/useSuggestions';
-import { TabBar } from './TabBar';
 import { SolverHud } from '../components/SolverHud';
 import { UnsavedBanner } from '../components/UnsavedBanner';
 import { ToastStack } from '../components/Toast';
 import { UnlockModalHost } from '../components/common/UnlockModalHost';
-import { TabSkeleton } from '../components/TabSkeleton';
-import { INTERACTIVE_BASE } from '../lib/utils';
-
-// Tabs are wired to the existing pages during Step 4. Each tab is replaced with
-// a dedicated Tab component in Step 5 (inline authoring). Using lazy() keeps
-// the tab-switch fast and matches the previous per-page load behaviour.
-const TournamentSetupPage = lazy(() =>
-  import('../pages/TournamentSetupPage').then((m) => ({ default: m.TournamentSetupPage })),
-);
-const RosterTab = lazy(() =>
-  import('../features/roster/RosterTab').then((m) => ({ default: m.RosterTab })),
-);
-const MatchesTab = lazy(() =>
-  import('../features/matches/MatchesTab').then((m) => ({ default: m.MatchesTab })),
-);
-const SchedulePage = lazy(() =>
-  import('../pages/SchedulePage').then((m) => ({ default: m.SchedulePage })),
-);
-const MatchControlCenterPage = lazy(() =>
-  import('../pages/MatchControlCenterPage').then((m) => ({ default: m.MatchControlCenterPage })),
-);
-const PublicDisplayPage = lazy(() =>
-  import('../pages/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
-);
-const BracketTab = lazy(() =>
-  import('../features/bracket/BracketTab').then((m) => ({ default: m.BracketTab })),
-);
-
-// FALLBACK is now built per-tab via TabSkeleton so the Suspense
-// shape matches the layout that's about to mount.
+import { AppStatusPopover } from '../components/AppStatusPopover';
+import { useTournamentId } from '../hooks/useTournamentId';
+import { WorkspaceShell } from '../platform/product-shell/WorkspaceShell';
+import { ProductOutlet } from './workspace/ProductOutlet';
+import { useWorkspaceIdentity } from '../platform/domain/useWorkspaceIdentity';
+import {
+  productForTab,
+  defaultTabForProduct,
+  productsForWorkspace,
+} from '../platform/domain/productModel';
 
 export function AppShell() {
   // Theme + density hooks live at App.tsx level so they fire on every
@@ -51,6 +30,11 @@ export function AppShell() {
   const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
   const pushToast = useUiStore((s) => s.pushToast);
   const setActiveProposal = useUiStore((s) => s.setActiveProposal);
+  const navigate = useNavigate();
+  const tid = useTournamentId();
+  const identity = useWorkspaceIdentity();
+  const activeProduct = productForTab(activeTab, activeTournamentKind);
+  const products = productsForWorkspace(activeTournamentKind);
 
   // Discard any in-flight proposal when the operator switches tabs.
   // Otherwise the next visit to the originating tab re-opens the
@@ -124,8 +108,8 @@ export function AppShell() {
         }}
       />
       {/* Skip-link: hidden until focused. Lets keyboard users jump past the
-          TabBar straight into the active pane. The target id (#main) is on
-          the <main> element below. */}
+          WorkspaceShell chrome straight into the active pane. The target
+          id (#main) is on the <main> element inside WorkspaceShell below. */}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-modal focus:rounded-sm focus:bg-primary focus:px-3 focus:py-1.5 focus:text-sm focus:text-primary-foreground focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -140,34 +124,21 @@ export function AppShell() {
           and should not fire on bracket-kind tournaments where those
           endpoints have no meaningful data. */}
       {activeTournamentKind !== 'bracket' ? <MeetOnlyPollingHooks /> : null}
-      <TabBar />
-      <UnsavedBannerSlot />
-      <main id="main" className="flex-1 min-h-0 overflow-auto">
-        <Suspense fallback={<TabSkeleton tab={activeTab} />}>
-          {/* Bracket-kind tournaments skip the activeTab dispatch and
-              render BracketTab directly — the meet tabs aren't
-              relevant. ``activeTournamentKind`` is loaded by
-              ``useTournamentKind`` on mount; while it's ``null`` the
-              shell falls back to the meet-style tab dispatch below. */}
-          {activeTournamentKind === 'bracket' ? (
-            <div key="bracket" className="h-full animate-block-in">
-              <BracketTab />
-            </div>
-          ) : (
-            // Re-keying on activeTab forces a remount and re-runs the
-            // animate-block-in entry so each tab switch reads as a
-            // deliberate arrival, not a flash.
-            <div key={activeTab} className="h-full animate-block-in">
-              {activeTab === 'setup' ? <TournamentSetupPage /> : null}
-              {activeTab === 'roster' ? <RosterTab /> : null}
-              {activeTab === 'matches' ? <MatchesTab /> : null}
-              {activeTab === 'schedule' ? <SchedulePage /> : null}
-              {activeTab === 'live' ? <MatchControlCenterPage /> : null}
-              {activeTab === 'tv' ? <TvPreviewTab /> : null}
-            </div>
-          )}
-        </Suspense>
-      </main>
+      <WorkspaceShell
+        identity={identity}
+        products={products}
+        activeProduct={activeProduct}
+        onSelectProduct={(p) => {
+          if (tid) navigate(`/tournaments/${tid}/${defaultTabForProduct(p, activeTournamentKind)}`, { replace: true });
+        }}
+        onBackToHub={() => navigate('/')}
+        statusSlot={<AppStatusPopover />}
+      >
+        <UnsavedBannerSlot />
+        <main id="main" className="min-h-0 flex-1 overflow-hidden">
+          <ProductOutlet />
+        </main>
+      </WorkspaceShell>
       <SolverHud />
       <ToastStack />
       <UnlockModalHost />
@@ -205,56 +176,6 @@ function UnsavedBannerSlot() {
   return (
     <div className="empty:hidden border-b border-border bg-background px-4 py-1.5">
       <UnsavedBanner />
-    </div>
-  );
-}
-
-// TV tab: presentation-grade preview with primary CTA + secondary action.
-// The PublicDisplayPage is fullscreen-designed; embedding it inline used to
-// look broken. We keep the embed but frame it as an aspect-ratio preview
-// card with clear hierarchy and pointer-events disabled so it reads as a
-// preview, not a live surface.
-function TvPreviewTab() {
-  const setActiveTab = useUiStore((s) => s.setActiveTab);
-  return (
-    <div className="mx-auto flex h-full max-w-[1400px] flex-col gap-4 px-4 py-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-foreground">Public display</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Preview of the venue TV. Open fullscreen on the display device.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('setup');
-              const url = new URL(window.location.href);
-              url.searchParams.set('section', 'display');
-              window.history.replaceState({}, '', url.toString());
-            }}
-            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground`}
-          >
-            <GearSix aria-hidden="true" className="h-4 w-4" />
-            Configure display
-          </button>
-          <a
-            href="/display"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90`}
-          >
-            <ArrowSquareOut aria-hidden="true" className="h-4 w-4" />
-            Open fullscreen
-          </a>
-        </div>
-      </header>
-      <div className="relative flex-1 min-h-0 overflow-hidden border border-border bg-card">
-        <div className="pointer-events-none absolute inset-0 overflow-auto">
-          <PublicDisplayPage />
-        </div>
-      </div>
     </div>
   );
 }

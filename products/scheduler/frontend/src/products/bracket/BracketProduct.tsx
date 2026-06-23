@@ -13,13 +13,13 @@ export function BracketProduct() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TabBar />
-      <main id="main" className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto">
         <Suspense fallback={<TabSkeleton tab={activeTab} />}>
           <div key="bracket" className="h-full animate-block-in">
             <BracketTab />
           </div>
         </Suspense>
-      </main>
+      </div>
     </div>
   );
 }
