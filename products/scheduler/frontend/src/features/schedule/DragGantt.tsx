@@ -53,7 +53,7 @@ import type {
   TournamentConfig,
   ValidationResponseDTO,
 } from '../../api/dto';
-import { getEventColor, EVENT_COLORS } from './eventColors';
+import { getEventColor, EVENT_COLORS } from '../../lib/eventColors';
 
 const VALIDATE_DEBOUNCE_MS = 80;
 

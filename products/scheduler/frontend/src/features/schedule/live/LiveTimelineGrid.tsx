@@ -19,7 +19,7 @@ import type {
   PlayerDTO,
   TournamentConfig,
 } from '../../../api/dto';
-import { EVENT_COLORS, getEventColor } from '../eventColors';
+import { EVENT_COLORS, getEventColor } from '../../../lib/eventColors';
 
 interface LiveTimelineGridProps {
   assignments: ScheduleAssignment[];

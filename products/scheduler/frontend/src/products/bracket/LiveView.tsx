@@ -6,7 +6,7 @@
 import { useMemo, useCallback } from 'react';
 import { GanttTimeline, type Placement } from '@scheduler/design-system';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
-import { getEventColor } from '../../features/schedule/eventColors';
+import { getEventColor } from '../../lib/eventColors';
 import { useBracketCurrentSlot } from './bracketTime';
 import { useUiStore } from '../../store/uiStore';
 import { BracketEmptyState } from './BracketEmptyState';
