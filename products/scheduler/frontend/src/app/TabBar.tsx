@@ -8,6 +8,7 @@ import { useDisruptions } from '../hooks/useDisruptions';
 import { useTournamentId } from '../hooks/useTournamentId';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import { BRACKET_TABS, MEET_TAB_IDS, type MeetTabId } from '../lib/bracketTabs';
+import { workspaceCopy } from '../platform/domain/workspace';
 
 type TabDef = { id: AppTab; label: string; hint?: string };
 
@@ -87,7 +88,7 @@ export function TabBar() {
 
   return (
     <nav
-      aria-label="Tournament scheduler tabs"
+      aria-label={workspaceCopy.tabsAriaLabel}
       className="sticky top-0 z-chrome flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4"
     >
       <div className="flex min-w-0 items-center gap-3">

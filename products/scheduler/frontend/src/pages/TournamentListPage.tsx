@@ -38,6 +38,7 @@ import type { TournamentSummaryDTO } from '../api/dto';
 import { ShuttleWorksMark } from '../components/ShuttleWorksMark';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { Button, Card, Modal, PageHeader, StatusPill } from '@scheduler/design-system';
+import { workspaceCopy } from '../platform/domain/workspace';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -297,7 +298,7 @@ export function TournamentListPage() {
         <PageHeader
           eyebrow="DASHBOARD"
           title="Your events"
-          description="Meets and tournaments you own or have been invited to."
+          description={workspaceCopy.dashboardDescription}
           actions={<Button onClick={() => setShowNewDialog(true)}>New</Button>}
         />
 
@@ -323,12 +324,12 @@ export function TournamentListPage() {
           <>
             <Section
               eyebrow="YOU OWN"
-              title="Your tournaments"
+              title={workspaceCopy.ownedSectionTitle}
               variant="owned"
               items={owned}
               onOpen={openTournament}
               onDelete={(t) => setDeleteTarget(t)}
-              emptyHint="You don't own any tournaments yet."
+              emptyHint={workspaceCopy.ownedEmptyHint}
             />
             <Section
               eyebrow="SHARED WITH YOU"
