@@ -49,17 +49,17 @@ describe('productsForWorkspace', () => {
     const bracket = p.find((x) => x.id === 'bracket')!;
     expect(bracket.available).toBe(false);
     expect(bracket.disabledReason).toBe(
-      'This workspace is a meet — brackets live in their own workspace.',
+      "Bracket isn't enabled for this workspace yet.",
     );
   });
   it('bracket workspace: Bracket live, Meet+Display disabled with reasons', () => {
     const p = productsForWorkspace('bracket');
     expect(p.find((x) => x.id === 'bracket')!.available).toBe(true);
     expect(p.find((x) => x.id === 'meet')!.disabledReason).toBe(
-      'This workspace is a bracket — meets live in their own workspace.',
+      "Meet isn't enabled for this workspace yet.",
     );
     expect(p.find((x) => x.id === 'display')!.disabledReason).toBe(
-      'Public display for brackets is coming.',
+      "Display isn't available for brackets yet.",
     );
   });
 });

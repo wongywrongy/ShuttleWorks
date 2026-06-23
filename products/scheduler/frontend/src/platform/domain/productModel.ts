@@ -34,9 +34,10 @@ export function defaultTabForProduct(product: ProductId, kind: Kind): string {
   return 'setup';
 }
 
-/** The switcher always lists all three products. The operator product that
- *  doesn't match this workspace's kind is disabled with an explanation, and
- *  Display is disabled for bracket workspaces (no public display yet). */
+/** The switcher always lists all three products. A product that isn't enabled
+ *  for this workspace yet is disabled with a forward-looking reason — the
+ *  long-term model is one workspace holding multiple modes, so the copy implies
+ *  "not enabled yet", not a permanent product boundary. */
 export function productsForWorkspace(kind: Kind): ProductSwitcherItem[] {
   const isBracket = kind === 'bracket';
   return [
@@ -45,7 +46,7 @@ export function productsForWorkspace(kind: Kind): ProductSwitcherItem[] {
       label: 'Meet',
       available: !isBracket,
       disabledReason: isBracket
-        ? 'This workspace is a bracket — meets live in their own workspace.'
+        ? "Meet isn't enabled for this workspace yet."
         : undefined,
     },
     {
@@ -53,7 +54,7 @@ export function productsForWorkspace(kind: Kind): ProductSwitcherItem[] {
       label: 'Bracket',
       available: isBracket,
       disabledReason: !isBracket
-        ? 'This workspace is a meet — brackets live in their own workspace.'
+        ? "Bracket isn't enabled for this workspace yet."
         : undefined,
     },
     {
@@ -61,7 +62,7 @@ export function productsForWorkspace(kind: Kind): ProductSwitcherItem[] {
       label: 'Display',
       available: !isBracket,
       disabledReason: isBracket
-        ? 'Public display for brackets is coming.'
+        ? "Display isn't available for brackets yet."
         : undefined,
     },
   ];

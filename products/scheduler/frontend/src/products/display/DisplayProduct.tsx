@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowSquareOut, GearSix } from '@phosphor-icons/react';
-import { useUiStore } from '../../store/uiStore';
+import { useTournamentId } from '../../hooks/useTournamentId';
 import { TabSkeleton } from '../../components/TabSkeleton';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
@@ -11,7 +12,8 @@ const PublicDisplayPage = lazy(() =>
 /** Display product mode: the venue public-display surface, live in-shell,
  *  with a "Configure display" shortcut and an "Open fullscreen" affordance. */
 export function DisplayProduct() {
-  const setActiveTab = useUiStore((s) => s.setActiveTab);
+  const navigate = useNavigate();
+  const tid = useTournamentId();
   return (
     <div className="mx-auto flex h-full max-w-[1400px] flex-col gap-4 px-4 py-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -24,19 +26,14 @@ export function DisplayProduct() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              setActiveTab('setup');
-              const url = new URL(window.location.href);
-              url.searchParams.set('section', 'display');
-              window.history.replaceState({}, '', url.toString());
-            }}
+            onClick={() => navigate(`/tournaments/${tid}/setup?section=display`)}
             className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground`}
           >
             <GearSix aria-hidden="true" className="h-4 w-4" />
             Configure display
           </button>
           <a
-            href="/display"
+            href={`/display?id=${tid}`}
             target="_blank"
             rel="noopener noreferrer"
             className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90`}
