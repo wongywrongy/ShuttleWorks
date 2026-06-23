@@ -1,8 +1,8 @@
 # Workspace suite architecture — design
 
 **Date:** 2026-06-23  
-**Status:** design / pending user review  
-**Branch:** `main`  
+**Status:** accepted — Open Decisions resolved 2026-06-23 (see below); Phase 1 cleared for planning  
+**Branch:** `dev/workspace-suite`  
 **Source:** user direction: evolve ShuttleWorks from one all-in-one scheduler into an Adobe-style suite of focused products, use the Meet side as the design-language reference, make each product a full-screen mode inside one durable workspace, refactor the filesystem carefully, and avoid breaking or changing existing functionality.
 
 ## Goal
@@ -512,13 +512,27 @@ The architecture initiative succeeds when:
 
 ## Open Decisions
 
-These should be decided during planning, not guessed during implementation:
+Resolved 2026-06-23 during planning. The throughline is **narrow and reversible**:
+introduce vocabulary and boundaries without physical moves or route changes that
+are expensive to walk back.
 
-1. Whether the first UI-visible rename from Tournament to Workspace should happen in Hub only or throughout the current app shell.
-2. Whether product modes should appear as top-level routes like `/workspaces/:id/meet` or preserve existing routes with a shell wrapper first.
-3. Whether Display should be launched from the Workspace Shell, the Hub, or both.
-4. Whether `/workspaces/*` API aliases should be added early or deferred until after frontend product routing is stable.
-5. Whether the long-term top-level repo split is worth the churn, or whether the intermediate `products/scheduler` module layout is enough.
+1. **Tournament → Workspace rename scope: Hub + new shell chrome only.** Deep
+   Meet/Bracket internals keep saying "tournament" for now. The rename is a
+   facade at the surface where the user first meets the app; a frontend domain
+   facade gives one place to map the noun. Zero risk to mature surfaces.
+2. **Route shape: preserve existing routes; add a shell *wrapper*, no new URL
+   scheme yet.** Defer `/workspaces/:id/meet`-style routes. A wrapper proves the
+   product-switcher mental model without a routing migration.
+3. **Display launch point: both.** Surfaced from Hub (open a venue screen for a
+   workspace) and from Workspace Shell (attach to live data). Display is
+   read-only, so exposing both entry contexts is cheap.
+4. **`/workspaces/*` API aliases: deferred to Phase 6.** Phase 1 is
+   frontend-facade only; adding backend aliases before frontend routing is stable
+   would invert the dependency order.
+5. **Long-term top-level repo split: deferred/skipped for now.** Adopt the
+   intermediate `products/scheduler` module layout as the target. Revisit a
+   physical `apps/`/`services/`/`packages/` split (Phase 7) only if it later
+   reduces complexity; it is not required for the suite model to succeed.
 
 ## Preferred First Implementation Plan
 
