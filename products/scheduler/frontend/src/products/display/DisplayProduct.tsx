@@ -6,7 +6,7 @@ import { TabSkeleton } from '../../components/TabSkeleton';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 const PublicDisplayPage = lazy(() =>
-  import('../../pages/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
+  import('./PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
 );
 
 /** Display product mode: the venue public-display surface, live in-shell,

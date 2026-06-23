@@ -15,8 +15,8 @@
  */
 import type { ReactNode } from 'react';
 
-import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../api/dto';
-import { formatElapsed } from '../../lib/timeFormatters';
+import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
+import { formatElapsed } from '../../../lib/timeFormatters';
 import { formatPlayers, isCourtClosedNow } from './helpers';
 
 export type CourtStatus = 'active' | 'called' | 'empty';

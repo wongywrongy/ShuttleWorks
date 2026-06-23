@@ -15,8 +15,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { apiClient } from '../../api/client';
-import { useTournamentStore } from '../../store/tournamentStore';
+import { apiClient } from '../../../api/client';
+import { useTournamentStore } from '../../../store/tournamentStore';
 
 export type LiveStatus = 'live' | 'reconnecting' | 'offline';
 

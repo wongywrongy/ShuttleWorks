@@ -5,8 +5,8 @@
  * time + rosters. Pure presentation; all derivation happens in the page
  * shell's `upcomingMatches` memo.
  */
-import type { ScheduleAssignment, MatchDTO, TournamentConfig } from '../../api/dto';
-import { formatSlotTime } from '../../lib/time';
+import type { ScheduleAssignment, MatchDTO, TournamentConfig } from '../../../api/dto';
+import { formatSlotTime } from '../../../lib/time';
 import { formatPlayers } from './helpers';
 
 interface UpcomingItem {

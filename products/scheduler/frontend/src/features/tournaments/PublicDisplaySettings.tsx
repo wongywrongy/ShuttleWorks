@@ -28,7 +28,7 @@ import {
 import {
   DISPLAY_PRESETS,
   DEFAULT_PRESET_ID,
-} from '../../pages/publicDisplay/displayPresets';
+} from '../../products/display/publicDisplay/displayPresets';
 
 const DISPLAY_MODE_OPTIONS = [
   { value: 'strip' as const, label: 'Strip' },

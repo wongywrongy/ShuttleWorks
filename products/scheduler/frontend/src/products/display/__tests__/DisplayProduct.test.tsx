@@ -6,7 +6,7 @@ import { DisplayProduct } from '../DisplayProduct';
 
 // The embedded public display is heavy + starts its own polling; stub it so
 // these tests focus on DisplayProduct's own routing affordances.
-vi.mock('../../../pages/PublicDisplayPage', () => ({
+vi.mock('../PublicDisplayPage', () => ({
   PublicDisplayPage: () => <div data-testid="public-display" />,
 }));
 

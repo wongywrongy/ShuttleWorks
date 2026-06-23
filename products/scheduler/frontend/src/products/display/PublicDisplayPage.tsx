@@ -18,13 +18,13 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useTournamentStore } from '../store/tournamentStore';
-import { useLiveTracking } from '../hooks/useLiveTracking';
-import { useAdvisories } from '../hooks/useAdvisories';
-import { AdvisoryBanner } from '../components/status/AdvisoryBanner';
-import { formatSlotTime } from '../lib/time';
-import { INTERACTIVE_BASE } from '../lib/utils';
-import type { ScheduleAssignment } from '../api/dto';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useLiveTracking } from '../../hooks/useLiveTracking';
+import { useAdvisories } from '../../hooks/useAdvisories';
+import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
+import { formatSlotTime } from '../../lib/time';
+import { INTERACTIVE_BASE } from '../../lib/utils';
+import type { ScheduleAssignment } from '../../api/dto';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
 import { useFullscreen } from './publicDisplay/useFullscreen';
 import { formatTournamentDate } from './publicDisplay/helpers';

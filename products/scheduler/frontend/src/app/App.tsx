@@ -10,7 +10,7 @@ import { AuthGuard } from './AuthGuard';
 const ICON_DEFAULTS = { weight: 'light' as const, size: '1em' as const, mirrored: false };
 
 const PublicDisplayPage = lazy(() =>
-  import('../pages/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
+  import('../products/display/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
 );
 const HubPage = lazy(() =>
   import('../products/hub/HubPage').then((m) => ({ default: m.HubPage })),

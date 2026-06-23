@@ -1,6 +1,6 @@
 import { ArrowsOut, ArrowsIn } from '@phosphor-icons/react';
 
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { INTERACTIVE_BASE } from '../../../lib/utils';
 
 interface FullscreenButtonProps {
   isFullscreen: boolean;
