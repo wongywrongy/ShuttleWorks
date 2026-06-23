@@ -11,10 +11,10 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 
-import { apiClient } from '../../../../api/client';
-import type { BackupEntryDTO, TournamentStateDTO } from '../../../../api/dto';
-import { useTournamentStore } from '../../../../store/tournamentStore';
-import { useTournamentId } from '../../../../hooks/useTournamentId';
+import { apiClient } from '../api/client';
+import type { BackupEntryDTO, TournamentStateDTO } from '../api/dto';
+import { useTournamentStore } from '../store/tournamentStore';
+import { useTournamentId } from './useTournamentId';
 
 /** Mirror a restored snapshot back into the live tournament store.
  *

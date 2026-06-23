@@ -17,7 +17,7 @@ import { ScheduleImportModal } from './ScheduleImportModal';
 import {
   applyStateToStore,
   useTournamentBackups,
-} from './hooks/useTournamentBackups';
+} from '../../../hooks/useTournamentBackups';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { Section } from '../../../platform/settings/SettingsPrimitives';
 
