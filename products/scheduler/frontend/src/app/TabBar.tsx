@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore, type AppTab } from '../store/uiStore';
-import { AppStatusPopover } from '../components/AppStatusPopover';
 import { useDisruptions } from '../hooks/useDisruptions';
 import { useTournamentId } from '../hooks/useTournamentId';
 import { INTERACTIVE_BASE } from '../lib/utils';
@@ -165,9 +164,6 @@ export function TabBar() {
             );
           })}
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <AppStatusPopover />
       </div>
     </nav>
   );
