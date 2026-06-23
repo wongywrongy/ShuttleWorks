@@ -11,9 +11,9 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { apiClient } from '../api/client';
-import type { InviteResolveDTO } from '../api/dto';
+import { useAuth } from '../../context/AuthContext';
+import { apiClient } from '../../api/client';
+import type { InviteResolveDTO } from '../../api/dto';
 import { Button, Card } from '@scheduler/design-system';
 
 export function InvitePage() {

@@ -19,10 +19,10 @@ const TournamentPage = lazy(() =>
   import('../pages/TournamentPage').then((m) => ({ default: m.TournamentPage })),
 );
 const LoginPage = lazy(() =>
-  import('../pages/LoginPage').then((m) => ({ default: m.LoginPage })),
+  import('../platform/auth/LoginPage').then((m) => ({ default: m.LoginPage })),
 );
 const InvitePage = lazy(() =>
-  import('../pages/InvitePage').then((m) => ({ default: m.InvitePage })),
+  import('../platform/auth/InvitePage').then((m) => ({ default: m.InvitePage })),
 );
 
 function Fallback() {
