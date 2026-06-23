@@ -28,7 +28,7 @@ import {
   validateMatch,
   type MatchIssue,
   type MatchIssueSeverity,
-} from '../features/matches/validateMatch';
+} from '../products/meet/matches/validateMatch';
 
 export interface DisruptionFeed {
   /** Total issue count across all matches. */

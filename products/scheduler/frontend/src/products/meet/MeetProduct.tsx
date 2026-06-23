@@ -4,19 +4,19 @@ import { TabBar } from '../../app/TabBar';
 import { TabSkeleton } from '../../components/TabSkeleton';
 
 const TournamentSetupPage = lazy(() =>
-  import('../../pages/TournamentSetupPage').then((m) => ({ default: m.TournamentSetupPage })),
+  import('./TournamentSetupPage').then((m) => ({ default: m.TournamentSetupPage })),
 );
 const RosterTab = lazy(() =>
-  import('../../features/roster/RosterTab').then((m) => ({ default: m.RosterTab })),
+  import('./roster/RosterTab').then((m) => ({ default: m.RosterTab })),
 );
 const MatchesTab = lazy(() =>
-  import('../../features/matches/MatchesTab').then((m) => ({ default: m.MatchesTab })),
+  import('./matches/MatchesTab').then((m) => ({ default: m.MatchesTab })),
 );
 const SchedulePage = lazy(() =>
-  import('../../pages/SchedulePage').then((m) => ({ default: m.SchedulePage })),
+  import('./SchedulePage').then((m) => ({ default: m.SchedulePage })),
 );
 const MatchControlCenterPage = lazy(() =>
-  import('../../pages/MatchControlCenterPage').then((m) => ({ default: m.MatchControlCenterPage })),
+  import('./MatchControlCenterPage').then((m) => ({ default: m.MatchControlCenterPage })),
 );
 
 /** Meet product mode: the operator tab strip + the active meet tab. The `tv`
