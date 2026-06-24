@@ -1,192 +1,171 @@
 # SP-B1 — Module-driven chrome — design
 
 **Date:** 2026-06-24
-**Status:** accepted (pending user spec review)
+**Status:** accepted (refined during planning — simpler than the first cut)
 **Branch:** `dev/workspace-suite`
 **Program:** "Control Plane First" → expanded SP-B (real multi-module workspaces).
 SP-B1 is the **structural keystone**: make the workspace chrome key off *which
 modules are enabled* instead of the single `kind`. Unlocks SP-B2 (foreign-operator
-enablement) and SP-B3 (Bracket Display). Mostly frontend; one tiny store slice.
+enablement) and SP-B3 (Bracket Display). Frontend-only.
 
 ## Goal
 
-Today the entire `/tournaments/:id/*` surface is driven by one `activeTournamentKind`:
-`TabBar` renders `kind === 'bracket' ? BRACKET_TABS : MEET_TABS`; `normalizeActiveTab`
-snaps any "wrong-kind" tab to that kind's home; the meet-only polling hooks gate on
-`kind !== 'bracket'`. That hard-codes one workspace = one module and makes a
-multi-module workspace impossible to navigate.
+Today the `/tournaments/:id/*` surface is driven by one `activeTournamentKind`:
+`TabBar` renders `kind === 'bracket' ? BRACKET_TABS : MEET_TABS`, and `TournamentPage`
+*snaps* any "wrong-kind" tab to that kind's home via `normalizeActiveTab`. That
+silent snap is the "misrouting" we're replacing, and it makes a multi-module
+workspace impossible to navigate (a bracket tab on a `kind=meet` hybrid gets snapped
+straight back to a meet tab).
 
-SP-B1 replaces the **single-kind** driver with the **active module** (which the
-shell already derives as `moduleForTab(activeTab)`) and makes tab validity key off
-the **set of enabled modules**. The Module Dock is already the module switcher and
-`tv` (Display) is already *excluded* from the meet tab strip — so the app already
-separates "switch module (dock)" from "operate within a module (TabBar)". This
-change finishes that separation.
+What the codebase **already** does right (and we keep): `ModuleOutlet` mounts the
+product by **`moduleForTab(activeTab)`** — not kind — and `tv` (Display) is already
+excluded from the meet tab strip (Display is reached via the dock, not a tab). So
+"switch module" (dock / URL) and "operate within a module" (TabBar) are already
+separated at the mount layer. SP-B1 finishes the job at the two remaining
+kind-locked points.
 
 **The hard guarantee:** every existing **single-module** Meet and Bracket workspace
 is byte- and behavior-identical — same tabs, same disabled prerequisites, same
 routes, same polling. Multi-module behavior only *appears* once two modules are
-enabled, which no current path produces (SP-B2 adds it). So SP-B1 ships and is
-verified as pure groundwork.
+enabled, which no current path produces (SP-B2 adds it). SP-B1 ships and is verified
+as pure groundwork.
 
 ## Decisions locked in brainstorming
 
 - **Presentation:** TabBar shows the **active module's** operator tabs; the **Module
-  Dock** switches the active module. (Not: concatenate all enabled modules' tabs
-  into one strip.)
-- **Scope:** SP-B1 also folds in the original bounded SP-B pieces — `defaultTabForModule`
-  module-keyed, `primaryModuleForOpen`, and the disabled-module unavailable guard.
-- **"Meet untouched" is deliberately relaxed here** (the rework touches `TabBar` /
-  `normalizeActiveTab` / `TournamentPage` / `AppShell`, which are Meet's chrome) —
-  so SP-B1 carries heavy regression coverage proving single-module parity.
-- **Deferred to a fast-follow (NOT SP-B1):** the hybrid workspace *identity/label*
-  (the kind badge, "DELETE MEET vs TOURNAMENT" copy) — cosmetic, already a known
-  separate concern.
+  Dock** switches the active module. (Not: concatenate all modules' tabs.)
+- **Non-enterable modules:** an in-shell **unavailable panel**, for **all
+  non-enterable statuses** (disabled + coming-soon) — *instead of* silently snapping.
+- SP-B1 folds in the original bounded pieces: `defaultTabForModule` module-keyed +
+  `primaryModuleForOpen` + the unavailable panel.
+- **"Meet untouched" is deliberately relaxed here** (the rework touches `TabBar` and
+  `TournamentPage`) — so SP-B1 carries heavy single-module regression coverage.
+- **Deferred fast-follow (NOT SP-B1):** hybrid workspace identity/label (kind badge,
+  "DELETE MEET vs TOURNAMENT" copy) — cosmetic, a known separate concern.
 
-## The model
+## The mechanism
 
-The workspace's **valid-tab universe** is the union of the tab groups of its
-**enabled** modules:
+The **active module** = `moduleForTab(activeTab, kind)` (existing helper: `tv →
+display`, `bracket-* → bracket`, meet operator tabs → `meet`, else kind fallback).
+Two kind-locked points become module-driven, and one guard is added:
 
-- `meet` enabled → `MEET_OPERATOR_TAB_IDS` (`setup, roster, matches, schedule, live`)
-- `bracket` enabled → `BRACKET_TAB_IDS` (`bracket-setup, bracket-roster, bracket-events,
-  bracket-draw, bracket-schedule, bracket-live`)
-- `display` enabled → `[]` (Display is a single surface reached via the dock / the
-  `tv` route — no operator tab strip, exactly as today)
+1. **`TabBar` renders `tabsForModule(activeModule)`** instead of `kind`-selected
+   tabs. For a single-module workspace `activeModule` is always that workspace's one
+   operator module → identical strip.
+2. **`TournamentPage` drops the kind-based snap.** Removing `normalizeActiveTab`'s
+   call means a tab whose module isn't enterable is *preserved*, not snapped — so the
+   guard (below) can show the panel, and a valid multi-module tab is never snapped
+   away. (Normal single-module navigation never triggered the snap — every tab
+   already matched its kind — so this is behavior-neutral there. The legacy `/bracket`
+   URL is already redirected to `/bracket-setup` by a route in `App.tsx`.)
+3. **The unavailable guard (`AppShell`)** is what prevents a non-enterable product
+   from mounting: when the active module is **not enterable** per the real `modules`
+   state, render `ModuleUnavailablePanel` **instead of `<ModuleOutlet/>`**. Because
+   `ModuleOutlet` is what mounts the product (and its TabBar), the panel cleanly takes
+   the whole content area — no floating tabs. Resilient: unknown status or modules
+   still loading → render the outlet (the kind fallback always has the active operator
+   enterable, so no false guard during load).
 
-The **active module** = `moduleForTab(activeTab)` (existing helper: `tv → display`,
-`bracket-* → bracket`, meet operator tabs → `meet`, else kind fallback). The TabBar
-renders `tabsForModule(activeModule)`.
+No new uiStore slice and no module-aware `normalizeActiveTab` are needed — the guard,
+sitting where the product mounts, subsumes both.
 
-## Changes (in dependency order)
+## Changes
 
-### 1. `src/lib/bracketTabs.ts` — pure helpers (new)
+### 1. `src/lib/bracketTabs.ts` — `tabsForModule(module)` (new, pure)
 
 ```ts
 import type { ModuleId } from '../platform/product-shell/types';
 
-/** The operator tab-id group for a module. Display has no operator strip
- *  (single surface via the dock / tv route), so it returns []. */
-export function tabIdsForModule(module: ModuleId): readonly AppTab[] {
-  if (module === 'bracket') return BRACKET_TAB_IDS;
+/** The `{id,label}` rows the TabBar renders for a module:
+ *  meet → the meet operator tabs, bracket → the bracket tabs,
+ *  display → [] (single surface via the dock / tv route, no strip). */
+export function tabsForModule(module: ModuleId): { id: AppTab; label: string }[] {
+  if (module === 'bracket') return BRACKET_TABS;
   if (module === 'display') return [];
-  return MEET_OPERATOR_TAB_IDS; // meet
+  return MEET_TABS;   // meet
 }
-
-/** The `{id,label}` rows the TabBar renders for a module. */
-export function tabsForModule(module: ModuleId): { id: AppTab; label: string }[];
-
-/** The union of valid tab ids across a set of enabled modules — the
- *  workspace's full valid-tab universe (drives normalizeActiveTab). */
-export function validTabIdsForModules(enabled: readonly ModuleId[]): Set<AppTab>;
 ```
 
-`tabsForModule('meet')` returns the exact rows TabBar's current `MEET_TABS` builds
-(`MEET_OPERATOR_TAB_IDS` + `MEET_TAB_LABELS`); `tabsForModule('bracket')` returns the
-current `BRACKET_TABS`. (The label maps move next to these helpers so the tab-id +
-label source stays single-sourced.)
+The label rows `MEET_TABS` (built from `MEET_OPERATOR_TAB_IDS` + the meet labels) and
+`BRACKET_TABS` move/stay next to this helper so the tab-id + label source is
+single-sourced. `tabsForModule('meet')` must return exactly the rows `TabBar`
+currently builds for a meet workspace; `tabsForModule('bracket')` exactly today's
+`BRACKET_TABS`.
 
-### 2. `normalizeActiveTab` — snap by enabled modules, not kind
-
-```ts
-/** Snap activeTab to a valid tab when it isn't valid for the workspace's
- *  ENABLED modules. Returns null when no change is needed.
- *  - enabled empty / null → caller is still loading; fall back to the
- *    kind-keyed behavior (unchanged) so single-module load is identical.
- *  - tab valid for some enabled module → null (keep).
- *  - else → the PRIMARY enabled module's home tab (defaultTabForModule). */
-export function normalizeActiveTabForModules(
-  activeTab: AppTab,
-  enabled: readonly ModuleId[],
-): AppTab | null;
-```
-
-The existing kind-keyed `normalizeActiveTab(activeTab, kind)` is **retained** and
-used as the load-time fallback (kind known before modules load). For a single-module
-workspace the two are equivalent (the one enabled operator's tabs == the kind's
-tabs), so behavior is identical; the module-keyed version only diverges once two
-modules are enabled.
-
-### 3. `uiStore` — publish the enabled-module set
-
-Add one slice (mirroring the existing `disruptionSummary` publish pattern — the
-shared TabBar/TournamentPage read product data from the store, not props):
-
-```ts
-activeWorkspaceModuleIds: ModuleId[] | null;   // null while loading/unknown
-setActiveWorkspaceModuleIds: (ids: ModuleId[] | null) => void;
-```
-
-Reset to `null` on unmount (like `setActiveTournamentId(null)`).
-
-### 4. `AppShell.tsx` — publish modules + gate polling by enablement
-
-- It already calls `useWorkspaceModules(tid)`. Publish the **enabled** module ids
-  to the store in an effect: `setActiveWorkspaceModuleIds(realModules ? enabledIds : null)`.
-- The dock nav already calls `defaultTabForModule` — drop the `kind` arg (see §6).
-- Meet-only polling hooks (`MeetOnlyPollingHooks`) gate on **meet being enabled**
-  instead of `kind !== 'bracket'`:
-  `const meetEnabled = (modules ?? modulesForWorkspace(kind)).some(m => m.id === 'meet' && m.status === 'enabled')`.
-  Single-kind meet → meet enabled → runs (identical); bracket-only → meet not
-  enabled → off (identical); hybrid → meet enabled → runs (new, correct).
-- **Unavailable guard:** compute the active module's status from `modules`; if the
-  active module is **not enterable** (`disabled` / `coming-soon`), render a minimal
-  `ModuleUnavailablePanel` instead of `<ModuleOutlet/>`. Resilient: unknown status
-  or modules still loading → render the outlet (the kind fallback always has the
-  active operator enabled, so no false guard during load).
-
-### 5. `TabBar.tsx` — render the active module's tabs
+### 2. `src/app/TabBar.tsx` — render the active module's tabs
 
 - `const activeModule = moduleForTab(activeTab, activeTournamentKind);`
 - `const tabs = tabsForModule(activeModule);`
-- Disabled-prerequisite logic keys off `activeModule` instead of `kind`:
-  - `activeModule === 'bracket'` → the `bracketDataReady` gating (draw/schedule/live)
-  - `activeModule === 'meet'` → the players/matches gating (matches/schedule/live)
-  - `disabledTabTitle` takes `activeModule`.
-- For a single-module workspace `activeModule` is always that workspace's one
-  operator module → identical tab strip + disabled rules as today.
+- The disabled-prerequisite logic keys off `activeModule` instead of `kind`:
+  `activeModule === 'bracket'` → the `bracketDataReady` gating (draw/schedule/live);
+  otherwise → the players/matches gating (matches/schedule/live). `disabledTabTitle`
+  takes `activeModule`.
+- Single-module parity: `activeModule` is always that workspace's one operator module,
+  so the tab strip + disabled rules are identical to today.
 
-### 6. `defaultTabForModule(module)` + `primaryModuleForOpen` (moduleModel.ts)
+### 3. `src/platform/domain/moduleModel.ts` — module-keyed entry routing
 
-- `defaultTabForModule(module): string` — drop `kind`; module-keyed: `meet→setup`,
-  `bracket→bracket-setup`, `display→tv`. Update the one `AppShell` dock-nav caller.
-- `primaryModuleForOpen(modules: WorkspaceModule[]): ModuleId` — precedence
+- `defaultTabForModule(module): string` — **drop the `kind` param** and the
+  `kind==='bracket'` short-circuit: `meet→setup`, `bracket→bracket-setup`, `display→tv`.
+- `primaryModuleForOpen(modules: WorkspaceModule[]): ModuleId` (new) — precedence
   `meet → bracket → display`: first **enabled**, else first **available**, else first
-  present, else `meet`. Hub `openTournament` uses it (reading `tournament.modules`
-  via `modulesFromDto`, else `modulesForWorkspace(kind)`) instead of
-  `kind === 'bracket' ? 'bracket-setup' : 'setup'`. Behavior-neutral for single-kind.
+  present, else `meet`.
 
-### 7. `TournamentPage.tsx` — drive normalize by enabled modules
+### 4. `src/products/hub/HubPage.tsx` — open via primary module
 
-- Keep the URL-segment → `activeTab` sync and the optimistic-kind set (kind is still
-  the identity + the load-time fallback).
-- The normalize effect reads `activeWorkspaceModuleIds` from the store: when present,
-  use `normalizeActiveTabForModules(activeTab, ids)`; when null (still loading), fall
-  back to the existing `normalizeActiveTab(activeTab, kind)`. Deps include the slice
-  so it re-runs when modules resolve. Net effect for single-module: identical.
+`openTournament` uses `primaryModuleForOpen` (reading `tournament.modules` via
+`modulesFromDto`, else `modulesForWorkspace(kind)`) instead of
+`kind === 'bracket' ? 'bracket-setup' : 'setup'`. Behavior-neutral for single-kind:
+meet→setup, bracket→bracket-setup.
 
-### 8. `ModuleUnavailablePanel` (new component)
+### 5. `src/app/AppShell.tsx` — module-aware shell
 
-Minimal, design-system styled. Props: `module: ModuleId`, `status: ModuleStatus`,
-`primaryLabel`, `onGoToPrimary`, `onOpenSettings?`. Renders the module note (from
-`moduleModel`), a "Go to {primaryLabel}" button, and — **only when `status==='disabled'`**
-— an "Open Settings" link to `/tournaments/:id/settings`. `data-testid="module-unavailable"`.
+- Dock nav: `defaultTabForModule(p)` (drop the `kind` arg — caller fix for §3).
+- Meet-only polling gate: replace `activeTournamentKind !== 'bracket'` with
+  **meet-enabled**: `modules.some(m => m.id === 'meet' && m.status === 'enabled')`
+  (where `modules = realModules ?? modulesForWorkspace(kind)`). Single-kind meet →
+  runs (identical); bracket-only → off (identical); hybrid → runs (new, correct).
+- **Guard:** compute the active module's `WorkspaceModule` from `modules`; if it is
+  not `isModuleEnterable`, render `<ModuleUnavailablePanel … />` in `<main>` instead
+  of `<ModuleOutlet/>`. Unknown/loading status → render the outlet.
+
+### 6. `src/app/workspace/ModuleUnavailablePanel.tsx` (new component)
+
+Minimal, design-system styled. Props: `label`, `note?`, `primaryLabel`,
+`onGoToPrimary`, `onOpenSettings?`. Renders a heading (`{label} isn't available in
+this workspace`), the `note`, a **"Go to {primaryLabel}"** button (→ the primary
+module's home), and — **only when the module is `disabled`** (i.e. `onOpenSettings`
+provided) — an **"Open Settings"** link. `data-testid="module-unavailable"`.
+`AppShell` supplies `label`/`note` from the active `WorkspaceModule`, `primaryLabel`
+from `primaryModuleForOpen`, and `onOpenSettings` only when the active module's status
+is `disabled`.
+
+### 7. `src/pages/TournamentPage.tsx` — drop the kind-snap
+
+Remove the `normalizeActiveTab` import and the effect that calls it (the one that does
+`const next = normalizeActiveTab(activeTab, kind); if (next) setActiveTab(next)`).
+Keep the URL-segment → `activeTab` sync and the optimistic-kind set (kind stays as
+identity + chrome fallback). With the snap gone, a non-enterable active tab is
+preserved and the AppShell guard shows the panel.
+
+If `normalizeActiveTab` (in `bracketTabs.ts`) is left with no remaining callers,
+remove it and its unit tests in the same task to avoid dead code.
 
 ## Out of scope (SP-B1)
 
-- Making any foreign operator actually enableable (SP-B2 — backend derivation +
-  transition rules). SP-B1 only makes a multi-module workspace *navigable* if one
-  existed.
+- Making any foreign operator enableable (SP-B2 — backend derivation + transitions).
 - Bracket Display surface/data (SP-B3).
-- Hybrid identity/label/badge + delete-copy (deferred fast-follow).
+- Hybrid identity/label/badge + delete copy (deferred fast-follow).
 - Concatenated multi-module tab strips (rejected — dock switches modules).
+- A uiStore enabled-module slice / module-aware `normalizeActiveTab` (unnecessary —
+  the guard subsumes them).
 
 ## Constraints
 
-- No backend / route-path changes. `kind` preserved (identity + load-time fallback).
+- No backend / route-path changes. `kind` preserved (identity + chrome fallback).
 - **Single-module Meet and Bracket workspaces must be byte/behavior-identical** —
-  this is the acceptance bar, proven by tests asserting the same tab ids, disabled
-  states, and routes as before.
+  the acceptance bar, proven by tests asserting the same tab ids, disabled states,
+  routes, and polling as before.
 - Existing design tokens; no new colors.
 - Gate (from `products/scheduler/frontend`): `npx tsc -b` clean, `npx vitest run`
   green (current 244 + new), `npm run build` clean. Executed **controller-side**
@@ -194,36 +173,36 @@ Minimal, design-system styled. Props: `module: ModuleId`, `status: ModuleStatus`
 
 ## Tests
 
-- **`bracketTabs`** (unit): `tabIdsForModule` / `tabsForModule` per module (incl.
-  `display → []`); `validTabIdsForModules` union for `[meet]`, `[bracket]`,
-  `[meet,bracket]`; `normalizeActiveTabForModules` — keep when valid, snap to primary
-  home when the active tab's module isn't enabled (single-module == old behavior;
-  multi-module keeps cross-module tabs).
+- **`bracketTabs`** (unit): `tabsForModule` per module (`meet` → the meet rows,
+  `bracket` → `BRACKET_TABS`, `display` → `[]`).
 - **`moduleModel`** (unit): `defaultTabForModule` module-keyed (3 cases — update the
   existing wrong-kind assertions); `primaryModuleForOpen` (enabled precedence,
   available fallback, hybrid→meet, bracket-only→bracket, blank→meet).
-- **`TabBar`** (component): given `activeTab` in each module, renders that module's
-  tabs; **single-module meet/bracket render the same tab ids + disabled rules as the
-  current tests** (regression parity); a multi-module fixture (meet+bracket enabled,
-  active tab switches) swaps the strip.
+- **`TabBar`** (component): the existing tests already set `activeTab` consistently
+  with `kind`, so they assert single-module parity and must stay green unchanged;
+  add a multi-module case — with `activeTab='bracket-setup'` the strip is the bracket
+  tabs even when `activeTournamentKind='meet'` (proving module-driven, not kind-driven).
 - **Hub** (component): `openTournament` routes by `primaryModuleForOpen(modules[])`
   (meet→setup, bracket→bracket-setup); kind fallback when no `modules[]`.
-- **`ModuleUnavailablePanel`** (component): renders the note + Go-to-primary; shows
-  Open-Settings only when `disabled`.
+- **`ModuleUnavailablePanel`** (component): renders heading + note + Go-to-primary;
+  shows Open-Settings only when `onOpenSettings` is provided.
+- **`TournamentPage`** (component): single-module meet + bracket land on / keep their
+  correct tab (parity, snap removal is a no-op there); a `kind=meet` page whose
+  `activeTab` is a bracket tab is **preserved** (not snapped) so the guard can act.
 - Existing `TabBar` / `moduleModel` / `ModuleDock` / Hub tests stay green (updated
-  only where the signature changed).
+  only where a signature changed).
 
 ## Acceptance criteria
 
-1. TabBar renders the **active module's** tabs (via `tabsForModule`), and the Module
-   Dock switches the active module; single-module Meet and Bracket workspaces are
-   byte/behavior-identical to before (tabs, disabled prerequisites, routes, polling).
-2. `normalizeActiveTab` validity keys off **enabled modules** (with the kind-keyed
-   path as the load-time fallback); a multi-module workspace keeps each enabled
-   module's tabs reachable instead of snapping them away.
-3. `defaultTabForModule` is module-keyed; Hub Open routes via `primaryModuleForOpen`;
+1. `TabBar` renders the **active module's** tabs (`tabsForModule`); single-module Meet
+   and Bracket are byte/behavior-identical (tabs, disabled prerequisites, routes,
+   polling).
+2. The kind-based snap is gone from `TournamentPage`; a non-enterable active module is
+   preserved and surfaces `ModuleUnavailablePanel` (Go-to-primary, plus Open-Settings
+   when disabled) **instead of** the module pane — no false guard during load.
+3. A multi-module workspace keeps each enabled module reachable (switching the dock /
+   URL renders that module's product + tab strip), with no snapping.
+4. `defaultTabForModule` is module-keyed; Hub Open routes via `primaryModuleForOpen`;
    both behavior-neutral for single-kind.
-4. A non-enterable active module renders `ModuleUnavailablePanel` (Go-to-primary, and
-   Open-Settings when disabled) instead of the module pane; no false guard during load.
 5. `tsc -b` + full `vitest run` + `build` green; no backend/route changes; `kind`
    preserved.
