@@ -13,7 +13,8 @@ import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
-import { Button, Card, Modal } from '@scheduler/design-system';
+import { Button, Modal } from '@scheduler/design-system';
+import { EmptyState, Skeleton } from '../../components/control-plane';
 import {
   modulesForWorkspace,
   modulesFromDto,
@@ -26,6 +27,7 @@ import {
   filterCounts,
   type HubFilterId,
 } from './hubFilters';
+import { HubSummaryBar } from './HubSummaryBar';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
 
@@ -121,6 +123,11 @@ export function HubPage() {
         </div>
       </header>
 
+      {/* Summary metrics */}
+      {!loading && tournaments.length > 0 ? (
+        <HubSummaryBar list={tournaments} onPickFilter={setActiveFilter} />
+      ) : null}
+
       {/* Filter tabs */}
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-background px-3">
         {HUB_FILTERS.map((f) => {
@@ -161,20 +168,13 @@ export function HubPage() {
           )}
 
           {loading ? (
-            <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+            <Skeleton rows={6} />
           ) : tournaments.length === 0 ? (
-            <div className="flex h-full items-center justify-center p-6">
-              <Card className="max-w-md p-8 text-center">
-                <p className="font-medium text-foreground">No workspaces yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  A workspace is your event control plane — it runs modules like
-                  Meet, Bracket, and Display.
-                </p>
-                <Button className="mt-4" onClick={() => navigate('/new')}>
-                  Create workspace
-                </Button>
-              </Card>
-            </div>
+            <EmptyState
+              title="No workspaces yet"
+              body="A workspace is your event control plane — it runs modules like Meet, Bracket, and Display."
+              action={<Button onClick={() => navigate('/new')}>Create workspace</Button>}
+            />
           ) : visible.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
               No workspaces match this filter.
