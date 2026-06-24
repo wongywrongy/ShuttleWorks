@@ -13,7 +13,10 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { Button, Card, Modal, PageHeader, StatusPill } from '@scheduler/design-system';
-import { modulesForWorkspace } from '../../platform/domain/moduleModel';
+import {
+  modulesForWorkspace,
+  modulesFromDto,
+} from '../../platform/domain/moduleModel';
 import { workspaceCopy } from '../../platform/domain/workspace';
 
 function formatDate(iso: string | null): string {
@@ -32,11 +35,15 @@ interface RowProps {
   onDelete?: () => void;
 }
 
-/** Enabled-module chips for a workspace row, derived from `kind` (the temporary
- *  compatibility bridge). Omits the non-enabled foreign operator module so a row
- *  reads as "modules enabled here", not a permanent workspace type. */
-function ModuleChips({ kind }: { kind: 'meet' | 'bracket' | null }) {
-  const chips = modulesForWorkspace(kind).filter((m) => m.status !== 'not-enabled');
+/** Module chips for a workspace row. Reads the real persisted `modules` from the
+ *  summary DTO when present, else falls back to the kind-derived catalog. Omits a
+ *  coming-soon foreign operator (Bracket on a meet / Meet on a bracket) to keep the
+ *  row clean, but keeps Display's coming-soon as an informative chip. */
+function ModuleChips({ tournament }: { tournament: TournamentSummaryDTO }) {
+  const all = tournament.modules
+    ? modulesFromDto(tournament.modules)
+    : modulesForWorkspace(tournament.kind);
+  const chips = all.filter((m) => m.status !== 'coming-soon' || m.id === 'display');
   return (
     <div className="flex flex-wrap items-center gap-1">
       {chips.map((m) => {
@@ -79,7 +86,7 @@ function TournamentRow({ tournament, variant, onOpen, onDelete }: RowProps) {
         )}
       </div>
       <div className="w-48 shrink-0">
-        <ModuleChips kind={tournament.kind} />
+        <ModuleChips tournament={tournament} />
       </div>
       {variant === 'shared' && (
         <span className="text-xs text-muted-foreground capitalize w-16 text-right">

@@ -590,6 +590,15 @@ export type TournamentRole = 'owner' | 'operator' | 'viewer';
  *  bracket_* table family. */
 export type TournamentKind = 'meet' | 'bracket';
 
+/** A persisted workspace module (from the backend `workspace_modules` table).
+ *  Statuses: enabled | available | disabled | coming_soon (the frontend
+ *  normalizes `coming_soon` → `coming-soon` when mapping into the dock). */
+export interface WorkspaceModuleDTO {
+  moduleId: 'meet' | 'bracket' | 'display';
+  status: 'enabled' | 'available' | 'disabled' | 'coming_soon';
+  config: Record<string, unknown> | null;
+}
+
 export interface TournamentSummaryDTO {
   id: string;
   name: string | null;
@@ -604,6 +613,9 @@ export interface TournamentSummaryDTO {
   /** Owner's email, denormalised at tournament-create time. Used by
    *  the "Shared with You" dashboard section. */
   ownerName: string | null;
+  /** Persisted module catalog for this workspace (sub-project #1). Optional
+   *  for backward compatibility with older payloads. */
+  modules?: WorkspaceModuleDTO[];
 }
 
 export interface TournamentCreateDTO {

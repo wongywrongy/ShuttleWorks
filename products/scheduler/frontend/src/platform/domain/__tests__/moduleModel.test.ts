@@ -3,7 +3,9 @@ import {
   moduleForTab,
   defaultTabForModule,
   modulesForWorkspace,
+  modulesFromDto,
   isModuleEnterable,
+  isModuleEnableable,
 } from '../moduleModel';
 
 describe('moduleForTab', () => {
@@ -41,20 +43,21 @@ describe('defaultTabForModule', () => {
 });
 
 describe('modulesForWorkspace', () => {
-  it('meet: Meet enabled, Display available, Bracket not-enabled with copy', () => {
+  it('meet (matches backend derive): Meet enabled, Display available, Bracket coming-soon', () => {
     const m = modulesForWorkspace('meet');
     expect(m.map((x) => x.id)).toEqual(['meet', 'bracket', 'display']);
     expect(m.find((x) => x.id === 'meet')!.status).toBe('enabled');
     expect(m.find((x) => x.id === 'display')!.status).toBe('available');
     const bracket = m.find((x) => x.id === 'bracket')!;
-    expect(bracket.status).toBe('not-enabled');
-    expect(bracket.note).toBe('Bracket is not enabled for this workspace.');
+    expect(bracket.status).toBe('coming-soon');
+    expect(bracket.note).toBe('Bracket is not enabled for this workspace yet.');
   });
-  it('bracket: Bracket enabled, Meet not-enabled, Display coming-soon with copy', () => {
+  it('bracket (matches backend derive): Bracket enabled, Meet + Display coming-soon', () => {
     const m = modulesForWorkspace('bracket');
     expect(m.find((x) => x.id === 'bracket')!.status).toBe('enabled');
+    expect(m.find((x) => x.id === 'meet')!.status).toBe('coming-soon');
     expect(m.find((x) => x.id === 'meet')!.note).toBe(
-      'Meet is not enabled for this workspace.',
+      'Meet is not enabled for this workspace yet.',
     );
     const display = m.find((x) => x.id === 'display')!;
     expect(display.status).toBe('coming-soon');
@@ -62,11 +65,38 @@ describe('modulesForWorkspace', () => {
   });
 });
 
-describe('isModuleEnterable', () => {
-  it('enabled + available are enterable; not-enabled + coming-soon are not', () => {
+describe('modulesFromDto', () => {
+  it('maps backend DTOs (coming_soon -> coming-soon) with labels + notes, in fixed order', () => {
+    const m = modulesFromDto([
+      { moduleId: 'display', status: 'available', config: null },
+      { moduleId: 'meet', status: 'enabled', config: null },
+      { moduleId: 'bracket', status: 'coming_soon', config: null },
+    ]);
+    expect(m.map((x) => x.id)).toEqual(['meet', 'bracket', 'display']);
+    expect(m.find((x) => x.id === 'meet')!.status).toBe('enabled');
+    expect(m.find((x) => x.id === 'display')!.status).toBe('available');
+    const bracket = m.find((x) => x.id === 'bracket')!;
+    expect(bracket.status).toBe('coming-soon');
+    expect(bracket.note).toBe('Bracket is not enabled for this workspace yet.');
+  });
+  it('notes a disabled module', () => {
+    const m = modulesFromDto([{ moduleId: 'display', status: 'disabled', config: null }]);
+    expect(m[0].status).toBe('disabled');
+    expect(m[0].note).toBe('Display is turned off — re-enable to use it.');
+  });
+});
+
+describe('isModuleEnterable / isModuleEnableable', () => {
+  it('enterable: enabled + available; not disabled / coming-soon', () => {
     expect(isModuleEnterable('enabled')).toBe(true);
     expect(isModuleEnterable('available')).toBe(true);
-    expect(isModuleEnterable('not-enabled')).toBe(false);
+    expect(isModuleEnterable('disabled')).toBe(false);
     expect(isModuleEnterable('coming-soon')).toBe(false);
+  });
+  it('enableable: available + disabled; not enabled / coming-soon', () => {
+    expect(isModuleEnableable('available')).toBe(true);
+    expect(isModuleEnableable('disabled')).toBe(true);
+    expect(isModuleEnableable('enabled')).toBe(false);
+    expect(isModuleEnableable('coming-soon')).toBe(false);
   });
 });

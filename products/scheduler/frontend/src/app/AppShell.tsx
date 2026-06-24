@@ -18,6 +18,7 @@ import {
   defaultTabForModule,
   modulesForWorkspace,
 } from '../platform/domain/moduleModel';
+import { useWorkspaceModules } from '../platform/domain/useWorkspaceModules';
 
 export function AppShell() {
   // Theme + density hooks live at App.tsx level so they fire on every
@@ -34,7 +35,10 @@ export function AppShell() {
   const tid = useTournamentId();
   const identity = useWorkspaceIdentity();
   const activeModule = moduleForTab(activeTab, activeTournamentKind);
-  const modules = modulesForWorkspace(activeTournamentKind);
+  // Real persisted module state (sub-project #2); fall back to the kind-derived
+  // catalog while loading or on error.
+  const { modules: realModules, enable: enableModule } = useWorkspaceModules(tid);
+  const modules = realModules ?? modulesForWorkspace(activeTournamentKind);
 
   // Discard any in-flight proposal when the operator switches tabs.
   // Otherwise the next visit to the originating tab re-opens the
@@ -131,6 +135,7 @@ export function AppShell() {
         onSelectModule={(p) => {
           if (tid) navigate(`/tournaments/${tid}/${defaultTabForModule(p, activeTournamentKind)}`, { replace: true });
         }}
+        onEnableModule={(id) => void enableModule(id)}
         onBackToHub={() => navigate('/')}
         statusSlot={<AppStatusPopover />}
       >

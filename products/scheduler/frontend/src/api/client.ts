@@ -18,6 +18,7 @@ import type {
   ValidationResponseDTO,
   TournamentStateDTO,
   TournamentSummaryDTO,
+  WorkspaceModuleDTO,
   TournamentCreateDTO,
   TournamentUpdateDTO,
   TournamentMemberDTO,
@@ -349,6 +350,31 @@ class ApiClient {
   /** Delete a tournament. CASCADE wipes match-states + backups. */
   async deleteTournament(tid: string): Promise<void> {
     await this.client.delete(`/tournaments/${tid}`);
+  }
+
+  // ---- Workspace modules (control-plane sub-project #1) ----------------
+
+  /** The persisted module catalog for a workspace. */
+  async getWorkspaceModules(tid: string): Promise<WorkspaceModuleDTO[]> {
+    const response = await this.client.get<WorkspaceModuleDTO[]>(
+      `/tournaments/${tid}/modules`,
+    );
+    return response.data;
+  }
+
+  /** Enable / disable / configure a workspace module. 409 (toasted by the
+   *  interceptor) on dependency / last-operational / has-data / coming_soon
+   *  rule violations. */
+  async patchWorkspaceModule(
+    tid: string,
+    moduleId: string,
+    body: { status?: string; config?: Record<string, unknown> | null },
+  ): Promise<WorkspaceModuleDTO> {
+    const response = await this.client.patch<WorkspaceModuleDTO>(
+      `/tournaments/${tid}/modules/${moduleId}`,
+      body,
+    );
+    return response.data;
   }
 
   // ---- Invite links (Step 7) -------------------------------------------

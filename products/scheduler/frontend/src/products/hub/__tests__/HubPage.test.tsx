@@ -111,4 +111,23 @@ describe('HubPage module-aware control plane', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New workspace' }));
     expect(loc.current).toBe('/new');
   });
+
+  it('module chips read the real modules[] DTO when present (not only kind)', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      {
+        id: 'x1', name: 'X Workspace', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: null, status: 'draft' as const,
+        modules: [
+          { moduleId: 'meet', status: 'enabled', config: null },
+          { moduleId: 'display', status: 'disabled', config: null },
+        ],
+      },
+    ] as never);
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('X Workspace')).toBeInTheDocument());
+    // Display came from the DTO as 'disabled' (not coming-soon) → chip present, no "soon".
+    const display = screen.getByTestId('chip-display');
+    expect(display).toBeInTheDocument();
+    expect(display).not.toHaveTextContent('soon');
+  });
 });

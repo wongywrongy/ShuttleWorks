@@ -1,13 +1,15 @@
 /** The three suite modules that can be enabled inside an open workspace. */
 export type ModuleId = 'meet' | 'bracket' | 'display';
 
-/** A module's enablement status within a workspace (derived from `kind` for
- *  now — `kind` is a temporary compatibility bridge to a future `modules[]`).
- *  - `enabled`: the workspace's active operator module.
- *  - `available`: usable/configurable now (e.g. Display on a meet).
- *  - `not-enabled`: a module not enabled for this workspace yet.
- *  - `coming-soon`: a module not yet built for this workspace's shape. */
-export type ModuleStatus = 'enabled' | 'available' | 'not-enabled' | 'coming-soon';
+/** A module's enablement status within a workspace. Real state comes from the
+ *  backend `workspace_modules` table; when absent it is derived from `kind`
+ *  (a temporary compatibility bridge). Mirrors the backend's vocabulary
+ *  (backend `coming_soon` is normalized to `coming-soon` at the API boundary).
+ *  - `enabled`: active — enter the module.
+ *  - `available`: not enabled but enableable/configurable now (e.g. Display on a meet).
+ *  - `disabled`: turned off (data preserved) — can be re-enabled.
+ *  - `coming-soon`: not enableable for this workspace yet (roadmap). */
+export type ModuleStatus = 'enabled' | 'available' | 'disabled' | 'coming-soon';
 
 /** One module entry in the Module Dock / catalog. Non-active statuses carry a
  *  `note` (shown as a tooltip) using enablement language. */
