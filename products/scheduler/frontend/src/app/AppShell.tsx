@@ -11,13 +11,13 @@ import { UnlockModalHost } from '../components/common/UnlockModalHost';
 import { AppStatusPopover } from '../components/AppStatusPopover';
 import { useTournamentId } from '../hooks/useTournamentId';
 import { WorkspaceShell } from '../platform/product-shell/WorkspaceShell';
-import { ProductOutlet } from './workspace/ProductOutlet';
+import { ModuleOutlet } from './workspace/ModuleOutlet';
 import { useWorkspaceIdentity } from '../platform/domain/useWorkspaceIdentity';
 import {
-  productForTab,
-  defaultTabForProduct,
-  productsForWorkspace,
-} from '../platform/domain/productModel';
+  moduleForTab,
+  defaultTabForModule,
+  modulesForWorkspace,
+} from '../platform/domain/moduleModel';
 
 export function AppShell() {
   // Theme + density hooks live at App.tsx level so they fire on every
@@ -33,8 +33,8 @@ export function AppShell() {
   const navigate = useNavigate();
   const tid = useTournamentId();
   const identity = useWorkspaceIdentity();
-  const activeProduct = productForTab(activeTab, activeTournamentKind);
-  const products = productsForWorkspace(activeTournamentKind);
+  const activeModule = moduleForTab(activeTab, activeTournamentKind);
+  const modules = modulesForWorkspace(activeTournamentKind);
 
   // Discard any in-flight proposal when the operator switches tabs.
   // Otherwise the next visit to the originating tab re-opens the
@@ -126,17 +126,17 @@ export function AppShell() {
       {activeTournamentKind !== 'bracket' ? <MeetOnlyPollingHooks /> : null}
       <WorkspaceShell
         identity={identity}
-        products={products}
-        activeProduct={activeProduct}
-        onSelectProduct={(p) => {
-          if (tid) navigate(`/tournaments/${tid}/${defaultTabForProduct(p, activeTournamentKind)}`, { replace: true });
+        modules={modules}
+        activeModule={activeModule}
+        onSelectModule={(p) => {
+          if (tid) navigate(`/tournaments/${tid}/${defaultTabForModule(p, activeTournamentKind)}`, { replace: true });
         }}
         onBackToHub={() => navigate('/')}
         statusSlot={<AppStatusPopover />}
       >
         <UnsavedBannerSlot />
         <main id="main" className="min-h-0 flex-1 overflow-hidden">
-          <ProductOutlet />
+          <ModuleOutlet />
         </main>
       </WorkspaceShell>
       <SolverHud />

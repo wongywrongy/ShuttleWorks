@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WorkspaceShell } from '../WorkspaceShell';
 import type { WorkspaceIdentity } from '../types';
-import { productsForWorkspace } from '../../domain/productModel';
+import { modulesForWorkspace } from '../../domain/moduleModel';
 
 const identity: WorkspaceIdentity = {
   name: 'Spring Finals',
@@ -13,13 +13,13 @@ const identity: WorkspaceIdentity = {
 };
 
 describe('WorkspaceShell', () => {
-  it('shows identity, status, switcher, status slot and children', () => {
+  it('shows identity, status, module dock, status slot and children', () => {
     render(
       <WorkspaceShell
         identity={identity}
-        products={productsForWorkspace('meet')}
-        activeProduct="meet"
-        onSelectProduct={() => {}}
+        modules={modulesForWorkspace('meet')}
+        activeModule="meet"
+        onSelectModule={() => {}}
         onBackToHub={() => {}}
         statusSlot={<span data-testid="chip">chip</span>}
       >
@@ -28,7 +28,7 @@ describe('WorkspaceShell', () => {
     );
     expect(screen.getByText('Spring Finals')).toBeInTheDocument();
     expect(screen.getByText('active')).toBeInTheDocument();
-    expect(screen.getByTestId('product-meet')).toBeInTheDocument();
+    expect(screen.getByTestId('module-meet')).toBeInTheDocument();
     expect(screen.getByTestId('chip')).toBeInTheDocument();
     expect(screen.getByTestId('content')).toBeInTheDocument();
   });
@@ -37,9 +37,9 @@ describe('WorkspaceShell', () => {
     render(
       <WorkspaceShell
         identity={{ name: null, date: null, status: null, kind: 'meet' }}
-        products={productsForWorkspace('meet')}
-        activeProduct="meet"
-        onSelectProduct={() => {}}
+        modules={modulesForWorkspace('meet')}
+        activeModule="meet"
+        onSelectModule={() => {}}
         onBackToHub={() => {}}
       >
         <div />
@@ -54,9 +54,9 @@ describe('WorkspaceShell', () => {
     render(
       <WorkspaceShell
         identity={identity}
-        products={productsForWorkspace('meet')}
-        activeProduct="meet"
-        onSelectProduct={() => {}}
+        modules={modulesForWorkspace('meet')}
+        activeModule="meet"
+        onSelectModule={() => {}}
         onBackToHub={onBackToHub}
       >
         <div />

@@ -1,25 +1,25 @@
 import type { ReactNode } from 'react';
-import { ProductSwitcher } from './ProductSwitcher';
+import { ModuleDock } from './ModuleDock';
 import { WorkspaceIdentityBar } from './WorkspaceIdentityBar';
-import type { ProductId, ProductSwitcherItem, WorkspaceIdentity } from './types';
+import type { ModuleId, WorkspaceModule, WorkspaceIdentity } from './types';
 
 interface WorkspaceShellProps {
   identity: WorkspaceIdentity;
-  products: ProductSwitcherItem[];
-  activeProduct: ProductId;
-  onSelectProduct: (id: ProductId) => void;
+  modules: WorkspaceModule[];
+  activeModule: ModuleId;
+  onSelectModule: (id: ModuleId) => void;
   onBackToHub: () => void;
   statusSlot?: ReactNode;
   children: ReactNode;
 }
 
-/** The stable workspace chrome: a top bar with identity, product switcher,
- *  and a status/connection slot, hosting the active product module below. */
+/** The stable workspace chrome: a top bar with identity, the Module Dock,
+ *  and a status/connection slot, hosting the active module below. */
 export function WorkspaceShell({
   identity,
-  products,
-  activeProduct,
-  onSelectProduct,
+  modules,
+  activeModule,
+  onSelectModule,
   onBackToHub,
   statusSlot,
   children,
@@ -28,7 +28,7 @@ export function WorkspaceShell({
     <div className="flex h-full min-h-0 flex-col">
       <div className="sticky top-0 z-chrome flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
         <WorkspaceIdentityBar identity={identity} onBackToHub={onBackToHub} />
-        <ProductSwitcher products={products} active={activeProduct} onSelect={onSelectProduct} />
+        <ModuleDock modules={modules} active={activeModule} onSelect={onSelectModule} />
         <div className="flex items-center gap-2">{statusSlot}</div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
