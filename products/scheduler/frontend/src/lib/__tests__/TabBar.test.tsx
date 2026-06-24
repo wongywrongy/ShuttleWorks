@@ -102,4 +102,17 @@ describe('<TabBar /> URL sync', () => {
     expect(loc.current).toBe('/tournaments/t1/setup'); // unchanged
     expect(useUiStore.getState().activeTab).toBe('setup'); // unchanged
   });
+
+  it('renders the ACTIVE MODULE tabs, not the kind tabs (multi-module)', () => {
+    // kind=meet but the active tab belongs to bracket → bracket strip.
+    useUiStore.setState({
+      activeTab: 'bracket-setup',
+      activeTournamentKind: 'meet',
+      bracketDataReady: true,
+    });
+    const loc = { current: '' };
+    renderTabBar('bracket-setup', loc);
+    expect(screen.getByTestId('tab-bracket-roster')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-roster')).toBeNull(); // no meet 'roster' tab
+  });
 });

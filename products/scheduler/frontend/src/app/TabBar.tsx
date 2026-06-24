@@ -3,29 +3,12 @@ import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore, type AppTab } from '../store/uiStore';
 import { useTournamentId } from '../hooks/useTournamentId';
 import { INTERACTIVE_BASE } from '../lib/utils';
-import { BRACKET_TABS, MEET_OPERATOR_TAB_IDS, type MeetTabId } from '../lib/bracketTabs';
+import { tabsForModule } from '../lib/bracketTabs';
+import { moduleForTab } from '../platform/domain/moduleModel';
+import type { ModuleId } from '../platform/product-shell/types';
 import { workspaceCopy } from '../platform/domain/workspace';
 
 type TabDef = { id: AppTab; label: string; hint?: string };
-
-/** Display labels for the meet tabs. Ids come from the shared
- *  ``MEET_TAB_IDS`` source — only the labels live here, so the tab-id
- *  list isn't duplicated across TabBar / bracketTabs / TournamentPage. */
-const MEET_TAB_LABELS: Record<MeetTabId, string> = {
-  setup: 'Setup',
-  roster: 'Roster',
-  matches: 'Matches',
-  schedule: 'Schedule',
-  live: 'Live',
-  tv: 'TV',
-};
-
-/** Tabs shown for a ``kind='meet'`` tournament — the intercollegiate
- *  dual / tri-meet workflow. */
-const MEET_TABS: TabDef[] = MEET_OPERATOR_TAB_IDS.map((id) => ({
-  id,
-  label: MEET_TAB_LABELS[id],
-}));
 
 /** Tabs that surface match-level state — the disruption count badge
  *  rides along on these so an operator on Schedule / Live can see at a
@@ -37,9 +20,9 @@ const DISRUPTION_TABS = new Set<AppTab>(['matches', 'schedule', 'live']);
 /** Tooltip for a disabled tab — names the unmet prerequisite. */
 function disabledTabTitle(
   tabId: AppTab,
-  kind: 'meet' | 'bracket' | null,
+  module: ModuleId,
 ): string | undefined {
-  if (kind === 'bracket') return 'Generate a draw first';
+  if (module === 'bracket') return 'Generate a draw first';
   if (tabId === 'matches') return 'Add players first';
   if (tabId === 'schedule' || tabId === 'live') return 'Create matches first';
   return undefined;
@@ -56,15 +39,15 @@ export function TabBar() {
   const navigate = useNavigate();
   const tid = useTournamentId();
 
-  // Default to meet tabs while ``activeTournamentKind`` is loading
-  // (it's null on first mount before useTournamentKind resolves).
-  // Bracket-kind tournaments navigate Draw / Schedule / Live through
-  // this same TabBar — same markup, same accent underline.
-  const tabs: TabDef[] =
-    activeTournamentKind === 'bracket' ? BRACKET_TABS : MEET_TABS;
+  // The tab strip follows the ACTIVE MODULE (derived from the active tab),
+  // not the workspace kind — so a multi-module workspace switches strips as
+  // the dock switches modules, while a single-module workspace always shows
+  // its one operator module's tabs (identical to the prior kind-keyed list).
+  const activeModule = moduleForTab(activeTab, activeTournamentKind);
+  const tabs: TabDef[] = tabsForModule(activeModule);
 
   const disabledTabs = new Set<AppTab>();
-  if (activeTournamentKind === 'bracket') {
+  if (activeModule === 'bracket') {
     // Bracket entry tabs (Setup, Roster, Events) stay enabled at all times —
     // they're how the operator builds the bracket. Draw / Schedule / Live
     // stay disabled until at least one event has been Generated, since
@@ -113,7 +96,7 @@ export function TabBar() {
                 aria-disabled={isDisabled || undefined}
                 title={
                   isDisabled
-                    ? disabledTabTitle(tab.id, activeTournamentKind)
+                    ? disabledTabTitle(tab.id, activeModule)
                     : undefined
                 }
                 data-testid={`tab-${tab.id}`}
