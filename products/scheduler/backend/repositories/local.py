@@ -52,7 +52,7 @@ def _conflict_error_class():
     return mod.ConflictError
 
 from fastapi import Request
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.time_utils import now_iso
@@ -780,6 +780,45 @@ class _LocalBracketRepo:
             )
         )
 
+    def count_events_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: bracket_event_count}`` — one grouped query."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketEvent.tournament_id, func.count())
+            .where(BracketEvent.tournament_id.in_(tournament_ids))
+            .group_by(BracketEvent.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
+    def count_matches_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: bracket_match_count}`` — one grouped query."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketMatch.tournament_id, func.count())
+            .where(BracketMatch.tournament_id.in_(tournament_ids))
+            .group_by(BracketMatch.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
+    def count_results_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: bracket_result_count}`` — one grouped query."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketResult.tournament_id, func.count())
+            .where(BracketResult.tournament_id.in_(tournament_ids))
+            .group_by(BracketResult.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
     def record_result(
         self,
         tournament_id: uuid.UUID,
@@ -891,6 +930,20 @@ class _LocalMatchStateRepo:
                     setattr(row, key, value)
         self.session.commit()
         return len(updates)
+
+    def count_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: match_state_count}`` — one grouped query. Used as
+        the meet 'results entered' signal."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(MatchState.tournament_id, func.count())
+            .where(MatchState.tournament_id.in_(tournament_ids))
+            .group_by(MatchState.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
 
 
 class _LocalTournamentBackupRepo:
@@ -1030,6 +1083,20 @@ class _LocalMemberRepo:
             )
         )
 
+    def count_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: member_count}`` for the given ids, one grouped
+        query. Omits ids with zero members; returns ``{}`` for empty input."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(TournamentMember.tournament_id, func.count())
+            .where(TournamentMember.tournament_id.in_(tournament_ids))
+            .group_by(TournamentMember.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
 
 class _LocalInviteLinkRepo:
     def __init__(self, session: Session) -> None:
@@ -1074,6 +1141,26 @@ class _LocalInviteLinkRepo:
             row.revoked_at = datetime.now(timezone.utc)
             self.session.commit()
         return True
+
+    def count_active_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: active_invite_count}`` — one grouped query.
+        Active = not revoked AND not expired (matches the frontend
+        ``inviteStatus``)."""
+        if not tournament_ids:
+            return {}
+        now = datetime.now(timezone.utc)
+        rows = self.session.execute(
+            select(InviteLink.tournament_id, func.count())
+            .where(
+                InviteLink.tournament_id.in_(tournament_ids),
+                InviteLink.revoked_at.is_(None),
+                or_(InviteLink.expires_at.is_(None), InviteLink.expires_at > now),
+            )
+            .group_by(InviteLink.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
 
 
 class _LocalCommandRepo:

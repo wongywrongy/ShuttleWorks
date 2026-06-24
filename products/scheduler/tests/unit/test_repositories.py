@@ -456,3 +456,49 @@ def test_invite_link_repo_cascade_on_tournament_delete(repo):
     repo.invite_links.create(tid, role="viewer", created_by=uuid.uuid4())
     repo.tournaments.delete(tid)
     assert repo.session.query(InviteLink).count() == 0
+
+
+# ---- Grouped *_by_tournament count helpers (Task 5) -------------------
+
+
+def test_count_by_tournament_helpers(repo, session):
+    from datetime import timedelta, timezone
+    from datetime import datetime as _dt
+
+    from database.models import BracketEvent
+
+    now = _dt.now(timezone.utc)
+    t1 = repo.tournaments.create(
+        name="A", kind="meet", tournament_date=None,
+        owner_id=uuid.uuid4(), owner_email="a@x.io",
+    )
+    t2 = repo.tournaments.create(
+        name="B", kind="bracket", tournament_date=None,
+        owner_id=uuid.uuid4(), owner_email="b@x.io",
+    )
+    # Members: 2 on t1, 0 on t2.
+    session.add(TournamentMember(tournament_id=t1.id, user_id=uuid.uuid4(), role="owner"))
+    session.add(TournamentMember(tournament_id=t1.id, user_id=uuid.uuid4(), role="viewer"))
+    # Invites on t1: 1 active, 1 revoked, 1 expired → active count 1.
+    session.add(InviteLink(tournament_id=t1.id, role="operator", created_by=uuid.uuid4()))
+    session.add(InviteLink(
+        tournament_id=t1.id, role="viewer", created_by=uuid.uuid4(),
+        revoked_at=now,
+    ))
+    session.add(InviteLink(
+        tournament_id=t1.id, role="viewer", created_by=uuid.uuid4(),
+        expires_at=now - timedelta(days=1),
+    ))
+    # Bracket data on t2 — use real column set (discipline/format/duration_slots).
+    session.add(BracketEvent(
+        tournament_id=t2.id, id="E1",
+        discipline="Men's Singles", format="se", duration_slots=2,
+        status="draft",
+    ))
+    session.commit()
+
+    ids = [t1.id, t2.id]
+    assert repo.members.count_by_tournament(ids) == {t1.id: 2}
+    assert repo.invite_links.count_active_by_tournament(ids) == {t1.id: 1}
+    assert repo.brackets.count_events_by_tournament(ids) == {t2.id: 1}
+    assert repo.members.count_by_tournament([]) == {}
