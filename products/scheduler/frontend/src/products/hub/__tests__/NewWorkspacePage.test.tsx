@@ -110,14 +110,15 @@ describe('NewWorkspacePage', () => {
     await waitFor(() => expect(loc.current).toBe('/tournaments/w5/setup'));
   });
 
-  it('Blank: all-available seed (display disabled) → routes to the primary available module (/setup)', async () => {
+  it('Blank: nothing enabled → routes to Modules setup (/settings?tab=modules)', async () => {
     returnCreated('w4', [m('meet', 'available'), m('bracket', 'available'), m('display', 'disabled')]);
     const loc = { current: '' };
     mount(loc);
     expect(screen.getByTestId('template-blank')).not.toBeDisabled();
     fireEvent.click(screen.getByTestId('template-blank'));
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w4/setup'));
+    // LocationProbe reads pathname (the ?tab=modules query is dropped).
+    await waitFor(() => expect(loc.current).toBe('/tournaments/w4/settings'));
     expect(seedFor(vi.mocked(apiClient.createTournament).mock.calls[0][0])).toMatchObject({
       meet: 'available',
       bracket: 'available',

@@ -12,70 +12,11 @@ import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { apiClient } from '../../api/client';
-import type { WorkspaceModuleDTO } from '../../api/dto';
-import {
-  modulesFromDto,
-  modulesForWorkspace,
-  primaryModuleForOpen,
-  defaultTabForModule,
-} from '../../platform/domain/moduleModel';
-
-type TemplateId = 'meet-day' | 'bracket-tournament' | 'hybrid' | 'blank';
-
-const MODULE_LABELS: Record<WorkspaceModuleDTO['moduleId'], string> = {
-  meet: 'Meet',
-  bracket: 'Bracket',
-  display: 'Display',
-};
-
-interface Template {
-  id: TemplateId;
-  title: string;
-  blurb: string;
-  kind: 'meet' | 'bracket';
-  /** Explicit module seed persisted on create (sent as `modules[]`). The
-   *  landing route is derived from the returned modules, not stored here. */
-  seed: WorkspaceModuleDTO[];
-}
-
-const seed = (
-  moduleId: WorkspaceModuleDTO['moduleId'],
-  status: WorkspaceModuleDTO['status'],
-): WorkspaceModuleDTO => ({ moduleId, status, config: null });
-
-const TEMPLATES: Template[] = [
-  {
-    id: 'meet-day',
-    title: 'Meet Day',
-    blurb: 'Roster, CP-SAT schedule, live cockpit, and a venue display.',
-    kind: 'meet',
-    seed: [seed('meet', 'enabled'), seed('bracket', 'available'), seed('display', 'enabled')],
-  },
-  {
-    id: 'bracket-tournament',
-    title: 'Bracket Tournament',
-    blurb: 'Events, seeding, draw generation, advancement, and results.',
-    kind: 'bracket',
-    seed: [seed('bracket', 'enabled'), seed('meet', 'available'), seed('display', 'available')],
-  },
-  {
-    id: 'hybrid',
-    title: 'Hybrid Event',
-    blurb: 'Meet and Bracket modules together in one workspace, plus a display.',
-    kind: 'meet',
-    seed: [seed('meet', 'enabled'), seed('bracket', 'enabled'), seed('display', 'enabled')],
-  },
-  {
-    id: 'blank',
-    title: 'Blank Workspace',
-    blurb: 'Start empty and enable modules as you go.',
-    kind: 'meet',
-    seed: [seed('meet', 'available'), seed('bracket', 'available'), seed('display', 'disabled')],
-  },
-];
+import { TEMPLATES, MODULE_LABELS, type TemplateId } from './newWorkspaceTemplates';
+import { landingRoute } from './workspaceCreateFlow';
 
 /** The module labels a template surfaces as chips — its enabled/available set. */
-function templateModuleLabels(t: Template): string[] {
+function templateModuleLabels(t: (typeof TEMPLATES)[number]): string[] {
   return t.seed
     .filter((m) => m.status === 'enabled' || m.status === 'available')
     .map((m) => MODULE_LABELS[m.moduleId]);
@@ -102,14 +43,10 @@ export function NewWorkspacePage() {
         tournamentDate: date || null,
         modules: template.seed,
       });
-      // Open via the RETURNED module state — primaryModuleForOpen picks the
-      // landing module (first enabled, else first available) and
-      // defaultTabForModule maps it to a route. No hardcoded destinations.
-      const mods = created.modules
-        ? modulesFromDto(created.modules)
-        : modulesForWorkspace(created.kind);
-      const segment = defaultTabForModule(primaryModuleForOpen(mods));
-      navigate(`/tournaments/${created.id}/${segment}`);
+      // Open via the RETURNED module state. landingRoute sends a workspace with
+      // nothing enabled (Blank / available-only Custom) to Modules setup, else to
+      // its primary module tab. No hardcoded destinations.
+      navigate(landingRoute(created));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create workspace');
     } finally {
