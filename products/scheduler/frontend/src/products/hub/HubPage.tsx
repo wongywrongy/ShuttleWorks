@@ -200,6 +200,7 @@ export function HubPage() {
           tournament={selected}
           onOpen={openTournament}
           onSettings={(id) => navigate(`/tournaments/${id}/settings`)}
+          onShare={(id) => navigate(`/tournaments/${id}/settings?tab=sharing`)}
         />
       </div>
 

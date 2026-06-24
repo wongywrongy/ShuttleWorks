@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { WorkspaceInspector } from '../WorkspaceInspector';
 import type { TournamentSummaryDTO } from '../../../api/dto';
 
@@ -29,7 +29,7 @@ const withSignals: TournamentSummaryDTO = {
 
 describe('WorkspaceInspector signals', () => {
   it('renders health/readiness, attention reasons, and collaboration counts', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
     const health = screen.getByTestId('inspector-health');
     expect(health).toHaveTextContent(/attention/i);
     expect(health).toHaveTextContent('0/2 ready');
@@ -41,20 +41,20 @@ describe('WorkspaceInspector signals', () => {
   });
 
   it('does not show the stale "coming in a later phase" copy', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
     expect(screen.queryByText(/coming in a later phase/i)).toBeNull();
   });
 
   it('renders without signals (older payloads) — no attention/collab sections', () => {
     const noSignals = { ...withSignals, signals: undefined };
-    render(<WorkspaceInspector tournament={noSignals} onOpen={() => {}} onSettings={() => {}} />);
+    render(<WorkspaceInspector tournament={noSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
     expect(screen.getByTestId('inspector-health')).toHaveTextContent(/good/i); // active → good fallback
     expect(screen.queryByTestId('inspector-attention')).toBeNull();
     expect(screen.queryByTestId('inspector-collab')).toBeNull();
   });
 
   it('renders an attention checklist from signals.setup', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
     // setup: { roster: false, scheduled: false } → checklist items rendered
     const checklist = screen.getByTestId('inspector-checklist');
     expect(checklist).toHaveTextContent(/roster/i);
@@ -62,8 +62,17 @@ describe('WorkspaceInspector signals', () => {
   });
 
   it('offers the primary next action', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
     // withSignals attention NO_ROSTER → "Add players"
     expect(screen.getByRole('button', { name: 'Add players' })).toBeInTheDocument();
+  });
+
+  it('Manage sharing uses onShare, distinct from Settings', () => {
+    const onSettings = vi.fn();
+    const onShare = vi.fn();
+    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={onSettings} onShare={onShare} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Manage sharing' }));
+    expect(onShare).toHaveBeenCalledWith('t1');
+    expect(onSettings).not.toHaveBeenCalled();
   });
 });

@@ -69,7 +69,7 @@ describe('HubPage navigation', () => {
     mount(loc);
     // Wait for the listTournaments mock to resolve and render.
     await waitFor(() => expect(screen.getByText(/Bracket A/i)).toBeInTheDocument());
-    const openButtons = screen.getAllByRole('button', { name: 'Open' });
+    const openButtons = screen.getAllByRole('button', { name: 'Open workspace' });
     // Order: bracket row first (owner, first in mock list).
     fireEvent.click(openButtons[0]);
     expect(loc.current).toBe('/tournaments/br1/bracket-setup');
@@ -79,7 +79,7 @@ describe('HubPage navigation', () => {
     const loc = { current: '' };
     mount(loc);
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    const openButtons = screen.getAllByRole('button', { name: 'Open' });
+    const openButtons = screen.getAllByRole('button', { name: 'Open workspace' });
     fireEvent.click(openButtons[1]); // meet row, second in list
     expect(loc.current).toBe('/tournaments/me1/setup');
   });
@@ -120,9 +120,10 @@ describe('HubPage module-aware control plane', () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Meet A'));
-    // Inspector shows the MODULES heading + an Open workspace action.
+    // Inspector shows the MODULES heading + an Open workspace action. (The selected
+    // row also renders an "Open workspace" button now, so expect both.)
     expect(screen.getByText('MODULES')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open workspace' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Open workspace' }).length).toBeGreaterThan(0);
   });
 
   it('shows module chips derived from kind; foreign operator now available (SP-B2)', async () => {

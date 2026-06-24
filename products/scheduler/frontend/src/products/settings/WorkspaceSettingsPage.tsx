@@ -7,7 +7,7 @@
  * placeholders. Additive — does not touch the Meet Setup rail.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { apiClient } from '../../api/client';
@@ -23,7 +23,14 @@ import { ComingSoonTab } from './ComingSoonTab';
 export function WorkspaceSettingsPage() {
   const { id: tid } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<SettingsTabId>('general');
+  const [searchParams] = useSearchParams();
+  // Deep-link the initial tab via ?tab= (e.g. the Hub inspector's "Manage sharing"
+  // → ?tab=sharing). Unknown values fall back to General. Not a route-path change.
+  const requestedTab = searchParams.get('tab');
+  const initialTab: SettingsTabId = SETTINGS_TABS.some((t) => t.id === requestedTab)
+    ? (requestedTab as SettingsTabId)
+    : 'general';
+  const [tab, setTab] = useState<SettingsTabId>(initialTab);
   const [summary, setSummary] = useState<TournamentSummaryDTO | null>(null);
 
   const load = useCallback(() => {

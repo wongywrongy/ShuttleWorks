@@ -175,7 +175,7 @@ export function WorkspaceRow({ tournament, selected, onSelect, onOpen, onSetting
           onOpen();
         }}
       >
-        {action.label}
+        {action.reasonCode ? action.label : 'Open workspace'}
       </Button>
       <OverflowMenu items={overflowItems} />
     </div>

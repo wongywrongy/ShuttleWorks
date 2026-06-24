@@ -119,4 +119,16 @@ describe('WorkspaceSettingsPage', () => {
     fireEvent.click(screen.getByTestId('settings-tab-sharing'));
     expect(screen.getByLabelText('Public display link')).toBeInTheDocument();
   });
+
+  it('opens the Sharing tab directly when ?tab=sharing is present (deep link)', () => {
+    render(
+      <MemoryRouter initialEntries={['/tournaments/t1/settings?tab=sharing']}>
+        <Routes>
+          <Route path="/tournaments/:id/settings" element={<WorkspaceSettingsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('settings-tab-sharing')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Public display link')).toBeInTheDocument();
+  });
 });

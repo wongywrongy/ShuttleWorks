@@ -28,13 +28,14 @@ interface InspectorProps {
   tournament: TournamentSummaryDTO | null;
   onOpen: (id: string) => void;
   onSettings: (id: string) => void;
+  onShare: (id: string) => void;
 }
 
 /** Right-side action panel for the selected workspace: a SIGNAL card (health,
  *  readiness, a setup checklist, attention reasons, collaboration counts), the
  *  module map (real `modules[]` when present, else kind-derived), and primary
  *  actions (the signal-derived next action, Settings, Manage sharing). */
-export function WorkspaceInspector({ tournament, onOpen, onSettings }: InspectorProps) {
+export function WorkspaceInspector({ tournament, onOpen, onSettings, onShare }: InspectorProps) {
   if (!tournament) {
     return (
       <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-card/40 lg:flex">
@@ -186,7 +187,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
         <Button
           variant="ghost"
           className="w-full"
-          onClick={() => onSettings(tournament.id)}
+          onClick={() => onShare(tournament.id)}
         >
           Manage sharing
         </Button>
