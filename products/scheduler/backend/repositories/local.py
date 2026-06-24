@@ -1200,6 +1200,34 @@ class _LocalModuleRepo:
         self.session.refresh(row)
         return row
 
+    def seed_modules(
+        self,
+        tournament: Tournament,
+        rows: list[dict],
+    ) -> list[WorkspaceModule]:
+        """Persist an explicit, normalized module seed for a new workspace.
+
+        ``rows`` are the output of ``normalize_module_seed`` —
+        ``{"module_id", "status", "config"}`` covering all three modules.
+        Inserts one row per module and commits; because rows now exist,
+        a later ``ensure_modules`` is a no-op. Intended for create-time
+        seeding of a workspace that has no module rows yet; if rows already
+        exist this would violate the unique ``(tournament_id, module_id)``
+        constraint, so callers must seed before any module read.
+        """
+        for row in rows:
+            self.session.add(
+                WorkspaceModule(
+                    tournament_id=tournament.id,
+                    module_id=row["module_id"],
+                    status=row["status"],
+                    config=row.get("config"),
+                )
+            )
+        self.session.flush()
+        self.session.commit()
+        return self._rows_for(tournament.id)
+
     def count_matches(self, tournament_id: uuid.UUID) -> int:
         """Number of operational ``matches`` rows (meet data-loss guard)."""
         return int(

@@ -331,3 +331,29 @@ def test_normalize_seed_rejects_bad_status():
 def test_normalize_seed_empty_backfills_all_modules():
     rows = normalize_module_seed([])
     assert _as_map(rows) == {"meet": "available", "bracket": "available", "display": "coming_soon"}
+
+
+# ---- seed_modules --------------------------------------------------------
+
+
+def test_seed_modules_persists_explicit_set(client):
+    from repositories import open_repository
+
+    rows = normalize_module_seed([
+        {"moduleId": "meet", "status": "enabled"},
+        {"moduleId": "display", "status": "enabled"},
+        {"moduleId": "bracket", "status": "available"},
+    ])
+    # Construct an unseeded tournament directly via the repo — bypassing the
+    # HTTP create path which would auto-seed modules on response generation.
+    with open_repository() as repo:
+        t = repo.tournaments.create(name="Seeded", kind="meet")
+        seeded = repo.modules.seed_modules(t, rows)
+        assert {m.module_id: m.status for m in seeded} == {
+            "meet": "enabled", "display": "enabled", "bracket": "available",
+        }
+        # ensure_modules is now a no-op (rows already exist).
+        again = repo.modules.ensure_modules(t)
+        assert {m.module_id: m.status for m in again} == {
+            "meet": "enabled", "display": "enabled", "bracket": "available",
+        }
