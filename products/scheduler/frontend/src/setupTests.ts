@@ -7,3 +7,13 @@
  */
 import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
+
+// jsdom has no ResizeObserver; Headless UI's anchored Menu (floating-ui positioning)
+// touches it on open. A no-op stub keeps those interactions from throwing.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
