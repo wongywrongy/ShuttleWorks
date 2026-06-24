@@ -10,8 +10,8 @@ import {
   attentionReasons,
   collaborationOf,
   moduleCountsOf,
-  healthDotClass,
 } from './hubSignals';
+import { HealthDot } from '../../components/control-plane';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
@@ -87,7 +87,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
             data-testid="inspector-health"
             className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground"
           >
-            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${healthDotClass(health)}`} />
+            <HealthDot health={health} />
             {health}
             {readiness ? (
               <span className="tabular-nums text-muted-foreground">
