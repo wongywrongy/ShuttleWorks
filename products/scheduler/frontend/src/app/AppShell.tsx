@@ -17,8 +17,45 @@ import {
   moduleForTab,
   defaultTabForModule,
   modulesForWorkspace,
+  primaryModuleForOpen,
+  isModuleEnterable,
 } from '../platform/domain/moduleModel';
+import type { ModuleId, WorkspaceModule } from '../platform/product-shell/types';
 import { useWorkspaceModules } from '../platform/domain/useWorkspaceModules';
+import { ModuleUnavailablePanel } from './workspace/ModuleUnavailablePanel';
+
+/** Whether the active module's pane is the normal module outlet or the
+ *  unavailable panel. Unknown/missing module status (still loading) resolves
+ *  to the outlet so there is no false guard before the real module catalog
+ *  arrives. */
+export type ActivePane =
+  | { kind: 'outlet' }
+  | {
+      kind: 'panel';
+      label: string;
+      note?: string;
+      primary: ModuleId;
+      primaryLabel: string;
+      canOpenSettings: boolean;
+    };
+
+export function resolveActivePane(
+  activeModule: ModuleId,
+  modules: WorkspaceModule[],
+): ActivePane {
+  const active = modules.find((m) => m.id === activeModule);
+  if (!active || isModuleEnterable(active.status)) return { kind: 'outlet' };
+  const primary = primaryModuleForOpen(modules);
+  const primaryWm = modules.find((m) => m.id === primary);
+  return {
+    kind: 'panel',
+    label: active.label,
+    note: active.note,
+    primary,
+    primaryLabel: primaryWm?.label ?? primary,
+    canOpenSettings: active.status === 'disabled',
+  };
+}
 
 export function AppShell() {
   // Theme + density hooks live at App.tsx level so they fire on every
@@ -39,6 +76,11 @@ export function AppShell() {
   // catalog while loading or on error.
   const { modules: realModules, enable: enableModule } = useWorkspaceModules(tid);
   const modules = realModules ?? modulesForWorkspace(activeTournamentKind);
+  // Meet-only polling runs when the Meet module is enabled (data exists), not
+  // by kind — so a hybrid keeps polling and a bracket-only workspace doesn't.
+  const meetEnabled = modules.some((m) => m.id === 'meet' && m.status === 'enabled');
+  // Whether to render the module outlet or the unavailable panel.
+  const pane = resolveActivePane(activeModule, modules);
 
   // Discard any in-flight proposal when the operator switches tabs.
   // Otherwise the next visit to the originating tab re-opens the
@@ -127,7 +169,7 @@ export function AppShell() {
       {/* Meet-only polling hooks: advisories + suggestions are meet-specific
           and should not fire on bracket-kind tournaments where those
           endpoints have no meaningful data. */}
-      {activeTournamentKind !== 'bracket' ? <MeetOnlyPollingHooks /> : null}
+      {meetEnabled ? <MeetOnlyPollingHooks /> : null}
       <WorkspaceShell
         identity={identity}
         modules={modules}
@@ -141,7 +183,26 @@ export function AppShell() {
       >
         <UnsavedBannerSlot />
         <main id="main" className="min-h-0 flex-1 overflow-hidden">
-          <ModuleOutlet />
+          {pane.kind === 'outlet' ? (
+            <ModuleOutlet />
+          ) : (
+            <ModuleUnavailablePanel
+              label={pane.label}
+              note={pane.note}
+              primaryLabel={pane.primaryLabel}
+              onGoToPrimary={() => {
+                if (tid)
+                  navigate(`/tournaments/${tid}/${defaultTabForModule(pane.primary)}`, {
+                    replace: true,
+                  });
+              }}
+              onOpenSettings={
+                pane.canOpenSettings && tid
+                  ? () => navigate(`/tournaments/${tid}/settings`)
+                  : undefined
+              }
+            />
+          )}
         </main>
       </WorkspaceShell>
       <SolverHud />
