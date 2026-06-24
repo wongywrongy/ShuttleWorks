@@ -139,7 +139,7 @@ def _modules_for(row: Tournament, repo: LocalRepository) -> List[WorkspaceModule
 
 def _counts_for(
     ids: List[uuid.UUID], repo: LocalRepository
-) -> dict:
+) -> dict[uuid.UUID, RowCounts]:
     """``{tournament_id: RowCounts}`` from the 6 grouped count queries.
 
     Computed once for a set of ids (the list path) or a single id (the

@@ -15,7 +15,7 @@ from typing import List
 
 from pydantic import BaseModel
 
-from database.models import OPERATIONAL_MODULES
+from database.models import display_dependency_satisfied
 
 
 @dataclass
@@ -114,9 +114,7 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
     attention: List[AttentionReasonDTO] = []
     if module_counts.enabled == 0:
         attention.append(AttentionReasonDTO(code="NO_MODULES_ENABLED", label="No modules enabled"))
-    if statuses.get("display") == "enabled" and not any(
-        statuses.get(m) == "enabled" for m in OPERATIONAL_MODULES
-    ):
+    if not display_dependency_satisfied(statuses):
         attention.append(AttentionReasonDTO(
             code="DISPLAY_NO_SOURCE", label="Display is on but no data module is enabled"))
 

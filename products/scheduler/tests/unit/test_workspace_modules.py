@@ -454,9 +454,10 @@ def test_list_signals_uses_grouped_queries_once(client, monkeypatch):
     client.post("/tournaments", json={"name": "Three"})
 
     import repositories.local as local_mod
-    calls = {"members": 0, "invites": 0}
+    calls = {"members": 0, "invites": 0, "bracket_events": 0}
     real_members = local_mod._LocalMemberRepo.count_by_tournament
     real_invites = local_mod._LocalInviteLinkRepo.count_active_by_tournament
+    real_bevents = local_mod._LocalBracketRepo.count_events_by_tournament
 
     def counted_members(self, ids):
         calls["members"] += 1
@@ -466,8 +467,13 @@ def test_list_signals_uses_grouped_queries_once(client, monkeypatch):
         calls["invites"] += 1
         return real_invites(self, ids)
 
+    def counted_bevents(self, ids):
+        calls["bracket_events"] += 1
+        return real_bevents(self, ids)
+
     monkeypatch.setattr(local_mod._LocalMemberRepo, "count_by_tournament", counted_members)
     monkeypatch.setattr(local_mod._LocalInviteLinkRepo, "count_active_by_tournament", counted_invites)
+    monkeypatch.setattr(local_mod._LocalBracketRepo, "count_events_by_tournament", counted_bevents)
 
     r = client.get("/tournaments")
     assert r.status_code == 200
@@ -475,6 +481,7 @@ def test_list_signals_uses_grouped_queries_once(client, monkeypatch):
     # Grouped: exactly one call each across 3 rows — NOT 3.
     assert calls["members"] == 1
     assert calls["invites"] == 1
+    assert calls["bracket_events"] == 1
 
 
 def test_seed_modules_persists_explicit_set(client):

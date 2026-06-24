@@ -502,3 +502,38 @@ def test_count_by_tournament_helpers(repo, session):
     assert repo.invite_links.count_active_by_tournament(ids) == {t1.id: 1}
     assert repo.brackets.count_events_by_tournament(ids) == {t2.id: 1}
     assert repo.members.count_by_tournament([]) == {}
+
+
+def test_count_matches_results_and_match_states_by_tournament(repo):
+    """Cover the three grouped helpers not exercised by test_count_by_tournament_helpers."""
+    t1 = repo.tournaments.create(name="C1")
+    t2 = repo.tournaments.create(name="C2")
+
+    # Bracket event on t2.
+    repo.brackets.create_event(
+        t2.id, "E1",
+        discipline="Men's Singles", format="se", duration_slots=2,
+    )
+    # One BracketMatch on t2/E1.
+    repo.brackets.bulk_create_matches(
+        t2.id, "E1",
+        [
+            {
+                "id": "M1",
+                "round_index": 0,
+                "match_index": 0,
+                "slot_a": {"participant_id": "P1"},
+                "slot_b": {"participant_id": "P2"},
+                "expected_duration_slots": 2,
+            }
+        ],
+    )
+    # One BracketResult on t2/E1/M1.
+    repo.brackets.record_result(t2.id, "E1", "M1", winner_side="A")
+    # One MatchState on t1.
+    repo.match_states.upsert(t1.id, "m1", {"status": "called"})
+
+    ids = [t1.id, t2.id]
+    assert repo.brackets.count_matches_by_tournament(ids) == {t2.id: 1}
+    assert repo.brackets.count_results_by_tournament(ids) == {t2.id: 1}
+    assert repo.match_states.count_by_tournament(ids) == {t1.id: 1}
