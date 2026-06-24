@@ -18,6 +18,8 @@ import { Button, Card, Modal, StatusPill } from '@scheduler/design-system';
 import {
   modulesForWorkspace,
   modulesFromDto,
+  defaultTabForModule,
+  primaryModuleForOpen,
 } from '../../platform/domain/moduleModel';
 import {
   HUB_FILTERS,
@@ -210,7 +212,10 @@ export function HubPage() {
   const openTournament = useCallback(
     (id: string) => {
       const t = tournaments.find((row) => row.id === id);
-      const segment = t?.kind === 'bracket' ? 'bracket-setup' : 'setup';
+      const mods = t?.modules
+        ? modulesFromDto(t.modules)
+        : modulesForWorkspace(t?.kind ?? 'meet');
+      const segment = defaultTabForModule(primaryModuleForOpen(mods));
       navigate(`/tournaments/${id}/${segment}`);
     },
     [navigate, tournaments],

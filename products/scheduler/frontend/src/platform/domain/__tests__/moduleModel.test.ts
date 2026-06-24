@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   moduleForTab,
   defaultTabForModule,
+  primaryModuleForOpen,
   modulesForWorkspace,
   modulesFromDto,
   isModuleEnterable,
@@ -30,15 +31,30 @@ describe('moduleForTab', () => {
 });
 
 describe('defaultTabForModule', () => {
-  it('routes meet-workspace modules to existing meet routes', () => {
-    expect(defaultTabForModule('meet', 'meet')).toBe('setup');
-    expect(defaultTabForModule('display', 'meet')).toBe('tv');
-    expect(defaultTabForModule('bracket', 'meet')).toBe('setup');
+  it('is module-keyed (independent of kind)', () => {
+    expect(defaultTabForModule('meet')).toBe('setup');
+    expect(defaultTabForModule('bracket')).toBe('bracket-setup');
+    expect(defaultTabForModule('display')).toBe('tv');
   });
-  it('routes everything to bracket home on a bracket workspace', () => {
-    expect(defaultTabForModule('bracket', 'bracket')).toBe('bracket-setup');
-    expect(defaultTabForModule('display', 'bracket')).toBe('bracket-setup');
-    expect(defaultTabForModule('meet', 'bracket')).toBe('bracket-setup');
+});
+
+describe('primaryModuleForOpen', () => {
+  const wm = (id: 'meet' | 'bracket' | 'display', status: string) =>
+    ({ id, label: id, status, note: undefined }) as never;
+  it('prefers the first enabled module in meet>bracket>display order', () => {
+    expect(
+      primaryModuleForOpen([wm('meet', 'enabled'), wm('bracket', 'enabled'), wm('display', 'enabled')]),
+    ).toBe('meet');
+    expect(
+      primaryModuleForOpen([wm('meet', 'coming-soon'), wm('bracket', 'enabled'), wm('display', 'coming-soon')]),
+    ).toBe('bracket');
+  });
+  it('falls back to first available, then first present, then meet', () => {
+    expect(
+      primaryModuleForOpen([wm('meet', 'available'), wm('bracket', 'available'), wm('display', 'disabled')]),
+    ).toBe('meet');
+    expect(primaryModuleForOpen([wm('display', 'coming-soon')])).toBe('display');
+    expect(primaryModuleForOpen([])).toBe('meet');
   });
 });
 

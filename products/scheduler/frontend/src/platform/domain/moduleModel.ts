@@ -35,14 +35,24 @@ export function moduleForTab(tab: string, kind: Kind): ModuleId {
   return kind === 'bracket' ? 'bracket' : 'meet';
 }
 
-/** The existing route segment to navigate to when a module is entered.
- *  On a bracket workspace only Bracket is real, so everything routes to the
- *  bracket home (defensive — non-enterable modules are never clicked). */
-export function defaultTabForModule(module: ModuleId, kind: Kind): string {
-  if (kind === 'bracket') return 'bracket-setup';
+/** The route segment to navigate to when a module is entered. Purely
+ *  module-keyed — the workspace kind no longer participates. */
+export function defaultTabForModule(module: ModuleId): string {
+  if (module === 'bracket') return 'bracket-setup';
   if (module === 'display') return 'tv';
-  if (module === 'meet') return 'setup';
-  return 'setup';
+  return 'setup'; // meet
+}
+
+/** The module a workspace should open to: first enabled, else first
+ *  available, else first present, in meet → bracket → display precedence.
+ *  Reads real module state so a hybrid lands on Meet and a bracket-only
+ *  workspace lands on Bracket. */
+export function primaryModuleForOpen(modules: WorkspaceModule[]): ModuleId {
+  const order: ModuleId[] = ['meet', 'bracket', 'display'];
+  const present = order.filter((id) => modules.some((m) => m.id === id));
+  const byStatus = (s: ModuleStatus) =>
+    present.find((id) => modules.find((m) => m.id === id)?.status === s);
+  return byStatus('enabled') ?? byStatus('available') ?? present[0] ?? 'meet';
 }
 
 /** Enablement copy for a non-active module, by id + status. */
