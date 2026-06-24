@@ -115,3 +115,6 @@ packages/*/dist/
 # PNGs themselves don't belong in version control. Already in the
 # root .dockerignore; mirror it here.
 design/baseline/
+
+# Superpowers SDD scratch (ledger, briefs, reports, review packages, brainstorm artifacts)
+.superpowers/

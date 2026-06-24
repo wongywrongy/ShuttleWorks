@@ -78,9 +78,10 @@ A seed is rejected with **400 `INVALID_INPUT`** if:
 
 **Backfill:** a partial seed is completed before validation — any of the three
 modules not named is filled to `available` (meet/bracket) or `coming_soon`
-(display, unless a data module is enabled, in which case `available`). This keeps
-the persisted set well-formed (all three modules present, matching what
-`ensure_modules` produces).
+(display, unless **`meet`** is enabled, in which case `available`). Display is a
+meet-specific surface; bracket-display is not built yet (`coming_soon`), matching
+`derive_modules`. This keeps the persisted set well-formed (all three modules
+present, matching what `ensure_modules` produces).
 
 Zero-`enabled` is **allowed** — the Blank template is legitimately all-`available`.
 The "keep ≥1 operational module" rule belongs to *disable*, not *create*.
