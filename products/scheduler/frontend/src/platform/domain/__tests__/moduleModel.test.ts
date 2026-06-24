@@ -59,22 +59,17 @@ describe('primaryModuleForOpen', () => {
 });
 
 describe('modulesForWorkspace', () => {
-  it('meet (matches backend derive): Meet enabled, Display available, Bracket coming-soon', () => {
+  it('meet (matches backend derive): Meet enabled, Bracket available, Display available', () => {
     const m = modulesForWorkspace('meet');
     expect(m.map((x) => x.id)).toEqual(['meet', 'bracket', 'display']);
     expect(m.find((x) => x.id === 'meet')!.status).toBe('enabled');
+    expect(m.find((x) => x.id === 'bracket')!.status).toBe('available');
     expect(m.find((x) => x.id === 'display')!.status).toBe('available');
-    const bracket = m.find((x) => x.id === 'bracket')!;
-    expect(bracket.status).toBe('coming-soon');
-    expect(bracket.note).toBe('Bracket is not enabled for this workspace yet.');
   });
-  it('bracket (matches backend derive): Bracket enabled, Meet + Display coming-soon', () => {
+  it('bracket (matches backend derive): Bracket enabled, Meet available, Display coming-soon', () => {
     const m = modulesForWorkspace('bracket');
     expect(m.find((x) => x.id === 'bracket')!.status).toBe('enabled');
-    expect(m.find((x) => x.id === 'meet')!.status).toBe('coming-soon');
-    expect(m.find((x) => x.id === 'meet')!.note).toBe(
-      'Meet is not enabled for this workspace yet.',
-    );
+    expect(m.find((x) => x.id === 'meet')!.status).toBe('available');
     const display = m.find((x) => x.id === 'display')!;
     expect(display.status).toBe('coming-soon');
     expect(display.note).toBe('Display for bracket workspaces is coming.');

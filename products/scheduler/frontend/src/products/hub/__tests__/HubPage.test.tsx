@@ -125,15 +125,18 @@ describe('HubPage module-aware control plane', () => {
     expect(screen.getByRole('button', { name: 'Open workspace' })).toBeInTheDocument();
   });
 
-  it('shows module chips derived from kind (meet→Meet+Display, bracket→Bracket+Display·soon)', async () => {
+  it('shows module chips derived from kind; foreign operator now available (SP-B2)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    expect(screen.getByTestId('chip-meet')).toHaveTextContent('Meet');
-    expect(screen.getByTestId('chip-bracket')).toHaveTextContent('Bracket');
+    // Both rows (Meet A + Bracket A) now surface all three modules: the foreign
+    // operator is `available` (no longer the filtered `coming-soon`), so the meet
+    // row shows a Bracket chip and the bracket row shows a Meet chip.
+    expect(screen.getAllByTestId('chip-meet')).toHaveLength(2);
+    expect(screen.getAllByTestId('chip-bracket')).toHaveLength(2);
     const display = screen.getAllByTestId('chip-display');
     expect(display).toHaveLength(2); // both rows offer a Display chip
-    // The bracket workspace's Display chip is "coming soon".
-    expect(display.some((el) => /soon/i.test(el.textContent || ''))).toBe(true);
+    // Only the bracket workspace's Display chip is "coming soon".
+    expect(display.filter((el) => /soon/i.test(el.textContent || ''))).toHaveLength(1);
   });
 
   it('"New workspace" navigates to the dedicated /new surface', async () => {
