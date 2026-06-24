@@ -1,10 +1,11 @@
 /**
- * Dedicated "New workspace" surface (route `/new`).
+ * Dedicated "New workspace" surface (route `/new`) — a workspace *system builder*.
  *
- * Each template carries an explicit module seed (sent as `modules[]`) plus a
- * legacy `kind` (compatibility/fallback identity). On create the backend
- * persists the seed and echoes it back; we open the workspace via
- * `primaryModuleForOpen` / `defaultTabForModule` on the returned modules.
+ * Pick a preset template (each carries an explicit `modules[]` seed + a legacy
+ * `kind`) or build a Custom one by toggling each module. On create the backend
+ * persists the seed and echoes it back; `landingRoute` opens the workspace on its
+ * primary module — or, when nothing is enabled, on Modules setup. Name and date
+ * are secondary details.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,36 +13,34 @@ import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { apiClient } from '../../api/client';
-import { TEMPLATES, MODULE_LABELS, type TemplateId } from './newWorkspaceTemplates';
+import { TEMPLATES, type TemplateId } from './newWorkspaceTemplates';
 import { landingRoute } from './workspaceCreateFlow';
-
-/** The module labels a template surfaces as chips — its enabled/available set. */
-function templateModuleLabels(t: (typeof TEMPLATES)[number]): string[] {
-  return t.seed
-    .filter((m) => m.status === 'enabled' || m.status === 'available')
-    .map((m) => MODULE_LABELS[m.moduleId]);
-}
+import { TemplateCard } from './TemplateCard';
+import { CustomModulesBuilder } from './CustomModulesBuilder';
+import { customSeed, kindForSeed, DEFAULT_CUSTOM, type CustomState } from './customModules';
 
 export function NewWorkspacePage() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<TemplateId>('meet-day');
+  const [custom, setCustom] = useState<CustomState>(DEFAULT_CUSTOM);
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const template = TEMPLATES.find((t) => t.id === selected)!;
-  const canCreate = !creating;
-
   async function handleCreate() {
     setCreating(true);
     setError(null);
     try {
+      const isCustom = selected === 'custom';
+      const tpl = TEMPLATES.find((t) => t.id === selected);
+      const modules = isCustom ? customSeed(custom) : tpl!.seed;
+      const kind = isCustom ? kindForSeed(custom) : tpl!.kind;
       const created = await apiClient.createTournament({
         name: name.trim() || null,
-        kind: template.kind,
+        kind,
         tournamentDate: date || null,
-        modules: template.seed,
+        modules,
       });
       // Open via the RETURNED module state. landingRoute sends a workspace with
       // nothing enabled (Blank / available-only Custom) to Modules setup, else to
@@ -63,15 +62,15 @@ export function NewWorkspacePage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-3xl space-y-8 px-6 py-10">
+      <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
         <div className="space-y-1">
           <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             CONTROL PLANE
           </div>
           <h1 className="text-2xl font-semibold">New workspace</h1>
           <p className="text-sm text-muted-foreground">
-            A workspace is your event control plane. Pick a template to enable its
-            modules — you can add more modules later.
+            Choose a system — or build a custom one. Modules can be turned on now or
+            left available to enable later.
           </p>
         </div>
 
@@ -84,74 +83,76 @@ export function NewWorkspacePage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {TEMPLATES.map((t) => {
-            const isSelected = t.id === selected;
-            const labels = templateModuleLabels(t);
-            return (
-              <button
+        <section className="space-y-3">
+          <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            SYSTEM
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {TEMPLATES.map((t) => (
+              <TemplateCard
                 key={t.id}
-                type="button"
-                aria-pressed={isSelected}
-                data-testid={`template-${t.id}`}
-                onClick={() => setSelected(t.id)}
-                className={[
-                  'border p-4 text-left transition-colors',
-                  isSelected
-                    ? 'border-foreground bg-muted/30 text-foreground'
-                    : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-                ].join(' ')}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-foreground">{t.title}</div>
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">{t.blurb}</div>
-                {labels.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {labels.map((m) => (
-                      <span
-                        key={m}
-                        className="rounded-sm border border-border px-1.5 py-0.5 text-2xs font-medium text-muted-foreground"
-                      >
-                        {m}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
+                template={t}
+                selected={selected === t.id}
+                onSelect={() => setSelected(t.id)}
+              />
+            ))}
+            <button
+              type="button"
+              aria-pressed={selected === 'custom'}
+              data-testid="template-custom"
+              onClick={() => setSelected('custom')}
+              className={[
+                'flex flex-col gap-2 rounded-md border p-4 text-left transition-colors sm:col-span-2',
+                selected === 'custom'
+                  ? 'border-foreground bg-muted/30'
+                  : 'border-dashed border-border hover:bg-muted/40',
+              ].join(' ')}
+            >
+              <div className="text-sm font-semibold text-foreground">Custom</div>
+              <div className="text-xs text-muted-foreground">
+                Choose exactly which modules to enable, make available, or leave off.
+              </div>
+            </button>
+          </div>
+          {selected === 'custom' ? (
+            <CustomModulesBuilder state={custom} onChange={setCustom} />
+          ) : null}
+        </section>
 
-        <div className="space-y-3">
-          <label className="block">
-            <span className="text-sm text-muted-foreground">Name</span>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Spring Invitational"
-              className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-              disabled={creating}
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm text-muted-foreground">Date</span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-              disabled={creating}
-            />
-          </label>
-        </div>
+        <section className="space-y-2">
+          <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            DETAILS (OPTIONAL)
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-xs text-muted-foreground">Name</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Spring Invitational"
+                className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+                disabled={creating}
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs text-muted-foreground">Date</span>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+                disabled={creating}
+              />
+            </label>
+          </div>
+        </section>
 
-        <div className="flex justify-between">
+        <div className="flex justify-between border-t border-border pt-4">
           <Button variant="ghost" onClick={() => navigate('/')} disabled={creating}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={!canCreate}>
+          <Button onClick={handleCreate} disabled={creating}>
             {creating ? 'Creating…' : 'Create workspace'}
           </Button>
         </div>

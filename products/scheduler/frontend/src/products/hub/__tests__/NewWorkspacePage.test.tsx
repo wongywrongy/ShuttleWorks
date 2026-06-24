@@ -110,6 +110,21 @@ describe('NewWorkspacePage', () => {
     await waitFor(() => expect(loc.current).toBe('/tournaments/w5/setup'));
   });
 
+  it('Custom: builds a modules[] seed and lands per the result', async () => {
+    // Custom with only bracket enabled → kind bracket, lands on bracket-setup.
+    returnCreated('wc', [m('bracket', 'enabled'), m('meet', 'disabled'), m('display', 'disabled')]);
+    const loc = { current: '' };
+    mount(loc);
+    fireEvent.click(screen.getByTestId('template-custom'));
+    fireEvent.click(screen.getByTestId('custom-bracket-enabled'));
+    fireEvent.click(screen.getByTestId('custom-meet-off'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+    await waitFor(() => expect(loc.current).toBe('/tournaments/wc/bracket-setup'));
+    const body = vi.mocked(apiClient.createTournament).mock.calls[0][0];
+    expect(body.kind).toBe('bracket');
+    expect(seedFor(body)).toMatchObject({ bracket: 'enabled', meet: 'disabled' });
+  });
+
   it('Blank: nothing enabled → routes to Modules setup (/settings?tab=modules)', async () => {
     returnCreated('w4', [m('meet', 'available'), m('bracket', 'available'), m('display', 'disabled')]);
     const loc = { current: '' };
