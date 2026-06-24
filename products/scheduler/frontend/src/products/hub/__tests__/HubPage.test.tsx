@@ -69,7 +69,7 @@ describe('HubPage navigation', () => {
     mount(loc);
     // Wait for the listTournaments mock to resolve and render.
     await waitFor(() => expect(screen.getByText(/Bracket A/i)).toBeInTheDocument());
-    const openButtons = screen.getAllByRole('button', { name: /open/i });
+    const openButtons = screen.getAllByRole('button', { name: 'Open' });
     // Order: bracket row first (owner, first in mock list).
     fireEvent.click(openButtons[0]);
     expect(loc.current).toBe('/tournaments/br1/bracket-setup');
@@ -79,18 +79,50 @@ describe('HubPage navigation', () => {
     const loc = { current: '' };
     mount(loc);
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    const openButtons = screen.getAllByRole('button', { name: /open/i });
+    const openButtons = screen.getAllByRole('button', { name: 'Open' });
     fireEvent.click(openButtons[1]); // meet row, second in list
     expect(loc.current).toBe('/tournaments/me1/setup');
   });
 });
 
 describe('HubPage module-aware control plane', () => {
-  it('uses workspace / module language, not "event" / "New event"', async () => {
+  it('is a control plane with search + module language, not "New event"', async () => {
     mount({ current: '' });
-    await waitFor(() => expect(screen.getByText('Your workspaces')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'New workspace' })).toBeInTheDocument();
-    expect(screen.queryByText('Your events')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'New workspace' })).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText('Search workspaces')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /new event/i })).not.toBeInTheDocument();
+  });
+
+  it('search filters the workspace list by name', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Search workspaces'), {
+      target: { value: 'Meet' },
+    });
+    expect(screen.queryByText('Bracket A')).not.toBeInTheDocument();
+    expect(screen.getByText('Meet A')).toBeInTheDocument();
+  });
+
+  it('filter tabs narrow the list and show counts', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
+    // Both rows are draft+owned → "Needs attention" shows both; make one active first by filtering Active (none).
+    fireEvent.click(screen.getByTestId('filter-active'));
+    expect(screen.queryByText('Bracket A')).not.toBeInTheDocument();
+    expect(screen.getByText('No workspaces match this filter.')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('filter-all'));
+    expect(screen.getByText('Bracket A')).toBeInTheDocument();
+  });
+
+  it('selecting a row populates the inspector with its module catalog', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Meet A'));
+    // Inspector shows the MODULES heading + an Open workspace action.
+    expect(screen.getByText('MODULES')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open workspace' })).toBeInTheDocument();
   });
 
   it('shows module chips derived from kind (meet→Meet+Display, bracket→Bracket+Display·soon)', async () => {

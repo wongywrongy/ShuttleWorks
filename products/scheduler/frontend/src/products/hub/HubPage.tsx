@@ -1,10 +1,12 @@
 /**
  * Workspace Hub — the control-plane landing page at `/`.
  *
- * Lists the operator's workspaces with enabled-module chips (derived from
- * `kind`, a temporary compatibility bridge) and a primary Open action.
- * "New workspace" routes to the dedicated `/new` create surface (module
- * templates). Two sections: "You own" and "Shared with you".
+ * A full-width operational control plane: a top command bar (wordmark, search,
+ * theme, New workspace), filter tabs (All / Active / Draft / Shared / Needs
+ * attention) with counts, a dense workspace list, and a right-side inspector
+ * for the selected workspace's module catalog + details. Module chips read the
+ * real persisted `modules[]` DTO (fallback to `kind`). "New workspace" routes
+ * to the dedicated `/new` create surface.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,12 +14,18 @@ import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
-import { Button, Card, Modal, PageHeader, StatusPill } from '@scheduler/design-system';
+import { Button, Card, Modal, StatusPill } from '@scheduler/design-system';
 import {
   modulesForWorkspace,
   modulesFromDto,
 } from '../../platform/domain/moduleModel';
-import { workspaceCopy } from '../../platform/domain/workspace';
+import {
+  HUB_FILTERS,
+  filterWorkspaces,
+  filterCounts,
+  type HubFilterId,
+} from './hubFilters';
+import { WorkspaceInspector } from './WorkspaceInspector';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -26,19 +34,10 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString();
 }
 
-interface RowProps {
-  tournament: TournamentSummaryDTO;
-  variant: 'owned' | 'shared';
-  onOpen: () => void;
-  /** Only wired for the owned section — viewers / operators can't
-   *  delete tournaments they don't own. */
-  onDelete?: () => void;
-}
-
 /** Module chips for a workspace row. Reads the real persisted `modules` from the
  *  summary DTO when present, else falls back to the kind-derived catalog. Omits a
- *  coming-soon foreign operator (Bracket on a meet / Meet on a bracket) to keep the
- *  row clean, but keeps Display's coming-soon as an informative chip. */
+ *  coming-soon foreign operator to keep the row clean, but keeps Display's
+ *  coming-soon as an informative chip. */
 function ModuleChips({ tournament }: { tournament: TournamentSummaryDTO }) {
   const all = tournament.modules
     ? modulesFromDto(tournament.modules)
@@ -71,42 +70,60 @@ function ModuleChips({ tournament }: { tournament: TournamentSummaryDTO }) {
   );
 }
 
-function TournamentRow({ tournament, variant, onOpen, onDelete }: RowProps) {
+interface RowProps {
+  tournament: TournamentSummaryDTO;
+  selected: boolean;
+  onSelect: () => void;
+  onOpen: () => void;
+  onDelete?: () => void;
+}
+
+function WorkspaceRow({ tournament, selected, onSelect, onOpen, onDelete }: RowProps) {
   return (
     <div
-      className="flex items-center gap-4 p-4 hover:bg-muted/40 cursor-pointer"
-      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={[
+        'flex cursor-pointer items-center gap-4 px-4 py-3 text-sm',
+        selected ? 'bg-accent/5' : 'hover:bg-muted/40',
+      ].join(' ')}
     >
-      <div className="flex-1 min-w-0">
-        <div className="font-medium truncate">{tournament.name || 'Untitled'}</div>
-        {variant === 'shared' && (
-          <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
-            owner: {tournament.ownerName ?? '—'}
-          </div>
-        )}
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium text-foreground">
+          {tournament.name || 'Untitled'}
+        </div>
+        <div className="mt-1">
+          <ModuleChips tournament={tournament} />
+        </div>
       </div>
-      <div className="w-48 shrink-0">
-        <ModuleChips tournament={tournament} />
-      </div>
-      {variant === 'shared' && (
-        <span className="text-xs text-muted-foreground capitalize w-16 text-right">
-          {tournament.role ?? '—'}
-        </span>
-      )}
-      <span className="text-xs text-muted-foreground tabular-nums w-24 text-right">
-        {formatDate(tournament.tournamentDate)}
+      <span className="hidden w-20 text-right text-xs capitalize text-muted-foreground sm:block">
+        {tournament.role ?? '—'}
+      </span>
+      <span className="hidden w-40 truncate text-right text-xs text-muted-foreground md:block">
+        {tournament.ownerName ?? '—'}
+      </span>
+      <span className="hidden w-24 text-right text-xs tabular-nums text-muted-foreground lg:block">
+        {formatDate(tournament.updatedAt)}
       </span>
       <StatusPill
-          tone={
-            tournament.status === 'active'
-              ? 'green'
-              : tournament.status === 'archived'
-                ? 'idle'
-                : 'done'
-          }
-        >
-          {tournament.status}
-        </StatusPill>
+        tone={
+          tournament.status === 'active'
+            ? 'green'
+            : tournament.status === 'archived'
+              ? 'idle'
+              : 'done'
+        }
+      >
+        {tournament.status}
+      </StatusPill>
       <Button
         variant="ghost"
         onClick={(e) => {
@@ -134,64 +151,17 @@ function TournamentRow({ tournament, variant, onOpen, onDelete }: RowProps) {
   );
 }
 
-function Section({
-  eyebrow,
-  title,
-  variant,
-  items,
-  onOpen,
-  onDelete,
-  emptyHint,
-}: {
-  eyebrow: string;
-  title: string;
-  variant: 'owned' | 'shared';
-  items: TournamentSummaryDTO[];
-  onOpen: (id: string) => void;
-  onDelete?: (t: TournamentSummaryDTO) => void;
-  emptyHint?: string;
-}) {
-  if (items.length === 0 && !emptyHint) return null;
-  return (
-    <section className="space-y-3">
-      <div className="space-y-0.5">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {eyebrow}
-        </span>
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      </div>
-      {items.length === 0 ? (
-        <Card className="p-6 text-sm text-muted-foreground">{emptyHint}</Card>
-      ) : (
-        <Card className="divide-y divide-border">
-          {items.map((t) => (
-            <TournamentRow
-              key={t.id}
-              tournament={t}
-              variant={variant}
-              onOpen={() => onOpen(t.id)}
-              onDelete={onDelete ? () => onDelete(t) : undefined}
-            />
-          ))}
-        </Card>
-      )}
-    </section>
-  );
-}
-
 export function HubPage() {
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<TournamentSummaryDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Delete-confirmation state: ``deleteTarget`` is the tournament the
-  // operator clicked Delete on; ``deleting`` is the in-flight flag.
-  // Surfaced as a modal that only renders when ``deleteTarget`` is set;
-  // confirming POSTs the DELETE, refreshes the list, and closes the
-  // modal. The dashboard re-renders without the deleted row.
-  const [deleteTarget, setDeleteTarget] =
-    useState<TournamentSummaryDTO | null>(null);
+  const [query, setQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<HubFilterId>('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<TournamentSummaryDTO | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const closeDeleteDialog = useCallback(() => {
@@ -206,7 +176,7 @@ export function HubPage() {
       const list = await apiClient.listTournaments();
       setTournaments(list);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load tournaments');
+      setError(err instanceof Error ? err.message : 'Failed to load workspaces');
     } finally {
       setLoading(false);
     }
@@ -216,23 +186,18 @@ export function HubPage() {
     void refresh();
   }, [refresh]);
 
-  const { owned, shared } = useMemo(() => {
-    const owned: TournamentSummaryDTO[] = [];
-    const shared: TournamentSummaryDTO[] = [];
-    for (const t of tournaments) {
-      if (t.role === 'owner') owned.push(t);
-      else shared.push(t);
-    }
-    return { owned, shared };
-  }, [tournaments]);
+  const counts = useMemo(() => filterCounts(tournaments), [tournaments]);
+  const visible = useMemo(
+    () => filterWorkspaces(tournaments, activeFilter, query),
+    [tournaments, activeFilter, query],
+  );
+  const selected = useMemo(
+    () => tournaments.find((t) => t.id === selectedId) ?? null,
+    [tournaments, selectedId],
+  );
 
   const openTournament = useCallback(
     (id: string) => {
-      // Route to /bracket landing for bracket-kind tournaments so
-      // the operator doesn't bounce off the meet Setup page when
-      // they click into a tournament they created as a bracket.
-      // AppShell will render BracketTab on either URL — the
-      // segment just decides which one we *show* in the browser.
       const t = tournaments.find((row) => row.id === id);
       const segment = t?.kind === 'bracket' ? 'bracket-setup' : 'setup';
       navigate(`/tournaments/${id}/${segment}`);
@@ -248,75 +213,108 @@ export function HubPage() {
       setTournaments((prev) => prev.filter((t) => t.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err) {
-      // The axios interceptor already surfaced a toast; we just clear
-      // the modal's in-flight flag and let the operator retry if they
-      // want. The list re-fetch isn't necessary — the row is still
-      // visible because the delete failed.
-      setError(
-        err instanceof Error ? err.message : 'Failed to delete tournament',
-      );
+      setError(err instanceof Error ? err.message : 'Failed to delete workspace');
     } finally {
       setDeleting(false);
     }
   }, [deleteTarget]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Page header — same lockup as the operator surfaces:
-          boxed wordmark on the left, chrome controls on the right. */}
-      <header className="sticky top-0 z-chrome flex h-12 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur">
+    <div className="flex h-screen flex-col bg-background text-foreground">
+      {/* Top command bar */}
+      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border bg-background px-4">
         <ShuttleWorksMark />
+        <div className="min-w-0 flex-1">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search workspaces…"
+            aria-label="Search workspaces"
+            className="w-full max-w-md rounded border border-border bg-card px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+          />
+        </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Button onClick={() => navigate('/new')}>New workspace</Button>
         </div>
       </header>
 
-      <div className="mx-auto max-w-4xl space-y-8 px-6 py-10">
-        <PageHeader
-          eyebrow="WORKSPACES"
-          title="Your workspaces"
-          description="Your event control planes — open a workspace to run its modules."
-          actions={<Button onClick={() => navigate('/new')}>New workspace</Button>}
-        />
+      {/* Filter tabs */}
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-background px-3">
+        {HUB_FILTERS.map((f) => {
+          const active = f.id === activeFilter;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              aria-pressed={active}
+              data-testid={`filter-${f.id}`}
+              onClick={() => setActiveFilter(f.id)}
+              className={[
+                'flex items-center gap-1.5 rounded-sm px-3 py-1 text-xs font-medium tracking-tight',
+                active
+                  ? 'bg-accent/10 text-accent'
+                  : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+              ].join(' ')}
+            >
+              {f.label}
+              <span className="text-2xs tabular-nums text-muted-foreground/70">
+                {counts[f.id]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-        {error && (
-          <div
-            role="alert"
-            className="rounded border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        )}
+      {/* Body: list + inspector */}
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-y-auto">
+          {error && (
+            <div
+              role="alert"
+              className="m-4 rounded border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              {error}
+            </div>
+          )}
 
-        {loading ? (
-          <div className="text-sm text-muted-foreground">Loading…</div>
-        ) : tournaments.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground">No workspaces yet.</p>
-            <p className="mt-1 text-xs text-muted-foreground/70">
-              Click <em>New workspace</em> to create your first event control plane.
-            </p>
-          </Card>
-        ) : (
-          <>
-            <Section
-              eyebrow="YOU OWN"
-              title={workspaceCopy.ownedSectionTitle}
-              variant="owned"
-              items={owned}
-              onOpen={openTournament}
-              onDelete={(t) => setDeleteTarget(t)}
-              emptyHint={workspaceCopy.ownedEmptyHint}
-            />
-            <Section
-              eyebrow="SHARED WITH YOU"
-              title="Collaborating on"
-              variant="shared"
-              items={shared}
-              onOpen={openTournament}
-            />
-          </>
-        )}
+          {loading ? (
+            <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+          ) : tournaments.length === 0 ? (
+            <div className="flex h-full items-center justify-center p-6">
+              <Card className="max-w-md p-8 text-center">
+                <p className="font-medium text-foreground">No workspaces yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  A workspace is your event control plane — it runs modules like
+                  Meet, Bracket, and Display.
+                </p>
+                <Button className="mt-4" onClick={() => navigate('/new')}>
+                  Create workspace
+                </Button>
+              </Card>
+            </div>
+          ) : visible.length === 0 ? (
+            <div className="p-6 text-sm text-muted-foreground">
+              No workspaces match this filter.
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {visible.map((t) => (
+                <WorkspaceRow
+                  key={t.id}
+                  tournament={t}
+                  selected={t.id === selectedId}
+                  onSelect={() => setSelectedId(t.id)}
+                  onOpen={() => openTournament(t.id)}
+                  onDelete={t.role === 'owner' ? () => setDeleteTarget(t) : undefined}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <WorkspaceInspector tournament={selected} onOpen={openTournament} />
       </div>
 
       {deleteTarget && (
@@ -340,25 +338,16 @@ export function HubPage() {
               </p>
             </div>
             <div className="mt-6 flex justify-between">
-              <Button
-                variant="ghost"
-                onClick={closeDeleteDialog}
-                disabled={deleting}
-              >
+              <Button variant="ghost" onClick={closeDeleteDialog} disabled={deleting}>
                 Cancel
               </Button>
-              <Button
-                variant="destructive"
-                onClick={handleDelete}
-                disabled={deleting}
-              >
+              <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
                 {deleting ? 'Deleting…' : 'Delete permanently'}
               </Button>
             </div>
           </div>
         </Modal>
       )}
-
     </div>
   );
 }
