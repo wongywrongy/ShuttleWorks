@@ -61,3 +61,21 @@ export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
     .filter((r): r is LiveRow => r !== null)
     .sort((x, y) => x.court - y.court);
 }
+
+/** The champion of an event: the winner of its final-round play_unit, when
+ *  that round is a single decided match. Returns the participant name, or
+ *  null when the event isn't a single-elimination final / isn't decided. */
+export function eventChampion(
+  data: BracketTournamentDTO,
+  eventId: string,
+): string | null {
+  const event = data.events.find((e) => e.id === eventId);
+  const finalRound = event?.rounds.at(-1);
+  if (!finalRound || finalRound.length !== 1) return null;
+  const puId = finalRound[0];
+  const result = data.results.find((r) => r.play_unit_id === puId);
+  if (!result || result.winner_side === 'none') return null;
+  const pu = data.play_units.find((u) => u.id === puId);
+  if (!pu) return null;
+  return sideLabel(pu, result.winner_side === 'A' ? 'a' : 'b', data.participants);
+}
