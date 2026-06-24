@@ -56,11 +56,13 @@ beforeEach(() => {
 });
 
 describe('WorkspaceSettingsPage', () => {
-  it('renders the tab rail and defaults to General (loads current name)', async () => {
+  it('renders the tab rail, defaults to Overview, and General loads the name', async () => {
     mount({ current: '' });
-    expect(screen.getByTestId('settings-tab-general')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-tab-overview')).toBeInTheDocument();
     expect(screen.getByTestId('settings-tab-modules')).toBeInTheDocument();
     expect(screen.getByTestId('settings-tab-danger')).toBeInTheDocument();
+    expect(screen.getByTestId('overview-tab')).toBeInTheDocument(); // default landing
+    fireEvent.click(screen.getByTestId('settings-tab-general'));
     await waitFor(() =>
       expect(screen.getByLabelText('Workspace name')).toHaveValue('My WS'),
     );
@@ -68,6 +70,7 @@ describe('WorkspaceSettingsPage', () => {
 
   it('General Save persists via updateTournament', async () => {
     mount({ current: '' });
+    fireEvent.click(screen.getByTestId('settings-tab-general'));
     await waitFor(() => expect(screen.getByLabelText('Workspace name')).toHaveValue('My WS'));
     fireEvent.change(screen.getByLabelText('Workspace name'), { target: { value: 'Renamed' } });
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));

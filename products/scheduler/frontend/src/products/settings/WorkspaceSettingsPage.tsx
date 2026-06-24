@@ -13,6 +13,7 @@ import { ThemeToggle } from '../../components/ThemeToggle';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { SETTINGS_TABS, type SettingsTabId } from './settingsTabs';
+import { OverviewTab } from './OverviewTab';
 import { GeneralSettingsTab } from './GeneralSettingsTab';
 import { ModulesSettingsTab } from './ModulesSettingsTab';
 import { DangerZoneTab } from './DangerZoneTab';
@@ -29,7 +30,7 @@ export function WorkspaceSettingsPage() {
   const requestedTab = searchParams.get('tab');
   const initialTab: SettingsTabId = SETTINGS_TABS.some((t) => t.id === requestedTab)
     ? (requestedTab as SettingsTabId)
-    : 'general';
+    : 'overview';
   const [tab, setTab] = useState<SettingsTabId>(initialTab);
   const [summary, setSummary] = useState<TournamentSummaryDTO | null>(null);
 
@@ -89,6 +90,7 @@ export function WorkspaceSettingsPage() {
         </nav>
 
         <div className="min-w-0 flex-1 overflow-y-auto">
+          {tab === 'overview' && <OverviewTab summary={summary} />}
           {tab === 'general' && (
             <GeneralSettingsTab tid={tid} summary={summary} onSaved={load} />
           )}
@@ -102,12 +104,6 @@ export function WorkspaceSettingsPage() {
             <ComingSoonTab
               title="Sync & Backups"
               description="Local source of truth, last sync, backups, and restore."
-            />
-          )}
-          {tab === 'appearance' && (
-            <ComingSoonTab
-              title="Appearance"
-              description="Theme and public display presentation."
             />
           )}
         </div>
