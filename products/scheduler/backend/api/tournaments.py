@@ -21,7 +21,7 @@ from app.dependencies import (
     require_tournament_access,
 )
 from app.error_codes import ErrorCode, http_error
-from app.schemas import TournamentStateDTO
+from app.schemas import TournamentStateDTO, WorkspaceModuleDTO
 from database.models import Tournament
 from repositories import LocalRepository, get_repository
 from api.invites import (
@@ -63,6 +63,10 @@ class TournamentSummaryDTO(BaseModel):
     updatedAt: str
     role: Optional[str] = None
     ownerName: Optional[str] = None
+    # Workspace-modules program (#1): first-class per-workspace module
+    # state, derived-and-persisted from ``kind``. Existing summary
+    # consumers ignore the new field.
+    modules: List[WorkspaceModuleDTO] = Field(default_factory=list)
 
 
 class TournamentCreateDTO(BaseModel):
@@ -99,6 +103,7 @@ def _to_summary(
     row: Tournament,
     *,
     role: Optional[str] = None,
+    modules: Optional[List[WorkspaceModuleDTO]] = None,
 ) -> TournamentSummaryDTO:
     return TournamentSummaryDTO(
         id=str(row.id),
@@ -110,7 +115,15 @@ def _to_summary(
         updatedAt=row.updated_at.isoformat() if row.updated_at else "",
         role=role,
         ownerName=row.owner_email,
+        modules=modules or [],
     )
+
+
+def _modules_for(row: Tournament, repo: LocalRepository) -> List[WorkspaceModuleDTO]:
+    """Derive-and-persist the workspace's modules, as DTOs for the summary."""
+    return [
+        WorkspaceModuleDTO.from_row(m) for m in repo.modules.ensure_modules(row)
+    ]
 
 
 def _backup_entry(row) -> BackupEntryDTO:
@@ -161,7 +174,11 @@ def list_tournaments(
         if role is not None:
             role_by_tournament[tid] = role
     return [
-        _to_summary(t, role=role_by_tournament[t.id])
+        _to_summary(
+            t,
+            role=role_by_tournament[t.id],
+            modules=_modules_for(t, repo),
+        )
         for t in repo.tournaments.list_all()
         if t.id in role_by_tournament
     ]
@@ -223,7 +240,7 @@ def create_tournament(
             row.id,
             {"config": seeded_config},
         )
-    return _to_summary(row, role="owner")
+    return _to_summary(row, role="owner", modules=_modules_for(row, repo))
 
 
 @router.get(
@@ -248,7 +265,7 @@ def get_tournament(
     user_uuid = user.as_uuid()
     if user_uuid is not None:
         role = repo.members.get_role(tournament_id, user_uuid)
-    return _to_summary(row, role=role)
+    return _to_summary(row, role=role, modules=_modules_for(row, repo))
 
 
 @router.patch(
@@ -286,7 +303,7 @@ def update_tournament(
     user_uuid = user.as_uuid()
     if user_uuid is not None:
         role = repo.members.get_role(tournament_id, user_uuid)
-    return _to_summary(row, role=role)
+    return _to_summary(row, role=role, modules=_modules_for(row, repo))
 
 
 @router.delete(

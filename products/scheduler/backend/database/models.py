@@ -48,6 +48,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -142,6 +143,9 @@ class Tournament(Base):
         back_populates="tournament", cascade="all, delete-orphan"
     )
     bracket_events: Mapped[list["BracketEvent"]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan"
+    )
+    modules: Mapped[list["WorkspaceModule"]] = relationship(
         back_populates="tournament", cascade="all, delete-orphan"
     )
 
@@ -597,5 +601,82 @@ class BracketResult(Base):
                 "bracket_matches.id",
             ],
             ondelete="CASCADE",
+        ),
+    )
+
+
+# ---- Workspace modules (workspace-modules program, sub-project #1) -------
+#
+# First-class per-workspace module state, tied to ``tournaments.id``. The
+# legacy ``kind`` column becomes a compatibility seed: a tournament's
+# initial module set is *derived* from ``kind`` (see ``derive_modules``)
+# the first time anyone reads its modules, then persisted as real rows so
+# later sub-projects (hub / settings / sharing redesigns, hybrid
+# enablement) read and mutate first-class state rather than re-deriving.
+
+# Canonical module ids. ``meet`` / ``bracket`` are the data-producing
+# operator modules; ``display`` is the read-only public surface.
+MODULE_IDS = ("meet", "bracket", "display")
+
+# Module lifecycle vocabulary. ``enabled`` — active/operable; ``available``
+# — installable but off; ``disabled`` — turned off by the operator;
+# ``coming_soon`` — not yet buildable for this workspace (immutable).
+MODULE_STATUSES = ("enabled", "available", "disabled", "coming_soon")
+
+# Operator (data-producing) modules — the dependency + last-operational
+# rules in the PATCH path key off this set.
+OPERATIONAL_MODULES = ("meet", "bracket")
+
+
+def derive_modules(kind: Optional[str]) -> dict[str, str]:
+    """Map a tournament's legacy ``kind`` to its seed module status set.
+
+    Honest, not silo-locked: only the kind's operator module is
+    ``enabled``; the foreign operator is ``coming_soon`` (hybrid
+    enablement is a future sub-project — we don't pretend it's enableable
+    yet). ``display`` is ``available`` for meet (the public surface
+    works) and ``coming_soon`` for bracket (not built). Unknown / ``None``
+    kinds fall back to the meet shape.
+    """
+    if kind == "bracket":
+        return {"bracket": "enabled", "display": "coming_soon", "meet": "coming_soon"}
+    # ``meet`` and any unknown / None kind.
+    return {"meet": "enabled", "display": "available", "bracket": "coming_soon"}
+
+
+class WorkspaceModule(Base):
+    """One persisted module row for a workspace (tournament).
+
+    Unique on ``(tournament_id, module_id)`` — at most one row per module
+    per workspace. Seeded lazily from ``derive_modules(tournament.kind)``
+    by ``LocalRepository.modules.ensure_modules`` the first time a read or
+    mutate path touches a workspace's modules; the Alembic migration
+    backfills the same set for rows that predate this table.
+    """
+
+    __tablename__ = "workspace_modules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    module_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    tournament: Mapped[Tournament] = relationship(back_populates="modules")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tournament_id", "module_id", name="uq_workspace_modules_tournament_module"
         ),
     )

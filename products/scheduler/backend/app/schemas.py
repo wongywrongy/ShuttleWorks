@@ -453,6 +453,27 @@ class MatchScore(BaseModel):
 # WarmRestartRequest typed against the stub.
 
 
+# ---- Workspace modules (workspace-modules program, sub-project #1) -----
+
+
+class WorkspaceModuleDTO(BaseModel):
+    """Wire shape for one persisted per-workspace module row.
+
+    ``moduleId`` is one of ``meet`` / ``bracket`` / ``display``;
+    ``status`` is one of ``enabled`` / ``available`` / ``disabled`` /
+    ``coming_soon``. ``config`` is the module's catch-all settings blob
+    (``None`` until set).
+    """
+    moduleId: str
+    status: str
+    config: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_row(cls, row) -> "WorkspaceModuleDTO":
+        """Build the DTO from a ``WorkspaceModule`` ORM row (duck-typed)."""
+        return cls(moduleId=row.module_id, status=row.status, config=row.config)
+
+
 # Health
 class HealthResponse(BaseModel):
     status: str

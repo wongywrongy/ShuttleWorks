@@ -52,7 +52,7 @@ def _conflict_error_class():
     return mod.ConflictError
 
 from fastapi import Request
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.time_utils import now_iso
@@ -69,6 +69,8 @@ from database.models import (
     Tournament,
     TournamentBackup,
     TournamentMember,
+    WorkspaceModule,
+    derive_modules,
 )
 from database.session import SessionLocal
 from services.sync_service import SyncService
@@ -1113,6 +1115,114 @@ def is_invite_valid(invite: InviteLink, *, now: Optional[datetime] = None) -> bo
     return True
 
 
+class _LocalModuleRepo:
+    """Per-workspace module persistence (workspace-modules sub-project #1).
+
+    ``ensure_modules`` is the lazy derive-and-persist seam: every read /
+    mutate path calls it, so a fresh ``create_all`` DB (tests), a
+    freshly-created tournament, and an existing prod row all converge on
+    the derived set without depending on the Alembic backfill.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def list_for_tournament(self, tournament: Tournament) -> list[WorkspaceModule]:
+        """Module rows for a workspace, deriving + persisting if absent."""
+        return self.ensure_modules(tournament)
+
+    def ensure_modules(self, tournament: Tournament) -> list[WorkspaceModule]:
+        """Return the workspace's module rows, seeding them when missing.
+
+        If the tournament has zero module rows, insert the derived set
+        (from ``derive_modules(tournament.kind)``), flush, and return it;
+        otherwise return the existing rows. Idempotent — a second call
+        never duplicates rows. Ordered by ``module_id`` for stable output.
+        """
+        existing = self._rows_for(tournament.id)
+        if existing:
+            return existing
+        derived = derive_modules(getattr(tournament, "kind", None))
+        for module_id, status in derived.items():
+            self.session.add(
+                WorkspaceModule(
+                    tournament_id=tournament.id,
+                    module_id=module_id,
+                    status=status,
+                    config=None,
+                )
+            )
+        self.session.flush()
+        self.session.commit()
+        return self._rows_for(tournament.id)
+
+    def _rows_for(self, tournament_id: uuid.UUID) -> list[WorkspaceModule]:
+        return list(
+            self.session.scalars(
+                select(WorkspaceModule)
+                .where(WorkspaceModule.tournament_id == tournament_id)
+                .order_by(WorkspaceModule.module_id.asc())
+            )
+        )
+
+    def get(
+        self, tournament_id: uuid.UUID, module_id: str
+    ) -> Optional[WorkspaceModule]:
+        return self.session.scalars(
+            select(WorkspaceModule).where(
+                WorkspaceModule.tournament_id == tournament_id,
+                WorkspaceModule.module_id == module_id,
+            )
+        ).one_or_none()
+
+    def update(
+        self,
+        tournament_id: uuid.UUID,
+        module_id: str,
+        fields: dict,
+    ) -> Optional[WorkspaceModule]:
+        """Apply ``status`` / ``config`` updates to a module row.
+
+        Deliberately *unguarded* — the dependency / no-data-loss rules
+        live in the PATCH route. This is the raw write the route calls
+        after its checks pass (and the seam tests use to stage otherwise
+        unreachable states). Only ``status`` and ``config`` are writable;
+        other keys are ignored. Returns ``None`` if no row matches.
+        """
+        row = self.get(tournament_id, module_id)
+        if row is None:
+            return None
+        if "status" in fields:
+            row.status = fields["status"]
+        if "config" in fields:
+            row.config = fields["config"]
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def count_matches(self, tournament_id: uuid.UUID) -> int:
+        """Number of operational ``matches`` rows (meet data-loss guard)."""
+        return int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(Match)
+                .where(Match.tournament_id == tournament_id)
+            )
+            or 0
+        )
+
+    def count_bracket_events(self, tournament_id: uuid.UUID) -> int:
+        """Number of ``bracket_events`` rows (bracket data-loss guard)."""
+        return int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(BracketEvent)
+                .where(BracketEvent.tournament_id == tournament_id)
+            )
+            or 0
+        )
+
+
 class LocalRepository:
     """Façade: holds the session and exposes the sub-repositories."""
 
@@ -1128,6 +1238,7 @@ class LocalRepository:
         self.backups = _LocalTournamentBackupRepo(session)
         self.members = _LocalMemberRepo(session)
         self.invite_links = _LocalInviteLinkRepo(session)
+        self.modules = _LocalModuleRepo(session)
 
     # ---- High-level orchestration (id-explicit, Step 2+) ----------------
 
