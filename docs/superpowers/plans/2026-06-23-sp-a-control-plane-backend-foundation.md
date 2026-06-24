@@ -223,10 +223,11 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
     of ``{"module_id", "status", "config"}`` rows ready to persist.
 
     Backfill: an unnamed ``meet`` / ``bracket`` becomes ``available``; an
-    unnamed ``display`` becomes ``available`` if a data module is enabled in
-    the named set, else ``coming_soon``. Raises ``ValueError`` on malformed
-    input; the caller maps that to a 400 and separately applies
-    ``display_dependency_satisfied``.
+    unnamed ``display`` becomes ``available`` only if ``meet`` is enabled in
+    the named set, else ``coming_soon`` (display is a meet-specific surface;
+    bracket-display is not built yet — matching ``derive_modules``). Raises
+    ``ValueError`` on malformed input; the caller maps that to a 400 and
+    separately applies ``display_dependency_satisfied``.
     """
     named: dict[str, dict] = {}
     for item in seeds:
@@ -244,9 +245,9 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
             "config": item.get("config"),
         }
 
-    operator_enabled = any(
-        named.get(m, {}).get("status") == "enabled" for m in OPERATIONAL_MODULES
-    )
+    # display is a meet-specific surface — gated on meet, NOT OPERATIONAL_MODULES
+    # (bracket-display is coming_soon / not built; matches derive_modules).
+    meet_enabled = named.get("meet", {}).get("status") == "enabled"
     rows: list[dict] = []
     for module_id in MODULE_IDS:
         if module_id in named:
@@ -254,7 +255,7 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
         elif module_id == "display":
             rows.append({
                 "module_id": "display",
-                "status": "available" if operator_enabled else "coming_soon",
+                "status": "available" if meet_enabled else "coming_soon",
                 "config": None,
             })
         else:
