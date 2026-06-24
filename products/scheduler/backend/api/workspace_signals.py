@@ -55,17 +55,22 @@ class WorkspaceSignalsDTO(BaseModel):
 
 
 def _module_counts(modules) -> ModuleCountsDTO:
-    counts = ModuleCountsDTO()
+    enabled = available = disabled = coming_soon = 0
     for m in modules:
         if m.status == "enabled":
-            counts.enabled += 1
+            enabled += 1
         elif m.status == "available":
-            counts.available += 1
+            available += 1
         elif m.status == "disabled":
-            counts.disabled += 1
+            disabled += 1
         elif m.status == "coming_soon":
-            counts.comingSoon += 1
-    return counts
+            coming_soon += 1
+    return ModuleCountsDTO(
+        enabled=enabled,
+        available=available,
+        disabled=disabled,
+        comingSoon=coming_soon,
+    )
 
 
 def _meet_setup(data: dict, counts: RowCounts) -> dict:
@@ -76,7 +81,7 @@ def _meet_setup(data: dict, counts: RowCounts) -> dict:
     roster = len(data.get("players") or []) > 0
     schedule = data.get("schedule")
     scheduled = bool(schedule) and bool(
-        (schedule or {}).get("assignments") if isinstance(schedule, dict) else schedule
+        schedule.get("assignments") if isinstance(schedule, dict) else schedule
     )
     results = counts.match_states > 0
     return {
@@ -116,7 +121,7 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
             code="DISPLAY_NO_SOURCE", label="Display is on but no data module is enabled"))
 
     if kind == "bracket":
-        if not setup["events"]:
+        if not setup["bracketBuilt"]:
             attention.append(AttentionReasonDTO(code="NO_BRACKET", label="Bracket not built yet"))
     else:
         if not setup["roster"]:

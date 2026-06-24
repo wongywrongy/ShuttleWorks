@@ -81,6 +81,17 @@ def test_bracket_not_built_attention():
     assert sig.setup["events"] is False
 
 
+def test_bracket_events_without_matches_fires_no_bracket():
+    # events configured (bracket_events=2) but draw not generated (bracket_matches=0)
+    # → bracketBuilt is False → NO_BRACKET must fire (old guard on "events" would miss this)
+    mods = [_mod("bracket", "enabled"), _mod("meet", "coming_soon"), _mod("display", "coming_soon")]
+    counts = RowCounts(bracket_events=2, bracket_matches=0)
+    sig = build_signals(_row(kind="bracket", status="active"), mods, counts)
+    assert sig.setup["events"] is True
+    assert sig.setup["bracketBuilt"] is False
+    assert any(a.code == "NO_BRACKET" for a in sig.attention)
+
+
 def test_collaboration_counts():
     mods = [_mod("meet", "enabled")]
     sig = build_signals(_row(status="active"), mods, RowCounts(members=3, active_invites=2))
