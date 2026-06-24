@@ -1,6 +1,6 @@
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { isModuleEnterable } from '../domain/moduleModel';
-import type { ModuleId, WorkspaceModule } from './types';
+import type { ModuleId, ModuleStatus, WorkspaceModule } from './types';
 
 interface ModuleDockProps {
   modules: WorkspaceModule[];
@@ -10,9 +10,27 @@ interface ModuleDockProps {
   onEnable?: (id: ModuleId) => void;
 }
 
+/** Per-module status dot: filled accent = enabled, accent ring = available,
+ *  muted fill = disabled, muted ring = coming-soon. Communicates installed
+ *  capability at a glance (vs. a plain tab strip). */
+function statusDotClass(status: ModuleStatus): string {
+  switch (status) {
+    case 'enabled':
+      return 'bg-accent';
+    case 'available':
+      return 'border border-accent';
+    case 'disabled':
+      return 'bg-muted-foreground/50';
+    default:
+      return 'border border-muted-foreground/40'; // coming-soon
+  }
+}
+
 /** The Module Dock — the workspace's module launcher. Each module reflects its
- *  real status: `enabled`/`available` enter on click; `disabled` shows an Enable
- *  affordance (`onEnable`); `coming-soon` is non-interactive with a roadmap note. */
+ *  real status (status dot + label): `enabled`/`available` enter on click;
+ *  `disabled` shows an Enable affordance (`onEnable`); `coming-soon` is
+ *  non-interactive with a roadmap note. The active module reads as the running
+ *  module, not a selected tab. */
 export function ModuleDock({ modules, active, onSelect, onEnable }: ModuleDockProps) {
   return (
     <div role="tablist" aria-label="Modules" className="flex items-center gap-0.5">
@@ -41,18 +59,24 @@ export function ModuleDock({ modules, active, onSelect, onEnable }: ModuleDockPr
             }}
             className={[
               INTERACTIVE_BASE,
-              'rounded-sm px-3 py-1.5 text-sm font-medium tracking-tight',
+              'inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium tracking-tight',
               !interactive
                 ? 'cursor-not-allowed text-muted-foreground/40'
                 : canEnable
                   ? 'italic text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                   : isActive
-                    ? 'bg-accent/10 text-accent font-semibold'
+                    ? 'bg-accent/10 font-semibold text-accent ring-1 ring-inset ring-accent/25'
                     : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
             ].join(' ')}
           >
-            {m.label}
-            {canEnable ? ' · enable' : ''}
+            <span
+              aria-hidden
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDotClass(m.status)}`}
+            />
+            <span>
+              {m.label}
+              {canEnable ? ' · enable' : ''}
+            </span>
           </button>
         );
       })}

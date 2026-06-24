@@ -53,7 +53,7 @@ function ModuleChips({ tournament }: { tournament: TournamentSummaryDTO }) {
             title={soon ? m.note : undefined}
             data-testid={`chip-${m.id}`}
             className={[
-              'rounded-sm px-1.5 py-0.5 text-2xs font-medium',
+              'inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-2xs font-medium',
               m.status === 'enabled'
                 ? 'bg-accent/10 text-accent'
                 : soon
@@ -61,6 +61,17 @@ function ModuleChips({ tournament }: { tournament: TournamentSummaryDTO }) {
                   : 'border border-border text-muted-foreground',
             ].join(' ')}
           >
+            <span
+              aria-hidden
+              className={[
+                'h-1 w-1 shrink-0 rounded-full',
+                m.status === 'enabled'
+                  ? 'bg-accent'
+                  : m.status === 'available'
+                    ? 'border border-accent'
+                    : 'border border-muted-foreground/40',
+              ].join(' ')}
+            />
             {m.label}
             {soon ? ' · soon' : ''}
           </span>
