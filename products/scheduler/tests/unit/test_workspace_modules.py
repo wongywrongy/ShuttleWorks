@@ -257,3 +257,17 @@ def test_ensure_modules_backfills_existing_tournament(client):
         "display": "coming_soon",
         "meet": "coming_soon",
     }
+
+
+def test_display_dependency_satisfied_rule():
+    from database.models import display_dependency_satisfied
+
+    # Display not enabled → always satisfied.
+    assert display_dependency_satisfied({"meet": "available", "display": "available"}) is True
+    assert display_dependency_satisfied({"meet": "disabled", "display": "disabled"}) is True
+    # Display enabled with an enabled operator → satisfied.
+    assert display_dependency_satisfied({"meet": "enabled", "display": "enabled"}) is True
+    assert display_dependency_satisfied({"bracket": "enabled", "display": "enabled"}) is True
+    # Display enabled with no enabled operator → violated.
+    assert display_dependency_satisfied({"meet": "available", "bracket": "disabled", "display": "enabled"}) is False
+    assert display_dependency_satisfied({"display": "enabled"}) is False

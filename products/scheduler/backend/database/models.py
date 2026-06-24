@@ -644,6 +644,20 @@ def derive_modules(kind: Optional[str]) -> dict[str, str]:
     return {"meet": "enabled", "display": "available", "bracket": "coming_soon"}
 
 
+def display_dependency_satisfied(statuses: dict[str, str]) -> bool:
+    """Whether the Display-dependency rule holds for a module status map.
+
+    ``display`` may be ``enabled`` only if a data-producing (operational)
+    module — ``meet`` or ``bracket`` — is also ``enabled``. Returns ``True``
+    whenever ``display`` is not ``enabled`` (the rule is vacuously satisfied).
+    Shared by the create-seed validation and the PATCH handler so the rule
+    lives in exactly one place.
+    """
+    if statuses.get("display") != "enabled":
+        return True
+    return any(statuses.get(m) == "enabled" for m in OPERATIONAL_MODULES)
+
+
 class WorkspaceModule(Base):
     """One persisted module row for a workspace (tournament).
 

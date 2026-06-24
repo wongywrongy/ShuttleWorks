@@ -26,6 +26,7 @@ from database.models import (
     MODULE_STATUSES,
     OPERATIONAL_MODULES,
     WorkspaceModule,
+    display_dependency_satisfied,
 )
 from repositories import LocalRepository, get_repository
 
@@ -145,11 +146,9 @@ def patch_module(
             )
 
         if new_status == "enabled" and module_id == "display":
-            has_operator = any(
-                m.module_id in OPERATIONAL_MODULES and m.status == "enabled"
-                for m in modules
-            )
-            if not has_operator:
+            statuses = {m.module_id: m.status for m in modules}
+            statuses["display"] = "enabled"
+            if not display_dependency_satisfied(statuses):
                 raise http_error(
                     409,
                     ErrorCode.MODULE_DEPENDENCY_UNMET,
