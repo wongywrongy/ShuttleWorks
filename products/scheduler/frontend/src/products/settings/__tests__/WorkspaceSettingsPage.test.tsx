@@ -79,11 +79,13 @@ describe('WorkspaceSettingsPage', () => {
     );
   });
 
-  it('Modules tab enables an available module via patch', async () => {
+  it('Modules catalog shows capability + dependency, and enables via patch', async () => {
     mount({ current: '' });
     fireEvent.click(screen.getByTestId('settings-tab-modules'));
     await waitFor(() => expect(screen.getByTestId('settings-module-display')).toBeInTheDocument());
     const row = screen.getByTestId('settings-module-display');
+    expect(within(row).getByText(/public display/i)).toBeInTheDocument();
+    expect(within(row).getByText(/Needs Meet or Bracket/i)).toBeInTheDocument();
     fireEvent.click(within(row).getByRole('button', { name: 'Enable' }));
     await waitFor(() =>
       expect(apiClient.patchWorkspaceModule).toHaveBeenCalledWith('t1', 'display', {
