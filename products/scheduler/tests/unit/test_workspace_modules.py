@@ -468,6 +468,27 @@ def test_migration_flip_sql_promotes_coming_soon_operators(client, tid):
         assert after["meet"] == "enabled"         # unaffected
 
 
+def test_migration_flip_display_coming_soon_to_available(client, tid):
+    import uuid as _uuid
+    from sqlalchemy import text
+    from repositories import open_repository
+
+    # Mirrors alembic j3e7f9a1b5c8.upgrade() verbatim.
+    FLIP_SQL = (
+        "UPDATE workspace_modules SET status = 'available' "
+        "WHERE module_id = 'display' AND status = 'coming_soon'"
+    )
+    with open_repository() as repo:
+        t = repo.tournaments.get_by_id(_uuid.UUID(tid))
+        repo.modules.ensure_modules(t)
+        repo.modules.update(t.id, "display", {"status": "coming_soon"})
+        repo.session.execute(text(FLIP_SQL))
+        repo.session.commit()
+        after = {m.module_id: m.status for m in repo.modules.ensure_modules(t)}
+        assert after["display"] == "available"
+        assert after["meet"] == "enabled"  # non-display row untouched
+
+
 def test_create_without_seed_unchanged(client):
     r = client.post("/tournaments", json={"name": "Legacy", "kind": "bracket"})
     assert r.status_code == 201
