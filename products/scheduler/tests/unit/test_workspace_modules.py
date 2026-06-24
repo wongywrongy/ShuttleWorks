@@ -422,6 +422,30 @@ def test_create_seed_rejected_leaves_no_orphan_tournament(client):
     assert tournaments == []
 
 
+def test_migration_flip_sql_promotes_coming_soon_operators(client, tid):
+    import uuid as _uuid
+    from sqlalchemy import text
+    from repositories import open_repository
+
+    # Mirrors alembic i2d6e8f0a4b7.upgrade()'s statement verbatim.
+    FLIP_SQL = (
+        "UPDATE workspace_modules SET status = 'available' "
+        "WHERE module_id IN ('meet', 'bracket') AND status = 'coming_soon'"
+    )
+    with open_repository() as repo:
+        t = repo.tournaments.get_by_id(_uuid.UUID(tid))
+        repo.modules.ensure_modules(t)
+        # Stage a legacy pre-B2 state: foreign operator + display both coming_soon.
+        repo.modules.update(t.id, "bracket", {"status": "coming_soon"})
+        repo.modules.update(t.id, "display", {"status": "coming_soon"})
+        repo.session.execute(text(FLIP_SQL))
+        repo.session.commit()
+        after = {m.module_id: m.status for m in repo.modules.ensure_modules(t)}
+        assert after["bracket"] == "available"   # operator promoted
+        assert after["display"] == "coming_soon"  # display left untouched
+        assert after["meet"] == "enabled"         # unaffected
+
+
 def test_create_without_seed_unchanged(client):
     r = client.post("/tournaments", json={"name": "Legacy", "kind": "bracket"})
     assert r.status_code == 201
