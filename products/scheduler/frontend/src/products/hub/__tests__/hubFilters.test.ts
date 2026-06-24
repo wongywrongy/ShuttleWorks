@@ -43,4 +43,39 @@ describe('hubFilters', () => {
     expect(filterWorkspaces(list, 'draft', 'gam').map((t) => t.id)).toEqual(['c']);
     expect(filterWorkspaces(list, 'all', 'zzz')).toHaveLength(0);
   });
+
+  it('Needs-attention uses signals when present (an active workspace can need attention)', () => {
+    const withSignals = [
+      // Active + signals.health 'attention' → attention (the old draft-only rule would miss it).
+      make({
+        id: 'd',
+        name: 'Delta',
+        status: 'active',
+        role: 'owner',
+        signals: {
+          health: 'attention',
+          attention: [{ code: 'NO_ROSTER', label: 'No players added yet' }],
+          modules: { enabled: 1, available: 1, disabled: 0, comingSoon: 1 },
+          setup: { roster: false },
+          collaboration: { memberCount: 1, activeInviteCount: 0 },
+        },
+      }),
+      // Active + healthy signals → NOT attention.
+      make({
+        id: 'e',
+        name: 'Echo',
+        status: 'active',
+        role: 'owner',
+        signals: {
+          health: 'good',
+          attention: [],
+          modules: { enabled: 1, available: 1, disabled: 0, comingSoon: 1 },
+          setup: { roster: true },
+          collaboration: { memberCount: 1, activeInviteCount: 0 },
+        },
+      }),
+    ];
+    expect(filterCounts(withSignals).attention).toBe(1);
+    expect(filterWorkspaces(withSignals, 'attention', '').map((t) => t.id)).toEqual(['d']);
+  });
 });

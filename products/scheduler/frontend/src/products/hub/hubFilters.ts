@@ -1,4 +1,5 @@
 import type { TournamentSummaryDTO } from '../../api/dto';
+import { needsAttention } from './hubSignals';
 
 export type HubFilterId = 'all' | 'active' | 'draft' | 'shared' | 'attention';
 
@@ -8,18 +9,15 @@ export interface HubFilter {
   predicate: (t: TournamentSummaryDTO) => boolean;
 }
 
-/** The control-plane filter tabs. `attention` = owned workspaces still in
- *  draft (incomplete setup) — the ones that actually need the operator. */
+/** The control-plane filter tabs. `attention` uses the server-computed
+ *  `signals` (health / attention reasons) when present, falling back to the
+ *  owned-and-draft heuristic for older payloads. */
 export const HUB_FILTERS: HubFilter[] = [
   { id: 'all', label: 'All', predicate: () => true },
   { id: 'active', label: 'Active', predicate: (t) => t.status === 'active' },
   { id: 'draft', label: 'Draft', predicate: (t) => t.status === 'draft' },
   { id: 'shared', label: 'Shared with me', predicate: (t) => t.role !== 'owner' },
-  {
-    id: 'attention',
-    label: 'Needs attention',
-    predicate: (t) => t.role === 'owner' && t.status === 'draft',
-  },
+  { id: 'attention', label: 'Needs attention', predicate: needsAttention },
 ];
 
 /** Apply a filter tab + a name search (case-insensitive substring). */
