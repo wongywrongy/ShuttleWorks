@@ -599,6 +599,36 @@ export interface WorkspaceModuleDTO {
   config: Record<string, unknown> | null;
 }
 
+/** Server-computed control-plane signals (mirrors backend
+ *  `api/workspace_signals.py`). Surfaced on `TournamentSummaryDTO.signals`. */
+export interface AttentionReasonDTO {
+  /** Stable machine code, e.g. "NO_ROSTER". */
+  code: string;
+  /** Human label, e.g. "No players added yet". */
+  label: string;
+}
+
+export interface ModuleCountsDTO {
+  enabled: number;
+  available: number;
+  disabled: number;
+  comingSoon: number;
+}
+
+export interface CollaborationDTO {
+  memberCount: number;
+  activeInviteCount: number;
+}
+
+export interface WorkspaceSignalsDTO {
+  health: 'good' | 'attention' | 'draft' | 'archived';
+  attention: AttentionReasonDTO[];
+  modules: ModuleCountsDTO;
+  /** Per-kind readiness checklist (keys vary by kind), e.g. `{ roster: true }`. */
+  setup: Record<string, boolean>;
+  collaboration: CollaborationDTO;
+}
+
 export interface TournamentSummaryDTO {
   id: string;
   name: string | null;
@@ -616,6 +646,9 @@ export interface TournamentSummaryDTO {
   /** Persisted module catalog for this workspace (sub-project #1). Optional
    *  for backward compatibility with older payloads. */
   modules?: WorkspaceModuleDTO[];
+  /** Server-computed control-plane signals (SP-A). Optional for backward
+   *  compatibility with older payloads. */
+  signals?: WorkspaceSignalsDTO;
 }
 
 export interface TournamentCreateDTO {
