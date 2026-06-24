@@ -22,7 +22,19 @@ describe('hubMetrics', () => {
     expect(m.attention).toBe(1); // a (health attention)
     expect(m.active).toBe(1); // a
     expect(m.shared).toBe(1); // b (viewer)
-    expect(m.enabledModules).toBe(3); // 2 + 1
+    expect(m.enabledModules).toBe(3); // 2 + 1 (from signals, modules[] absent)
     expect(m.pendingInvites).toBe(3); // 2 + 1
+  });
+
+  it('counts enabled modules from modules[] when present (robust to missing signals)', () => {
+    const list = [
+      base({ id: 'a', modules: [
+        { moduleId: 'meet', status: 'enabled', config: null },
+        { moduleId: 'display', status: 'enabled', config: null },
+        { moduleId: 'bracket', status: 'available', config: null },
+      ] }),
+      base({ id: 'b', modules: [{ moduleId: 'bracket', status: 'enabled', config: null }] }),
+    ];
+    expect(hubMetrics(list).enabledModules).toBe(3); // 2 + 1
   });
 });

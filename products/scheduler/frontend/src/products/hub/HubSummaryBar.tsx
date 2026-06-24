@@ -1,7 +1,8 @@
 /**
- * The Hub's top summary band — six operational totals derived from the loaded
- * workspaces' server signals (via hubMetrics). The attention / active / shared
- * stats are buttons that drive the matching filter; the rest are read-only.
+ * The Hub's top summary band — operational totals for a tournament control plane:
+ * Workspaces, Needs attention, Active, Enabled modules. Attention + Active are
+ * buttons that drive the matching filter. Collaboration (members / invites) is
+ * not headlined here — it lives in the inspector + People surfaces.
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { MetricStat } from '../../components/control-plane';
@@ -38,19 +39,8 @@ export function HubSummaryBar({
       >
         <MetricStat label="Active" value={m.active} />
       </button>
-      <button
-        type="button"
-        data-testid="metric-shared"
-        onClick={() => onPickFilter('shared')}
-        className="flex flex-1 items-center bg-background px-4 py-3 text-left hover:bg-muted/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-      >
-        <MetricStat label="Shared" value={m.shared} />
-      </button>
       <div className="flex flex-1 items-center bg-background px-4 py-3">
         <MetricStat label="Enabled modules" value={m.enabledModules} testId="metric-modules" />
-      </div>
-      <div className="flex flex-1 items-center bg-background px-4 py-3">
-        <MetricStat label="Pending invites" value={m.pendingInvites} testId="metric-invites" />
       </div>
     </div>
   );
