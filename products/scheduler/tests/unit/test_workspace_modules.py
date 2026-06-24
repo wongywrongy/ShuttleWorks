@@ -333,6 +333,76 @@ def test_normalize_seed_empty_backfills_all_modules():
     assert _as_map(rows) == {"meet": "available", "bracket": "available", "display": "coming_soon"}
 
 
+# ---- create endpoint accepts modules[] -----------------------------------
+
+
+def _modules_map(body) -> dict:
+    return {m["moduleId"]: m["status"] for m in body["modules"]}
+
+
+def test_create_with_hybrid_seed_persists_all_enabled(client):
+    r = client.post("/tournaments", json={
+        "name": "Hybrid", "kind": "meet",
+        "modules": [
+            {"moduleId": "meet", "status": "enabled"},
+            {"moduleId": "bracket", "status": "enabled"},
+            {"moduleId": "display", "status": "enabled"},
+        ],
+    })
+    assert r.status_code == 201, r.text
+    assert _modules_map(r.json()) == {"meet": "enabled", "bracket": "enabled", "display": "enabled"}
+    # Persisted: a re-list shows the same set.
+    listed = next(t for t in client.get("/tournaments").json() if t["id"] == r.json()["id"])
+    assert _modules_map(listed) == {"meet": "enabled", "bracket": "enabled", "display": "enabled"}
+
+
+def test_create_with_blank_seed_all_available(client):
+    r = client.post("/tournaments", json={
+        "name": "Blank", "kind": "meet",
+        "modules": [
+            {"moduleId": "meet", "status": "available"},
+            {"moduleId": "bracket", "status": "available"},
+            {"moduleId": "display", "status": "disabled"},
+        ],
+    })
+    assert r.status_code == 201, r.text
+    assert _modules_map(r.json()) == {"meet": "available", "bracket": "available", "display": "disabled"}
+
+
+def test_create_with_partial_seed_backfills(client):
+    r = client.post("/tournaments", json={
+        "name": "Partial", "modules": [{"moduleId": "bracket", "status": "enabled"}],
+    })
+    assert r.status_code == 201, r.text
+    assert _modules_map(r.json()) == {"bracket": "enabled", "meet": "available", "display": "coming_soon"}
+
+
+def test_create_seed_rejects_unknown_module(client):
+    r = client.post("/tournaments", json={
+        "name": "Bad", "modules": [{"moduleId": "scoreboard", "status": "enabled"}],
+    })
+    assert r.status_code == 400
+
+
+def test_create_seed_rejects_display_without_source(client):
+    r = client.post("/tournaments", json={
+        "name": "BadDisplay",
+        "modules": [
+            {"moduleId": "meet", "status": "available"},
+            {"moduleId": "bracket", "status": "available"},
+            {"moduleId": "display", "status": "enabled"},
+        ],
+    })
+    assert r.status_code == 400
+
+
+def test_create_without_seed_unchanged(client):
+    r = client.post("/tournaments", json={"name": "Legacy", "kind": "bracket"})
+    assert r.status_code == 201
+    # kind-derived seed: bracket enabled, others coming_soon.
+    assert _modules_map(r.json()) == {"bracket": "enabled", "display": "coming_soon", "meet": "coming_soon"}
+
+
 # ---- seed_modules --------------------------------------------------------
 
 

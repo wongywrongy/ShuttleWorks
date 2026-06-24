@@ -22,7 +22,7 @@ from app.dependencies import (
 )
 from app.error_codes import ErrorCode, http_error
 from app.schemas import TournamentStateDTO, WorkspaceModuleDTO
-from database.models import Tournament
+from database.models import Tournament, normalize_module_seed, display_dependency_satisfied
 from repositories import LocalRepository, get_repository
 from api.invites import (
     InviteCreateDTO,
@@ -69,10 +69,17 @@ class TournamentSummaryDTO(BaseModel):
     modules: List[WorkspaceModuleDTO] = Field(default_factory=list)
 
 
+class WorkspaceModuleSeedDTO(BaseModel):
+    moduleId: str = Field(max_length=20)
+    status: str = Field(max_length=20)
+    config: Optional[dict] = None
+
+
 class TournamentCreateDTO(BaseModel):
     name: Optional[str] = Field(default=None, max_length=200)
     kind: str = Field(default="meet", max_length=20)
     tournamentDate: Optional[str] = Field(default=None, max_length=32)
+    modules: Optional[List[WorkspaceModuleSeedDTO]] = None
 
 
 class TournamentUpdateDTO(BaseModel):
@@ -202,7 +209,7 @@ def create_tournament(
     if body.kind not in ("meet", "bracket"):
         raise http_error(
             400,
-            ErrorCode.VALIDATION_FAILED,
+            ErrorCode.INVALID_INPUT,
             f"kind must be 'meet' or 'bracket', got {body.kind!r}",
         )
     row = repo.tournaments.create(
@@ -214,6 +221,24 @@ def create_tournament(
     )
     if user_uuid is not None:
         repo.members.add_member(row.id, user_uuid, role="owner")
+
+    # Explicit module seed (control-plane templates / custom create). When
+    # present, validate + backfill, enforce the display dependency, and
+    # persist before any module read so ensure_modules is a no-op.
+    if body.modules is not None:
+        try:
+            seed_rows = normalize_module_seed([m.model_dump() for m in body.modules])
+        except ValueError as exc:
+            raise http_error(400, ErrorCode.INVALID_INPUT, str(exc))
+        statuses = {r["module_id"]: r["status"] for r in seed_rows}
+        if not display_dependency_satisfied(statuses):
+            raise http_error(
+                400,
+                ErrorCode.INVALID_INPUT,
+                "display may be enabled only with an enabled operational module",
+            )
+        repo.modules.seed_modules(row, seed_rows)
+
     # Seed a fully-valid config so SetupTab reads the dashboard name + date
     # on first open instead of blank fields, AND so the first frontend PUT
     # (which snapshots the Zustand store) passes Pydantic validation on all
