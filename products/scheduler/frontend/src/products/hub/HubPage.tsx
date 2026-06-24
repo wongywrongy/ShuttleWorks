@@ -1,35 +1,10 @@
 /**
- * Tournament dashboard — the multi-tournament landing page at ``/``.
+ * Workspace Hub — the control-plane landing page at `/`.
  *
- * Step 6 split rows into two sections:
- *   - **Your Tournaments** (``role === 'owner'``): columns name /
- *     status / date / Open.
- *   - **Shared with You** (any other role): columns name / your role /
- *     owner name / date / Open.
- *
- * Status pill colours follow the PRODUCT-doc semantic palette: draft is
- * neutral grey, active is green, archived is muted.
- *
- * The **New** button opens a two-step dialog:
- *   1. Pick a kind — **Meet** (intercollegiate inter-school
- *      dual / tri-meet, scheduler product) or **Tournament**
- *      (bracket draws, tournament product).
- *   2. Meet flow: existing name + date form → POST /tournaments →
- *      navigate to /tournaments/:id/setup.
- *      Tournament flow: open the tournament app in a new tab at
- *      ``VITE_TOURNAMENT_APP_URL`` (defaults to
- *      ``http://localhost:5174``). The tournament product is a
- *      separate stack — see ``products/tournament/``.
- *
- * Only meets are listed on this dashboard; tournament-product
- * tournaments live in their own (stateless) backend. No charts, no
- * activity feed, no onboarding — the spec explicitly scopes v1 to
- * the functional cockpit.
- *
- * Visual language is the same as the operator surfaces: boxed
- * ShuttleWorks wordmark + ThemeToggle in a sticky header, semantic
- * status tokens (``--status-live`` / ``--status-idle``), eyebrow
- * micro-tags above each section heading.
+ * Lists the operator's workspaces with enabled-module chips (derived from
+ * `kind`, a temporary compatibility bridge) and a primary Open action.
+ * "New workspace" routes to the dedicated `/new` create surface (module
+ * templates). Two sections: "You own" and "Shared with you".
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -38,6 +13,7 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { Button, Card, Modal, PageHeader, StatusPill } from '@scheduler/design-system';
+import { modulesForWorkspace } from '../../platform/domain/moduleModel';
 import { workspaceCopy } from '../../platform/domain/workspace';
 
 function formatDate(iso: string | null): string {
@@ -56,6 +32,38 @@ interface RowProps {
   onDelete?: () => void;
 }
 
+/** Enabled-module chips for a workspace row, derived from `kind` (the temporary
+ *  compatibility bridge). Omits the non-enabled foreign operator module so a row
+ *  reads as "modules enabled here", not a permanent workspace type. */
+function ModuleChips({ kind }: { kind: 'meet' | 'bracket' | null }) {
+  const chips = modulesForWorkspace(kind).filter((m) => m.status !== 'not-enabled');
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {chips.map((m) => {
+        const soon = m.status === 'coming-soon';
+        return (
+          <span
+            key={m.id}
+            title={soon ? m.note : undefined}
+            data-testid={`chip-${m.id}`}
+            className={[
+              'rounded-sm px-1.5 py-0.5 text-2xs font-medium',
+              m.status === 'enabled'
+                ? 'bg-accent/10 text-accent'
+                : soon
+                  ? 'border border-dashed border-border text-muted-foreground/60'
+                  : 'border border-border text-muted-foreground',
+            ].join(' ')}
+          >
+            {m.label}
+            {soon ? ' · soon' : ''}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function TournamentRow({ tournament, variant, onOpen, onDelete }: RowProps) {
   return (
     <div
@@ -70,9 +78,9 @@ function TournamentRow({ tournament, variant, onOpen, onDelete }: RowProps) {
           </div>
         )}
       </div>
-      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground w-20">
-        {tournament.kind === 'bracket' ? 'TOURNAMENT' : 'MEET'}
-      </span>
+      <div className="w-48 shrink-0">
+        <ModuleChips kind={tournament.kind} />
+      </div>
       {variant === 'shared' && (
         <span className="text-xs text-muted-foreground capitalize w-16 text-right">
           {tournament.role ?? '—'}
@@ -164,19 +172,11 @@ function Section({
   );
 }
 
-type NewEventKind = 'meet' | 'bracket';
-
 export function HubPage() {
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<TournamentSummaryDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [showNewDialog, setShowNewDialog] = useState(false);
-  const [newKind, setNewKind] = useState<NewEventKind>('meet');
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newDate, setNewDate] = useState('');
 
   // Delete-confirmation state: ``deleteTarget`` is the tournament the
   // operator clicked Delete on; ``deleting`` is the in-flight flag.
@@ -186,14 +186,6 @@ export function HubPage() {
   const [deleteTarget, setDeleteTarget] =
     useState<TournamentSummaryDTO | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const closeNewDialog = useCallback(() => {
-    if (creating) return;
-    setShowNewDialog(false);
-    setNewKind('meet');
-    setNewName('');
-    setNewDate('');
-  }, [creating]);
 
   const closeDeleteDialog = useCallback(() => {
     if (deleting) return;
@@ -261,28 +253,6 @@ export function HubPage() {
     }
   }, [deleteTarget]);
 
-  const handleCreate = useCallback(async () => {
-    setCreating(true);
-    try {
-      const created = await apiClient.createTournament({
-        name: newName.trim() || null,
-        kind: newKind,
-        tournamentDate: newDate || null,
-      });
-      // The two kinds run on the same backend row but show different
-      // chrome — the AppShell's TabBar reads ``kind`` and either
-      // shows the 6 meet tabs (kind='meet') or hides the strip and
-      // renders BracketTab directly (kind='bracket'). URL segment
-      // is informational; AppShell decides what to render.
-      const destination = newKind === 'bracket' ? 'bracket-setup' : 'setup';
-      navigate(`/tournaments/${created.id}/${destination}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create tournament');
-    } finally {
-      setCreating(false);
-    }
-  }, [newName, newDate, newKind, navigate]);
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Page header — same lockup as the operator surfaces:
@@ -296,10 +266,10 @@ export function HubPage() {
 
       <div className="mx-auto max-w-4xl space-y-8 px-6 py-10">
         <PageHeader
-          eyebrow="DASHBOARD"
-          title="Your events"
-          description={workspaceCopy.dashboardDescription}
-          actions={<Button onClick={() => setShowNewDialog(true)}>New</Button>}
+          eyebrow="WORKSPACES"
+          title="Your workspaces"
+          description="Your event control planes — open a workspace to run its modules."
+          actions={<Button onClick={() => navigate('/new')}>New workspace</Button>}
         />
 
         {error && (
@@ -315,9 +285,9 @@ export function HubPage() {
           <div className="text-sm text-muted-foreground">Loading…</div>
         ) : tournaments.length === 0 ? (
           <Card className="p-8 text-center">
-            <p className="text-muted-foreground">No events yet.</p>
+            <p className="text-muted-foreground">No workspaces yet.</p>
             <p className="mt-1 text-xs text-muted-foreground/70">
-              Click <em>New</em> to create a meet or open the tournament app.
+              Click <em>New workspace</em> to create your first event control plane.
             </p>
           </Card>
         ) : (
@@ -382,176 +352,6 @@ export function HubPage() {
         </Modal>
       )}
 
-      {showNewDialog && (
-        <Modal onClose={closeNewDialog} titleId="new-event-heading">
-          <div className="p-6">
-            <NewEventForm
-              kind={newKind}
-              name={newName}
-              date={newDate}
-              creating={creating}
-              onKindChange={setNewKind}
-              onNameChange={setNewName}
-              onDateChange={setNewDate}
-              onCancel={closeNewDialog}
-              onSubmit={handleCreate}
-            />
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }
-
-// ---- New-event dialog: single form -----------------------------------
-//
-// PR 3 of the backend-merge arc collapsed the prior two-step
-// Meet | Tournament dialog into a single form with a kind selector.
-// Both kinds create the same ``tournaments`` row in the scheduler
-// backend (the tournament product's separate stack is retired in
-// this PR); the only difference is which tab the operator lands on
-// after create:
-//   meet    → /tournaments/:id/setup   (roster builder + meet schedule)
-//   bracket → /tournaments/:id/bracket (single-elim / round-robin draws)
-
-function NewEventForm({
-  kind,
-  name,
-  date,
-  creating,
-  onKindChange,
-  onNameChange,
-  onDateChange,
-  onCancel,
-  onSubmit,
-}: {
-  kind: NewEventKind;
-  name: string;
-  date: string;
-  creating: boolean;
-  onKindChange: (k: NewEventKind) => void;
-  onNameChange: (v: string) => void;
-  onDateChange: (v: string) => void;
-  onCancel: () => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <>
-      <div className="mb-4 space-y-0.5">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          NEW EVENT
-        </span>
-        <h2 id="new-event-heading" className="text-base font-semibold text-foreground">
-          Name + date + kind
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Both kinds run on the same CP-SAT engine — kind just picks the
-          tab you land on after create. You can rename and switch kinds
-          inside the tournament later.
-        </p>
-      </div>
-      <div className="space-y-3">
-        <label className="block">
-          <span className="text-sm text-muted-foreground">Name</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder="e.g. Spring Invitational"
-            className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-            disabled={creating}
-            autoFocus
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm text-muted-foreground">Date</span>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => onDateChange(e.target.value)}
-            className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-            disabled={creating}
-          />
-        </label>
-        <fieldset className="block">
-          <legend className="text-sm text-muted-foreground">Kind</legend>
-          <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <KindOption
-              value="meet"
-              current={kind}
-              onSelect={onKindChange}
-              title="Meet"
-              hint="Intercollegiate dual / tri-meet — roster + CP-SAT schedule + live cockpit."
-              disabled={creating}
-            />
-            <KindOption
-              value="bracket"
-              current={kind}
-              onSelect={onKindChange}
-              title="Tournament"
-              hint="Single-elimination or round-robin bracket draws with seeded placement. No meet tabs — bracket surface only."
-              disabled={creating}
-            />
-          </div>
-        </fieldset>
-      </div>
-      <div className="mt-6 flex justify-between">
-        <Button variant="ghost" onClick={onCancel} disabled={creating}>
-          Cancel
-        </Button>
-        <Button onClick={onSubmit} disabled={creating}>
-          {creating
-            ? 'Creating…'
-            : kind === 'bracket'
-              ? 'Create tournament'
-              : 'Create meet'}
-        </Button>
-      </div>
-    </>
-  );
-}
-
-function KindOption({
-  value,
-  current,
-  onSelect,
-  title,
-  hint,
-  disabled,
-}: {
-  value: NewEventKind;
-  current: NewEventKind;
-  onSelect: (v: NewEventKind) => void;
-  title: string;
-  hint: string;
-  disabled?: boolean;
-}) {
-  const selected = value === current;
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(value)}
-      disabled={disabled}
-      aria-pressed={selected}
-      className={[
-        'border p-3 text-left transition-colors',
-        selected
-          ? 'border-foreground bg-muted/30 text-foreground'
-          : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-        disabled ? 'cursor-not-allowed opacity-60' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-    >
-      <div className="text-sm font-medium">{title}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
-    </button>
-  );
-}
-
-// PR 3 of the backend-merge arc removed the prior ``TournamentInfo``
-// component that did ``window.open(VITE_TOURNAMENT_APP_URL)``. Both
-// meet and bracket kinds now live in the same scheduler shell — the
-// bracket kind just routes to the Bracket tab after create. See
-// commit b55bfcb for the original Meet | Tournament fork, b44f32a
-// for the dashboard restyle, and the PR 3 commit for this collapse.

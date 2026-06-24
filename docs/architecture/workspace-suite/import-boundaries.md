@@ -7,7 +7,7 @@ backend-ownership-map.md.
 
 ## Frontend rules
 
-1. **Product modes must not import each other's internals.** `features/bracket/*`
+1. **Modules must not import each other's internals.** `features/bracket/*`
    must not import from `features/schedule/*`, `features/liveOps/*`, etc., and vice
    versa. Meet must not import Bracket internals; Bracket must not import Meet internals.
 2. **Cross-product shared state flows through the platform layer** (`api/`, `hooks/`

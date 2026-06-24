@@ -15,6 +15,9 @@ const PublicDisplayPage = lazy(() =>
 const HubPage = lazy(() =>
   import('../products/hub/HubPage').then((m) => ({ default: m.HubPage })),
 );
+const NewWorkspacePage = lazy(() =>
+  import('../products/hub/NewWorkspacePage').then((m) => ({ default: m.NewWorkspacePage })),
+);
 const TournamentPage = lazy(() =>
   import('../pages/TournamentPage').then((m) => ({ default: m.TournamentPage })),
 );
@@ -99,6 +102,18 @@ function App() {
                   <AuthGuard>
                     <Suspense fallback={<Fallback />}>
                       <HubPage />
+                    </Suspense>
+                  </AuthGuard>
+                }
+              />
+
+              {/* Authenticated: dedicated New Workspace (module templates). */}
+              <Route
+                path="/new"
+                element={
+                  <AuthGuard>
+                    <Suspense fallback={<Fallback />}>
+                      <NewWorkspacePage />
                     </Suspense>
                   </AuthGuard>
                 }

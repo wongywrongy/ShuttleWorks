@@ -44,6 +44,7 @@ function mount(refObj: { current: string }) {
         />
         {/* Catch-all so navigate('/tournaments/t1/bracket-setup') doesn't 404. */}
         <Route path="/tournaments/:id/*" element={<LocationProbe refObj={refObj} />} />
+        <Route path="/new" element={<LocationProbe refObj={refObj} />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -81,5 +82,33 @@ describe('HubPage navigation', () => {
     const openButtons = screen.getAllByRole('button', { name: /open/i });
     fireEvent.click(openButtons[1]); // meet row, second in list
     expect(loc.current).toBe('/tournaments/me1/setup');
+  });
+});
+
+describe('HubPage module-aware control plane', () => {
+  it('uses workspace / module language, not "event" / "New event"', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Your workspaces')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'New workspace' })).toBeInTheDocument();
+    expect(screen.queryByText('Your events')).not.toBeInTheDocument();
+  });
+
+  it('shows module chips derived from kind (meet→Meet+Display, bracket→Bracket+Display·soon)', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
+    expect(screen.getByTestId('chip-meet')).toHaveTextContent('Meet');
+    expect(screen.getByTestId('chip-bracket')).toHaveTextContent('Bracket');
+    const display = screen.getAllByTestId('chip-display');
+    expect(display).toHaveLength(2); // both rows offer a Display chip
+    // The bracket workspace's Display chip is "coming soon".
+    expect(display.some((el) => /soon/i.test(el.textContent || ''))).toBe(true);
+  });
+
+  it('"New workspace" navigates to the dedicated /new surface', async () => {
+    const loc = { current: '' };
+    mount(loc);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New workspace' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'New workspace' }));
+    expect(loc.current).toBe('/new');
   });
 });

@@ -10,13 +10,22 @@ this file, this file wins for *user-facing* naming; internals may lag (see rules
   days, setup, meet-day ops, bracket play, display config, exports, backups, and
   post-event review. The new user-facing product noun. Implemented today by the
   `tournaments` table / `/tournaments/*` routes (internal name unchanged).
-- **Product Mode** — a full-screen focused surface inside an open workspace: Meet,
-  Bracket, or Display. Replaces the "one app with many tabs" mental model.
+- **Workspace Module** (formerly "Product Mode") — Meet, Bracket, or Display, **enabled
+  inside a workspace** (Ubiquiti/UniFi control-plane model, not Adobe-style separate
+  apps). A workspace's module set is derived from `kind` for now — **`kind` is a
+  temporary compatibility bridge** to a future persisted `modules[]` (not yet
+  implemented). Module statuses: `enabled` / `available` / `not-enabled` / `coming-soon`.
+- **Module Dock** — the in-workspace control that lists the workspace's modules and
+  switches between the enterable ones (the old "product switcher"). Non-enabled modules
+  stay visible with enablement copy ("Bracket is not enabled for this workspace.").
+- **Module Catalog** — the full set of suite modules (Meet / Bracket / Display) and
+  their per-workspace status; `modulesForWorkspace(kind)` derives it today.
 - **Workspace Shell** — the common chrome shown once a workspace is open: workspace
-  identity/status, product switcher, role/connection indicators, shared sync health.
+  identity/status, the Module Dock, role/connection indicators, shared sync health.
   Stable and minimal; not a second dashboard.
-- **Hub** — the pre-workspace surface: workspace list, recent, create/import,
-  backups, sharing, global settings, product launcher. Today: `TournamentListPage`.
+- **Hub** — the pre-workspace control plane: workspace list (with enabled-module chips),
+  recent, create/import, backups, sharing, global settings. Today: `products/hub/HubPage`;
+  creation via the dedicated `products/hub/NewWorkspacePage` (`/new`, module templates).
 - **Core Platform** — non-user-facing shared foundation: workspace identity, auth/
   roles, command queue, sync/outbox, API client, shared roster/courts/time, design
   system, scheduler-core integration.
