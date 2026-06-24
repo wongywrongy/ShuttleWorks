@@ -387,7 +387,7 @@ Wire the seed into `POST /tournaments`: add the DTO field, normalize + dependenc
 
 **Interfaces:**
 - Consumes: `normalize_module_seed`, `display_dependency_satisfied` (from `database.models`), `repo.modules.seed_modules` (Task 3).
-- Produces: `POST /tournaments` accepts optional `modules: [{moduleId, status, config?}]`; persists the validated+backfilled set; the returned summary's `modules[]` reflects the seed. Malformed seed → 400 `VALIDATION_FAILED`.
+- Produces: `POST /tournaments` accepts optional `modules: [{moduleId, status, config?}]`; persists the validated+backfilled set; the returned summary's `modules[]` reflects the seed. Malformed seed → 400 `INVALID_INPUT`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -499,12 +499,12 @@ In `create_tournament`, after the member is added and **before** the `if body.na
         try:
             seed_rows = normalize_module_seed([m.model_dump() for m in body.modules])
         except ValueError as exc:
-            raise http_error(400, ErrorCode.VALIDATION_FAILED, str(exc))
+            raise http_error(400, ErrorCode.INVALID_INPUT, str(exc))
         statuses = {r["module_id"]: r["status"] for r in seed_rows}
         if not display_dependency_satisfied(statuses):
             raise http_error(
                 400,
-                ErrorCode.VALIDATION_FAILED,
+                ErrorCode.INVALID_INPUT,
                 "display may be enabled only with an enabled operational module",
             )
         repo.modules.seed_modules(row, seed_rows)

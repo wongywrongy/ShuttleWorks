@@ -70,7 +70,7 @@ class TournamentCreateDTO(BaseModel):
 
 ### Validation (runs on the merged set, before persist)
 
-A seed is rejected with **400 `VALIDATION_FAILED`** if:
+A seed is rejected with **400 `INVALID_INPUT`** if:
 - it names an unknown `moduleId`, or names the same `moduleId` twice;
 - a `status` is outside the four literals;
 - it violates the **Display dependency**: `display` may not be `enabled` unless
