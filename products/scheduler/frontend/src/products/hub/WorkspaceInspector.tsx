@@ -4,6 +4,14 @@ import {
   modulesForWorkspace,
   modulesFromDto,
 } from '../../platform/domain/moduleModel';
+import {
+  workspaceHealth,
+  readinessOf,
+  attentionReasons,
+  collaborationOf,
+  moduleCountsOf,
+  healthDotClass,
+} from './hubSignals';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
@@ -21,9 +29,9 @@ interface InspectorProps {
   onSettings: (id: string) => void;
 }
 
-/** Right-side inspector: the selected workspace's summary + its full module
- *  catalog (real `modules[]` when present, else kind-derived). Honest about
- *  what's not built yet — sharing/collab data lands in a later phase. */
+/** Right-side inspector: the selected workspace's server-computed signal
+ *  (health, readiness, attention reasons, collaboration counts) + its full
+ *  module catalog (real `modules[]` when present, else kind-derived). */
 export function WorkspaceInspector({ tournament, onOpen, onSettings }: InspectorProps) {
   if (!tournament) {
     return (
@@ -65,9 +73,76 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
         <dd className="text-right tabular-nums text-foreground">{fmtDate(tournament.updatedAt)}</dd>
       </dl>
 
+      {(() => {
+        const health = workspaceHealth(tournament);
+        const readiness = readinessOf(tournament);
+        const reasons = attentionReasons(tournament);
+        const collab = collaborationOf(tournament);
+        return (
+          <div className="space-y-3 border-b border-border p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                SIGNAL
+              </span>
+              <span
+                data-testid="inspector-health"
+                className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground"
+              >
+                <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${healthDotClass(health)}`} />
+                {health}
+                {readiness ? (
+                  <span className="tabular-nums text-muted-foreground">
+                    {' · '}
+                    {readiness.ready}/{readiness.total} ready
+                  </span>
+                ) : null}
+              </span>
+            </div>
+            {reasons.length > 0 ? (
+              <ul data-testid="inspector-attention" className="space-y-1">
+                {reasons.map((r) => (
+                  <li
+                    key={r.code}
+                    className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                  >
+                    <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-status-warning" />
+                    {r.label}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {collab ? (
+              <div
+                data-testid="inspector-collab"
+                className="flex items-center gap-4 text-xs text-muted-foreground"
+              >
+                <span>
+                  <span className="tabular-nums text-foreground">{collab.memberCount}</span>{' '}
+                  member{collab.memberCount === 1 ? '' : 's'}
+                </span>
+                <span>
+                  <span className="tabular-nums text-foreground">{collab.activeInviteCount}</span>{' '}
+                  active invite{collab.activeInviteCount === 1 ? '' : 's'}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        );
+      })()}
+
       <div className="border-b border-border p-4">
-        <div className="mb-2 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          MODULES
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            MODULES
+          </span>
+          {(() => {
+            const counts = moduleCountsOf(tournament);
+            return counts ? (
+              <span data-testid="inspector-module-counts" className="text-2xs tabular-nums text-muted-foreground">
+                {counts.enabled} enabled · {counts.available} available
+              </span>
+            ) : null;
+          })()}
         </div>
         <ul className="space-y-1.5">
           {modules.map((m) => (
@@ -101,9 +176,6 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
         >
           Settings
         </Button>
-        <p className="mt-3 text-2xs leading-relaxed text-muted-foreground/60">
-          Sharing &amp; collaborators — coming in a later phase.
-        </p>
       </div>
     </aside>
   );

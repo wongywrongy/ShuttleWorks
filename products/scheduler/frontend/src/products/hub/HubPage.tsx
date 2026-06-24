@@ -27,6 +27,13 @@ import {
   filterCounts,
   type HubFilterId,
 } from './hubFilters';
+import {
+  workspaceHealth,
+  readinessOf,
+  attentionReasons,
+  collaborationOf,
+  healthDotClass,
+} from './hubSignals';
 import { WorkspaceInspector } from './WorkspaceInspector';
 
 function formatDate(iso: string | null): string {
@@ -92,6 +99,10 @@ interface RowProps {
 }
 
 function WorkspaceRow({ tournament, selected, onSelect, onOpen, onDelete }: RowProps) {
+  const health = workspaceHealth(tournament);
+  const readiness = readinessOf(tournament);
+  const reasons = attentionReasons(tournament);
+  const collab = collaborationOf(tournament);
   return (
     <div
       role="button"
@@ -110,11 +121,38 @@ function WorkspaceRow({ tournament, selected, onSelect, onOpen, onDelete }: RowP
       ].join(' ')}
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-foreground">
-          {tournament.name || 'Untitled'}
+        <div className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            title={`Health: ${health}`}
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${healthDotClass(health)}`}
+          />
+          <span className="truncate font-medium text-foreground">
+            {tournament.name || 'Untitled'}
+          </span>
         </div>
-        <div className="mt-1">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <ModuleChips tournament={tournament} />
+          {readiness || reasons.length > 0 || collab ? (
+            <span
+              data-testid="row-metrics"
+              className="flex items-center gap-3 text-2xs tabular-nums text-muted-foreground"
+            >
+              {readiness ? (
+                <span>
+                  {readiness.ready}/{readiness.total} ready
+                </span>
+              ) : null}
+              {reasons.length > 0 ? (
+                <span className="text-status-warning">{reasons.length} to address</span>
+              ) : null}
+              {collab ? (
+                <span>
+                  {collab.memberCount} member{collab.memberCount === 1 ? '' : 's'}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
         </div>
       </div>
       <span className="hidden w-20 text-right text-xs capitalize text-muted-foreground sm:block">

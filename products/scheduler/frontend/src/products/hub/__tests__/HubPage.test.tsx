@@ -165,4 +165,27 @@ describe('HubPage module-aware control plane', () => {
     expect(display).toBeInTheDocument();
     expect(display).not.toHaveTextContent('soon');
   });
+
+  it('rows render the server signal metrics (readiness, attention, members)', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      {
+        id: 's1', name: 'Signal WS', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: null, status: 'active' as const,
+        modules: [{ moduleId: 'meet', status: 'enabled', config: null }],
+        signals: {
+          health: 'attention',
+          attention: [{ code: 'NO_ROSTER', label: 'No players added yet' }],
+          modules: { enabled: 1, available: 2, disabled: 0, comingSoon: 0 },
+          setup: { roster: false, scheduled: false },
+          collaboration: { memberCount: 4, activeInviteCount: 1 },
+        },
+      },
+    ] as never);
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Signal WS')).toBeInTheDocument());
+    const metrics = screen.getByTestId('row-metrics');
+    expect(metrics).toHaveTextContent('0/2 ready');
+    expect(metrics).toHaveTextContent('1 to address');
+    expect(metrics).toHaveTextContent('4 members');
+  });
 });

@@ -7,6 +7,13 @@ import type { AttentionReasonDTO, TournamentSummaryDTO } from '../../api/dto';
 
 export type WorkspaceHealth = 'good' | 'attention' | 'draft' | 'archived';
 
+/** Health → dot color: good = accent, attention = warning, else muted. */
+export function healthDotClass(h: WorkspaceHealth): string {
+  if (h === 'good') return 'bg-accent';
+  if (h === 'attention') return 'bg-status-warning';
+  return 'bg-muted-foreground/40';
+}
+
 /** Health badge value — prefers `signals.health`, else derives from status. */
 export function workspaceHealth(t: TournamentSummaryDTO): WorkspaceHealth {
   if (t.signals) return t.signals.health;
