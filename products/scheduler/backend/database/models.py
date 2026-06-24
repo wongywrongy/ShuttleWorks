@@ -631,17 +631,17 @@ OPERATIONAL_MODULES = ("meet", "bracket")
 def derive_modules(kind: Optional[str]) -> dict[str, str]:
     """Map a tournament's legacy ``kind`` to its seed module status set.
 
-    Honest, not silo-locked: only the kind's operator module is
-    ``enabled``; the foreign operator is ``coming_soon`` (hybrid
-    enablement is a future sub-project — we don't pretend it's enableable
-    yet). ``display`` is ``available`` for meet (the public surface
-    works) and ``coming_soon`` for bracket (not built). Unknown / ``None``
-    kinds fall back to the meet shape.
+    The kind's own operator is ``enabled``; the foreign operator is
+    ``available`` — installable / directly usable, and promotable to
+    ``enabled`` via the control plane (SP-B2 multi-module enablement).
+    ``display`` is ``available`` for meet (the public surface works) and
+    ``coming_soon`` for bracket (the bracket public surface is not built —
+    SP-B3). Unknown / ``None`` kinds fall back to the meet shape.
     """
     if kind == "bracket":
-        return {"bracket": "enabled", "display": "coming_soon", "meet": "coming_soon"}
+        return {"bracket": "enabled", "display": "coming_soon", "meet": "available"}
     # ``meet`` and any unknown / None kind.
-    return {"meet": "enabled", "display": "available", "bracket": "coming_soon"}
+    return {"meet": "enabled", "display": "available", "bracket": "available"}
 
 
 def display_dependency_satisfied(statuses: dict[str, str]) -> bool:

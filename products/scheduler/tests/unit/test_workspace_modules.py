@@ -112,16 +112,29 @@ def test_derive_modules_status_maps(client):
     assert derive_modules("meet") == {
         "meet": "enabled",
         "display": "available",
-        "bracket": "coming_soon",
+        "bracket": "available",
     }
     assert derive_modules("bracket") == {
         "bracket": "enabled",
         "display": "coming_soon",
-        "meet": "coming_soon",
+        "meet": "available",
     }
     # Unknown / None fall back to the meet shape.
     assert derive_modules("nonsense") == derive_modules("meet")
     assert derive_modules(None) == derive_modules("meet")
+
+
+def test_enable_foreign_operator_on_meet_workspace(client):
+    # A meet workspace now seeds bracket as 'available' (was coming_soon), so
+    # enabling the foreign operator succeeds (available -> enabled), where it
+    # was a 409 MODULE_IMMUTABLE before.
+    tid = seed_tournament(client, "Hybrid via enable")
+    r = client.patch(f"/tournaments/{tid}/modules/bracket", json={"status": "enabled"})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "enabled"
+    mods = {m["moduleId"]: m["status"] for m in client.get(f"/tournaments/{tid}/modules").json()}
+    assert mods["bracket"] == "enabled"
+    assert mods["meet"] == "enabled"
 
 
 # ---- 2. Lazy derive-and-persist (idempotent) --------------------------
@@ -156,7 +169,7 @@ def test_summary_includes_modules(client, tid):
     assert len(modules) == 3
     assert modules["meet"]["status"] == "enabled"
     assert modules["display"]["status"] == "available"
-    assert modules["bracket"]["status"] == "coming_soon"
+    assert modules["bracket"]["status"] == "available"
 
 
 # ---- 4. GET module list -----------------------------------------------
@@ -251,12 +264,12 @@ def test_ensure_modules_backfills_existing_tournament(client):
     assert meet_mods == {
         "meet": "enabled",
         "display": "available",
-        "bracket": "coming_soon",
+        "bracket": "available",
     }
     assert bracket_mods == {
         "bracket": "enabled",
         "display": "coming_soon",
-        "meet": "coming_soon",
+        "meet": "available",
     }
 
 
@@ -412,8 +425,9 @@ def test_create_seed_rejected_leaves_no_orphan_tournament(client):
 def test_create_without_seed_unchanged(client):
     r = client.post("/tournaments", json={"name": "Legacy", "kind": "bracket"})
     assert r.status_code == 201
-    # kind-derived seed: bracket enabled, others coming_soon.
-    assert _modules_map(r.json()) == {"bracket": "enabled", "display": "coming_soon", "meet": "coming_soon"}
+    # kind-derived seed: bracket enabled, meet available (foreign operator now
+    # enableable), only display coming_soon (bracket display = SP-B3).
+    assert _modules_map(r.json()) == {"bracket": "enabled", "display": "coming_soon", "meet": "available"}
 
 
 # ---- seed_modules --------------------------------------------------------
