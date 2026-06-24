@@ -135,8 +135,8 @@ describe('HubPage module-aware control plane', () => {
     expect(screen.getAllByTestId('chip-bracket')).toHaveLength(2);
     const display = screen.getAllByTestId('chip-display');
     expect(display).toHaveLength(2); // both rows offer a Display chip
-    // Only the bracket workspace's Display chip is "coming soon".
-    expect(display.filter((el) => /soon/i.test(el.textContent || ''))).toHaveLength(1);
+    // Display is `available` for both kinds now (SP-B3) — no "coming soon".
+    expect(display.filter((el) => /soon/i.test(el.textContent || ''))).toHaveLength(0);
   });
 
   it('"New workspace" navigates to the dedicated /new surface', async () => {

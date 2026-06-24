@@ -68,12 +68,13 @@ function moduleNote(id: ModuleId, status: ModuleStatus): string | undefined {
 /** The kind-derived module catalog — the FALLBACK used before/without real
  *  backend module state. Mirrors the backend's `derive_modules(kind)` exactly:
  *  meet → meet enabled, bracket available, display available; bracket →
- *  bracket enabled, meet available, display coming-soon. The foreign operator
- *  is `available` (installable / usable, SP-B2), not `coming-soon`. */
+ *  bracket enabled, meet available, display available. The foreign operator
+ *  and display are both `available` (installable / usable — SP-B2 / SP-B3),
+ *  not `coming-soon`. */
 export function modulesForWorkspace(kind: Kind): WorkspaceModule[] {
   const isBracket = kind === 'bracket';
   const status = (id: ModuleId): ModuleStatus => {
-    if (id === 'display') return isBracket ? 'coming-soon' : 'available';
+    if (id === 'display') return 'available';
     const isThisOperator = (id === 'bracket') === isBracket;
     return isThisOperator ? 'enabled' : 'available';
   };

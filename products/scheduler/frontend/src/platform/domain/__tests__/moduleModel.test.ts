@@ -66,13 +66,11 @@ describe('modulesForWorkspace', () => {
     expect(m.find((x) => x.id === 'bracket')!.status).toBe('available');
     expect(m.find((x) => x.id === 'display')!.status).toBe('available');
   });
-  it('bracket (matches backend derive): Bracket enabled, Meet available, Display coming-soon', () => {
+  it('bracket (matches backend derive): Bracket enabled, Meet available, Display available', () => {
     const m = modulesForWorkspace('bracket');
     expect(m.find((x) => x.id === 'bracket')!.status).toBe('enabled');
     expect(m.find((x) => x.id === 'meet')!.status).toBe('available');
-    const display = m.find((x) => x.id === 'display')!;
-    expect(display.status).toBe('coming-soon');
-    expect(display.note).toBe('Display for bracket workspaces is coming.');
+    expect(m.find((x) => x.id === 'display')!.status).toBe('available');
   });
 });
 
