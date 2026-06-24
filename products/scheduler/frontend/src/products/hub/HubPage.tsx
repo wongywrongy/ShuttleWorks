@@ -151,6 +151,9 @@ function WorkspaceRow({ tournament, selected, onSelect, onOpen, onDelete }: RowP
                   {collab.memberCount} member{collab.memberCount === 1 ? '' : 's'}
                 </span>
               ) : null}
+              {collab && collab.activeInviteCount > 0 ? (
+                <span>{collab.activeInviteCount} pending</span>
+              ) : null}
             </span>
           ) : null}
         </div>

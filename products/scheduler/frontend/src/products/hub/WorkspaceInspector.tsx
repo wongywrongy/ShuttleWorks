@@ -46,6 +46,11 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
   const modules = tournament.modules
     ? modulesFromDto(tournament.modules)
     : modulesForWorkspace(tournament.kind);
+  const health = workspaceHealth(tournament);
+  const readiness = readinessOf(tournament);
+  const reasons = attentionReasons(tournament);
+  const collab = collaborationOf(tournament);
+  const moduleCounts = moduleCountsOf(tournament);
 
   return (
     <aside className="hidden w-80 shrink-0 flex-col overflow-y-auto border-l border-border bg-card/40 lg:flex">
@@ -73,76 +78,62 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
         <dd className="text-right tabular-nums text-foreground">{fmtDate(tournament.updatedAt)}</dd>
       </dl>
 
-      {(() => {
-        const health = workspaceHealth(tournament);
-        const readiness = readinessOf(tournament);
-        const reasons = attentionReasons(tournament);
-        const collab = collaborationOf(tournament);
-        return (
-          <div className="space-y-3 border-b border-border p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                SIGNAL
+      <div className="space-y-3 border-b border-border p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            SIGNAL
+          </span>
+          <span
+            data-testid="inspector-health"
+            className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground"
+          >
+            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${healthDotClass(health)}`} />
+            {health}
+            {readiness ? (
+              <span className="tabular-nums text-muted-foreground">
+                {' · '}
+                {readiness.ready}/{readiness.total} ready
               </span>
-              <span
-                data-testid="inspector-health"
-                className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground"
-              >
-                <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${healthDotClass(health)}`} />
-                {health}
-                {readiness ? (
-                  <span className="tabular-nums text-muted-foreground">
-                    {' · '}
-                    {readiness.ready}/{readiness.total} ready
-                  </span>
-                ) : null}
-              </span>
-            </div>
-            {reasons.length > 0 ? (
-              <ul data-testid="inspector-attention" className="space-y-1">
-                {reasons.map((r) => (
-                  <li
-                    key={r.code}
-                    className="flex items-start gap-1.5 text-xs text-muted-foreground"
-                  >
-                    <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-status-warning" />
-                    {r.label}
-                  </li>
-                ))}
-              </ul>
             ) : null}
-            {collab ? (
-              <div
-                data-testid="inspector-collab"
-                className="flex items-center gap-4 text-xs text-muted-foreground"
-              >
-                <span>
-                  <span className="tabular-nums text-foreground">{collab.memberCount}</span>{' '}
-                  member{collab.memberCount === 1 ? '' : 's'}
-                </span>
-                <span>
-                  <span className="tabular-nums text-foreground">{collab.activeInviteCount}</span>{' '}
-                  active invite{collab.activeInviteCount === 1 ? '' : 's'}
-                </span>
-              </div>
-            ) : null}
+          </span>
+        </div>
+        {reasons.length > 0 ? (
+          <ul data-testid="inspector-attention" className="space-y-1">
+            {reasons.map((r) => (
+              <li key={r.code} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-status-warning" />
+                {r.label}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {collab ? (
+          <div
+            data-testid="inspector-collab"
+            className="flex items-center gap-4 text-xs text-muted-foreground"
+          >
+            <span>
+              <span className="tabular-nums text-foreground">{collab.memberCount}</span>{' '}
+              member{collab.memberCount === 1 ? '' : 's'}
+            </span>
+            <span>
+              <span className="tabular-nums text-foreground">{collab.activeInviteCount}</span>{' '}
+              active invite{collab.activeInviteCount === 1 ? '' : 's'}
+            </span>
           </div>
-        );
-      })()}
+        ) : null}
+      </div>
 
       <div className="border-b border-border p-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             MODULES
           </span>
-          {(() => {
-            const counts = moduleCountsOf(tournament);
-            return counts ? (
-              <span data-testid="inspector-module-counts" className="text-2xs tabular-nums text-muted-foreground">
-                {counts.enabled} enabled · {counts.available} available
-              </span>
-            ) : null;
-          })()}
+          {moduleCounts ? (
+            <span data-testid="inspector-module-counts" className="text-2xs tabular-nums text-muted-foreground">
+              {moduleCounts.enabled} enabled · {moduleCounts.available} available
+            </span>
+          ) : null}
         </div>
         <ul className="space-y-1.5">
           {modules.map((m) => (

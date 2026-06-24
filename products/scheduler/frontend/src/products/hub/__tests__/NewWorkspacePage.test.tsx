@@ -100,6 +100,16 @@ describe('NewWorkspacePage', () => {
     });
   });
 
+  it('falls back to kind-derived modules when the create response omits modules', async () => {
+    // Older/edge backend response without `modules` → modulesForWorkspace(kind).
+    vi.mocked(apiClient.createTournament).mockResolvedValue({ id: 'w5', kind: 'meet' } as never);
+    const loc = { current: '' };
+    mount(loc);
+    fireEvent.click(screen.getByTestId('template-meet-day'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+    await waitFor(() => expect(loc.current).toBe('/tournaments/w5/setup'));
+  });
+
   it('Blank: all-available seed (display disabled) → routes to the primary available module (/setup)', async () => {
     returnCreated('w4', [m('meet', 'available'), m('bracket', 'available'), m('display', 'disabled')]);
     const loc = { current: '' };
