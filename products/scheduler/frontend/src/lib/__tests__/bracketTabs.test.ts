@@ -4,7 +4,6 @@ import {
   BRACKET_TAB_IDS,
   isBracketTab,
   bracketTabView,
-  normalizeActiveTab,
   tabsForModule,
 } from '../bracketTabs';
 
@@ -80,35 +79,6 @@ describe('bracketTabView', () => {
   });
 });
 
-describe('normalizeActiveTab', () => {
-  it('snaps a non-bracket tab to bracket-setup when kind is bracket', () => {
-    expect(normalizeActiveTab('setup', 'bracket')).toBe('bracket-setup');
-    expect(normalizeActiveTab('schedule', 'bracket')).toBe('bracket-setup');
-    expect(normalizeActiveTab('bracket', 'bracket')).toBe('bracket-setup');
-  });
-  it('leaves a bracket tab untouched when kind is bracket', () => {
-    expect(normalizeActiveTab('bracket-schedule', 'bracket')).toBeNull();
-  });
-  it('snaps a bracket-* or legacy "bracket" tab to setup when kind is meet', () => {
-    expect(normalizeActiveTab('bracket-live', 'meet')).toBe('setup');
-    expect(normalizeActiveTab('bracket', 'meet')).toBe('setup');
-  });
-  it('leaves a meet tab untouched when kind is meet', () => {
-    expect(normalizeActiveTab('roster', 'meet')).toBeNull();
-  });
-  it('returns null while kind is still loading', () => {
-    expect(normalizeActiveTab('setup', null)).toBeNull();
-    expect(normalizeActiveTab('bracket-draw', null)).toBeNull();
-  });
-  it('normalizes the legacy "bracket" activeTab to "bracket-setup" on bracket kind', () => {
-    // The bare 'bracket' value is reserved as a stale sentinel only —
-    // post-Bundle-3 the legacy URL redirects to /bracket-setup, but
-    // any code path that still sets activeTab='bracket' (e.g. from a
-    // very old stored UI state) must snap to a valid bracket sub-tab.
-    expect(normalizeActiveTab('bracket', 'bracket')).toBe('bracket-setup');
-  });
-});
-
 describe('BRACKET_TAB_IDS — extended for entry tabs (#5)', () => {
   it('includes the three new entry-flow ids in order before draw/schedule/live', () => {
     expect(BRACKET_TAB_IDS).toEqual([
@@ -124,8 +94,5 @@ describe('BRACKET_TAB_IDS — extended for entry tabs (#5)', () => {
     expect(bracketTabView('bracket-setup')).toBe('setup');
     expect(bracketTabView('bracket-roster')).toBe('roster');
     expect(bracketTabView('bracket-events')).toBe('events');
-  });
-  it('normalizeActiveTab snaps non-bracket → bracket-setup (new default landing)', () => {
-    expect(normalizeActiveTab('schedule', 'bracket')).toBe('bracket-setup');
   });
 });

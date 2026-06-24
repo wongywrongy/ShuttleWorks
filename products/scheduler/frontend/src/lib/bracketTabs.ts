@@ -46,10 +46,10 @@ export const MEET_TAB_IDS = [
 
 export type MeetTabId = (typeof MEET_TAB_IDS)[number];
 
-/** The meet tabs the TabBar renders. Excludes ``tv`` — TV is reached
- *  through the Workspace Shell's Display product mode, not the tab strip —
- *  while ``tv`` stays in ``MEET_TAB_IDS`` so the ``/tournaments/:id/tv``
- *  route and ``normalizeActiveTab`` keep treating it as valid. */
+/** The meet operator tab ids the TabBar renders. Excludes ``tv`` — TV is
+ *  reached through the Display module (dock / ``/tournaments/:id/tv`` route),
+ *  not the tab strip — while ``tv`` stays in ``MEET_TAB_IDS`` so the route
+ *  keeps treating it as valid. */
 export const MEET_OPERATOR_TAB_IDS = MEET_TAB_IDS.filter(
   (id) => id !== 'tv',
 ) as Exclude<MeetTabId, 'tv'>[];
@@ -94,24 +94,4 @@ export function isBracketTab(tab: AppTab): tab is BracketTabId {
 
 export function bracketTabView(tab: BracketTabId): BracketView {
   return tab.slice('bracket-'.length) as BracketView;
-}
-
-/**
- * Normalize ``activeTab`` when the active tournament kind resolves.
- * ``activeTab`` is shared store state: for a bracket the URL segment
- * is the bare ``/bracket`` (→ ``activeTab`` ``'bracket'``, not a
- * renderable section), and ``activeTab`` can also be stale from a
- * prior tournament of the other kind.
- *
- * Returns the tab id to set, or ``null`` when no change is needed
- * (kind still loading, or the tab is already valid for the kind).
- */
-export function normalizeActiveTab(
-  activeTab: AppTab,
-  kind: 'meet' | 'bracket' | null,
-): AppTab | null {
-  if (kind === 'bracket' && !isBracketTab(activeTab)) return 'bracket-setup';
-  if (kind === 'meet' && !(MEET_TAB_IDS as readonly string[]).includes(activeTab))
-    return 'setup';
-  return null;
 }

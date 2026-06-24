@@ -22,7 +22,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
-import { normalizeActiveTab, MEET_TAB_IDS, BRACKET_TAB_IDS } from '../lib/bracketTabs';
+import { MEET_TAB_IDS, BRACKET_TAB_IDS } from '../lib/bracketTabs';
 
 // URL-routable trailing segments: every meet tab id + every bracket tab id.
 // Legacy `/bracket` is handled by an explicit <Navigate> route in App.tsx;
@@ -73,20 +73,11 @@ export function TournamentPage() {
     useUiStore.getState().setActiveTournamentKind(optimisticKind);
   }, [tid, location.pathname]);
 
-  // Once the active tournament kind is known, snap ``activeTab`` onto a
-  // tab that's valid for that kind. ``activeTab`` can be stale from a
-  // prior tournament of the other kind, OR it can be the bare ``'bracket'``
-  // sentinel left in ``AppTab`` for backwards compat (no production code
-  // path emits it post-Bundle-3, but the normalizer still snaps it to
-  // ``'bracket-setup'``). Runs after the layout effect above sets the
-  // optimistic kind, and again when ``useTournamentKind``'s async fetch
-  // corrects it.
-  const activeTab = useUiStore((s) => s.activeTab);
-  const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
-  useEffect(() => {
-    const next = normalizeActiveTab(activeTab, activeTournamentKind);
-    if (next) useUiStore.getState().setActiveTab(next);
-  }, [activeTab, activeTournamentKind]);
+  // No kind-based snap: a tab whose module isn't enterable for this workspace
+  // is preserved so the AppShell guard can show the unavailable panel (rather
+  // than silently routing away), and a valid multi-module tab is never snapped
+  // to the wrong kind's home. The legacy ``/bracket`` URL is redirected to
+  // ``/bracket-setup`` by a route in ``App.tsx`` before this page mounts.
 
   if (!tid) {
     return (
