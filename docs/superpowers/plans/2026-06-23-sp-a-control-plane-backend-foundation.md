@@ -961,7 +961,7 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
             code="DISPLAY_NO_SOURCE", label="Display is on but no data module is enabled"))
 
     if kind == "bracket":
-        if not setup["events"]:
+        if not setup["bracketBuilt"]:
             attention.append(AttentionReasonDTO(code="NO_BRACKET", label="Bracket not built yet"))
     else:
         if not setup["roster"]:
