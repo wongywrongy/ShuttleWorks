@@ -7,6 +7,7 @@
  * ``schedule`` / ``live`` ids and stay unambiguous in dispatch.
  */
 import type { AppTab } from '../store/uiStore';
+import type { ModuleId } from '../platform/product-shell/types';
 
 export const BRACKET_TAB_IDS = [
   'bracket-setup',
@@ -52,6 +53,30 @@ export type MeetTabId = (typeof MEET_TAB_IDS)[number];
 export const MEET_OPERATOR_TAB_IDS = MEET_TAB_IDS.filter(
   (id) => id !== 'tv',
 ) as Exclude<MeetTabId, 'tv'>[];
+
+/** Display labels for the meet operator tabs. Single-sourced here so the
+ *  TabBar doesn't redefine the id list. */
+export const MEET_TAB_LABELS: Record<Exclude<MeetTabId, 'tv'>, string> = {
+  setup: 'Setup',
+  roster: 'Roster',
+  matches: 'Matches',
+  schedule: 'Schedule',
+  live: 'Live',
+};
+
+/** The `{id,label}` rows the TabBar renders for a meet workspace. */
+export const MEET_TABS: { id: AppTab; label: string }[] = MEET_OPERATOR_TAB_IDS.map(
+  (id) => ({ id, label: MEET_TAB_LABELS[id] }),
+);
+
+/** The TabBar rows for a module: meet → meet operator tabs, bracket → the
+ *  bracket tabs, display → [] (single surface reached via the dock / tv
+ *  route, no operator strip). */
+export function tabsForModule(module: ModuleId): { id: AppTab; label: string }[] {
+  if (module === 'bracket') return BRACKET_TABS;
+  if (module === 'display') return [];
+  return MEET_TABS;
+}
 
 /** The bare view name a ``bracket-`` tab maps to — drives the
  *  ``BracketViewHeader`` eyebrow and the content switch. */

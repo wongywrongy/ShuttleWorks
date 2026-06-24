@@ -5,7 +5,26 @@ import {
   isBracketTab,
   bracketTabView,
   normalizeActiveTab,
+  tabsForModule,
 } from '../bracketTabs';
+
+describe('tabsForModule', () => {
+  it('meet → the meet operator tabs (setup..live, no tv)', () => {
+    expect(tabsForModule('meet').map((t) => t.id)).toEqual([
+      'setup',
+      'roster',
+      'matches',
+      'schedule',
+      'live',
+    ]);
+  });
+  it('bracket → the bracket tabs', () => {
+    expect(tabsForModule('bracket')).toBe(BRACKET_TABS);
+  });
+  it('display → no operator strip', () => {
+    expect(tabsForModule('display')).toEqual([]);
+  });
+});
 
 describe('BRACKET_TAB_IDS / BRACKET_TABS', () => {
   it('lists the six bracket sections in order', () => {
