@@ -11,7 +11,8 @@ import {
   collaborationOf,
   moduleCountsOf,
 } from './hubSignals';
-import { HealthDot } from '../../components/control-plane';
+import { nextActionFor } from './nextAction';
+import { HealthDot, SectionCard } from '../../components/control-plane';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
@@ -29,9 +30,10 @@ interface InspectorProps {
   onSettings: (id: string) => void;
 }
 
-/** Right-side inspector: the selected workspace's server-computed signal
- *  (health, readiness, attention reasons, collaboration counts) + its full
- *  module catalog (real `modules[]` when present, else kind-derived). */
+/** Right-side action panel for the selected workspace: a SIGNAL card (health,
+ *  readiness, a setup checklist, attention reasons, collaboration counts), the
+ *  module map (real `modules[]` when present, else kind-derived), and primary
+ *  actions (the signal-derived next action, Settings, Manage sharing). */
 export function WorkspaceInspector({ tournament, onOpen, onSettings }: InspectorProps) {
   if (!tournament) {
     return (
@@ -51,6 +53,8 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
   const reasons = attentionReasons(tournament);
   const collab = collaborationOf(tournament);
   const moduleCounts = moduleCountsOf(tournament);
+  const action = nextActionFor(tournament);
+  const setupEntries = Object.entries(tournament.signals?.setup ?? {});
 
   return (
     <aside className="hidden w-80 shrink-0 flex-col overflow-y-auto border-l border-border bg-card/40 lg:flex">
@@ -78,11 +82,9 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
         <dd className="text-right tabular-nums text-foreground">{fmtDate(tournament.updatedAt)}</dd>
       </dl>
 
-      <div className="space-y-3 border-b border-border p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            SIGNAL
-          </span>
+      <SectionCard
+        eyebrow="SIGNAL"
+        right={
           <span
             data-testid="inspector-health"
             className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground"
@@ -96,45 +98,59 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
               </span>
             ) : null}
           </span>
+        }
+      >
+        <div className="space-y-3">
+          {setupEntries.length > 0 ? (
+            <ul data-testid="inspector-checklist" className="space-y-1">
+              {setupEntries.map(([key, done]) => (
+                <li key={key} className="flex items-center gap-1.5 text-xs capitalize text-muted-foreground">
+                  <span aria-hidden className={done ? 'text-accent' : 'text-muted-foreground/40'}>
+                    {done ? '✓' : '○'}
+                  </span>
+                  {key}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {reasons.length > 0 ? (
+            <ul data-testid="inspector-attention" className="space-y-1">
+              {reasons.map((r) => (
+                <li key={r.code} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-status-warning" />
+                  {r.label}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {collab ? (
+            <div
+              data-testid="inspector-collab"
+              className="flex items-center gap-4 text-xs text-muted-foreground"
+            >
+              <span>
+                <span className="tabular-nums text-foreground">{collab.memberCount}</span>{' '}
+                member{collab.memberCount === 1 ? '' : 's'}
+              </span>
+              <span>
+                <span className="tabular-nums text-foreground">{collab.activeInviteCount}</span>{' '}
+                active invite{collab.activeInviteCount === 1 ? '' : 's'}
+              </span>
+            </div>
+          ) : null}
         </div>
-        {reasons.length > 0 ? (
-          <ul data-testid="inspector-attention" className="space-y-1">
-            {reasons.map((r) => (
-              <li key={r.code} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-status-warning" />
-                {r.label}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {collab ? (
-          <div
-            data-testid="inspector-collab"
-            className="flex items-center gap-4 text-xs text-muted-foreground"
-          >
-            <span>
-              <span className="tabular-nums text-foreground">{collab.memberCount}</span>{' '}
-              member{collab.memberCount === 1 ? '' : 's'}
-            </span>
-            <span>
-              <span className="tabular-nums text-foreground">{collab.activeInviteCount}</span>{' '}
-              active invite{collab.activeInviteCount === 1 ? '' : 's'}
-            </span>
-          </div>
-        ) : null}
-      </div>
+      </SectionCard>
 
-      <div className="border-b border-border p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            MODULES
-          </span>
-          {moduleCounts ? (
+      <SectionCard
+        eyebrow="MODULES"
+        right={
+          moduleCounts ? (
             <span data-testid="inspector-module-counts" className="text-2xs tabular-nums text-muted-foreground">
               {moduleCounts.enabled} enabled · {moduleCounts.available} available
             </span>
-          ) : null}
-        </div>
+          ) : undefined
+        }
+      >
         <ul className="space-y-1.5">
           {modules.map((m) => (
             <li key={m.id} className="flex items-center justify-between gap-2" title={m.note}>
@@ -154,18 +170,25 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings }: Inspector
             </li>
           ))}
         </ul>
-      </div>
+      </SectionCard>
 
-      <div className="p-4">
+      <div className="space-y-2 p-4">
         <Button className="w-full" onClick={() => onOpen(tournament.id)}>
-          Open workspace
+          {action.reasonCode ? action.label : 'Open workspace'}
         </Button>
         <Button
           variant="ghost"
-          className="mt-2 w-full"
+          className="w-full"
           onClick={() => onSettings(tournament.id)}
         >
           Settings
+        </Button>
+        <Button
+          variant="ghost"
+          className="w-full"
+          onClick={() => onSettings(tournament.id)}
+        >
+          Manage sharing
         </Button>
       </div>
     </aside>

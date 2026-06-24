@@ -52,4 +52,18 @@ describe('WorkspaceInspector signals', () => {
     expect(screen.queryByTestId('inspector-attention')).toBeNull();
     expect(screen.queryByTestId('inspector-collab')).toBeNull();
   });
+
+  it('renders an attention checklist from signals.setup', () => {
+    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} />);
+    // setup: { roster: false, scheduled: false } → checklist items rendered
+    const checklist = screen.getByTestId('inspector-checklist');
+    expect(checklist).toHaveTextContent(/roster/i);
+    expect(checklist).toHaveTextContent(/scheduled/i);
+  });
+
+  it('offers the primary next action', () => {
+    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} />);
+    // withSignals attention NO_ROSTER → "Add players"
+    expect(screen.getByRole('button', { name: 'Add players' })).toBeInTheDocument();
+  });
 });
