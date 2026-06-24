@@ -622,6 +622,9 @@ export interface TournamentCreateDTO {
   name?: string | null;
   kind?: TournamentKind;
   tournamentDate?: string | null;
+  /** Optional explicit module seed (control-plane templates). When present,
+   *  the backend persists this set instead of the kind-derived one. */
+  modules?: WorkspaceModuleDTO[];
 }
 
 export interface TournamentUpdateDTO {

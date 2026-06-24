@@ -12,55 +12,73 @@ import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { apiClient } from '../../api/client';
+import type { WorkspaceModuleDTO } from '../../api/dto';
 
 type TemplateId = 'meet-day' | 'bracket-tournament' | 'hybrid' | 'blank';
+
+const MODULE_LABELS: Record<WorkspaceModuleDTO['moduleId'], string> = {
+  meet: 'Meet',
+  bracket: 'Bracket',
+  display: 'Display',
+};
 
 interface Template {
   id: TemplateId;
   title: string;
   blurb: string;
-  modules: string[];
-  kind: 'meet' | 'bracket' | null; // null = disabled / coming soon
-  destination: string | null;
-  comingSoon?: string;
+  kind: 'meet' | 'bracket';
+  /** Explicit module seed persisted on create (sent as `modules[]`). */
+  seed: WorkspaceModuleDTO[];
+  /** Tab segment to land on, or the `'settings'` sentinel (Blank → Modules). */
+  destination: string;
 }
+
+const seed = (
+  moduleId: WorkspaceModuleDTO['moduleId'],
+  status: WorkspaceModuleDTO['status'],
+): WorkspaceModuleDTO => ({ moduleId, status, config: null });
 
 const TEMPLATES: Template[] = [
   {
     id: 'meet-day',
     title: 'Meet Day',
     blurb: 'Roster, CP-SAT schedule, live cockpit, and a venue display.',
-    modules: ['Meet', 'Display'],
     kind: 'meet',
+    seed: [seed('meet', 'enabled'), seed('bracket', 'available'), seed('display', 'enabled')],
     destination: 'setup',
   },
   {
     id: 'bracket-tournament',
     title: 'Bracket Tournament',
     blurb: 'Events, seeding, draw generation, advancement, and results.',
-    modules: ['Bracket'],
     kind: 'bracket',
+    seed: [seed('bracket', 'enabled'), seed('meet', 'available'), seed('display', 'available')],
     destination: 'bracket-setup',
   },
   {
     id: 'hybrid',
     title: 'Hybrid Event',
-    blurb: 'Meet and Bracket modules together in one workspace.',
-    modules: ['Meet', 'Bracket', 'Display'],
-    kind: null,
-    destination: null,
-    comingSoon: 'Coming soon — multiple modules in one workspace.',
+    blurb: 'Meet and Bracket modules together in one workspace, plus a display.',
+    kind: 'meet',
+    seed: [seed('meet', 'enabled'), seed('bracket', 'enabled'), seed('display', 'enabled')],
+    destination: 'setup',
   },
   {
     id: 'blank',
     title: 'Blank Workspace',
     blurb: 'Start empty and enable modules as you go.',
-    modules: [],
-    kind: null,
-    destination: null,
-    comingSoon: 'Coming soon.',
+    kind: 'meet',
+    seed: [seed('meet', 'available'), seed('bracket', 'available'), seed('display', 'disabled')],
+    destination: 'settings',
   },
 ];
+
+/** The module labels a template surfaces as chips — its enabled/available set. */
+function templateModuleLabels(t: Template): string[] {
+  return t.seed
+    .filter((m) => m.status === 'enabled' || m.status === 'available')
+    .map((m) => MODULE_LABELS[m.moduleId]);
+}
 
 export function NewWorkspacePage() {
   const navigate = useNavigate();
@@ -71,10 +89,9 @@ export function NewWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
 
   const template = TEMPLATES.find((t) => t.id === selected)!;
-  const canCreate = template.kind !== null && !creating;
+  const canCreate = !creating;
 
   async function handleCreate() {
-    if (template.kind === null || template.destination === null) return;
     setCreating(true);
     setError(null);
     try {
@@ -82,8 +99,13 @@ export function NewWorkspacePage() {
         name: name.trim() || null,
         kind: template.kind,
         tournamentDate: date || null,
+        modules: template.seed,
       });
-      navigate(`/tournaments/${created.id}/${template.destination}`);
+      // Blank has no enabled module → land on Settings (Modules) to turn things
+      // on; the others land on their primary module's home tab.
+      const segment =
+        template.destination === 'settings' ? 'settings' : template.destination;
+      navigate(`/tournaments/${created.id}/${segment}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create workspace');
     } finally {
@@ -123,39 +145,29 @@ export function NewWorkspacePage() {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {TEMPLATES.map((t) => {
-            const disabled = t.kind === null;
-            const isSelected = t.id === selected && !disabled;
+            const isSelected = t.id === selected;
+            const labels = templateModuleLabels(t);
             return (
               <button
                 key={t.id}
                 type="button"
-                disabled={disabled}
                 aria-pressed={isSelected}
                 data-testid={`template-${t.id}`}
-                onClick={() => !disabled && setSelected(t.id)}
+                onClick={() => setSelected(t.id)}
                 className={[
                   'border p-4 text-left transition-colors',
-                  disabled
-                    ? 'cursor-not-allowed border-border opacity-60'
-                    : isSelected
-                      ? 'border-foreground bg-muted/30 text-foreground'
-                      : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                  isSelected
+                    ? 'border-foreground bg-muted/30 text-foreground'
+                    : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground',
                 ].join(' ')}
               >
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-semibold text-foreground">{t.title}</div>
-                  {disabled ? (
-                    <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
-                      Soon
-                    </span>
-                  ) : null}
                 </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {disabled ? t.comingSoon : t.blurb}
-                </div>
-                {t.modules.length > 0 && (
+                <div className="mt-1 text-xs text-muted-foreground">{t.blurb}</div>
+                {labels.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {t.modules.map((m) => (
+                    {labels.map((m) => (
                       <span
                         key={m}
                         className="rounded-sm border border-border px-1.5 py-0.5 text-2xs font-medium text-muted-foreground"
