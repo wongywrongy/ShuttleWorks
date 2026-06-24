@@ -43,6 +43,12 @@ export function BracketDisplayPage() {
     return () => window.clearInterval(t);
   }, []);
 
+  const currentTime = now.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+
   // Event selection for the draw/results views — default to the first event.
   const eventParam = searchParams.get('event');
   const events = data?.events ?? [];
@@ -100,6 +106,7 @@ export function BracketDisplayPage() {
           ) : null}
         </div>
         <div className="flex items-center gap-3">
+          <span className="tabular-nums text-base text-muted-foreground">{currentTime}</span>
           <LiveStatusPill status={liveStatus} error={syncError} />
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </div>

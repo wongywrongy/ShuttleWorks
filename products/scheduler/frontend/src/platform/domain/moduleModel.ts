@@ -58,7 +58,6 @@ export function primaryModuleForOpen(modules: WorkspaceModule[]): ModuleId {
 /** Enablement copy for a non-active module, by id + status. */
 function moduleNote(id: ModuleId, status: ModuleStatus): string | undefined {
   if (status === 'coming-soon') {
-    if (id === 'display') return 'Display for bracket workspaces is coming.';
     return `${MODULE_LABELS[id]} is not enabled for this workspace yet.`;
   }
   if (status === 'disabled') return `${MODULE_LABELS[id]} is turned off — re-enable to use it.`;
