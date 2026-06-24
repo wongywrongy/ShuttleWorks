@@ -18,7 +18,7 @@ export interface Template {
   seed: WorkspaceModuleDTO[];
 }
 
-export const seed = (
+const seed = (
   moduleId: WorkspaceModuleDTO['moduleId'],
   status: WorkspaceModuleDTO['status'],
 ): WorkspaceModuleDTO => ({ moduleId, status, config: null });

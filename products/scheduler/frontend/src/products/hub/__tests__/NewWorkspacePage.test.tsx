@@ -10,7 +10,7 @@ vi.mock('../../../api/client', () => ({
 
 function LocationProbe({ refObj }: { refObj: { current: string } }) {
   const loc = useLocation();
-  refObj.current = loc.pathname;
+  refObj.current = loc.pathname + loc.search;
   return null;
 }
 
@@ -132,8 +132,7 @@ describe('NewWorkspacePage', () => {
     expect(screen.getByTestId('template-blank')).not.toBeDisabled();
     fireEvent.click(screen.getByTestId('template-blank'));
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    // LocationProbe reads pathname (the ?tab=modules query is dropped).
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w4/settings'));
+    await waitFor(() => expect(loc.current).toBe('/tournaments/w4/settings?tab=modules'));
     expect(seedFor(vi.mocked(apiClient.createTournament).mock.calls[0][0])).toMatchObject({
       meet: 'available',
       bracket: 'available',

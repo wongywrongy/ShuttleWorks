@@ -25,7 +25,11 @@ export function CustomModulesBuilder({
       {MODULES.map((moduleId) => (
         <div key={moduleId} className="flex items-center justify-between gap-3">
           <span className="text-sm text-foreground">{MODULE_LABELS[moduleId]}</span>
-          <div className="inline-flex overflow-hidden rounded-sm border border-border">
+          <div
+            role="group"
+            aria-label={MODULE_LABELS[moduleId]}
+            className="inline-flex overflow-hidden rounded-sm border border-border"
+          >
             {STATES.map((s) => {
               const active = state[moduleId] === s.value;
               return (
