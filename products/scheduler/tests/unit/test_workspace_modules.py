@@ -419,6 +419,64 @@ def test_create_without_seed_unchanged(client):
 # ---- seed_modules --------------------------------------------------------
 
 
+def test_summary_carries_signals(client):
+    r = client.post("/tournaments", json={
+        "name": "Sig", "kind": "meet",
+        "modules": [
+            {"moduleId": "meet", "status": "enabled"},
+            {"moduleId": "bracket", "status": "available"},
+            {"moduleId": "display", "status": "available"},
+        ],
+    })
+    body = r.json()
+    assert "signals" in body and body["signals"] is not None
+    sig = body["signals"]
+    assert sig["modules"]["enabled"] == 1
+    assert sig["health"] in {"good", "attention", "draft", "archived"}
+    # Fresh meet with no roster/schedule → attention reasons present.
+    assert any(a["code"] == "NO_ROSTER" for a in sig["attention"])
+    assert sig["collaboration"]["memberCount"] == 1  # owner
+
+
+def test_list_carries_signals_for_each_row(client):
+    client.post("/tournaments", json={"name": "One"})
+    client.post("/tournaments", json={"name": "Two", "kind": "bracket"})
+    listing = client.get("/tournaments").json()
+    assert len(listing) == 2
+    for row in listing:
+        assert row["signals"] is not None
+        assert "health" in row["signals"]
+
+
+def test_list_signals_uses_grouped_queries_once(client, monkeypatch):
+    client.post("/tournaments", json={"name": "One"})
+    client.post("/tournaments", json={"name": "Two"})
+    client.post("/tournaments", json={"name": "Three"})
+
+    import repositories.local as local_mod
+    calls = {"members": 0, "invites": 0}
+    real_members = local_mod._LocalMemberRepo.count_by_tournament
+    real_invites = local_mod._LocalInviteLinkRepo.count_active_by_tournament
+
+    def counted_members(self, ids):
+        calls["members"] += 1
+        return real_members(self, ids)
+
+    def counted_invites(self, ids):
+        calls["invites"] += 1
+        return real_invites(self, ids)
+
+    monkeypatch.setattr(local_mod._LocalMemberRepo, "count_by_tournament", counted_members)
+    monkeypatch.setattr(local_mod._LocalInviteLinkRepo, "count_active_by_tournament", counted_invites)
+
+    r = client.get("/tournaments")
+    assert r.status_code == 200
+    assert len(r.json()) == 3
+    # Grouped: exactly one call each across 3 rows — NOT 3.
+    assert calls["members"] == 1
+    assert calls["invites"] == 1
+
+
 def test_seed_modules_persists_explicit_set(client):
     from repositories import open_repository
 

@@ -30,6 +30,7 @@ from api.invites import (
     InviteSummaryDTO,
     _to_summary as _invite_summary,
 )
+from api.workspace_signals import RowCounts, WorkspaceSignalsDTO, build_signals
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 log = logging.getLogger("scheduler.tournaments")
@@ -67,6 +68,7 @@ class TournamentSummaryDTO(BaseModel):
     # state, derived-and-persisted from ``kind``. Existing summary
     # consumers ignore the new field.
     modules: List[WorkspaceModuleDTO] = Field(default_factory=list)
+    signals: Optional[WorkspaceSignalsDTO] = None
 
 
 class WorkspaceModuleSeedDTO(BaseModel):
@@ -111,6 +113,7 @@ def _to_summary(
     *,
     role: Optional[str] = None,
     modules: Optional[List[WorkspaceModuleDTO]] = None,
+    signals: Optional[WorkspaceSignalsDTO] = None,
 ) -> TournamentSummaryDTO:
     return TournamentSummaryDTO(
         id=str(row.id),
@@ -123,6 +126,7 @@ def _to_summary(
         role=role,
         ownerName=row.owner_email,
         modules=modules or [],
+        signals=signals,
     )
 
 
@@ -131,6 +135,33 @@ def _modules_for(row: Tournament, repo: LocalRepository) -> List[WorkspaceModule
     return [
         WorkspaceModuleDTO.from_row(m) for m in repo.modules.ensure_modules(row)
     ]
+
+
+def _counts_for(
+    ids: List[uuid.UUID], repo: LocalRepository
+) -> dict:
+    """``{tournament_id: RowCounts}`` from the 6 grouped count queries.
+
+    Computed once for a set of ids (the list path) or a single id (the
+    get/create/update paths). No per-row DB round-trips.
+    """
+    members = repo.members.count_by_tournament(ids)
+    invites = repo.invite_links.count_active_by_tournament(ids)
+    bevents = repo.brackets.count_events_by_tournament(ids)
+    bmatches = repo.brackets.count_matches_by_tournament(ids)
+    bresults = repo.brackets.count_results_by_tournament(ids)
+    mstates = repo.match_states.count_by_tournament(ids)
+    return {
+        tid: RowCounts(
+            members=members.get(tid, 0),
+            active_invites=invites.get(tid, 0),
+            bracket_events=bevents.get(tid, 0),
+            bracket_matches=bmatches.get(tid, 0),
+            bracket_results=bresults.get(tid, 0),
+            match_states=mstates.get(tid, 0),
+        )
+        for tid in ids
+    }
 
 
 def _backup_entry(row) -> BackupEntryDTO:
@@ -180,15 +211,20 @@ def list_tournaments(
         role = repo.members.get_role(tid, user_uuid)
         if role is not None:
             role_by_tournament[tid] = role
-    return [
-        _to_summary(
-            t,
-            role=role_by_tournament[t.id],
-            modules=_modules_for(t, repo),
+    visible = [t for t in repo.tournaments.list_all() if t.id in role_by_tournament]
+    counts = _counts_for([t.id for t in visible], repo)
+    out: List[TournamentSummaryDTO] = []
+    for t in visible:
+        modules = _modules_for(t, repo)
+        out.append(
+            _to_summary(
+                t,
+                role=role_by_tournament[t.id],
+                modules=modules,
+                signals=build_signals(t, modules, counts[t.id]),
+            )
         )
-        for t in repo.tournaments.list_all()
-        if t.id in role_by_tournament
-    ]
+    return out
 
 
 @router.post("", response_model=TournamentSummaryDTO, status_code=201)
@@ -270,7 +306,14 @@ def create_tournament(
             row.id,
             {"config": seeded_config},
         )
-    return _to_summary(row, role="owner", modules=_modules_for(row, repo))
+    modules = _modules_for(row, repo)
+    counts = _counts_for([row.id], repo)
+    return _to_summary(
+        row,
+        role="owner",
+        modules=modules,
+        signals=build_signals(row, modules, counts[row.id]),
+    )
 
 
 @router.get(
@@ -295,7 +338,14 @@ def get_tournament(
     user_uuid = user.as_uuid()
     if user_uuid is not None:
         role = repo.members.get_role(tournament_id, user_uuid)
-    return _to_summary(row, role=role, modules=_modules_for(row, repo))
+    modules = _modules_for(row, repo)
+    counts = _counts_for([row.id], repo)
+    return _to_summary(
+        row,
+        role=role,
+        modules=modules,
+        signals=build_signals(row, modules, counts[row.id]),
+    )
 
 
 @router.patch(
@@ -333,7 +383,14 @@ def update_tournament(
     user_uuid = user.as_uuid()
     if user_uuid is not None:
         role = repo.members.get_role(tournament_id, user_uuid)
-    return _to_summary(row, role=role, modules=_modules_for(row, repo))
+    modules = _modules_for(row, repo)
+    counts = _counts_for([row.id], repo)
+    return _to_summary(
+        row,
+        role=role,
+        modules=modules,
+        signals=build_signals(row, modules, counts[row.id]),
+    )
 
 
 @router.delete(
