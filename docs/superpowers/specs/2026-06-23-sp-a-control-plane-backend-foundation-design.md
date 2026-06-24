@@ -148,12 +148,13 @@ then slices per row:
 
 ```python
 ids = [t.id for t in rows if t.id in role_by_tournament]
-members   = repo.members.count_by_tournament(ids)            # {id: int}
-invites   = repo.invite_links.count_active_by_tournament(ids)# {id: int}
-bevents   = repo.brackets.count_events_by_tournament(ids)    # {id: int}
-bmatches  = repo.brackets.count_matches_by_tournament(ids)   # {id: int}
-bresults  = repo.brackets.count_results_by_tournament(ids)   # {id: int}
-# one grouped query each; then per-row slice into _signals_for
+members   = repo.members.count_by_tournament(ids)             # {id: int}
+invites   = repo.invite_links.count_active_by_tournament(ids) # {id: int}
+bevents   = repo.brackets.count_events_by_tournament(ids)     # {id: int}
+bmatches  = repo.brackets.count_matches_by_tournament(ids)    # {id: int}
+bresults  = repo.brackets.count_results_by_tournament(ids)    # {id: int}
+mstates   = repo.match_states.count_by_tournament(ids)        # {id: int}
+# one grouped query each (6 total); then per-row slice into _signals_for
 ```
 
 Single-GET endpoints (`get_tournament`, create, update) call the **same grouped
@@ -175,10 +176,10 @@ Meet readiness reads `row.data` — a **non-deferred JSON column already loaded*
   - `roster` — `len(data.get("players", [])) > 0`.
   - `scheduled` — a schedule has been generated (`data["schedule"]` /
     assignments non-empty).
-  - `results` — at least one scored match in the blob (`data["matches"]` entry
-    carrying a recorded result, or non-empty `data` history). **Blob-only** — no
-    relational `match_states` fetch. If the plan finds results are not reliably
-    mirrored in the blob, **drop this key** rather than add a per-row query.
+  - `results` — at least one `match_states` row, via a **grouped
+    `match_states.count_by_tournament(ids)`** query (one fixed grouped query, not
+    per-row). Chosen over a blob heuristic because the blob's match shape doesn't
+    reliably carry results; a grouped count is both reliable and N+1-free.
 - **bracket** (`kind == "bracket"`), from the grouped count slices:
   - `events` — bracket events count > 0.
   - `bracketBuilt` — bracket matches count > 0.
@@ -232,8 +233,9 @@ the Hub collaboration count equals what the Sharing tab shows.
 - `kind` preserved as legacy compatibility.
 - No data-lossy behavior; create/open/delete preserved.
 - The list endpoint must add **no per-row DB round-trip** for signals beyond the
-  fixed set of grouped queries (member, active-invite, bracket events/matches/
-  results). Meet readiness adds zero queries (blob already loaded).
+  fixed set of **6 grouped queries** (member, active-invite, bracket events/matches/
+  results, match-states). Meet `configured`/`roster`/`scheduled` add zero queries
+  (blob already loaded).
 - Backend suite stays green (currently 489 pass / 1 pre-existing psycopg2
   `test_config` skip). Migration story unchanged — SP-A adds no new table
   (`workspace_modules` already migrated); `seed_modules` writes to it.
