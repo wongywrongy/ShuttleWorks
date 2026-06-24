@@ -212,19 +212,8 @@ def create_tournament(
             ErrorCode.INVALID_INPUT,
             f"kind must be 'meet' or 'bracket', got {body.kind!r}",
         )
-    row = repo.tournaments.create(
-        name=body.name,
-        kind=body.kind,
-        tournament_date=body.tournamentDate,
-        owner_id=user_uuid,
-        owner_email=user.email,
-    )
-    if user_uuid is not None:
-        repo.members.add_member(row.id, user_uuid, role="owner")
-
-    # Explicit module seed (control-plane templates / custom create). When
-    # present, validate + backfill, enforce the display dependency, and
-    # persist before any module read so ensure_modules is a no-op.
+    # Validate the seed up front (both checks are pure — no row needed) so a
+    # rejected seed never leaves an orphan tournament/member row behind.
     if body.modules is not None:
         try:
             seed_rows = normalize_module_seed([m.model_dump() for m in body.modules])
@@ -237,6 +226,22 @@ def create_tournament(
                 ErrorCode.INVALID_INPUT,
                 "display may be enabled only with an enabled operational module",
             )
+    else:
+        seed_rows = None
+
+    row = repo.tournaments.create(
+        name=body.name,
+        kind=body.kind,
+        tournament_date=body.tournamentDate,
+        owner_id=user_uuid,
+        owner_email=user.email,
+    )
+    if user_uuid is not None:
+        repo.members.add_member(row.id, user_uuid, role="owner")
+
+    # Explicit module seed (control-plane templates / custom create). When
+    # present, persist before any module read so ensure_modules is a no-op.
+    if seed_rows is not None:
         repo.modules.seed_modules(row, seed_rows)
 
     # Seed a fully-valid config so SetupTab reads the dashboard name + date

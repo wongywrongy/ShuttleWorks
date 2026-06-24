@@ -382,6 +382,7 @@ def test_create_seed_rejects_unknown_module(client):
         "name": "Bad", "modules": [{"moduleId": "scoreboard", "status": "enabled"}],
     })
     assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "INVALID_INPUT"
 
 
 def test_create_seed_rejects_display_without_source(client):
@@ -394,6 +395,18 @@ def test_create_seed_rejects_display_without_source(client):
         ],
     })
     assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "INVALID_INPUT"
+
+
+def test_create_seed_rejected_leaves_no_orphan_tournament(client):
+    """A rejected seed must not leave an orphan tournament or member row."""
+    r = client.post("/tournaments", json={
+        "name": "Orphan", "modules": [{"moduleId": "scoreboard", "status": "enabled"}],
+    })
+    assert r.status_code == 400
+    # No tournament was committed — the caller's membership list is empty.
+    tournaments = client.get("/tournaments").json()
+    assert tournaments == []
 
 
 def test_create_without_seed_unchanged(client):
