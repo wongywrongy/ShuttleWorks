@@ -7,10 +7,6 @@ import type { AttentionReasonDTO, TournamentSummaryDTO } from '../../api/dto';
 
 export type WorkspaceHealth = 'good' | 'attention' | 'draft' | 'archived';
 
-/** Health → dot color. Canonical map lives in the control-plane HealthDot;
- *  re-exported here for the existing inline callers (HubPage row, until SP-D2 T4). */
-export { healthColorClass as healthDotClass } from '../../components/control-plane/HealthDot';
-
 /** Health badge value — prefers `signals.health`, else derives from status. */
 export function workspaceHealth(t: TournamentSummaryDTO): WorkspaceHealth {
   if (t.signals) return t.signals.health;
