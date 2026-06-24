@@ -137,6 +137,18 @@ def test_enable_foreign_operator_on_meet_workspace(client):
     assert mods["meet"] == "enabled"
 
 
+def test_enable_foreign_operator_on_bracket_workspace(client):
+    # Symmetric to the meet case: a bracket workspace seeds meet as 'available',
+    # so enabling the foreign Meet operator (available -> enabled) succeeds.
+    tid = _seed_bracket_tournament(client, "Hybrid via enable (bracket)")
+    r = client.patch(f"/tournaments/{tid}/modules/meet", json={"status": "enabled"})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "enabled"
+    mods = {m["moduleId"]: m["status"] for m in client.get(f"/tournaments/{tid}/modules").json()}
+    assert mods["meet"] == "enabled"
+    assert mods["bracket"] == "enabled"
+
+
 # ---- 2. Lazy derive-and-persist (idempotent) --------------------------
 
 
