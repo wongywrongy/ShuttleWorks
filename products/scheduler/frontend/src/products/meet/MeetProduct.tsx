@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { useUiStore } from '../../store/uiStore';
 import { TabBar } from '../../app/TabBar';
 import { TabSkeleton } from '../../components/TabSkeleton';
+import { useDisruptionPublisher } from './matches/useDisruptionPublisher';
 
 const TournamentSetupPage = lazy(() =>
   import('./TournamentSetupPage').then((m) => ({ default: m.TournamentSetupPage })),
@@ -23,6 +24,9 @@ const MatchControlCenterPage = lazy(() =>
  *  tab is no longer here — it became the Display product mode. */
 export function MeetProduct() {
   const activeTab = useUiStore((s) => s.activeTab);
+  // Publish the meet disruption summary into the neutral uiStore slice the
+  // shared TabBar badge reads (keeps the shell free of meet validation deps).
+  useDisruptionPublisher();
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TabBar />

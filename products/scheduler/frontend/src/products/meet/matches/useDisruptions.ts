@@ -23,12 +23,12 @@
  * relevant store slices.
  */
 import { useMemo } from 'react';
-import { useTournamentStore } from '../store/tournamentStore';
+import { useTournamentStore } from '../../../store/tournamentStore';
 import {
   validateMatch,
   type MatchIssue,
   type MatchIssueSeverity,
-} from '../products/meet/matches/validateMatch';
+} from './validateMatch';
 
 export interface DisruptionFeed {
   /** Total issue count across all matches. */

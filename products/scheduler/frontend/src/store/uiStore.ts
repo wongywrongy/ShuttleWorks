@@ -145,6 +145,22 @@ interface UiState {
   bracketDataReady: boolean | null;
   setBracketDataReady: (ready: boolean | null) => void;
 
+  // Meet disruption summary (counts only) published by the meet product's
+  // ``useDisruptionPublisher`` so the shared ``TabBar`` badge reads counts
+  // without the shell importing meet validation. Zeroed when no meet is mounted.
+  disruptionSummary: {
+    total: number;
+    errors: number;
+    warnings: number;
+    severity: 'error' | 'warning' | null;
+  };
+  setDisruptionSummary: (summary: {
+    total: number;
+    errors: number;
+    warnings: number;
+    severity: 'error' | 'warning' | null;
+  }) => void;
+
   // Solver HUD
   solverHud: SolverHudState;
   setSolverHud: (patch: Partial<SolverHudState>) => void;
@@ -223,6 +239,7 @@ const INITIAL: Pick<
   | 'activeTournamentKind'
   | 'activeTournamentStatus'
   | 'bracketDataReady'
+  | 'disruptionSummary'
   | 'solverHud'
   | 'pendingPin'
   | 'lastValidation'
@@ -248,6 +265,7 @@ const INITIAL: Pick<
   activeTournamentKind: null,
   activeTournamentStatus: null,
   bracketDataReady: null,
+  disruptionSummary: { total: 0, errors: 0, warnings: 0, severity: null },
   solverHud: DEFAULT_SOLVER_HUD,
   pendingPin: null,
   lastValidation: null,
@@ -277,6 +295,7 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
   setActiveTournamentStatus: (activeTournamentStatus) => set({ activeTournamentStatus }),
   setBracketDataReady: (bracketDataReady) => set({ bracketDataReady }),
+  setDisruptionSummary: (disruptionSummary) => set({ disruptionSummary }),
 
   setSolverHud: (patch) =>
     set((state) => ({ solverHud: { ...state.solverHud, ...patch } })),

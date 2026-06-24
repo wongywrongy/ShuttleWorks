@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore, type AppTab } from '../store/uiStore';
-import { useDisruptions } from '../hooks/useDisruptions';
 import { useTournamentId } from '../hooks/useTournamentId';
 import { INTERACTIVE_BASE } from '../lib/utils';
 import { BRACKET_TABS, MEET_OPERATOR_TAB_IDS, type MeetTabId } from '../lib/bracketTabs';
@@ -53,7 +52,7 @@ export function TabBar() {
   const bracketDataReady = useUiStore((s) => s.bracketDataReady);
   const matches = useTournamentStore((s) => s.matches);
   const players = useTournamentStore((s) => s.players);
-  const disruptions = useDisruptions();
+  const disruptions = useUiStore((s) => s.disruptionSummary);
   const navigate = useNavigate();
   const tid = useTournamentId();
 

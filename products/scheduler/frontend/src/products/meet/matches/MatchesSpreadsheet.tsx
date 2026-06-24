@@ -19,7 +19,7 @@ import { useTournamentStore } from '../../../store/tournamentStore';
 import { usePlayerMap } from '../../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../../hooks/useSearchParamState';
-import { useDisruptions } from '../../../hooks/useDisruptions';
+import { useDisruptions } from './useDisruptions';
 import { EVENT_LABEL, isDoublesRank } from '../roster/positionGrid/helpers';
 import { maxSeverity, type MatchIssue } from './validateMatch';
 
