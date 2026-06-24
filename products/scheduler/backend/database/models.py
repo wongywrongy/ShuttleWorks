@@ -634,12 +634,12 @@ def derive_modules(kind: Optional[str]) -> dict[str, str]:
     The kind's own operator is ``enabled``; the foreign operator is
     ``available`` — installable / directly usable, and promotable to
     ``enabled`` via the control plane (SP-B2 multi-module enablement).
-    ``display`` is ``available`` for meet (the public surface works) and
-    ``coming_soon`` for bracket (the bracket public surface is not built —
-    SP-B3). Unknown / ``None`` kinds fall back to the meet shape.
+    ``display`` is ``available`` for both kinds — the bracket public display
+    (SP-B3) renders the draw / live matches / results. Unknown / ``None``
+    kinds fall back to the meet shape.
     """
     if kind == "bracket":
-        return {"bracket": "enabled", "display": "coming_soon", "meet": "available"}
+        return {"bracket": "enabled", "display": "available", "meet": "available"}
     # ``meet`` and any unknown / None kind.
     return {"meet": "enabled", "display": "available", "bracket": "available"}
 

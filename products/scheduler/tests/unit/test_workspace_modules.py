@@ -116,7 +116,7 @@ def test_derive_modules_status_maps(client):
     }
     assert derive_modules("bracket") == {
         "bracket": "enabled",
-        "display": "coming_soon",
+        "display": "available",
         "meet": "available",
     }
     # Unknown / None fall back to the meet shape.
@@ -147,6 +147,16 @@ def test_enable_foreign_operator_on_bracket_workspace(client):
     mods = {m["moduleId"]: m["status"] for m in client.get(f"/tournaments/{tid}/modules").json()}
     assert mods["meet"] == "enabled"
     assert mods["bracket"] == "enabled"
+
+
+def test_enable_display_on_bracket_workspace(client):
+    # A bracket workspace now seeds display 'available' (was coming_soon), and
+    # bracket is enabled, so the display-dependency rule is satisfied → enabling
+    # display succeeds (was 409 MODULE_IMMUTABLE).
+    tid = _seed_bracket_tournament(client, "Bracket TV")
+    r = client.patch(f"/tournaments/{tid}/modules/display", json={"status": "enabled"})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "enabled"
 
 
 # ---- 2. Lazy derive-and-persist (idempotent) --------------------------
@@ -280,7 +290,7 @@ def test_ensure_modules_backfills_existing_tournament(client):
     }
     assert bracket_mods == {
         "bracket": "enabled",
-        "display": "coming_soon",
+        "display": "available",
         "meet": "available",
     }
 
@@ -461,9 +471,9 @@ def test_migration_flip_sql_promotes_coming_soon_operators(client, tid):
 def test_create_without_seed_unchanged(client):
     r = client.post("/tournaments", json={"name": "Legacy", "kind": "bracket"})
     assert r.status_code == 201
-    # kind-derived seed: bracket enabled, meet available (foreign operator now
-    # enableable), only display coming_soon (bracket display = SP-B3).
-    assert _modules_map(r.json()) == {"bracket": "enabled", "display": "coming_soon", "meet": "available"}
+    # kind-derived seed: bracket enabled, meet + display both available now
+    # (foreign operator enableable; bracket display = SP-B3).
+    assert _modules_map(r.json()) == {"bracket": "enabled", "display": "available", "meet": "available"}
 
 
 # ---- seed_modules --------------------------------------------------------
