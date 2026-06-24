@@ -25,9 +25,12 @@ import { useWorkspaceModules } from '../platform/domain/useWorkspaceModules';
 import { ModuleUnavailablePanel } from './workspace/ModuleUnavailablePanel';
 
 /** Whether the active module's pane is the normal module outlet or the
- *  unavailable panel. Unknown/missing module status (still loading) resolves
- *  to the outlet so there is no false guard before the real module catalog
- *  arrives. */
+ *  unavailable panel. A missing active module (empty/partial list) resolves
+ *  to the outlet defensively. In practice no false guard fires during load
+ *  for a second reason: the caller passes `modulesForWorkspace(kind)` until
+ *  the real catalog arrives, and that fallback always has the workspace's own
+ *  operator module enterable (and TournamentPage sets the optimistic kind
+ *  synchronously before paint), so the active tab's module is enterable. */
 export type ActivePane =
   | { kind: 'outlet' }
   | {

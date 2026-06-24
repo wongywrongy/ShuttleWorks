@@ -74,6 +74,9 @@ export const MEET_TABS: { id: AppTab; label: string }[] = MEET_OPERATOR_TAB_IDS.
  *  route, no operator strip). */
 export function tabsForModule(module: ModuleId): { id: AppTab; label: string }[] {
   if (module === 'bracket') return BRACKET_TABS;
+  // Display has no operator strip and is unreachable from the TabBar (the
+  // TabBar mounts inside MeetProduct/BracketProduct, not DisplayProduct);
+  // returned for defensiveness / completeness.
   if (module === 'display') return [];
   return MEET_TABS;
 }
