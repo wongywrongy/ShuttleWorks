@@ -11,6 +11,10 @@ vi.mock('../../../api/client', () => ({
     deleteTournament: vi.fn(),
     getWorkspaceModules: vi.fn(),
     patchWorkspaceModule: vi.fn(),
+    listMembers: vi.fn(),
+    listInvites: vi.fn(),
+    createInvite: vi.fn(),
+    revokeInvite: vi.fn(),
   },
 }));
 
@@ -47,6 +51,8 @@ beforeEach(() => {
   vi.mocked(apiClient.updateTournament).mockResolvedValue({} as never);
   vi.mocked(apiClient.deleteTournament).mockResolvedValue(undefined as never);
   vi.mocked(apiClient.patchWorkspaceModule).mockResolvedValue({} as never);
+  vi.mocked(apiClient.listMembers).mockResolvedValue([] as never);
+  vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
 });
 
 describe('WorkspaceSettingsPage', () => {
@@ -102,7 +108,15 @@ describe('WorkspaceSettingsPage', () => {
 
   it('a not-yet-built tab is an honest placeholder', () => {
     mount({ current: '' });
-    fireEvent.click(screen.getByTestId('settings-tab-people'));
+    fireEvent.click(screen.getByTestId('settings-tab-sync'));
     expect(screen.getByText('Coming in a later phase.')).toBeInTheDocument();
+  });
+
+  it('People & Access and Sharing tabs render the real surfaces', () => {
+    mount({ current: '' });
+    fireEvent.click(screen.getByTestId('settings-tab-people'));
+    expect(screen.getByText('Members & roles')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('settings-tab-sharing'));
+    expect(screen.getByLabelText('Public display link')).toBeInTheDocument();
   });
 });

@@ -16,6 +16,8 @@ import { SETTINGS_TABS, type SettingsTabId } from './settingsTabs';
 import { GeneralSettingsTab } from './GeneralSettingsTab';
 import { ModulesSettingsTab } from './ModulesSettingsTab';
 import { DangerZoneTab } from './DangerZoneTab';
+import { PeopleAccessTab } from './PeopleAccessTab';
+import { SharingTab } from './SharingTab';
 import { ComingSoonTab } from './ComingSoonTab';
 
 export function WorkspaceSettingsPage() {
@@ -87,18 +89,8 @@ export function WorkspaceSettingsPage() {
           {tab === 'danger' && (
             <DangerZoneTab tid={tid} summary={summary} onChanged={load} />
           )}
-          {tab === 'people' && (
-            <ComingSoonTab
-              title="People & Access"
-              description="Members, roles, and pending invites for this workspace."
-            />
-          )}
-          {tab === 'sharing' && (
-            <ComingSoonTab
-              title="Sharing"
-              description="Invite links and public display links, with expiry and revoke."
-            />
-          )}
+          {tab === 'people' && <PeopleAccessTab tid={tid} summary={summary} />}
+          {tab === 'sharing' && <SharingTab tid={tid} />}
           {tab === 'sync' && (
             <ComingSoonTab
               title="Sync & Backups"
