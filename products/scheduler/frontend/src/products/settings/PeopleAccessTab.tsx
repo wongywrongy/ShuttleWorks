@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
 import type { TournamentMemberDTO, TournamentSummaryDTO } from '../../api/dto';
+import { shortId, initialFor } from './memberIdentity';
 
 const ROLE_LEGEND: { role: string; desc: string }[] = [
   { role: 'Owner', desc: 'Full control — modules, sharing, delete.' },
@@ -74,14 +75,22 @@ export function PeopleAccessTab({
                 data-testid={`member-${m.userId}`}
                 className="flex items-center justify-between gap-3 p-3"
               >
-                <span className="truncate font-mono text-xs text-foreground">{m.userId}</span>
-                <span className="flex items-center gap-3">
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {fmtDate(m.joinedAt)}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-muted-foreground"
+                  >
+                    {initialFor(m.userId)}
                   </span>
-                  <span className="rounded-sm border border-border px-1.5 py-0.5 text-2xs font-medium capitalize text-muted-foreground">
-                    {m.role}
+                  <span className="flex flex-col">
+                    <span className="text-xs font-medium capitalize text-foreground">{m.role}</span>
+                    <span className="font-mono text-2xs text-muted-foreground/70" title="Member id">
+                      {shortId(m.userId)}
+                    </span>
                   </span>
+                </span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  Joined {fmtDate(m.joinedAt)}
                 </span>
               </li>
             ))

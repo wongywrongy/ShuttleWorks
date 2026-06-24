@@ -23,6 +23,17 @@ describe('PeopleAccessTab', () => {
     await waitFor(() => expect(screen.getByTestId('member-u-abc')).toBeInTheDocument());
   });
 
+  it('shows a short id chip + role, not the full raw UUID', async () => {
+    const uuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    vi.mocked(apiClient.listMembers).mockResolvedValue([
+      { userId: uuid, role: 'operator', joinedAt: '2026-01-01T00:00:00Z' },
+    ] as never);
+    render(<PeopleAccessTab tid="t1" summary={summary} />);
+    const row = await screen.findByTestId(`member-${uuid}`);
+    expect(row).toHaveTextContent('AAAAAAAA'); // short id chip
+    expect(screen.queryByText(uuid)).toBeNull(); // full UUID never shown as text
+  });
+
   it('shows an empty-members hint', async () => {
     vi.mocked(apiClient.listMembers).mockResolvedValue([] as never);
     render(<PeopleAccessTab tid="t1" summary={summary} />);
