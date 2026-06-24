@@ -271,3 +271,71 @@ def test_display_dependency_satisfied_rule():
     # Display enabled with no enabled operator → violated.
     assert display_dependency_satisfied({"meet": "available", "bracket": "disabled", "display": "enabled"}) is False
     assert display_dependency_satisfied({"display": "enabled"}) is False
+
+
+# ---- normalize_module_seed -----------------------------------------------
+
+
+def _as_map(rows):
+    return {r["module_id"]: r["status"] for r in rows}
+
+
+def test_normalize_seed_meet_day_template():
+    from database.models import normalize_module_seed
+
+    rows = normalize_module_seed([
+        {"moduleId": "meet", "status": "enabled"},
+        {"moduleId": "display", "status": "enabled"},
+        {"moduleId": "bracket", "status": "available"},
+    ])
+    assert _as_map(rows) == {"meet": "enabled", "display": "enabled", "bracket": "available"}
+    # Ordered by MODULE_IDS = (meet, bracket, display).
+    assert [r["module_id"] for r in rows] == ["meet", "bracket", "display"]
+
+
+def test_normalize_seed_backfills_missing_modules():
+    from database.models import normalize_module_seed
+
+    # Only bracket named; meet/display backfilled. Display backfills to
+    # coming_soon because no operational module is enabled.
+    rows = normalize_module_seed([{"moduleId": "bracket", "status": "enabled"}])
+    assert _as_map(rows) == {"bracket": "enabled", "meet": "available", "display": "coming_soon"}
+
+
+def test_normalize_seed_backfills_display_available_when_operator_enabled():
+    from database.models import normalize_module_seed
+
+    rows = normalize_module_seed([{"moduleId": "meet", "status": "enabled"}])
+    assert _as_map(rows)["display"] == "available"
+
+
+def test_normalize_seed_preserves_config():
+    from database.models import normalize_module_seed
+
+    rows = normalize_module_seed([{"moduleId": "meet", "status": "enabled", "config": {"x": 1}}])
+    meet = next(r for r in rows if r["module_id"] == "meet")
+    assert meet["config"] == {"x": 1}
+
+
+def test_normalize_seed_rejects_unknown_module():
+    from database.models import normalize_module_seed
+
+    with pytest.raises(ValueError):
+        normalize_module_seed([{"moduleId": "scoreboard", "status": "enabled"}])
+
+
+def test_normalize_seed_rejects_duplicate_module():
+    from database.models import normalize_module_seed
+
+    with pytest.raises(ValueError):
+        normalize_module_seed([
+            {"moduleId": "meet", "status": "enabled"},
+            {"moduleId": "meet", "status": "available"},
+        ])
+
+
+def test_normalize_seed_rejects_bad_status():
+    from database.models import normalize_module_seed
+
+    with pytest.raises(ValueError):
+        normalize_module_seed([{"moduleId": "meet", "status": "on"}])

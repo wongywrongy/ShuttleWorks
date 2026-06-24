@@ -658,6 +658,54 @@ def display_dependency_satisfied(statuses: dict[str, str]) -> bool:
     return any(statuses.get(m) == "enabled" for m in OPERATIONAL_MODULES)
 
 
+def normalize_module_seed(seeds: list[dict]) -> list[dict]:
+    """Validate and complete an explicit create-time module seed.
+
+    ``seeds`` is the create endpoint's optional ``modules[]`` — each item a
+    dict with ``moduleId``, ``status``, and optional ``config``. Validates
+    structure (known id, no duplicates, valid status), backfills any of the
+    three modules not named, and returns an ordered (by ``MODULE_IDS``) list
+    of ``{"module_id", "status", "config"}`` rows ready to persist.
+
+    Backfill: an unnamed ``meet`` / ``bracket`` becomes ``available``; an
+    unnamed ``display`` becomes ``available`` if a data module is enabled in
+    the named set, else ``coming_soon``. Raises ``ValueError`` on malformed
+    input; the caller maps that to a 400 and separately applies
+    ``display_dependency_satisfied``.
+    """
+    named: dict[str, dict] = {}
+    for item in seeds:
+        module_id = item.get("moduleId")
+        status = item.get("status")
+        if module_id not in MODULE_IDS:
+            raise ValueError(f"unknown moduleId: {module_id!r}")
+        if module_id in named:
+            raise ValueError(f"duplicate moduleId: {module_id!r}")
+        if status not in MODULE_STATUSES:
+            raise ValueError(f"invalid status: {status!r}")
+        named[module_id] = {
+            "module_id": module_id,
+            "status": status,
+            "config": item.get("config"),
+        }
+
+    # Display is available only if meet is enabled (display is a meet-specific feature).
+    meet_enabled = named.get("meet", {}).get("status") == "enabled"
+    rows: list[dict] = []
+    for module_id in MODULE_IDS:
+        if module_id in named:
+            rows.append(named[module_id])
+        elif module_id == "display":
+            rows.append({
+                "module_id": "display",
+                "status": "available" if meet_enabled else "coming_soon",
+                "config": None,
+            })
+        else:
+            rows.append({"module_id": module_id, "status": "available", "config": None})
+    return rows
+
+
 class WorkspaceModule(Base):
     """One persisted module row for a workspace (tournament).
 
