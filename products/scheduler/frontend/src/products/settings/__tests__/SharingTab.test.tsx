@@ -27,6 +27,16 @@ describe('SharingTab', () => {
     expect(input.value).toContain('/display?id=t1');
   });
 
+  it('separates the public display link from collaborator invites with safety copy', () => {
+    render(<SharingTab tid="t1" />);
+    const pub = screen.getByTestId('sharing-public');
+    expect(pub).toHaveTextContent(/anyone with this link/i);
+    expect(within(pub).getByLabelText('Public display link')).toBeInTheDocument();
+    const inv = screen.getByTestId('sharing-invites');
+    expect(within(inv).getByText(/operate this workspace/i)).toBeInTheDocument();
+    expect(within(inv).getByRole('button', { name: 'Create invite' })).toBeInTheDocument();
+  });
+
   it('Create invite calls createInvite then refetches the list', async () => {
     render(<SharingTab tid="t1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Create invite' }));

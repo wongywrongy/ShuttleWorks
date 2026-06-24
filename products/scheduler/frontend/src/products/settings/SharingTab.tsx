@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@scheduler/design-system';
+import { SectionCard } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import type { InviteRole, InviteSummaryDTO } from '../../api/dto';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
@@ -74,19 +75,22 @@ export function SharingTab({ tid }: { tid: string }) {
   const now = Date.now();
 
   return (
-    <div className="max-w-2xl space-y-6 p-6">
-      <div>
+    <div className="max-w-2xl p-6">
+      <div className="pb-4">
         <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           SHARING
         </div>
         <h2 className="mt-1 text-base font-semibold text-foreground">Links &amp; access</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          The public display link is view-only; collaborator invites let people sign in
+          and operate this workspace. They are separate — share each deliberately.
+        </p>
       </div>
 
-      {/* Public display link — its own primitive, separate from invites. */}
-      <section className="space-y-2">
-        <div className="text-sm font-medium text-foreground">Public display link</div>
-        <p className="text-xs text-muted-foreground">
-          Anyone with this link can view the read-only venue display.
+      {/* Public display link — read-only, separate from collaborator invites. */}
+      <SectionCard eyebrow="PUBLIC DISPLAY LINK" testId="sharing-public">
+        <p className="mb-2 text-xs text-muted-foreground">
+          Anyone with this link can view the read-only venue display — no sign-in required.
         </p>
         <div className="flex items-center gap-2">
           <input
@@ -102,11 +106,13 @@ export function SharingTab({ tid }: { tid: string }) {
             Open fullscreen
           </Button>
         </div>
-      </section>
+      </SectionCard>
 
       {/* Collaborator invite links. */}
-      <section className="space-y-3">
-        <div className="text-sm font-medium text-foreground">Invite links</div>
+      <SectionCard eyebrow="COLLABORATOR INVITES" testId="sharing-invites">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Invited people can sign in and operate this workspace. Revoke a link any time.
+        </p>
         <div className="flex items-center gap-2">
           <select
             value={role}
@@ -174,7 +180,7 @@ export function SharingTab({ tid }: { tid: string }) {
             })
           )}
         </ul>
-      </section>
+      </SectionCard>
     </div>
   );
 }
