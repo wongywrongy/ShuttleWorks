@@ -15,6 +15,9 @@ vi.mock('../../../api/client', () => ({
     listInvites: vi.fn(),
     createInvite: vi.fn(),
     revokeInvite: vi.fn(),
+    listBackups: vi.fn(),
+    createBackup: vi.fn(),
+    restoreBackup: vi.fn(),
   },
 }));
 
@@ -53,6 +56,7 @@ beforeEach(() => {
   vi.mocked(apiClient.patchWorkspaceModule).mockResolvedValue({} as never);
   vi.mocked(apiClient.listMembers).mockResolvedValue([] as never);
   vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
+  vi.mocked(apiClient.listBackups).mockResolvedValue({ backups: [] } as never);
 });
 
 describe('WorkspaceSettingsPage', () => {
@@ -111,10 +115,13 @@ describe('WorkspaceSettingsPage', () => {
     await waitFor(() => expect(loc.current).toBe('/'));
   });
 
-  it('a not-yet-built tab is an honest placeholder', () => {
+  it('Sync & Backups tab renders the real backups surface', async () => {
     mount({ current: '' });
     fireEvent.click(screen.getByTestId('settings-tab-sync'));
-    expect(screen.getByText('Coming in a later phase.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Backups' })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /create backup/i })).toBeInTheDocument();
   });
 
   it('People & Access and Sharing tabs render the real surfaces', () => {

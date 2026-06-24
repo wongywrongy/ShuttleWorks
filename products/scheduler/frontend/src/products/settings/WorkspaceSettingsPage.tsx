@@ -19,7 +19,7 @@ import { ModulesSettingsTab } from './ModulesSettingsTab';
 import { DangerZoneTab } from './DangerZoneTab';
 import { PeopleAccessTab } from './PeopleAccessTab';
 import { SharingTab } from './SharingTab';
-import { ComingSoonTab } from './ComingSoonTab';
+import { SyncBackupsTab } from './SyncBackupsTab';
 
 export function WorkspaceSettingsPage() {
   const { id: tid } = useParams<{ id: string }>();
@@ -100,12 +100,7 @@ export function WorkspaceSettingsPage() {
           )}
           {tab === 'people' && <PeopleAccessTab tid={tid} summary={summary} />}
           {tab === 'sharing' && <SharingTab tid={tid} />}
-          {tab === 'sync' && (
-            <ComingSoonTab
-              title="Sync & Backups"
-              description="Local source of truth, last sync, backups, and restore."
-            />
-          )}
+          {tab === 'sync' && <SyncBackupsTab tid={tid} />}
         </div>
       </div>
     </div>
