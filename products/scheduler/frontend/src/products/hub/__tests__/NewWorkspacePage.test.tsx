@@ -48,8 +48,21 @@ describe('NewWorkspacePage', () => {
       ),
     );
 
-  it('Meet Day creates kind=meet with a seed (meet+display enabled) and routes to /setup', async () => {
-    vi.mocked(apiClient.createTournament).mockResolvedValue({ id: 'w1' } as never);
+  // The backend echoes the seeded modules back on the created summary; the page
+  // routes via primaryModuleForOpen(returned modules). Mock returns those.
+  const m = (moduleId: string, status: string) => ({ moduleId, status, config: null });
+  const returnCreated = (
+    id: string,
+    modules: { moduleId: string; status: string; config: null }[],
+  ) =>
+    vi.mocked(apiClient.createTournament).mockResolvedValue({
+      id,
+      kind: 'meet',
+      modules,
+    } as never);
+
+  it('Meet Day: seed (meet+display enabled, bracket available) → routes to /setup (meet primary)', async () => {
+    returnCreated('w1', [m('meet', 'enabled'), m('bracket', 'available'), m('display', 'enabled')]);
     const loc = { current: '' };
     mount(loc);
     fireEvent.click(screen.getByTestId('template-meet-day'));
@@ -60,8 +73,8 @@ describe('NewWorkspacePage', () => {
     expect(seedFor(body)).toMatchObject({ meet: 'enabled', display: 'enabled', bracket: 'available' });
   });
 
-  it('Bracket Tournament creates kind=bracket with a seed and routes to /bracket-setup', async () => {
-    vi.mocked(apiClient.createTournament).mockResolvedValue({ id: 'w2' } as never);
+  it('Bracket Tournament: seed (bracket enabled, meet/display available) → routes to /bracket-setup', async () => {
+    returnCreated('w2', [m('bracket', 'enabled'), m('meet', 'available'), m('display', 'available')]);
     const loc = { current: '' };
     mount(loc);
     fireEvent.click(screen.getByTestId('template-bracket-tournament'));
@@ -69,11 +82,11 @@ describe('NewWorkspacePage', () => {
     await waitFor(() => expect(loc.current).toBe('/tournaments/w2/bracket-setup'));
     const body = vi.mocked(apiClient.createTournament).mock.calls[0][0];
     expect(body.kind).toBe('bracket');
-    expect(seedFor(body)).toMatchObject({ bracket: 'enabled', meet: 'available' });
+    expect(seedFor(body)).toMatchObject({ bracket: 'enabled', meet: 'available', display: 'available' });
   });
 
-  it('Hybrid is enabled and creates meet + bracket + display enabled, routing to /setup', async () => {
-    vi.mocked(apiClient.createTournament).mockResolvedValue({ id: 'w3' } as never);
+  it('Hybrid: seed (all three enabled) → routes to /setup (meet primary)', async () => {
+    returnCreated('w3', [m('meet', 'enabled'), m('bracket', 'enabled'), m('display', 'enabled')]);
     const loc = { current: '' };
     mount(loc);
     expect(screen.getByTestId('template-hybrid')).not.toBeDisabled();
@@ -87,14 +100,14 @@ describe('NewWorkspacePage', () => {
     });
   });
 
-  it('Blank is enabled and creates an all-available workspace, routing to Settings', async () => {
-    vi.mocked(apiClient.createTournament).mockResolvedValue({ id: 'w4' } as never);
+  it('Blank: all-available seed (display disabled) → routes to the primary available module (/setup)', async () => {
+    returnCreated('w4', [m('meet', 'available'), m('bracket', 'available'), m('display', 'disabled')]);
     const loc = { current: '' };
     mount(loc);
     expect(screen.getByTestId('template-blank')).not.toBeDisabled();
     fireEvent.click(screen.getByTestId('template-blank'));
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w4/settings'));
+    await waitFor(() => expect(loc.current).toBe('/tournaments/w4/setup'));
     expect(seedFor(vi.mocked(apiClient.createTournament).mock.calls[0][0])).toMatchObject({
       meet: 'available',
       bracket: 'available',

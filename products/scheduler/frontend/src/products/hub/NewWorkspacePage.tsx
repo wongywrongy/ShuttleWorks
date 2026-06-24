@@ -1,10 +1,10 @@
 /**
  * Dedicated "New workspace" surface (route `/new`).
  *
- * Replaces the old kind-toggle dialog with module-template selection. A
- * template enables a set of modules and maps to the existing backend `kind`
- * (a temporary compatibility bridge — there is no module persistence yet).
- * On create we navigate to the first enabled operational module.
+ * Each template carries an explicit module seed (sent as `modules[]`) plus a
+ * legacy `kind` (compatibility/fallback identity). On create the backend
+ * persists the seed and echoes it back; we open the workspace via
+ * `primaryModuleForOpen` / `defaultTabForModule` on the returned modules.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +13,12 @@ import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { apiClient } from '../../api/client';
 import type { WorkspaceModuleDTO } from '../../api/dto';
+import {
+  modulesFromDto,
+  modulesForWorkspace,
+  primaryModuleForOpen,
+  defaultTabForModule,
+} from '../../platform/domain/moduleModel';
 
 type TemplateId = 'meet-day' | 'bracket-tournament' | 'hybrid' | 'blank';
 
@@ -27,10 +33,9 @@ interface Template {
   title: string;
   blurb: string;
   kind: 'meet' | 'bracket';
-  /** Explicit module seed persisted on create (sent as `modules[]`). */
+  /** Explicit module seed persisted on create (sent as `modules[]`). The
+   *  landing route is derived from the returned modules, not stored here. */
   seed: WorkspaceModuleDTO[];
-  /** Tab segment to land on, or the `'settings'` sentinel (Blank → Modules). */
-  destination: string;
 }
 
 const seed = (
@@ -45,7 +50,6 @@ const TEMPLATES: Template[] = [
     blurb: 'Roster, CP-SAT schedule, live cockpit, and a venue display.',
     kind: 'meet',
     seed: [seed('meet', 'enabled'), seed('bracket', 'available'), seed('display', 'enabled')],
-    destination: 'setup',
   },
   {
     id: 'bracket-tournament',
@@ -53,7 +57,6 @@ const TEMPLATES: Template[] = [
     blurb: 'Events, seeding, draw generation, advancement, and results.',
     kind: 'bracket',
     seed: [seed('bracket', 'enabled'), seed('meet', 'available'), seed('display', 'available')],
-    destination: 'bracket-setup',
   },
   {
     id: 'hybrid',
@@ -61,7 +64,6 @@ const TEMPLATES: Template[] = [
     blurb: 'Meet and Bracket modules together in one workspace, plus a display.',
     kind: 'meet',
     seed: [seed('meet', 'enabled'), seed('bracket', 'enabled'), seed('display', 'enabled')],
-    destination: 'setup',
   },
   {
     id: 'blank',
@@ -69,7 +71,6 @@ const TEMPLATES: Template[] = [
     blurb: 'Start empty and enable modules as you go.',
     kind: 'meet',
     seed: [seed('meet', 'available'), seed('bracket', 'available'), seed('display', 'disabled')],
-    destination: 'settings',
   },
 ];
 
@@ -101,10 +102,13 @@ export function NewWorkspacePage() {
         tournamentDate: date || null,
         modules: template.seed,
       });
-      // Blank has no enabled module → land on Settings (Modules) to turn things
-      // on; the others land on their primary module's home tab.
-      const segment =
-        template.destination === 'settings' ? 'settings' : template.destination;
+      // Open via the RETURNED module state — primaryModuleForOpen picks the
+      // landing module (first enabled, else first available) and
+      // defaultTabForModule maps it to a route. No hardcoded destinations.
+      const mods = created.modules
+        ? modulesFromDto(created.modules)
+        : modulesForWorkspace(created.kind);
+      const segment = defaultTabForModule(primaryModuleForOpen(mods));
       navigate(`/tournaments/${created.id}/${segment}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create workspace');
