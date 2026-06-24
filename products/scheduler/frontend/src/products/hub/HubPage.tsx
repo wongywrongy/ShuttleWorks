@@ -314,7 +314,11 @@ export function HubPage() {
           )}
         </div>
 
-        <WorkspaceInspector tournament={selected} onOpen={openTournament} />
+        <WorkspaceInspector
+          tournament={selected}
+          onOpen={openTournament}
+          onSettings={(id) => navigate(`/tournaments/${id}/settings`)}
+        />
       </div>
 
       {deleteTarget && (

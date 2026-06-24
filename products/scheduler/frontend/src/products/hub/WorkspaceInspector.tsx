@@ -18,12 +18,13 @@ function statusTone(status: TournamentSummaryDTO['status']) {
 interface InspectorProps {
   tournament: TournamentSummaryDTO | null;
   onOpen: (id: string) => void;
+  onSettings: (id: string) => void;
 }
 
 /** Right-side inspector: the selected workspace's summary + its full module
  *  catalog (real `modules[]` when present, else kind-derived). Honest about
  *  what's not built yet — sharing/collab data lands in a later phase. */
-export function WorkspaceInspector({ tournament, onOpen }: InspectorProps) {
+export function WorkspaceInspector({ tournament, onOpen, onSettings }: InspectorProps) {
   if (!tournament) {
     return (
       <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-card/40 lg:flex">
@@ -92,6 +93,13 @@ export function WorkspaceInspector({ tournament, onOpen }: InspectorProps) {
       <div className="p-4">
         <Button className="w-full" onClick={() => onOpen(tournament.id)}>
           Open workspace
+        </Button>
+        <Button
+          variant="ghost"
+          className="mt-2 w-full"
+          onClick={() => onSettings(tournament.id)}
+        >
+          Settings
         </Button>
         <p className="mt-3 text-2xs leading-relaxed text-muted-foreground/60">
           Sharing &amp; collaborators — coming in a later phase.

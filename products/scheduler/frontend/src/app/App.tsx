@@ -18,6 +18,11 @@ const HubPage = lazy(() =>
 const NewWorkspacePage = lazy(() =>
   import('../products/hub/NewWorkspacePage').then((m) => ({ default: m.NewWorkspacePage })),
 );
+const WorkspaceSettingsPage = lazy(() =>
+  import('../products/settings/WorkspaceSettingsPage').then((m) => ({
+    default: m.WorkspaceSettingsPage,
+  })),
+);
 const TournamentPage = lazy(() =>
   import('../pages/TournamentPage').then((m) => ({ default: m.TournamentPage })),
 );
@@ -126,6 +131,18 @@ function App() {
               <Route
                 path="/tournaments/:id/bracket"
                 element={<BracketLegacyRedirect />}
+              />
+
+              {/* Authenticated: Workspace Settings center (additive). */}
+              <Route
+                path="/tournaments/:id/settings"
+                element={
+                  <AuthGuard>
+                    <Suspense fallback={<Fallback />}>
+                      <WorkspaceSettingsPage />
+                    </Suspense>
+                  </AuthGuard>
+                }
               />
 
               {/* Authenticated: per-tournament shell. */}
