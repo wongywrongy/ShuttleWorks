@@ -668,7 +668,7 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
     of ``{"module_id", "status", "config"}`` rows ready to persist.
 
     Backfill: an unnamed ``meet`` / ``bracket`` becomes ``available``; an
-    unnamed ``display`` becomes ``available`` if a data module is enabled in
+    unnamed ``display`` becomes ``available`` if ``meet`` is enabled in
     the named set, else ``coming_soon``. Raises ``ValueError`` on malformed
     input; the caller maps that to a 400 and separately applies
     ``display_dependency_satisfied``.
@@ -689,7 +689,7 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
             "config": item.get("config"),
         }
 
-    # Display is available only if meet is enabled (display is a meet-specific feature).
+    # Display is available only if meet is enabled (display is a meet-specific feature — not tied to OPERATIONAL_MODULES).
     meet_enabled = named.get("meet", {}).get("status") == "enabled"
     rows: list[dict] = []
     for module_id in MODULE_IDS:

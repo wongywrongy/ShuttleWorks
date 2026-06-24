@@ -30,6 +30,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from _helpers import isolate_test_database, seed_tournament
+from database.models import normalize_module_seed
 
 
 @pytest.fixture
@@ -281,8 +282,6 @@ def _as_map(rows):
 
 
 def test_normalize_seed_meet_day_template():
-    from database.models import normalize_module_seed
-
     rows = normalize_module_seed([
         {"moduleId": "meet", "status": "enabled"},
         {"moduleId": "display", "status": "enabled"},
@@ -294,8 +293,6 @@ def test_normalize_seed_meet_day_template():
 
 
 def test_normalize_seed_backfills_missing_modules():
-    from database.models import normalize_module_seed
-
     # Only bracket named; meet/display backfilled. Display backfills to
     # coming_soon because no operational module is enabled.
     rows = normalize_module_seed([{"moduleId": "bracket", "status": "enabled"}])
@@ -303,30 +300,22 @@ def test_normalize_seed_backfills_missing_modules():
 
 
 def test_normalize_seed_backfills_display_available_when_operator_enabled():
-    from database.models import normalize_module_seed
-
     rows = normalize_module_seed([{"moduleId": "meet", "status": "enabled"}])
     assert _as_map(rows)["display"] == "available"
 
 
 def test_normalize_seed_preserves_config():
-    from database.models import normalize_module_seed
-
     rows = normalize_module_seed([{"moduleId": "meet", "status": "enabled", "config": {"x": 1}}])
     meet = next(r for r in rows if r["module_id"] == "meet")
     assert meet["config"] == {"x": 1}
 
 
 def test_normalize_seed_rejects_unknown_module():
-    from database.models import normalize_module_seed
-
     with pytest.raises(ValueError):
         normalize_module_seed([{"moduleId": "scoreboard", "status": "enabled"}])
 
 
 def test_normalize_seed_rejects_duplicate_module():
-    from database.models import normalize_module_seed
-
     with pytest.raises(ValueError):
         normalize_module_seed([
             {"moduleId": "meet", "status": "enabled"},
@@ -335,7 +324,10 @@ def test_normalize_seed_rejects_duplicate_module():
 
 
 def test_normalize_seed_rejects_bad_status():
-    from database.models import normalize_module_seed
-
     with pytest.raises(ValueError):
         normalize_module_seed([{"moduleId": "meet", "status": "on"}])
+
+
+def test_normalize_seed_empty_backfills_all_modules():
+    rows = normalize_module_seed([])
+    assert _as_map(rows) == {"meet": "available", "bracket": "available", "display": "coming_soon"}
