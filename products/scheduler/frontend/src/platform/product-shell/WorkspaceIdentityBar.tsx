@@ -8,6 +8,10 @@ interface WorkspaceIdentityBarProps {
   onBackToHub: () => void;
 }
 
+/** Maps a workspace status to a StatusPill tone (the pill text still shows the
+ *  literal status). active → green; archived → idle (muted); draft / null →
+ *  `done`, the design-system's neutral grey tone (NOT "finished") — matching the
+ *  Hub row/inspector pills. */
 function statusTone(status: WorkspaceIdentity['status']) {
   if (status === 'active') return 'green' as const;
   if (status === 'archived') return 'idle' as const;

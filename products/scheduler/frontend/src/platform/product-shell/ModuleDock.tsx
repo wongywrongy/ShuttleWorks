@@ -14,8 +14,8 @@ interface ModuleDockProps {
 }
 
 /** Per-module status dot: filled accent = enabled, accent ring = available,
- *  muted fill = disabled, muted ring = coming-soon. Communicates installed
- *  capability at a glance (vs. a plain tab strip). */
+ *  muted fill = disabled. Communicates installed capability at a glance
+ *  (vs. a plain tab strip). */
 function statusDotClass(status: ModuleStatus): string {
   switch (status) {
     case 'enabled':
@@ -25,15 +25,16 @@ function statusDotClass(status: ModuleStatus): string {
     case 'disabled':
       return 'bg-muted-foreground/50';
     default:
-      return 'border border-muted-foreground/40'; // coming-soon
+      return 'border border-muted-foreground/40'; // defensive fallback — 'coming-soon' is never emitted
   }
 }
 
-/** The Module Dock — the workspace's module launcher. Each module reflects its
- *  real status (status dot + label): `enabled`/`available` enter on click;
- *  `disabled` shows an Enable affordance (`onEnable`); `coming-soon` is
- *  non-interactive with a roadmap note. The active module reads as the running
- *  module, not a selected tab. */
+/** The Module Dock — the workspace's module launcher. A leading glyph frames the
+ *  region; each module reflects its real status (status dot + label):
+ *  `enabled`/`available` enter on click; `disabled` shows an Enable affordance
+ *  (`onEnable`). A trailing Manage affordance (`onManage`) opens the module
+ *  catalog. The active module reads as the running module (aria-selected + a
+ *  pulsing dot), not a selected tab. */
 export function ModuleDock({ modules, active, onSelect, onEnable, onManage }: ModuleDockProps) {
   return (
     <div className="flex items-center gap-1">

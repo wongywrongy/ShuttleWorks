@@ -6,6 +6,7 @@ import {
   attentionReasons,
   collaborationOf,
   moduleCountsOf,
+  setupLabel,
 } from '../hub/hubSignals';
 
 /** Workspace Overview — the control-plane summary for one workspace: health +
@@ -60,7 +61,8 @@ export function OverviewTab({ summary }: { summary: TournamentSummaryDTO | null 
                   <span aria-hidden className={done ? 'text-accent' : 'text-muted-foreground/40'}>
                     {done ? '✓' : '○'}
                   </span>
-                  {key}
+                  {/* raw backend key (camelCase) → words; capitalize CSS cases the first letter */}
+                  {setupLabel(key)}
                 </li>
               ))}
             </ul>

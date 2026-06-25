@@ -21,6 +21,8 @@ export function PeopleAccessTab({
   summary,
 }: {
   tid: string;
+  /** Pre-fetched workspace summary from the parent (avoids a duplicate
+   *  getTournament call). Only `ownerName` is consumed here. */
   summary: TournamentSummaryDTO | null;
 }) {
   const [members, setMembers] = useState<TournamentMemberDTO[] | null>(null);

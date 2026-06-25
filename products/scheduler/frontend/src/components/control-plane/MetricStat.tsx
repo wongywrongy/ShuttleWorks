@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
 
+/** A control-plane KPI tile: a small-caps tracking label over a large tabular
+ *  value. Used in the Hub summary band. `accent` tints the value in the theme
+ *  accent (for an alarming count, e.g. items needing attention). */
 export function MetricStat({
   label,
   value,

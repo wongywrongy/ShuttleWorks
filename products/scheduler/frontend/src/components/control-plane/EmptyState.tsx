@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+/** A centered empty/zero-state: a title, optional body, and an optional CTA in
+ *  the `action` slot (e.g. a "Create workspace" button). */
 export function EmptyState({
   title,
   body,

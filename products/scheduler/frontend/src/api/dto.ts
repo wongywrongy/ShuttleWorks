@@ -591,8 +591,9 @@ export type TournamentRole = 'owner' | 'operator' | 'viewer';
 export type TournamentKind = 'meet' | 'bracket';
 
 /** A persisted workspace module (from the backend `workspace_modules` table).
- *  Statuses: enabled | available | disabled | coming_soon (the frontend
- *  normalizes `coming_soon` → `coming-soon` when mapping into the dock). */
+ *  Statuses: enabled | available | disabled | coming_soon. All modules are fully
+ *  built, so `coming_soon` is legacy/defensive only — the frontend maps any such
+ *  value to `available` in `modulesFromDto` (it never renders a "coming soon" state). */
 export interface WorkspaceModuleDTO {
   moduleId: 'meet' | 'bracket' | 'display';
   status: 'enabled' | 'available' | 'disabled' | 'coming_soon';

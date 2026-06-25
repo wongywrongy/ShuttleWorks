@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@scheduler/design-system';
 import { SectionCard } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
@@ -18,6 +18,9 @@ function fmtExpiry(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? iso : `Expires ${d.toLocaleDateString()}`;
 }
 
+/** Writes `text` to the clipboard. Returns false (rather than throwing) when the
+ *  Clipboard API is unavailable — non-secure context (no HTTPS/localhost) or a
+ *  denied permission — so callers can no-op gracefully. */
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
@@ -40,7 +43,9 @@ export function SharingTab({ tid }: { tid: string }) {
   const [role, setRole] = useState<InviteRole>('operator');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // A no-cancel reload used after a create/revoke mutation (user-initiated).
   const refresh = useCallback(() => {
     apiClient
       .listInvites(tid)
@@ -48,12 +53,26 @@ export function SharingTab({ tid }: { tid: string }) {
       .catch(() => setInvites([]));
   }, [tid]);
 
-  useEffect(() => refresh(), [refresh]);
+  // Initial / tid-change load, guarded so a late response can't overwrite newer state.
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .listInvites(tid)
+      .then((r) => !cancelled && setInvites(r))
+      .catch(() => !cancelled && setInvites([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [tid]);
+
+  // Clear the "Copied" flash timer on unmount.
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
   async function copy(text: string, key: string) {
     if (await copyToClipboard(text)) {
       setCopied(key);
-      setTimeout(() => setCopied(null), 1500);
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(null), 1500);
     }
   }
 

@@ -56,6 +56,9 @@ export function primaryModuleForOpen(modules: WorkspaceModule[]): ModuleId {
 }
 
 /** Enablement copy for a non-active module, by id + status. */
+/** Tooltip/note copy for a non-enterable module. Returns undefined for
+ *  enabled/available (no note needed). The `coming-soon` branch is defensive —
+ *  `modulesFromDto` never yields that status — and is unreachable in practice. */
 function moduleNote(id: ModuleId, status: ModuleStatus): string | undefined {
   if (status === 'coming-soon') {
     return `${MODULE_LABELS[id]} is not enabled for this workspace yet.`;

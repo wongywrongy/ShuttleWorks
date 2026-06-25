@@ -34,7 +34,7 @@ export function ModuleCatalogRow({
                   : 'border border-dashed border-border text-muted-foreground/60',
             ].join(' ')}
           >
-            {module.status.replace('-', ' ')}
+            {module.status.replaceAll('-', ' ')}
           </span>
         </div>
         <p className="text-xs text-muted-foreground">{meta?.capability ?? module.note}</p>

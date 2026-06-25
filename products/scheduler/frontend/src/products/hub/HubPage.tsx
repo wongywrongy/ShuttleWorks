@@ -43,10 +43,14 @@ export function HubPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<TournamentSummaryDTO | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Delete errors are shown inside the confirm modal — the global banner would be
+  // occluded by the open modal.
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const closeDeleteDialog = useCallback(() => {
     if (deleting) return;
     setDeleteTarget(null);
+    setDeleteError(null);
   }, [deleting]);
 
   const refresh = useCallback(async () => {
@@ -91,12 +95,13 @@ export function HubPage() {
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    setDeleteError(null);
     try {
       await apiClient.deleteTournament(deleteTarget.id);
       setTournaments((prev) => prev.filter((t) => t.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete workspace');
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete workspace');
     } finally {
       setDeleting(false);
     }
@@ -224,6 +229,14 @@ export function HubPage() {
                 Can&rsquo;t be undone.
               </p>
             </div>
+            {deleteError && (
+              <div
+                role="alert"
+                className="mb-4 rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive"
+              >
+                {deleteError}
+              </div>
+            )}
             <div className="mt-6 flex justify-between">
               <Button variant="ghost" onClick={closeDeleteDialog} disabled={deleting}>
                 Cancel

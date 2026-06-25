@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../../api/client';
 import type { WorkspaceModuleDTO } from '../../api/dto';
 import type { WorkspaceModule } from '../product-shell/types';
@@ -23,13 +23,22 @@ export interface WorkspaceModulesHook {
 export function useWorkspaceModules(tid: string | null): WorkspaceModulesHook {
   const [dtos, setDtos] = useState<WorkspaceModuleDTO[] | null>(null);
   const [loading, setLoading] = useState(false);
+  // Holds the cancel fn for the in-flight request so any new refetch — whether
+  // from the mount effect or an imperative setStatus — supersedes the previous
+  // one (last write wins on rapid enable/disable).
+  const cancelRef = useRef<(() => void) | null>(null);
 
   const refetch = useCallback(() => {
+    cancelRef.current?.();
     if (!tid) {
       setDtos(null);
+      cancelRef.current = null;
       return;
     }
     let cancelled = false;
+    cancelRef.current = () => {
+      cancelled = true;
+    };
     setLoading(true);
     apiClient
       .getWorkspaceModules(tid)
@@ -42,12 +51,12 @@ export function useWorkspaceModules(tid: string | null): WorkspaceModulesHook {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [tid]);
 
-  useEffect(() => refetch(), [refetch]);
+  useEffect(() => {
+    refetch();
+    return () => cancelRef.current?.();
+  }, [refetch]);
 
   const setStatus = useCallback(
     async (moduleId: string, status: string) => {

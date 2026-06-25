@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
 
+/** A hairline-bordered section with a small-caps `eyebrow` heading and an
+ *  optional `right` slot (e.g. a health badge or a "N enabled · M available"
+ *  count). Used to group inspector / settings sections. */
 export function SectionCard({
   eyebrow,
   children,

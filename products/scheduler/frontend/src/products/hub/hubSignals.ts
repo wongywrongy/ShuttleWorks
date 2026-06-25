@@ -34,6 +34,13 @@ export interface Readiness {
   total: number;
 }
 
+/** Human label for a `signals.setup` checklist key. The backend emits camelCase
+ *  (e.g. `bracketBuilt`); split it into words so a `capitalize` style renders
+ *  "Bracket built" rather than "BracketBuilt". */
+export function setupLabel(key: string): string {
+  return key.replace(/([A-Z])/g, ' $1').trim();
+}
+
 /** Setup readiness as ready/total over the per-kind checklist; null when no
  *  signals (or an empty checklist). */
 export function readinessOf(t: TournamentSummaryDTO): Readiness | null {

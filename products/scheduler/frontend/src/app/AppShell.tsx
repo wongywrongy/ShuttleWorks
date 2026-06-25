@@ -204,7 +204,9 @@ export function AppShell() {
               }}
               onOpenSettings={
                 pane.canOpenSettings && tid
-                  ? () => navigate(`/tournaments/${tid}/settings`)
+                  ? // Deep-link to the Modules catalog — this panel shows for a
+                    // disabled module, so that's where the operator enables it.
+                    () => navigate(`/tournaments/${tid}/settings?tab=modules`)
                   : undefined
               }
             />

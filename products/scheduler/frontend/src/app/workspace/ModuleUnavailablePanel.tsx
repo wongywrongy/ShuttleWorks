@@ -13,8 +13,8 @@ interface ModuleUnavailablePanelProps {
 }
 
 /** Shown in place of the module pane when the active module isn't enterable
- *  (disabled / coming-soon) for this workspace — an explicit, actionable
- *  state instead of a silent misroute. */
+ *  (disabled — the only non-enterable status emitted in practice) for this
+ *  workspace — an explicit, actionable state instead of a silent misroute. */
 export function ModuleUnavailablePanel({
   label,
   note,

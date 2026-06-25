@@ -1,3 +1,11 @@
+/**
+ * Workspace Inspector — the Hub's right-side action panel (hidden below `lg`).
+ *
+ * For the selected workspace it shows the server-computed signal (health,
+ * readiness checklist, attention reasons, collaboration counts), the module map,
+ * and primary actions. Prefers `signals` and degrades safely when absent; renders
+ * a placeholder when no workspace is selected.
+ */
 import { Button, StatusPill } from '@scheduler/design-system';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import {
@@ -10,6 +18,7 @@ import {
   attentionReasons,
   collaborationOf,
   moduleCountsOf,
+  setupLabel,
 } from './hubSignals';
 import { nextActionFor } from './nextAction';
 import { HealthDot, SectionCard } from '../../components/control-plane';
@@ -109,7 +118,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings, onShare }: 
                   <span aria-hidden className={done ? 'text-accent' : 'text-muted-foreground/40'}>
                     {done ? '✓' : '○'}
                   </span>
-                  {key}
+                  {setupLabel(key)}
                 </li>
               ))}
             </ul>

@@ -26,7 +26,7 @@ export function WorkspaceSettingsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // Deep-link the initial tab via ?tab= (e.g. the Hub inspector's "Manage sharing"
-  // → ?tab=sharing). Unknown values fall back to General. Not a route-path change.
+  // → ?tab=sharing). Unknown values fall back to Overview. Not a route-path change.
   const requestedTab = searchParams.get('tab');
   const initialTab: SettingsTabId = SETTINGS_TABS.some((t) => t.id === requestedTab)
     ? (requestedTab as SettingsTabId)
