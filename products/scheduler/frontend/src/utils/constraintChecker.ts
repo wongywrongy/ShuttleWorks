@@ -9,6 +9,7 @@ import type {
   ConstraintViolation,
 } from '../api/dto';
 import { indexById } from '../lib/indexById';
+import { getMatchPlayerIds } from './trafficLight';
 
 /**
  * Compute constraint violations from current schedule assignments
@@ -34,17 +35,6 @@ export function computeConstraintViolations(
   violations.push(...checkCourtCapacity(assignments, matchMap));
 
   return violations;
-}
-
-/**
- * Get all player IDs from a match
- */
-function getMatchPlayerIds(match: MatchDTO): string[] {
-  const players: string[] = [];
-  if (match.sideA) players.push(...match.sideA);
-  if (match.sideB) players.push(...match.sideB);
-  if (match.sideC) players.push(...match.sideC);
-  return players;
 }
 
 /**

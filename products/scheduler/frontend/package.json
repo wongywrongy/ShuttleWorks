@@ -36,7 +36,6 @@
     "exceljs": "^4.4.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-force-graph-2d": "^1.29.0",
     "react-router-dom": "^7.13.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",

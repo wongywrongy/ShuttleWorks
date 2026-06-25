@@ -14,8 +14,6 @@ instead.
 | `trafficLight.ts` | Per-match readiness light (green/amber/red) given roster + schedule + live state. `computeAllTrafficLights()` is the entry point. |
 | `constraintChecker.ts` | Mirrors a subset of the backend hard rules so the frontend can reject obviously-invalid drags before `/schedule/validate`. Keep aligned with `backend/api/_validate.py`. |
 | `scheduleProgress.ts` | Smooth solver progress events into a percent + label for the HUD. |
-| `exporters.ts` | CSV / XLSX export of the schedule, roster, and matches. |
-| `importers.ts` | CSV / XLSX import for roster + matches. |
 
 ## What lives elsewhere
 

@@ -31,11 +31,11 @@ export function getCurrentTime(): string {
   });
 }
 
-export function isOvernightSchedule(config: TournamentConfig): boolean {
+function isOvernightSchedule(config: TournamentConfig): boolean {
   return timeToMinutes(config.dayEnd) <= timeToMinutes(config.dayStart);
 }
 
-export function getAdjustedEndMinutes(config: TournamentConfig): number {
+function getAdjustedEndMinutes(config: TournamentConfig): number {
   const start = timeToMinutes(config.dayStart);
   let end = timeToMinutes(config.dayEnd);
   if (end <= start) end += MIN_PER_DAY;
