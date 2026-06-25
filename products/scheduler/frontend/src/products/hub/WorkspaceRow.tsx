@@ -1,36 +1,46 @@
 /**
- * A single workspace row in the Hub control-plane list. Shows a health dot +
- * name, module chips, the signal-metrics cluster, role/owner/updated columns,
- * a status pill, the primary next-action button (derived from signals), and an
- * overflow menu carrying Settings + (owner-only) Delete. Destructive actions
- * live in the overflow, never inline on the row surface.
+ * A single workspace row in the time-oriented Hub list. The event date is the
+ * anchor (left, prominent); then the workspace name, its module chips, and a
+ * single plain-language next action. The health indicator is secondary (a small
+ * dot by the name), not the lead. Destructive actions live in an overflow menu
+ * that reveals on hover/focus — never inline on the row surface.
+ *
+ * Deliberately omits owner/identity, raw status badges, and aggregate metrics:
+ * the time section + health dot carry that, and the detail lives in the
+ * inspector.
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
-import { Button, StatusPill } from '@scheduler/design-system';
+import { Button } from '@scheduler/design-system';
 import { HealthDot, OverflowMenu, type OverflowItem } from '../../components/control-plane';
-import {
-  modulesForWorkspace,
-  modulesFromDto,
-} from '../../platform/domain/moduleModel';
-import {
-  workspaceHealth,
-  readinessOf,
-  attentionReasons,
-  collaborationOf,
-} from './hubSignals';
-import { nextActionFor } from './nextAction';
+import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
+import { workspaceHealth } from './hubSignals';
+import { rowActionFor } from './nextAction';
+import { eventDate, type HubGroupId } from './hubGrouping';
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString();
+/** Calendar-style date anchor: month / big day / year. Undated reads as a muted
+ *  placeholder so the column still aligns. */
+function DateAnchor({ iso, receded }: { iso: string | null; receded: boolean }) {
+  if (!iso) {
+    return (
+      <div className="w-14 shrink-0 text-center font-mono text-2xs uppercase text-muted-foreground/50">
+        No date
+      </div>
+    );
+  }
+  const d = eventDate(iso);
+  const valid = !Number.isNaN(d.getTime());
+  const mon = valid ? d.toLocaleDateString(undefined, { month: 'short' }) : '';
+  const day = valid ? d.toLocaleDateString(undefined, { day: 'numeric' }) : iso.slice(0, 10);
+  const year = valid ? d.toLocaleDateString(undefined, { year: 'numeric' }) : '';
+  return (
+    <div className={`w-14 shrink-0 text-center ${receded ? 'text-muted-foreground' : ''}`}>
+      <div className="font-mono text-2xs uppercase tracking-[0.06em] text-muted-foreground">{mon}</div>
+      <div className="text-xl font-semibold leading-none tabular-nums">{day}</div>
+      <div className="font-mono text-2xs tabular-nums text-muted-foreground/70">{year}</div>
+    </div>
+  );
 }
 
-/** Module chips for a workspace row. Reads the real persisted `modules` from the
- *  summary DTO when present, else falls back to the kind-derived catalog. Omits a
- *  coming-soon foreign operator to keep the row clean, but keeps Display's
- *  coming-soon as an informative chip. */
 function ModuleChips({ tournament }: { tournament: TournamentSummaryDTO }) {
   const all = tournament.modules
     ? modulesFromDto(tournament.modules)
@@ -76,19 +86,28 @@ function ModuleChips({ tournament }: { tournament: TournamentSummaryDTO }) {
 
 interface RowProps {
   tournament: TournamentSummaryDTO;
+  group: HubGroupId;
   selected: boolean;
   onSelect: () => void;
   onOpen: () => void;
+  onSetDate: () => void;
   onSettings: () => void;
   onDelete?: () => void;
 }
 
-export function WorkspaceRow({ tournament, selected, onSelect, onOpen, onSettings, onDelete }: RowProps) {
+export function WorkspaceRow({
+  tournament,
+  group,
+  selected,
+  onSelect,
+  onOpen,
+  onSetDate,
+  onSettings,
+  onDelete,
+}: RowProps) {
   const health = workspaceHealth(tournament);
-  const readiness = readinessOf(tournament);
-  const reasons = attentionReasons(tournament);
-  const collab = collaborationOf(tournament);
-  const action = nextActionFor(tournament);
+  const action = rowActionFor(tournament, group);
+  const receded = group === 'past';
 
   const overflowItems: OverflowItem[] = [
     { key: 'settings', label: 'Settings', onSelect: onSettings },
@@ -99,81 +118,44 @@ export function WorkspaceRow({ tournament, selected, onSelect, onOpen, onSetting
 
   return (
     // A plain clickable region for selecting the row (populates the inspector).
-    // Intentionally NOT a role=button/option: it embeds interactive children (the
-    // next-action button + overflow menu), which ARIA forbids inside a widget role.
-    // Those buttons are the keyboard-accessible actions; row selection is a
-    // mouse/pointer convenience whose result is also reachable via them.
+    // Not a role=button/option: it embeds interactive children (the action
+    // button + overflow menu), which ARIA forbids inside a widget role.
     <div
       onClick={onSelect}
       className={[
-        'flex cursor-pointer items-center gap-4 px-4 py-3 text-sm',
+        'group flex cursor-pointer items-center gap-4 px-4 py-3 text-sm',
+        receded ? 'opacity-60 hover:opacity-100' : '',
         selected ? 'bg-accent/5' : 'hover:bg-muted/40',
       ].join(' ')}
     >
+      <DateAnchor iso={tournament.tournamentDate} receded={receded} />
+
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <HealthDot health={health} />
           <span className="truncate font-medium text-foreground">
             {tournament.name || 'Untitled'}
           </span>
+          <HealthDot health={health} />
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="mt-1">
           <ModuleChips tournament={tournament} />
-          {readiness || reasons.length > 0 || collab ? (
-            <span
-              data-testid="row-metrics"
-              className="flex items-center gap-3 text-2xs tabular-nums text-muted-foreground"
-            >
-              {readiness ? (
-                <span>
-                  {readiness.ready}/{readiness.total} ready
-                </span>
-              ) : null}
-              {reasons.length > 0 ? (
-                <span className="text-status-warning">{reasons.length} to address</span>
-              ) : null}
-              {collab ? (
-                <span>
-                  {collab.memberCount} member{collab.memberCount === 1 ? '' : 's'}
-                </span>
-              ) : null}
-              {collab && collab.activeInviteCount > 0 ? (
-                <span>{collab.activeInviteCount} pending</span>
-              ) : null}
-            </span>
-          ) : null}
         </div>
       </div>
-      <span className="hidden w-20 text-right text-xs capitalize text-muted-foreground sm:block">
-        {tournament.role ?? '—'}
-      </span>
-      <span className="hidden w-40 truncate text-right text-xs text-muted-foreground md:block">
-        {tournament.ownerName ?? '—'}
-      </span>
-      <span className="hidden w-24 text-right text-xs tabular-nums text-muted-foreground lg:block">
-        {formatDate(tournament.updatedAt)}
-      </span>
-      <StatusPill
-        tone={
-          tournament.status === 'active'
-            ? 'green'
-            : tournament.status === 'archived'
-              ? 'idle'
-              : 'done'
-        }
-      >
-        {tournament.status}
-      </StatusPill>
+
       <Button
-        variant="ghost"
+        variant={receded ? 'ghost' : action.kind === 'open' ? 'outline' : 'ghost'}
         onClick={(e) => {
           e.stopPropagation();
-          onOpen();
+          if (action.kind === 'set-date') onSetDate();
+          else onOpen();
         }}
       >
-        {action.reasonCode ? action.label : 'Open workspace'}
+        {action.label}
       </Button>
-      <OverflowMenu items={overflowItems} />
+
+      <span className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <OverflowMenu items={overflowItems} />
+      </span>
     </div>
   );
 }

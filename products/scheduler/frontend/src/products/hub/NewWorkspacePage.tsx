@@ -68,7 +68,7 @@ export function NewWorkspacePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="h-full overflow-y-auto bg-background text-foreground">
       <header className="sticky top-0 z-chrome flex h-12 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur">
         <ShuttleWorksMark />
         <div className="flex items-center gap-2">

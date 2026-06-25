@@ -26,20 +26,22 @@ export function Eyebrow({
       : tone === 'destructive'
         ? 'text-destructive'
         : 'text-muted-foreground';
-  // Keep framed string labels as a single text node so they read as one
-  // token ("[ MODULES ]") to the DOM and to text queries.
-  const content =
-    framed && typeof children === 'string'
-      ? `[ ${children} ]`
-      : framed
-        ? (
-            <>
-              {'[ '}
-              {children}
-              {' ]'}
-            </>
-          )
-        : children;
+  // Uppercase the *text content* (not just via CSS) so the DOM matches the
+  // visual — mirrors the design-system Eyebrow and keeps framed labels a
+  // single text node ("[ MODULES ]") for the DOM and text queries.
+  const isString = typeof children === 'string';
+  const text = isString ? children.toUpperCase() : children;
+  const content = framed
+    ? isString
+      ? `[ ${text as string} ]`
+      : (
+          <>
+            {'[ '}
+            {children}
+            {' ]'}
+          </>
+        )
+    : text;
   return (
     <span
       className={`font-mono text-2xs font-semibold uppercase tracking-[0.08em] ${toneClass} ${className}`}

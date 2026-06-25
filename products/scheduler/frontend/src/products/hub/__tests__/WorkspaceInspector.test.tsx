@@ -8,7 +8,7 @@ const withSignals: TournamentSummaryDTO = {
   name: 'Spring Meet',
   status: 'active',
   kind: 'meet',
-  tournamentDate: '2026-04-01',
+  tournamentDate: '2026-12-01', // future → upcoming, so the primary action is the setup step
   createdAt: '',
   updatedAt: '',
   role: 'owner',
@@ -27,52 +27,59 @@ const withSignals: TournamentSummaryDTO = {
   },
 };
 
-describe('WorkspaceInspector signals', () => {
-  it('renders health/readiness, attention reasons, and collaboration counts', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
-    const health = screen.getByTestId('inspector-health');
-    expect(health).toHaveTextContent(/attention/i);
-    expect(health).toHaveTextContent('0/2 ready');
-    expect(screen.getByTestId('inspector-attention')).toHaveTextContent('No players added yet');
-    const collab = screen.getByTestId('inspector-collab');
-    expect(collab).toHaveTextContent('3 members');
-    expect(collab).toHaveTextContent('2 active invites');
-    expect(screen.getByTestId('inspector-module-counts')).toHaveTextContent('1 enabled · 2 available');
-  });
+const noop = () => {};
 
-  it('does not show the stale "coming in a later phase" copy', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
-    expect(screen.queryByText(/coming in a later phase/i)).toBeNull();
-  });
-
-  it('renders without signals (older payloads) — no attention/collab sections', () => {
-    const noSignals = { ...withSignals, signals: undefined };
-    render(<WorkspaceInspector tournament={noSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
-    expect(screen.getByTestId('inspector-health')).toHaveTextContent(/good/i); // active → good fallback
-    expect(screen.queryByTestId('inspector-attention')).toBeNull();
-    expect(screen.queryByTestId('inspector-collab')).toBeNull();
-  });
-
-  it('renders an attention checklist from signals.setup', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
-    // setup: { roster: false, scheduled: false } → checklist items rendered
+describe('WorkspaceInspector', () => {
+  it('renders plain-language to-dos, a readiness checklist, and module counts', () => {
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    expect(screen.getByTestId('inspector-todos')).toHaveTextContent('No players added yet');
     const checklist = screen.getByTestId('inspector-checklist');
     expect(checklist).toHaveTextContent(/roster/i);
     expect(checklist).toHaveTextContent(/scheduled/i);
+    expect(screen.getByTestId('inspector-module-counts')).toHaveTextContent('1 on · 2 available');
   });
 
-  it('offers the primary next action', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={() => {}} onShare={() => {}} />);
-    // withSignals attention NO_ROSTER → "Add players"
+  it('does not show raw signal codes or identity/collaboration metadata', () => {
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    expect(screen.queryByText(/\[ SIGNAL \]/)).toBeNull();
+    expect(screen.queryByText(/NO_ROSTER/)).toBeNull();
+    expect(screen.queryByText(/op@example\.com/)).toBeNull();
+    expect(screen.queryByText(/active invite/i)).toBeNull();
+    expect(screen.queryByText(/member/i)).toBeNull();
+  });
+
+  it('renders without signals (older payloads) — no to-dos / checklist sections', () => {
+    const noSignals = { ...withSignals, signals: undefined };
+    render(<WorkspaceInspector tournament={noSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    expect(screen.queryByTestId('inspector-todos')).toBeNull();
+    expect(screen.queryByTestId('inspector-checklist')).toBeNull();
+  });
+
+  it('offers the primary next action (the setup step for an upcoming event)', () => {
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
     expect(screen.getByRole('button', { name: 'Add players' })).toBeInTheDocument();
   });
 
-  it('Manage sharing uses onShare, distinct from Settings', () => {
+  it('undated workspace primary action is "Set date" → onSetDate', () => {
+    const onSetDate = vi.fn();
+    const onOpen = vi.fn();
+    render(
+      <WorkspaceInspector
+        tournament={{ ...withSignals, tournamentDate: null }}
+        onOpen={onOpen}
+        onSetDate={onSetDate}
+        onSettings={noop}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Set date' }));
+    expect(onSetDate).toHaveBeenCalledWith('t1');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('the secondary action opens workspace settings', () => {
     const onSettings = vi.fn();
-    const onShare = vi.fn();
-    render(<WorkspaceInspector tournament={withSignals} onOpen={() => {}} onSettings={onSettings} onShare={onShare} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Manage sharing' }));
-    expect(onShare).toHaveBeenCalledWith('t1');
-    expect(onSettings).not.toHaveBeenCalled();
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={onSettings} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace settings' }));
+    expect(onSettings).toHaveBeenCalledWith('t1');
   });
 });

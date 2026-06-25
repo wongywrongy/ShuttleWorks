@@ -1,55 +1,48 @@
 /**
- * Workspace Inspector — the Hub's right-side action panel (hidden below `lg`).
+ * Workspace Inspector — the Hub's right-side detail panel (hidden below `lg`),
+ * shown when a workspace is selected.
  *
- * For the selected workspace it shows the server-computed signal (health,
- * readiness checklist, attention reasons, collaboration counts), the module map,
- * and primary actions. Prefers `signals` and degrades safely when absent; renders
- * a placeholder when no workspace is selected.
+ * Plain-language and operator-first: the event name + date, the specific things
+ * blocking readiness (to-dos), a simple readiness checklist, the module map, and
+ * one primary action + a secondary (workspace settings). Deliberately omits raw
+ * signal codes, owner/identity metadata, and collaboration stats.
  */
-import { Button, StatusPill } from '@scheduler/design-system';
+import { Button } from '@scheduler/design-system';
 import type { TournamentSummaryDTO } from '../../api/dto';
-import {
-  modulesForWorkspace,
-  modulesFromDto,
-} from '../../platform/domain/moduleModel';
-import {
-  workspaceHealth,
-  readinessOf,
-  attentionReasons,
-  collaborationOf,
-  moduleCountsOf,
-  setupLabel,
-} from './hubSignals';
-import { nextActionFor } from './nextAction';
-import { HealthDot, SectionCard, Eyebrow } from '../../components/control-plane';
+import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
+import { attentionReasons, moduleCountsOf, setupLabel } from './hubSignals';
+import { rowActionFor } from './nextAction';
+import { dayKey, eventDate, type HubGroupId } from './hubGrouping';
+import { SectionCard } from '../../components/control-plane';
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString();
+  if (!iso) return 'No date set';
+  const d = eventDate(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function statusTone(status: TournamentSummaryDTO['status']) {
-  return status === 'active' ? 'green' : status === 'archived' ? 'idle' : 'done';
+/** Same time-group logic the Hub list uses, for a single workspace, so the
+ *  inspector's primary action matches its row. */
+function groupOf(t: TournamentSummaryDTO, todayKey: string): HubGroupId {
+  if (!t.tournamentDate) return 'undated';
+  return dayKey(t.tournamentDate) >= todayKey ? 'upcoming' : 'past';
 }
 
 interface InspectorProps {
   tournament: TournamentSummaryDTO | null;
   onOpen: (id: string) => void;
+  onSetDate: (id: string) => void;
   onSettings: (id: string) => void;
-  onShare: (id: string) => void;
 }
 
-/** Right-side action panel for the selected workspace: a SIGNAL card (health,
- *  readiness, a setup checklist, attention reasons, collaboration counts), the
- *  module map (real `modules[]` when present, else kind-derived), and primary
- *  actions (the signal-derived next action, Settings, Manage sharing). */
-export function WorkspaceInspector({ tournament, onOpen, onSettings, onShare }: InspectorProps) {
+export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }: InspectorProps) {
   if (!tournament) {
     return (
       <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-card/40 lg:flex">
         <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground/70">
-          Select a workspace to see its modules and details.
+          Select a workspace to see what&rsquo;s next.
         </div>
       </aside>
     );
@@ -58,103 +51,56 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings, onShare }: 
   const modules = tournament.modules
     ? modulesFromDto(tournament.modules)
     : modulesForWorkspace(tournament.kind);
-  const health = workspaceHealth(tournament);
-  const readiness = readinessOf(tournament);
-  const reasons = attentionReasons(tournament);
-  const collab = collaborationOf(tournament);
+  const todos = attentionReasons(tournament);
   const moduleCounts = moduleCountsOf(tournament);
-  const action = nextActionFor(tournament);
   const setupEntries = Object.entries(tournament.signals?.setup ?? {});
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const action = rowActionFor(tournament, groupOf(tournament, todayKey));
 
   return (
     <aside className="hidden w-80 shrink-0 flex-col overflow-y-auto border-l border-border bg-card/40 lg:flex">
       <div className="border-b border-border p-4">
-        <Eyebrow framed>WORKSPACE</Eyebrow>
-        <h2 className="mt-1 truncate text-base font-semibold text-foreground">
+        <h2 className="truncate text-base font-semibold text-foreground">
           {tournament.name || 'Untitled'}
         </h2>
-        <div className="mt-2 flex items-center gap-2">
-          <StatusPill tone={statusTone(tournament.status)}>{tournament.status}</StatusPill>
-          <span className="text-xs capitalize text-muted-foreground">
-            {tournament.role ?? '—'}
-          </span>
-        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{fmtDate(tournament.tournamentDate)}</p>
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-3 gap-y-2 border-b border-border p-4 text-xs">
-        <dt className="text-muted-foreground">Date</dt>
-        <dd className="text-right tabular-nums text-foreground">{fmtDate(tournament.tournamentDate)}</dd>
-        <dt className="text-muted-foreground">Owner</dt>
-        <dd className="truncate text-right text-foreground">{tournament.ownerName ?? '—'}</dd>
-        <dt className="text-muted-foreground">Updated</dt>
-        <dd className="text-right tabular-nums text-foreground">{fmtDate(tournament.updatedAt)}</dd>
-      </dl>
+      {todos.length > 0 ? (
+        <SectionCard eyebrow="To do">
+          <ul data-testid="inspector-todos" className="space-y-1.5">
+            {todos.map((r) => (
+              <li key={r.code} className="flex items-start gap-1.5 text-xs text-foreground">
+                <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-status-warning" />
+                {r.label}
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      ) : null}
+
+      {setupEntries.length > 0 ? (
+        <SectionCard eyebrow="Readiness">
+          <ul data-testid="inspector-checklist" className="space-y-1">
+            {setupEntries.map(([key, done]) => (
+              <li key={key} className="flex items-center gap-1.5 text-xs capitalize text-muted-foreground">
+                <span aria-hidden className={done ? 'text-accent' : 'text-muted-foreground/40'}>
+                  {done ? '✓' : '○'}
+                </span>
+                {setupLabel(key)}
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      ) : null}
 
       <SectionCard
-        eyebrow="SIGNAL"
-        right={
-          <span
-            data-testid="inspector-health"
-            className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground"
-          >
-            <HealthDot health={health} />
-            {health}
-            {readiness ? (
-              <span className="tabular-nums text-muted-foreground">
-                {' · '}
-                {readiness.ready}/{readiness.total} ready
-              </span>
-            ) : null}
-          </span>
-        }
-      >
-        <div className="space-y-3">
-          {setupEntries.length > 0 ? (
-            <ul data-testid="inspector-checklist" className="space-y-1">
-              {setupEntries.map(([key, done]) => (
-                <li key={key} className="flex items-center gap-1.5 text-xs capitalize text-muted-foreground">
-                  <span aria-hidden className={done ? 'text-accent' : 'text-muted-foreground/40'}>
-                    {done ? '✓' : '○'}
-                  </span>
-                  {setupLabel(key)}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {reasons.length > 0 ? (
-            <ul data-testid="inspector-attention" className="space-y-1">
-              {reasons.map((r) => (
-                <li key={r.code} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-status-warning" />
-                  {r.label}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {collab ? (
-            <div
-              data-testid="inspector-collab"
-              className="flex items-center gap-4 text-xs text-muted-foreground"
-            >
-              <span>
-                <span className="tabular-nums text-foreground">{collab.memberCount}</span>{' '}
-                member{collab.memberCount === 1 ? '' : 's'}
-              </span>
-              <span>
-                <span className="tabular-nums text-foreground">{collab.activeInviteCount}</span>{' '}
-                active invite{collab.activeInviteCount === 1 ? '' : 's'}
-              </span>
-            </div>
-          ) : null}
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        eyebrow="MODULES"
+        eyebrow="Modules"
         right={
           moduleCounts ? (
             <span data-testid="inspector-module-counts" className="text-2xs tabular-nums text-muted-foreground">
-              {moduleCounts.enabled} enabled · {moduleCounts.available} available
+              {moduleCounts.enabled} on · {moduleCounts.available} available
             </span>
           ) : undefined
         }
@@ -181,22 +127,14 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings, onShare }: 
       </SectionCard>
 
       <div className="space-y-2 p-4">
-        <Button className="w-full" onClick={() => onOpen(tournament.id)}>
-          {action.reasonCode ? action.label : 'Open workspace'}
-        </Button>
         <Button
-          variant="ghost"
           className="w-full"
-          onClick={() => onSettings(tournament.id)}
+          onClick={() => (action.kind === 'set-date' ? onSetDate(tournament.id) : onOpen(tournament.id))}
         >
-          Settings
+          {action.label}
         </Button>
-        <Button
-          variant="ghost"
-          className="w-full"
-          onClick={() => onShare(tournament.id)}
-        >
-          Manage sharing
+        <Button variant="ghost" className="w-full" onClick={() => onSettings(tournament.id)}>
+          Workspace settings
         </Button>
       </div>
     </aside>

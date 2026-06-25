@@ -5,7 +5,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { AuthProvider } from '../context/AuthContext';
 import { useAppliedTheme } from '../hooks/useAppliedTheme';
 import { useAppliedDensity } from '../hooks/useAppliedDensity';
-import { AuthGuard } from './AuthGuard';
+import { AuthedLayout } from './AuthedLayout';
 
 const ICON_DEFAULTS = { weight: 'light' as const, size: '1em' as const, mirrored: false };
 
@@ -21,6 +21,11 @@ const NewWorkspacePage = lazy(() =>
 const WorkspaceSettingsPage = lazy(() =>
   import('../products/settings/WorkspaceSettingsPage').then((m) => ({
     default: m.WorkspaceSettingsPage,
+  })),
+);
+const GlobalSettingsPage = lazy(() =>
+  import('../products/settings/GlobalSettingsPage').then((m) => ({
+    default: m.GlobalSettingsPage,
   })),
 );
 const TournamentPage = lazy(() =>
@@ -100,65 +105,23 @@ function App() {
               <Route path="/tracking" element={<Navigate to="/" replace />} />
               <Route path="/live-ops" element={<Navigate to="/" replace />} />
 
-              {/* Authenticated: dashboard list. */}
-              <Route
-                path="/"
-                element={
-                  <AuthGuard>
-                    <Suspense fallback={<Fallback />}>
-                      <HubPage />
-                    </Suspense>
-                  </AuthGuard>
-                }
-              />
-
-              {/* Authenticated: dedicated New Workspace (module templates). */}
-              <Route
-                path="/new"
-                element={
-                  <AuthGuard>
-                    <Suspense fallback={<Fallback />}>
-                      <NewWorkspacePage />
-                    </Suspense>
-                  </AuthGuard>
-                }
-              />
-
-              {/* Legacy redirect: pre-Bundle-3 URLs pointed at the bare /bracket
-                  segment. Redirect them to /bracket-setup so bookmarks and shared
-                  links don't 404. Replace semantics so the operator's history
-                  stays clean (no back-button stop on the dead legacy URL). */}
-              <Route
-                path="/tournaments/:id/bracket"
-                element={<BracketLegacyRedirect />}
-              />
-
-              {/* Authenticated: Workspace Settings center (additive). */}
-              <Route
-                path="/tournaments/:id/settings"
-                element={
-                  <AuthGuard>
-                    <Suspense fallback={<Fallback />}>
-                      <WorkspaceSettingsPage />
-                    </Suspense>
-                  </AuthGuard>
-                }
-              />
-
-              {/* Authenticated: per-tournament shell. */}
-              <Route
-                path="/tournaments/:id/*"
-                element={
-                  <AuthGuard>
-                    <Suspense fallback={<Fallback />}>
-                      <TournamentPage />
-                    </Suspense>
-                  </AuthGuard>
-                }
-              />
-
-              {/* Fallback. */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              {/* Authenticated app — one layout mounts the persistent global
+                  sidebar (AppSidebar) + AuthGuard + Suspense around the routed
+                  content, so the rail is present on every authenticated surface
+                  incl. inside a workspace. */}
+              <Route element={<AuthedLayout />}>
+                <Route path="/" element={<HubPage />} />
+                <Route path="/new" element={<NewWorkspacePage />} />
+                {/* Global (app-wide) settings — distinct from per-workspace. */}
+                <Route path="/settings" element={<GlobalSettingsPage />} />
+                {/* Legacy redirect: pre-Bundle-3 URLs pointed at the bare /bracket
+                    segment. Replace semantics so history stays clean. */}
+                <Route path="/tournaments/:id/bracket" element={<BracketLegacyRedirect />} />
+                <Route path="/tournaments/:id/settings" element={<WorkspaceSettingsPage />} />
+                <Route path="/tournaments/:id/*" element={<TournamentPage />} />
+                {/* Fallback (authenticated paths). */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
             </Routes>
           </AuthProvider>
         </BrowserRouter>

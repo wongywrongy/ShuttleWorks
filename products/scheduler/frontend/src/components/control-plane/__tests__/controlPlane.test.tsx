@@ -5,7 +5,8 @@ import { MetricStat, HealthDot, EmptyState, Skeleton, SectionCard, healthColorCl
 describe('control-plane primitives', () => {
   it('MetricStat shows label + value', () => {
     render(<MetricStat label="Active" value={3} testId="m-active" />);
-    expect(screen.getByTestId('m-active')).toHaveTextContent('Active');
+    // Eyebrow renders the label uppercased (design grammar).
+    expect(screen.getByTestId('m-active')).toHaveTextContent('ACTIVE');
     expect(screen.getByTestId('m-active')).toHaveTextContent('3');
   });
   it('healthColorClass maps health to a token class', () => {

@@ -1,6 +1,7 @@
 /**
- * Dashboard navigation: Open and the post-Create handler must target
- * /bracket-setup for bracket tournaments (was /bracket pre-Bundle-3).
+ * Hub navigation + the time-oriented control plane. Open and the post-Create
+ * handler must target /bracket-setup for bracket tournaments (was /bracket
+ * pre-Bundle-3). The Hub groups workspaces by event date, not status.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -16,8 +17,6 @@ vi.mock('../../../api/client', () => ({
   },
 }));
 
-// Auth gate / theme / density hooks are no-ops here — we mount the
-// page directly without AuthGuard or the wider AppShell.
 vi.mock('../../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1', email: 'op@example.com' } }),
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -42,7 +41,6 @@ function mount(refObj: { current: string }) {
             </>
           }
         />
-        {/* Catch-all so navigate('/tournaments/t1/bracket-setup') doesn't 404. */}
         <Route path="/tournaments/:id/*" element={<LocationProbe refObj={refObj} />} />
         <Route path="/new" element={<LocationProbe refObj={refObj} />} />
       </Routes>
@@ -51,14 +49,16 @@ function mount(refObj: { current: string }) {
 }
 
 beforeEach(() => {
+  // Future dates so both land in "Upcoming" with an "Open workspace" action
+  // (no signals → no setup step), which is what the navigation tests click.
   vi.mocked(apiClient.listTournaments).mockResolvedValue([
     {
       id: 'br1', name: 'Bracket A', kind: 'bracket' as const, role: 'owner' as const,
-      tournamentDate: null, status: 'draft' as const,
+      tournamentDate: '2026-12-01', status: 'draft' as const,
     },
     {
       id: 'me1', name: 'Meet A', kind: 'meet' as const, role: 'owner' as const,
-      tournamentDate: null, status: 'draft' as const,
+      tournamentDate: '2026-12-02', status: 'draft' as const,
     },
   ] as never);
 });
@@ -67,11 +67,9 @@ describe('HubPage navigation', () => {
   it('Open on a bracket tournament navigates to /bracket-setup', async () => {
     const loc = { current: '' };
     mount(loc);
-    // Wait for the listTournaments mock to resolve and render.
     await waitFor(() => expect(screen.getByText(/Bracket A/i)).toBeInTheDocument());
     const openButtons = screen.getAllByRole('button', { name: 'Open workspace' });
-    // Order: bracket row first (owner, first in mock list).
-    fireEvent.click(openButtons[0]);
+    fireEvent.click(openButtons[0]); // bracket row first (soonest upcoming)
     expect(loc.current).toBe('/tournaments/br1/bracket-setup');
   });
 
@@ -80,12 +78,12 @@ describe('HubPage navigation', () => {
     mount(loc);
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
     const openButtons = screen.getAllByRole('button', { name: 'Open workspace' });
-    fireEvent.click(openButtons[1]); // meet row, second in list
+    fireEvent.click(openButtons[1]); // meet row second
     expect(loc.current).toBe('/tournaments/me1/setup');
   });
 });
 
-describe('HubPage module-aware control plane', () => {
+describe('HubPage time-oriented control plane', () => {
   it('is a control plane with search + module language, not "New event"', async () => {
     mount({ current: '' });
     await waitFor(() =>
@@ -93,6 +91,12 @@ describe('HubPage module-aware control plane', () => {
     );
     expect(screen.getByLabelText('Search workspaces')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /new event/i })).not.toBeInTheDocument();
+  });
+
+  it('groups workspaces chronologically (Upcoming section present)', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
+    expect(screen.getByText('[ UPCOMING ]')).toBeInTheDocument();
   });
 
   it('search filters the workspace list by name', async () => {
@@ -105,38 +109,20 @@ describe('HubPage module-aware control plane', () => {
     expect(screen.getByText('Meet A')).toBeInTheDocument();
   });
 
-  it('filter tabs narrow the list and show counts', async () => {
-    mount({ current: '' });
-    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    // Both rows are draft+owned → "Needs attention" shows both; make one active first by filtering Active (none).
-    fireEvent.click(screen.getByTestId('filter-active'));
-    expect(screen.queryByText('Bracket A')).not.toBeInTheDocument();
-    expect(screen.getByText('No workspaces match this filter.')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('filter-all'));
-    expect(screen.getByText('Bracket A')).toBeInTheDocument();
-  });
-
   it('selecting a row populates the inspector with its module catalog', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Meet A'));
-    // Inspector shows the MODULES heading + an Open workspace action. (The selected
-    // row also renders an "Open workspace" button now, so expect both.)
     expect(screen.getByText('[ MODULES ]')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Open workspace' }).length).toBeGreaterThan(0);
   });
 
   it('shows module chips derived from kind; foreign operator now available (SP-B2)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    // Both rows (Meet A + Bracket A) now surface all three modules: the foreign
-    // operator is `available` (no longer the filtered `coming-soon`), so the meet
-    // row shows a Bracket chip and the bracket row shows a Meet chip.
     expect(screen.getAllByTestId('chip-meet')).toHaveLength(2);
     expect(screen.getAllByTestId('chip-bracket')).toHaveLength(2);
     const display = screen.getAllByTestId('chip-display');
-    expect(display).toHaveLength(2); // both rows offer a Display chip
-    // Display is `available` for both kinds now (SP-B3) — no "coming soon".
+    expect(display).toHaveLength(2);
     expect(display.filter((el) => /soon/i.test(el.textContent || ''))).toHaveLength(0);
   });
 
@@ -152,7 +138,7 @@ describe('HubPage module-aware control plane', () => {
     vi.mocked(apiClient.listTournaments).mockResolvedValue([
       {
         id: 'x1', name: 'X Workspace', kind: 'meet' as const, role: 'owner' as const,
-        tournamentDate: null, status: 'draft' as const,
+        tournamentDate: '2026-12-01', status: 'draft' as const,
         modules: [
           { moduleId: 'meet', status: 'enabled', config: null },
           { moduleId: 'display', status: 'disabled', config: null },
@@ -161,32 +147,8 @@ describe('HubPage module-aware control plane', () => {
     ] as never);
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('X Workspace')).toBeInTheDocument());
-    // Display came from the DTO as 'disabled' (not coming-soon) → chip present, no "soon".
     const display = screen.getByTestId('chip-display');
     expect(display).toBeInTheDocument();
     expect(display).not.toHaveTextContent('soon');
-  });
-
-  it('rows render the server signal metrics (readiness, attention, members)', async () => {
-    vi.mocked(apiClient.listTournaments).mockResolvedValue([
-      {
-        id: 's1', name: 'Signal WS', kind: 'meet' as const, role: 'owner' as const,
-        tournamentDate: null, status: 'active' as const,
-        modules: [{ moduleId: 'meet', status: 'enabled', config: null }],
-        signals: {
-          health: 'attention',
-          attention: [{ code: 'NO_ROSTER', label: 'No players added yet' }],
-          modules: { enabled: 1, available: 2, disabled: 0, comingSoon: 0 },
-          setup: { roster: false, scheduled: false },
-          collaboration: { memberCount: 4, activeInviteCount: 1 },
-        },
-      },
-    ] as never);
-    mount({ current: '' });
-    await waitFor(() => expect(screen.getByText('Signal WS')).toBeInTheDocument());
-    const metrics = screen.getByTestId('row-metrics');
-    expect(metrics).toHaveTextContent('0/2 ready');
-    expect(metrics).toHaveTextContent('1 to address');
-    expect(metrics).toHaveTextContent('4 members');
   });
 });

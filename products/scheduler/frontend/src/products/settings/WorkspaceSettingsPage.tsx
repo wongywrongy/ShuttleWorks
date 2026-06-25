@@ -50,7 +50,7 @@ export function WorkspaceSettingsPage() {
   const backSegment = summary?.kind === 'bracket' ? 'bracket-setup' : 'setup';
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-3">
           <ShuttleWorksMark />
