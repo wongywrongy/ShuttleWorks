@@ -1,6 +1,12 @@
 # ShuttleWorks — Tech Stack
 _Last updated: 2026-05-13 (post backend-merge arc)_
 
+> **Note (2026-06):** This describes the post-merge meet/bracket backend + data model. The
+> **workspace-suite control-plane redesign** layered a control plane on top — a workspace +
+> module model (`workspace_modules`), per-workspace signals, and backup endpoints. For the
+> current architecture see the design record in
+> [`superpowers/specs/`](./superpowers/specs) (the 2026-06 SP-A…SP-D specs).
+
 This file describes the system as it stands at the end of the
 backend-merge arc (PRs 1–4 of T-A through T-H). The arc folded the
 prior tournament product into the scheduler — one FastAPI, one

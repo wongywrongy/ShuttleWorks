@@ -1,5 +1,10 @@
 # Backend architecture
 
+> **Note (2026-06):** Predates the workspace-suite redesign, which added the workspace + module
+> model (`workspace_modules` + the module PATCH rules), per-workspace control-plane signals on
+> the tournament endpoints, and the state backup endpoints. Current design record:
+> [`../../docs/superpowers/specs/`](../../docs/superpowers/specs).
+
 A FastAPI app that fronts a CP-SAT solver. Stateless per-request: every
 `POST /schedule` carries the full problem in the body. Persistence is a
 side-channel for tournament state and live match status only.

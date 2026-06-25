@@ -1,5 +1,10 @@
 # Frontend architecture
 
+> **Note (2026-06):** Predates the workspace-suite redesign. The app is now a workspace
+> control plane: `src/products/{hub,settings,meet,bracket,display}`, `src/platform/product-shell`
+> (workspace chrome + module dock), `src/components/control-plane`. Current design record:
+> [`../../docs/superpowers/specs/`](../../docs/superpowers/specs).
+
 Single-page React 19 + Vite app. One shell, one tab bar, lazy-loaded
 tab panels. State is split between two Zustand stores; the larger one
 is persisted via debounced PUTs to a server-side snapshot.
