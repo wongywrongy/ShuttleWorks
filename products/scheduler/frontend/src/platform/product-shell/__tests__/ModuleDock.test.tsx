@@ -17,6 +17,24 @@ describe('ModuleDock', () => {
     expect(screen.getByTestId('module-display')).toHaveAttribute('aria-selected', 'false');
   });
 
+  it('marks the active module as current (running)', () => {
+    render(<ModuleDock modules={modules} active="meet" onSelect={() => {}} />);
+    expect(screen.getByTestId('module-meet')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTestId('module-display')).not.toHaveAttribute('aria-current');
+  });
+
+  it('shows a Manage affordance that calls onManage when provided', async () => {
+    const onManage = vi.fn();
+    render(<ModuleDock modules={modules} active="meet" onSelect={() => {}} onManage={onManage} />);
+    await userEvent.click(screen.getByTestId('module-manage'));
+    expect(onManage).toHaveBeenCalled();
+  });
+
+  it('omits the Manage affordance when onManage is absent', () => {
+    render(<ModuleDock modules={modules} active="meet" onSelect={() => {}} />);
+    expect(screen.queryByTestId('module-manage')).toBeNull();
+  });
+
   it('disables a coming-soon module and exposes the roadmap note', () => {
     render(<ModuleDock modules={modules} active="meet" onSelect={() => {}} />);
     const bracket = screen.getByTestId('module-bracket');
