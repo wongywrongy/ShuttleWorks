@@ -8,7 +8,7 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { MetricStat } from '../../components/control-plane';
 import { hubMetrics } from './hubMetrics';
 
-type PickId = 'attention' | 'active' | 'shared';
+type PickId = 'attention' | 'active';
 
 export function HubSummaryBar({
   list,

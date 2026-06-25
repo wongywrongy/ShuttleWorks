@@ -2,9 +2,9 @@
  * Workspace Settings center (route `/tournaments/:id/settings`).
  *
  * A dedicated, professional settings surface: header + back-to-workspace, a
- * left tab rail, and a content pane. Functional tabs this slice: General,
- * Modules, Danger Zone. The rest are honest "coming in a later phase"
- * placeholders. Additive — does not touch the Meet Setup rail.
+ * left tab rail, and a content pane. Tabs: Overview (default), General, Modules,
+ * People & Access, Sharing, Sync & Backups, Danger Zone — all functional. The
+ * initial tab can be deep-linked via ?tab=. Additive — does not touch Meet Setup.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
