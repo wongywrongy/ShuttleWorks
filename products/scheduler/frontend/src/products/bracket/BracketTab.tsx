@@ -13,8 +13,8 @@
  * ``BracketViewHeader`` strip above the active view.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Sliders, Database, Share as ShareIcon } from '@phosphor-icons/react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Sliders, Database, Share as ShareIcon, ListChecks } from '@phosphor-icons/react';
 
 import { BracketApiProvider } from '../../api/bracketClient';
 
@@ -26,6 +26,7 @@ import { reconcileBracketRoster } from './bracketMigration';
 import { SettingsShell, type SettingsSectionDef } from '../../platform/settings/SettingsShell';
 import { ShareSettings } from '../../platform/settings/ShareSettings';
 import { BracketTournamentSection } from './BracketTournamentSection';
+import { BracketStructureSection } from './BracketStructureSection';
 import { BracketDataSection } from './BracketDataSection';
 import { BracketRosterTab } from './BracketRosterTab';
 import { EventsTab } from './EventsTab';
@@ -63,6 +64,10 @@ export function BracketTab() {
 
 function BracketTabBody() {
   const { data, setData, error, refresh } = useBracket();
+  const params = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const goToEvents = () =>
+    navigate(`/tournaments/${params.id}/bracket-events`, { replace: true });
   const [eventId, setEventId] = useState<string>('');
   const activeTab = useUiStore((s) => s.activeTab);
   const setBracketDataReady = useUiStore((s) => s.setBracketDataReady);
@@ -142,6 +147,12 @@ function BracketTabBody() {
         render: () => <BracketTournamentSection />,
       },
       {
+        id: 'structure',
+        label: 'Events and roster',
+        icon: ListChecks,
+        render: () => <BracketStructureSection />,
+      },
+      {
         id: 'data',
         label: 'Tournament data',
         icon: Database,
@@ -174,6 +185,8 @@ function BracketTabBody() {
           eyebrow={view}
           title="No draws generated"
           body="Open Events to add events and generate draws. Setup controls the venue and schedule settings for those draws."
+          actionLabel="Open Events"
+          onAction={goToEvents}
         />
       </div>
     );

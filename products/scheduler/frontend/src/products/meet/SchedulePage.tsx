@@ -15,6 +15,7 @@ import { Download, CalendarBlank } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system/components';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useTournament } from '../../hooks/useTournament';
+import { useTournamentId } from '../../hooks/useTournamentId';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useMatchStateStore } from '../../store/matchStateStore';
 import { useUiStore } from '../../store/uiStore';
@@ -34,6 +35,7 @@ import { MatchesTable, type TableView } from './schedule/MatchesTable';
 import { ScheduleSidebar } from './schedule/ScheduleSidebar';
 
 export function SchedulePage() {
+  const tid = useTournamentId();
   const { config, loading: configLoading, error: configError } = useTournament();
   const players = useTournamentStore((state) => state.players);
   const matches = useTournamentStore((state) => state.matches);
@@ -352,6 +354,19 @@ export function SchedulePage() {
             hasSchedule={!!schedule}
             confirmingReplace={confirmingReplace}
           />
+          {!needsConfig && matches.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No matches yet —{' '}
+              <Link
+                to={`/tournaments/${tid}/matches`}
+                replace
+                className="underline hover:text-foreground"
+              >
+                generate matches
+              </Link>{' '}
+              before scheduling.
+            </p>
+          ) : null}
         </div>
       )}
     </div>

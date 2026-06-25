@@ -1,6 +1,8 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@scheduler/design-system";
 import { useBracketApi } from "../../api/bracketClient";
+import { useTournamentId } from "../../hooks/useTournamentId";
 import type {
   AssignmentDTO,
   PlayUnitDTO,
@@ -17,9 +19,21 @@ interface Props {
 }
 
 export function DrawView({ data, eventId, onChange }: Props) {
+  const tid = useTournamentId();
+  const navigate = useNavigate();
+  const goToEvents = () =>
+    navigate(`/tournaments/${tid}/bracket-events`, { replace: true });
   const event = data.events.find((e) => e.id === eventId);
   if (!event) {
-    return <p className="text-sm text-ink-500">No event selected.</p>;
+    return (
+      <BracketEmptyState
+        eyebrow="Draw"
+        title="No event selected"
+        body="Add an event and enter its participants, then generate the draw."
+        actionLabel="Open Events"
+        onAction={goToEvents}
+      />
+    );
   }
   if (data.play_units.filter((p) => p.event_id === eventId).length === 0) {
     return (
@@ -27,6 +41,8 @@ export function DrawView({ data, eventId, onChange }: Props) {
         eyebrow="Draw"
         title="No draw generated"
         body="Open Events, enter participants for this event, then generate the draw."
+        actionLabel="Open Events"
+        onAction={goToEvents}
       />
     );
   }

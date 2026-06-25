@@ -11,8 +11,10 @@
  * provides layout; nothing else.
  */
 import { useState } from 'react';
-import { Sliders, Palette, Monitor, Database, Cpu, Share } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router-dom';
+import { Sliders, Palette, Monitor, Database, Cpu, Share, ListChecks } from '@phosphor-icons/react';
 import { useTournament } from '../../hooks/useTournament';
+import { useTournamentId } from '../../hooks/useTournamentId';
 import { useLockGuard } from '../../hooks/useLockGuard';
 import { TournamentConfigForm } from './tournaments/TournamentConfigForm';
 import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
@@ -26,6 +28,8 @@ import type { TournamentConfig } from '../../api/dto';
 
 export function TournamentSetupPage() {
   const { config, loading, error, updateConfig } = useTournament();
+  const tid = useTournamentId();
+  const navigate = useNavigate();
   const { isLocked, confirmUnlock } = useLockGuard();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -82,6 +86,28 @@ export function TournamentSetupPage() {
           onSave={handleSave}
           saving={saving}
         />
+      ),
+    },
+    {
+      id: 'matches',
+      label: 'Matches',
+      icon: ListChecks,
+      render: () => (
+        <div className="space-y-4">
+          <p className="max-w-[58ch] text-sm leading-6 text-muted-foreground">
+            Matches are the pairings the scheduler places onto courts. Build
+            them from the roster — auto-generate by event rank or add rows by
+            hand — then generate the schedule in Operations → Courts.
+          </p>
+          <button
+            type="button"
+            data-testid="setup-open-matches"
+            onClick={() => navigate(`/tournaments/${tid}/matches`, { replace: true })}
+            className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-card px-3 text-xs font-medium text-card-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
+          >
+            Generate and manage matches
+          </button>
+        </div>
       ),
     },
     {
