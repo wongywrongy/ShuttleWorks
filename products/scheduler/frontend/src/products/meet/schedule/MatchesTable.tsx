@@ -215,7 +215,7 @@ export function MatchesTable({
               </tr>
             </thead>
             <tbody>
-              {byTime.flatMap(({ slotId: _slotId, time, assignments: slotAssignments }) =>
+              {byTime.flatMap(({ time, assignments: slotAssignments }) =>
                 slotAssignments.map((a, idx) => {
                   const isSelected = selectedMatchId === a.matchId;
                   return (

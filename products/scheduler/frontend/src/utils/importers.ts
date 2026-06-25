@@ -8,7 +8,7 @@ export async function importFromJSON(file: File): Promise<ScheduleRequest> {
         const content = e.target?.result as string;
         const data = JSON.parse(content) as ScheduleRequest;
         resolve(data);
-      } catch (error) {
+      } catch {
         reject(new Error('Invalid JSON file'));
       }
     };
@@ -17,7 +17,7 @@ export async function importFromJSON(file: File): Promise<ScheduleRequest> {
   });
 }
 
-export async function importFromCSV(_file: File): Promise<ScheduleRequest> {
+export async function importFromCSV(): Promise<ScheduleRequest> {
   // CSV import would need to be implemented based on specific format
   // For now, just throw an error indicating it's not implemented
   throw new Error('CSV import not yet implemented. Please use JSON format.');
