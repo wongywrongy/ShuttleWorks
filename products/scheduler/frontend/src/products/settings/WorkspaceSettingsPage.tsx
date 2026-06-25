@@ -9,7 +9,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
-import { ThemeToggle } from '../../components/ThemeToggle';
 import { Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
@@ -62,7 +61,6 @@ export function WorkspaceSettingsPage() {
             ← Back to workspace
           </button>
         </div>
-        <ThemeToggle />
       </header>
 
       <div className="flex min-h-0 flex-1">

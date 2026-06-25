@@ -116,14 +116,14 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByText('[ MODULES ]')).toBeInTheDocument();
   });
 
-  it('shows module chips derived from kind; foreign operator now available (SP-B2)', async () => {
+  it('module chips show only enabled modules (one per row, kind-derived)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    expect(screen.getAllByTestId('chip-meet')).toHaveLength(2);
-    expect(screen.getAllByTestId('chip-bracket')).toHaveLength(2);
-    const display = screen.getAllByTestId('chip-display');
-    expect(display).toHaveLength(2);
-    expect(display.filter((el) => /soon/i.test(el.textContent || ''))).toHaveLength(0);
+    // Enabled-only: a meet workspace shows just Meet; a bracket workspace just
+    // Bracket. Available/disabled modules are not shown in the row.
+    expect(screen.getAllByTestId('chip-meet')).toHaveLength(1);
+    expect(screen.getAllByTestId('chip-bracket')).toHaveLength(1);
+    expect(screen.queryAllByTestId('chip-display')).toHaveLength(0);
   });
 
   it('"New workspace" navigates to the dedicated /new surface', async () => {
@@ -141,14 +141,16 @@ describe('HubPage time-oriented control plane', () => {
         tournamentDate: '2026-12-01', status: 'draft' as const,
         modules: [
           { moduleId: 'meet', status: 'enabled', config: null },
-          { moduleId: 'display', status: 'disabled', config: null },
+          { moduleId: 'display', status: 'enabled', config: null },
         ],
       },
     ] as never);
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('X Workspace')).toBeInTheDocument());
-    const display = screen.getByTestId('chip-display');
-    expect(display).toBeInTheDocument();
-    expect(display).not.toHaveTextContent('soon');
+    // Display enabled in the DTO (a kind=meet default would NOT enable it) → its
+    // chip shows; bracket is not enabled → no chip.
+    expect(screen.getByTestId('chip-meet')).toBeInTheDocument();
+    expect(screen.getByTestId('chip-display')).toBeInTheDocument();
+    expect(screen.queryAllByTestId('chip-bracket')).toHaveLength(0);
   });
 });

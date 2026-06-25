@@ -12,7 +12,6 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
-import { ThemeToggle } from '../../components/ThemeToggle';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState, Skeleton, Eyebrow } from '../../components/control-plane';
 import {
@@ -122,7 +121,6 @@ export function HubPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <ThemeToggle />
           <Button onClick={() => navigate('/new')}>New workspace</Button>
         </div>
       </header>

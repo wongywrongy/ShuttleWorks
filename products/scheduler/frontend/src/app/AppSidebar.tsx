@@ -9,8 +9,7 @@
  * Per-workspace settings live inside the workspace; this rail never carries them.
  */
 import { Link, useLocation } from 'react-router-dom';
-import { GearSix } from '@phosphor-icons/react';
-import { IconShuttle } from '@scheduler/design-system';
+import { GearSix, House } from '@phosphor-icons/react';
 import { useAuth } from '../context/AuthContext';
 
 function railItemClass(active: boolean): string {
@@ -34,18 +33,15 @@ export function AppSidebar() {
       aria-label="Global"
       className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-card/40 py-3"
     >
-      {/* Brand / home */}
+      {/* Home */}
       <Link
         to="/"
         title="Home"
         aria-label="Home"
         aria-current={onHub ? 'page' : undefined}
-        className={[
-          'flex h-10 w-10 items-center justify-center rounded-md border transition-colors',
-          onHub ? 'border-accent text-accent' : 'border-foreground text-foreground hover:bg-muted/40',
-        ].join(' ')}
+        className={railItemClass(onHub)}
       >
-        <IconShuttle className="h-5 w-5" />
+        <House className="h-5 w-5" weight={onHub ? 'fill' : 'regular'} aria-hidden />
       </Link>
 
       <div className="mt-2 flex flex-1 flex-col items-center gap-1">
@@ -63,7 +59,7 @@ export function AppSidebar() {
 
       {/* Account */}
       <Link
-        to="/settings?section=account"
+        to="/settings?section=profile"
         title={user?.email ?? 'Account'}
         aria-label="Account"
         className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-2xs font-semibold text-muted-foreground hover:text-foreground"

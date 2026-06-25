@@ -41,45 +41,26 @@ function DateAnchor({ iso, receded }: { iso: string | null; receded: boolean }) 
   );
 }
 
+/** Only the *enabled* modules — the row reflects what is actually active in the
+ *  workspace, nothing more. Available/disabled modules are not shown. */
 function ModuleChips({ tournament }: { tournament: TournamentSummaryDTO }) {
   const all = tournament.modules
     ? modulesFromDto(tournament.modules)
     : modulesForWorkspace(tournament.kind);
-  const chips = all.filter((m) => m.status !== 'coming-soon' || m.id === 'display');
+  const chips = all.filter((m) => m.status === 'enabled');
+  if (chips.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {chips.map((m) => {
-        const soon = m.status === 'coming-soon';
-        return (
-          <span
-            key={m.id}
-            title={soon ? m.note : undefined}
-            data-testid={`chip-${m.id}`}
-            className={[
-              'inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-2xs font-medium',
-              m.status === 'enabled'
-                ? 'bg-accent/10 text-accent'
-                : soon
-                  ? 'border border-dashed border-border text-muted-foreground/60'
-                  : 'border border-border text-muted-foreground',
-            ].join(' ')}
-          >
-            <span
-              aria-hidden
-              className={[
-                'h-1 w-1 shrink-0 rounded-full',
-                m.status === 'enabled'
-                  ? 'bg-accent'
-                  : m.status === 'available'
-                    ? 'border border-accent'
-                    : 'border border-muted-foreground/40',
-              ].join(' ')}
-            />
-            {m.label}
-            {soon ? ' · soon' : ''}
-          </span>
-        );
-      })}
+      {chips.map((m) => (
+        <span
+          key={m.id}
+          data-testid={`chip-${m.id}`}
+          className="inline-flex items-center gap-1 rounded-sm bg-accent/10 px-1.5 py-0.5 text-2xs font-medium text-accent"
+        >
+          <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-accent" />
+          {m.label}
+        </span>
+      ))}
     </div>
   );
 }

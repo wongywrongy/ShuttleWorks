@@ -11,7 +11,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
-import { ThemeToggle } from '../../components/ThemeToggle';
 import { Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import { TEMPLATES, type TemplateId } from './newWorkspaceTemplates';
@@ -71,9 +70,6 @@ export function NewWorkspacePage() {
     <div className="h-full overflow-y-auto bg-background text-foreground">
       <header className="sticky top-0 z-chrome flex h-12 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur">
         <ShuttleWorksMark />
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-        </div>
       </header>
 
       <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
