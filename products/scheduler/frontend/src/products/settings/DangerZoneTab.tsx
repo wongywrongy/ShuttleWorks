@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Modal } from '@scheduler/design-system';
-import { Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 
@@ -43,8 +42,7 @@ export function DangerZoneTab({
   return (
     <div className="max-w-xl space-y-4 p-6">
       <div>
-        <Eyebrow framed tone="destructive">DANGER ZONE</Eyebrow>
-        <h2 className="mt-1 text-base font-semibold text-foreground">Archive or delete</h2>
+        <h2 className="text-lg font-semibold text-foreground">Archive or delete</h2>
       </div>
 
       <div className="flex items-center justify-between gap-4 rounded border border-border p-4">

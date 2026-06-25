@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
 import type { TournamentMemberDTO, TournamentSummaryDTO } from '../../api/dto';
-import { Eyebrow } from '../../components/control-plane';
 import { shortId, initialFor } from './memberIdentity';
 
 const ROLE_LEGEND: { role: string; desc: string }[] = [
@@ -42,8 +41,7 @@ export function PeopleAccessTab({
   return (
     <div className="max-w-2xl space-y-5 p-6">
       <div>
-        <Eyebrow framed>PEOPLE &amp; ACCESS</Eyebrow>
-        <h2 className="mt-1 text-base font-semibold text-foreground">Members &amp; roles</h2>
+        <h2 className="text-lg font-semibold text-foreground">Members &amp; roles</h2>
         {summary?.ownerName && (
           <p className="mt-1 text-xs text-muted-foreground">Owner: {summary.ownerName}</p>
         )}
@@ -59,9 +57,7 @@ export function PeopleAccessTab({
       </ul>
 
       <div>
-        <div className="mb-2">
-          <Eyebrow framed>MEMBERS</Eyebrow>
-        </div>
+        <h3 className="mb-2 text-sm font-semibold text-foreground">Members</h3>
         <ul className="divide-y divide-border rounded border border-border">
           {members === null ? (
             <li className="p-3 text-sm text-muted-foreground">Loading…</li>
