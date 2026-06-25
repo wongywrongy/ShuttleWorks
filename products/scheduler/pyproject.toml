@@ -2,3 +2,6 @@
 # Pytest rootdir marker — keeps `products/scheduler/` as the rootdir
 # regardless of where the test command is invoked from.
 testpaths = ["tests"]
+# Async tests are opt-in via explicit ``@pytest.mark.asyncio`` markers
+# (see test_suggestions_worker.py, test_proposal_pipeline_integration.py).
+asyncio_mode = "strict"
