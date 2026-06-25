@@ -6,6 +6,7 @@ import type { BracketView } from "../../lib/bracketTabs";
 import { useUiStore } from "../../store/uiStore";
 import { INTERACTIVE_BASE } from "../../lib/utils";
 import { EventsFilterStrip } from "./EventsFilterStrip";
+import { SourceChip } from "../operations/SourceChip";
 
 interface Props {
   /** Bare view name — drives the eyebrow. Derived from ``activeTab``
@@ -120,6 +121,10 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
         <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {VIEW_LABEL[view]}
         </span>
+        {/* Phase B: engine-provenance chip on the Operations surfaces
+            (Courts = schedule, Live). Draw is a Bracket-section surface,
+            not Operations, so it's omitted. Single-engine → constant. */}
+        {(view === "schedule" || view === "live") && <SourceChip source="bracket" />}
         {view === "draw" ? (
           <>
             <Select

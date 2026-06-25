@@ -35,6 +35,7 @@ import { SuggestionsRail } from './suggestions/SuggestionsRail';
 import { GanttLegend } from './control-center/GanttLegend';
 import { exportScheduleXlsx } from './exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { SourceChip } from '../operations/SourceChip';
 import type { Advisory } from '../../api/dto';
 
 export function MatchControlCenterPage() {
@@ -459,6 +460,9 @@ export function MatchControlCenterPage() {
               <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Live
               </span>
+              {/* Phase B: engine-provenance chip — single-engine source is a
+                  per-surface constant (this is a meet Operations surface). */}
+              <SourceChip source="meet" />
               <span
                 className="text-sm font-semibold text-foreground tabular-nums"
                 title="Share of currently-scheduled matches that are finished. Cancelled or court-closed matches drop out of both sides of the ratio."

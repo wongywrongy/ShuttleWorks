@@ -33,6 +33,7 @@ import { computeConstraintViolations } from '../../utils/constraintChecker';
 import { formatSlotTime } from '../../lib/time';
 import { MatchesTable, type TableView } from './schedule/MatchesTable';
 import { ScheduleSidebar } from './schedule/ScheduleSidebar';
+import { SourceChip } from '../operations/SourceChip';
 
 export function SchedulePage() {
   const tid = useTournamentId();
@@ -225,13 +226,18 @@ export function SchedulePage() {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
-              <LiveMetricsBar
-                elapsed={elapsed}
-                solutionCount={solutionCount}
-                objectiveScore={objectiveScore}
-                bestBound={bestBound}
-                status={status}
-              />
+              <div className="flex min-w-0 items-center gap-3">
+                {/* Phase B: engine-provenance chip — single-engine source is a
+                    per-surface constant (this is a meet Operations surface). */}
+                <SourceChip source="meet" />
+                <LiveMetricsBar
+                  elapsed={elapsed}
+                  solutionCount={solutionCount}
+                  objectiveScore={objectiveScore}
+                  bestBound={bestBound}
+                  status={status}
+                />
+              </div>
               <div className="flex shrink-0 items-center gap-2">
                 <Button
                   type="button"
