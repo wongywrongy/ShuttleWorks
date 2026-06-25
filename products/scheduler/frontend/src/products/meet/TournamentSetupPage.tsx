@@ -168,7 +168,11 @@ export function TournamentSetupPage() {
       ) : null}
 
       <div className="min-h-0 flex-1">
-        <SettingsShell sections={sections} defaultSectionId="tournament" />
+        <SettingsShell
+          sections={sections}
+          defaultSectionId="tournament"
+          orientation="horizontal"
+        />
       </div>
     </div>
   );

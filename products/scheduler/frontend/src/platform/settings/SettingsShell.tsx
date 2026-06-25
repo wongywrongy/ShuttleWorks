@@ -45,12 +45,21 @@ interface SettingsShellProps {
   /** Eyebrow text shown at the top-left of the right-pane header strip.
    *  Defaults to `"Setup"` so the page is self-labelled. */
   eyebrow?: string;
+  /** Section-nav placement.
+   *  - `'vertical'` (default): persistent left rail — the classic two-zone
+   *    shell. Use when the shell is the page's only left chrome.
+   *  - `'horizontal'`: section nav becomes a top segmented tab strip with no
+   *    left rail. Use when an outer chrome (e.g. the workspace sidebar)
+   *    already owns the left edge, so a second stacked rail would read as
+   *    redundant. */
+  orientation?: 'vertical' | 'horizontal';
 }
 
 export function SettingsShell({
   sections,
   defaultSectionId,
   eyebrow = 'Setup',
+  orientation = 'vertical',
 }: SettingsShellProps) {
   const fallback = defaultSectionId ?? sections[0]?.id ?? '';
   const [activeId, setActiveId] = useSearchParamState('section', fallback, {
@@ -66,6 +75,65 @@ export function SettingsShell({
 
   const ActiveIcon = active.icon;
 
+  // ───── HORIZONTAL: top tab strip, no left rail ─────
+  // Used when an outer chrome owns the left edge (workspace sidebar). The tab
+  // row both names the active section and replaces the redundant icon+title
+  // header strip, so the section name is never rendered twice. The row never
+  // wraps — it scrolls horizontally on narrow content widths.
+  if (orientation === 'horizontal') {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <div className="flex shrink-0 items-stretch gap-3 border-b border-border bg-card px-4">
+          <span className="flex shrink-0 items-center text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {eyebrow}
+          </span>
+          <nav
+            aria-label="Settings sections"
+            data-testid="settings-tabs"
+            className="flex min-w-0 items-stretch gap-0.5 overflow-x-auto overflow-y-hidden"
+          >
+            {sections.map((s) => {
+              const isActive = s.id === active.id;
+              const Icon = s.icon;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setActiveId(s.id)}
+                  aria-current={isActive ? 'page' : undefined}
+                  data-testid={`settings-nav-${s.id}`}
+                  className={[
+                    'relative -mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm transition-colors duration-fast ease-brand',
+                    isActive
+                      ? 'border-b-accent font-semibold text-foreground'
+                      : 'border-b-transparent text-muted-foreground hover:text-foreground',
+                  ].join(' ')}
+                >
+                  {Icon ? (
+                    <Icon
+                      aria-hidden="true"
+                      className={`h-4 w-4 ${isActive ? '' : 'opacity-60'}`}
+                    />
+                  ) : null}
+                  <span>{s.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div
+          role="region"
+          aria-label={`${eyebrow} — ${active.title ?? active.label}`}
+          className="min-h-0 flex-1 overflow-auto px-4 pb-6"
+        >
+          {active.render()}
+        </div>
+      </div>
+    );
+  }
+
+  // ───── VERTICAL (default): persistent left rail ─────
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
       {/* ───── LEFT RAIL ───── */}
