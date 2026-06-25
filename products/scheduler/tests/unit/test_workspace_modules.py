@@ -340,6 +340,12 @@ def test_normalize_seed_backfills_display_available_when_operator_enabled():
     assert _as_map(rows)["display"] == "available"
 
 
+def test_normalize_seed_rejects_coming_soon():
+    # coming_soon is retired — all modules are built, so it is not seedable.
+    with pytest.raises(ValueError):
+        normalize_module_seed([{"moduleId": "meet", "status": "coming_soon"}])
+
+
 def test_normalize_seed_preserves_config():
     rows = normalize_module_seed([{"moduleId": "meet", "status": "enabled", "config": {"x": 1}}])
     meet = next(r for r in rows if r["module_id"] == "meet")

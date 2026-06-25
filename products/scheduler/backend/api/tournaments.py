@@ -203,19 +203,18 @@ def list_tournaments(
     user_uuid = user.as_uuid()
     if user_uuid is None:
         return []
-    # Resolve every (tournament_id, role) pair for the caller up front
-    # so the list response can carry the role per row without an N+1
-    # lookup. ``list_all`` is already newest-first.
-    role_by_tournament: dict = {}
-    for tid in repo.members.list_tournament_ids_for_user(user_uuid):
-        role = repo.members.get_role(tid, user_uuid)
-        if role is not None:
-            role_by_tournament[tid] = role
+    # Resolve every (tournament_id, role) pair for the caller in one query so the
+    # list response carries the role per row without an N+1 lookup. ``list_all`` is
+    # already newest-first.
+    role_by_tournament = repo.members.list_roles_for_user(user_uuid)
     visible = [t for t in repo.tournaments.list_all() if t.id in role_by_tournament]
+    # Modules + signals are both gathered in batch (one query for all module rows,
+    # six grouped count queries) rather than per-row.
+    modules_by_tid = repo.modules.ensure_modules_for(visible)
     counts = _counts_for([t.id for t in visible], repo)
     out: List[TournamentSummaryDTO] = []
     for t in visible:
-        modules = _modules_for(t, repo)
+        modules = [WorkspaceModuleDTO.from_row(m) for m in modules_by_tid[t.id]]
         out.append(
             _to_summary(
                 t,

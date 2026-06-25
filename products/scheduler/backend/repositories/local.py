@@ -1083,6 +1083,15 @@ class _LocalMemberRepo:
             )
         )
 
+    def list_roles_for_user(self, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
+        """``{tournament_id: role}`` for every tournament the user belongs to,
+        in one query — replaces an N+1 ``get_role`` loop on the list path."""
+        rows = self.session.execute(
+            select(TournamentMember.tournament_id, TournamentMember.role)
+            .where(TournamentMember.user_id == user_id)
+        ).all()
+        return {tid: role for tid, role in rows}
+
     def count_by_tournament(
         self, tournament_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, int]:
@@ -1215,7 +1224,10 @@ class _LocalModuleRepo:
         self.session = session
 
     def list_for_tournament(self, tournament: Tournament) -> list[WorkspaceModule]:
-        """Module rows for a workspace, deriving + persisting if absent."""
+        """Module rows for a workspace. NOTE: not a pure read — delegates to
+        ``ensure_modules``, which INSERTs + commits the derived set on first
+        access (write-on-read). The list path uses ``ensure_modules_for`` to
+        batch this."""
         return self.ensure_modules(tournament)
 
     def ensure_modules(self, tournament: Tournament) -> list[WorkspaceModule]:
@@ -1242,6 +1254,30 @@ class _LocalModuleRepo:
         self.session.flush()
         self.session.commit()
         return self._rows_for(tournament.id)
+
+    def ensure_modules_for(
+        self, tournaments: list[Tournament]
+    ) -> dict[uuid.UUID, list[WorkspaceModule]]:
+        """Batched ``ensure_modules`` for the list path: one query reads every
+        tournament's rows; only the (rare) tournaments with no rows yet are
+        seeded individually. Avoids an N+1 read per row. Returns
+        ``{tournament_id: rows}`` (rows ordered by module_id)."""
+        if not tournaments:
+            return {}
+        ids = [t.id for t in tournaments]
+        by_tid: dict[uuid.UUID, list[WorkspaceModule]] = {tid: [] for tid in ids}
+        rows = self.session.scalars(
+            select(WorkspaceModule)
+            .where(WorkspaceModule.tournament_id.in_(ids))
+            .order_by(WorkspaceModule.module_id.asc())
+        )
+        for m in rows:
+            by_tid.setdefault(m.tournament_id, []).append(m)
+        # Seed any tournament that has no rows yet (legacy / never-accessed).
+        for t in tournaments:
+            if not by_tid.get(t.id):
+                by_tid[t.id] = self.ensure_modules(t)
+        return by_tid
 
     def _rows_for(self, tournament_id: uuid.UUID) -> list[WorkspaceModule]:
         return list(

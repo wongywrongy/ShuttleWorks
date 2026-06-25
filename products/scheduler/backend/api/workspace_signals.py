@@ -47,6 +47,15 @@ class CollaborationDTO(BaseModel):
 
 
 class WorkspaceSignalsDTO(BaseModel):
+    """Control-plane signals for one workspace (see ``build_signals``).
+
+    Vocabulary the frontend can rely on:
+    - ``health``: ``"archived" | "draft" | "attention" | "good"``.
+    - ``attention[].code``: ``NO_MODULES_ENABLED | DISPLAY_NO_SOURCE | NO_BRACKET |
+      NO_ROSTER | NOT_SCHEDULED``.
+    - ``setup``: a ``dict[str, bool]`` readiness checklist whose keys vary by kind.
+    """
+
     health: str
     attention: List[AttentionReasonDTO]
     modules: ModuleCountsDTO

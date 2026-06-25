@@ -620,7 +620,9 @@ MODULE_IDS = ("meet", "bracket", "display")
 
 # Module lifecycle vocabulary. ``enabled`` — active/operable; ``available``
 # — installable but off; ``disabled`` — turned off by the operator;
-# ``coming_soon`` — not yet buildable for this workspace (immutable).
+# ``coming_soon`` — retired: all modules are fully built. Kept in the tuple only
+# as migration / immutable-guard vocabulary (the migrations convert legacy
+# coming_soon rows to ``available``); seeding it is rejected (normalize_module_seed).
 MODULE_STATUSES = ("enabled", "available", "disabled", "coming_soon")
 
 # Operator (data-producing) modules — the dependency + last-operational
@@ -682,6 +684,11 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
             raise ValueError(f"duplicate moduleId: {module_id!r}")
         if status not in MODULE_STATUSES:
             raise ValueError(f"invalid status: {status!r}")
+        # All modules are fully built — `coming_soon` is not a seedable status.
+        # (It remains in MODULE_STATUSES only as immutable-guard / migration
+        # vocabulary; a seed must never persist a row in that state.)
+        if status == "coming_soon":
+            raise ValueError("coming_soon is not a seedable module status")
         named[module_id] = {
             "module_id": module_id,
             "status": status,

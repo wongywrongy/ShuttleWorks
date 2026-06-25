@@ -460,9 +460,10 @@ class WorkspaceModuleDTO(BaseModel):
     """Wire shape for one persisted per-workspace module row.
 
     ``moduleId`` is one of ``meet`` / ``bracket`` / ``display``;
-    ``status`` is one of ``enabled`` / ``available`` / ``disabled`` /
-    ``coming_soon``. ``config`` is the module's catch-all settings blob
-    (``None`` until set).
+    ``status`` is one of ``enabled`` / ``available`` / ``disabled``. (The legacy
+    ``coming_soon`` is retired — all modules are built; migrations convert any
+    existing such rows to ``available`` and seeding it is rejected.) ``config`` is
+    the module's catch-all settings blob (``None`` until set).
     """
     moduleId: str
     status: str
