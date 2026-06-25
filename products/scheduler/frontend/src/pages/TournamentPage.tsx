@@ -23,13 +23,16 @@ import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
 import { MEET_TAB_IDS, BRACKET_TAB_IDS } from '../lib/bracketTabs';
+import { SHELL_SEGMENTS } from '../app/workspace/workspaceNav';
 
-// URL-routable trailing segments: every meet tab id + every bracket tab id.
+// URL-routable trailing segments: every meet tab id + every bracket tab id +
+// the workspace-shell segments (overview / display-config / ws-* admin).
 // Legacy `/bracket` is handled by an explicit <Navigate> route in App.tsx;
 // by the time we reach this layoutEffect the URL is already /bracket-setup.
 const _TAB_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   ...MEET_TAB_IDS,
   ...BRACKET_TAB_IDS,
+  ...SHELL_SEGMENTS,
 ]);
 
 export function TournamentPage() {
@@ -64,13 +67,16 @@ export function TournamentPage() {
       // Segment IS the tab id, 1:1. No translation.
       useUiStore.getState().setActiveTab(segment as AppTab);
     }
-    // Optimistic kind: any bracket-* segment → bracket; otherwise meet.
-    // ``useTournamentKind``'s async fetch corrects the optimistic guess
-    // if the URL lies (e.g. someone hand-edits the URL to a bracket tab
-    // on a meet-kind tournament).
-    const optimisticKind: 'meet' | 'bracket' =
-      segment && segment.startsWith('bracket-') ? 'bracket' : 'meet';
-    useUiStore.getState().setActiveTournamentKind(optimisticKind);
+    // Optimistic kind: any bracket-* segment → bracket; otherwise meet. Skip
+    // for kind-agnostic shell segments (overview / ws-* / display-config) —
+    // there ``useTournamentKind``'s async fetch is the only source of truth, so
+    // we don't flash the wrong engine's groups on a bracket workspace.
+    if (segment && !SHELL_SEGMENTS.has(segment as AppTab)) {
+      const optimisticKind: 'meet' | 'bracket' = segment.startsWith('bracket-')
+        ? 'bracket'
+        : 'meet';
+      useUiStore.getState().setActiveTournamentKind(optimisticKind);
+    }
   }, [tid, location.pathname]);
 
   // No kind-based snap: a tab whose module isn't enterable for this workspace

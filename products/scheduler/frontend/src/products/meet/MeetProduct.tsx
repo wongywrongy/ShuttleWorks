@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react';
 import { useUiStore } from '../../store/uiStore';
-import { TabBar } from '../../app/TabBar';
 import { TabSkeleton } from '../../components/TabSkeleton';
 import { useDisruptionPublisher } from './matches/useDisruptionPublisher';
 
@@ -29,7 +28,6 @@ export function MeetProduct() {
   useDisruptionPublisher();
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <TabBar />
       <div className="min-h-0 flex-1 overflow-auto">
         <Suspense fallback={<TabSkeleton tab={activeTab} />}>
           <div key={activeTab} className="h-full animate-block-in">

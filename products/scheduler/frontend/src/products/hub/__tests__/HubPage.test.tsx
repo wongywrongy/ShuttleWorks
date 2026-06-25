@@ -64,22 +64,24 @@ beforeEach(() => {
 });
 
 describe('HubPage navigation', () => {
-  it('Open on a bracket tournament navigates to /bracket-setup', async () => {
+  // Opening a workspace now lands on its in-workspace Overview (the readiness
+  // landing); kind-specific routing happens inside the workspace via the sidebar.
+  it('Open on a bracket tournament navigates to its Overview', async () => {
     const loc = { current: '' };
     mount(loc);
     await waitFor(() => expect(screen.getByText(/Bracket A/i)).toBeInTheDocument());
     const openButtons = screen.getAllByRole('button', { name: 'Open workspace' });
     fireEvent.click(openButtons[0]); // bracket row first (soonest upcoming)
-    expect(loc.current).toBe('/tournaments/br1/bracket-setup');
+    expect(loc.current).toBe('/tournaments/br1/overview');
   });
 
-  it('Open on a meet tournament navigates to /setup', async () => {
+  it('Open on a meet tournament navigates to its Overview', async () => {
     const loc = { current: '' };
     mount(loc);
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
     const openButtons = screen.getAllByRole('button', { name: 'Open workspace' });
     fireEvent.click(openButtons[1]); // meet row second
-    expect(loc.current).toBe('/tournaments/me1/setup');
+    expect(loc.current).toBe('/tournaments/me1/overview');
   });
 });
 

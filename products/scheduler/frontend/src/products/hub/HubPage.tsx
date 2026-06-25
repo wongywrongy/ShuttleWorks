@@ -14,12 +14,6 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState, Skeleton, Eyebrow } from '../../components/control-plane';
-import {
-  modulesForWorkspace,
-  modulesFromDto,
-  defaultTabForModule,
-  primaryModuleForOpen,
-} from '../../platform/domain/moduleModel';
 import { groupWorkspaces } from './hubGrouping';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
@@ -78,16 +72,10 @@ export function HubPage() {
     [tournaments, selectedId],
   );
 
+  // Open a workspace on its readiness Overview (the in-workspace default).
   const openTournament = useCallback(
-    (id: string) => {
-      const t = tournaments.find((row) => row.id === id);
-      const mods = t?.modules
-        ? modulesFromDto(t.modules)
-        : modulesForWorkspace(t?.kind ?? 'meet');
-      const segment = defaultTabForModule(primaryModuleForOpen(mods));
-      navigate(`/tournaments/${id}/${segment}`);
-    },
-    [navigate, tournaments],
+    (id: string) => navigate(`/tournaments/${id}/overview`),
+    [navigate],
   );
 
   const handleDelete = useCallback(async () => {

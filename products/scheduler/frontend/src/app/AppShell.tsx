@@ -23,6 +23,8 @@ import {
 import type { ModuleId, WorkspaceModule } from '../platform/product-shell/types';
 import { useWorkspaceModules } from '../platform/domain/useWorkspaceModules';
 import { ModuleUnavailablePanel } from './workspace/ModuleUnavailablePanel';
+import { WorkspaceShellSurface } from '../products/workspace/WorkspaceShellSurface';
+import { SHELL_SEGMENTS, isAdminSegment } from './workspace/workspaceNav';
 
 /** Whether the active module's pane is the normal module outlet or the
  *  unavailable panel. A missing active module (empty/partial list) resolves
@@ -77,7 +79,7 @@ export function AppShell() {
   const activeModule = moduleForTab(activeTab, activeTournamentKind);
   // Real persisted module state (sub-project #2); fall back to the kind-derived
   // catalog while loading or on error.
-  const { modules: realModules, enable: enableModule } = useWorkspaceModules(tid);
+  const { modules: realModules } = useWorkspaceModules(tid);
   const modules = realModules ?? modulesForWorkspace(activeTournamentKind);
   // Meet-only polling runs when the Meet module is enabled (data exists), not
   // by kind — so a hybrid keeps polling and a bracket-only workspace doesn't.
@@ -176,20 +178,23 @@ export function AppShell() {
       <WorkspaceShell
         identity={identity}
         modules={modules}
-        activeModule={activeModule}
-        onSelectModule={(p) => {
-          if (tid) navigate(`/tournaments/${tid}/${defaultTabForModule(p)}`, { replace: true });
-        }}
-        onEnableModule={(id) => void enableModule(id)}
-        onManageModules={() => {
-          if (tid) navigate(`/tournaments/${tid}/settings?tab=modules`);
+        tid={tid ?? ''}
+        kind={activeTournamentKind}
+        activeTab={activeTab}
+        adminActive={isAdminSegment(activeTab)}
+        onOpenAdmin={() => {
+          if (tid) navigate(`/tournaments/${tid}/ws-members`);
         }}
         onBackToHub={() => navigate('/')}
         statusSlot={<AppStatusPopover />}
       >
         <UnsavedBannerSlot />
         <main id="main" className="min-h-0 flex-1 overflow-hidden">
-          {pane.kind === 'outlet' ? (
+          {SHELL_SEGMENTS.has(activeTab) ? (
+            <div className="h-full overflow-auto">
+              <WorkspaceShellSurface segment={activeTab} modules={modules} />
+            </div>
+          ) : pane.kind === 'outlet' ? (
             <ModuleOutlet />
           ) : (
             <ModuleUnavailablePanel
@@ -204,9 +209,9 @@ export function AppShell() {
               }}
               onOpenSettings={
                 pane.canOpenSettings && tid
-                  ? // Deep-link to the Modules catalog — this panel shows for a
-                    // disabled module, so that's where the operator enables it.
-                    () => navigate(`/tournaments/${tid}/settings?tab=modules`)
+                  ? // Deep-link to the in-workspace Modules admin — this panel
+                    // shows for a disabled module, so that's where it's enabled.
+                    () => navigate(`/tournaments/${tid}/ws-modules`)
                   : undefined
               }
             />

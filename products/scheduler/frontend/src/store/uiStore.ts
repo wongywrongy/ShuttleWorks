@@ -29,7 +29,17 @@ export type AppTab =
   | 'bracket-events'
   | 'bracket-draw'
   | 'bracket-schedule'
-  | 'bracket-live';
+  | 'bracket-live'
+  // Workspace-shell segments (left-sidebar IA): the readiness landing,
+  // the Display configuration page, and the in-workspace admin sections
+  // (the former standalone /settings tabs, re-homed under WORKSPACE).
+  | 'overview'
+  | 'display-config'
+  | 'ws-members'
+  | 'ws-sharing'
+  | 'ws-modules'
+  | 'ws-sync'
+  | 'ws-settings';
 
 export type SolverPhase = 'presolve' | 'search' | 'proving' | null;
 

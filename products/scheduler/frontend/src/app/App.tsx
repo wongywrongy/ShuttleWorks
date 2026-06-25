@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
 import { IconContext } from '@phosphor-icons/react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { AuthProvider } from '../context/AuthContext';
@@ -17,11 +17,6 @@ const HubPage = lazy(() =>
 );
 const NewWorkspacePage = lazy(() =>
   import('../products/hub/NewWorkspacePage').then((m) => ({ default: m.NewWorkspacePage })),
-);
-const WorkspaceSettingsPage = lazy(() =>
-  import('../products/settings/WorkspaceSettingsPage').then((m) => ({
-    default: m.WorkspaceSettingsPage,
-  })),
 );
 const GlobalSettingsPage = lazy(() =>
   import('../products/settings/GlobalSettingsPage').then((m) => ({
@@ -50,6 +45,25 @@ function Fallback() {
 function BracketLegacyRedirect() {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={`/tournaments/${id}/bracket-setup`} replace />;
+}
+
+/** The standalone workspace-settings page was absorbed into the workspace
+ *  sidebar (WORKSPACE section). Redirect the old route + its ?tab= deep links
+ *  into the in-workspace admin segments so existing links don't break. */
+const _SETTINGS_TAB_TO_SEGMENT: Record<string, string> = {
+  overview: 'overview',
+  general: 'ws-settings',
+  modules: 'ws-modules',
+  people: 'ws-members',
+  sharing: 'ws-sharing',
+  sync: 'ws-sync',
+  danger: 'ws-settings',
+};
+function WorkspaceSettingsRedirect() {
+  const { id } = useParams<{ id: string }>();
+  const [sp] = useSearchParams();
+  const seg = _SETTINGS_TAB_TO_SEGMENT[sp.get('tab') ?? ''] ?? 'ws-settings';
+  return <Navigate to={`/tournaments/${id}/${seg}`} replace />;
 }
 
 function App() {
@@ -117,7 +131,7 @@ function App() {
                 {/* Legacy redirect: pre-Bundle-3 URLs pointed at the bare /bracket
                     segment. Replace semantics so history stays clean. */}
                 <Route path="/tournaments/:id/bracket" element={<BracketLegacyRedirect />} />
-                <Route path="/tournaments/:id/settings" element={<WorkspaceSettingsPage />} />
+                <Route path="/tournaments/:id/settings" element={<WorkspaceSettingsRedirect />} />
                 <Route path="/tournaments/:id/*" element={<TournamentPage />} />
                 {/* Fallback (authenticated paths). */}
                 <Route path="*" element={<Navigate to="/" replace />} />
