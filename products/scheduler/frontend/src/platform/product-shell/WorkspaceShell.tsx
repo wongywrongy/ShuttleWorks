@@ -9,6 +9,7 @@ interface WorkspaceShellProps {
   activeModule: ModuleId;
   onSelectModule: (id: ModuleId) => void;
   onEnableModule?: (id: ModuleId) => void;
+  onManageModules?: () => void;
   onBackToHub: () => void;
   statusSlot?: ReactNode;
   children: ReactNode;
@@ -22,6 +23,7 @@ export function WorkspaceShell({
   activeModule,
   onSelectModule,
   onEnableModule,
+  onManageModules,
   onBackToHub,
   statusSlot,
   children,
@@ -35,6 +37,7 @@ export function WorkspaceShell({
           active={activeModule}
           onSelect={onSelectModule}
           onEnable={onEnableModule}
+          onManage={onManageModules}
         />
         <div className="flex items-center gap-2">{statusSlot}</div>
       </div>

@@ -181,6 +181,9 @@ export function AppShell() {
           if (tid) navigate(`/tournaments/${tid}/${defaultTabForModule(p)}`, { replace: true });
         }}
         onEnableModule={(id) => void enableModule(id)}
+        onManageModules={() => {
+          if (tid) navigate(`/tournaments/${tid}/settings?tab=modules`);
+        }}
         onBackToHub={() => navigate('/')}
         statusSlot={<AppStatusPopover />}
       >
