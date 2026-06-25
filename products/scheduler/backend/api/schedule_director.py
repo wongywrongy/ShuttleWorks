@@ -21,6 +21,7 @@ Action kinds:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from typing import Dict, List, Literal, Optional
@@ -258,8 +259,12 @@ async def _solve_and_propose(
         stayCloseWeight=10,
     )
     locked_assignments = build_locked_assignments(repo, tournament_id)
-    new_schedule, _moved = _run_warm_restart(
-        wr_request, locked_assignments=locked_assignments
+    # Offload the CP-SAT solve to the threadpool so a director action does not
+    # block the event loop (mirrors the other solver endpoints).
+    loop = asyncio.get_running_loop()
+    new_schedule, _moved = await loop.run_in_executor(
+        None,
+        lambda: _run_warm_restart(wr_request, locked_assignments=locked_assignments),
     )
     return _build_proposal(
         store,

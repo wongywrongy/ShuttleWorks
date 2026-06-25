@@ -91,10 +91,20 @@ async def generate_schedule(request: GenerateScheduleRequest):
             previous_assignments=previous_assignments,
             solver_options=solver_options,
         )
-        result = CPSATBackend(
-            solver_options=solver_request.solver_options,
-            candidate_pool_size=candidate_pool_size_for(request.config),
-        ).solve(solver_request)
+        # Run the CPU-bound CP-SAT solve in a threadpool so the async
+        # event loop stays responsive to concurrent requests for the
+        # duration of the solve. Mirrors the streaming route's
+        # ``loop.run_in_executor`` pattern. ``await`` re-raises any
+        # solver exception in this frame, so the ``except`` below still
+        # maps it to SOLVE_FAILED unchanged.
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: CPSATBackend(
+                solver_options=solver_request.solver_options,
+                candidate_pool_size=candidate_pool_size_for(request.config),
+            ).solve(solver_request),
+        )
         return result_to_dto(result)
 
     except Exception:

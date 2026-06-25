@@ -372,8 +372,12 @@ async def create_warm_restart_proposal(
     store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     locked_assignments = build_locked_assignments(repo, tournament_id)
-    new_schedule, _moved = _run_warm_restart(
-        request, locked_assignments=locked_assignments
+    # Offload the CPU-bound solve to a threadpool so the event loop stays
+    # responsive to concurrent requests during the solve.
+    loop = asyncio.get_running_loop()
+    new_schedule, _moved = await loop.run_in_executor(
+        None,
+        lambda: _run_warm_restart(request, locked_assignments=locked_assignments),
     )
     async with lock:
         _evict_expired(store)
@@ -410,8 +414,12 @@ async def create_repair_proposal(
     store = _get_store(http_request.app, tournament_id)
     lock = _get_lock(http_request.app)
     locked_assignments = build_locked_assignments(repo, tournament_id)
-    new_schedule, _ = _run_repair(
-        request, locked_assignments=locked_assignments
+    # Offload the CPU-bound solve to a threadpool so the event loop stays
+    # responsive to concurrent requests during the solve.
+    loop = asyncio.get_running_loop()
+    new_schedule, _ = await loop.run_in_executor(
+        None,
+        lambda: _run_repair(request, locked_assignments=locked_assignments),
     )
 
     # If this is a court-closure disruption, propose a config update
@@ -525,8 +533,12 @@ async def create_manual_edit_proposal(
         stayCloseWeight=10,
     )
     locked_assignments = build_locked_assignments(repo, tournament_id)
-    new_schedule, _ = _run_warm_restart(
-        wr_request, locked_assignments=locked_assignments
+    # Offload the CPU-bound solve to a threadpool so the event loop stays
+    # responsive to concurrent requests during the solve.
+    loop = asyncio.get_running_loop()
+    new_schedule, _ = await loop.run_in_executor(
+        None,
+        lambda: _run_warm_restart(wr_request, locked_assignments=locked_assignments),
     )
     async with lock:
         _evict_expired(store)

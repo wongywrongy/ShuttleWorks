@@ -12,6 +12,7 @@ via ``model.AddHint``, so it converges much faster than a full solve.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Dict, List, Literal, Optional, Set
 
@@ -314,5 +315,11 @@ def _run_repair_with_cancel(
 @router.post("/schedule/repair", response_model=RepairResponse)
 async def repair_schedule(request: RepairRequest) -> RepairResponse:
     """Re-solve the affected slice; everything else stays put."""
-    new_schedule, repaired_ids = _run_repair(request)
+    # Offload the CPU-bound solve to a threadpool so the event loop stays
+    # responsive to concurrent requests during the solve. The sync helper
+    # keeps its signature; ``await`` re-raises any exception it raises.
+    loop = asyncio.get_running_loop()
+    new_schedule, repaired_ids = await loop.run_in_executor(
+        None, lambda: _run_repair(request)
+    )
     return RepairResponse(schedule=new_schedule, repairedMatchIds=repaired_ids)
