@@ -667,11 +667,10 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
     three modules not named, and returns an ordered (by ``MODULE_IDS``) list
     of ``{"module_id", "status", "config"}`` rows ready to persist.
 
-    Backfill: an unnamed ``meet`` / ``bracket`` becomes ``available``; an
-    unnamed ``display`` becomes ``available`` if ``meet`` is enabled in
-    the named set, else ``coming_soon``. Raises ``ValueError`` on malformed
-    input; the caller maps that to a 400 and separately applies
-    ``display_dependency_satisfied``.
+    Backfill: any unnamed module becomes ``available`` (installable) — display
+    included, since it is fully built for both operators (meet + bracket). Raises
+    ``ValueError`` on malformed input; the caller maps that to a 400 and separately
+    applies ``display_dependency_satisfied``.
     """
     named: dict[str, dict] = {}
     for item in seeds:
@@ -689,18 +688,14 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
             "config": item.get("config"),
         }
 
-    # Display is available only if meet is enabled (display is a meet-specific feature — not tied to OPERATIONAL_MODULES).
-    meet_enabled = named.get("meet", {}).get("status") == "enabled"
+    # Display is fully built for both operators (meet + bracket public displays),
+    # so an unnamed display backfills to 'available' (installable). It can only be
+    # *enabled* when an operational module is enabled — the dependency rule
+    # (display_dependency_satisfied), applied separately by the caller.
     rows: list[dict] = []
     for module_id in MODULE_IDS:
         if module_id in named:
             rows.append(named[module_id])
-        elif module_id == "display":
-            rows.append({
-                "module_id": "display",
-                "status": "available" if meet_enabled else "coming_soon",
-                "config": None,
-            })
         else:
             rows.append({"module_id": module_id, "status": "available", "config": None})
     return rows

@@ -75,7 +75,7 @@ describe('modulesForWorkspace', () => {
 });
 
 describe('modulesFromDto', () => {
-  it('maps backend DTOs (coming_soon -> coming-soon) with labels + notes, in fixed order', () => {
+  it('maps backend DTOs in fixed order; legacy coming_soon → available (never shown)', () => {
     const m = modulesFromDto([
       { moduleId: 'display', status: 'available', config: null },
       { moduleId: 'meet', status: 'enabled', config: null },
@@ -85,8 +85,9 @@ describe('modulesFromDto', () => {
     expect(m.find((x) => x.id === 'meet')!.status).toBe('enabled');
     expect(m.find((x) => x.id === 'display')!.status).toBe('available');
     const bracket = m.find((x) => x.id === 'bracket')!;
-    expect(bracket.status).toBe('coming-soon');
-    expect(bracket.note).toBe('Bracket is not enabled for this workspace yet.');
+    // All modules are built — legacy coming_soon is surfaced as available.
+    expect(bracket.status).toBe('available');
+    expect(bracket.note).toBeUndefined();
   });
   it('notes a disabled module', () => {
     const m = modulesFromDto([{ moduleId: 'display', status: 'disabled', config: null }]);

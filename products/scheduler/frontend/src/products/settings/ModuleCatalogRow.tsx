@@ -49,9 +49,7 @@ export function ModuleCatalogRow({
           </Button>
         ) : isModuleEnableable(module.status) ? (
           <Button onClick={onEnable}>Enable</Button>
-        ) : (
-          <span className="text-2xs text-muted-foreground/60">Coming soon</span>
-        )}
+        ) : null}
       </div>
     </li>
   );

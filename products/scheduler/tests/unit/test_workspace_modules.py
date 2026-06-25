@@ -328,10 +328,11 @@ def test_normalize_seed_meet_day_template():
 
 
 def test_normalize_seed_backfills_missing_modules():
-    # Only bracket named; meet/display backfilled. Display backfills to
-    # coming_soon because no operational module is enabled.
+    # Only bracket named; meet/display backfilled. Display is fully built for
+    # both operators, so an unnamed display backfills to 'available' (never
+    # coming_soon) — installable even when the named operator is bracket.
     rows = normalize_module_seed([{"moduleId": "bracket", "status": "enabled"}])
-    assert _as_map(rows) == {"bracket": "enabled", "meet": "available", "display": "coming_soon"}
+    assert _as_map(rows) == {"bracket": "enabled", "meet": "available", "display": "available"}
 
 
 def test_normalize_seed_backfills_display_available_when_operator_enabled():
@@ -365,7 +366,8 @@ def test_normalize_seed_rejects_bad_status():
 
 def test_normalize_seed_empty_backfills_all_modules():
     rows = normalize_module_seed([])
-    assert _as_map(rows) == {"meet": "available", "bracket": "available", "display": "coming_soon"}
+    # Every module backfills to 'available' — none are coming_soon (all built).
+    assert _as_map(rows) == {"meet": "available", "bracket": "available", "display": "available"}
 
 
 # ---- create endpoint accepts modules[] -----------------------------------
@@ -409,7 +411,7 @@ def test_create_with_partial_seed_backfills(client):
         "name": "Partial", "modules": [{"moduleId": "bracket", "status": "enabled"}],
     })
     assert r.status_code == 201, r.text
-    assert _modules_map(r.json()) == {"bracket": "enabled", "meet": "available", "display": "coming_soon"}
+    assert _modules_map(r.json()) == {"bracket": "enabled", "meet": "available", "display": "available"}
 
 
 def test_create_seed_rejects_unknown_module(client):

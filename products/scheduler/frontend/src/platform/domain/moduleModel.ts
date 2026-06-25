@@ -84,11 +84,13 @@ export function modulesForWorkspace(kind: Kind): WorkspaceModule[] {
 }
 
 /** Map the real backend module DTOs into the dock's WorkspaceModule shape.
- *  Normalizes the backend's `coming_soon` to the frontend `coming-soon`. */
+ *  All three modules are fully built, so any residual backend `coming_soon`
+ *  (legacy data not yet migrated) is treated as `available` — nothing in the UI
+ *  ever renders a "coming soon" state. */
 export function modulesFromDto(dtos: WorkspaceModuleDTO[]): WorkspaceModule[] {
   const byId = new Map<ModuleId, ModuleStatus>();
   for (const d of dtos) {
-    const status = (d.status === 'coming_soon' ? 'coming-soon' : d.status) as ModuleStatus;
+    const status = (d.status === 'coming_soon' ? 'available' : d.status) as ModuleStatus;
     byId.set(d.moduleId as ModuleId, status);
   }
   return MODULE_ORDER.filter((id) => byId.has(id)).map((id) => {
