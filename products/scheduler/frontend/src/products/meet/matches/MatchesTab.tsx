@@ -17,6 +17,7 @@ import { useSearchParamState } from '../../../hooks/useSearchParamState';
 import { usePlayerMap } from '../../../store/selectors';
 import { AutoGeneratePanel } from './AutoGeneratePanel';
 import { MatchesSpreadsheet } from './MatchesSpreadsheet';
+import { EmptyState } from '../../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 
 export function MatchesTab() {
@@ -122,11 +123,32 @@ export function MatchesTab() {
         </div>
       </header>
 
+      {/* Auto-generate stays visible even when empty — it is the
+          primary "build from roster" path the empty state points at. */}
       <AutoGeneratePanel />
-      <MatchesSpreadsheet
-        pendingFocusId={pendingFocusId}
-        onFocusConsumed={() => setPendingFocusId(null)}
-      />
+      {matches.length === 0 ? (
+        <EmptyState
+          title="No matches yet"
+          body="Build matches from your roster above, then generate the schedule in Operations → Courts."
+          action={
+            <button
+              type="button"
+              onClick={addEmptyRow}
+              disabled={!canAddRow}
+              data-testid="empty-add-match"
+              title={canAddRow ? 'Add match row' : 'Need at least 2 players'}
+              className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-3 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+              ＋ Add match by hand
+            </button>
+          }
+        />
+      ) : (
+        <MatchesSpreadsheet
+          pendingFocusId={pendingFocusId}
+          onFocusConsumed={() => setPendingFocusId(null)}
+        />
+      )}
     </div>
   );
 }

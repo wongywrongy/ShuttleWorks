@@ -77,6 +77,7 @@ export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): Workspa
       role: 'engine',
       items: [
         { segment: 'roster', label: 'Roster' },
+        { segment: 'matches', label: 'Matches' },
         { segment: 'setup', label: 'Configuration' },
       ],
     });

@@ -13,8 +13,10 @@
  * set in the Engine or Display panes.
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import type { TournamentConfig, BreakWindow } from '../../../api/dto';
 import { isValidTime } from '../../../lib/time';
+import { useTournamentId } from '../../../hooks/useTournamentId';
 import { useSuccessFlash } from '../../../hooks/useSuccessFlash';
 import { Button } from '@scheduler/design-system';
 import { IconDone } from '@scheduler/design-system';
@@ -80,6 +82,7 @@ export function TournamentConfigForm({
     config.breaks || []
   );
   const justSaved = useSuccessFlash(saving);
+  const tid = useTournamentId();
 
   const baselineRef = useRef<TournamentConfig>(config);
   const breakBaselineRef = useRef<BreakWindow[]>(config.breaks ?? []);
@@ -171,65 +174,91 @@ export function TournamentConfigForm({
   return (
     <form onSubmit={handleSubmit}>
       <SectionHeader>Identity</SectionHeader>
-      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
-        <Row
-          label="Tournament name"
-          control={
-            <TextInput
-              value={formData.tournamentName ?? ''}
-              onChange={(v) => set('tournamentName', v)}
-              width={200}
-              placeholder="My tournament"
-              ariaLabel="Tournament name"
-            />
-          }
-        />
-        <Row
-          label="Meet type"
-          control={
-            <Seg
-              options={MEET_TYPE_OPTIONS}
-              value={formData.meetMode ?? 'dual'}
-              onChange={(v) => set('meetMode', v)}
-              ariaLabel="Meet type"
-            />
-          }
-        />
-      </div>
+      <Row
+        label="Tournament name"
+        control={
+          <TextInput
+            value={formData.tournamentName ?? ''}
+            onChange={(v) => set('tournamentName', v)}
+            width={200}
+            placeholder="My tournament"
+            ariaLabel="Tournament name"
+          />
+        }
+      />
+      <Row
+        label="Meet type"
+        control={
+          <Seg
+            options={MEET_TYPE_OPTIONS}
+            value={formData.meetMode ?? 'dual'}
+            onChange={(v) => set('meetMode', v)}
+            ariaLabel="Meet type"
+          />
+        }
+      />
 
       <SectionHeader>Schedule &amp; venue</SectionHeader>
-      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
-        <Row label="Date" control={
-          <DateInput value={formData.tournamentDate ?? ''} onChange={(v) => set('tournamentDate', v)} ariaLabel="Tournament date" />
-        } />
-        <Row label="Slot duration" control={
-          <NumberWithSuffix value={formData.intervalMinutes} onChange={(v) => set('intervalMinutes', v)} suffix="min" min={5} max={240} ariaLabel="Slot duration in minutes" />
-        } />
-        <Row label="Start time" control={
-          <TimeInput value={formData.dayStart} onChange={(v) => set('dayStart', v)} ariaLabel="Day start" />
-        } />
-        <Row label="End time" control={
-          <TimeInput value={formData.dayEnd} onChange={(v) => set('dayEnd', v)} ariaLabel="Day end" />
-        } />
-        <Row label="Courts" control={
-          <NumberInput value={formData.courtCount} onChange={(v) => set('courtCount', v)} min={1} max={32} ariaLabel="Court count" />
-        } />
-        <Row label="Rest between matches" control={
-          <NumberWithSuffix value={formData.defaultRestMinutes} onChange={(v) => set('defaultRestMinutes', v)} suffix="min" min={0} max={120} ariaLabel="Rest between matches" />
-        } />
-        <Row label="Break start" control={
-          <TimeInput value={breakStart} onChange={setBreakStart} ariaLabel="Break start" />
-        } />
-        <Row label="Break end" control={
-          <TimeInput value={breakEnd} onChange={setBreakEnd} ariaLabel="Break end" />
-        } />
-      </div>
+      <Row label="Date" control={
+        <DateInput value={formData.tournamentDate ?? ''} onChange={(v) => set('tournamentDate', v)} ariaLabel="Tournament date" />
+      } />
+      <Row label="Start time" control={
+        <TimeInput value={formData.dayStart} onChange={(v) => set('dayStart', v)} ariaLabel="Day start" />
+      } />
+      <Row label="End time" control={
+        <TimeInput value={formData.dayEnd} onChange={(v) => set('dayEnd', v)} ariaLabel="Day end" />
+      } />
+      <Row label="Slot duration" control={
+        <NumberWithSuffix value={formData.intervalMinutes} onChange={(v) => set('intervalMinutes', v)} suffix="min" min={5} max={240} ariaLabel="Slot duration in minutes" />
+      } />
+      <Row label="Courts" control={
+        <NumberInput value={formData.courtCount} onChange={(v) => set('courtCount', v)} min={1} max={32} ariaLabel="Court count" />
+      } />
+      <Row label="Rest between matches" control={
+        <NumberWithSuffix value={formData.defaultRestMinutes} onChange={(v) => set('defaultRestMinutes', v)} suffix="min" min={0} max={120} ariaLabel="Rest between matches" />
+      } />
+      <Row
+        label="Break (optional)"
+        control={
+          breakStart || breakEnd ? (
+            <span className="inline-flex items-center gap-2">
+              <TimeInput value={breakStart} onChange={setBreakStart} ariaLabel="Break start" />
+              <span className="text-xs text-muted-foreground">–</span>
+              <TimeInput value={breakEnd} onChange={setBreakEnd} ariaLabel="Break end" />
+              <button
+                type="button"
+                onClick={() => { setBreakStart(''); setBreakEnd(''); }}
+                className="ml-1 text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast ease-brand"
+              >
+                Clear
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setBreakStart('12:00')}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast ease-brand"
+            >
+              None — add break
+            </button>
+          )
+        }
+      />
 
       <SectionHeader>Scoring</SectionHeader>
-      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
-        <Row label="Score type" control={
+      <Row
+        label="Score type"
+        control={
           <Seg options={SCORE_TYPE_OPTIONS} value={formData.scoringFormat ?? 'badminton'} onChange={(v) => set('scoringFormat', v)} ariaLabel="Score type" />
-        } />
+        }
+      />
+      <div
+        className={[
+          'mt-1 pl-4 border-l border-border/60',
+          formData.scoringFormat === 'simple' ? 'opacity-50 pointer-events-none' : '',
+        ].join(' ')}
+        aria-disabled={formData.scoringFormat === 'simple'}
+      >
         <Row label="Points per set" control={
           <SelectInput value={formData.pointsPerSet ?? 21} onChange={(v) => set('pointsPerSet', v)} options={POINTS_PER_SET_OPTIONS} ariaLabel="Points per set" />
         } />
@@ -238,25 +267,35 @@ export function TournamentConfigForm({
         } />
         <Row label="Deuce (win by 2)" control={
           <Toggle value={formData.deuceEnabled ?? true} onChange={(v) => set('deuceEnabled', v)} ariaLabel="Deuce enabled" />
-        } />
+        } last />
       </div>
 
       <SectionHeader>Events</SectionHeader>
       <Row label="Men's singles" control={
-        <NumberInput value={ranks.MS ?? 3} onChange={(n) => setRank('MS', n)} min={0} max={20} ariaLabel="Men's singles positions" />
+        <NumberWithSuffix value={ranks.MS ?? 3} onChange={(n) => setRank('MS', n)} suffix="positions" min={0} max={20} ariaLabel="Men's singles positions" />
       } />
       <Row label="Women's singles" control={
-        <NumberInput value={ranks.WS ?? 3} onChange={(n) => setRank('WS', n)} min={0} max={20} ariaLabel="Women's singles positions" />
+        <NumberWithSuffix value={ranks.WS ?? 3} onChange={(n) => setRank('WS', n)} suffix="positions" min={0} max={20} ariaLabel="Women's singles positions" />
       } />
       <Row label="Men's doubles" control={
-        <NumberInput value={ranks.MD ?? 2} onChange={(n) => setRank('MD', n)} min={0} max={20} ariaLabel="Men's doubles positions" />
+        <NumberWithSuffix value={ranks.MD ?? 2} onChange={(n) => setRank('MD', n)} suffix="positions" min={0} max={20} ariaLabel="Men's doubles positions" />
       } />
       <Row label="Women's doubles" control={
-        <NumberInput value={ranks.WD ?? 2} onChange={(n) => setRank('WD', n)} min={0} max={20} ariaLabel="Women's doubles positions" />
+        <NumberWithSuffix value={ranks.WD ?? 2} onChange={(n) => setRank('WD', n)} suffix="positions" min={0} max={20} ariaLabel="Women's doubles positions" />
       } />
       <Row label="Mixed doubles" control={
-        <NumberInput value={ranks.XD ?? 2} onChange={(n) => setRank('XD', n)} min={0} max={20} ariaLabel="Mixed doubles positions" />
+        <NumberWithSuffix value={ranks.XD ?? 2} onChange={(n) => setRank('XD', n)} suffix="positions" min={0} max={20} ariaLabel="Mixed doubles positions" />
       } last />
+
+      <p className="mt-6 text-xs text-muted-foreground">
+        Sharing, the public display link, and backups live in{' '}
+        <Link
+          to={`/tournaments/${tid}/ws-settings`}
+          className="text-accent hover:underline"
+        >
+          workspace settings
+        </Link>.
+      </p>
 
       {Object.keys(errors).length > 0 && (
         <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
