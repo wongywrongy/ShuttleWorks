@@ -1,40 +1,47 @@
 # Backend architecture
 
-> **Note (2026-06):** Predates the workspace-suite redesign, which added the workspace + module
-> model (`workspace_modules` + the module PATCH rules), per-workspace control-plane signals on
-> the tournament endpoints, and the state backup endpoints. Current design record:
-> [`../../docs/superpowers/specs/`](../../docs/superpowers/specs).
+> Reflects the 2026-06 workspace-suite control-plane redesign. Full per-slice
+> design record: [`../../docs/superpowers/specs/`](../../docs/superpowers/specs).
 
-A FastAPI app that fronts a CP-SAT solver. Stateless per-request: every
-`POST /schedule` carries the full problem in the body. Persistence is a
-side-channel for tournament state and live match status only.
+A FastAPI app that fronts a CP-SAT solver. The solver path is stateless
+per-request (every `POST /schedule` carries the full problem in the body).
+Workspace + tournament state is persisted in **SQLite via SQLAlchemy 2.0**
+(through `repositories/local.py`, the `LocalRepository`), with Alembic
+migrations; the cloud mirror (Supabase Postgres) is populated asynchronously by
+the outbox `sync_service`.
 
 ## Layout
 
 ```
 backend/
 ├── app/
-│   ├── main.py                  # FastAPI app, CORS, lifespan, request-id middleware
+│   ├── main.py                  # FastAPI app, CORS, lifespan (runs Alembic upgrade on startup), middleware
 │   ├── schemas.py               # Pydantic DTOs (mirror frontend/src/api/dto.ts)
 │   ├── error_codes.py           # ErrorCode enum + http_error() helper
-│   ├── paths.py                 # data_dir() / ensure_data_dir() helpers
-│   └── time_utils.py            # ISO-8601 UTC + slot-math helpers
-├── api/
-│   ├── schedule.py              # POST /schedule, /schedule/stream (SSE), /schedule/validate
-│   ├── schedule_repair.py       # POST /schedule/repair — targeted disruption repair
-│   ├── schedule_warm_restart.py # POST /schedule/warm-restart — stay-close re-solve
-│   ├── match_state.py           # GET/PUT /match-state — live match status
-│   ├── tournament_state.py      # GET/PUT /tournament-state — debounced full snapshot
-│   └── _validate.py             # shared validation utilities
-├── services/
-│   ├── persistence.py           # single owner of on-disk state + write lock
-│   ├── _backups.py              # atomic-write + backup-rotation primitives
-│   └── csv_importer.py          # parse roster/matches CSVs
+│   └── …                        # auth deps, paths, time utils
+├── api/                          # route handlers (one APIRouter per file)
+│   ├── tournaments.py            # workspace CRUD + list (with control-plane signals) + /state + state backups
+│   ├── workspace_modules.py      # GET/PATCH per-workspace modules (enable/disable + dependency rules)
+│   ├── workspace_signals.py      # build_signals() — health / readiness / attention / collaboration
+│   ├── invites.py                # collaborator invite links (create / list / revoke / accept)
+│   ├── brackets.py               # bracket draws / advancement / import-export
+│   ├── commands.py               # idempotent operator command queue
+│   ├── match_state.py            # live match status (called / started / finished)
+│   ├── schedule*.py              # /schedule (+ stream / validate / repair / warm-restart / proposals / …)
+│   └── _validate.py              # shared validation utilities
+├── database/
+│   ├── models.py                 # SQLAlchemy models (Tournament, WorkspaceModule, TournamentMember,
+│   │                             #   InviteLink, TournamentBackup, …) + derive/normalize module helpers
+│   └── session.py                # one engine bound to settings.database_url
+├── repositories/
+│   ├── local.py                  # LocalRepository + per-entity sub-repos (members, modules, brackets, backups, …)
+│   └── base.py
+├── alembic/                      # SQLite + Postgres migrations (head: j3e7f9a1b5c8)
+├── services/                     # match_state, sync_service (outbox), bracket/, suggestions_worker, csv_importer
 ├── Dockerfile
 └── requirements.txt
 
 scheduler_core/   # the solver itself; see scheduler_core/README.md
-src/adapters/         # sport-specific adapters (badminton)
 ```
 
 The HTTP layer lives in `backend/`. The solver engine lives under
@@ -92,19 +99,41 @@ in-progress matches are hard-pinned; everything else is hinted at its
 current slot+court with a per-match move penalty. Conservative /
 Balanced / Aggressive map to penalty weights 10 / 5 / 1.
 
-### `/tournament-state`
+### `/tournaments/{id}/state`
 
-GET returns the persisted snapshot from `data/tournament.json`. PUT
-debounced from the frontend (~1 s) writes it back atomically. This is
-the only mutable shared state on the backend; everything else is
-per-request.
+GET returns the workspace's persisted state; PUT (debounced ~1 s from the
+frontend) writes it back. State lives in SQLite via the `LocalRepository` — the
+canonical store. (This replaced the old singleton `/tournament-state` +
+`data/tournament.json` file when the backends merged onto SQLAlchemy.)
 
 ### `/match-state`
 
-Live operator status (`scheduled` / `called` / `started` / `finished`)
-plus actual start/end timestamps. Persisted alongside tournament
-state but written on every transition since the mutations carry user
-intent that must not be debounced away.
+Live operator status (`scheduled` / `called` / `started` / `finished`) plus
+actual start/end timestamps. Written on every transition (no debounce) since
+the mutations carry user intent that must not be coalesced away.
+
+## Workspace control plane
+
+The control-plane surface (the Hub + per-workspace Settings) is served by:
+
+- **`GET/POST /tournaments`, `GET/PATCH/DELETE /tournaments/{id}`** — workspace
+  CRUD. The list carries per-row `signals` (one batched pass, not N+1) and the
+  caller's `role`, plus each workspace's `modules`. Create accepts an optional
+  `modules[]` seed (validated by `normalize_module_seed`; `coming_soon` is not
+  a seedable status).
+- **`GET /tournaments/{id}/modules`, `PATCH …/modules/{moduleId}`** — enable /
+  disable a module. Server-enforced rules (each a 409): Display needs an enabled
+  operational module (meet | bracket); a workspace keeps ≥1 operational module
+  enabled; a module with data can't be disabled.
+- **`GET …/state/backups`, `POST …/state/backup`, `POST …/state/restore/{filename}`**
+  — per-workspace state snapshots (list / create / restore).
+- **`/invites`** — collaborator invite links (create with role, list with
+  status/expiry, revoke, accept). Members are listed via `GET …/members`.
+
+`build_signals` (`api/workspace_signals.py`) is a pure function computing each
+workspace's `health` (`good | attention | draft | archived`), an `attention[]`
+code list, a `setup` readiness checklist, module counts, and collaboration
+counts from batched row counts — no per-row DB work.
 
 ## Adding a new HTTP route
 
