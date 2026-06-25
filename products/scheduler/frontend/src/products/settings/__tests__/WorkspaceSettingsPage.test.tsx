@@ -15,9 +15,9 @@ vi.mock('../../../api/client', () => ({
     listInvites: vi.fn(),
     createInvite: vi.fn(),
     revokeInvite: vi.fn(),
-    listBackups: vi.fn(),
-    createBackup: vi.fn(),
-    restoreBackup: vi.fn(),
+    listTournamentBackups: vi.fn(),
+    createTournamentBackup: vi.fn(),
+    restoreTournamentBackup: vi.fn(),
   },
 }));
 
@@ -56,7 +56,7 @@ beforeEach(() => {
   vi.mocked(apiClient.patchWorkspaceModule).mockResolvedValue({} as never);
   vi.mocked(apiClient.listMembers).mockResolvedValue([] as never);
   vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
-  vi.mocked(apiClient.listBackups).mockResolvedValue({ backups: [] } as never);
+  vi.mocked(apiClient.listTournamentBackups).mockResolvedValue({ backups: [] } as never);
 });
 
 describe('WorkspaceSettingsPage', () => {

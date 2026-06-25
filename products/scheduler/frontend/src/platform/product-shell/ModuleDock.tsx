@@ -51,7 +51,6 @@ export function ModuleDock({ modules, active, onSelect, onEnable, onManage }: Mo
             role="tab"
             disabled={!interactive}
             aria-selected={isActive}
-            aria-current={isActive ? 'page' : undefined}
             aria-disabled={!interactive || undefined}
             title={canEnable ? `Enable ${m.label}` : !enterable ? m.note : undefined}
             data-testid={`module-${m.id}`}

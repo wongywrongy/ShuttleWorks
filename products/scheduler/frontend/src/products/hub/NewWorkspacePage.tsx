@@ -28,12 +28,25 @@ export function NewWorkspacePage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Select a template (or 'custom') and clear any stale create error, since the
+  // configuration just changed and a prior failure may no longer apply.
+  function pick(id: TemplateId) {
+    setSelected(id);
+    setError(null);
+  }
+
   async function handleCreate() {
     setCreating(true);
     setError(null);
     try {
       const isCustom = selected === 'custom';
       const tpl = TEMPLATES.find((t) => t.id === selected);
+      // Guard the non-null assertions below: a non-custom selection must match a
+      // TEMPLATES entry. (Defends against a future TemplateId added without a seed.)
+      if (!isCustom && !tpl) {
+        setError('Unknown template — please refresh and try again.');
+        return;
+      }
       const modules = isCustom ? customSeed(custom) : tpl!.seed;
       const kind = isCustom ? kindForSeed(custom) : tpl!.kind;
       const created = await apiClient.createTournament({
@@ -93,14 +106,14 @@ export function NewWorkspacePage() {
                 key={t.id}
                 template={t}
                 selected={selected === t.id}
-                onSelect={() => setSelected(t.id)}
+                onSelect={() => pick(t.id)}
               />
             ))}
             <button
               type="button"
               aria-pressed={selected === 'custom'}
               data-testid="template-custom"
-              onClick={() => setSelected('custom')}
+              onClick={() => pick('custom')}
               className={[
                 'flex flex-col gap-2 rounded-md border p-4 text-left transition-colors sm:col-span-2',
                 selected === 'custom'

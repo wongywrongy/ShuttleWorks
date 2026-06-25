@@ -714,21 +714,6 @@ export interface TournamentMemberDTO {
   joinedAt: string;
 }
 
-export interface BackupEntryDTO {
-  filename: string;
-  sizeBytes: number;
-  modifiedAt: string;
-}
-
-export interface BackupListDTO {
-  backups: BackupEntryDTO[];
-}
-
-export interface BackupCreatedDTO {
-  created: boolean;
-  filename: string | null;
-}
-
 // ---- Operator commands (Step F of the architecture-adjustment arc) -------
 
 export type MatchAction =

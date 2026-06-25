@@ -31,6 +31,7 @@ export function TemplateCard({
         {chips.map((m) => (
           <span
             key={m.moduleId}
+            aria-label={`${MODULE_LABELS[m.moduleId]} — ${m.status}`}
             data-testid={`tplchip-${m.moduleId}`}
             data-status={m.status}
             className={[

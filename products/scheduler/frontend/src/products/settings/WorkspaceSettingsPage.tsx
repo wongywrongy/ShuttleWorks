@@ -100,7 +100,7 @@ export function WorkspaceSettingsPage() {
           )}
           {tab === 'people' && <PeopleAccessTab tid={tid} summary={summary} />}
           {tab === 'sharing' && <SharingTab tid={tid} />}
-          {tab === 'sync' && <SyncBackupsTab tid={tid} />}
+          {tab === 'sync' && <SyncBackupsTab />}
         </div>
       </div>
     </div>

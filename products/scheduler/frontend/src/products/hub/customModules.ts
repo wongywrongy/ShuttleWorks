@@ -1,3 +1,13 @@
+/**
+ * Custom-build module state for the `/new` route's Custom template.
+ *
+ * A per-module tri-state (enabled | available | off) maps to the create payload:
+ *   enabled   → 'enabled'   (on immediately)
+ *   available → 'available' (installable later from Settings)
+ *   off       → 'disabled'  (present but off)
+ * `kindForSeed` derives the legacy workspace `kind`: bracket-only → 'bracket',
+ * everything else → 'meet'.
+ */
 import type { WorkspaceModuleDTO } from '../../api/dto';
 
 export type ModuleState = 'enabled' | 'available' | 'off';

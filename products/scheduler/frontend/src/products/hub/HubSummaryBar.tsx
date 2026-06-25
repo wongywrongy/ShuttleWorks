@@ -4,13 +4,17 @@
  * buttons that drive the matching filter. Collaboration (members / invites) is
  * not headlined here — it lives in the inspector + People surfaces.
  */
+import { memo } from 'react';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { MetricStat } from '../../components/control-plane';
 import { hubMetrics } from './hubMetrics';
 
 type PickId = 'attention' | 'active';
 
-export function HubSummaryBar({
+// memo: HubPage re-renders on search/filter/selection state, but `list` is a
+// stable reference between fetches — so skip recomputing hubMetrics (which calls
+// modulesFromDto per workspace) when only unrelated Hub state changed.
+export const HubSummaryBar = memo(function HubSummaryBar({
   list,
   onPickFilter,
 }: {
@@ -44,4 +48,4 @@ export function HubSummaryBar({
       </div>
     </div>
   );
-}
+});

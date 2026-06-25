@@ -1,58 +1,34 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState } from '../../components/control-plane';
-import { apiClient } from '../../api/client';
-import type { BackupEntryDTO } from '../../api/dto';
+import { useTournamentBackups } from '../../hooks/useTournamentBackups';
 
+/** Human-readable file size: B / KB / MB. */
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Locale date-time for a backup's modified timestamp (falls back to the raw ISO). */
 function fmtDate(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
 /** Sync & Backups: list the workspace's state backups, create a new one, and
- *  restore from one (with confirm). Wired to the per-tournament backup
- *  endpoints — the local store is the source of truth. */
-export function SyncBackupsTab({ tid }: { tid: string }) {
-  const [backups, setBackups] = useState<BackupEntryDTO[] | null>(null);
-  const [busy, setBusy] = useState(false);
+ *  restore from one (with confirm). Wired through the shared `useTournamentBackups`
+ *  hook — the single seam for backup actions — so a restore re-hydrates the live
+ *  tournament store (no stale data) exactly like the operator BackupPanel. */
+export function SyncBackupsTab() {
+  const { entries, loading, error, busyAction, createBackup, restoreBackup } = useTournamentBackups();
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
-  const [restoring, setRestoring] = useState(false);
-
-  const refresh = useCallback(() => {
-    apiClient
-      .listBackups(tid)
-      .then((r) => setBackups(r.backups))
-      .catch(() => setBackups([]));
-  }, [tid]);
-
-  useEffect(() => refresh(), [refresh]);
-
-  async function create() {
-    setBusy(true);
-    try {
-      await apiClient.createBackup(tid);
-      refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
+  const restoring = busyAction === restoreTarget;
 
   async function confirmRestore() {
     if (!restoreTarget) return;
-    setRestoring(true);
-    try {
-      await apiClient.restoreBackup(tid, restoreTarget);
-      setRestoreTarget(null);
-      refresh();
-    } finally {
-      setRestoring(false);
-    }
+    await restoreBackup(restoreTarget); // hook applies the restored state to the store + refreshes
+    setRestoreTarget(null);
   }
 
   return (
@@ -68,21 +44,30 @@ export function SyncBackupsTab({ tid }: { tid: string }) {
             current state with the snapshot.
           </p>
         </div>
-        <Button onClick={create} disabled={busy}>
-          {busy ? 'Creating…' : 'Create backup'}
+        <Button onClick={() => void createBackup()} disabled={busyAction === 'create'}>
+          {busyAction === 'create' ? 'Creating…' : 'Create backup'}
         </Button>
       </div>
 
-      {backups === null ? (
+      {error ? (
+        <div
+          role="alert"
+          className="rounded border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {loading && entries.length === 0 ? (
         <div className="p-3 text-sm text-muted-foreground">Loading…</div>
-      ) : backups.length === 0 ? (
+      ) : entries.length === 0 ? (
         <EmptyState
           title="No backups yet"
           body="Create a backup to snapshot this workspace's current state."
         />
       ) : (
         <ul className="divide-y divide-border rounded border border-border">
-          {backups.map((b) => (
+          {entries.map((b) => (
             <li
               key={b.filename}
               data-testid={`backup-${b.filename}`}
@@ -117,7 +102,7 @@ export function SyncBackupsTab({ tid }: { tid: string }) {
               <Button variant="ghost" onClick={() => setRestoreTarget(null)} disabled={restoring}>
                 Cancel
               </Button>
-              <Button onClick={confirmRestore} disabled={restoring}>
+              <Button onClick={() => void confirmRestore()} disabled={restoring}>
                 {restoring ? 'Restoring…' : 'Restore workspace'}
               </Button>
             </div>

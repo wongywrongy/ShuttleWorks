@@ -1,3 +1,13 @@
+/**
+ * Preset workspace templates for the `/new` route.
+ *
+ * Each Template carries a display title/blurb, a legacy `kind` (workspace
+ * classification sent to the backend), and an explicit `seed` (the `modules[]`
+ * array persisted on create). The `custom` template id is handled separately —
+ * see customModules.ts — and intentionally has no entry in TEMPLATES.
+ * MODULE_LABELS is re-exported here so UI consumers (TemplateCard,
+ * CustomModulesBuilder) share one label map without coupling to moduleModel.
+ */
 import type { WorkspaceModuleDTO } from '../../api/dto';
 
 export type TemplateId = 'meet-day' | 'bracket-tournament' | 'hybrid' | 'blank' | 'custom';
@@ -12,6 +22,10 @@ export interface Template {
   id: TemplateId;
   title: string;
   blurb: string;
+  /** Legacy workspace classification sent to the backend (`TournamentCreateDTO.kind`).
+   *  Still required: the backend selects the schema/table family (meet_* vs bracket_*)
+   *  from `kind`, independent of the module seed. Post-create routing is derived from
+   *  the RETURNED modules, not from `kind` — see workspaceCreateFlow.landingRoute. */
   kind: 'meet' | 'bracket';
   /** Explicit module seed persisted on create (sent as `modules[]`). The landing
    *  route is derived from the returned modules (see workspaceCreateFlow). */

@@ -98,17 +98,13 @@ export function WorkspaceRow({ tournament, selected, onSelect, onOpen, onSetting
   ];
 
   return (
+    // A plain clickable region for selecting the row (populates the inspector).
+    // Intentionally NOT a role=button/option: it embeds interactive children (the
+    // next-action button + overflow menu), which ARIA forbids inside a widget role.
+    // Those buttons are the keyboard-accessible actions; row selection is a
+    // mouse/pointer convenience whose result is also reachable via them.
     <div
-      role="button"
-      tabIndex={0}
-      aria-pressed={selected}
       onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
       className={[
         'flex cursor-pointer items-center gap-4 px-4 py-3 text-sm',
         selected ? 'bg-accent/5' : 'hover:bg-muted/40',

@@ -6,7 +6,6 @@ import { ModuleCatalogRow } from './ModuleCatalogRow';
  *  / has-data / coming_soon 409s surface as toasts — we never fake success. */
 export function ModulesSettingsTab({ tid }: { tid: string }) {
   const { modules, enable, disable } = useWorkspaceModules(tid);
-  const list = modules ?? [];
 
   return (
     <div className="max-w-2xl space-y-4 p-6">
@@ -22,14 +21,18 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
         </p>
       </div>
       <ul className="divide-y divide-border rounded border border-border">
-        {list.map((m) => (
-          <ModuleCatalogRow
-            key={m.id}
-            module={m}
-            onEnable={() => void enable(m.id)}
-            onDisable={() => void disable(m.id)}
-          />
-        ))}
+        {modules === null ? (
+          <li className="p-3 text-sm text-muted-foreground">Loading…</li>
+        ) : (
+          modules.map((m) => (
+            <ModuleCatalogRow
+              key={m.id}
+              module={m}
+              onEnable={() => void enable(m.id)}
+              onDisable={() => void disable(m.id)}
+            />
+          ))
+        )}
       </ul>
     </div>
   );

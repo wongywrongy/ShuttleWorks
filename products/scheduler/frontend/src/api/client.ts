@@ -430,23 +430,6 @@ class ApiClient {
     await this.client.delete(`/invites/${token}`);
   }
 
-  /** Lists the workspace's state backups (most recent first, per the backend). */
-  async listBackups(tid: string): Promise<BackupListDTO> {
-    const r = await this.client.get<BackupListDTO>(`/tournaments/${tid}/state/backups`);
-    return r.data;
-  }
-
-  /** Snapshots the workspace's current state into a new backup. */
-  async createBackup(tid: string): Promise<BackupCreatedDTO> {
-    const r = await this.client.post<BackupCreatedDTO>(`/tournaments/${tid}/state/backup`);
-    return r.data;
-  }
-
-  /** Restores the workspace's state from a named backup. */
-  async restoreBackup(tid: string, filename: string): Promise<void> {
-    await this.client.post(`/tournaments/${tid}/state/restore/${encodeURIComponent(filename)}`);
-  }
-
   // ---- Two-phase commit (proposal pipeline) ----------------------------
 
   /** Create a warm-restart proposal — same body as warm-restart, but

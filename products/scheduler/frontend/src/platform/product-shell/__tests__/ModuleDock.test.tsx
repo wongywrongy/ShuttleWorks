@@ -17,10 +17,12 @@ describe('ModuleDock', () => {
     expect(screen.getByTestId('module-display')).toHaveAttribute('aria-selected', 'false');
   });
 
-  it('marks the active module as current (running)', () => {
+  it('marks the active (running) module via aria-selected', () => {
     render(<ModuleDock modules={modules} active="meet" onSelect={() => {}} />);
-    expect(screen.getByTestId('module-meet')).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByTestId('module-display')).not.toHaveAttribute('aria-current');
+    // aria-selected is the correct ARIA state for an active tab (a redundant
+    // aria-current would double-announce); the pulsing dot conveys "running" visually.
+    expect(screen.getByTestId('module-meet')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('module-display')).toHaveAttribute('aria-selected', 'false');
   });
 
   it('shows a Manage affordance that calls onManage when provided', async () => {
