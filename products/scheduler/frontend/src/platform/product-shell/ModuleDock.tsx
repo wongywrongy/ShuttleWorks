@@ -1,7 +1,8 @@
-import { SquaresFour, SlidersHorizontal } from '@phosphor-icons/react';
+import { SlidersHorizontal } from '@phosphor-icons/react';
+import { IconShuttle, IconBracket, IconCourt } from '@scheduler/design-system';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { isModuleEnterable } from '../domain/moduleModel';
-import type { ModuleId, ModuleStatus, WorkspaceModule } from './types';
+import type { ModuleId, WorkspaceModule } from './types';
 
 interface ModuleDockProps {
   modules: WorkspaceModule[];
@@ -13,38 +14,32 @@ interface ModuleDockProps {
   onManage?: () => void;
 }
 
-/** Per-module status dot: filled accent = enabled, accent ring = available,
- *  muted fill = disabled. Communicates installed capability at a glance
- *  (vs. a plain tab strip). */
-function statusDotClass(status: ModuleStatus): string {
-  switch (status) {
-    case 'enabled':
-      return 'bg-accent';
-    case 'available':
-      return 'border border-accent';
-    case 'disabled':
-      return 'bg-muted-foreground/50';
-    default:
-      return 'border border-muted-foreground/40'; // defensive fallback — 'coming-soon' is never emitted
-  }
-}
+/** Each module carries its own domain glyph (brand personality, per the
+ *  design-system icon set) instead of a generic dot. Identity comes from the
+ *  glyph; status comes from the button's color state (active = accent pill,
+ *  available = dimmed, disabled = faint + Enable affordance). */
+const MODULE_GLYPH: Record<ModuleId, typeof IconShuttle> = {
+  meet: IconShuttle,
+  bracket: IconBracket,
+  display: IconCourt,
+};
 
-/** The Module Dock — the workspace's module launcher. A leading glyph frames the
- *  region; each module reflects its real status (status dot + label):
- *  `enabled`/`available` enter on click; `disabled` shows an Enable affordance
- *  (`onEnable`). A trailing Manage affordance (`onManage`) opens the module
- *  catalog. The active module reads as the running module (aria-selected + a
- *  pulsing dot), not a selected tab. */
+/** The Module Dock — the workspace's module launcher. Each module reflects its
+ *  real status via its color state (domain glyph + label): `enabled`/`available`
+ *  enter on click; `disabled` shows an Enable affordance (`onEnable`). A trailing
+ *  Manage affordance (`onManage`) opens the module catalog. The active module
+ *  reads as the running module (aria-selected + a pulsing glyph), not a selected
+ *  tab. */
 export function ModuleDock({ modules, active, onSelect, onEnable, onManage }: ModuleDockProps) {
   return (
     <div className="flex items-center gap-1">
-      <SquaresFour aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground/60" />
       <div role="tablist" aria-label="Modules" className="flex items-center gap-0.5">
         {modules.map((m) => {
         const isActive = m.id === active;
         const enterable = isModuleEnterable(m.status);
         const canEnable = m.status === 'disabled' && !!onEnable;
         const interactive = enterable || canEnable;
+        const Glyph = MODULE_GLYPH[m.id];
         return (
           <button
             key={m.id}
@@ -72,15 +67,17 @@ export function ModuleDock({ modules, active, onSelect, onEnable, onManage }: Mo
                   ? 'italic text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                   : isActive
                     ? 'bg-accent/10 font-semibold text-accent ring-1 ring-inset ring-accent/25'
-                    : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                    : m.status === 'available'
+                      ? 'text-muted-foreground/80 hover:bg-muted/40 hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
             ].join(' ')}
           >
-            <span
+            <Glyph
               aria-hidden
               className={[
-                'h-1.5 w-1.5 shrink-0 rounded-full',
-                statusDotClass(m.status),
+                'h-3.5 w-3.5 shrink-0',
                 isActive && m.status === 'enabled' ? 'animate-pulse' : '',
+                m.status === 'available' ? 'opacity-70' : '',
               ].join(' ')}
             />
             <span>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@scheduler/design-system';
+import { Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import type { TournamentStatus, TournamentSummaryDTO } from '../../api/dto';
 
@@ -47,9 +48,7 @@ export function GeneralSettingsTab({
   return (
     <div className="max-w-xl space-y-4 p-6">
       <div>
-        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          GENERAL
-        </div>
+        <Eyebrow framed>GENERAL</Eyebrow>
         <h2 className="mt-1 text-base font-semibold text-foreground">Workspace details</h2>
       </div>
       <label className="block">

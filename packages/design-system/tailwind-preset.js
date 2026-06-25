@@ -156,22 +156,20 @@ module.exports = {
         cell: 'var(--density-cell-py) var(--density-cell-px)',
       },
 
-      // -------- Radii (BRAND.md §3 — 90° default) --------
+      // -------- Radii (dialed back — gently rounded surfaces) --------
       borderRadius: {
         none: '0',
-        DEFAULT: 'var(--radius)',         // 0
-        sm: 'var(--radius-sm)',           // 2px — interactive controls only
-        md: 'var(--radius-md)',           // 0
-        lg: 'var(--radius-lg)',           // 0
+        DEFAULT: 'var(--radius)',         // 6px
+        sm: 'var(--radius-sm)',           // 4px — interactive controls
+        md: 'var(--radius-md)',           // 8px — cards / grouped surfaces
+        lg: 'var(--radius-lg)',           // 12px — modals / prominent surfaces
         // Full removed (was rounded-full) — replace with rounded-none in code
       },
 
-      // -------- Shadows (BRAND.md §6 — hard-offset only, no Gaussian) ----
-      // Tailwind's stock `shadow-lg`/`shadow-xl` are Gaussian drop shadows
-      // (`0 10px 15px -3px rgba(0,0,0,0.1)` etc.) which clash with the
-      // brutalist chrome. Override the elevation utilities so they all
-      // resolve to the brand hard-offset shadow (light mode only; dark
-      // mode drops to bare substrate per --shadow-hard's dark override).
+      // -------- Shadows (soft elevation; hard offset is opt-in) ----------
+      // sm/md/lg resolve to subtle Gaussian elevation (--shadow-sm/md/lg);
+      // dark mode drops them to none (substrate contrast carries depth).
+      // DEFAULT/xl/2xl keep the opt-in hard offset for callers that want it.
       boxShadow: {
         none: 'none',
         sm:   'var(--shadow-sm)',

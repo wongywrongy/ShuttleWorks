@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Modal } from '@scheduler/design-system';
-import { EmptyState } from '../../components/control-plane';
+import { EmptyState, Eyebrow } from '../../components/control-plane';
 import { useTournamentBackups } from '../../hooks/useTournamentBackups';
 
 /** Human-readable file size: B / KB / MB. */
@@ -35,9 +35,7 @@ export function SyncBackupsTab() {
     <div className="max-w-2xl space-y-4 p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            SYNC &amp; BACKUPS
-          </div>
+          <Eyebrow framed>SYNC &amp; BACKUPS</Eyebrow>
           <h2 className="mt-1 text-base font-semibold text-foreground">Backups</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             A backup is a full snapshot of this workspace. Restoring replaces the

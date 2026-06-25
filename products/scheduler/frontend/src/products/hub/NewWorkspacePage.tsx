@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
+import { Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import { TEMPLATES, type TemplateId } from './newWorkspaceTemplates';
 import { landingRoute } from './workspaceCreateFlow';
@@ -77,9 +78,7 @@ export function NewWorkspacePage() {
 
       <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
         <div className="space-y-1">
-          <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            CONTROL PLANE
-          </div>
+          <Eyebrow framed>CONTROL PLANE</Eyebrow>
           <h1 className="text-2xl font-semibold">New workspace</h1>
           <p className="text-sm text-muted-foreground">
             Choose a system — or build a custom one. Modules can be turned on now or
@@ -97,9 +96,7 @@ export function NewWorkspacePage() {
         )}
 
         <section className="space-y-3">
-          <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            SYSTEM
-          </div>
+          <Eyebrow framed>SYSTEM</Eyebrow>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {TEMPLATES.map((t) => (
               <TemplateCard
@@ -133,9 +130,7 @@ export function NewWorkspacePage() {
         </section>
 
         <section className="space-y-2">
-          <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            DETAILS (OPTIONAL)
-          </div>
+          <Eyebrow framed>DETAILS (OPTIONAL)</Eyebrow>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="text-xs text-muted-foreground">Name</span>

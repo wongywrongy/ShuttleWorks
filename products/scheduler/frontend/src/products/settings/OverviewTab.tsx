@@ -1,5 +1,5 @@
 import type { TournamentSummaryDTO } from '../../api/dto';
-import { SectionCard, HealthDot } from '../../components/control-plane';
+import { SectionCard, HealthDot, Eyebrow } from '../../components/control-plane';
 import {
   workspaceHealth,
   readinessOf,
@@ -31,9 +31,7 @@ export function OverviewTab({ summary }: { summary: TournamentSummaryDTO | null 
   return (
     <div data-testid="overview-tab" className="max-w-2xl">
       <div className="border-b border-border p-6">
-        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          OVERVIEW
-        </div>
+        <Eyebrow framed>OVERVIEW</Eyebrow>
         <h2 className="mt-1 truncate text-base font-semibold text-foreground">
           {summary.name || 'Untitled'}
         </h2>

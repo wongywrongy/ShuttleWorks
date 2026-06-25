@@ -21,7 +21,7 @@ import {
   setupLabel,
 } from './hubSignals';
 import { nextActionFor } from './nextAction';
-import { HealthDot, SectionCard } from '../../components/control-plane';
+import { HealthDot, SectionCard, Eyebrow } from '../../components/control-plane';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
@@ -69,9 +69,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSettings, onShare }: 
   return (
     <aside className="hidden w-80 shrink-0 flex-col overflow-y-auto border-l border-border bg-card/40 lg:flex">
       <div className="border-b border-border p-4">
-        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          WORKSPACE
-        </div>
+        <Eyebrow framed>WORKSPACE</Eyebrow>
         <h2 className="mt-1 truncate text-base font-semibold text-foreground">
           {tournament.name || 'Untitled'}
         </h2>

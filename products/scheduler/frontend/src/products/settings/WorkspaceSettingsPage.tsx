@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
+import { Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { SETTINGS_TABS, type SettingsTabId } from './settingsTabs';
@@ -66,8 +67,8 @@ export function WorkspaceSettingsPage() {
 
       <div className="flex min-h-0 flex-1">
         <nav className="w-56 shrink-0 space-y-0.5 border-r border-border p-3">
-          <div className="px-2 pb-2 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            {summary?.name || 'Workspace'} · Settings
+          <div className="px-2 pb-2">
+            <Eyebrow>{summary?.name || 'Workspace'} · Settings</Eyebrow>
           </div>
           {SETTINGS_TABS.map((t) => (
             <button

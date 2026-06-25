@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
+import { Eyebrow } from './Eyebrow';
 
-/** A control-plane KPI tile: a small-caps tracking label over a large tabular
+/** A control-plane KPI tile: a mono overline label over a large tabular
  *  value. Used in the Hub summary band. `accent` tints the value in the theme
  *  accent (for an alarming count, e.g. items needing attention). */
 export function MetricStat({
@@ -16,9 +17,7 @@ export function MetricStat({
 }) {
   return (
     <div data-testid={testId} className="flex flex-col gap-0.5">
-      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-        {label}
-      </span>
+      <Eyebrow>{label}</Eyebrow>
       <span className={`text-xl font-semibold tabular-nums ${accent ? 'text-accent' : 'text-foreground'}`}>
         {value}
       </span>

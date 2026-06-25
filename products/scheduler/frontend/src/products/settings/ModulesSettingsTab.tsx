@@ -1,4 +1,5 @@
 import { useWorkspaceModules } from '../../platform/domain/useWorkspaceModules';
+import { Eyebrow } from '../../components/control-plane';
 import { ModuleCatalogRow } from './ModuleCatalogRow';
 
 /** The module catalog: each module's capability, status, dependency, and the
@@ -10,9 +11,7 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
   return (
     <div className="max-w-2xl space-y-4 p-6">
       <div>
-        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          MODULES
-        </div>
+        <Eyebrow framed>MODULES</Eyebrow>
         <h2 className="mt-1 text-base font-semibold text-foreground">Module catalog</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Each module is a product system inside this workspace. Display needs an

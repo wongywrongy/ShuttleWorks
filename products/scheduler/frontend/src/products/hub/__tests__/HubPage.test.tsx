@@ -122,7 +122,7 @@ describe('HubPage module-aware control plane', () => {
     fireEvent.click(screen.getByText('Meet A'));
     // Inspector shows the MODULES heading + an Open workspace action. (The selected
     // row also renders an "Open workspace" button now, so expect both.)
-    expect(screen.getByText('MODULES')).toBeInTheDocument();
+    expect(screen.getByText('[ MODULES ]')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Open workspace' }).length).toBeGreaterThan(0);
   });
 

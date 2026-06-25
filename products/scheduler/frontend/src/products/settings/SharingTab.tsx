@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@scheduler/design-system';
-import { SectionCard } from '../../components/control-plane';
+import { SectionCard, Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import type { InviteRole, InviteSummaryDTO } from '../../api/dto';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
@@ -96,9 +96,7 @@ export function SharingTab({ tid }: { tid: string }) {
   return (
     <div className="max-w-2xl p-6">
       <div className="pb-4">
-        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          SHARING
-        </div>
+        <Eyebrow framed>SHARING</Eyebrow>
         <h2 className="mt-1 text-base font-semibold text-foreground">Links &amp; access</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           The public display link is view-only; collaborator invites let people sign in

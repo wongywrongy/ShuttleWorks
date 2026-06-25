@@ -14,7 +14,7 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { Button, Modal } from '@scheduler/design-system';
-import { EmptyState, Skeleton } from '../../components/control-plane';
+import { EmptyState, Skeleton, Eyebrow } from '../../components/control-plane';
 import {
   modulesForWorkspace,
   modulesFromDto,
@@ -213,9 +213,9 @@ export function HubPage() {
         <Modal onClose={closeDeleteDialog} titleId="delete-tournament-heading">
           <div className="p-6">
             <div className="mb-4 space-y-0.5">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-destructive">
+              <Eyebrow framed tone="destructive">
                 DELETE {deleteTarget.kind === 'bracket' ? 'TOURNAMENT' : 'MEET'}
-              </span>
+              </Eyebrow>
               <h2
                 id="delete-tournament-heading"
                 className="text-base font-semibold text-foreground"

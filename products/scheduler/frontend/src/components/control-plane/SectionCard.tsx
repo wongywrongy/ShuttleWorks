@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
+import { Eyebrow } from './Eyebrow';
 
-/** A hairline-bordered section with a small-caps `eyebrow` heading and an
+/** A hairline-bordered section with a mono `[ EYEBROW ]` heading and an
  *  optional `right` slot (e.g. a health badge or a "N enabled · M available"
  *  count). Used to group inspector / settings sections. */
 export function SectionCard({
@@ -17,9 +18,7 @@ export function SectionCard({
   return (
     <section data-testid={testId} className="border-b border-border p-4">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {eyebrow}
-        </span>
+        <Eyebrow framed>{eyebrow}</Eyebrow>
         {right}
       </div>
       {children}
