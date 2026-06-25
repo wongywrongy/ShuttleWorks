@@ -83,7 +83,13 @@ export function AppShell() {
   const modules = realModules ?? modulesForWorkspace(activeTournamentKind);
   // Meet-only polling runs when the Meet module is enabled (data exists), not
   // by kind — so a hybrid keeps polling and a bracket-only workspace doesn't.
-  const meetEnabled = modules.some((m) => m.id === 'meet' && m.status === 'enabled');
+  // Gate on the REAL catalog, never the kind-derived fallback: on the
+  // kind-agnostic Overview `kind` is briefly null and the fallback would
+  // default to meet-enabled, firing stray meet polls on a bracket-only
+  // workspace. Until the real modules load, meet polling stays off.
+  const meetEnabled = (realModules ?? []).some(
+    (m) => m.id === 'meet' && m.status === 'enabled',
+  );
   // Whether to render the module outlet or the unavailable panel.
   const pane = resolveActivePane(activeModule, modules);
 
