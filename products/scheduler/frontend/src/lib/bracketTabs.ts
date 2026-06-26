@@ -13,6 +13,7 @@ export const BRACKET_TAB_IDS = [
   'bracket-setup',
   'bracket-roster',
   'bracket-events',
+  'bracket-draws',
   'bracket-draw',
   'bracket-matches',
   'bracket-schedule',
@@ -27,6 +28,7 @@ export const BRACKET_TABS: { id: BracketTabId; label: string }[] = [
   { id: 'bracket-setup', label: 'Setup' },
   { id: 'bracket-roster', label: 'Roster' },
   { id: 'bracket-events', label: 'Events' },
+  { id: 'bracket-draws', label: 'Draws' },
   { id: 'bracket-draw', label: 'Draw' },
   { id: 'bracket-matches', label: 'Matches' },
   { id: 'bracket-schedule', label: 'Schedule' },
@@ -89,6 +91,7 @@ export type BracketView =
   | 'setup'
   | 'roster'
   | 'events'
+  | 'draws'
   | 'draw'
   | 'matches'
   | 'schedule'

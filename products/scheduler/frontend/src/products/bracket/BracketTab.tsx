@@ -14,7 +14,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Sliders, Database, Share as ShareIcon, ListChecks } from '@phosphor-icons/react';
+import { Sliders, ListChecks } from '@phosphor-icons/react';
 
 import { BracketApiProvider } from '../../api/bracketClient';
 
@@ -27,12 +27,11 @@ import { type SettingsSectionDef } from '../../platform/settings/SettingsShell';
 import { Seg } from '../../platform/settings/SettingsControls';
 import { ActionsBar } from '../../components/control-plane';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
-import { ShareSettings } from '../../platform/settings/ShareSettings';
 import { BracketTournamentSection } from './BracketTournamentSection';
 import { BracketStructureSection } from './BracketStructureSection';
-import { BracketDataSection } from './BracketDataSection';
 import { BracketRosterTab } from './BracketRosterTab';
 import { EventsTab } from './EventsTab';
+import { BracketDrawsTab } from './BracketDrawsTab';
 import { BracketMatchesTab } from './BracketMatchesTab';
 import { BracketViewHeader } from './BracketViewHeader';
 import { DrawView } from './DrawView';
@@ -161,18 +160,9 @@ function BracketTabBody() {
         icon: ListChecks,
         render: () => <BracketStructureSection />,
       },
-      {
-        id: 'data',
-        label: 'Tournament data',
-        icon: Database,
-        render: () => <BracketDataSection />,
-      },
-      {
-        id: 'share',
-        label: 'Share',
-        icon: ShareIcon,
-        render: () => <ShareSettings />,
-      },
+      // Tournament data + Share were removed from the bracket Configuration
+      // switcher — they live in workspace settings (Sync and backups /
+      // Sharing) now, the same as Meet.
     ],
     [],
   );
@@ -263,6 +253,7 @@ function BracketTabBody() {
         )}
         {view === 'roster' && <BracketRosterTab />}
         {view === 'events' && <EventsTab />}
+        {view === 'draws' && <BracketDrawsTab />}
         {view === 'matches' && data && <BracketMatchesTab data={data} />}
         {view === 'draw' && data && (
           <div className="p-4">

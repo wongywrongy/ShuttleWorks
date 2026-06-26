@@ -27,6 +27,7 @@ export type AppTab =
   | 'bracket-setup'
   | 'bracket-roster'
   | 'bracket-events'
+  | 'bracket-draws'
   | 'bracket-draw'
   | 'bracket-matches'
   | 'bracket-schedule'

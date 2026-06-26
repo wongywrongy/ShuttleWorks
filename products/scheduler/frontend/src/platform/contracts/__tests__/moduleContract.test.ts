@@ -129,13 +129,13 @@ describe('moduleContract — ownedSegments match buildWorkspaceNav', () => {
   }
 
   it('does not claim AppTab segments that are not nav destinations', () => {
-    // bracket-roster / bracket-events exist in AppTab but are not nav items
-    // today — no descriptor may claim them.
+    // bracket-events / bracket-draw exist in AppTab but are internal surfaces
+    // (reached from Draws, not the sidebar) — no descriptor may claim them.
     const claimed = new Set<AppTab>(
       moduleContracts.flatMap((c) => [...c.ownedSegments]),
     );
-    expect(claimed.has('bracket-roster')).toBe(false);
     expect(claimed.has('bracket-events')).toBe(false);
+    expect(claimed.has('bracket-draw')).toBe(false);
   });
 });
 

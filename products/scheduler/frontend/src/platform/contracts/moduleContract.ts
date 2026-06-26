@@ -175,7 +175,7 @@ export const meetContract: ModuleContract = {
 export const bracketContract: ModuleContract = {
   id: 'bracket',
   enableable: true,
-  ownedSegments: ['bracket-draw', 'bracket-matches', 'bracket-setup'],
+  ownedSegments: ['bracket-roster', 'bracket-draws', 'bracket-matches', 'bracket-setup'],
   ownedEndpoints: [
     apiClient.getBracket,
     apiClient.createBracket,

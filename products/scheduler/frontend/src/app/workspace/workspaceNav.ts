@@ -89,7 +89,8 @@ export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): Workspa
       label: 'Bracket',
       role: 'engine',
       items: [
-        { segment: 'bracket-draw', label: 'Draw' },
+        { segment: 'bracket-roster', label: 'Roster' },
+        { segment: 'bracket-draws', label: 'Draws' },
         { segment: 'bracket-matches', label: 'Matches' },
         { segment: 'bracket-setup', label: 'Configuration' },
       ],
