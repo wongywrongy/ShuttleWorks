@@ -13,14 +13,14 @@
  * URL is the shared source of truth.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Warning } from '@phosphor-icons/react';
+import { CaretRight, Check, Warning } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { usePlayerMap } from '../../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../../hooks/useSearchParamState';
 import { useDisruptions } from './useDisruptions';
-import { EVENT_LABEL, isDoublesRank } from '../roster/positionGrid/helpers';
+import { EVENT_LABEL, EVENT_ORDER, isDoublesRank } from '../roster/positionGrid/helpers';
 import { maxSeverity, type MatchIssue } from './validateMatch';
 
 function eventTintForPrefix(rank: string | null | undefined): string {
@@ -117,6 +117,17 @@ export function MatchesSpreadsheet({
   const config = useTournamentStore((s) => s.config);
   const disruptions = useDisruptions();
 
+  // Per-event collapse state. Keyed by event prefix (MS, WS, …) or the
+  // '—' sentinel for the unassigned group; default all-expanded.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   // Configured event ranks — derived from `config.rankCounts`. These
   // populate the per-row event select. Plain derivation (no useMemo)
   // so React Compiler can auto-memoize the whole component; a manual
@@ -146,25 +157,99 @@ export function MatchesSpreadsheet({
     );
   }
 
+  // Group the filtered matches by event prefix so each discipline gets
+  // its own collapsible section. Section order follows EVENT_ORDER; any
+  // match with no/unknown rank collects into a trailing "Unassigned"
+  // group keyed by the '—' sentinel.
+  const groupsByPrefix = new Map<string, MatchDTO[]>();
+  for (const m of filteredMatches) {
+    const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
+    const key = prefix || '—';
+    if (!groupsByPrefix.has(key)) groupsByPrefix.set(key, []);
+    groupsByPrefix.get(key)!.push(m);
+  }
+  const orderedKeys = [
+    ...EVENT_ORDER.filter((p) => groupsByPrefix.has(p)),
+    ...[...groupsByPrefix.keys()].filter(
+      (k) => !(EVENT_ORDER as readonly string[]).includes(k),
+    ),
+  ];
+
   return (
     <>
       <ColumnHeaderRow />
-      {filteredMatches.map((m) => (
-        <MatchRow
-          key={m.id}
-          match={m}
-          index={matches.indexOf(m)}
-          players={players}
-          groups={groups}
-          configuredRanks={configuredRanks}
-          issues={disruptions.byMatch.get(m.id) ?? EMPTY_ISSUES}
-          autoFocus={m.id === pendingFocusId}
-          onFocusConsumed={onFocusConsumed}
-          onUpdate={updateMatch}
-          onDelete={deleteMatch}
-        />
-      ))}
+      {orderedKeys.map((key) => {
+        const rows = groupsByPrefix.get(key)!;
+        const isCollapsed = collapsed.has(key);
+        const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
+        return (
+          <div key={key}>
+            <GroupHeader
+              label={label}
+              count={rows.length}
+              collapsed={isCollapsed}
+              onToggle={() => toggleGroup(key)}
+            />
+            {!isCollapsed
+              ? rows.map((m) => (
+                  <MatchRow
+                    key={m.id}
+                    match={m}
+                    index={matches.indexOf(m)}
+                    players={players}
+                    groups={groups}
+                    configuredRanks={configuredRanks}
+                    issues={disruptions.byMatch.get(m.id) ?? EMPTY_ISSUES}
+                    autoFocus={m.id === pendingFocusId}
+                    onFocusConsumed={onFocusConsumed}
+                    onUpdate={updateMatch}
+                    onDelete={deleteMatch}
+                  />
+                ))
+              : null}
+          </div>
+        );
+      })}
     </>
+  );
+}
+
+/* =========================================================================
+ * GroupHeader — collapsible per-event section header. Caret + event
+ * label + match count, hairline-separated like the rows it groups.
+ * ========================================================================= */
+function GroupHeader({
+  label,
+  count,
+  collapsed,
+  onToggle,
+}: {
+  label: string;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      data-testid={`match-group-${label}`}
+      className="flex w-full items-center gap-2 border-b border-border bg-muted/30 px-5 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/50"
+    >
+      <CaretRight
+        aria-hidden
+        weight="bold"
+        className={[
+          'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-fast ease-brand',
+          collapsed ? '' : 'rotate-90',
+        ].join(' ')}
+      />
+      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-foreground">
+        {label}
+      </span>
+      <span className="text-2xs tabular-nums text-muted-foreground">{count}</span>
+    </button>
   );
 }
 

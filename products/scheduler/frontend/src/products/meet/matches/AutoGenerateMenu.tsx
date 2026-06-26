@@ -1,16 +1,20 @@
 /**
- * Inline auto match generator — single-row treatment.
+ * Auto-generate affordance for the Matches actions bar.
  *
- * Renders as one full-bleed row: info copy left, Generate button right,
- * `border-b` only — no card, no radius, no background. The destructive
- * (replace existing) flow still pre-confirms before destroying state.
+ * A compact secondary button that opens a popover with the build-from-
+ * roster summary, the incomplete-doubles caveat, and the generate /
+ * replace-existing flow. This replaces the old full-bleed banner strip
+ * that lived in the content area — the actions bar now owns it, since
+ * generating matches acts on the whole page.
  *
- * Incomplete-doubles warning, when non-empty, surfaces as a second
- * full-bleed warning row below the gen row (same hairline treatment).
+ * The generation logic (feasible-pairing preview, replace confirm,
+ * incomplete-doubles detection) is unchanged from the prior panel.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
+import { Sparkle } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { INTERACTIVE_BASE } from '../../../lib/utils';
 import type { MatchDTO } from '../../../api/dto';
 
 function expandRanks(counts: Record<string, number> | undefined): string[] {
@@ -26,12 +30,16 @@ function isDoublesRank(rank: string): boolean {
   return prefix.endsWith('D');
 }
 
-export function AutoGeneratePanel() {
+export function AutoGenerateMenu() {
   const config = useTournamentStore((s) => s.config);
   const players = useTournamentStore((s) => s.players);
   const groups = useTournamentStore((s) => s.groups);
   const importMatches = useTournamentStore((s) => s.importMatches);
   const matches = useTournamentStore((s) => s.matches);
+
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
 
   const ranks = useMemo(() => expandRanks(config?.rankCounts), [config?.rankCounts]);
 
@@ -77,7 +85,28 @@ export function AutoGeneratePanel() {
     return out;
   }, [ranks, groups, players]);
 
-  const [confirm, setConfirm] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const click = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setConfirm(false);
+      }
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        setConfirm(false);
+      }
+    };
+    document.addEventListener('mousedown', click);
+    document.addEventListener('keydown', key);
+    return () => {
+      document.removeEventListener('mousedown', click);
+      document.removeEventListener('keydown', key);
+    };
+  }, [open]);
+
   const hasExisting = matches.length > 0;
   const canGenerate = preview.length > 0;
 
@@ -88,6 +117,7 @@ export function AutoGeneratePanel() {
     }
     importMatches(preview);
     setConfirm(false);
+    setOpen(false);
   };
 
   const buttonLabel = !canGenerate
@@ -108,7 +138,7 @@ export function AutoGeneratePanel() {
 
   const infoLine = !canGenerate
     ? ranks.length === 0
-      ? 'No event ranks configured — set them in the Setup tab.'
+      ? 'No event ranks configured — set them in Configuration.'
       : groups.length < 2
         ? 'Need at least 2 schools to generate matches.'
         : 'No feasible pairings with the current roster.'
@@ -117,44 +147,59 @@ export function AutoGeneratePanel() {
       }.`;
 
   return (
-    <>
-      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-2.5">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        data-testid="auto-generate-toggle"
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
+      >
+        <Sparkle aria-hidden="true" className="h-3.5 w-3.5" />
+        Auto-generate
+      </button>
+      {open ? (
+        <div
+          role="dialog"
+          aria-label="Auto-generate matches"
+          className="motion-enter absolute right-0 top-full z-overlay mt-1 w-72 rounded-sm border border-border bg-popover p-3 text-popover-foreground shadow-lg"
+        >
+          <div className="mb-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Auto-generate
-          </span>
-          <span className="truncate text-xs text-muted-foreground">{infoLine}</span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {confirm ? (
+          </div>
+          <p className="text-xs text-muted-foreground">{infoLine}</p>
+          {incompletePairs.length > 0 ? (
+            <p className="mt-2 border-l-2 border-status-warning/50 bg-status-warning/5 px-2 py-1 text-xs text-status-warning">
+              <span className="font-medium">Skipping incomplete doubles:</span>{' '}
+              {incompletePairs.join(', ')} — assign both partners in Roster.
+            </p>
+          ) : null}
+          <div className="mt-3 flex items-center justify-end gap-2">
+            {confirm ? (
+              <button
+                type="button"
+                onClick={() => setConfirm(false)}
+                className="text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+              >
+                Cancel
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={() => setConfirm(false)}
-              className="text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+              onClick={generate}
+              disabled={!canGenerate}
+              data-testid="auto-generate-matches"
+              className={[
+                'rounded-sm border px-3 py-1 text-xs font-medium transition-colors duration-fast ease-brand disabled:opacity-50',
+                buttonClass,
+              ].join(' ')}
             >
-              Cancel
+              {buttonLabel}
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={generate}
-            disabled={!canGenerate}
-            data-testid="auto-generate-matches"
-            className={[
-              'rounded-sm border px-3 py-1 text-xs font-medium transition-colors duration-fast ease-brand disabled:opacity-50',
-              buttonClass,
-            ].join(' ')}
-          >
-            {buttonLabel}
-          </button>
-        </div>
-      </div>
-      {incompletePairs.length > 0 ? (
-        <div className="border-b border-border bg-status-warning/5 px-5 py-1.5 text-xs text-status-warning">
-          <span className="font-medium">Skipping incomplete doubles:</span>{' '}
-          {incompletePairs.join(', ')} — assign both partners in the Roster tab.
+          </div>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

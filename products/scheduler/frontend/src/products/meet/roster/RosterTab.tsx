@@ -43,6 +43,7 @@ import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
 import { PlayerDetailPanel } from './PlayerDetailPanel';
 import { InlineSearch } from '../../../components/InlineSearch';
+import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 
 export function RosterTab() {
@@ -178,7 +179,6 @@ export function RosterTab() {
   };
 
   // Derived data.
-  const activeSchool = groups.find((g) => g.id === activeSchoolId) ?? null;
   const schoolPlayers = useMemo(
     () =>
       players
@@ -207,15 +207,6 @@ export function RosterTab() {
     setSelectedPlayerId((curr) => (curr === playerId ? null : playerId));
   };
 
-  // Position-grid header derived counts.
-  const rankCounts = config?.rankCounts;
-  const eventCount = rankCounts
-    ? Object.values(rankCounts).filter((n) => (n ?? 0) > 0).length
-    : 0;
-  const positionCount = rankCounts
-    ? Object.values(rankCounts).reduce((sum, n) => sum + (n ?? 0), 0)
-    : 0;
-
   const canExport = groups.length > 0 && players.length > 0;
 
   return (
@@ -226,20 +217,17 @@ export function RosterTab() {
       onDragCancel={onDragCancel}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
-      <div className="flex h-full min-h-0 overflow-hidden">
-        {/* ───── LEFT PANEL ─────────────────────────────────────────── */}
-        <aside
-          data-testid="roster-left-panel"
-          className="flex w-[260px] shrink-0 flex-col overflow-hidden border-r border-border bg-card"
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        {/* ───── ACTIONS BAR — page-level controls ───────────────────── */}
+        <MeetActionsBar
+          title="Roster"
+          status={
+            <span className="text-sm font-semibold text-foreground tabular-nums">
+              {players.length} player{players.length === 1 ? '' : 's'}
+            </span>
+          }
         >
-          <SchoolsSection
-            groups={groups}
-            counts={schoolCounts}
-            activeSchoolId={activeSchoolId}
-            onSelect={setActiveSchoolId}
-            onAddSchool={(name) => addGroup({ id: uuid(), name })}
-          />
-          <BulkImportSection
+          <BulkImportMenu
             schoolId={activeSchoolId}
             onImport={(names) => {
               if (!activeSchoolId) return;
@@ -254,71 +242,89 @@ export function RosterTab() {
               }
             }}
           />
-          {schoolPlayers.length > 0 && (
-            <div className="border-b border-border/60 px-3 py-2">
-              <InlineSearch
-                query={query}
-                onQueryChange={setQuery}
-                placeholder={`Filter ${schoolPlayers.length} player${schoolPlayers.length === 1 ? '' : 's'}…`}
-              />
-            </div>
-          )}
-          <PlayerListSection
-            players={filteredPlayers}
-            schoolId={activeSchoolId}
-            selectedPlayerId={selectedPlayerId}
-            onTogglePlayer={togglePlayer}
-            onDeletePlayer={deletePlayer}
-            emptyAllMessage={schoolPlayers.length === 0 ? 'No players yet.' : null}
-            query={query}
-          />
-        </aside>
-
-        {/* ───── CENTER PANEL — position grid ───────────────────────── */}
-        <main
-          data-testid="roster-right-panel"
-          className="flex min-w-0 flex-1 flex-col overflow-hidden"
-        >
-          <PositionGridHeader
-            schoolName={activeSchool?.name ?? '—'}
-            eventCount={eventCount}
-            positionCount={positionCount}
-            canExport={canExport}
-            onExport={() => exportRosterXlsx(players, groups, config)}
-          />
-          <div className="min-h-0 flex-1 overflow-auto">
-            {activeSchoolId ? (
-              <PositionGrid
-                schoolId={activeSchoolId}
-                highlightedPlayerId={selectedPlayerId}
-                onSelectPlayer={(id) => setSelectedPlayerId(id)}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Add a school in the left panel to start rostering.
-              </div>
-            )}
-          </div>
-        </main>
-
-        {/* ───── RIGHT PANEL — player detail ────────────────────────── */}
-        {/* Mounted only while a player is selected. It claims a fixed
-            width and the grid's min-w-0 lets it reflow narrower — the
-            detail shares horizontal space rather than pushing the grid
-            down (no wasted lower half). */}
-        {selectedPlayer ? (
-          <aside
-            data-testid="roster-detail-pane"
-            className="flex w-[320px] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+          <button
+            type="button"
+            onClick={() => exportRosterXlsx(players, groups, config)}
+            disabled={!canExport}
+            data-testid="export-roster"
+            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
           >
-            <PlayerDetailPanel
-              player={selectedPlayer}
-              visible
-              onDismiss={() => setSelectedPlayerId(null)}
-              groups={groups}
-            />
-          </aside>
-        ) : null}
+            <Download aria-hidden="true" className="h-3.5 w-3.5" />
+            Export XLSX
+          </button>
+          <AddSchoolMenu onAddSchool={(name) => addGroup({ id: uuid(), name })} />
+        </MeetActionsBar>
+
+        {/* ───── CONTENT — school tabs above the three-pane body ─────── */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <SchoolTabs
+            groups={groups}
+            counts={schoolCounts}
+            activeSchoolId={activeSchoolId}
+            onSelect={setActiveSchoolId}
+          />
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            {/* LEFT — filter + player list */}
+            <aside
+              data-testid="roster-left-panel"
+              className="flex w-[260px] shrink-0 flex-col overflow-hidden border-r border-border bg-card"
+            >
+              {schoolPlayers.length > 0 && (
+                <div className="border-b border-border/60 px-3 py-2">
+                  <InlineSearch
+                    query={query}
+                    onQueryChange={setQuery}
+                    placeholder={`Filter ${schoolPlayers.length} player${schoolPlayers.length === 1 ? '' : 's'}…`}
+                  />
+                </div>
+              )}
+              <PlayerListSection
+                players={filteredPlayers}
+                schoolId={activeSchoolId}
+                selectedPlayerId={selectedPlayerId}
+                onTogglePlayer={togglePlayer}
+                onDeletePlayer={deletePlayer}
+                emptyAllMessage={schoolPlayers.length === 0 ? 'No players yet.' : null}
+                query={query}
+              />
+            </aside>
+
+            {/* CENTER — position grid (scrolls) */}
+            <main
+              data-testid="roster-right-panel"
+              className="flex min-w-0 flex-1 flex-col overflow-hidden"
+            >
+              <div className="min-h-0 flex-1 overflow-auto">
+                {activeSchoolId ? (
+                  <PositionGrid
+                    schoolId={activeSchoolId}
+                    highlightedPlayerId={selectedPlayerId}
+                    onSelectPlayer={(id) => setSelectedPlayerId(id)}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    Add a school from the actions bar to start rostering.
+                  </div>
+                )}
+              </div>
+            </main>
+
+            {/* RIGHT — player detail (mounted only while a player is selected) */}
+            {selectedPlayer ? (
+              <aside
+                data-testid="roster-detail-pane"
+                className="flex w-[320px] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+              >
+                <PlayerDetailPanel
+                  player={selectedPlayer}
+                  visible
+                  onDismiss={() => setSelectedPlayerId(null)}
+                  groups={groups}
+                />
+              </aside>
+            ) : null}
+          </div>
+        </div>
       </div>
       <DragOverlay dropAnimation={null}>
         {activeDragName ? <DragOverlayChip name={activeDragName} /> : null}
@@ -328,116 +334,178 @@ export function RosterTab() {
 }
 
 /* =========================================================================
- * SchoolsSection — structured vertical list + inline "Add school".
- * Each school is a full-width row (name + count); the active row carries
- * a left-edge accent bar. Not coloured pill tabs.
+ * SchoolTabs — horizontal school selector at the top of the content area
+ * (just below the actions bar). Mirrors the settings-shell tab-strip
+ * grammar (underline-active) so the Meet surfaces read as one family; the
+ * per-school player count rides each tab.
  * ========================================================================= */
-function SchoolsSection({
+function SchoolTabs({
   groups,
   counts,
   activeSchoolId,
   onSelect,
-  onAddSchool,
 }: {
   groups: { id: string; name: string }[];
   counts: Map<string, number>;
   activeSchoolId: string | null;
   onSelect: (id: string) => void;
-  onAddSchool: (name: string) => void;
 }) {
-  const [adding, setAdding] = useState(false);
+  if (groups.length === 0) {
+    return (
+      <div className="shrink-0 border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">
+        No schools yet — add one from the actions bar above.
+      </div>
+    );
+  }
+  return (
+    <div
+      data-testid="school-tabs"
+      className="flex shrink-0 items-stretch gap-0.5 overflow-x-auto overflow-y-hidden border-b border-border bg-card px-2"
+    >
+      {groups.map((g) => {
+        const isActive = g.id === activeSchoolId;
+        return (
+          <button
+            key={g.id}
+            type="button"
+            onClick={() => onSelect(g.id)}
+            data-testid={`school-pill-${g.id}`}
+            aria-current={isActive ? 'page' : undefined}
+            className={[
+              'relative -mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors duration-fast ease-brand',
+              isActive
+                ? 'border-b-accent font-semibold text-foreground'
+                : 'border-b-transparent text-muted-foreground hover:text-foreground',
+            ].join(' ')}
+          >
+            <span className="max-w-[14rem] truncate">{g.name}</span>
+            <span
+              className={`tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground/60'}`}
+            >
+              {counts.get(g.id) ?? 0}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* =========================================================================
+ * AddSchoolMenu — actions-bar primary control. Opens a one-field popover
+ * to name a new school. Enter commits; Esc / outside-click cancels.
+ * ========================================================================= */
+function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void }) {
+  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const click = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', click);
+    return () => document.removeEventListener('mousedown', click);
+  }, [open]);
 
   const commit = () => {
     const name = draft.trim();
-    if (!name) {
-      setAdding(false);
-      setDraft('');
-      return;
-    }
-    onAddSchool(name);
+    if (name) onAddSchool(name);
     setDraft('');
-    setAdding(false);
+    setOpen(false);
   };
 
   return (
-    <div className="border-b border-border/60 px-2 py-2">
-      <div className="px-1 pb-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-        Schools
-      </div>
-      <ul className="flex flex-col gap-0.5">
-        {groups.map((g) => {
-          const isActive = g.id === activeSchoolId;
-          return (
-            <li key={g.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(g.id)}
-                data-testid={`school-pill-${g.id}`}
-                aria-pressed={isActive}
-                className={[
-                  'group flex w-full items-center gap-2 rounded-sm border-l-2 py-1 pl-2 pr-2 text-left text-sm transition-colors duration-fast ease-brand',
-                  isActive
-                    ? 'border-accent bg-accent/10 font-medium text-foreground'
-                    : 'border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-                ].join(' ')}
-              >
-                <span className="min-w-0 flex-1 truncate">{g.name}</span>
-                <span
-                  className={`shrink-0 tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground/60'}`}
-                >
-                  {counts.get(g.id) ?? 0}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      <div className="mt-1 px-0.5">
-        {adding ? (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        data-testid="school-add-button"
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
+      >
+        ＋ Add school
+      </button>
+      {open ? (
+        <div
+          role="dialog"
+          aria-label="Add school"
+          className="motion-enter absolute right-0 top-full z-overlay mt-1 w-64 rounded-sm border border-border bg-popover p-2 text-popover-foreground shadow-lg"
+        >
           <input
             autoFocus
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
             onKeyDown={(e) => {
               if (e.key === 'Enter') commit();
               else if (e.key === 'Escape') {
                 setDraft('');
-                setAdding(false);
+                setOpen(false);
               }
             }}
             placeholder="School name"
             data-testid="school-add-input"
             className="h-7 w-full rounded-sm border border-border bg-bg-elev px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            data-testid="school-add-button"
-            className="flex w-full items-center gap-1 rounded-sm border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
-          >
-            ＋ Add school
-          </button>
-        )}
-      </div>
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDraft('');
+                setOpen(false);
+              }}
+              className="rounded-sm border border-border px-2 py-0.5 text-xs hover:bg-muted/40"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={commit}
+              disabled={!draft.trim()}
+              className="rounded-sm bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 /* =========================================================================
- * BulkImportSection — pinned above the player list.
+ * BulkImportMenu — actions-bar control. Opens a popover textarea; each
+ * non-empty line becomes a player in the active school. Disabled until a
+ * school is selected.
  * ========================================================================= */
-function BulkImportSection({
+function BulkImportMenu({
   schoolId,
   onImport,
 }: {
   schoolId: string | null;
   onImport: (names: string[]) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const click = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', click);
+    document.addEventListener('keydown', key);
+    return () => {
+      document.removeEventListener('mousedown', click);
+      document.removeEventListener('keydown', key);
+    };
+  }, [open]);
 
   const parseNames = (input: string): string[] =>
     input
@@ -445,31 +513,55 @@ function BulkImportSection({
       .map((s) => s.trim())
       .filter(Boolean);
 
-  if (!schoolId) return null;
+  const names = parseNames(draft);
+
+  const commit = () => {
+    if (names.length === 0) return;
+    onImport(names);
+    setDraft('');
+    setOpen(false);
+  };
+
+  const disabled = !schoolId;
   return (
-    <div className="border-b border-border/60 px-3 py-2">
-      {expanded ? (
-        <div className="space-y-2">
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        data-testid="bulk-import-toggle"
+        title={disabled ? 'Select a school first' : 'Bulk-import players'}
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+      >
+        ＋ Bulk import
+      </button>
+      {open && !disabled ? (
+        <div
+          role="dialog"
+          aria-label="Bulk-import players"
+          className="motion-enter absolute right-0 top-full z-overlay mt-1 w-72 rounded-sm border border-border bg-popover p-2 text-popover-foreground shadow-lg"
+        >
           <textarea
             autoFocus
-            rows={4}
+            rows={5}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={'Paste names, one per line.\nToan Le\nKyle Wong'}
             data-testid="bulk-import-textarea"
             className="w-full resize-y rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
-          <div className="flex items-center justify-between text-2xs">
-            <span className="text-muted-foreground tabular-nums">
-              {parseNames(draft).length} name
-              {parseNames(draft).length === 1 ? '' : 's'}
+          <div className="mt-1.5 flex items-center justify-between">
+            <span className="text-2xs tabular-nums text-muted-foreground">
+              {names.length} name{names.length === 1 ? '' : 's'}
             </span>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setDraft('');
-                  setExpanded(false);
+                  setOpen(false);
                 }}
                 className="rounded-sm border border-border px-2 py-0.5 text-xs hover:bg-muted/40"
               >
@@ -477,32 +569,17 @@ function BulkImportSection({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  const names = parseNames(draft);
-                  if (names.length === 0) return;
-                  onImport(names);
-                  setDraft('');
-                  setExpanded(false);
-                }}
-                disabled={parseNames(draft).length === 0}
+                onClick={commit}
+                disabled={names.length === 0}
                 data-testid="bulk-import-commit"
                 className="rounded-sm bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
               >
-                Add {parseNames(draft).length || ''}
+                Add {names.length || ''}
               </button>
             </div>
           </div>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          data-testid="bulk-import-toggle"
-          className="flex w-full items-center justify-center rounded-sm border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:bg-accent-bg hover:text-accent"
-        >
-          ＋ Bulk-import players
-        </button>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -599,48 +676,3 @@ function PlayerListSection({
   );
 }
 
-/* =========================================================================
- * PositionGridHeader — title · school · counts · Export.
- * ========================================================================= */
-function PositionGridHeader({
-  schoolName,
-  eventCount,
-  positionCount,
-  canExport,
-  onExport,
-}: {
-  schoolName: string;
-  eventCount: number;
-  positionCount: number;
-  canExport: boolean;
-  onExport: () => void;
-}) {
-  return (
-    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
-      <div className="flex min-w-0 items-baseline gap-3">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Position grid
-        </span>
-        <span className="truncate text-sm font-semibold text-foreground">
-          {schoolName}
-        </span>
-        <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-          {eventCount} event{eventCount === 1 ? '' : 's'} · {positionCount} position
-          {positionCount === 1 ? '' : 's'}
-        </span>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <button
-          type="button"
-          onClick={onExport}
-          disabled={!canExport}
-          data-testid="export-roster"
-          className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-sm border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
-        >
-          <Download aria-hidden="true" className="h-4 w-4" />
-          Export XLSX
-        </button>
-      </div>
-    </header>
-  );
-}

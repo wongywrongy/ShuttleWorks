@@ -25,7 +25,18 @@ import {
   RangeSlider,
 } from '../../../platform/settings/SettingsControls';
 
-export function EngineSettings() {
+export function EngineSettings({
+  formId,
+  onBusyChange,
+}: {
+  /** When set, the form carries this id so an external Save button (the
+   *  page actions bar) can submit it via `form=`, and the in-form Save
+   *  button is hidden. */
+  formId?: string;
+  /** Reports save in-flight state up so the external Save button can show
+   *  Saving…/Saved without duplicating this pane's submit logic. */
+  onBusyChange?: (busy: boolean) => void;
+} = {}) {
   const { config, updateConfig } = useTournament();
   const { confirmUnlock } = useLockGuard();
   const [formData, setFormData] = useState<Partial<TournamentConfig>>(() =>
@@ -70,6 +81,7 @@ export function EngineSettings() {
     if (!config) return;
     if (!(await confirmUnlock())) return;
     setSaving(true);
+    onBusyChange?.(true);
     setSaveError(null);
     try {
       await updateConfig({ ...config, ...formData });
@@ -77,11 +89,12 @@ export function EngineSettings() {
       setSaveError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
+      onBusyChange?.(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form id={formId} onSubmit={handleSubmit}>
       {/* Two-column panels matching the Tournament form: Solver + Live
           operations stacked on the left, Optimisation goals on the right. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 items-start">
@@ -207,19 +220,24 @@ export function EngineSettings() {
           {saveError}
         </div>
       )}
-      <div className="mt-6">
-        <Button type="submit" disabled={saving || !config}>
-          {justSaved ? (
-            <span key="saved" className="motion-enter-icon inline-flex items-center gap-2">
-              <IconDone size={16} /> Saved
-            </span>
-          ) : saving ? (
-            'Saving…'
-          ) : (
-            'Save engine settings'
-          )}
-        </Button>
-      </div>
+      {/* In-form Save — hidden when an external actions-bar Save owns
+          submission (formId set). Kept behind the guard so saving/justSaved
+          stay referenced and the save flow is identical either way. */}
+      {!formId ? (
+        <div className="mt-6">
+          <Button type="submit" disabled={saving || !config}>
+            {justSaved ? (
+              <span key="saved" className="motion-enter-icon inline-flex items-center gap-2">
+                <IconDone size={16} /> Saved
+              </span>
+            ) : saving ? (
+              'Saving…'
+            ) : (
+              'Save engine settings'
+            )}
+          </Button>
+        </div>
+      ) : null}
     </form>
   );
 }

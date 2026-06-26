@@ -35,6 +35,10 @@ interface TournamentConfigFormProps {
   config: TournamentConfig;
   onSave: (config: TournamentConfig) => void;
   saving: boolean;
+  /** When set, the form carries this id so an external Save button (the
+   *  page actions bar) can submit it via `form=`, and the in-form Save
+   *  button is hidden. */
+  formId?: string;
 }
 
 const MEET_TYPE_OPTIONS = [
@@ -63,6 +67,7 @@ export function TournamentConfigForm({
   config,
   onSave,
   saving,
+  formId,
 }: TournamentConfigFormProps) {
   const [formData, setFormData] = useState<TournamentConfig>({
     ...config,
@@ -211,7 +216,7 @@ export function TournamentConfigForm({
   })();
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form id={formId} onSubmit={handleSubmit}>
       {/* Grouped headed panels in a responsive grid. Each panel is an
           independent single-column stack of locked <Row>s — the grid
           supplies the horizontal usage, the Rows stay full-width within
@@ -364,19 +369,24 @@ export function TournamentConfigForm({
           </ul>
         </div>
       )}
-      <div className="mt-6">
-        <Button type="submit" disabled={saving}>
-          {justSaved ? (
-            <span key="saved" className="motion-enter-icon inline-flex items-center gap-2">
-              <IconDone size={16} /> Saved
-            </span>
-          ) : saving ? (
-            'Saving…'
-          ) : (
-            'Save tournament settings'
-          )}
-        </Button>
-      </div>
+      {/* In-form Save — hidden when an external actions-bar Save owns
+          submission (formId set). Kept behind the guard so saving/justSaved
+          stay referenced and the save flow is identical either way. */}
+      {!formId ? (
+        <div className="mt-6">
+          <Button type="submit" disabled={saving}>
+            {justSaved ? (
+              <span key="saved" className="motion-enter-icon inline-flex items-center gap-2">
+                <IconDone size={16} /> Saved
+              </span>
+            ) : saving ? (
+              'Saving…'
+            ) : (
+              'Save tournament settings'
+            )}
+          </Button>
+        </div>
+      ) : null}
     </form>
   );
 }
