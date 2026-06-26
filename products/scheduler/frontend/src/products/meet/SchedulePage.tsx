@@ -34,6 +34,7 @@ import { formatSlotTime } from '../../lib/time';
 import { MatchesTable, type TableView } from './schedule/MatchesTable';
 import { ScheduleSidebar } from './schedule/ScheduleSidebar';
 import { SourceChip } from '../operations/SourceChip';
+import { ActionsBar } from '../../components/control-plane';
 
 export function SchedulePage() {
   const tid = useTournamentId();
@@ -225,44 +226,46 @@ export function SchedulePage() {
       {showVisualization && displayAssignments.length > 0 && config ? (
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div className="flex min-w-0 flex-1 flex-col">
-            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
-              <div className="flex min-w-0 items-center gap-3">
-                {/* Phase B: engine-provenance chip — single-engine source is a
-                    per-surface constant (this is a meet Operations surface). */}
-                <SourceChip source="meet" />
-                <LiveMetricsBar
-                  elapsed={elapsed}
-                  solutionCount={solutionCount}
-                  objectiveScore={objectiveScore}
-                  bestBound={bestBound}
-                  status={status}
-                />
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="toolbar"
-                  onClick={() => void exportScheduleXlsx(schedule, matches, players, config)}
-                  disabled={!schedule || schedule.assignments.length === 0}
-                  data-testid="export-schedule"
-                  title={
-                    !schedule || schedule.assignments.length === 0
-                      ? 'Generate a schedule first'
-                      : 'Download schedule as XLSX'
-                  }
-                >
-                  <Download aria-hidden="true" />
-                  Export XLSX
-                </Button>
-                <ScheduleActions
-                  onGenerate={handleGenerate}
-                  generating={isOptimizing}
-                  hasSchedule={!!schedule}
-                  confirmingReplace={confirmingReplace}
-                />
-              </div>
-            </header>
+            <ActionsBar
+              title="Courts"
+              status={
+                <>
+                  {/* Engine-provenance chip — single-engine source is a
+                      per-surface constant (this is a meet Operations surface). */}
+                  <SourceChip source="meet" />
+                  <LiveMetricsBar
+                    elapsed={elapsed}
+                    solutionCount={solutionCount}
+                    objectiveScore={objectiveScore}
+                    bestBound={bestBound}
+                    status={status}
+                  />
+                </>
+              }
+            >
+              <Button
+                type="button"
+                size="xs"
+                variant="toolbar"
+                onClick={() => void exportScheduleXlsx(schedule, matches, players, config)}
+                disabled={!schedule || schedule.assignments.length === 0}
+                data-testid="export-schedule"
+                title={
+                  !schedule || schedule.assignments.length === 0
+                    ? 'Generate a schedule first'
+                    : 'Download schedule as XLSX'
+                }
+              >
+                <Download aria-hidden="true" />
+                Export XLSX
+              </Button>
+              <ScheduleActions
+                onGenerate={handleGenerate}
+                generating={isOptimizing}
+                hasSchedule={!!schedule}
+                confirmingReplace={confirmingReplace}
+              />
+            </ActionsBar>
 
             <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-3">
               {schedule && !isOptimizing ? (

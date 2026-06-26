@@ -36,6 +36,7 @@ import { GanttLegend } from './control-center/GanttLegend';
 import { exportScheduleXlsx } from './exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { SourceChip } from '../operations/SourceChip';
+import { ActionsBar } from '../../components/control-plane';
 import type { Advisory } from '../../api/dto';
 
 export function MatchControlCenterPage() {
@@ -455,89 +456,88 @@ export function MatchControlCenterPage() {
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Operator header strip — eyebrow + stats + actions, single
               baseline. Same vocabulary as Matches/Roster/Setup. */}
-          <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
-            <div className="flex min-w-0 items-baseline gap-3">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Live
-              </span>
-              {/* Phase B: engine-provenance chip — single-engine source is a
-                  per-surface constant (this is a meet Operations surface). */}
-              <SourceChip source="meet" />
-              <span
-                className="text-sm font-semibold text-foreground tabular-nums"
-                title="Share of currently-scheduled matches that are finished. Cancelled or court-closed matches drop out of both sides of the ratio."
-              >
-                {stats?.percentage || 0}%
-              </span>
-              <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-                {stats?.finished || 0} of {stats?.total || 0} matches
-              </span>
-              {(stats?.inProgress || 0) > 0 ? (
-                <span className="text-xs font-medium text-status-live tabular-nums whitespace-nowrap">
-                  · {stats.inProgress} active
+          <ActionsBar
+            title="Live"
+            status={
+              <>
+                {/* Engine-provenance chip — single-engine source is a
+                    per-surface constant (this is a meet Operations surface). */}
+                <SourceChip source="meet" />
+                <span
+                  className="text-sm font-semibold text-foreground tabular-nums"
+                  title="Share of currently-scheduled matches that are finished. Cancelled or court-closed matches drop out of both sides of the ratio."
+                >
+                  {stats?.percentage || 0}%
                 </span>
-              ) : null}
-              {delayedCount > 0 ? (
-                <span className="rounded-sm border border-status-warning/40 bg-status-warning/10 px-1.5 py-0.5 text-2xs font-semibold text-status-warning tabular-nums">
-                  {delayedCount} late
+                <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+                  {stats?.finished || 0} of {stats?.total || 0} matches
                 </span>
-              ) : null}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                size="xs"
-                variant="toolbar"
-                onClick={() => void exportScheduleXlsx(
-                  liveOps.schedule,
-                  liveOps.matches,
-                  players,
-                  liveOps.config!,
-                )}
-                disabled={!liveOps.schedule || liveOps.schedule.assignments.length === 0}
-                title={
-                  !liveOps.schedule || liveOps.schedule.assignments.length === 0
-                    ? 'No schedule to export'
-                    : 'Download schedule as XLSX'
-                }
-              >
-                <Download aria-hidden="true" />
-                Export XLSX
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="toolbar"
-                onClick={() => setDirectorOpen(true)}
-                title="Director tools — delays, breaks, blackouts"
-              >
-                <GearSix aria-hidden="true" />
-                Director
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="toolbar"
-                onClick={() => {
-                  setDisruptionPrefill({});
-                  setDisruptionOpen(true);
-                }}
-                title="Repair after a disruption (court closed, withdrawal, overrun, cancellation)"
-              >
-                Disruption
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="toolbar"
-                onClick={liveOps.triggerReoptimize}
-                disabled={liveOps.isReoptimizing}
-                title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan or Move/postpone."
-              >
-                {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
-              </Button>
-            </div>
-          </header>
+                {(stats?.inProgress || 0) > 0 ? (
+                  <span className="whitespace-nowrap text-xs font-medium text-status-live tabular-nums">
+                    · {stats.inProgress} active
+                  </span>
+                ) : null}
+                {delayedCount > 0 ? (
+                  <span className="rounded-sm border border-status-warning/40 bg-status-warning/10 px-1.5 py-0.5 text-2xs font-semibold text-status-warning tabular-nums">
+                    {delayedCount} late
+                  </span>
+                ) : null}
+              </>
+            }
+          >
+            <Button
+              type="button"
+              size="xs"
+              variant="toolbar"
+              onClick={() => void exportScheduleXlsx(
+                liveOps.schedule,
+                liveOps.matches,
+                players,
+                liveOps.config!,
+              )}
+              disabled={!liveOps.schedule || liveOps.schedule.assignments.length === 0}
+              title={
+                !liveOps.schedule || liveOps.schedule.assignments.length === 0
+                  ? 'No schedule to export'
+                  : 'Download schedule as XLSX'
+              }
+            >
+              <Download aria-hidden="true" />
+              Export XLSX
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              variant="toolbar"
+              onClick={() => setDirectorOpen(true)}
+              title="Director tools — delays, breaks, blackouts"
+            >
+              <GearSix aria-hidden="true" />
+              Director
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              variant="toolbar"
+              onClick={() => {
+                setDisruptionPrefill({});
+                setDisruptionOpen(true);
+              }}
+              title="Repair after a disruption (court closed, withdrawal, overrun, cancellation)"
+            >
+              Disruption
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              variant="toolbar"
+              onClick={liveOps.triggerReoptimize}
+              disabled={liveOps.isReoptimizing}
+              title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan or Move/postpone."
+            >
+              {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
+            </Button>
+          </ActionsBar>
           {/* Gantt grid */}
           <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-3">
             <GanttChart
