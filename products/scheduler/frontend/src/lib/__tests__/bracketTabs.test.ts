@@ -26,12 +26,13 @@ describe('tabsForModule', () => {
 });
 
 describe('BRACKET_TAB_IDS / BRACKET_TABS', () => {
-  it('lists the six bracket sections in order', () => {
+  it('lists the seven bracket sections in order', () => {
     expect(BRACKET_TAB_IDS).toEqual([
       'bracket-setup',
       'bracket-roster',
       'bracket-events',
       'bracket-draw',
+      'bracket-matches',
       'bracket-schedule',
       'bracket-live',
     ]);
@@ -40,6 +41,7 @@ describe('BRACKET_TAB_IDS / BRACKET_TABS', () => {
       'bracket-roster',
       'bracket-events',
       'bracket-draw',
+      'bracket-matches',
       'bracket-schedule',
       'bracket-live',
     ]);
@@ -48,6 +50,7 @@ describe('BRACKET_TAB_IDS / BRACKET_TABS', () => {
       'Roster',
       'Events',
       'Draw',
+      'Matches',
       'Schedule',
       'Live',
     ]);
@@ -86,6 +89,7 @@ describe('BRACKET_TAB_IDS — extended for entry tabs (#5)', () => {
       'bracket-roster',
       'bracket-events',
       'bracket-draw',
+      'bracket-matches',
       'bracket-schedule',
       'bracket-live',
     ]);

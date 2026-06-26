@@ -33,6 +33,7 @@ import { BracketStructureSection } from './BracketStructureSection';
 import { BracketDataSection } from './BracketDataSection';
 import { BracketRosterTab } from './BracketRosterTab';
 import { EventsTab } from './EventsTab';
+import { BracketMatchesTab } from './BracketMatchesTab';
 import { BracketViewHeader } from './BracketViewHeader';
 import { DrawView } from './DrawView';
 import { ScheduleView } from './ScheduleView';
@@ -178,7 +179,11 @@ function BracketTabBody() {
 
   // Setup, Roster, and Events do NOT depend on bracket-events data.
   // Draw/Schedule/Live render the events' draws/Gantts; they need data.
-  const needsBracketData = view === 'draw' || view === 'schedule' || view === 'live';
+  const needsBracketData =
+    view === 'draw' ||
+    view === 'matches' ||
+    view === 'schedule' ||
+    view === 'live';
   if (needsBracketData && !data) {
     return (
       <div className="min-h-full bg-background">
@@ -258,6 +263,7 @@ function BracketTabBody() {
         )}
         {view === 'roster' && <BracketRosterTab />}
         {view === 'events' && <EventsTab />}
+        {view === 'matches' && data && <BracketMatchesTab data={data} />}
         {view === 'draw' && data && (
           <div className="p-4">
             <DrawView

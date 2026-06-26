@@ -28,6 +28,7 @@ export type AppTab =
   | 'bracket-roster'
   | 'bracket-events'
   | 'bracket-draw'
+  | 'bracket-matches'
   | 'bracket-schedule'
   | 'bracket-live'
   // Workspace-shell segments (left-sidebar IA): the readiness landing,
