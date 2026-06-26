@@ -58,5 +58,40 @@ export function useRankAssignment() {
     });
   };
 
-  return { assignRank, unassignRank };
+  /**
+   * Move a player from `fromRank` to `toRank` in a SINGLE updatePlayer so
+   * it stays consistent with the render snapshot — a naive
+   * unassignRank()+assignRank() would re-add `fromRank` because both read
+   * the same stale `players` closure. Singles destination still displaces
+   * any other holder in the school.
+   */
+  const moveRank = (
+    schoolId: string,
+    playerId: string,
+    fromRank: string,
+    toRank: string,
+  ) => {
+    if (fromRank === toRank) return;
+    const player = players.find((p) => p.id === playerId);
+    if (!player) return;
+
+    if (!isDoublesRank(toRank)) {
+      for (const other of players) {
+        if (
+          other.id !== player.id &&
+          other.groupId === schoolId &&
+          (other.ranks ?? []).includes(toRank)
+        ) {
+          updatePlayer(other.id, {
+            ranks: (other.ranks ?? []).filter((r) => r !== toRank),
+          });
+        }
+      }
+    }
+    const next = (player.ranks ?? []).filter((r) => r !== fromRank);
+    if (!next.includes(toRank)) next.push(toRank);
+    updatePlayer(player.id, { ranks: next });
+  };
+
+  return { assignRank, unassignRank, moveRank };
 }

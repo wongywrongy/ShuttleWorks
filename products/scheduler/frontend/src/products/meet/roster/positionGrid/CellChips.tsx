@@ -9,49 +9,104 @@
  *     cells must NEVER group regardless of occupant count — grouping
  *     implies "this is a pair" which is wrong for singles.
  *   • 0 occupants → returns null; the parent shows a "＋ add" hint.
+ *
+ * Each occupant row carries a small drag handle (useDraggable, id
+ * `chip:{schoolId}:{playerId}:{rank}`) so an assigned player can be
+ * dragged to another cell. The handle is the only drag source; the rest
+ * of the chip still bubbles a click to the cell (opens the picker) and
+ * the × still unassigns.
  */
+import { useDraggable } from '@dnd-kit/core';
+import { DotsSixVertical } from '@phosphor-icons/react';
 import type { PlayerDTO } from '../../../../api/dto';
 
-export function CellChips({
-  occupants,
-  doubles,
-  highlightedPlayerId,
-  onRemove,
+function CellChipRow({
+  player,
+  schoolId,
   rank,
+  onRemove,
 }: {
-  occupants: PlayerDTO[];
-  doubles: boolean;
-  highlightedPlayerId?: string | null;
-  onRemove: (playerId: string) => void;
+  player: PlayerDTO;
+  schoolId: string;
   rank: string;
+  onRemove: (playerId: string) => void;
 }) {
-  const renderPlayerRow = (p: PlayerDTO) => (
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `chip:${schoolId}:${player.id}:${rank}`,
+    data: { schoolId, playerId: player.id, sourceRank: rank },
+  });
+  return (
     <div
-      key={p.id}
-      className="group flex items-center justify-between gap-1 px-2 py-0.5 text-2xs font-medium leading-tight"
+      className={[
+        'group flex items-center justify-between gap-1 px-1.5 py-0.5 text-2xs font-medium leading-tight',
+        isDragging ? 'opacity-40' : '',
+      ].join(' ')}
     >
-      <span className="break-words">{p.name || '(unnamed)'}</span>
+      <span className="flex min-w-0 items-center gap-1">
+        <span
+          ref={setNodeRef}
+          {...listeners}
+          {...attributes}
+          data-no-picker="true"
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Drag ${player.name || 'player'}`}
+          className="shrink-0 cursor-grab text-muted-foreground/40 transition-colors duration-fast ease-brand hover:text-muted-foreground"
+        >
+          <DotsSixVertical
+            aria-hidden
+            weight="bold"
+            className="pointer-events-none h-3 w-3"
+          />
+        </span>
+        <span className="break-words">{player.name || '(unnamed)'}</span>
+      </span>
       <span
         role="button"
         tabIndex={0}
         data-no-picker="true"
         onClick={(e) => {
           e.stopPropagation();
-          onRemove(p.id);
+          onRemove(player.id);
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.stopPropagation();
             e.preventDefault();
-            onRemove(p.id);
+            onRemove(player.id);
           }
         }}
-        aria-label={`Unassign ${p.name} from ${rank}`}
+        aria-label={`Unassign ${player.name} from ${rank}`}
         className="cursor-pointer text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100 hover:text-destructive"
       >
         ×
       </span>
     </div>
+  );
+}
+
+export function CellChips({
+  occupants,
+  doubles,
+  schoolId,
+  highlightedPlayerId,
+  onRemove,
+  rank,
+}: {
+  occupants: PlayerDTO[];
+  doubles: boolean;
+  schoolId: string;
+  highlightedPlayerId?: string | null;
+  onRemove: (playerId: string) => void;
+  rank: string;
+}) {
+  const renderRow = (p: PlayerDTO) => (
+    <CellChipRow
+      key={p.id}
+      player={p}
+      schoolId={schoolId}
+      rank={rank}
+      onRemove={onRemove}
+    />
   );
 
   const groupHighlighted =
@@ -73,7 +128,7 @@ export function CellChips({
           containerHighlight,
         ].join(' ')}
       >
-        {occupants.map(renderPlayerRow)}
+        {occupants.map(renderRow)}
       </div>
     );
   }
@@ -94,7 +149,7 @@ export function CellChips({
                   : 'border-border bg-card',
               ].join(' ')}
             >
-              {renderPlayerRow(p)}
+              {renderRow(p)}
             </div>
           );
         })}

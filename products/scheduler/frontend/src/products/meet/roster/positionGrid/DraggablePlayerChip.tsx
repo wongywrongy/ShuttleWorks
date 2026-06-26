@@ -5,7 +5,6 @@
  * based on school match.
  */
 import { useDraggable } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
 import { DotsSixVertical } from '@phosphor-icons/react';
 import type { PlayerDTO } from '../../../../api/dto';
 
@@ -16,13 +15,10 @@ export function DraggablePlayerChip({
   player: PlayerDTO;
   schoolId: string;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `player:${player.id}`,
     data: { schoolId, playerId: player.id },
   });
-  const style = transform
-    ? { transform: CSS.Translate.toString({ x: transform.x, y: transform.y, scaleX: 1, scaleY: 1 }) }
-    : undefined;
   const eventCount = (player.ranks ?? []).length;
   const heavy = eventCount >= 4;
   return (
@@ -30,13 +26,10 @@ export function DraggablePlayerChip({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      style={style}
       data-testid={`pool-chip-${player.id}`}
       className={[
-        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-fast ease-brand',
-        isDragging
-          ? 'z-popover shadow-lg ring-2 ring-primary cursor-grabbing opacity-90 scale-[1.02]'
-          : 'cursor-grab hover:border-primary',
+        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-[box-shadow,border-color,opacity] duration-fast ease-brand',
+        isDragging ? 'opacity-40' : 'cursor-grab hover:border-primary',
       ].join(' ')}
     >
       <DotsSixVertical

@@ -100,6 +100,7 @@ export function PositionCell({
             <CellChips
               occupants={occupants}
               doubles={doubles}
+              schoolId={schoolId}
               highlightedPlayerId={highlightedPlayerId}
               onRemove={removeRank}
               rank={rank}

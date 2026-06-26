@@ -24,11 +24,15 @@ import { v4 as uuid } from 'uuid';
 import { Download } from '@phosphor-icons/react';
 import {
   DndContext,
+  DragOverlay,
   MouseSensor,
   TouchSensor,
+  KeyboardSensor,
+  MeasuringStrategy,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import type { PlayerDTO } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
@@ -40,6 +44,7 @@ import {
 } from './PositionGrid';
 import { isDoublesRank } from './positionGrid/helpers';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
+import { DragOverlayChip } from './positionGrid/DragOverlayChip';
 import { PlayerDetailPanel } from './PlayerDetailPanel';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
@@ -52,11 +57,14 @@ export function RosterTab() {
   const addPlayer = useTournamentStore((s) => s.addPlayer);
   const deletePlayer = useTournamentStore((s) => s.deletePlayer);
   const updatePlayer = useTournamentStore((s) => s.updatePlayer);
-  const { assignRank } = useRankAssignment();
+  const { assignRank, moveRank } = useRankAssignment();
 
   const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  // Name of the player currently being dragged — drives the DragOverlay
+  // preview so a chip can leave the grid's overflow-auto without clipping.
+  const [activeDragName, setActiveDragName] = useState<string | null>(null);
 
   // Keep activeSchoolId valid as groups change.
   useEffect(() => {
@@ -127,20 +135,33 @@ export function RosterTab() {
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor),
   );
 
+  const onDragStart = (event: DragStartEvent) => {
+    const data = event.active.data.current as { playerId?: string } | undefined;
+    const p = players.find((x) => x.id === data?.playerId);
+    setActiveDragName(p?.name ?? null);
+  };
+
+  const onDragCancel = () => setActiveDragName(null);
+
   const onDragEnd = (event: DragEndEvent) => {
+    setActiveDragName(null);
+    // `sourceRank` is present when the drag started from an assigned cell
+    // chip (a re-assignment) rather than a pool chip.
     const activeData = event.active.data.current as
-      | { schoolId: string; playerId: string }
+      | { schoolId: string; playerId: string; sourceRank?: string }
       | undefined;
     const overData = event.over?.data.current as
       | { schoolId: string; rank: string; doubles: boolean; capacity: number }
       | undefined;
     if (!activeData || !overData) return;
     if (activeData.schoolId !== overData.schoolId) return;
+    if (activeData.sourceRank === overData.rank) return; // dropped on its own cell
 
     // Doubles capacity guard stays here; the singles displacement
-    // invariant + the add live in useRankAssignment.
+    // invariant + the add/move live in useRankAssignment.
     if (overData.doubles) {
       const existing = players.filter(
         (p) =>
@@ -148,7 +169,16 @@ export function RosterTab() {
       );
       if (existing.length >= overData.capacity) return;
     }
-    assignRank(activeData.schoolId, activeData.playerId, overData.rank);
+    if (activeData.sourceRank) {
+      moveRank(
+        overData.schoolId,
+        activeData.playerId,
+        activeData.sourceRank,
+        overData.rank,
+      );
+    } else {
+      assignRank(activeData.schoolId, activeData.playerId, overData.rank);
+    }
   };
 
   // Derived data.
@@ -193,7 +223,13 @@ export function RosterTab() {
   const canExport = groups.length > 0 && players.length > 0;
 
   return (
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+    <DndContext
+      sensors={sensors}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragCancel={onDragCancel}
+      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+    >
       <div className="flex h-full min-h-0 overflow-hidden">
         {/* ───── LEFT PANEL ─────────────────────────────────────────── */}
         <aside
@@ -275,6 +311,9 @@ export function RosterTab() {
           />
         </main>
       </div>
+      <DragOverlay dropAnimation={null}>
+        {activeDragName ? <DragOverlayChip name={activeDragName} /> : null}
+      </DragOverlay>
     </DndContext>
   );
 }

@@ -62,4 +62,26 @@ describe('useRankAssignment', () => {
     act(() => result.current.unassignRank('a', 'MS1'));
     expect(ranksOf('a')).toEqual(['MD2']);
   });
+
+  it('moveRank moves a player and does NOT re-add the source rank', () => {
+    seed([mkPlayer('a', 'S1', ['MS1', 'MD1'])]);
+    const { result } = renderHook(() => useRankAssignment());
+    act(() => result.current.moveRank('S1', 'a', 'MS1', 'MS2'));
+    expect(ranksOf('a')).toEqual(['MD1', 'MS2']); // MS1 gone, MS2 added
+  });
+
+  it('moveRank into an occupied singles slot displaces the prior holder', () => {
+    seed([mkPlayer('a', 'S1', ['MS2']), mkPlayer('b', 'S1', ['MS1'])]);
+    const { result } = renderHook(() => useRankAssignment());
+    act(() => result.current.moveRank('S1', 'b', 'MS1', 'MS2'));
+    expect(ranksOf('a')).toEqual([]); // displaced
+    expect(ranksOf('b')).toEqual(['MS2']);
+  });
+
+  it('moveRank with fromRank === toRank is a no-op', () => {
+    seed([mkPlayer('a', 'S1', ['MS1'])]);
+    const { result } = renderHook(() => useRankAssignment());
+    act(() => result.current.moveRank('S1', 'a', 'MS1', 'MS1'));
+    expect(ranksOf('a')).toEqual(['MS1']);
+  });
 });
