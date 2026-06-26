@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { TournamentConfig, BreakWindow } from '../../../api/dto';
-import { isValidTime, timeToMinutes } from '../../../lib/time';
+import { isValidTime } from '../../../lib/time';
 import { useTournamentId } from '../../../hooks/useTournamentId';
 import { useSuccessFlash } from '../../../hooks/useSuccessFlash';
 import { Button } from '@scheduler/design-system';
@@ -26,7 +26,6 @@ import {
   Seg,
   Toggle,
   TimeInput,
-  NumberInput,
   NumberWithSuffix,
   SelectInput,
 } from '../../../platform/settings/SettingsControls';
@@ -186,35 +185,6 @@ export function TournamentConfigForm({
     setFormData((prev) => ({ ...prev, [key]: value }));
   }
 
-  // Soft, advisory capacity check for the End-time field. Parallelism
-  // (courts) adds throughput, NOT duration, so this is a capacity model —
-  // never a derivation or a hard block. Qualitative copy only: real makespan
-  // depends on rest/overlap/solver. Guarded against mid-edit invalid times so
-  // it never throws or renders NaN.
-  const scheduleMayNotFit = ((): boolean => {
-    if (!isValidTime(formData.dayStart) || !isValidTime(formData.dayEnd)) return false;
-    if (formData.intervalMinutes < 5 || formData.courtCount < 1) return false;
-    const start = timeToMinutes(formData.dayStart);
-    let end = timeToMinutes(formData.dayEnd);
-    if (end <= start) end += 24 * 60; // overnight wrap
-    let breakMinutes = 0;
-    if (isValidTime(breakStart) && isValidTime(breakEnd)) {
-      const bDur = timeToMinutes(breakEnd) - timeToMinutes(breakStart);
-      if (bDur > 0) breakMinutes = bDur;
-    }
-    const usable = end - start - breakMinutes;
-    if (usable <= 0) return false;
-    const slotsPerCourt = Math.floor(usable / formData.intervalMinutes);
-    const capacity = formData.courtCount * slotsPerCourt;
-    const positions = Object.values(ranks).reduce(
-      (sum, n) => sum + (Number.isFinite(n) ? n : 0),
-      0,
-    );
-    // Tri meets run every pairing twice (A-B, A-C, B-C); dual runs one pairing.
-    const demand = positions * (formData.meetMode === 'tri' ? 3 : 1);
-    return demand > 0 && capacity > 0 && demand > capacity;
-  })();
-
   return (
     <form id={formId} onSubmit={handleSubmit}>
       {/* Grouped headed panels in a responsive grid. Each panel is an
@@ -264,28 +234,21 @@ export function TournamentConfigForm({
           </div>
         </section>
 
-        {/* Panel 2 — Schedule: when & where. (Date is removed — identity
-            belongs to workspace settings.) */}
+        {/* Panel 2 — Schedule: engine timing only. Courts and the day
+            window (start / end / slot duration) describe the venue and live
+            in workspace settings; identity (name/date) lives there too. */}
         <section className="lg:col-span-1">
           <SectionHeader>Schedule</SectionHeader>
-          <Row label="Start time" control={
-            <TimeInput value={formData.dayStart} onChange={(v) => set('dayStart', v)} ariaLabel="Day start" />
-          } />
-          <Row label="End time" control={
-            <TimeInput value={formData.dayEnd} onChange={(v) => set('dayEnd', v)} ariaLabel="Day end" />
-          } />
-          {scheduleMayNotFit ? (
-            <p className="py-1.5 text-xs text-muted-foreground">
-              Schedule may not fit every match in this window — courts add
-              parallelism, not length. Consider more courts or a later end.
-            </p>
-          ) : null}
-          <Row label="Slot duration" control={
-            <NumberWithSuffix value={formData.intervalMinutes} onChange={(v) => set('intervalMinutes', v)} suffix="min" min={5} max={240} ariaLabel="Slot duration in minutes" />
-          } />
-          <Row label="Courts" control={
-            <NumberInput value={formData.courtCount} onChange={(v) => set('courtCount', v)} min={1} max={32} ariaLabel="Court count" />
-          } />
+          <p className="pb-1 text-xs text-muted-foreground">
+            Courts and schedule timing live in{' '}
+            <Link
+              to={`/tournaments/${tid}/ws-venue`}
+              className="text-accent hover:underline"
+            >
+              Venue &amp; schedule
+            </Link>
+            .
+          </p>
           <Row label="Rest between matches" control={
             <NumberWithSuffix value={formData.defaultRestMinutes} onChange={(v) => set('defaultRestMinutes', v)} suffix="min" min={0} max={120} ariaLabel="Rest between matches" />
           } />

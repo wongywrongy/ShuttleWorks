@@ -13,6 +13,7 @@ import { apiClient } from '../../api/client';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import { WorkspaceOverview } from './WorkspaceOverview';
 import { DisplayConfig } from './DisplayConfig';
+import { VenueScheduleTab } from './VenueScheduleTab';
 import { PeopleAccessTab } from '../settings/PeopleAccessTab';
 import { SharingTab } from '../settings/SharingTab';
 import { ModulesSettingsTab } from '../settings/ModulesSettingsTab';
@@ -45,6 +46,8 @@ export function WorkspaceShellSurface({
       return <WorkspaceOverview summary={summary} />;
     case 'display-config':
       return <DisplayConfig tid={tid} modules={modules} />;
+    case 'ws-venue':
+      return <VenueScheduleTab />;
     case 'ws-members':
       return <PeopleAccessTab tid={tid} summary={summary} />;
     case 'ws-sharing':

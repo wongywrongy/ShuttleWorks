@@ -82,13 +82,14 @@ beforeEach(() => {
 });
 
 describe('BracketTab — fresh tournament (data === null)', () => {
-  it('renders the Setup form (Identity + Schedule & Venue) on bracket-setup tab', () => {
+  it('renders the Setup form (engine timing) on bracket-setup tab', () => {
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
-    // SetupTab renders Identity and Schedule & Venue sections.
-    expect(screen.getByLabelText(/Tournament name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Courts/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Start time/i)).toBeInTheDocument();
+    // The Tournament section is engine-timing only now — identity + venue
+    // were extracted to workspace settings / Venue & schedule.
+    expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Tournament name/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Courts/i)).not.toBeInTheDocument();
     // Must NOT show the draw empty-state CTA.
     expect(screen.queryByText(/No draws generated yet/i)).not.toBeInTheDocument();
   });
@@ -114,7 +115,7 @@ describe('BracketTab — fresh tournament (data === null)', () => {
     expect(screen.getByRole('heading', { name: 'No draws generated' })).toBeInTheDocument();
     expect(screen.getByText(/Open Events to add events and generate draws/i)).toBeInTheDocument();
     // Should not render the Draw content or Setup form
-    expect(screen.queryByLabelText(/Tournament name/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Rest between rounds/i)).not.toBeInTheDocument();
   });
 
   it('shows the empty-state CTA on bracket-schedule tab', () => {
@@ -212,7 +213,7 @@ describe('BracketTab — Setup chrome', () => {
   it('renders the Tournament section content by default', () => {
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
-    // Tournament section shows the name field
-    expect(screen.getByLabelText(/Tournament name/i)).toBeInTheDocument();
+    // Tournament section shows the engine-timing field by default.
+    expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
   });
 });

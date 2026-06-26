@@ -37,6 +37,7 @@ export interface WorkspaceNav {
 
 /** Admin (WORKSPACE) segments — also drive the top-bar gear "active" indicator. */
 export const ADMIN_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
+  'ws-venue',
   'ws-members',
   'ws-sharing',
   'ws-modules',
@@ -130,6 +131,7 @@ export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): Workspa
     admin: {
       label: 'Workspace',
       items: [
+        { segment: 'ws-venue', label: 'Venue & schedule' },
         { segment: 'ws-members', label: 'Members' },
         { segment: 'ws-sharing', label: 'Sharing' },
         { segment: 'ws-modules', label: 'Modules' },

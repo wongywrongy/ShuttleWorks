@@ -1,14 +1,14 @@
 /**
- * Tests for BracketTournamentSection — the refactored bracket Setup form
- * that lives inside the SettingsShell's "Tournament" section.
- *
- * Same persist semantics as the prior SetupTab (controlled draft,
- * onBlur dirty-check writes to tournamentStore); only the chrome
- * changed (SectionHeader + Row + meet input primitives in place of
- * hand-rolled <h2> + <Field> + raw <input>).
+ * Tests for BracketTournamentSection — the bracket Setup "Tournament"
+ * section, now engine-timing only. Identity (name/date) and the venue
+ * fields (courts, slot duration, start/end) were extracted to workspace
+ * settings + the Venue & schedule surface; the one field that stays is
+ * the bracket-specific "rest between rounds", with onBlur dirty-check
+ * writes to tournamentStore.
  */
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { BracketTournamentSection } from '../BracketTournamentSection';
 import { useTournamentStore } from '../../../store/tournamentStore';
 
@@ -29,64 +29,69 @@ function resetStore() {
   });
 }
 
+function renderSection() {
+  return render(
+    <MemoryRouter initialEntries={['/tournaments/t1/bracket-setup']}>
+      <Routes>
+        <Route
+          path="/tournaments/:id/*"
+          element={<BracketTournamentSection />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   resetStore();
 });
 
 describe('<BracketTournamentSection />', () => {
-  it('renders the Tournament name field bound to store config', () => {
-    render(<BracketTournamentSection />);
-    const input = screen.getByLabelText(/Tournament name/i) as HTMLInputElement;
-    expect(input.value).toBe('Bracket A');
+  it('renders the Rest between rounds field bound to store config', () => {
+    renderSection();
+    const input = screen.getByLabelText(/Rest between rounds/i) as HTMLInputElement;
+    expect(input.value).toBe('1');
   });
 
-  it('renders the Tournament date field bound to store config', () => {
-    render(<BracketTournamentSection />);
-    const input = screen.getByLabelText(/Tournament date/i) as HTMLInputElement;
-    expect(input.value).toBe('2026-05-15');
+  it('no longer renders the extracted identity / venue fields', () => {
+    renderSection();
+    expect(screen.queryByLabelText(/Tournament name/i)).toBeNull();
+    expect(screen.queryByLabelText(/Tournament date/i)).toBeNull();
+    expect(screen.queryByLabelText(/Courts/i)).toBeNull();
+    expect(screen.queryByLabelText(/Slot duration/i)).toBeNull();
+    expect(screen.queryByLabelText(/Start time/i)).toBeNull();
+    expect(screen.queryByLabelText(/End time/i)).toBeNull();
   });
 
-  it('renders Courts, Slot duration, Start time, End time, Rest between rounds', () => {
-    render(<BracketTournamentSection />);
-    expect(screen.getByLabelText(/Courts/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Slot duration/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Start time/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/End time/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
+  it('links to the workspace venue + settings surfaces', () => {
+    renderSection();
+    expect(screen.getByRole('link', { name: /Venue & schedule/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /workspace settings/i })).toBeInTheDocument();
   });
 
-  it('writes Tournament name to the store on blur when value changed', () => {
+  it('writes restBetweenRounds to the store on blur when value changed', () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
-    render(<BracketTournamentSection />);
-    const input = screen.getByLabelText(/Tournament name/i) as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'Renamed Bracket' } });
+    renderSection();
+    const input = screen.getByLabelText(/Rest between rounds/i) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '3' } });
     fireEvent.blur(input);
     expect(setConfig).toHaveBeenCalled();
     const lastCall = setConfig.mock.calls[setConfig.mock.calls.length - 1];
-    expect((lastCall[0] as { tournamentName?: string }).tournamentName).toBe('Renamed Bracket');
+    expect((lastCall[0] as { restBetweenRounds?: number }).restBetweenRounds).toBe(3);
   });
 
   it('does NOT write to the store on blur when value unchanged (dirty-check)', () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
-    render(<BracketTournamentSection />);
-    const input = screen.getByLabelText(/Tournament name/i) as HTMLInputElement;
+    renderSection();
+    const input = screen.getByLabelText(/Rest between rounds/i) as HTMLInputElement;
     fireEvent.blur(input);
     expect(setConfig).not.toHaveBeenCalled();
   });
 
-  it('renders Identity + Schedule & venue section headers', () => {
-    render(<BracketTournamentSection />);
-    expect(screen.getByText(/^Identity$/i)).toBeInTheDocument();
-    expect(screen.getByText(/Schedule.*venue/i)).toBeInTheDocument();
-  });
+  it('resyncs the rest field when store config changes externally (hydrate / cross-tab)', () => {
+    renderSection();
+    expect((screen.getByLabelText(/Rest between rounds/i) as HTMLInputElement).value).toBe('1');
 
-  it('resyncs input values when store config changes externally (hydrate / cross-tab)', () => {
-    render(<BracketTournamentSection />);
-    // Initially shows the setup from beforeEach (name = 'Bracket A', courts = 4).
-    expect((screen.getByLabelText(/Tournament name/i) as HTMLInputElement).value).toBe('Bracket A');
-    expect((screen.getByLabelText(/Courts/i) as HTMLInputElement).value).toBe('4');
-
-    // Simulate an external config update (hydration from server, another tab pushing state).
     act(() => {
       useTournamentStore.setState({
         config: {
@@ -104,12 +109,6 @@ describe('<BracketTournamentSection />', () => {
       });
     });
 
-    // Controlled inputs must reflect the new config — not stale defaultValue.
-    expect((screen.getByLabelText(/Tournament name/i) as HTMLInputElement).value).toBe('Externally Updated Name');
-    expect((screen.getByLabelText(/Courts/i) as HTMLInputElement).value).toBe('8');
-    expect((screen.getByLabelText(/Slot duration/i) as HTMLInputElement).value).toBe('45');
-    expect((screen.getByLabelText(/Start time/i) as HTMLInputElement).value).toBe('08:00');
-    expect((screen.getByLabelText(/End time/i) as HTMLInputElement).value).toBe('20:00');
     expect((screen.getByLabelText(/Rest between rounds/i) as HTMLInputElement).value).toBe('2');
   });
 });

@@ -36,6 +36,7 @@ export type AppTab =
   // (the former standalone /settings tabs, re-homed under WORKSPACE).
   | 'overview'
   | 'display-config'
+  | 'ws-venue'
   | 'ws-members'
   | 'ws-sharing'
   | 'ws-modules'

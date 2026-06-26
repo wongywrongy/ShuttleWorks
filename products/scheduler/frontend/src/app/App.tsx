@@ -57,6 +57,7 @@ const _SETTINGS_TAB_TO_SEGMENT: Record<string, string> = {
   people: 'ws-members',
   sharing: 'ws-sharing',
   sync: 'ws-sync',
+  venue: 'ws-venue',
   danger: 'ws-settings',
 };
 function WorkspaceSettingsRedirect() {
