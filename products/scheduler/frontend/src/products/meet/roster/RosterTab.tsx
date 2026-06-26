@@ -307,7 +307,6 @@ export function RosterTab() {
             visible={selectedPlayer !== null}
             onDismiss={() => setSelectedPlayerId(null)}
             groups={groups}
-            config={config}
           />
         </main>
       </div>

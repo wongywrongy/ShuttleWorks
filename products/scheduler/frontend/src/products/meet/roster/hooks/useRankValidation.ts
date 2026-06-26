@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTournamentStore } from '../../../../store/tournamentStore';
 import type { PlayerDTO } from '../../../../api/dto';
+import { isDoublesRank } from '../positionGrid/helpers';
 
 interface RankOption {
   value: string;
@@ -21,13 +22,6 @@ const RANK_LABELS: Record<string, string> = {
   WD: "Women's Doubles",
   XD: "Mixed Doubles",
 };
-
-/**
- * Check if a rank is a doubles rank (MD, WD, XD)
- */
-function isDoublesRank(rank: string): boolean {
-  return rank.startsWith('MD') || rank.startsWith('WD') || rank.startsWith('XD');
-}
 
 /**
  * useRankValidation Hook

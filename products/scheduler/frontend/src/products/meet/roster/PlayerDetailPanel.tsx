@@ -21,16 +21,17 @@
  */
 import { X } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
-import type { PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../../api/dto';
+import type { PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
+import { useRankValidation } from './hooks/useRankValidation';
+import { isDoublesRank } from './positionGrid/helpers';
 
 interface Props {
   player: PlayerDTO | null;
   visible: boolean;
   onDismiss: () => void;
   groups: RosterGroupDTO[];
-  config: TournamentConfig | null;
 }
 
 export function PlayerDetailPanel({
@@ -38,31 +39,27 @@ export function PlayerDetailPanel({
   visible,
   onDismiss,
   groups,
-  config,
 }: Props) {
   const updatePlayer = useTournamentStore((s) => s.updatePlayer);
   const { assignRank, unassignRank } = useRankAssignment();
+  // Grouped ranks + per-rank eligibility (who holds it, whether full) for
+  // this player's school, excluding the player themself.
+  const { availableRanks, isRankFull } = useRankValidation(
+    player?.groupId ?? null,
+    player?.id,
+  );
 
-  // Available ranks derived from config.rankCounts. Per BRAND.md events
-  // are 5 disciplines (MS / WS / MD / WD / XD), each with N positions.
-  // Plain derivation — React Compiler handles memoization.
-  const availableRanks: string[] = [];
-  if (config?.rankCounts) {
-    for (const [prefix, count] of Object.entries(config.rankCounts)) {
-      for (let i = 1; i <= (count ?? 0); i++) availableRanks.push(`${prefix}${i}`);
-    }
-  }
-
-  // Pill toggle: removal is always safe; addition goes through the
-  // shared invariant (singles displacement). Doubles capacity is not
-  // enforced here, matching prior behaviour (the grid cell guards it).
+  // Pill toggle: removal is always safe; addition goes through the shared
+  // singles-displacement invariant. A doubles rank already full with two
+  // OTHER players is blocked here too, matching the grid cell's guard.
   const handleToggleRank = (rank: string) => {
     if (!player) return;
     if ((player.ranks ?? []).includes(rank)) {
       unassignRank(player.id, rank);
-    } else {
-      assignRank(player.groupId, player.id, rank);
+      return;
     }
+    if (isDoublesRank(rank) && isRankFull(rank)) return;
+    assignRank(player.groupId, player.id, rank);
   };
 
   return (
@@ -174,32 +171,61 @@ export function PlayerDetailPanel({
             <label className="text-xs font-medium text-muted-foreground self-start mt-1">
               Ranks
             </label>
-            <div className="flex flex-wrap gap-1.5">
-              {availableRanks.length === 0 ? (
+            <div className="flex flex-col gap-1.5">
+              {Object.keys(availableRanks).length === 0 ? (
                 <span className="text-xs text-muted-foreground">
                   Configure positions in Setup to assign ranks.
                 </span>
               ) : (
-                availableRanks.map((r) => {
-                  const isActive = (player.ranks ?? []).includes(r);
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => handleToggleRank(r)}
-                      aria-pressed={isActive}
-                      className={[
-                        'rounded-md border px-2 py-0.5 text-2xs font-mono font-medium tabular-nums',
-                        'transition-colors duration-fast ease-brand',
-                        isActive
-                          ? 'border-accent bg-accent/10 text-accent'
-                          : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
-                      ].join(' ')}
-                    >
-                      {r}
-                    </button>
-                  );
-                })
+                Object.entries(availableRanks).map(([key, cat]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className="w-7 shrink-0 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {key}
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {cat.ranks.map((r) => {
+                        const isActive = (player.ranks ?? []).includes(r.value);
+                        const doubles = isDoublesRank(r.value);
+                        // r.disabled = full by OTHER players (singles: 1, doubles: 2).
+                        const takenByOther = !isActive && r.disabled;
+                        const blocked = takenByOther && doubles; // doubles full → can't join
+                        return (
+                          <button
+                            key={r.value}
+                            type="button"
+                            disabled={blocked}
+                            onClick={() => handleToggleRank(r.value)}
+                            aria-pressed={isActive}
+                            title={
+                              r.assignedTo
+                                ? `${r.value} — ${r.assignedTo}${
+                                    blocked
+                                      ? ' (full)'
+                                      : doubles
+                                        ? ''
+                                        : ' · assigning moves them out'
+                                  }`
+                                : r.value
+                            }
+                            className={[
+                              'rounded-md border px-2 py-0.5 text-2xs font-mono font-medium tabular-nums',
+                              'transition-colors duration-fast ease-brand disabled:cursor-not-allowed',
+                              isActive
+                                ? 'border-accent bg-accent/10 text-accent'
+                                : blocked
+                                  ? 'border-border/60 bg-muted/40 text-muted-foreground/50'
+                                  : takenByOther
+                                    ? 'border-status-warning/40 bg-status-warning-bg/40 text-status-warning'
+                                    : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
+                            ].join(' ')}
+                          >
+                            {r.value}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
