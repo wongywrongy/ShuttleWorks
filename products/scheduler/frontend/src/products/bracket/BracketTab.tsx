@@ -267,7 +267,7 @@ function BracketTabBody() {
         {view === 'draws' && <BracketDrawsTab />}
         {view === 'matches' && data && <BracketMatchesTab data={data} />}
         {view === 'draw' && data && (
-          <div className="p-4">
+          <div className="h-full overflow-hidden">
             <DrawView
               data={data}
               eventId={eventId}

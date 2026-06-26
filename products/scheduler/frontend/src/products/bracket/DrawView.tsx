@@ -10,6 +10,7 @@ import type {
   TournamentDTO,
 } from "../../api/bracketDto";
 import { BracketEmptyState } from "./BracketEmptyState";
+import { PanZoomCanvas } from "./PanZoomCanvas";
 
 interface Props {
   data: TournamentDTO;
@@ -86,11 +87,15 @@ function BracketView({
     [data.participants]
   );
 
+  const roundLabels = event.rounds.map((_, ri) =>
+    shortRoundLabel(ri, event.rounds.length),
+  );
+
   return (
-    <div className="overflow-auto">
-      <div className="flex gap-8 min-w-max">
+    <PanZoomCanvas roundLabels={roundLabels}>
+      <div className="flex gap-8 p-2">
         {event.rounds.map((round, ri) => (
-          <div key={ri} className="flex flex-col">
+          <div key={ri} data-round={ri} className="flex flex-col">
             <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.18em] mb-3">
               {roundLabel(ri, event.rounds.length)}
             </h3>
@@ -132,7 +137,7 @@ function BracketView({
           </div>
         ))}
       </div>
-    </div>
+    </PanZoomCanvas>
   );
 }
 
@@ -243,6 +248,15 @@ function roundLabel(roundIndex: number, roundCount: number): string {
   return `Round ${roundIndex + 1}`;
 }
 
+/** Compact label for the round-jump chips (F / SF / QF / R3…). */
+function shortRoundLabel(roundIndex: number, roundCount: number): string {
+  const fromEnd = roundCount - 1 - roundIndex;
+  if (fromEnd === 0) return "F";
+  if (fromEnd === 1) return "SF";
+  if (fromEnd === 2) return "QF";
+  return `R${roundIndex + 1}`;
+}
+
 function RoundRobinView({
   data,
   eventId,
@@ -268,7 +282,7 @@ function RoundRobinView({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="h-full space-y-6 overflow-auto p-4">
       {event.rounds.map((round, ri) => (
         <Card key={ri} variant="frame" className="p-4">
           <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.18em] mb-3">

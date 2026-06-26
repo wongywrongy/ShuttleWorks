@@ -10,7 +10,10 @@ const BracketTab = lazy(() =>
 export function BracketProduct() {
   const activeTab = useUiStore((s) => s.activeTab);
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // h-full (not just flex-1): the AppShell <main> is a block, so flex-1
+    // can't stretch us — h-full fills its definite height so the bracket
+    // surfaces (the pan/zoom draw canvas in particular) use the screen.
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-auto bg-card">
         <Suspense fallback={<TabSkeleton tab={activeTab} />}>
           <div key="bracket" className="h-full animate-block-in">
