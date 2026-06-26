@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@scheduler/design-system";
 import { useBracketApi } from "../../api/bracketClient";
@@ -11,6 +11,7 @@ import type {
 } from "../../api/bracketDto";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { PanZoomCanvas } from "./PanZoomCanvas";
+import { bwfPositions } from "./bwf";
 
 interface Props {
   data: TournamentDTO;
@@ -86,58 +87,165 @@ function BracketView({
     () => Object.fromEntries(data.participants.map((p) => [p.id, p.name])),
     [data.participants]
   );
+  const participantById = useMemo(
+    () => Object.fromEntries(data.participants.map((p) => [p.id, p])),
+    [data.participants]
+  );
+
+  // The draw can be re-seeded only while nothing has been played — once a
+  // result lands, the bracket is live and slots are frozen.
+  const hasResults = data.results.some((r) => idMap[r.play_unit_id]);
+  const editable = !hasResults;
+
+  const [editing, setEditing] = useState(false);
+  const [selectedPos, setSelectedPos] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Round-0 bracket positions: match m holds positions (2m, 2m+1).
+  const round0 = event.rounds[0] ?? [];
+  const size = round0.length * 2;
+  const occupantAt = useMemo(() => {
+    const m: Record<number, string | undefined> = {};
+    round0.forEach((puId, mi) => {
+      const pu = idMap[puId];
+      m[mi * 2] = pu?.side_a?.[0];
+      m[mi * 2 + 1] = pu?.side_b?.[0];
+    });
+    return m;
+  }, [round0, idMap]);
+
+  // Swap the players at two positions and persist. Placement is controlled
+  // by the explicit `seed` the backend now honours: position p ← the player
+  // given seed bwfPositions(size)[p].
+  const swapSlots = async (p1: number, p2: number) => {
+    setBusy(true);
+    try {
+      const occ = { ...occupantAt, [p1]: occupantAt[p2], [p2]: occupantAt[p1] };
+      const posToSeed = bwfPositions(size);
+      const participants = [];
+      for (let p = 0; p < size; p++) {
+        const id = occ[p];
+        if (!id) continue; // bye — omitted; the backend re-inserts it
+        const part = participantById[id];
+        participants.push({
+          id,
+          name: part?.name ?? id,
+          members: part?.members ?? undefined,
+          seed: posToSeed[p],
+        });
+      }
+      await api.eventUpsert(eventId, {
+        discipline: event.discipline,
+        format: event.format,
+        bracket_size: size,
+        duration_slots: 1,
+        seeded_count: participants.length,
+        participants,
+      });
+      onChange(await api.eventGenerate(eventId, { wipe: true }));
+    } finally {
+      setBusy(false);
+      setSelectedPos(null);
+    }
+  };
+
+  const onSlotClick = (pos: number) => {
+    if (busy || !occupantAt[pos]) return; // can't pick up a bye
+    if (selectedPos === null) {
+      setSelectedPos(pos);
+    } else if (selectedPos === pos) {
+      setSelectedPos(null);
+    } else {
+      void swapSlots(selectedPos, pos);
+    }
+  };
 
   const roundLabels = event.rounds.map((_, ri) =>
     shortRoundLabel(ri, event.rounds.length),
   );
 
   return (
-    <PanZoomCanvas roundLabels={roundLabels}>
-      <div className="flex gap-8 p-2">
-        {event.rounds.map((round, ri) => (
-          <div key={ri} data-round={ri} className="flex flex-col">
-            <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.18em] mb-3">
-              {roundLabel(ri, event.rounds.length)}
-            </h3>
-            <div
-              className="flex flex-col"
-              style={{ gap: ri === 0 ? "0.5rem" : `${0.5 * 2 ** ri}rem` }}
-            >
-              {round.map((puId, mi) => (
+    <div className="flex h-full min-h-0 flex-col">
+      {editable ? (
+        <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setEditing((e) => !e);
+              setSelectedPos(null);
+            }}
+            data-testid="edit-seeding"
+            className={
+              editing
+                ? "inline-flex h-7 items-center rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:opacity-90"
+                : "inline-flex h-7 items-center rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground hover:bg-muted/40"
+            }
+          >
+            {editing ? "Done seeding" : "Edit seeding"}
+          </button>
+          {editing ? (
+            <span className="text-2xs text-muted-foreground">
+              {busy
+                ? "Saving…"
+                : selectedPos !== null
+                  ? "Click another player to swap their slots"
+                  : "Click two players to swap their bracket slots"}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        <PanZoomCanvas roundLabels={roundLabels}>
+          <div className="flex gap-8 p-2">
+            {event.rounds.map((round, ri) => (
+              <div key={ri} data-round={ri} className="flex flex-col">
+                <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.18em] mb-3">
+                  {roundLabel(ri, event.rounds.length)}
+                </h3>
                 <div
-                  key={puId}
-                  className="w-64"
-                  style={{
-                    marginTop:
-                      ri === 0 || mi === 0 ? 0 : `${0.5 * 2 ** ri}rem`,
-                  }}
+                  className="flex flex-col"
+                  style={{ gap: ri === 0 ? "0.5rem" : `${0.5 * 2 ** ri}rem` }}
                 >
-                  <BracketCell
-                    pu={idMap[puId]}
-                    nameById={nameById}
-                    result={resultByPu[puId]}
-                    assignment={assignmentByPu[puId]}
-                    onResult={async (winner) => {
-                      const a = assignmentByPu[puId];
-                      const finishedAt = a
-                        ? a.actual_end_slot ?? a.slot_id + a.duration_slots
-                        : null;
-                      onChange(
-                        await api.recordResult({
-                          play_unit_id: puId,
-                          winner_side: winner,
-                          finished_at_slot: finishedAt,
-                        })
-                      );
-                    }}
-                  />
+                  {round.map((puId, mi) => (
+                    <div
+                      key={puId}
+                      className="w-64"
+                      style={{
+                        marginTop:
+                          ri === 0 || mi === 0 ? 0 : `${0.5 * 2 ** ri}rem`,
+                      }}
+                    >
+                      <BracketCell
+                        pu={idMap[puId]}
+                        nameById={nameById}
+                        result={resultByPu[puId]}
+                        assignment={assignmentByPu[puId]}
+                        seeding={editing && ri === 0}
+                        selectedPos={selectedPos}
+                        onSlotClick={onSlotClick}
+                        onResult={async (winner) => {
+                          const a = assignmentByPu[puId];
+                          const finishedAt = a
+                            ? a.actual_end_slot ?? a.slot_id + a.duration_slots
+                            : null;
+                          onChange(
+                            await api.recordResult({
+                              play_unit_id: puId,
+                              winner_side: winner,
+                              finished_at_slot: finishedAt,
+                            })
+                          );
+                        }}
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </PanZoomCanvas>
       </div>
-    </PanZoomCanvas>
+    </div>
   );
 }
 
@@ -146,18 +254,27 @@ function BracketCell({
   nameById,
   result,
   assignment,
+  seeding = false,
+  selectedPos = null,
+  onSlotClick,
   onResult,
 }: {
   pu: PlayUnitDTO;
   nameById: Record<string, string>;
   result: ResultDTO | undefined;
   assignment: AssignmentDTO | undefined;
+  /** Round-0 cell in seeding-edit mode: sides swap instead of recording. */
+  seeding?: boolean;
+  selectedPos?: number | null;
+  onSlotClick?: (pos: number) => void;
   onResult: (w: "A" | "B") => Promise<void>;
 }) {
   const winner = result?.winner_side;
   const aName = labelFor(pu.side_a, pu.slot_a, nameById);
   const bName = labelFor(pu.side_b, pu.slot_b, nameById);
-  const canRecord = !!pu.side_a && !!pu.side_b && !result;
+  const canRecord = !!pu.side_a && !!pu.side_b && !result && !seeding;
+  const posA = pu.match_index * 2;
+  const posB = posA + 1;
 
   return (
     <Card variant="frame" className="p-3 space-y-2">
@@ -174,6 +291,9 @@ function BracketCell({
         winning={winner === "A"}
         loser={result && winner === "B"}
         bye={pu.side_a === null}
+        seeding={seeding}
+        selected={seeding && selectedPos === posA}
+        onSlotClick={seeding ? () => onSlotClick?.(posA) : undefined}
         onWin={canRecord ? () => onResult("A") : undefined}
       />
       <Side
@@ -181,6 +301,9 @@ function BracketCell({
         winning={winner === "B"}
         loser={result && winner === "A"}
         bye={pu.side_b === null}
+        seeding={seeding}
+        selected={seeding && selectedPos === posB}
+        onSlotClick={seeding ? () => onSlotClick?.(posB) : undefined}
         onWin={canRecord ? () => onResult("B") : undefined}
       />
     </Card>
@@ -192,33 +315,48 @@ function Side({
   winning,
   loser,
   bye,
+  seeding = false,
+  selected = false,
+  onSlotClick,
   onWin,
 }: {
   label: string;
   winning?: boolean;
   loser?: boolean;
   bye?: boolean;
+  seeding?: boolean;
+  selected?: boolean;
+  onSlotClick?: () => void;
   onWin?: () => void;
 }) {
+  const onClick = seeding ? onSlotClick : onWin;
+  const disabled = seeding ? !!bye : !onWin || bye;
+
   return (
     <button
-      onClick={onWin}
-      disabled={!onWin || bye}
+      onClick={onClick}
+      disabled={disabled}
       className={
         "w-full flex items-center justify-between rounded-sm px-2 py-1.5 text-sm " +
-        (winning
+        (selected
+          ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
+          : winning
           ? "bg-status-done-bg border border-status-done/40 text-status-done font-medium"
           : loser
           ? "bg-muted text-muted-foreground line-through"
           : bye
           ? "bg-muted text-muted-foreground italic"
+          : seeding
+          ? "bg-bg-elev border border-border cursor-pointer hover:border-accent"
           : "bg-bg-elev border border-border hover:bg-accent")
       }
     >
       <span className="truncate">{label}</span>
-      {onWin && !bye && (
+      {seeding && !bye ? (
+        <span className="text-3xs text-muted-foreground">⇄</span>
+      ) : onWin && !bye ? (
         <span className="text-3xs text-muted-foreground">↵ wins</span>
-      )}
+      ) : null}
     </button>
   );
 }
