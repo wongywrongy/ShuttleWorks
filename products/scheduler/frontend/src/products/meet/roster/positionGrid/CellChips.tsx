@@ -19,12 +19,10 @@ import type { PlayerDTO } from '../../../../api/dto';
 
 function CellChipRow({
   player,
-  highlighted,
   onSelect,
   onRemove,
 }: {
   player: PlayerDTO;
-  highlighted: boolean;
   onSelect: (playerId: string) => void;
   onRemove: (playerId: string) => void;
 }) {
@@ -34,10 +32,7 @@ function CellChipRow({
         type="button"
         onClick={() => onSelect(player.id)}
         title={`${player.name || 'player'} — click to view, double-click to reassign`}
-        className={[
-          'min-w-0 flex-1 cursor-pointer break-normal text-left text-xs font-medium leading-tight',
-          highlighted ? 'text-accent' : 'text-foreground hover:text-accent',
-        ].join(' ')}
+        className="min-w-0 flex-1 cursor-pointer break-normal text-left text-xs font-medium leading-tight text-foreground hover:text-accent"
       >
         {player.name || '(unnamed)'}
       </button>
@@ -67,7 +62,6 @@ function CellChipRow({
 
 export function CellChips({
   occupants,
-  highlightedPlayerId,
   onSelect,
   onRemove,
 }: {
@@ -75,7 +69,6 @@ export function CellChips({
   /** Retained for call-site compatibility; pair vs. singles no longer
    *  changes the (now chrome-free) rendering. */
   doubles?: boolean;
-  highlightedPlayerId?: string | null;
   onSelect: (playerId: string) => void;
   onRemove: (playerId: string) => void;
 }) {
@@ -86,7 +79,6 @@ export function CellChips({
         <CellChipRow
           key={p.id}
           player={p}
-          highlighted={p.id === highlightedPlayerId}
           onSelect={onSelect}
           onRemove={onRemove}
         />

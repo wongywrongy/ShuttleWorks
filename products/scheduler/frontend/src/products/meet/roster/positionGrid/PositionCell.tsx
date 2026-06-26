@@ -28,16 +28,18 @@ export function PositionCell({
   doubles,
   disabled,
   occupants,
-  highlightedPlayerId,
-  onSelectPlayer,
+  selected,
+  onSelectPosition,
 }: {
   schoolId: string;
   rank: string;
   doubles: boolean;
   disabled: boolean;
   occupants: PlayerDTO[];
-  highlightedPlayerId?: string | null;
-  onSelectPlayer?: (playerId: string) => void;
+  /** This cell's position is the one open in the detail drawer. */
+  selected?: boolean;
+  /** Single-click a filled cell → open the position detail for this rank. */
+  onSelectPosition?: (rank: string) => void;
 }) {
   const { assignRank, unassignRank } = useRankAssignment();
   const capacity = doubles ? 2 : 1;
@@ -55,10 +57,12 @@ export function PositionCell({
     },
     [],
   );
-  const handleSelect = (playerId: string) => {
+  // Single-click selects the whole position (this rank), not one player,
+  // so the detail drawer can show every occupant of a doubles cell.
+  const handleSelect = () => {
     if (clickTimer.current) clearTimeout(clickTimer.current);
     clickTimer.current = setTimeout(() => {
-      onSelectPlayer?.(playerId);
+      onSelectPosition?.(rank);
       clickTimer.current = null;
     }, 220);
   };
@@ -101,6 +105,7 @@ export function PositionCell({
       className={[
         'group/cell relative align-top border-b border-r border-border last:border-r-0 transition-colors',
         disabled ? 'bg-muted/60 text-muted-foreground/70' : '',
+        selected && !disabled ? 'bg-accent/5 ring-2 ring-inset ring-accent/50' : '',
         isDragging && !disabled ? 'ring-1 ring-inset ring-border' : '',
         dragHover
           ? 'bg-status-done-bg ring-[3px] ring-inset ring-status-done shadow-inner'
@@ -121,7 +126,6 @@ export function PositionCell({
           <CellChips
             occupants={occupants}
             doubles={doubles}
-            highlightedPlayerId={highlightedPlayerId}
             onSelect={handleSelect}
             onRemove={removeRank}
           />

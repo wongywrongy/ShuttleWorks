@@ -13,15 +13,15 @@ export function GridBody({
   maxRows,
   schoolId,
   byRank,
-  highlightedPlayerId,
-  onSelectPlayer,
+  highlightedRank,
+  onSelectPosition,
 }: {
   events: GridEvent[];
   maxRows: number;
   schoolId: string;
   byRank: Map<string, PlayerDTO[]>;
-  highlightedPlayerId?: string | null;
-  onSelectPlayer?: (playerId: string) => void;
+  highlightedRank?: string | null;
+  onSelectPosition?: (rank: string) => void;
 }) {
   return (
     <tbody>
@@ -41,8 +41,8 @@ export function GridBody({
                 doubles={isDoubles(ev.prefix)}
                 disabled={occupants === null}
                 occupants={occupants ?? []}
-                highlightedPlayerId={highlightedPlayerId}
-                onSelectPlayer={onSelectPlayer}
+                selected={rank === highlightedRank}
+                onSelectPosition={onSelectPosition}
               />
             );
           })}

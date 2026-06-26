@@ -32,13 +32,13 @@ export { usePositionGridColumns } from './positionGrid/usePositionGridColumns';
 
 export function PositionGrid({
   schoolId,
-  highlightedPlayerId,
-  onSelectPlayer,
+  highlightedRank,
+  onSelectPosition,
 }: {
   schoolId: string;
-  highlightedPlayerId?: string | null;
-  /** Single-click an assigned player in a cell → open their detail panel. */
-  onSelectPlayer?: (playerId: string) => void;
+  highlightedRank?: string | null;
+  /** Single-click a filled cell → open that position's detail drawer. */
+  onSelectPosition?: (rank: string) => void;
 }) {
   const players = useTournamentStore((s) => s.players);
 
@@ -76,8 +76,8 @@ export function PositionGrid({
       maxRows={maxRows}
       schoolId={schoolId}
       byRank={byRank}
-      highlightedPlayerId={highlightedPlayerId}
-      onSelectPlayer={onSelectPlayer}
+      highlightedRank={highlightedRank}
+      onSelectPosition={onSelectPosition}
     />
   );
 }

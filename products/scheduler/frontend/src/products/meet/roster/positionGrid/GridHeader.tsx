@@ -1,30 +1,19 @@
 /**
  * Position-grid header row. Neutral theme (no per-event colors) to match
- * the site. All column management lives in the grid itself — no separate
- * menu:
- *   - REORDER: drag a header (a horizontal SortableContext in a nested,
- *     DOM-less DndContext, isolated from the chip-drag context — its IDs
- *     are raw event prefixes, distinct from cell:/player:/chip:).
+ * the site. Column management lives in the grid itself — no separate menu:
+ *   - REORDER: drag a header. The `DndContext` + `SortableContext` are
+ *     hoisted up to wrap the whole `<table>` in GridTable; this header only
+ *     renders the sortable cells. Keeping the DndContext out of the `<tr>`
+ *     matters: it emits hidden accessibility nodes, and those become
+ *     phantom table cells under `table-layout: fixed`, stealing a column's
+ *     worth of width on the right.
  *   - HIDE: hover a header → eye-slash button (toggleVisible).
  *   - RESTORE / RESET: the `#` corner cell shows dashed chips for hidden
  *     events (click to show) and a reset control when order/visibility is
  *     customized.
  */
 import type { CSSProperties } from 'react';
-import {
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  useSortable,
-  horizontalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { EyeSlash, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { EVENT_LABEL, EVENT_ORDER, isDoubles } from './helpers';
@@ -83,29 +72,12 @@ function SortableHeaderCell({
 }
 
 export function GridHeader({ events }: { events: GridEvent[] }) {
-  const { allConfiguredEvents, reorderColumns, toggleVisible, resetColumns, eventVisible } =
+  const { allConfiguredEvents, toggleVisible, resetColumns, eventVisible } =
     usePositionGridColumns();
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-  );
-  const visibleOrder = events.map((e) => e.prefix);
   const hidden = allConfiguredEvents.filter((p) => eventVisible?.[p] === false);
   const canonical = EVENT_ORDER.filter((p) => allConfiguredEvents.includes(p));
   const reordered = JSON.stringify(allConfiguredEvents) !== JSON.stringify(canonical);
   const customized = hidden.length > 0 || reordered;
-
-  const onDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const from = visibleOrder.indexOf(String(active.id));
-    const to = visibleOrder.indexOf(String(over.id));
-    if (from < 0 || to < 0) return;
-    const nextVisible = arrayMove(visibleOrder, from, to);
-    // Preserve any configured-but-hidden events (rare) at the end so the
-    // reorder of visible columns never drops them from eventOrder.
-    const stillHidden = allConfiguredEvents.filter((p) => !visibleOrder.includes(p));
-    reorderColumns([...nextVisible, ...stillHidden]);
-  };
 
   return (
     <thead>
@@ -138,17 +110,9 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
             ) : null}
           </div>
         </th>
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={onDragEnd}
-        >
-          <SortableContext items={visibleOrder} strategy={horizontalListSortingStrategy}>
-            {events.map((ev) => (
-              <SortableHeaderCell key={ev.prefix} ev={ev} onHide={toggleVisible} />
-            ))}
-          </SortableContext>
-        </DndContext>
+        {events.map((ev) => (
+          <SortableHeaderCell key={ev.prefix} ev={ev} onHide={toggleVisible} />
+        ))}
       </tr>
     </thead>
   );

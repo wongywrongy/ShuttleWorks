@@ -38,10 +38,10 @@ import type { PlayerDTO } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { exportRosterXlsx } from '../exports/xlsxExports';
 import { DraggablePlayerChip, PositionGrid } from './PositionGrid';
-import { isDoublesRank } from './positionGrid/helpers';
+import { EVENT_LABEL, isDoublesRank } from './positionGrid/helpers';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
-import { PlayerDetailPanel } from './PlayerDetailPanel';
+import { DetailDrawer } from './PlayerDetailPanel';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
@@ -57,6 +57,9 @@ export function RosterTab() {
   const { assignRank, moveRank } = useRankAssignment();
 
   const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
+  // Detail drawer targets — a clicked grid position (rank) OR a clicked
+  // list player. Only one is open at a time; opening one clears the other.
+  const [selectedRank, setSelectedRank] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   // Name of the player currently being dragged — drives the DragOverlay
@@ -129,6 +132,12 @@ export function RosterTab() {
     }
   }, [players, activeSchoolId, selectedPlayerId]);
 
+  // Positions are per-school, so close the position drawer when the active
+  // school changes.
+  useEffect(() => {
+    setSelectedRank(null);
+  }, [activeSchoolId]);
+
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -195,6 +204,19 @@ export function RosterTab() {
   const selectedPlayer =
     players.find((p) => p.id === selectedPlayerId) ?? null;
 
+  // Occupants of the open position (active school, this rank). Drives the
+  // position drawer — singles = 1, doubles = up to 2.
+  const positionOccupants = selectedRank
+    ? players.filter(
+        (p) =>
+          p.groupId === activeSchoolId && (p.ranks ?? []).includes(selectedRank),
+      )
+    : [];
+  const closeDrawer = () => {
+    setSelectedRank(null);
+    setSelectedPlayerId(null);
+  };
+
   // Plain derivations — React Compiler auto-memoizes. Removing the
   // manual useMemo with optional-chained deps unblocks compilation.
   const schoolCounts = new Map<string, number>();
@@ -202,8 +224,10 @@ export function RosterTab() {
     schoolCounts.set(p.groupId, (schoolCounts.get(p.groupId) ?? 0) + 1);
   }
 
-  // Toggle selection: clicking the selected player a second time dismisses.
+  // Toggle selection: clicking the selected player a second time dismisses;
+  // opening a list player closes any open position.
   const togglePlayer = (playerId: string) => {
+    setSelectedRank(null);
     setSelectedPlayerId((curr) => (curr === playerId ? null : playerId));
   };
 
@@ -263,7 +287,9 @@ export function RosterTab() {
             activeSchoolId={activeSchoolId}
             onSelect={setActiveSchoolId}
           />
-          <div className="flex min-h-0 flex-1 overflow-hidden">
+          {/* `relative` so the detail drawer can float over the grid's
+              right edge as a layer on top (the grid keeps full width). */}
+          <div className="relative flex min-h-0 flex-1 overflow-hidden">
             {/* LEFT — filter + player list */}
             <aside
               data-testid="roster-left-panel"
@@ -289,7 +315,7 @@ export function RosterTab() {
               />
             </aside>
 
-            {/* CENTER — position grid (scrolls) */}
+            {/* CENTER — position grid (always full width; scrolls) */}
             <main
               data-testid="roster-right-panel"
               className="flex min-w-0 flex-1 flex-col overflow-hidden"
@@ -298,8 +324,11 @@ export function RosterTab() {
                 {activeSchoolId ? (
                   <PositionGrid
                     schoolId={activeSchoolId}
-                    highlightedPlayerId={selectedPlayerId}
-                    onSelectPlayer={(id) => setSelectedPlayerId(id)}
+                    highlightedRank={selectedRank}
+                    onSelectPosition={(rank) => {
+                      setSelectedPlayerId(null);
+                      setSelectedRank(rank);
+                    }}
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -309,19 +338,35 @@ export function RosterTab() {
               </div>
             </main>
 
-            {/* RIGHT — player detail (mounted only while a player is selected) */}
-            {selectedPlayer ? (
-              <aside
-                data-testid="roster-detail-pane"
-                className="flex w-[320px] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
-              >
-                <PlayerDetailPanel
-                  player={selectedPlayer}
-                  visible
-                  onDismiss={() => setSelectedPlayerId(null)}
-                  groups={groups}
-                />
-              </aside>
+            {/* DETAIL DRAWER — floats over the grid. A clicked position
+                (its 1–2 occupants) or a clicked list player. */}
+            {selectedRank ? (
+              <DetailDrawer
+                eyebrow="Position"
+                title={selectedRank}
+                mono
+                subtitle={
+                  EVENT_LABEL[selectedRank.match(/^[A-Z]+/)?.[0] ?? '']?.full
+                }
+                occupants={positionOccupants}
+                groups={groups}
+                emptyHint={
+                  positionOccupants.length < (isDoublesRank(selectedRank) ? 2 : 1)
+                    ? positionOccupants.length === 0
+                      ? 'No one assigned yet — click the cell to assign a player.'
+                      : 'Partner not assigned — double-click the cell to add one.'
+                    : null
+                }
+                onClose={closeDrawer}
+              />
+            ) : selectedPlayer ? (
+              <DetailDrawer
+                eyebrow="Player"
+                title={selectedPlayer.name || '(unnamed)'}
+                occupants={[selectedPlayer]}
+                groups={groups}
+                onClose={closeDrawer}
+              />
             ) : null}
           </div>
         </div>
