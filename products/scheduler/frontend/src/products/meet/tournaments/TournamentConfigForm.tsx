@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { TournamentConfig, BreakWindow } from '../../../api/dto';
-import { isValidTime } from '../../../lib/time';
+import { isValidTime, timeToMinutes } from '../../../lib/time';
 import { useTournamentId } from '../../../hooks/useTournamentId';
 import { useSuccessFlash } from '../../../hooks/useSuccessFlash';
 import { Button } from '@scheduler/design-system';
@@ -25,8 +25,6 @@ import {
   SectionHeader,
   Seg,
   Toggle,
-  TextInput,
-  DateInput,
   TimeInput,
   NumberInput,
   NumberWithSuffix,
@@ -74,8 +72,11 @@ export function TournamentConfigForm({
     pointsPerSet: config.pointsPerSet ?? 21,
     deuceEnabled: config.deuceEnabled ?? true,
     meetMode: config.meetMode ?? 'dual',
-    tournamentName: config.tournamentName ?? '',
-    tournamentDate: config.tournamentDate ?? '',
+    // Identity (name/date) is owned by workspace settings, NOT this meet
+    // form. Pass the raw config values through — never coerce to '' — so a
+    // save here can't blank the Hub workspace name/date. See handleSubmit.
+    tournamentName: config.tournamentName,
+    tournamentDate: config.tournamentDate,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [breakWindows, setBreakWindows] = useState<BreakWindow[]>(
@@ -153,7 +154,16 @@ export function TournamentConfigForm({
     e.preventDefault();
     if (validate()) {
       const cleanedBreaks = breakWindows.filter((bw) => bw.start || bw.end);
-      onSave({ ...formData, breaks: cleanedBreaks });
+      onSave({
+        ...formData,
+        // Belt-and-suspenders: identity is re-derived from the freshest
+        // config prop, never from form state. When config has no identity
+        // these are `undefined` → omitted from the JSON PUT → the backend
+        // summary-mirror is skipped, so the workspace name/date survive.
+        tournamentName: config.tournamentName,
+        tournamentDate: config.tournamentDate,
+        breaks: cleanedBreaks,
+      });
     }
   };
 
@@ -171,121 +181,166 @@ export function TournamentConfigForm({
     setFormData((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Soft, advisory capacity check for the End-time field. Parallelism
+  // (courts) adds throughput, NOT duration, so this is a capacity model —
+  // never a derivation or a hard block. Qualitative copy only: real makespan
+  // depends on rest/overlap/solver. Guarded against mid-edit invalid times so
+  // it never throws or renders NaN.
+  const scheduleMayNotFit = ((): boolean => {
+    if (!isValidTime(formData.dayStart) || !isValidTime(formData.dayEnd)) return false;
+    if (formData.intervalMinutes < 5 || formData.courtCount < 1) return false;
+    const start = timeToMinutes(formData.dayStart);
+    let end = timeToMinutes(formData.dayEnd);
+    if (end <= start) end += 24 * 60; // overnight wrap
+    let breakMinutes = 0;
+    if (isValidTime(breakStart) && isValidTime(breakEnd)) {
+      const bDur = timeToMinutes(breakEnd) - timeToMinutes(breakStart);
+      if (bDur > 0) breakMinutes = bDur;
+    }
+    const usable = end - start - breakMinutes;
+    if (usable <= 0) return false;
+    const slotsPerCourt = Math.floor(usable / formData.intervalMinutes);
+    const capacity = formData.courtCount * slotsPerCourt;
+    const positions = Object.values(ranks).reduce(
+      (sum, n) => sum + (Number.isFinite(n) ? n : 0),
+      0,
+    );
+    // Tri meets run every pairing twice (A-B, A-C, B-C); dual runs one pairing.
+    const demand = positions * (formData.meetMode === 'tri' ? 3 : 1);
+    return demand > 0 && capacity > 0 && demand > capacity;
+  })();
+
   return (
     <form onSubmit={handleSubmit}>
-      <SectionHeader>Identity</SectionHeader>
-      <Row
-        label="Tournament name"
-        control={
-          <TextInput
-            value={formData.tournamentName ?? ''}
-            onChange={(v) => set('tournamentName', v)}
-            width={200}
-            placeholder="My tournament"
-            ariaLabel="Tournament name"
+      {/* Grouped headed panels in a responsive grid. Each panel is an
+          independent single-column stack of locked <Row>s — the grid
+          supplies the horizontal usage, the Rows stay full-width within
+          their panel (Baymard/NN-g: group, don't multi-column the fields). */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-2 items-start">
+        {/* Panel 1 — Format: what kind of competition. Score type and its
+            dependents stay together so the grid never splits a parent from
+            its indented children. */}
+        <section className="lg:col-span-1">
+          <SectionHeader>Format</SectionHeader>
+          <Row
+            label="Meet type"
+            control={
+              <Seg
+                options={MEET_TYPE_OPTIONS}
+                value={formData.meetMode ?? 'dual'}
+                onChange={(v) => set('meetMode', v)}
+                ariaLabel="Meet type"
+              />
+            }
           />
-        }
-      />
-      <Row
-        label="Meet type"
-        control={
-          <Seg
-            options={MEET_TYPE_OPTIONS}
-            value={formData.meetMode ?? 'dual'}
-            onChange={(v) => set('meetMode', v)}
-            ariaLabel="Meet type"
+          <Row
+            label="Score type"
+            control={
+              <Seg options={SCORE_TYPE_OPTIONS} value={formData.scoringFormat ?? 'badminton'} onChange={(v) => set('scoringFormat', v)} ariaLabel="Score type" />
+            }
+            last
           />
-        }
-      />
+          <div
+            className={[
+              'mt-1 pl-4 border-l border-border/60',
+              formData.scoringFormat === 'simple' ? 'opacity-50 pointer-events-none' : '',
+            ].join(' ')}
+            aria-disabled={formData.scoringFormat === 'simple'}
+          >
+            <Row label="Points per set" control={
+              <SelectInput value={formData.pointsPerSet ?? 21} onChange={(v) => set('pointsPerSet', v)} options={POINTS_PER_SET_OPTIONS} ariaLabel="Points per set" />
+            } />
+            <Row label="Match format" control={
+              <SelectInput value={formData.setsToWin ?? 2} onChange={(v) => set('setsToWin', v)} options={MATCH_FORMAT_OPTIONS} ariaLabel="Match format" />
+            } />
+            <Row label="Deuce (win by 2)" control={
+              <Toggle value={formData.deuceEnabled ?? true} onChange={(v) => set('deuceEnabled', v)} ariaLabel="Deuce enabled" />
+            } last />
+          </div>
+        </section>
 
-      <SectionHeader>Schedule &amp; venue</SectionHeader>
-      <Row label="Date" control={
-        <DateInput value={formData.tournamentDate ?? ''} onChange={(v) => set('tournamentDate', v)} ariaLabel="Tournament date" />
-      } />
-      <Row label="Start time" control={
-        <TimeInput value={formData.dayStart} onChange={(v) => set('dayStart', v)} ariaLabel="Day start" />
-      } />
-      <Row label="End time" control={
-        <TimeInput value={formData.dayEnd} onChange={(v) => set('dayEnd', v)} ariaLabel="Day end" />
-      } />
-      <Row label="Slot duration" control={
-        <NumberWithSuffix value={formData.intervalMinutes} onChange={(v) => set('intervalMinutes', v)} suffix="min" min={5} max={240} ariaLabel="Slot duration in minutes" />
-      } />
-      <Row label="Courts" control={
-        <NumberInput value={formData.courtCount} onChange={(v) => set('courtCount', v)} min={1} max={32} ariaLabel="Court count" />
-      } />
-      <Row label="Rest between matches" control={
-        <NumberWithSuffix value={formData.defaultRestMinutes} onChange={(v) => set('defaultRestMinutes', v)} suffix="min" min={0} max={120} ariaLabel="Rest between matches" />
-      } />
-      <Row
-        label="Break (optional)"
-        control={
-          breakStart || breakEnd ? (
-            <span className="inline-flex items-center gap-2">
-              <TimeInput value={breakStart} onChange={setBreakStart} ariaLabel="Break start" />
-              <span className="text-xs text-muted-foreground">–</span>
-              <TimeInput value={breakEnd} onChange={setBreakEnd} ariaLabel="Break end" />
-              <button
-                type="button"
-                onClick={() => { setBreakStart(''); setBreakEnd(''); }}
-                className="ml-1 text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast ease-brand"
-              >
-                Clear
-              </button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setBreakStart('12:00')}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast ease-brand"
-            >
-              None — add break
-            </button>
-          )
-        }
-      />
+        {/* Panel 2 — Schedule: when & where. (Date is removed — identity
+            belongs to workspace settings.) */}
+        <section className="lg:col-span-1">
+          <SectionHeader>Schedule</SectionHeader>
+          <Row label="Start time" control={
+            <TimeInput value={formData.dayStart} onChange={(v) => set('dayStart', v)} ariaLabel="Day start" />
+          } />
+          <Row label="End time" control={
+            <TimeInput value={formData.dayEnd} onChange={(v) => set('dayEnd', v)} ariaLabel="Day end" />
+          } />
+          {scheduleMayNotFit ? (
+            <p className="py-1.5 text-xs text-muted-foreground">
+              Schedule may not fit every match in this window — courts add
+              parallelism, not length. Consider more courts or a later end.
+            </p>
+          ) : null}
+          <Row label="Slot duration" control={
+            <NumberWithSuffix value={formData.intervalMinutes} onChange={(v) => set('intervalMinutes', v)} suffix="min" min={5} max={240} ariaLabel="Slot duration in minutes" />
+          } />
+          <Row label="Courts" control={
+            <NumberInput value={formData.courtCount} onChange={(v) => set('courtCount', v)} min={1} max={32} ariaLabel="Court count" />
+          } />
+          <Row label="Rest between matches" control={
+            <NumberWithSuffix value={formData.defaultRestMinutes} onChange={(v) => set('defaultRestMinutes', v)} suffix="min" min={0} max={120} ariaLabel="Rest between matches" />
+          } />
+          <Row
+            label="Break (optional)"
+            last
+            control={
+              breakStart || breakEnd ? (
+                <span className="inline-flex items-center gap-2">
+                  <TimeInput value={breakStart} onChange={setBreakStart} ariaLabel="Break start" />
+                  <span className="text-xs text-muted-foreground">–</span>
+                  <TimeInput value={breakEnd} onChange={setBreakEnd} ariaLabel="Break end" />
+                  <button
+                    type="button"
+                    onClick={() => { setBreakStart(''); setBreakEnd(''); }}
+                    className="ml-1 text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast ease-brand"
+                  >
+                    Clear
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setBreakStart('12:00')}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast ease-brand"
+                >
+                  None — add break
+                </button>
+              )
+            }
+          />
+        </section>
 
-      <SectionHeader>Scoring</SectionHeader>
-      <Row
-        label="Score type"
-        control={
-          <Seg options={SCORE_TYPE_OPTIONS} value={formData.scoringFormat ?? 'badminton'} onChange={(v) => set('scoringFormat', v)} ariaLabel="Score type" />
-        }
-      />
-      <div
-        className={[
-          'mt-1 pl-4 border-l border-border/60',
-          formData.scoringFormat === 'simple' ? 'opacity-50 pointer-events-none' : '',
-        ].join(' ')}
-        aria-disabled={formData.scoringFormat === 'simple'}
-      >
-        <Row label="Points per set" control={
-          <SelectInput value={formData.pointsPerSet ?? 21} onChange={(v) => set('pointsPerSet', v)} options={POINTS_PER_SET_OPTIONS} ariaLabel="Points per set" />
-        } />
-        <Row label="Match format" control={
-          <SelectInput value={formData.setsToWin ?? 2} onChange={(v) => set('setsToWin', v)} options={MATCH_FORMAT_OPTIONS} ariaLabel="Match format" />
-        } />
-        <Row label="Deuce (win by 2)" control={
-          <Toggle value={formData.deuceEnabled ?? true} onChange={(v) => set('deuceEnabled', v)} ariaLabel="Deuce enabled" />
-        } last />
+        {/* Panel 3 — Events: what's contested. Full width below the two
+            columns; the five short spinners wrap into two inner columns so
+            they stop wasting the full row on a 64px input. */}
+        <section className="lg:col-span-2">
+          <SectionHeader>Events</SectionHeader>
+          <p className="pb-1 text-xs text-muted-foreground">
+            Lineup positions contested per discipline (e.g. 3 = 1st–3rd singles).
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10">
+            <Row label="Men's singles" control={
+              <NumberWithSuffix value={ranks.MS ?? 3} onChange={(n) => setRank('MS', n)} suffix="positions" min={0} max={20} ariaLabel="Men's singles positions" />
+            } />
+            <Row label="Women's singles" control={
+              <NumberWithSuffix value={ranks.WS ?? 3} onChange={(n) => setRank('WS', n)} suffix="positions" min={0} max={20} ariaLabel="Women's singles positions" />
+            } />
+            <Row label="Men's doubles" control={
+              <NumberWithSuffix value={ranks.MD ?? 2} onChange={(n) => setRank('MD', n)} suffix="positions" min={0} max={20} ariaLabel="Men's doubles positions" />
+            } />
+            <Row label="Women's doubles" control={
+              <NumberWithSuffix value={ranks.WD ?? 2} onChange={(n) => setRank('WD', n)} suffix="positions" min={0} max={20} ariaLabel="Women's doubles positions" />
+            } />
+            <Row label="Mixed doubles" control={
+              <NumberWithSuffix value={ranks.XD ?? 2} onChange={(n) => setRank('XD', n)} suffix="positions" min={0} max={20} ariaLabel="Mixed doubles positions" />
+            } last />
+          </div>
+        </section>
       </div>
-
-      <SectionHeader>Events</SectionHeader>
-      <Row label="Men's singles" control={
-        <NumberWithSuffix value={ranks.MS ?? 3} onChange={(n) => setRank('MS', n)} suffix="positions" min={0} max={20} ariaLabel="Men's singles positions" />
-      } />
-      <Row label="Women's singles" control={
-        <NumberWithSuffix value={ranks.WS ?? 3} onChange={(n) => setRank('WS', n)} suffix="positions" min={0} max={20} ariaLabel="Women's singles positions" />
-      } />
-      <Row label="Men's doubles" control={
-        <NumberWithSuffix value={ranks.MD ?? 2} onChange={(n) => setRank('MD', n)} suffix="positions" min={0} max={20} ariaLabel="Men's doubles positions" />
-      } />
-      <Row label="Women's doubles" control={
-        <NumberWithSuffix value={ranks.WD ?? 2} onChange={(n) => setRank('WD', n)} suffix="positions" min={0} max={20} ariaLabel="Women's doubles positions" />
-      } />
-      <Row label="Mixed doubles" control={
-        <NumberWithSuffix value={ranks.XD ?? 2} onChange={(n) => setRank('XD', n)} suffix="positions" min={0} max={20} ariaLabel="Mixed doubles positions" />
-      } last />
 
       <p className="mt-6 text-xs text-muted-foreground">
         Sharing, the public display link, and backups live in{' '}
