@@ -21,6 +21,10 @@ export function DraggablePlayerChip({
   });
   const eventCount = (player.ranks ?? []).length;
   const heavy = eventCount >= 4;
+  // Flat, chrome-free row content — the parent list <li> carries the row
+  // background / active state so player rows read at the same density and
+  // weight as the school-list rows (one component family). This element is
+  // just the drag source + the name + the event-count badge.
   return (
     <button
       ref={setNodeRef}
@@ -28,22 +32,22 @@ export function DraggablePlayerChip({
       {...attributes}
       data-testid={`pool-chip-${player.id}`}
       className={[
-        'inline-flex w-full items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-left text-sm shadow-sm transition-[box-shadow,border-color,opacity] duration-fast ease-brand',
-        isDragging ? 'opacity-40' : 'cursor-grab hover:border-primary',
+        'inline-flex w-full items-center gap-2 bg-transparent px-0 py-0 text-left text-sm transition-opacity duration-fast ease-brand',
+        isDragging ? 'opacity-40' : 'cursor-grab',
       ].join(' ')}
     >
       <DotsSixVertical
         aria-hidden
         weight="bold"
-        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50"
       />
       <span className="flex-1 truncate">{player.name || '(unnamed)'}</span>
       <span
         className={[
-          'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-3xs tabular-nums',
+          'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-sm px-1 text-3xs tabular-nums',
           heavy
             ? 'bg-status-warning-bg text-status-warning ring-1 ring-status-warning/40'
-            : 'text-muted-foreground',
+            : 'text-muted-foreground/70',
         ].join(' ')}
         title={
           heavy

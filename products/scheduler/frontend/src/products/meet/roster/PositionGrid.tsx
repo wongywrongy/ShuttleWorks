@@ -33,9 +33,12 @@ export { usePositionGridColumns } from './positionGrid/usePositionGridColumns';
 export function PositionGrid({
   schoolId,
   highlightedPlayerId,
+  onSelectPlayer,
 }: {
   schoolId: string;
   highlightedPlayerId?: string | null;
+  /** Single-click an assigned player in a cell → open their detail panel. */
+  onSelectPlayer?: (playerId: string) => void;
 }) {
   const players = useTournamentStore((s) => s.players);
 
@@ -74,6 +77,7 @@ export function PositionGrid({
       schoolId={schoolId}
       byRank={byRank}
       highlightedPlayerId={highlightedPlayerId}
+      onSelectPlayer={onSelectPlayer}
     />
   );
 }

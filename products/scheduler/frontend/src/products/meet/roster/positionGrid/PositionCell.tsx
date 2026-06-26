@@ -1,16 +1,22 @@
 /**
  * One cell in the position grid. Owns the drag-drop droppable target
- * wiring and the inline search picker that opens on click; the chip
- * rendering (grouped pair for filled doubles, standalone chips for
- * singles or half-filled doubles, highlighting) lives in `CellChips`.
+ * (pool→cell assign), the inline reassign picker, and the click model:
  *
- * The singles-displacement invariant lives in `useRankAssignment` —
- * assigning a player to a singles rank strips that rank from any other
- * holder in the same school. Doubles capacity (≤2) is guarded here at
- * the call site before delegating to the hook.
+ *   - filled cell, single click on a name → open that player's detail
+ *     panel (debounced so a double-click doesn't also fire it)
+ *   - filled cell, double click           → enter edit mode (reassign picker)
+ *   - empty cell, single click            → assign picker
+ *
+ * A faint pencil glyph appears on hover of a filled cell to signal that
+ * double-click reassigns; the names are `cursor-pointer` to signal that a
+ * single click views detail.
+ *
+ * The singles-displacement invariant lives in `useRankAssignment`; doubles
+ * capacity (≤2) is guarded here before delegating to the hook.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
+import { PencilSimple } from '@phosphor-icons/react';
 import type { PlayerDTO } from '../../../../api/dto';
 import { useRankAssignment } from './useRankAssignment';
 import { CellChips } from './CellChips';
@@ -23,6 +29,7 @@ export function PositionCell({
   disabled,
   occupants,
   highlightedPlayerId,
+  onSelectPlayer,
 }: {
   schoolId: string;
   rank: string;
@@ -30,12 +37,38 @@ export function PositionCell({
   disabled: boolean;
   occupants: PlayerDTO[];
   highlightedPlayerId?: string | null;
+  onSelectPlayer?: (playerId: string) => void;
 }) {
   const { assignRank, unassignRank } = useRankAssignment();
   const capacity = doubles ? 2 : 1;
   const isFull = occupants.length >= capacity;
 
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Single-click opens detail, double-click opens the reassign picker.
+  // A short timer suppresses the single-click action when a double-click
+  // follows, so the two gestures stay cleanly separated.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (clickTimer.current) clearTimeout(clickTimer.current);
+    },
+    [],
+  );
+  const handleSelect = (playerId: string) => {
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    clickTimer.current = setTimeout(() => {
+      onSelectPlayer?.(playerId);
+      clickTimer.current = null;
+    }, 220);
+  };
+  const handleEdit = () => {
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
+    setPickerOpen(true);
+  };
 
   const { setNodeRef, isOver, active } = useDroppable({
     id: `cell:${schoolId}:${rank}`,
@@ -48,8 +81,6 @@ export function PositionCell({
   };
 
   const assignPlayer = (playerId: string) => {
-    // Doubles capacity guard stays at the call site; the singles
-    // displacement invariant + the add live in useRankAssignment.
     if (doubles && occupants.length >= capacity) return;
     assignRank(schoolId, playerId, rank);
   };
@@ -68,7 +99,7 @@ export function PositionCell({
       ref={setNodeRef}
       data-testid={`pos-cell-${schoolId}-${rank}`}
       className={[
-        'relative align-top border-b border-r border-border last:border-r-0 transition-colors min-w-[160px]',
+        'group/cell relative align-top border-b border-r border-border last:border-r-0 transition-colors min-w-[160px]',
         disabled ? 'bg-muted/60 text-muted-foreground/70' : '',
         isDragging && !disabled ? 'ring-1 ring-inset ring-border' : '',
         dragHover
@@ -80,38 +111,49 @@ export function PositionCell({
       ].join(' ')}
     >
       {disabled ? (
-        <span className="block px-1 py-1 text-3xs italic opacity-50">—</span>
+        <span className="block px-1.5 py-1 text-3xs italic opacity-50">—</span>
+      ) : occupants.length > 0 ? (
+        // Filled cell: names view-on-click; double-click anywhere reassigns.
+        <div
+          onDoubleClick={handleEdit}
+          className="px-1.5 py-1"
+        >
+          <CellChips
+            occupants={occupants}
+            doubles={doubles}
+            highlightedPlayerId={highlightedPlayerId}
+            onSelect={handleSelect}
+            onRemove={removeRank}
+          />
+          {doubles && occupants.length === 1 ? (
+            <button
+              type="button"
+              data-no-picker="true"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPickerOpen(true);
+              }}
+              className="mt-0.5 inline-flex items-center gap-1 rounded-sm border border-dashed border-border px-1.5 py-0.5 text-3xs italic text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
+            >
+              ＋ add partner
+            </button>
+          ) : null}
+          {/* Hover affordance: signals double-click reassigns. */}
+          <PencilSimple
+            aria-hidden
+            className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground/40 opacity-0 transition-opacity duration-fast ease-brand group-hover/cell:opacity-100"
+          />
+        </div>
       ) : (
+        // Empty cell: single click assigns.
         <button
           type="button"
-          onClick={(e) => {
-            if ((e.target as HTMLElement).dataset.noPicker) return;
-            setPickerOpen((v) => !v);
-          }}
+          onClick={() => setPickerOpen(true)}
           data-testid={`pos-cell-btn-${schoolId}-${rank}`}
-          className="block w-full rounded px-1 py-1 text-left hover:bg-card/70 focus:outline-none focus:bg-card"
+          className="flex w-full items-center gap-1 px-1.5 py-1 text-left text-xs italic text-muted-foreground transition-colors duration-fast ease-brand hover:text-accent"
         >
-          <div className="flex flex-col gap-1">
-            <CellChips
-              occupants={occupants}
-              doubles={doubles}
-              schoolId={schoolId}
-              highlightedPlayerId={highlightedPlayerId}
-              onRemove={removeRank}
-              rank={rank}
-            />
-            {doubles && occupants.length === 1 ? (
-              <span className="rounded-md border border-dashed border-border px-2 py-0.5 text-3xs italic text-muted-foreground">
-                ＋ add partner
-              </span>
-            ) : null}
-            {occupants.length === 0 ? (
-              <span className="inline-flex items-center gap-1 text-2xs italic text-muted-foreground">
-                <span aria-hidden>＋</span>
-                {doubles ? 'add pair' : 'add player'}
-              </span>
-            ) : null}
-          </div>
+          <span aria-hidden>＋</span>
+          {doubles ? 'add pair' : 'add player'}
         </button>
       )}
 

@@ -13,20 +13,24 @@ export function GridTable({
   schoolId,
   byRank,
   highlightedPlayerId,
+  onSelectPlayer,
 }: {
   events: GridEvent[];
   maxRows: number;
   schoolId: string;
   byRank: Map<string, PlayerDTO[]>;
   highlightedPlayerId?: string | null;
+  onSelectPlayer?: (playerId: string) => void;
 }) {
   return (
     <div className="h-full overflow-auto bg-card">
       {/* border-collapse so the per-cell borders merge into clean grid lines.
           `table-fixed` + w-full spreads the columns evenly across the full
-          width (no right-edge whitespace) instead of sizing to content. */}
+          width (no right-edge whitespace). `h-full` lets the trailing filler
+          row in GridBody absorb the leftover vertical space so the grid frame
+          reaches the bottom of the pane while the real rows stay compact. */}
       <table
-        className="w-full min-w-[780px] table-fixed border-collapse text-sm"
+        className="h-full w-full min-w-[780px] table-fixed border-collapse text-sm"
         data-testid="position-grid-table"
       >
         <GridHeader events={events} />
@@ -36,6 +40,7 @@ export function GridTable({
           schoolId={schoolId}
           byRank={byRank}
           highlightedPlayerId={highlightedPlayerId}
+          onSelectPlayer={onSelectPlayer}
         />
       </table>
     </div>

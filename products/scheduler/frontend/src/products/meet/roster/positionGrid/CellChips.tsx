@@ -2,64 +2,49 @@
  * Plain-text occupant rendering inside a PositionCell.
  *
  *   • Singles cell  → one name on its own line.
- *   • Doubles cell  → up to two names stacked (the pair reads as two
- *     lines; no bordered "card" — keep it compact and chrome-free).
+ *   • Doubles cell  → up to two names stacked.
  *   • 0 occupants   → returns null; the parent shows a "＋ add" hint.
  *
  * Per the roster spec these are PLAIN TEXT lines — no chips, borders,
- * avatars, or handle icons. The name text itself is the drag source
- * (useDraggable, id `chip:{schoolId}:{playerId}:{rank}`) so an assigned
- * player can still be dragged to another cell; the × (a sibling of the
- * name, NOT inside the drag node) unassigns on hover. A plain click on
- * the name bubbles to the cell to open the picker; a drag moves the
- * player. Selection highlight is carried by text colour, not a box.
+ * avatars, or handle icons. Interaction model (owned by PositionCell):
+ *   - single click an occupant name → open that player's detail panel
+ *     (debounced in PositionCell so it doesn't fire on a double-click)
+ *   - double click the cell        → enter edit mode (reassign picker)
+ *   - × (a sibling, not the name)  → unassign
+ * In-cell drag was removed in favour of double-click-to-reassign; the
+ * pool→cell drag from the left list remains the primary assign gesture.
+ * Selection highlight is carried by text colour, not a box.
  */
-import { useDraggable } from '@dnd-kit/core';
 import type { PlayerDTO } from '../../../../api/dto';
 
 function CellChipRow({
   player,
-  schoolId,
-  rank,
   highlighted,
+  onSelect,
   onRemove,
 }: {
   player: PlayerDTO;
-  schoolId: string;
-  rank: string;
   highlighted: boolean;
+  onSelect: (playerId: string) => void;
   onRemove: (playerId: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `chip:${schoolId}:${player.id}:${rank}`,
-    data: { schoolId, playerId: player.id, sourceRank: rank },
-  });
   return (
-    <div
-      className={[
-        'group flex items-center justify-between gap-1 leading-tight',
-        isDragging ? 'opacity-40' : '',
-      ].join(' ')}
-    >
-      {/* Drag source is the name span only, so a pointer-down on the ×
-          (a sibling) never starts a player drag. */}
-      <span
-        ref={setNodeRef}
-        {...listeners}
-        {...attributes}
-        title={player.name || '(unnamed)'}
+    <div className="group/row flex items-center justify-between gap-1 leading-tight">
+      <button
+        type="button"
+        onClick={() => onSelect(player.id)}
+        title={`${player.name || 'player'} — click to view, double-click to reassign`}
         className={[
-          'min-w-0 cursor-grab break-words text-2xs font-medium',
-          highlighted ? 'text-accent' : 'text-foreground',
+          'min-w-0 flex-1 cursor-pointer truncate text-left text-xs font-medium',
+          highlighted ? 'text-accent' : 'text-foreground hover:text-accent',
         ].join(' ')}
       >
         {player.name || '(unnamed)'}
-      </span>
+      </button>
       <span
         role="button"
         tabIndex={0}
         data-no-picker="true"
-        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
           onRemove(player.id);
@@ -71,8 +56,8 @@ function CellChipRow({
             onRemove(player.id);
           }
         }}
-        aria-label={`Unassign ${player.name} from ${rank}`}
-        className="shrink-0 cursor-pointer text-2xs text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100 hover:text-destructive"
+        aria-label={`Unassign ${player.name}`}
+        className="shrink-0 cursor-pointer text-xs text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:text-destructive group-hover/row:opacity-100"
       >
         ×
       </span>
@@ -82,19 +67,17 @@ function CellChipRow({
 
 export function CellChips({
   occupants,
-  schoolId,
   highlightedPlayerId,
+  onSelect,
   onRemove,
-  rank,
 }: {
   occupants: PlayerDTO[];
   /** Retained for call-site compatibility; pair vs. singles no longer
    *  changes the (now chrome-free) rendering. */
   doubles?: boolean;
-  schoolId: string;
   highlightedPlayerId?: string | null;
+  onSelect: (playerId: string) => void;
   onRemove: (playerId: string) => void;
-  rank: string;
 }) {
   if (occupants.length === 0) return null;
   return (
@@ -103,9 +86,8 @@ export function CellChips({
         <CellChipRow
           key={p.id}
           player={p}
-          schoolId={schoolId}
-          rank={rank}
           highlighted={p.id === highlightedPlayerId}
+          onSelect={onSelect}
           onRemove={onRemove}
         />
       ))}

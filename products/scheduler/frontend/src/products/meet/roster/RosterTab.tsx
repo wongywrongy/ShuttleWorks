@@ -291,6 +291,7 @@ export function RosterTab() {
               <PositionGrid
                 schoolId={activeSchoolId}
                 highlightedPlayerId={selectedPlayerId}
+                onSelectPlayer={(id) => setSelectedPlayerId(id)}
               />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -551,7 +552,7 @@ function PlayerListSection({
   return (
     <ul
       data-testid="player-list"
-      className="flex-1 space-y-1 overflow-y-auto px-2 py-2"
+      className="flex-1 space-y-0.5 overflow-y-auto px-2 py-2"
     >
       {players.map((p) => {
         const isSelected = p.id === selectedPlayerId;
@@ -561,18 +562,21 @@ function PlayerListSection({
             data-testid={`player-row-${p.id}`}
             data-selected={isSelected ? 'true' : 'false'}
             className={[
-              'group relative flex items-center gap-1 rounded-sm transition-colors duration-fast ease-brand',
+              // Same row family as the school list: border-l accent bar,
+              // py-1 / pl-2 / pr-2, text-sm, hover wash. Keeps both lists at
+              // one density.
+              'group flex cursor-pointer items-center gap-2 rounded-sm border-l-2 py-1 pl-2 pr-2 text-sm transition-colors duration-fast ease-brand',
               isSelected
-                ? 'bg-accent/10 ring-1 ring-accent/30'
-                : 'hover:bg-muted/40',
+                ? 'border-accent bg-accent/10 font-medium text-foreground'
+                : 'border-transparent text-foreground hover:bg-muted/40',
             ].join(' ')}
             onClick={(e) => {
-              // Don't toggle when clicking the drag chip's own buttons.
+              // Don't toggle when clicking the row's own buttons (× delete).
               if ((e.target as HTMLElement).closest('[data-no-select]')) return;
               onTogglePlayer(p.id);
             }}
           >
-            <span className="flex-1">
+            <span className="min-w-0 flex-1">
               <DraggablePlayerChip player={p} schoolId={schoolId} />
             </span>
             <button
@@ -584,7 +588,7 @@ function PlayerListSection({
               }}
               title={`Remove ${p.name}`}
               aria-label={`Remove ${p.name}`}
-              className="rounded-sm p-1 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+              className="shrink-0 rounded-sm p-0.5 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
             >
               ×
             </button>
