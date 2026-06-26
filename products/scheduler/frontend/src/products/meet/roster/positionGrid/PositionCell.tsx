@@ -12,7 +12,6 @@
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import type { PlayerDTO } from '../../../../api/dto';
-import { EVENT_LABEL } from './helpers';
 import { useRankAssignment } from './useRankAssignment';
 import { CellChips } from './CellChips';
 import { PlayerSearchPicker } from './PlayerSearchPicker';
@@ -20,7 +19,6 @@ import { PlayerSearchPicker } from './PlayerSearchPicker';
 export function PositionCell({
   schoolId,
   rank,
-  eventPrefix,
   doubles,
   disabled,
   occupants,
@@ -28,7 +26,6 @@ export function PositionCell({
 }: {
   schoolId: string;
   rank: string;
-  eventPrefix: string;
   doubles: boolean;
   disabled: boolean;
   occupants: PlayerDTO[];
@@ -66,15 +63,13 @@ export function PositionCell({
   const dragReject = isOver && !dragIsEligible;
   const isDragging = active !== null;
 
-  const bodyTint = EVENT_LABEL[eventPrefix]?.body ?? '';
-
   return (
     <td
       ref={setNodeRef}
       data-testid={`pos-cell-${schoolId}-${rank}`}
       className={[
         'relative align-top border-b border-r border-border last:border-r-0 transition-colors min-w-[160px]',
-        disabled ? 'bg-muted/60 text-muted-foreground/70' : bodyTint,
+        disabled ? 'bg-muted/60 text-muted-foreground/70' : '',
         isDragging && !disabled ? 'ring-1 ring-inset ring-border' : '',
         dragHover
           ? 'bg-status-done-bg ring-[3px] ring-inset ring-status-done shadow-inner'

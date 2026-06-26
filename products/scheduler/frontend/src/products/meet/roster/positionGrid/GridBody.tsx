@@ -36,7 +36,6 @@ export function GridBody({
                 key={ev.prefix}
                 schoolId={schoolId}
                 rank={rank}
-                eventPrefix={ev.prefix}
                 doubles={isDoubles(ev.prefix)}
                 disabled={occupants === null}
                 occupants={occupants ?? []}

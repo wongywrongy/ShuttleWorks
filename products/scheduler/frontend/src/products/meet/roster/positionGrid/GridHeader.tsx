@@ -1,14 +1,14 @@
 /**
- * Position-grid header row — the `#` row-number stub plus one `<th>` per
- * visible event, carrying the event's identity color (EVENT_LABEL) and a
- * doubles/singles subtitle.
- *
- * Event columns are draggable to reorder directly in the grid (writes
- * `config.eventOrder` via reorderColumns). This uses a NESTED DndContext +
- * horizontal SortableContext — DOM-less providers, so the `<tr>` still
- * contains only `<th>` — isolated from the parent chip-drag context (its
- * IDs are raw event prefixes, distinct from `cell:`/`player:`/`chip:`).
- * Show/hide + reset still live in the Columns menu (those aren't drags).
+ * Position-grid header row. Neutral theme (no per-event colors) to match
+ * the site. All column management lives in the grid itself — no separate
+ * menu:
+ *   - REORDER: drag a header (a horizontal SortableContext in a nested,
+ *     DOM-less DndContext, isolated from the chip-drag context — its IDs
+ *     are raw event prefixes, distinct from cell:/player:/chip:).
+ *   - HIDE: hover a header → eye-slash button (toggleVisible).
+ *   - RESTORE / RESET: the `#` corner cell shows dashed chips for hidden
+ *     events (click to show) and a reset control when order/visibility is
+ *     customized.
  */
 import type { CSSProperties } from 'react';
 import {
@@ -26,7 +26,8 @@ import {
   horizontalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { EVENT_LABEL, isDoubles } from './helpers';
+import { EyeSlash, ArrowCounterClockwise } from '@phosphor-icons/react';
+import { EVENT_LABEL, EVENT_ORDER, isDoubles } from './helpers';
 import { usePositionGridColumns } from './usePositionGridColumns';
 
 export interface GridEvent {
@@ -34,7 +35,13 @@ export interface GridEvent {
   count: number;
 }
 
-function SortableHeaderCell({ ev }: { ev: GridEvent }) {
+function SortableHeaderCell({
+  ev,
+  onHide,
+}: {
+  ev: GridEvent;
+  onHide: (prefix: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: ev.prefix });
   const label = EVENT_LABEL[ev.prefix];
@@ -47,29 +54,45 @@ function SortableHeaderCell({ ev }: { ev: GridEvent }) {
     <th
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      // dnd-kit's sortable attributes set role="button"; restore the table
-      // header semantics (it stays keyboard-draggable via the listeners +
-      // aria-roledescription="sortable").
-      role="columnheader"
-      className={`cursor-grab touch-none border-b-2 border-r border-border px-3 py-1.5 text-left text-xs font-bold tracking-wide last:border-r-0 active:cursor-grabbing ${label?.header ?? 'bg-muted text-foreground'}`}
-      title={label?.full ? `${label.full} — drag to reorder` : 'Drag to reorder'}
+      className="group relative border-b-2 border-r border-border bg-muted px-3 py-1.5 text-left text-xs font-bold tracking-wide text-foreground last:border-r-0"
     >
-      {ev.prefix}
-      <span className="ml-2 text-3xs font-medium opacity-70">
-        {isDoubles(ev.prefix) ? 'doubles' : 'singles'}
+      {/* Drag handle is the label span (not the whole th) so the hide
+          button stays clickable and the th keeps its columnheader role. */}
+      <span
+        {...attributes}
+        {...listeners}
+        className="inline-flex cursor-grab touch-none items-baseline gap-2 active:cursor-grabbing"
+        title={label?.full ? `${label.full} — drag to reorder` : 'Drag to reorder'}
+      >
+        {ev.prefix}
+        <span className="text-3xs font-medium text-muted-foreground">
+          {isDoubles(ev.prefix) ? 'doubles' : 'singles'}
+        </span>
       </span>
+      <button
+        type="button"
+        onClick={() => onHide(ev.prefix)}
+        aria-label={`Hide ${ev.prefix} column`}
+        title={`Hide ${ev.prefix}`}
+        className="absolute right-1 top-1 rounded p-0.5 text-muted-foreground/50 opacity-0 transition-opacity duration-fast ease-brand hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+      >
+        <EyeSlash aria-hidden className="h-3 w-3" />
+      </button>
     </th>
   );
 }
 
 export function GridHeader({ events }: { events: GridEvent[] }) {
-  const { allConfiguredEvents, reorderColumns } = usePositionGridColumns();
+  const { allConfiguredEvents, reorderColumns, toggleVisible, resetColumns, eventVisible } =
+    usePositionGridColumns();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
   const visibleOrder = events.map((e) => e.prefix);
+  const hidden = allConfiguredEvents.filter((p) => eventVisible?.[p] === false);
+  const canonical = EVENT_ORDER.filter((p) => allConfiguredEvents.includes(p));
+  const reordered = JSON.stringify(allConfiguredEvents) !== JSON.stringify(canonical);
+  const customized = hidden.length > 0 || reordered;
 
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -80,15 +103,40 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
     const nextVisible = arrayMove(visibleOrder, from, to);
     // Preserve any configured-but-hidden events (rare) at the end so the
     // reorder of visible columns never drops them from eventOrder.
-    const hidden = allConfiguredEvents.filter((p) => !visibleOrder.includes(p));
-    reorderColumns([...nextVisible, ...hidden]);
+    const stillHidden = allConfiguredEvents.filter((p) => !visibleOrder.includes(p));
+    reorderColumns([...nextVisible, ...stillHidden]);
   };
 
   return (
     <thead>
       <tr>
-        <th className="w-12 border-b-2 border-r border-border bg-muted py-1.5 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-          #
+        <th className="w-12 border-b-2 border-r border-border bg-muted px-1 py-1.5 align-top text-center text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="flex flex-col items-center gap-1">
+            <span>#</span>
+            {hidden.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => toggleVisible(p)}
+                aria-label={`Show ${p} column`}
+                title={`Show ${p}`}
+                className="rounded border border-dashed border-border px-1 font-mono text-3xs lowercase text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
+              >
+                {p}
+              </button>
+            ))}
+            {customized ? (
+              <button
+                type="button"
+                onClick={resetColumns}
+                aria-label="Reset columns"
+                title="Reset column order &amp; visibility"
+                className="rounded p-0.5 text-muted-foreground/60 transition-colors duration-fast ease-brand hover:text-foreground"
+              >
+                <ArrowCounterClockwise aria-hidden className="h-3 w-3" />
+              </button>
+            ) : null}
+          </div>
         </th>
         <DndContext
           sensors={sensors}
@@ -97,7 +145,7 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
         >
           <SortableContext items={visibleOrder} strategy={horizontalListSortingStrategy}>
             {events.map((ev) => (
-              <SortableHeaderCell key={ev.prefix} ev={ev} />
+              <SortableHeaderCell key={ev.prefix} ev={ev} onHide={toggleVisible} />
             ))}
           </SortableContext>
         </DndContext>

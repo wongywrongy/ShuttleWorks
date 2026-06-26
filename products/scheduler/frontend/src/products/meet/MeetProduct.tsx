@@ -26,8 +26,11 @@ export function MeetProduct() {
   // Publish the meet disruption summary into the neutral uiStore slice the
   // shared TabBar badge reads (keeps the shell free of meet validation deps).
   useDisruptionPublisher();
+    // h-full (not just flex-1): the AppShell <main> that holds this is a
+    // block, not a flex container, so flex-1 can't stretch us — h-full fills
+    // its definite height so meet surfaces (roster grid, etc.) use the screen.
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-auto">
         <Suspense fallback={<TabSkeleton tab={activeTab} />}>
           <div key={activeTab} className="h-full animate-block-in">

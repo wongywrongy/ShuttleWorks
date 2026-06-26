@@ -21,10 +21,12 @@ export function GridTable({
   highlightedPlayerId?: string | null;
 }) {
   return (
-    <div className="overflow-x-auto bg-card">
-      {/* border-collapse so the per-cell borders merge into clean grid lines */}
+    <div className="h-full overflow-auto bg-card">
+      {/* border-collapse so the per-cell borders merge into clean grid lines.
+          `table-fixed` + w-full spreads the columns evenly across the full
+          width (no right-edge whitespace) instead of sizing to content. */}
       <table
-        className="w-full min-w-[780px] border-collapse text-sm"
+        className="w-full min-w-[780px] table-fixed border-collapse text-sm"
         data-testid="position-grid-table"
       >
         <GridHeader events={events} />

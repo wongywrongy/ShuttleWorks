@@ -37,11 +37,7 @@ import {
 import type { PlayerDTO } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { exportRosterXlsx } from '../exports/xlsxExports';
-import {
-  DraggablePlayerChip,
-  PositionGrid,
-  PositionGridColumnControls,
-} from './PositionGrid';
+import { DraggablePlayerChip, PositionGrid } from './PositionGrid';
 import { isDoublesRank } from './positionGrid/helpers';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
@@ -612,7 +608,6 @@ function PositionGridHeader({
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <PositionGridColumnControls />
         <button
           type="button"
           onClick={onExport}

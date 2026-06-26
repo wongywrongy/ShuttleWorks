@@ -22,39 +22,13 @@ import { useTournamentStore } from '../../../store/tournamentStore';
 import type { PlayerDTO } from '../../../api/dto';
 import { usePositionGridColumns } from './positionGrid/usePositionGridColumns';
 import { GridTable } from './positionGrid/GridTable';
-import { ColumnManager } from './positionGrid/ColumnManager';
 
 // Re-export for existing call sites — RosterTab imports DraggablePlayerChip
-// + PositionGridColumnControls from './PositionGrid'. usePositionGridColumns
-// now lives in its own module; re-export to keep the public surface stable.
+// from './PositionGrid'. usePositionGridColumns now lives in its own module;
+// re-export to keep the public surface stable. Column management (reorder /
+// hide / reset) now lives in the grid header itself — no separate menu.
 export { DraggablePlayerChip } from './positionGrid/DraggablePlayerChip';
 export { usePositionGridColumns } from './positionGrid/usePositionGridColumns';
-
-/**
- * Standalone column-visibility/order control. Rendered by RosterTab
- * inside its `PositionGridHeader` so the grid itself can sit flush
- * against the page chrome with no internal header bar.
- */
-export function PositionGridColumnControls() {
-  const {
-    allConfiguredEvents,
-    eventVisible,
-    moveColumn,
-    reorderColumns,
-    toggleVisible,
-    resetColumns,
-  } = usePositionGridColumns();
-  return (
-    <ColumnManager
-      order={allConfiguredEvents}
-      visible={eventVisible}
-      onMove={moveColumn}
-      onReorder={reorderColumns}
-      onToggle={toggleVisible}
-      onReset={resetColumns}
-    />
-  );
-}
 
 export function PositionGrid({
   schoolId,
