@@ -54,7 +54,7 @@ function SortableHeaderCell({
     <th
       ref={setNodeRef}
       style={style}
-      className="group relative border-b-2 border-r border-border bg-muted px-2 py-1.5 text-left text-xs font-bold tracking-wide text-foreground last:border-r-0"
+      className="group relative border-b border-r border-border bg-muted/40 px-2 py-1.5 text-left text-xs font-bold tracking-wide text-foreground last:border-r-0"
     >
       {/* Drag handle is the label span (not the whole th) so the hide
           button stays clickable and the th keeps its columnheader role. */}
@@ -110,7 +110,7 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
   return (
     <thead>
       <tr>
-        <th className="w-9 border-b-2 border-r border-border bg-muted px-1 py-1.5 align-top text-center text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <th className="w-9 border-b border-r border-border bg-muted/40 px-1 py-1.5 align-top text-center text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
           <div className="flex flex-col items-center gap-1">
             <span>#</span>
             {hidden.map((p) => (

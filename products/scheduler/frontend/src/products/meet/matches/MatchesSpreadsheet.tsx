@@ -23,12 +23,6 @@ import { useDisruptions } from './useDisruptions';
 import { EVENT_LABEL, EVENT_ORDER, isDoublesRank } from '../roster/positionGrid/helpers';
 import { maxSeverity, type MatchIssue } from './validateMatch';
 
-function eventTintForPrefix(rank: string | null | undefined): string {
-  if (!rank) return '';
-  const prefix = rank.match(/^[A-Z]+/)?.[0] ?? '';
-  return EVENT_LABEL[prefix]?.body ?? '';
-}
-
 /** Side capacity derived from the event rank. Singles = 1, doubles =
  *  2, unknown rank = 2 (let the operator fill it; validation will flag
  *  any oversized state). */
@@ -235,7 +229,7 @@ function GroupHeader({
       onClick={onToggle}
       aria-expanded={!collapsed}
       data-testid={`match-group-${label}`}
-      className="flex w-full items-center gap-2 border-b border-border bg-muted/30 px-5 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/50"
+      className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-5 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/60"
     >
       <CaretRight
         aria-hidden
@@ -258,7 +252,7 @@ function GroupHeader({
  * ========================================================================= */
 function ColumnHeaderRow() {
   return (
-    <div className="flex items-center gap-3 border-b-2 border-border bg-muted/40 px-5 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+    <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-5 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
       <span className="w-4" aria-hidden />
       <span className="w-8">#</span>
       <span className="w-20">Event</span>
@@ -359,7 +353,7 @@ function MatchRow({
       data-testid={`match-row-${match.id}`}
       data-severity={severity ?? 'none'}
       className={[
-        'group flex min-h-[44px] items-center gap-3 border-b border-border px-5',
+        'group flex min-h-[40px] items-center gap-3 border-b border-border px-5',
         'transition-colors duration-fast ease-brand hover:bg-muted/30',
         accentStripe,
       ].join(' ')}
@@ -405,10 +399,7 @@ function MatchRow({
           mono
           size="sm"
           ariaLabel="Event rank"
-          triggerClassName={[
-            'w-20 border-transparent px-1.5 py-0.5 hover:border-border/60 focus:bg-card',
-            eventTintForPrefix(match.eventRank),
-          ].join(' ')}
+          triggerClassName="w-20 border-transparent px-1.5 py-0.5 hover:border-border/60 focus:bg-card"
         />
       ) : (
         <input
@@ -423,7 +414,6 @@ function MatchRow({
             'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-mono tabular-nums outline-none',
             'transition-colors duration-fast ease-brand',
             'hover:border-border/60 focus:border-accent focus:bg-card',
-            eventTintForPrefix(match.eventRank),
           ].join(' ')}
         />
       )}
@@ -610,9 +600,9 @@ function PlayerCellEditor({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="text-xs italic text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+            className="text-xs italic text-muted-foreground transition-colors duration-fast ease-brand hover:text-accent"
           >
-            {side}…
+            ＋ add player
           </button>
         ) : (
           selectedPlayers.map((p, i) => (
@@ -620,7 +610,7 @@ function PlayerCellEditor({
               <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="text-foreground underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                className="text-foreground transition-colors duration-fast ease-brand hover:text-accent"
                 title={`Click to edit ${side}`}
               >
                 {p.name || '—'}
@@ -632,7 +622,7 @@ function PlayerCellEditor({
                   toggle(p.id);
                 }}
                 aria-label={`Remove ${p.name}`}
-                className="ml-0.5 text-muted-foreground/60 hover:text-destructive"
+                className="ml-0.5 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:text-destructive group-hover:opacity-100"
               >
                 ×
               </button>
@@ -647,7 +637,7 @@ function PlayerCellEditor({
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-label={`Add player to ${side}`}
-            className="text-xs text-muted-foreground/70 underline decoration-dotted underline-offset-2 hover:text-foreground"
+            className="text-xs italic text-muted-foreground/70 transition-colors duration-fast ease-brand hover:text-accent"
           >
             ＋ add
           </button>

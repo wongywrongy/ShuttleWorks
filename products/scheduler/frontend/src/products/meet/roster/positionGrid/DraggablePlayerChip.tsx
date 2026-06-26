@@ -5,7 +5,6 @@
  * based on school match.
  */
 import { useDraggable } from '@dnd-kit/core';
-import { DotsSixVertical } from '@phosphor-icons/react';
 import type { PlayerDTO } from '../../../../api/dto';
 
 export function DraggablePlayerChip({
@@ -23,8 +22,8 @@ export function DraggablePlayerChip({
   const heavy = eventCount >= 4;
   // Flat, chrome-free row content — the parent list <li> carries the row
   // background / active state so player rows read at the same density and
-  // weight as the school-list rows (one component family). This element is
-  // just the drag source + the name + the event-count badge.
+  // weight as the rest of the Meet surfaces (one row family). Plain name +
+  // event-count badge; no handle glyph (the whole row is the drag source).
   return (
     <button
       ref={setNodeRef}
@@ -36,11 +35,6 @@ export function DraggablePlayerChip({
         isDragging ? 'opacity-40' : 'cursor-grab',
       ].join(' ')}
     >
-      <DotsSixVertical
-        aria-hidden
-        weight="bold"
-        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50"
-      />
       <span className="flex-1 truncate">{player.name || '(unnamed)'}</span>
       <span
         className={[
