@@ -92,7 +92,7 @@ export function LiveMetricsBar({
 
         <div className={`flex items-center gap-1 transition-transform duration-300 ease-brand ${showPulse ? 'scale-105' : ''}`}>
           <span className="text-muted-foreground">Solutions:</span>
-          <span className={`font-mono font-medium tabular-nums ${showPulse ? 'text-green-600' : 'text-foreground'}`}>
+          <span className={`font-mono font-medium tabular-nums ${showPulse ? 'text-status-live' : 'text-foreground'}`}>
             <AnimatedNumber value={solutionCount} formatFn={(n) => Math.round(n).toString()} />
           </span>
         </div>

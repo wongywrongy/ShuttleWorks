@@ -86,7 +86,7 @@ export function CandidatesPanel({ schedule, onSelect }: Props) {
             <div className="mt-0.5 flex items-center justify-between gap-2 text-2xs text-muted-foreground">
               <span>found at {c.foundAtSeconds.toFixed(1)}s</span>
               {!isActive && (
-                <span className={isLowDisruption ? 'text-green-600 dark:text-green-400 font-medium' : ''}>
+                <span className={isLowDisruption ? 'text-status-live font-medium' : ''}>
                   {movedCount} move{movedCount === 1 ? '' : 's'} vs active
                   {isLowDisruption ? ' · low-disruption' : ''}
                 </span>

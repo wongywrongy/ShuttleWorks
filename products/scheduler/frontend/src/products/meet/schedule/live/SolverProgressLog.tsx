@@ -130,11 +130,11 @@ export function SolverProgressLog({
   const getEntryColor = (type: SolverLogEntry['type']) => {
     switch (type) {
       case 'solution':
-        return 'text-green-600';
+        return 'text-status-live';
       case 'violation':
-        return 'text-amber-600';
+        return 'text-status-warning';
       case 'stats':
-        return 'text-blue-600 font-medium';
+        return 'text-status-started font-medium';
       case 'progress':
         return 'text-muted-foreground italic';
       default:

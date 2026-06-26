@@ -41,7 +41,7 @@ function WarningTable({ warnings }: { warnings: ImportWarning[] }) {
               <td className="px-2 py-1 text-foreground">{w.timeLabel || '—'}</td>
               <td className="px-2 py-1 text-foreground">{w.court || '—'}</td>
               <td className="px-2 py-1 text-foreground">{w.event || '—'}</td>
-              <td className="px-2 py-1 text-orange-700">{w.reason}</td>
+              <td className="px-2 py-1 text-status-warning">{w.reason}</td>
             </tr>
           ))}
         </tbody>
@@ -80,7 +80,7 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
         {plan.schools.join(' vs ')}), <strong>{plan.players.length}</strong> players,{' '}
         <strong>{plan.matches.length}</strong> matches,{' '}
         <strong>{plan.assignments.length}</strong> scheduled of {plan.totalScheduleRows} rows.
-        <span className="block text-2xs text-orange-700">
+        <span className="block text-2xs text-status-warning">
           This replaces your entire current tournament (groups, players, matches, schedule).
         </span>
       </>
@@ -118,7 +118,7 @@ export function ScheduleImportModal({ result, busy, onApply, onCancel }: Props) 
             disabled={!canApply}
             data-testid="schedule-import-apply"
             aria-busy={busy}
-            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700`}
+            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:brightness-110`}
           >
             {busy && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
             {busy ? 'Applying…' : applyLabel}

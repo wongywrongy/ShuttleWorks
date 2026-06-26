@@ -1,3 +1,5 @@
+import { INTERACTIVE_BASE } from '../../../lib/utils';
+
 interface SetupGuideProps {
   isOpen: boolean;
   onClose: () => void;
@@ -176,9 +178,9 @@ export function SetupGuide({ isOpen, onClose }: SetupGuideProps) {
           </section>
 
           {/* TIPS */}
-          <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-sm">
-            <h4 className="font-semibold text-blue-900 mb-1 text-sm">Quick Reference</h4>
-            <ul className="list-disc list-inside space-y-0.5 text-blue-800 text-xs">
+          <div className="mt-3 p-2 bg-status-started-bg border border-status-started/30 rounded-sm">
+            <h4 className="font-semibold text-status-started mb-1 text-sm">Quick Reference</h4>
+            <ul className="list-disc list-inside space-y-0.5 text-foreground text-xs">
               <li>Total available time = Day End minus Day Start (in minutes)</li>
               <li>Number of slots = Total time divided by Interval Minutes</li>
               <li>More courts = more simultaneous matches = shorter overall schedule</li>
@@ -192,7 +194,7 @@ export function SetupGuide({ isOpen, onClose }: SetupGuideProps) {
         <div className="mt-3 flex justify-end">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded-sm text-sm hover:bg-blue-700"
+            className={`${INTERACTIVE_BASE} px-3 py-1.5 bg-primary text-primary-foreground rounded-sm text-sm hover:brightness-110`}
           >
             Close
           </button>

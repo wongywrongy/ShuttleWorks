@@ -69,11 +69,11 @@ function moveDirection(move: MatchMove): Direction {
 }
 
 const DIRECTION_TONE: Record<Direction, string> = {
-  forward: 'bg-amber-50 text-amber-700 border-amber-200',  // moved later
-  backward: 'bg-emerald-50 text-emerald-700 border-emerald-200',  // moved earlier
-  'court-only': 'bg-blue-50 text-blue-700 border-blue-200',
-  add: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  remove: 'bg-red-50 text-red-700 border-red-200',
+  forward: 'bg-status-warning-bg text-status-warning border-status-warning/30',  // moved later
+  backward: 'bg-status-live-bg text-status-live border-status-live/30',  // moved earlier
+  'court-only': 'bg-status-started-bg text-status-started border-status-started/30',
+  add: 'bg-status-live-bg text-status-live border-status-live/30',
+  remove: 'bg-status-blocked-bg text-status-blocked border-status-blocked/30',
 };
 
 const DIRECTION_LABEL: Record<Direction, string> = {
@@ -248,9 +248,9 @@ export function ScheduleDiffView({
     <div className="space-y-2">
       {/* Infeasibility warnings — surface first, slim variant */}
       {impact.infeasibilityWarnings.length > 0 && (
-        <div className="rounded border border-red-300 bg-red-50 px-2 py-1.5 text-xs text-red-800" role="alert">
+        <div className="rounded border border-status-blocked/40 bg-status-blocked-bg px-2 py-1.5 text-xs text-status-blocked" role="alert">
           <div className="flex items-start gap-1.5">
-            <WarningOctagon className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-red-500" aria-hidden="true" />
+            <WarningOctagon className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-status-blocked" aria-hidden="true" />
             <div className="flex-1">
               <span className="font-semibold">
                 {pluralize(impact.infeasibilityWarnings.length, 'warning')}:
@@ -483,10 +483,10 @@ function Pill({
     value === 0 ? null : improvedWhenNegative ? value < 0 : value > 0;
   const tone =
     better === null
-      ? 'bg-bg-subtle text-fg-muted'
+      ? 'bg-muted text-muted-foreground'
       : better
-        ? 'bg-emerald-50 text-emerald-700'
-        : 'bg-red-50 text-red-700';
+        ? 'bg-status-live-bg text-status-live'
+        : 'bg-status-blocked-bg text-status-blocked';
   const formatted = integer ? value.toFixed(0) : value.toFixed(1);
   return (
     <span className={`rounded px-2 py-0.5 ${tone}`}>

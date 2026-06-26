@@ -159,7 +159,7 @@ export function BackupPanel() {
         }
       >
         {error && (
-          <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700">
+          <div className="rounded border border-destructive/40 bg-status-blocked-bg px-2 py-1 text-xs text-status-blocked">
             {error}
           </div>
         )}
@@ -186,13 +186,13 @@ export function BackupPanel() {
                 </div>
                 {confirmRestore === e.filename ? (
                   <div className="flex items-center gap-1">
-                    <span className="text-orange-600">Replace current state?</span>
+                    <span className="text-status-warning">Replace current state?</span>
                     <button
                       type="button"
                       onClick={() => handleRestore(e.filename)}
                       disabled={busyAction !== null}
                       aria-busy={busyAction === e.filename}
-                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700`}
+                      className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded bg-destructive px-2 py-0.5 text-destructive-foreground hover:brightness-110`}
                     >
                       {busyAction === e.filename && (
                         <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />
