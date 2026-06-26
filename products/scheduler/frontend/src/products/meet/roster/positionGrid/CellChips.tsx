@@ -35,7 +35,7 @@ function CellChipRow({
         onClick={() => onSelect(player.id)}
         title={`${player.name || 'player'} — click to view, double-click to reassign`}
         className={[
-          'min-w-0 flex-1 cursor-pointer truncate text-left text-xs font-medium',
+          'min-w-0 flex-1 cursor-pointer break-normal text-left text-xs font-medium leading-tight',
           highlighted ? 'text-accent' : 'text-foreground hover:text-accent',
         ].join(' ')}
       >

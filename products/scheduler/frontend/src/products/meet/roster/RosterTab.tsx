@@ -309,7 +309,7 @@ export function RosterTab() {
         {selectedPlayer ? (
           <aside
             data-testid="roster-detail-pane"
-            className="flex w-[340px] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+            className="flex w-[320px] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
           >
             <PlayerDetailPanel
               player={selectedPlayer}

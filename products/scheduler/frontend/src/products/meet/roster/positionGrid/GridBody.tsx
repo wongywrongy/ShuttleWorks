@@ -27,7 +27,7 @@ export function GridBody({
     <tbody>
       {Array.from({ length: maxRows }, (_, i) => i + 1).map((row) => (
         <tr key={row}>
-          <td className="w-12 border-b border-r border-border bg-muted/40 py-1 text-center text-xs font-semibold text-muted-foreground tabular-nums">
+          <td className="w-9 border-b border-r border-border bg-muted/40 py-1 text-center text-xs font-semibold text-muted-foreground tabular-nums">
             {row}
           </td>
           {events.map((ev) => {

@@ -122,17 +122,20 @@ export function PlayerSearchPicker({
                 onMouseEnter={() => setActiveIndex(i)}
                 data-testid={`picker-option-${p.id}`}
                 className={[
-                  'flex w-full items-center justify-between rounded px-2 py-1 text-left text-sm transition-colors',
+                  'flex w-full flex-col items-start gap-0.5 rounded px-2 py-1 text-left text-sm transition-colors',
                   i === safeActiveIndex
                     ? 'bg-accent/10 text-accent'
                     : 'text-foreground hover:bg-muted/50',
                 ].join(' ')}
               >
-                <span className="truncate">{p.name || '(unnamed)'}</span>
+                {/* Name on its own line + ranks below, so neither truncates
+                    when the picker is constrained to a narrow grid column. */}
+                <span className="w-full break-normal leading-tight">
+                  {p.name || '(unnamed)'}
+                </span>
                 {currentRanks.length > 0 ? (
-                  <span className="ml-2 truncate text-3xs font-normal text-muted-foreground">
-                    {currentRanks.slice(0, 3).join(', ')}
-                    {currentRanks.length > 3 ? '…' : ''}
+                  <span className="w-full break-normal text-3xs font-normal text-muted-foreground">
+                    {currentRanks.join(', ')}
                   </span>
                 ) : null}
               </button>

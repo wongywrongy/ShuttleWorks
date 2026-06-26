@@ -26,11 +26,13 @@ export function GridTable({
     <div className="h-full overflow-auto bg-card">
       {/* border-collapse so the per-cell borders merge into clean grid lines.
           `table-fixed` + w-full spreads the columns evenly across the full
-          width (no right-edge whitespace). `h-full` lets the trailing filler
-          row in GridBody absorb the leftover vertical space so the grid frame
-          reaches the bottom of the pane while the real rows stay compact. */}
+          width. The min-width is a low floor (≈480) so the columns shrink to
+          fit whatever width the centre pane has — when the detail pane opens
+          the grid stays fully visible (all columns, no clipped right edge)
+          instead of forcing a horizontal scrollbar. `h-full` lets the trailing
+          filler row in GridBody fill the height while real rows stay compact. */}
       <table
-        className="h-full w-full min-w-[780px] table-fixed border-collapse text-sm"
+        className="h-full w-full min-w-[480px] table-fixed border-collapse text-sm"
         data-testid="position-grid-table"
       >
         <GridHeader events={events} />

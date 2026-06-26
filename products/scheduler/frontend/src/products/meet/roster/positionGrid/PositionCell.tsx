@@ -99,7 +99,7 @@ export function PositionCell({
       ref={setNodeRef}
       data-testid={`pos-cell-${schoolId}-${rank}`}
       className={[
-        'group/cell relative align-top border-b border-r border-border last:border-r-0 transition-colors min-w-[160px]',
+        'group/cell relative align-top border-b border-r border-border last:border-r-0 transition-colors',
         disabled ? 'bg-muted/60 text-muted-foreground/70' : '',
         isDragging && !disabled ? 'ring-1 ring-inset ring-border' : '',
         dragHover
