@@ -52,7 +52,6 @@ from app.dependencies import (
 )
 from repositories import LocalRepository, get_repository
 from scheduler_core.domain.models import (
-    ScheduleConfig,
     SolverOptions,
     SolverStatus,
 )
@@ -87,6 +86,7 @@ from services.bracket.state import (
     register_draw,
 )
 from services.bracket.validation import BracketConflict, validate_bracket_move
+from services.scheduling.params import SchedulingParams, build_schedule_config
 
 router = APIRouter(
     prefix="/tournaments/{tournament_id}/bracket",
@@ -353,10 +353,16 @@ def _hydrate_session(
     total_slots = int(session_cfg.get("total_slots", 128))
     rest = int(_pick(camel_cfg, session_cfg, "restBetweenRounds", "rest_between_rounds", 1))
 
-    config = ScheduleConfig(
-        total_slots=total_slots,
-        court_count=court_count,
-        interval_minutes=interval_minutes,
+    # Built through the shared scheduling-parameter builder so courts /
+    # time window / slot duration are read into a ``ScheduleConfig`` the
+    # same way the meet path reads them (see
+    # ``services/scheduling/params.py``).
+    config = build_schedule_config(
+        SchedulingParams(
+            court_count=court_count,
+            total_slots=total_slots,
+            interval_minutes=interval_minutes,
+        )
     )
 
     start_time_iso = session_cfg.get("start_time")
@@ -986,10 +992,12 @@ def create_bracket(
         state=state,
         draws=draws,
         events=events_meta,
-        config=ScheduleConfig(
-            total_slots=body.total_slots,
-            court_count=body.courts,
-            interval_minutes=body.interval_minutes,
+        config=build_schedule_config(
+            SchedulingParams(
+                court_count=body.courts,
+                total_slots=body.total_slots,
+                interval_minutes=body.interval_minutes,
+            )
         ),
         rest_between_rounds=body.rest_between_rounds,
         start_time=body.start_time,
