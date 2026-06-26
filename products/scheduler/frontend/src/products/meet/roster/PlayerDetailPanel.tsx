@@ -1,13 +1,12 @@
 /**
- * PlayerDetailPanel — docks to the bottom of the Roster right panel
- * when a player is selected. Slides up from below via CSS transform
- * and overlays the bottom 280 px of the grid area; the grid itself
- * keeps its full scrollable height (the operator scrolls past the
- * panel rather than the panel taking grid space).
+ * PlayerDetailPanel — fills the Roster's right-hand pane when a player
+ * is selected. It shares horizontal space with the position grid (the
+ * grid reflows narrower) rather than stacking below it, so the lower
+ * half of the screen is never wasted. The parent (RosterTab) mounts the
+ * pane only while a player is selected; this component just fills it.
  *
- * Always mounted so the slide animation runs both directions cleanly;
- * `pointer-events-none` + opacity 0 + translate-y-full make it inert
- * when no player is selected.
+ * Internals are single-column and fluid (label above control, controls
+ * `w-full`) so everything fits the narrow pane without overflowing.
  *
  * Shows the same fields the (now-removed) inline RosterSpreadsheet
  * carried for one player: school, availability summary, min rest, notes,
@@ -66,13 +65,7 @@ export function PlayerDetailPanel({
     <div
       data-testid="player-detail-panel"
       aria-hidden={!visible}
-      className={[
-        'absolute inset-x-0 bottom-0 z-overlay flex h-[280px] shrink-0 flex-col border-t border-border bg-card text-foreground',
-        'transition-[transform,opacity] duration-moderate ease-brand',
-        visible
-          ? 'translate-y-0 opacity-100'
-          : 'pointer-events-none translate-y-full opacity-0',
-      ].join(' ')}
+      className="flex h-full w-full flex-col bg-card text-foreground animate-block-in"
     >
       <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-3 py-2">
         <div className="flex items-baseline gap-3">
@@ -97,81 +90,90 @@ export function PlayerDetailPanel({
 
       {player ? (
         <div className="flex-1 overflow-y-auto px-3 py-3">
-          {/* Two-column layout matches the rest of the Setup-style
-              rows: label left at 13px / fixed width, control right. */}
-          <div className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-2 items-center">
-            <label className="text-xs font-medium text-muted-foreground">School</label>
-            <Select
-              value={player.groupId}
-              onValueChange={(v) =>
-                updatePlayer(player.id, { groupId: v })
-              }
-              options={groups.map((g) => ({ value: g.id, label: g.name }))}
-              ariaLabel="School"
-              size="sm"
-              triggerStyle={{ width: 220 }}
-            />
-
-            <label className="text-xs font-medium text-muted-foreground">Availability</label>
-            <span className="text-xs text-muted-foreground">
-              {player.availability && player.availability.length > 0
-                ? `${player.availability.length} window${player.availability.length === 1 ? '' : 's'} defined`
-                : 'All day (no restrictions)'}
-            </span>
-
-            <label
-              htmlFor="player-rest-input"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Min rest
-            </label>
-            <span className="inline-flex items-baseline gap-2">
-              <input
-                id="player-rest-input"
-                type="number"
-                min={0}
-                max={120}
-                value={
-                  player.minRestMinutes != null
-                    ? String(player.minRestMinutes)
-                    : ''
+          {/* Single-column, label-above-control — fits the narrow right
+              pane without overflowing (the old fixed widths were sized
+              for the full-width bottom dock). */}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">School</label>
+              <Select
+                value={player.groupId}
+                onValueChange={(v) =>
+                  updatePlayer(player.id, { groupId: v })
                 }
-                placeholder="default"
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  updatePlayer(player.id, {
-                    minRestMinutes:
-                      raw === '' ? undefined : Number(raw) || 0,
-                  });
-                }}
-                className="h-7 w-20 rounded-sm border border-border bg-bg-elev px-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+                options={groups.map((g) => ({ value: g.id, label: g.name }))}
+                ariaLabel="School"
+                size="sm"
+                triggerStyle={{ width: '100%' }}
               />
-              <span className="text-xs text-muted-foreground">min</span>
-            </span>
+            </div>
 
-            <label
-              htmlFor="player-notes-input"
-              className="text-xs font-medium text-muted-foreground self-start mt-1"
-            >
-              Notes
-            </label>
-            <textarea
-              id="player-notes-input"
-              value={player.notes ?? ''}
-              onChange={(e) =>
-                updatePlayer(player.id, {
-                  notes: e.target.value || undefined,
-                })
-              }
-              rows={2}
-              placeholder="Optional notes…"
-              className="w-[360px] rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Availability</label>
+              <span className="text-xs text-muted-foreground">
+                {player.availability && player.availability.length > 0
+                  ? `${player.availability.length} window${player.availability.length === 1 ? '' : 's'} defined`
+                  : 'All day (no restrictions)'}
+              </span>
+            </div>
 
-            <label className="text-xs font-medium text-muted-foreground self-start mt-1">
-              Ranks
-            </label>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="player-rest-input"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Min rest
+              </label>
+              <span className="inline-flex items-baseline gap-2">
+                <input
+                  id="player-rest-input"
+                  type="number"
+                  min={0}
+                  max={120}
+                  value={
+                    player.minRestMinutes != null
+                      ? String(player.minRestMinutes)
+                      : ''
+                  }
+                  placeholder="default"
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    updatePlayer(player.id, {
+                      minRestMinutes:
+                        raw === '' ? undefined : Number(raw) || 0,
+                    });
+                  }}
+                  className="h-7 w-20 rounded-sm border border-border bg-bg-elev px-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <span className="text-xs text-muted-foreground">min</span>
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="player-notes-input"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Notes
+              </label>
+              <textarea
+                id="player-notes-input"
+                value={player.notes ?? ''}
+                onChange={(e) =>
+                  updatePlayer(player.id, {
+                    notes: e.target.value || undefined,
+                  })
+                }
+                rows={3}
+                placeholder="Optional notes…"
+                className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
             <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Ranks
+              </label>
               {Object.keys(availableRanks).length === 0 ? (
                 <span className="text-xs text-muted-foreground">
                   Configure positions in Setup to assign ranks.

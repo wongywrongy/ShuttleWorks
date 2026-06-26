@@ -274,10 +274,10 @@ export function RosterTab() {
           />
         </aside>
 
-        {/* ───── RIGHT PANEL ────────────────────────────────────────── */}
+        {/* ───── CENTER PANEL — position grid ───────────────────────── */}
         <main
           data-testid="roster-right-panel"
-          className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
+          className="flex min-w-0 flex-1 flex-col overflow-hidden"
         >
           <PositionGridHeader
             schoolName={activeSchool?.name ?? '—'}
@@ -298,13 +298,26 @@ export function RosterTab() {
               </div>
             )}
           </div>
-          <PlayerDetailPanel
-            player={selectedPlayer}
-            visible={selectedPlayer !== null}
-            onDismiss={() => setSelectedPlayerId(null)}
-            groups={groups}
-          />
         </main>
+
+        {/* ───── RIGHT PANEL — player detail ────────────────────────── */}
+        {/* Mounted only while a player is selected. It claims a fixed
+            width and the grid's min-w-0 lets it reflow narrower — the
+            detail shares horizontal space rather than pushing the grid
+            down (no wasted lower half). */}
+        {selectedPlayer ? (
+          <aside
+            data-testid="roster-detail-pane"
+            className="flex w-[340px] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+          >
+            <PlayerDetailPanel
+              player={selectedPlayer}
+              visible
+              onDismiss={() => setSelectedPlayerId(null)}
+              groups={groups}
+            />
+          </aside>
+        ) : null}
       </div>
       <DragOverlay dropAnimation={null}>
         {activeDragName ? <DragOverlayChip name={activeDragName} /> : null}
@@ -314,7 +327,9 @@ export function RosterTab() {
 }
 
 /* =========================================================================
- * SchoolsSection — pill switcher + inline "Add school".
+ * SchoolsSection — structured vertical list + inline "Add school".
+ * Each school is a full-width row (name + count); the active row carries
+ * a left-edge accent bar. Not coloured pill tabs.
  * ========================================================================= */
 function SchoolsSection({
   groups,
@@ -345,36 +360,39 @@ function SchoolsSection({
   };
 
   return (
-    <div className="border-b border-border/60 px-3 py-2">
-      {/* Pills + Add on one line — no eyebrow label above; per-pill
-          count acts as the muted suffix. */}
-      <div className="flex flex-wrap items-center gap-1.5">
+    <div className="border-b border-border/60 px-2 py-2">
+      <div className="px-1 pb-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        Schools
+      </div>
+      <ul className="flex flex-col gap-0.5">
         {groups.map((g) => {
           const isActive = g.id === activeSchoolId;
           return (
-            <button
-              key={g.id}
-              type="button"
-              onClick={() => onSelect(g.id)}
-              data-testid={`school-pill-${g.id}`}
-              aria-pressed={isActive}
-              className={[
-                INTERACTIVE_BASE,
-                'inline-flex items-center gap-1.5 border px-2 py-0.5 text-xs font-medium transition-colors duration-fast ease-brand',
-                isActive
-                  ? 'border-accent bg-accent/10 text-accent'
-                  : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
-              ].join(' ')}
-            >
-              {g.name}
-              <span
-                className={`tabular-nums ${isActive ? 'text-accent/70' : 'text-muted-foreground/60'}`}
+            <li key={g.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(g.id)}
+                data-testid={`school-pill-${g.id}`}
+                aria-pressed={isActive}
+                className={[
+                  'group flex w-full items-center gap-2 rounded-sm border-l-2 py-1 pl-2 pr-2 text-left text-sm transition-colors duration-fast ease-brand',
+                  isActive
+                    ? 'border-accent bg-accent/10 font-medium text-foreground'
+                    : 'border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                ].join(' ')}
               >
-                {counts.get(g.id) ?? 0}
-              </span>
-            </button>
+                <span className="min-w-0 flex-1 truncate">{g.name}</span>
+                <span
+                  className={`shrink-0 tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground/60'}`}
+                >
+                  {counts.get(g.id) ?? 0}
+                </span>
+              </button>
+            </li>
           );
         })}
+      </ul>
+      <div className="mt-1 px-0.5">
         {adding ? (
           <input
             autoFocus
@@ -390,16 +408,16 @@ function SchoolsSection({
             }}
             placeholder="School name"
             data-testid="school-add-input"
-            className="h-6 w-32 rounded-sm border border-border bg-bg-elev px-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-7 w-full rounded-sm border border-border bg-bg-elev px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         ) : (
           <button
             type="button"
             onClick={() => setAdding(true)}
             data-testid="school-add-button"
-            className="inline-flex items-center gap-0.5 border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
+            className="flex w-full items-center gap-1 rounded-sm border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
           >
-            ＋ Add
+            ＋ Add school
           </button>
         )}
       </div>
