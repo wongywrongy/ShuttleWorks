@@ -307,7 +307,7 @@ export function MatchDetailsPanel({
                   <span className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Winner
                   </span>{' '}
-                  <span className="font-semibold text-blue-800 dark:text-blue-300">{winnerNames}</span>
+                  <span className="font-semibold text-status-started">{winnerNames}</span>
                 </span>
                 {score && (
                   <span className="font-mono text-sm font-bold tabular-nums text-foreground">
@@ -361,8 +361,8 @@ export function MatchDetailsPanel({
       {status === 'scheduled' && trafficLight?.reason && light !== 'green' && (
         <div className={`px-2 py-1.5 rounded text-3xs mb-3 ${
           light === 'yellow'
-            ? 'bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-500/15 dark:border-yellow-500/40 dark:text-yellow-200'
-            : 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-500/15 dark:border-red-500/40 dark:text-red-200'
+            ? 'bg-status-warning-bg border border-status-warning/40 text-status-warning'
+            : 'bg-status-blocked-bg border border-status-blocked/40 text-status-blocked'
         }`}>
           {trafficLight.reason}
         </div>
@@ -490,7 +490,7 @@ export function MatchDetailsPanel({
               : null;
           const sideClass = (side: 'A' | 'B') =>
             winner === side
-              ? 'text-green-700 dark:text-green-300 font-semibold'
+              ? 'text-status-live font-semibold'
               : winner && winner !== side
                 ? 'text-muted-foreground line-through decoration-1'
                 : 'text-foreground';
@@ -527,7 +527,7 @@ export function MatchDetailsPanel({
                 <div className="flex items-center justify-between gap-1">
                   <span className={`${sideClass(side)} inline-flex items-center gap-1.5 min-w-0`}>
                     {winner === side && (
-                      <span className="rounded bg-blue-100 px-1 text-3xs font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
+                      <span className="rounded bg-status-started-bg px-1 text-3xs font-semibold uppercase tracking-wide text-status-started">
                         Won
                       </span>
                     )}
@@ -552,7 +552,7 @@ export function MatchDetailsPanel({
                         aria-label={confirmed ? 'Mark as not checked in' : 'Check in'}
                         className={`inline-flex items-center justify-center rounded h-4 w-4 text-3xs ${
                           confirmed
-                            ? 'bg-green-600 text-white'
+                            ? 'bg-status-live text-bg-elev'
                             : 'border border-border bg-card text-muted-foreground hover:bg-muted/40'
                         }`}
                       >
@@ -608,8 +608,8 @@ export function MatchDetailsPanel({
                           }}
                           className={
                             armed
-                              ? 'rounded border border-red-500 bg-red-600 px-1 text-3xs font-semibold text-white motion-safe:animate-pulse'
-                              : 'rounded border border-red-300 bg-red-50 px-1 text-3xs text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300'
+                              ? 'rounded border border-destructive bg-destructive px-1 text-3xs font-semibold text-destructive-foreground motion-safe:animate-pulse'
+                              : 'rounded border border-destructive/40 bg-status-blocked-bg px-1 text-3xs text-status-blocked hover:bg-status-blocked-bg/70'
                           }
                           title={
                             armed
@@ -703,7 +703,7 @@ export function MatchDetailsPanel({
                       · waited {formatDuration(matchState.calledAt, matchState.actualStartTime)}
                     </span>
                   ) : (
-                    <span className="ml-1 text-3xs text-blue-600">
+                    <span className="ml-1 text-3xs text-status-started">
                       · {formatDuration(matchState.calledAt, new Date().toISOString())} ago
                     </span>
                   )}
@@ -716,7 +716,7 @@ export function MatchDetailsPanel({
                 <span className="tabular-nums text-foreground">
                   {formatIsoClock(matchState.actualStartTime)}
                   {status === 'started' && (
-                    <span className="ml-1 text-3xs text-green-700">
+                    <span className="ml-1 text-3xs text-status-live">
                       · playing{' '}
                       <ElapsedTimer
                         startTime={matchState.actualStartTime}
@@ -808,7 +808,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={() => onRequestMove(match.id)}
-                  className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-2xs text-blue-700 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200"
+                  className="rounded border border-status-started/40 bg-status-started-bg px-2 py-0.5 text-2xs text-status-started hover:bg-status-started-bg/70"
                   title="Re-anchor this match to a new time or court. Other matches stay put."
                 >
                   Move / postpone…
@@ -826,7 +826,7 @@ export function MatchDetailsPanel({
                   <button
                     type="button"
                     onClick={() => onRequestDisruption('overrun', match.id)}
-                    className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-2xs text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                    className="rounded border border-status-warning/40 bg-status-warning-bg px-2 py-0.5 text-2xs text-status-warning hover:bg-status-warning-bg/70"
                     title="Mark overrun — keeps this match playing, slides successors back to absorb the delay."
                   >
                     Mark overrun
@@ -835,7 +835,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={() => onRequestDisruption('cancellation', match.id)}
-                  className="rounded border border-red-300 bg-red-50 px-2 py-0.5 text-2xs text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"
+                  className="rounded border border-destructive/40 bg-status-blocked-bg px-2 py-0.5 text-2xs text-status-blocked hover:bg-status-blocked-bg/70"
                   title="Cancel match — removes it entirely and frees the slot for later use."
                 >
                   Cancel match

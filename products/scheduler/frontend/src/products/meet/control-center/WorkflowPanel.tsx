@@ -147,7 +147,7 @@ export function WorkflowPanel({
         <div className="flex-shrink-0 border-b border-border/60">
           <div className="px-2 py-1.5 flex items-center justify-between border-b border-border/60">
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-status-live animate-pulse" />
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 In Progress
               </span>

@@ -64,8 +64,8 @@ export function InProgressCard({
       className={[
         'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
         isSelected
-          ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-500/15'
-          : 'border-l-green-500 bg-green-50/60 hover:bg-green-50 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15',
+          ? 'border-l-status-started bg-status-started-bg'
+          : 'border-l-status-live bg-status-live-bg/40 hover:bg-status-live-bg/60',
       ].join(' ')}
     >
       <span className="font-semibold text-foreground tabular-nums">
@@ -78,7 +78,7 @@ export function InProgressCard({
       <span className="truncate text-foreground" title={`${sideANames} vs ${sideBNames}`}>
         {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
         {wasMoved && (
-          <span className="ml-1 text-3xs text-orange-500 dark:text-orange-300">
+          <span className="ml-1 text-3xs text-accent">
             (moved)
           </span>
         )}
@@ -91,7 +91,7 @@ export function InProgressCard({
               onRequestScore(assignment.matchId);
             }}
             disabled={updating}
-            className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-700 !px-2 !py-0.5 !text-2xs`}
+            className={`${ACTION_BTN} bg-primary text-primary-foreground hover:brightness-110 !px-2 !py-0.5 !text-2xs`}
             title="Enter score — opens score editor in the rail"
             aria-label="Enter score"
           >

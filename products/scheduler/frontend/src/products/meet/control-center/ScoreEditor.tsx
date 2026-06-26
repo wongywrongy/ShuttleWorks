@@ -377,7 +377,7 @@ function BadmintonInlineEditor({
                 value={s.sideA || ''}
                 onChange={(e) => updateScore(i, 'sideA', e.target.value)}
                 placeholder="—"
-                className={`${inputCls} ${wonBy === 'A' ? 'border-green-500 bg-green-50 font-semibold text-green-800 dark:bg-green-500/15 dark:text-green-300' : ''}`}
+                className={`${inputCls} ${wonBy === 'A' ? 'border-status-live bg-status-live-bg font-semibold text-status-live' : ''}`}
               />
               <span className="text-muted-foreground">–</span>
               <input
@@ -389,7 +389,7 @@ function BadmintonInlineEditor({
                 value={s.sideB || ''}
                 onChange={(e) => updateScore(i, 'sideB', e.target.value)}
                 placeholder="—"
-                className={`${inputCls} ${wonBy === 'B' ? 'border-green-500 bg-green-50 font-semibold text-green-800 dark:bg-green-500/15 dark:text-green-300' : ''}`}
+                className={`${inputCls} ${wonBy === 'B' ? 'border-status-live bg-status-live-bg font-semibold text-status-live' : ''}`}
               />
             </div>
           );
@@ -399,9 +399,9 @@ function BadmintonInlineEditor({
       <div className="mt-2 flex items-center justify-between rounded bg-card px-2 py-1 text-2xs">
         <span className="text-muted-foreground">Sets</span>
         <span className="font-mono tabular-nums text-foreground">
-          <span className={matchWinner === 'A' ? 'font-semibold text-green-700 dark:text-green-300' : ''}>{setsWonA}</span>
+          <span className={matchWinner === 'A' ? 'font-semibold text-status-live' : ''}>{setsWonA}</span>
           <span className="mx-1 text-muted-foreground">–</span>
-          <span className={matchWinner === 'B' ? 'font-semibold text-green-700 dark:text-green-300' : ''}>{setsWonB}</span>
+          <span className={matchWinner === 'B' ? 'font-semibold text-status-live' : ''}>{setsWonB}</span>
         </span>
       </div>
 

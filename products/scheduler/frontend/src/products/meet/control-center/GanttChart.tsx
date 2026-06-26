@@ -309,12 +309,17 @@ export function GanttChart({
 
       // Ring priority: selected > blocked > impacted > postponed > resting > late.
       let ringClass = '';
+      // Ring hues are drawn from the semantic token palette (6 distinct
+      // hues). impacted → accent ("related, attention"); postponed →
+      // status-idle ("parked"); resting + late both → status-warning
+      // (both are amber time-cautions and never share a block — ring
+      // priority shows only one).
       if (isSelected) ringClass = 'ring-2 ring-inset ring-status-started';
       else if (isBlocked) ringClass = 'ring-2 ring-inset ring-status-blocked';
-      else if (isImpacted) ringClass = 'ring-2 ring-inset ring-purple-500';
-      else if (isPostponed) ringClass = 'ring-2 ring-inset ring-red-400';
+      else if (isImpacted) ringClass = 'ring-2 ring-inset ring-accent';
+      else if (isPostponed) ringClass = 'ring-2 ring-inset ring-status-idle';
       else if (isResting) ringClass = 'ring-2 ring-inset ring-status-warning';
-      else if (isLate) ringClass = 'ring-2 ring-inset ring-yellow-400';
+      else if (isLate) ringClass = 'ring-2 ring-inset ring-status-warning';
 
       const multiLane = (placement.laneCount ?? 1) > 1;
 

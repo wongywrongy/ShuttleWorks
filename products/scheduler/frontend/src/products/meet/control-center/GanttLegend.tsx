@@ -36,32 +36,32 @@ const FILLS: Array<{ swatchClass: string; label: string; title: string }> = [
 
 const RINGS: Array<{ ringClass: string; label: string; title: string }> = [
   {
-    ringClass: 'ring-blue-500',
+    ringClass: 'ring-status-started',
     label: 'Selected',
     title: 'Currently focused match',
   },
   {
-    ringClass: 'ring-red-500',
+    ringClass: 'ring-status-blocked',
     label: 'Blocked',
     title: 'A player conflict prevents calling this match',
   },
   {
-    ringClass: 'ring-purple-500',
+    ringClass: 'ring-accent',
     label: 'Impacted',
     title: 'Shares a player with the selected match',
   },
   {
-    ringClass: 'ring-red-400',
+    ringClass: 'ring-status-idle',
     label: 'Postponed',
     title: 'Operator has postponed this match',
   },
   {
-    ringClass: 'ring-amber-400',
+    ringClass: 'ring-status-warning',
     label: 'Resting',
     title: 'A player is still resting from a previous match',
   },
   {
-    ringClass: 'ring-yellow-400',
+    ringClass: 'ring-status-warning',
     label: 'Late',
     title: 'Past its scheduled slot but not started',
   },
@@ -74,7 +74,7 @@ export function GanttLegend() {
       aria-label="Gantt colour key"
       className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground"
     >
-      <span className="font-semibold uppercase tracking-wider">Status</span>
+      <span className="font-semibold uppercase tracking-[0.18em]">Status</span>
       {FILLS.map((f) => (
         <span key={f.label} className="inline-flex items-center gap-1.5" title={f.title}>
           <span
@@ -88,7 +88,7 @@ export function GanttLegend() {
         aria-hidden="true"
         className="mx-1 hidden h-3 w-px bg-border/60 sm:inline-block"
       />
-      <span className="font-semibold uppercase tracking-wider">Outline</span>
+      <span className="font-semibold uppercase tracking-[0.18em]">Outline</span>
       {RINGS.map((r) => (
         <span key={r.label} className="inline-flex items-center gap-1.5" title={r.title}>
           <span

@@ -56,7 +56,7 @@ export function FinishedCard({
       className={[
         'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
         isSelected
-          ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-500/15'
+          ? 'border-l-status-started bg-status-started-bg'
           : 'border-l-status-done bg-muted/40 hover:bg-muted/60',
       ].join(' ')}
     >
@@ -73,7 +73,7 @@ export function FinishedCard({
         {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
       </span>
       {score ? (
-        <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 dark:text-blue-300">
+        <span className="font-mono text-xs font-semibold tabular-nums text-status-started">
           {score.sideA}–{score.sideB}
         </span>
       ) : (

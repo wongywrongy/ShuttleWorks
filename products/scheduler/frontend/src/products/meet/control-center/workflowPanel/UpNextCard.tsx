@@ -148,7 +148,7 @@ export function UpNextCard({
       className={[
         'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
         lightStyles.border,
-        isSelected ? 'bg-blue-50 dark:bg-blue-500/15' : `${lightStyles.bg} hover:brightness-[0.98]`,
+        isSelected ? 'bg-status-started-bg' : `${lightStyles.bg} hover:brightness-[0.98]`,
       ].join(' ')}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${lightStyles.dot}`} />
@@ -179,7 +179,7 @@ export function UpNextCard({
                       INTERACTIVE_BASE,
                       'inline-flex items-center gap-0.5 rounded border px-1.5 py-0 text-2xs font-medium',
                       confirmed
-                        ? 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25'
+                        ? 'border-status-live/40 bg-status-live-bg text-status-live hover:bg-status-live-bg/70'
                         : 'border-border bg-card text-foreground hover:bg-muted',
                     ].join(' ')}
                     title={confirmed ? `${p.name} checked in` : `Click to check in ${p.name}`}
@@ -203,7 +203,7 @@ export function UpNextCard({
                       handleCheckInAll();
                     }}
                     disabled={updating}
-                    className={`${INTERACTIVE_BASE} inline-flex items-center gap-0.5 rounded bg-blue-600 px-1.5 py-0 text-3xs font-medium text-white hover:bg-blue-700`}
+                    className={`${INTERACTIVE_BASE} inline-flex items-center gap-0.5 rounded bg-primary px-1.5 py-0 text-3xs font-medium text-primary-foreground hover:brightness-110`}
                     title={`Check in all ${missingPlayers.length} remaining`}
                     aria-label="Check in all"
                   >
@@ -221,7 +221,7 @@ export function UpNextCard({
                 {p.name}
                 {p.delayCount > 0 && (
                   <span
-                    className="ml-0.5 rounded bg-yellow-100 px-1 text-3xs font-medium text-yellow-700 dark:bg-amber-500/15 dark:text-amber-200"
+                    className="ml-0.5 rounded bg-status-warning-bg px-1 text-3xs font-medium text-status-warning"
                     title={`${p.delayCount} delay(s)`}
                   >
                     {p.delayCount}
@@ -292,7 +292,7 @@ export function UpNextCard({
                 ACTION_BTN,
                 '!px-2 !py-0.5 !text-2xs',
                 matchState?.postponed
-                  ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-500/15 dark:text-orange-200 dark:hover:bg-orange-500/25'
+                  ? 'bg-accent-bg text-accent hover:opacity-90'
                   : 'bg-muted text-foreground hover:bg-muted/80',
               ].join(' ')}
               aria-pressed={Boolean(matchState?.postponed)}
@@ -310,7 +310,7 @@ export function UpNextCard({
                 handleStart();
               }}
               disabled={updating}
-              className={`${ACTION_BTN} bg-green-600 text-white hover:bg-green-700 !px-2 !py-0.5 !text-2xs`}
+              className={`${ACTION_BTN} bg-primary text-primary-foreground hover:brightness-110 !px-2 !py-0.5 !text-2xs`}
               title={
                 missingPlayers.length > 0
                   ? `Start — ${missingPlayers.length} player(s) not yet checked in`
