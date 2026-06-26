@@ -20,78 +20,15 @@
 import { useMemo } from 'react';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import type { PlayerDTO } from '../../../api/dto';
-import { EVENT_ORDER, EVENT_LABEL, isDoubles } from './positionGrid/helpers';
-import { PositionCell } from './positionGrid/PositionCell';
+import { usePositionGridColumns } from './positionGrid/usePositionGridColumns';
+import { GridTable } from './positionGrid/GridTable';
 import { ColumnManager } from './positionGrid/ColumnManager';
 
-// Re-export for existing call sites — RosterTab imports
-// DraggablePlayerChip from './PositionGrid'. Keep the public surface
-// stable while the implementation moves to a dedicated module.
+// Re-export for existing call sites — RosterTab imports DraggablePlayerChip
+// + PositionGridColumnControls from './PositionGrid'. usePositionGridColumns
+// now lives in its own module; re-export to keep the public surface stable.
 export { DraggablePlayerChip } from './positionGrid/DraggablePlayerChip';
-
-/**
- * Column ordering + visibility — both per-tournament settings on
- * `config`. Falls back to the canonical MD/WD/XD/WS/MS sequence
- * when `config.eventOrder` is unset, and shows every configured
- * event when `config.eventVisible` is unset.
- */
-export function usePositionGridColumns() {
-  const config = useTournamentStore((s) => s.config);
-  const setConfig = useTournamentStore((s) => s.setConfig);
-
-  // Plain derivations — React Compiler auto-memoizes. Manual useMemo
-  // with optional-chained deps was blocking whole-component compilation.
-  const _counts = config?.rankCounts ?? {};
-  const _orderedEvents = (config?.eventOrder?.length ? config.eventOrder : EVENT_ORDER).filter(
-    (ev) => (_counts[ev] ?? 0) > 0,
-  );
-  for (const ev of EVENT_ORDER) {
-    if ((_counts[ev] ?? 0) > 0 && !_orderedEvents.includes(ev)) _orderedEvents.push(ev);
-  }
-  const allConfiguredEvents = _orderedEvents;
-  const _visible = config?.eventVisible;
-  const events = allConfiguredEvents
-    .filter((ev) => _visible?.[ev] !== false)
-    .map((ev) => ({ prefix: ev, count: _counts[ev] ?? 0 }));
-
-  const moveColumn = (prefix: string, direction: -1 | 1) => {
-    if (!config) return;
-    const order = [...allConfiguredEvents];
-    const idx = order.indexOf(prefix);
-    if (idx < 0) return;
-    const target = idx + direction;
-    if (target < 0 || target >= order.length) return;
-    [order[idx], order[target]] = [order[target], order[idx]];
-    setConfig({ ...config, eventOrder: order });
-  };
-
-  const reorderColumns = (nextOrder: string[]) => {
-    if (!config) return;
-    setConfig({ ...config, eventOrder: nextOrder });
-  };
-
-  const toggleVisible = (prefix: string) => {
-    if (!config) return;
-    const visible = { ...(config.eventVisible ?? {}) };
-    visible[prefix] = visible[prefix] === false ? true : false;
-    setConfig({ ...config, eventVisible: visible });
-  };
-
-  const resetColumns = () => {
-    if (!config) return;
-    setConfig({ ...config, eventOrder: undefined, eventVisible: undefined });
-  };
-
-  return {
-    events,
-    allConfiguredEvents,
-    eventVisible: config?.eventVisible,
-    moveColumn,
-    reorderColumns,
-    toggleVisible,
-    resetColumns,
-  };
-}
+export { usePositionGridColumns } from './positionGrid/usePositionGridColumns';
 
 /**
  * Standalone column-visibility/order control. Rendered by RosterTab
@@ -157,60 +94,12 @@ export function PositionGrid({
   }
 
   return (
-    <div className="overflow-x-auto bg-card">
-      {/* border-collapse so the per-cell borders merge into clean grid lines */}
-      <table
-        className="w-full min-w-[780px] border-collapse text-sm"
-        data-testid="position-grid-table"
-      >
-        <thead>
-          <tr>
-            <th className="w-12 border-b-2 border-r border-border bg-muted py-1.5 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-              #
-            </th>
-            {events.map((ev) => {
-              const label = EVENT_LABEL[ev.prefix];
-              return (
-                <th
-                  key={ev.prefix}
-                  className={`border-b-2 border-r border-border px-3 py-1.5 text-left text-xs font-bold tracking-wide last:border-r-0 ${label?.header ?? 'bg-muted text-foreground'}`}
-                  title={label?.full}
-                >
-                  {ev.prefix}
-                  <span className="ml-2 text-3xs font-medium opacity-70">
-                    {isDoubles(ev.prefix) ? 'doubles' : 'singles'}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: maxRows }, (_, i) => i + 1).map((row) => (
-            <tr key={row}>
-              <td className="w-12 border-b border-r border-border bg-muted/40 py-1.5 text-center text-xs font-semibold text-muted-foreground tabular-nums">
-                {row}
-              </td>
-              {events.map((ev) => {
-                const rank = `${ev.prefix}${row}`;
-                const occupants = row <= ev.count ? byRank.get(rank) ?? [] : null;
-                return (
-                  <PositionCell
-                    key={ev.prefix}
-                    schoolId={schoolId}
-                    rank={rank}
-                    eventPrefix={ev.prefix}
-                    doubles={isDoubles(ev.prefix)}
-                    disabled={occupants === null}
-                    occupants={occupants ?? []}
-                    highlightedPlayerId={highlightedPlayerId}
-                  />
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <GridTable
+      events={events}
+      maxRows={maxRows}
+      schoolId={schoolId}
+      byRank={byRank}
+      highlightedPlayerId={highlightedPlayerId}
+    />
   );
 }

@@ -39,6 +39,7 @@ import {
   PositionGridColumnControls,
 } from './PositionGrid';
 import { isDoublesRank } from './positionGrid/helpers';
+import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { PlayerDetailPanel } from './PlayerDetailPanel';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
@@ -51,6 +52,7 @@ export function RosterTab() {
   const addPlayer = useTournamentStore((s) => s.addPlayer);
   const deletePlayer = useTournamentStore((s) => s.deletePlayer);
   const updatePlayer = useTournamentStore((s) => s.updatePlayer);
+  const { assignRank } = useRankAssignment();
 
   const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -137,32 +139,16 @@ export function RosterTab() {
     if (!activeData || !overData) return;
     if (activeData.schoolId !== overData.schoolId) return;
 
-    const current = players.find((p) => p.id === activeData.playerId);
-    if (!current) return;
-
-    const ranks = current.ranks ?? [];
-    if (ranks.includes(overData.rank)) return;
-
-    if (!overData.doubles) {
-      for (const other of players) {
-        if (
-          other.id !== current.id &&
-          other.groupId === activeData.schoolId &&
-          (other.ranks ?? []).includes(overData.rank)
-        ) {
-          updatePlayer(other.id, {
-            ranks: (other.ranks ?? []).filter((r) => r !== overData.rank),
-          });
-        }
-      }
-    } else {
+    // Doubles capacity guard stays here; the singles displacement
+    // invariant + the add live in useRankAssignment.
+    if (overData.doubles) {
       const existing = players.filter(
         (p) =>
           p.groupId === activeData.schoolId && (p.ranks ?? []).includes(overData.rank),
       );
       if (existing.length >= overData.capacity) return;
     }
-    updatePlayer(current.id, { ranks: [...ranks, overData.rank] });
+    assignRank(activeData.schoolId, activeData.playerId, overData.rank);
   };
 
   // Derived data.

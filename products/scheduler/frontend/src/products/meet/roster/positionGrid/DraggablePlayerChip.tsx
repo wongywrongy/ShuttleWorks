@@ -6,6 +6,7 @@
  */
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import { DotsSixVertical } from '@phosphor-icons/react';
 import type { PlayerDTO } from '../../../../api/dto';
 
 export function DraggablePlayerChip({
@@ -38,7 +39,11 @@ export function DraggablePlayerChip({
           : 'cursor-grab hover:border-primary',
       ].join(' ')}
     >
-      <span aria-hidden className="text-muted-foreground/70">⠿</span>
+      <DotsSixVertical
+        aria-hidden
+        weight="bold"
+        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+      />
       <span className="flex-1 truncate">{player.name || '(unnamed)'}</span>
       <span
         className={[
