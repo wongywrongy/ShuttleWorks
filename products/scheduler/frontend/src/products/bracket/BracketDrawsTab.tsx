@@ -18,11 +18,15 @@ export function BracketDrawsTab() {
   const navigate = useNavigate();
   const events = data?.events ?? [];
 
-  const goManage = () => navigate(`/tournaments/${tid}/bracket-events`);
+  // "New draw" lands directly on the draw-creation form (the Events
+  // surface owns event + participants + generate); `?new=1` auto-opens its
+  // add row so the click does something visible instead of dropping the
+  // operator on an inert table.
+  const newDraw = () => navigate(`/tournaments/${tid}/bracket-events?new=1`);
   const openDraw = () => navigate(`/tournaments/${tid}/bracket-draw`);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div className="flex h-full min-h-0 flex-col bg-card">
       <ActionsBar
         title="Draws"
         status={
@@ -33,7 +37,7 @@ export function BracketDrawsTab() {
       >
         <button
           type="button"
-          onClick={goManage}
+          onClick={newDraw}
           data-testid="bracket-new-draw"
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
         >
@@ -49,7 +53,7 @@ export function BracketDrawsTab() {
             action={
               <button
                 type="button"
-                onClick={goManage}
+                onClick={newDraw}
                 className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
               >
                 ＋ New draw

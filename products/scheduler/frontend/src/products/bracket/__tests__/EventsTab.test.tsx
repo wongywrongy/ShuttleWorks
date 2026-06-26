@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { EventsTab } from '../EventsTab';
 import { useTournamentStore } from '../../../store/tournamentStore';
 
@@ -94,7 +95,11 @@ describe('EventsTab', () => {
       results: [],
     };
 
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
 
     expect(screen.getByText('ID')).toBeInTheDocument();
     const emptyStateHeading = screen.getByRole('heading', { name: 'No bracket events yet' });
@@ -109,7 +114,11 @@ describe('EventsTab', () => {
   });
 
   it('renders the spreadsheet header columns', () => {
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     expect(screen.getByText('ID')).toBeInTheDocument();
     expect(screen.getByText('Discipline')).toBeInTheDocument();
     expect(screen.getByText('Format')).toBeInTheDocument();
@@ -120,7 +129,11 @@ describe('EventsTab', () => {
   });
 
   it('renders a row for each event in the bracket data', () => {
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     // 'MS' appears in both ID and Discipline columns; getAllByText handles that
     expect(screen.getAllByText('MS').length).toBeGreaterThan(0);
     expect(screen.getByText('SE')).toBeInTheDocument();
@@ -130,19 +143,31 @@ describe('EventsTab', () => {
 
   it('renders ○ Draft pill for draft status', () => {
     mockBracketData = makeBracketData({ status: 'draft' });
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     expect(screen.getByText(/Draft/i)).toBeInTheDocument();
   });
 
   it('renders ● Generated pill for generated status', () => {
     mockBracketData = makeBracketData({ status: 'generated' });
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     expect(screen.getByText(/Generated/i)).toBeInTheDocument();
   });
 
   it('renders ● Started pill for started status', () => {
     mockBracketData = makeBracketData({ status: 'started' });
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     expect(screen.getByText(/Started/i)).toBeInTheDocument();
   });
 
@@ -150,27 +175,43 @@ describe('EventsTab', () => {
 
   it('shows disabled Generate button when draft but participant count != size', () => {
     mockBracketData = makeBracketData({ status: 'draft', participantCount: 0, bracketSize: 4 });
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     const btn = screen.getByRole('button', { name: /Generate/i });
     expect(btn).toBeDisabled();
   });
 
   it('shows enabled Generate button when draft and participant count == size >= 2', () => {
     mockBracketData = makeBracketData({ status: 'draft', participantCount: 4, bracketSize: 4 });
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     const btn = screen.getByRole('button', { name: /Generate/i });
     expect(btn).not.toBeDisabled();
   });
 
   it('shows Re-generate button when status is generated', () => {
     mockBracketData = makeBracketData({ status: 'generated' });
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     expect(screen.getByRole('button', { name: /Re-generate/i })).toBeInTheDocument();
   });
 
   it('shows locked span when status is started', () => {
     mockBracketData = makeBracketData({ status: 'started' });
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     expect(screen.getByText(/locked/i)).toBeInTheDocument();
   });
 
@@ -180,7 +221,11 @@ describe('EventsTab', () => {
     mockBracketData = makeBracketData({ status: 'draft', participantCount: 4, bracketSize: 4 });
     const mockTournament = { ...mockBracketData };
     mockEventGenerate.mockResolvedValue(mockTournament);
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole('button', { name: /Generate/i }));
     await vi.waitFor(() => expect(mockEventGenerate).toHaveBeenCalledWith('MS', { wipe: false }));
     expect(mockSetData).toHaveBeenCalledWith(mockTournament);
@@ -189,20 +234,32 @@ describe('EventsTab', () => {
   // --- Picker open/close ---
 
   it('opens the participant picker when "N entered" is clicked', () => {
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole('button', { name: /entered/i }));
     expect(screen.getByText(/Pick participants/i)).toBeInTheDocument();
   });
 
   it('closes the participant picker when Cancel is clicked', () => {
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole('button', { name: /entered/i }));
     fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
     expect(screen.queryByText(/Pick participants/i)).not.toBeInTheDocument();
   });
 
   it('closes the picker when the same row button is clicked again (toggle)', () => {
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     const trigger = screen.getByRole('button', { name: /entered/i });
     fireEvent.click(trigger);
     expect(screen.getByText(/Pick participants/i)).toBeInTheDocument();
@@ -216,7 +273,11 @@ describe('EventsTab', () => {
     mockBracketData = makeBracketData({ status: 'draft' });
     const mockTournament = { ...mockBracketData! };
     mockEventUpsert.mockResolvedValue(mockTournament);
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     // Open the picker
     fireEvent.click(screen.getByRole('button', { name: /entered/i }));
     // Check both players
@@ -258,7 +319,11 @@ describe('EventsTab', () => {
     };
     const mockTournament = { ...mockBracketData };
     mockEventUpsert.mockResolvedValue(mockTournament);
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     // Open doubles picker
     fireEvent.click(screen.getByRole('button', { name: /entered/i }));
     expect(screen.getByText(/Pick player A \(pair 1\)/i)).toBeInTheDocument();
@@ -300,7 +365,11 @@ describe('EventsTab', () => {
         },
       ],
     };
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole('button', { name: /entered/i }));
     // Step A: pick Alex — advances to step B
     fireEvent.click(screen.getByRole('button', { name: 'Alex Tan' }));
@@ -325,7 +394,11 @@ describe('EventsTab', () => {
         },
       ],
     };
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole('button', { name: /entered/i }));
     const commitBtn = screen.getByRole('button', { name: /Commit pairs/i });
     expect(commitBtn).toBeDisabled();
@@ -334,7 +407,11 @@ describe('EventsTab', () => {
   // --- Add event row ---
 
   it('shows the new event row when + Add event is clicked', () => {
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole('button', { name: /Add event/i }));
     expect(screen.getByPlaceholderText('MS')).toBeInTheDocument();
   });
@@ -343,7 +420,11 @@ describe('EventsTab', () => {
     mockBracketData = makeBracketData();
     const mockTournament = { ...mockBracketData! };
     mockEventUpsert.mockResolvedValue(mockTournament);
-    render(<EventsTab />);
+    render(
+      <MemoryRouter>
+        <EventsTab />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole('button', { name: /Add event/i }));
     const idInput = screen.getByPlaceholderText('MS');
     fireEvent.change(idInput, { target: { value: 'WS' } });

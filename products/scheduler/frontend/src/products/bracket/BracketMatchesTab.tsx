@@ -8,10 +8,12 @@
  * (Courts / Live) just like the meet's matches do.
  */
 import { useMemo, useState } from 'react';
-import { CaretRight, MagnifyingGlass } from '@phosphor-icons/react';
+import { CaretRight, Download, MagnifyingGlass } from '@phosphor-icons/react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { useBracketApi } from '../../api/bracketClient';
 import { ActionsBar } from '../../components/control-plane';
 import { EmptyState } from '../../components/control-plane';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 
 type Status = 'done' | 'live' | 'ready' | 'pending';
 
@@ -30,6 +32,7 @@ const STATUS_CLASS: Record<Status, string> = {
 };
 
 export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
+  const api = useBracketApi();
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const toggle = (key: string) =>
@@ -107,7 +110,7 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
   const shown = groups.reduce((n, g) => n + g.units.length, 0);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div className="flex h-full min-h-0 flex-col bg-card">
       <ActionsBar
         title="Matches"
         status={
@@ -141,6 +144,14 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
             className="h-7 w-56 rounded-sm border border-border bg-card pl-7 pr-2 text-xs outline-none transition-colors duration-fast ease-brand placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/30"
           />
         </div>
+        <a
+          href={api.exportCsvUrl()}
+          data-testid="bracket-export-matches"
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
+        >
+          <Download aria-hidden="true" className="h-3.5 w-3.5" />
+          Export CSV
+        </a>
       </ActionsBar>
 
       <div className="min-h-0 flex-1 overflow-auto">

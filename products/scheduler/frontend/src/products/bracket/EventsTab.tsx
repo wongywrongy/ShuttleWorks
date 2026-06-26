@@ -10,7 +10,8 @@
  * flow. Implements Decision 10 (in-grid picker). Implements Decision 3
  * (status read from bracket_events.status).
  */
-import { Fragment, useState, useCallback } from 'react';
+import { Fragment, useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useBracket } from '../../hooks/useBracket';
 import { useBracketApi } from '../../api/bracketClient';
 import { useTournamentStore } from '../../store/tournamentStore';
@@ -29,6 +30,18 @@ export function EventsTab() {
   const [openPickerFor, setOpenPickerFor] = useState<string | null>(null);
   const [addingRow, setAddingRow] = useState(false);
 
+  // "New draw" from the Draws surface routes here with ?new=1 to land the
+  // operator straight on the add-event form. Consume the flag once.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setAddingRow(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('new');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   const events = data?.events ?? [];
 
   const handleGenerate = useCallback(
@@ -45,7 +58,7 @@ export function EventsTab() {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div className="flex h-full min-h-0 flex-col bg-card">
       <ActionsBar
         title="Events"
         status={

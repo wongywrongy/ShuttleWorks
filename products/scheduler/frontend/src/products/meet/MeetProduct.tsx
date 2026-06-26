@@ -31,7 +31,7 @@ export function MeetProduct() {
     // its definite height so meet surfaces (roster grid, etc.) use the screen.
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto bg-card">
         <Suspense fallback={<TabSkeleton tab={activeTab} />}>
           <div key={activeTab} className="h-full animate-block-in">
             {activeTab === 'setup' ? <TournamentSetupPage /> : null}

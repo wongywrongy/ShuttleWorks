@@ -1,19 +1,29 @@
 /**
  * Schedule lock indicator
- * Shows when a schedule is locked (generated) and editing would clear it
+ * Shows when a schedule is locked (generated) and editing would clear it.
+ *
+ * `locked` lets a caller drive this off a PER-ENGINE lock signal rather
+ * than the meet store flag — the two engines schedule independently, so
+ * locking the meet schedule must never light up on the bracket. When
+ * `locked` is omitted it falls back to the meet store flag (the original
+ * behaviour).
  */
 import { useTournamentStore } from '../../store/tournamentStore';
 
 interface ScheduleLockIndicatorProps {
   className?: string;
   showUnlockHint?: boolean;
+  /** Explicit per-engine lock state. Omit to read the meet store flag. */
+  locked?: boolean;
 }
 
 export function ScheduleLockIndicator({
   className = '',
   showUnlockHint = false,
+  locked,
 }: ScheduleLockIndicatorProps) {
-  const isScheduleLocked = useTournamentStore((state) => state.isScheduleLocked);
+  const meetLocked = useTournamentStore((state) => state.isScheduleLocked);
+  const isScheduleLocked = locked ?? meetLocked;
 
   if (!isScheduleLocked) return null;
 

@@ -26,7 +26,9 @@ import { reconcileBracketRoster } from './bracketMigration';
 import { type SettingsSectionDef } from '../../platform/settings/SettingsShell';
 import { Seg } from '../../platform/settings/SettingsControls';
 import { ActionsBar } from '../../components/control-plane';
+import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
+import { useBracketScheduleLock } from './useBracketScheduleLock';
 import { BracketTournamentSection } from './BracketTournamentSection';
 import { BracketStructureSection } from './BracketStructureSection';
 import { BracketRosterTab } from './BracketRosterTab';
@@ -145,6 +147,9 @@ function BracketTabBody() {
     'tournament',
     { debounceMs: 0 },
   );
+  // Per-engine lock signal — independent of the meet schedule. Stubbed
+  // false today; the affordance is wired for when the backend supports it.
+  const { isLocked: bracketScheduleLocked } = useBracketScheduleLock();
 
   const bracketSetupSections = useMemo<SettingsSectionDef[]>(
     () => [
@@ -176,7 +181,7 @@ function BracketTabBody() {
     view === 'live';
   if (needsBracketData && !data) {
     return (
-      <div className="min-h-full bg-background">
+      <div className="min-h-full bg-card">
         {error ? (
           <BracketInlineNotice
             tone="error"
@@ -196,7 +201,7 @@ function BracketTabBody() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full flex-col bg-card">
       {/* Setup / Roster / Events own their header strips (SettingsShell
           or tab-local) — rendering the view header there produced a
           double-header stack the meet never shows. */}
@@ -243,6 +248,12 @@ function BracketTabBody() {
                 />
               }
             />
+            {bracketScheduleLocked ? (
+              <ScheduleLockIndicator
+                locked={bracketScheduleLocked}
+                showUnlockHint
+              />
+            ) : null}
             <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 pt-3">
               {(
                 bracketSetupSections.find((s) => s.id === setupSection) ??
