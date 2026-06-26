@@ -1,18 +1,19 @@
 /**
- * Auto-generate affordance for the Matches actions bar.
+ * "Regenerate from roster" — the primary Matches action.
  *
- * A compact secondary button that opens a popover with the build-from-
- * roster summary, the incomplete-doubles caveat, and the generate /
- * replace-existing flow. This replaces the old full-bleed banner strip
- * that lived in the content area — the actions bar now owns it, since
- * generating matches acts on the whole page.
+ * The meet's output IS its matches, and matches are derived from the
+ * position grid: every feasible cross-school pairing per rank. This
+ * control rebuilds those lineup matches from the current roster.
  *
- * The generation logic (feasible-pairing preview, replace confirm,
- * incomplete-doubles detection) is unchanged from the prior panel.
+ * It MERGES rather than blind-replaces: a match is a "lineup slot" keyed
+ * by (rank, the two schools). Regenerate refreshes every lineup slot from
+ * the grid but keeps any match that isn't one of those slots — hand-added
+ * custom matches survive as overrides. (Edits to a standard lineup slot
+ * are rebuilt from the roster, since the grid is the source of truth.)
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
-import { Sparkle } from '@phosphor-icons/react';
+import { ArrowsClockwise } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import type { MatchDTO } from '../../../api/dto';
@@ -26,11 +27,10 @@ function expandRanks(counts: Record<string, number> | undefined): string[] {
 }
 
 function isDoublesRank(rank: string): boolean {
-  const prefix = rank.replace(/\d+$/, '');
-  return prefix.endsWith('D');
+  return rank.replace(/\d+$/, '').endsWith('D');
 }
 
-export function AutoGenerateMenu() {
+export function RegenerateMenu() {
   const config = useTournamentStore((s) => s.config);
   const players = useTournamentStore((s) => s.players);
   const groups = useTournamentStore((s) => s.groups);
@@ -38,16 +38,31 @@ export function AutoGenerateMenu() {
   const matches = useTournamentStore((s) => s.matches);
 
   const [open, setOpen] = useState(false);
-  const [confirm, setConfirm] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
   const ranks = useMemo(() => expandRanks(config?.rankCounts), [config?.rankCounts]);
+  const groupByPlayer = useMemo(
+    () => new Map(players.map((p) => [p.id, p.groupId])),
+    [players],
+  );
 
-  const preview = useMemo(() => {
+  // A lineup slot's identity: rank + the two schools (order-independent).
+  const slotKey = (m: {
+    eventRank?: string | null;
+    sideA: string[];
+    sideB: string[];
+  }) => {
+    const rank = m.eventRank ?? '';
+    const a = groupByPlayer.get(m.sideA[0] ?? '') ?? '?';
+    const b = groupByPlayer.get(m.sideB[0] ?? '') ?? '?';
+    const [s1, s2] = [a, b].sort();
+    return `${rank}|${s1}|${s2}`;
+  };
+
+  const generated = useMemo(() => {
     const out: MatchDTO[] = [];
     for (const rank of ranks) {
-      const doubles = isDoublesRank(rank);
-      const needed = doubles ? 2 : 1;
+      const needed = isDoublesRank(rank) ? 2 : 1;
       for (let i = 0; i < groups.length; i++) {
         for (let j = i + 1; j < groups.length; j++) {
           const sideAPlayers = players.filter(
@@ -85,19 +100,22 @@ export function AutoGenerateMenu() {
     return out;
   }, [ranks, groups, players]);
 
+  // Existing matches that aren't a regenerated lineup slot — kept as
+  // custom overrides.
+  const generatedKeys = useMemo(
+    () => new Set(generated.map(slotKey)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [generated, groupByPlayer],
+  );
+  const keptCustom = matches.filter((m) => !generatedKeys.has(slotKey(m)));
+
   useEffect(() => {
     if (!open) return;
     const click = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setConfirm(false);
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        setConfirm(false);
-      }
+      if (e.key === 'Escape') setOpen(false);
     };
     document.addEventListener('mousedown', click);
     document.addEventListener('keydown', key);
@@ -107,34 +125,12 @@ export function AutoGenerateMenu() {
     };
   }, [open]);
 
-  const hasExisting = matches.length > 0;
-  const canGenerate = preview.length > 0;
+  const canGenerate = generated.length > 0;
 
-  const generate = () => {
-    if (hasExisting && !confirm) {
-      setConfirm(true);
-      return;
-    }
-    importMatches(preview);
-    setConfirm(false);
+  const regenerate = () => {
+    importMatches([...generated, ...keptCustom]);
     setOpen(false);
   };
-
-  const buttonLabel = !canGenerate
-    ? 'No feasible pairings'
-    : confirm && hasExisting
-      ? `Click again — replaces ${matches.length}`
-      : hasExisting
-        ? `Replace ${matches.length} existing`
-        : 'Generate matches';
-
-  const buttonClass = !canGenerate
-    ? 'cursor-not-allowed text-muted-foreground'
-    : confirm && hasExisting
-      ? 'border-destructive bg-destructive/10 text-destructive hover:bg-destructive/15'
-      : hasExisting
-        ? 'border-status-warning/40 text-status-warning hover:bg-status-warning/10'
-        : 'border-border text-foreground hover:bg-muted/40';
 
   const infoLine = !canGenerate
     ? ranks.length === 0
@@ -142,8 +138,10 @@ export function AutoGenerateMenu() {
       : groups.length < 2
         ? 'Need at least 2 schools to generate matches.'
         : 'No feasible pairings with the current roster.'
-    : `Will produce ${preview.length} match${preview.length === 1 ? '' : 'es'} across ${ranks.length} rank${ranks.length === 1 ? '' : 's'} × ${groups.length} school${groups.length === 1 ? '' : 's'}${
-        hasExisting ? ` · replaces all ${matches.length}` : ''
+    : `Rebuild ${generated.length} lineup match${generated.length === 1 ? '' : 'es'} from the roster${
+        keptCustom.length > 0
+          ? ` · keeps ${keptCustom.length} custom match${keptCustom.length === 1 ? '' : 'es'}`
+          : ''
       }.`;
 
   return (
@@ -153,20 +151,20 @@ export function AutoGenerateMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        data-testid="auto-generate-toggle"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
+        data-testid="regenerate-toggle"
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
       >
-        <Sparkle aria-hidden="true" className="h-3.5 w-3.5" />
-        Auto-generate
+        <ArrowsClockwise aria-hidden="true" className="h-3.5 w-3.5" />
+        Regenerate from roster
       </button>
       {open ? (
         <div
           role="dialog"
-          aria-label="Auto-generate matches"
+          aria-label="Regenerate matches from roster"
           className="motion-enter absolute right-0 top-full z-overlay mt-1 w-72 rounded-sm border border-border bg-popover p-3 text-popover-foreground shadow-lg"
         >
           <div className="mb-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Auto-generate
+            Regenerate from roster
           </div>
           <p className="text-xs text-muted-foreground">{infoLine}</p>
           {incompletePairs.length > 0 ? (
@@ -175,27 +173,15 @@ export function AutoGenerateMenu() {
               {incompletePairs.join(', ')} — assign both partners in Roster.
             </p>
           ) : null}
-          <div className="mt-3 flex items-center justify-end gap-2">
-            {confirm ? (
-              <button
-                type="button"
-                onClick={() => setConfirm(false)}
-                className="text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
-              >
-                Cancel
-              </button>
-            ) : null}
+          <div className="mt-3 flex items-center justify-end">
             <button
               type="button"
-              onClick={generate}
+              onClick={regenerate}
               disabled={!canGenerate}
-              data-testid="auto-generate-matches"
-              className={[
-                'rounded-sm border px-3 py-1 text-xs font-medium transition-colors duration-fast ease-brand disabled:opacity-50',
-                buttonClass,
-              ].join(' ')}
+              data-testid="regenerate-confirm"
+              className="rounded-sm border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:opacity-50"
             >
-              {buttonLabel}
+              Regenerate
             </button>
           </div>
         </div>

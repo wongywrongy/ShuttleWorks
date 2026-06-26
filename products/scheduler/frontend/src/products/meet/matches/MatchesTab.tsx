@@ -13,7 +13,7 @@ import { exportMatchesXlsx } from '../exports/xlsxExports';
 import { useSearchParamState } from '../../../hooks/useSearchParamState';
 import { usePlayerMap } from '../../../store/selectors';
 import { MatchesSpreadsheet } from './MatchesSpreadsheet';
-import { AutoGenerateMenu } from './AutoGenerateMenu';
+import { RegenerateMenu } from './RegenerateMenu';
 import { EmptyState } from '../../../components/control-plane';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
@@ -73,6 +73,9 @@ export function MatchesTab() {
             <span className="text-sm font-semibold text-foreground tabular-nums">
               {matches.length} match{matches.length === 1 ? '' : 'es'}
             </span>
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
+              · from roster
+            </span>
             {searchQuery.trim() && filteredCount !== matches.length ? (
               <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
                 · showing {filteredCount}
@@ -96,7 +99,18 @@ export function MatchesTab() {
             className="h-7 w-56 rounded-sm border border-border bg-card pl-7 pr-2 text-xs outline-none transition-colors duration-fast ease-brand placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/30"
           />
         </div>
-        <AutoGenerateMenu />
+        {/* Manual add is a de-emphasized override — the primary path is
+            regenerating from the roster. */}
+        <button
+          type="button"
+          onClick={addEmptyRow}
+          disabled={!canAddRow}
+          data-testid="add-match-row"
+          title={canAddRow ? 'Add a custom match by hand' : 'Need at least 2 players'}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-2.5 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
+        >
+          ＋ Add match
+        </button>
         <button
           type="button"
           onClick={() => void exportMatchesXlsx(matches, players, groups)}
@@ -107,23 +121,14 @@ export function MatchesTab() {
           <Download aria-hidden="true" className="h-3.5 w-3.5" />
           Export XLSX
         </button>
-        <button
-          type="button"
-          onClick={addEmptyRow}
-          disabled={!canAddRow}
-          data-testid="add-match-row"
-          title={canAddRow ? 'Add match row' : 'Need at least 2 players'}
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
-        >
-          ＋ Add match
-        </button>
+        <RegenerateMenu />
       </MeetActionsBar>
 
       <div className="min-h-0 flex-1 overflow-auto">
         {matches.length === 0 ? (
           <EmptyState
             title="No matches yet"
-            body="Build matches from your roster — use Auto-generate in the bar above, or add them by hand. Then generate the schedule in Operations → Courts."
+            body="Matches are generated from the position grid. Use Regenerate from roster in the bar above to build them, then schedule in Operations → Courts. You can also add a custom match by hand."
             action={
               <button
                 type="button"
