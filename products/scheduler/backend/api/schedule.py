@@ -22,8 +22,8 @@ from app.schemas import (
 # Import directly from scheduler_core domain models and engine
 try:
     from scheduler_core.domain.models import ScheduleRequest
-    from scheduler_core.engine import CPSATBackend
     from scheduler_core.engine.cpsat_backend import CPSATScheduler
+    from scheduler_core.schedule import schedule as solve_schedule
 except ImportError as e:
     raise ImportError(
         f"Could not import scheduler_core: {e}. "
@@ -100,10 +100,11 @@ async def generate_schedule(request: GenerateScheduleRequest):
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None,
-            lambda: CPSATBackend(
-                solver_options=solver_request.solver_options,
+            lambda: solve_schedule(
+                solver_request,
+                options=solver_request.solver_options,
                 candidate_pool_size=candidate_pool_size_for(request.config),
-            ).solve(solver_request),
+            ),
         )
         return result_to_dto(result)
 
