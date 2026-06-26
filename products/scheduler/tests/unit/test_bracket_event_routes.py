@@ -472,3 +472,50 @@ def test_generate_bye_result_persisted(client, tid):
     assert rows[0].winner_side in ("A", "B"), (
         f"BYE winner_side should be A or B, got {rows[0].winner_side!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Explicit seed ordering (the documented placement contract)
+# ---------------------------------------------------------------------------
+
+
+def test_generate_honors_explicit_seed_order(client, tid):
+    """Placement follows the explicit ``seed`` field, and re-seeding
+    re-places participants.
+
+    The generators treat input order as seed order; the generate route
+    orders participants by ascending seed before building the draw, so
+    seed 1 occupies the top slot (round 0, match 0, side A). Re-seeding a
+    different participant to seed 1 must move it into that slot — this is
+    what lets the operator place players in specific bracket positions.
+    """
+    _minimal_bracket(tid, client)
+
+    def top_slot(parts):
+        r1 = client.post(_event_url(tid, "MS"), json=_upsert_body(parts))
+        assert r1.status_code == 200, r1.text
+        r2 = client.post(_event_url(tid, "MS", "generate"), json={"wipe": True})
+        assert r2.status_code == 200, r2.text
+        pus = [
+            p
+            for p in r2.json()["play_units"]
+            if p["event_id"] == "MS"
+            and p["round_index"] == 0
+            and p["match_index"] == 0
+        ]
+        assert len(pus) == 1
+        return pus[0]["side_a"]
+
+    eight = [{"id": f"P{i}", "name": f"P{i}", "seed": i} for i in range(1, 9)]
+    # Seed 1 (P1) occupies the top slot.
+    assert top_slot(eight) == ["P1"]
+
+    # Re-seed so P3 becomes seed 1 and P1 becomes seed 3 — P3 takes the slot.
+    reseeded = [
+        {
+            **p,
+            "seed": 1 if p["id"] == "P3" else 3 if p["id"] == "P1" else p["seed"],
+        }
+        for p in eight
+    ]
+    assert top_slot(reseeded) == ["P3"]

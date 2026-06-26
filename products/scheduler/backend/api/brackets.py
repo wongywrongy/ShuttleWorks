@@ -1248,6 +1248,16 @@ def generate_event_route(
             detail=f"event {event_id!r} needs at least 2 participants to generate",
         )
 
+    # Honour the explicit ``seed`` (the documented contract): the draw
+    # generators treat input ORDER as seed order, so order the rows by
+    # ascending seed — seeded first, unseeded trailing by id. This is what
+    # lets the operator place players in specific bracket slots (the UI
+    # sends each participant the seed for its chosen position).
+    participant_rows = sorted(
+        participant_rows,
+        key=lambda p: (p.seed is None, p.seed if p.seed is not None else 0, p.id),
+    )
+
     participants = [
         Participant(
             id=p.id,
