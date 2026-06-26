@@ -132,7 +132,7 @@ export function LiveMatchList({ data, onChange }: Props) {
         </span>
         <span className="min-w-0 flex-1 truncate text-sm">
           <span className={result?.winner_side === 'A' ? 'font-semibold' : ''}>{labelA}</span>
-          <span className="px-1.5 text-2xs uppercase tracking-wider text-muted-foreground">vs</span>
+          <span className="px-1.5 text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</span>
           <span className={result?.winner_side === 'B' ? 'font-semibold' : ''}>{labelB}</span>
         </span>
         <span
@@ -140,7 +140,7 @@ export function LiveMatchList({ data, onChange }: Props) {
           onClick={(e) => e.stopPropagation()}
         >
           {result ? (
-            <span className="text-2xs font-semibold uppercase tracking-wider text-status-done">
+            <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-status-done">
               {result.winner_side === 'A' ? labelA : labelB} won
             </span>
           ) : assignment && !started ? (

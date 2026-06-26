@@ -91,7 +91,7 @@ export function BracketMatchesTable({ data, selectedId, onSelect }: Props) {
   return (
     <div className="flex-1 min-h-0 overflow-auto border-t border-border">
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background px-4 py-2">
-        <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Matches
         </div>
         <div className="text-2xs tabular-nums text-muted-foreground">
@@ -166,7 +166,7 @@ function ScopeGroupRows({
   return (
     <>
       <tr className="bg-muted/30">
-        <td colSpan={4} className="px-4 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <td colSpan={4} className="px-4 py-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {header}
         </td>
       </tr>

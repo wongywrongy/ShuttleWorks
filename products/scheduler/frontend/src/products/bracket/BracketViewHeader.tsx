@@ -139,7 +139,7 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
               }))}
             />
             {selectedEvent && (
-              <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 {formatLabel}
               </span>
             )}

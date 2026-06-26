@@ -67,7 +67,7 @@ export function BracketScheduleSidebar({ data, selectedId }: Props) {
   return (
     <aside className="w-64 shrink-0 overflow-auto border-l border-border bg-background px-4 py-4">
       <div className="mb-3">
-        <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {event?.discipline ?? '—'}
         </div>
         <div className="text-sm font-medium text-foreground">

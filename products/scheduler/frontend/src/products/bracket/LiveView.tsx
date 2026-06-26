@@ -51,7 +51,7 @@ const CHIP_RING: Record<ChipState, string> = {
   called:    'ring-2 ring-inset ring-status-called',
   started:   'ring-2 ring-inset ring-status-live',
   finished:  'ring-2 ring-inset ring-status-done',
-  late:      'ring-2 ring-inset ring-yellow-400',
+  late:      'ring-2 ring-inset ring-status-warning',
 };
 
 // ---- Tooltip builder -------------------------------------------------------
@@ -228,7 +228,7 @@ function ChipStateLegend() {
     { ring: '', label: 'Scheduled', title: 'On the plan, not yet started' },
     { ring: 'ring-2 ring-inset ring-status-live', label: 'Started', title: 'Match is being played' },
     { ring: 'ring-2 ring-inset ring-status-done', label: 'Finished', title: 'Result recorded' },
-    { ring: 'ring-2 ring-inset ring-yellow-400', label: 'Late', title: 'Past its scheduled slot without starting' },
+    { ring: 'ring-2 ring-inset ring-status-warning', label: 'Late', title: 'Past its scheduled slot without starting' },
   ];
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-1.5">

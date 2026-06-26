@@ -75,7 +75,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
       {/* Participants */}
       <div className="space-y-1">
         <div className="text-sm">{labelA}</div>
-        <div className="text-2xs uppercase tracking-wider text-muted-foreground">vs</div>
+        <div className="text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</div>
         <div className="text-sm">{labelB}</div>
       </div>
 

@@ -16,7 +16,7 @@ export function EventsFilterStrip() {
 
   if (!data) return null;
   return (
-    <div className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wider">
+    <div className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-[0.18em]">
       <span className="text-muted-foreground mr-2">EVENTS:</span>
       {data.events.map((ev) => {
         const on = filter[ev.id] !== false;
