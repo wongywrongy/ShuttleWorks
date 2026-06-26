@@ -23,7 +23,10 @@ import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
 import { reconcileBracketRoster } from './bracketMigration';
-import { SettingsShell, type SettingsSectionDef } from '../../platform/settings/SettingsShell';
+import { type SettingsSectionDef } from '../../platform/settings/SettingsShell';
+import { Seg } from '../../platform/settings/SettingsControls';
+import { ActionsBar } from '../../components/control-plane';
+import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { ShareSettings } from '../../platform/settings/ShareSettings';
 import { BracketTournamentSection } from './BracketTournamentSection';
 import { BracketStructureSection } from './BracketStructureSection';
@@ -137,6 +140,11 @@ function BracketTabBody() {
   // ``TournamentPage`` once kind resolves; fall back to 'setup'
   // defensively for the first render before that effect runs.
   const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : 'setup';
+  const [setupSection, setSetupSection] = useSearchParamState(
+    'section',
+    'tournament',
+    { debounceMs: 0 },
+  );
 
   const bracketSetupSections = useMemo<SettingsSectionDef[]>(
     () => [
@@ -225,10 +233,28 @@ function BracketTabBody() {
         className="min-h-0 flex-1 overflow-auto animate-block-in"
       >
         {view === 'setup' && (
-          <SettingsShell
-            sections={bracketSetupSections}
-            defaultSectionId="tournament"
-          />
+          <div className="flex h-full min-h-0 flex-col">
+            <ActionsBar
+              title="Configuration"
+              status={
+                <Seg
+                  options={bracketSetupSections.map((s) => ({
+                    value: s.id,
+                    label: s.label,
+                  }))}
+                  value={setupSection}
+                  onChange={(v) => setSetupSection(v)}
+                  ariaLabel="Configuration section"
+                />
+              }
+            />
+            <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 pt-3">
+              {(
+                bracketSetupSections.find((s) => s.id === setupSection) ??
+                bracketSetupSections[0]
+              ).render()}
+            </div>
+          </div>
         )}
         {view === 'roster' && <BracketRosterTab />}
         {view === 'events' && <EventsTab />}

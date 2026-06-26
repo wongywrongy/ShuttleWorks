@@ -7,6 +7,7 @@ import { useState, useMemo, useContext } from 'react';
 import { MagnifyingGlass } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { ActionsBar } from '../../components/control-plane';
 import { BracketApiContext } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
@@ -96,57 +97,53 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
   };
 
   return (
-    <div className="flex min-h-full flex-col bg-background">
-      {/* Operator header — single baseline; mirrors MatchesTab's
-          eyebrow + bold count + search/add cluster so the bracket
-          Roster reads with the same chrome rhythm as the meet's. */}
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Roster
-          </span>
-          <span className="text-sm font-semibold text-foreground tabular-nums">
-            {players.length} player{players.length === 1 ? '' : 's'}
-          </span>
-          {query.trim() && filtered.length !== players.length ? (
-            <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-              · showing {filtered.length}
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <ActionsBar
+        title="Roster"
+        status={
+          <>
+            <span className="text-sm font-semibold text-foreground tabular-nums">
+              {players.length} player{players.length === 1 ? '' : 's'}
             </span>
-          ) : null}
+            {query.trim() && filtered.length !== players.length ? (
+              <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+                · showing {filtered.length}
+              </span>
+            ) : null}
+          </>
+        }
+      >
+        <div className="relative">
+          <MagnifyingGlass
+            aria-hidden="true"
+            className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search players…"
+            aria-label="Search players"
+            className="h-7 w-56 rounded-sm border border-border bg-card pl-7 pr-2 text-xs outline-none transition-colors duration-fast ease-brand placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/30"
+          />
         </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          <div className="relative">
-            <MagnifyingGlass
-              aria-hidden="true"
-              className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-            />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search players…"
-              aria-label="Search players"
-              className="h-7 w-56 rounded-sm border border-border bg-card pl-7 pr-2 text-xs outline-none transition-colors duration-fast ease-brand placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/30"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-2.5 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent`}
-          >
-            ＋ Add player
-          </button>
-        </div>
-      </header>
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
+        >
+          ＋ Add player
+        </button>
+      </ActionsBar>
 
       {/* Column-label row — same vocabulary as the meet's flat tables. */}
-      <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         <span className="flex-1">Player</span>
         <span className="flex-1">Events</span>
         <span className="w-16 text-right">Actions</span>
       </div>
 
-      <ul className="divide-y divide-border">
+      <ul className="min-h-0 flex-1 overflow-auto divide-y divide-border">
         {filtered.map((p) => (
           <li
             key={p.id}

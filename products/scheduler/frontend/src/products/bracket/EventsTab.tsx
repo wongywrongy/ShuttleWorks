@@ -17,6 +17,7 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import type { BracketEventStatus } from '../../api/bracketDto';
 import { Button, StatusPill } from '@scheduler/design-system';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { ActionsBar } from '../../components/control-plane';
 import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
 import { BracketEmptyState } from './BracketEmptyState';
 
@@ -44,28 +45,25 @@ export function EventsTab() {
   );
 
   return (
-    <div className="flex min-h-full flex-col bg-background">
-      {/* Operator header — single baseline; mirrors MatchesTab's
-          eyebrow + bold count + add cluster so the bracket Events tab
-          reads with the same chrome rhythm as the meet's tabs. */}
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Events
-          </span>
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <ActionsBar
+        title="Events"
+        status={
           <span className="text-sm font-semibold text-foreground tabular-nums">
             {events.length} event{events.length === 1 ? '' : 's'}
           </span>
-        </div>
+        }
+      >
         <button
           type="button"
           aria-label="+ Add event"
           onClick={() => setAddingRow(true)}
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-2.5 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent`}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
         >
           ＋ Add event
         </button>
-      </header>
+      </ActionsBar>
+      <div className="min-h-0 flex-1 overflow-auto">
       {events.length === 0 && !addingRow ? (
         <BracketEmptyState
           eyebrow="Events"
@@ -177,6 +175,7 @@ export function EventsTab() {
             )}
           </tbody>
         </table>
+      </div>
     </div>
   );
 }

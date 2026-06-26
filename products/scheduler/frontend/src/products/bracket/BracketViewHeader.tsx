@@ -5,6 +5,7 @@ import { Select, StatusBar } from "@scheduler/design-system";
 import type { BracketView } from "../../lib/bracketTabs";
 import { useUiStore } from "../../store/uiStore";
 import { INTERACTIVE_BASE } from "../../lib/utils";
+import { ActionsBar } from "../../components/control-plane";
 import { EventsFilterStrip } from "./EventsFilterStrip";
 import { SourceChip } from "../operations/SourceChip";
 
@@ -116,62 +117,60 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
     selectedEvent?.format === "se" ? "Single Elim" : "Round Robin";
 
   return (
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {VIEW_LABEL[view]}
-        </span>
-        {/* Phase B: engine-provenance chip on the Operations surfaces
-            (Courts = schedule, Live). Draw is a Bracket-section surface,
-            not Operations, so it's omitted. Single-engine → constant. */}
-        {(view === "schedule" || view === "live") && <SourceChip source="bracket" />}
-        {view === "draw" ? (
-          <>
-            <Select
-              value={eventId}
-              onValueChange={(v) => v && onEventId(v)}
-              ariaLabel="Event"
-              size="sm"
-              mono
-              options={data.events.map((e) => ({
-                value: e.id,
-                label: `${e.id} · ${e.discipline}`,
-              }))}
-            />
-            {selectedEvent && (
-              <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {formatLabel}
-              </span>
-            )}
-          </>
-        ) : (
-          <EventsFilterStrip />
-        )}
-      </div>
-      <div className="flex flex-shrink-0 items-center gap-2">
-        <span className="font-mono">
-          <StatusBar
-            items={[
-              { tone: "done", label: "DONE", count: counts.done },
-              { tone: "green", label: "LIVE", count: counts.live },
-              { tone: "amber", label: "READY", count: counts.ready },
-              { tone: "idle", label: "PEND", count: counts.pending },
-            ]}
-          />
-        </span>
-        {view === "schedule" && <ExportMenu api={api} />}
-        {(view === "schedule" || view === "live") && schedulableCount > 0 && (
-          <button
-            type="button"
-            onClick={() => void handleScheduleNext()}
-            disabled={scheduling}
-            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            {scheduling ? 'Scheduling…' : `Schedule next round (${schedulableCount})`}
-          </button>
-        )}
-      </div>
-    </header>
+    <ActionsBar
+      title={VIEW_LABEL[view]}
+      status={
+        <>
+          {/* Engine-provenance chip on the Operations surfaces (Courts =
+              schedule, Live). Draw is a Bracket-section surface. */}
+          {(view === "schedule" || view === "live") && <SourceChip source="bracket" />}
+          {view === "draw" ? (
+            <>
+              <Select
+                value={eventId}
+                onValueChange={(v) => v && onEventId(v)}
+                ariaLabel="Event"
+                size="sm"
+                mono
+                options={data.events.map((e) => ({
+                  value: e.id,
+                  label: `${e.id} · ${e.discipline}`,
+                }))}
+              />
+              {selectedEvent && (
+                <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  {formatLabel}
+                </span>
+              )}
+            </>
+          ) : (
+            <EventsFilterStrip />
+          )}
+        </>
+      }
+    >
+      <span className="font-mono">
+        <StatusBar
+          items={[
+            { tone: "done", label: "DONE", count: counts.done },
+            { tone: "green", label: "LIVE", count: counts.live },
+            { tone: "amber", label: "READY", count: counts.ready },
+            { tone: "idle", label: "PEND", count: counts.pending },
+          ]}
+        />
+      </span>
+      {view === "schedule" && <ExportMenu api={api} />}
+      {(view === "schedule" || view === "live") && schedulableCount > 0 && (
+        <button
+          type="button"
+          onClick={() => void handleScheduleNext()}
+          disabled={scheduling}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
+        >
+          {scheduling ? 'Scheduling…' : `Schedule next round (${schedulableCount})`}
+        </button>
+      )}
+    </ActionsBar>
   );
 }
 
