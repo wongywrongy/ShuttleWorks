@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useUiStore } from '../../../store/uiStore';
 import { BracketViewHeader } from '../BracketViewHeader';
 import type { BracketTournamentDTO, ScheduleNextOut } from '../../../api/bracketDto';
@@ -49,13 +50,22 @@ const FIXTURE: BracketTournamentDTO = {
 
 function renderHeader() {
   return render(
-    <BracketViewHeader
-      view="live"
-      data={FIXTURE}
-      eventId="MS"
-      onEventId={() => {}}
-      onRefresh={() => Promise.resolve()}
-    />,
+    <MemoryRouter initialEntries={['/tournaments/t-1/bracket-live']}>
+      <Routes>
+        <Route
+          path="/tournaments/:id/*"
+          element={
+            <BracketViewHeader
+              view="live"
+              data={FIXTURE}
+              eventId="MS"
+              onEventId={() => {}}
+              onRefresh={() => Promise.resolve()}
+            />
+          }
+        />
+      </Routes>
+    </MemoryRouter>,
   );
 }
 

@@ -1,7 +1,7 @@
 /**
  * Bracket Roster tab — flat list + detail panel below. Slimmer than
  * the meet's RosterTab (no schools/positions). Player events are a
- * derived read-only display sourced from the EventsTab participants.
+ * derived read-only display sourced from the Draws participants.
  */
 import { useState, useMemo, useContext } from 'react';
 import { MagnifyingGlass } from '@phosphor-icons/react';

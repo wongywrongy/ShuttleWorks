@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
 import { Select, StatusBar } from "@scheduler/design-system";
 import type { BracketView } from "../../lib/bracketTabs";
 import { useUiStore } from "../../store/uiStore";
+import { useTournamentId } from "../../hooks/useTournamentId";
 import { INTERACTIVE_BASE } from "../../lib/utils";
 import { ActionsBar } from "../../components/control-plane";
 import { EventsFilterStrip } from "./EventsFilterStrip";
@@ -48,6 +50,8 @@ const VIEW_LABEL: Record<Props["view"], string> = {
  */
 export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }: Props) {
   const api = useBracketApi();
+  const tid = useTournamentId();
+  const navigate = useNavigate();
   const pushToast = useUiStore((s) => s.pushToast);
   const [scheduling, setScheduling] = useState(false);
   const counts = useMemo(
@@ -126,6 +130,16 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
           {(view === "schedule" || view === "live") && <SourceChip source="bracket" />}
           {view === "draw" ? (
             <>
+              {/* The Draw canvas is reached by opening a row on the Draws
+                  surface (no sidebar entry of its own), so it carries an
+                  explicit way back rather than stranding the operator. */}
+              <button
+                type="button"
+                onClick={() => navigate(`/tournaments/${tid}/bracket-draws`)}
+                className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2 text-xs text-card-foreground hover:bg-muted/40`}
+              >
+                ← Draws
+              </button>
               <Select
                 value={eventId}
                 onValueChange={(v) => v && onEventId(v)}

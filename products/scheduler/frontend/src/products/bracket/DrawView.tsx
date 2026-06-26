@@ -23,17 +23,17 @@ interface Props {
 export function DrawView({ data, eventId, onChange }: Props) {
   const tid = useTournamentId();
   const navigate = useNavigate();
-  const goToEvents = () =>
-    navigate(`/tournaments/${tid}/bracket-events`, { replace: true });
+  const goToDraws = () =>
+    navigate(`/tournaments/${tid}/bracket-draws`, { replace: true });
   const event = data.events.find((e) => e.id === eventId);
   if (!event) {
     return (
       <BracketEmptyState
         eyebrow="Draw"
         title="No event selected"
-        body="Add an event and enter its participants, then generate the draw."
-        actionLabel="Open Events"
-        onAction={goToEvents}
+        body="Create a draw and enter its participants, then generate it."
+        actionLabel="Open Draws"
+        onAction={goToDraws}
       />
     );
   }
@@ -42,9 +42,9 @@ export function DrawView({ data, eventId, onChange }: Props) {
       <BracketEmptyState
         eyebrow="Draw"
         title="No draw generated"
-        body="Open Events, enter participants for this event, then generate the draw."
-        actionLabel="Open Events"
-        onAction={goToEvents}
+        body="Open Draws, enter participants for this event, then generate the draw."
+        actionLabel="Open Draws"
+        onAction={goToDraws}
       />
     );
   }

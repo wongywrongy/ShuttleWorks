@@ -27,21 +27,21 @@ export function BracketStructureSection() {
 
   return (
     <div>
-      <SectionHeader>Events and participants</SectionHeader>
+      <SectionHeader>Draws and participants</SectionHeader>
       <p className="pb-3 text-xs leading-5 text-muted-foreground">
-        Events, draws and the participant pool live on their own surfaces.
-        Open them here, then return to Draw to seed and run the bracket.
+        Draws and the participant pool live on their own surfaces. Open them
+        here, then return to Draw to seed and run the bracket.
       </p>
       <Row
-        label="Events and draws"
+        label="Draws"
         control={
           <button
             type="button"
-            data-testid="bracket-open-events"
-            onClick={() => go('bracket-events')}
+            data-testid="bracket-open-draws"
+            onClick={() => go('bracket-draws')}
             className={`${INTERACTIVE_BASE} ${LINK_CLASSES}`}
           >
-            Manage events
+            Manage draws
           </button>
         }
       />

@@ -1,5 +1,5 @@
 /**
- * In-grid participant picker. Renders below the active EventsTab row,
+ * In-grid participant picker. Renders below the active Draws row,
  * in flow (no popover). Singles = checkbox list, Doubles = 2-step
  * pair-select (commit pair as a TEAM participant).
  */

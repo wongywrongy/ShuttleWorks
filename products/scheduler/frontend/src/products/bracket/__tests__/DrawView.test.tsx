@@ -12,7 +12,7 @@ vi.mock('../../../api/bracketClient', () => ({
 }));
 
 /** DrawView reads the tournament id from the route and navigates to
- *  bracket-events from its empty state, so mount it under a matching
+ *  bracket-draws from its empty state, so mount it under a matching
  *  /tournaments/:id route. */
 function renderDrawView(ui: ReactElement) {
   return render(
@@ -55,8 +55,8 @@ describe('DrawView', () => {
     renderDrawView(<DrawView data={NO_DRAW} eventId="MS" onChange={vi.fn()} refresh={async () => {}} />);
 
     expect(screen.getByRole('heading', { name: 'No draw generated' })).toBeInTheDocument();
-    expect(screen.getByText(/Open Events, enter participants for this event, then generate the draw/i)).toBeInTheDocument();
-    // The empty state routes back to Events so the orphaned segment stays reachable.
-    expect(screen.getByRole('button', { name: 'Open Events' })).toBeInTheDocument();
+    expect(screen.getByText(/Open Draws, enter participants for this event, then generate the draw/i)).toBeInTheDocument();
+    // The empty state routes back to the unified Draws surface.
+    expect(screen.getByRole('button', { name: 'Open Draws' })).toBeInTheDocument();
   });
 });

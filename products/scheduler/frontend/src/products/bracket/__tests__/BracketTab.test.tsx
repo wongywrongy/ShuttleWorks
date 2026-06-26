@@ -101,11 +101,13 @@ describe('BracketTab — fresh tournament (data === null)', () => {
     expect(screen.queryByText(/No draws generated yet/i)).not.toBeInTheDocument();
   });
 
-  it('renders the Events spreadsheet (headers + Add event) on bracket-events tab', () => {
-    useUiStore.setState({ activeTab: 'bracket-events' });
+  it('renders the unified Draws surface (New draw) on bracket-draws tab', () => {
+    useUiStore.setState({ activeTab: 'bracket-draws' });
     renderBracketTab();
-    expect(screen.getByText('ID')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /\+ Add event/i })).toBeInTheDocument();
+    // Draws absorbed the former Events spreadsheet; with no bracket data
+    // yet it shows the empty state with the New draw action (the create
+    // flow opens a layer, not a separate page).
+    expect(screen.getByTestId('bracket-new-draw')).toBeInTheDocument();
     expect(screen.queryByText(/No draws generated yet/i)).not.toBeInTheDocument();
   });
 
@@ -113,7 +115,7 @@ describe('BracketTab — fresh tournament (data === null)', () => {
     useUiStore.setState({ activeTab: 'bracket-draw' });
     renderBracketTab();
     expect(screen.getByRole('heading', { name: 'No draws generated' })).toBeInTheDocument();
-    expect(screen.getByText(/Open Events to add events and generate draws/i)).toBeInTheDocument();
+    expect(screen.getByText(/Open Draws to create a draw and generate it/i)).toBeInTheDocument();
     // Should not render the Draw content or Setup form
     expect(screen.queryByLabelText(/Rest between rounds/i)).not.toBeInTheDocument();
   });

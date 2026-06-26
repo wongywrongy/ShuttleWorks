@@ -13,7 +13,7 @@
  * ``BracketViewHeader`` strip above the active view.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Sliders, ListChecks } from '@phosphor-icons/react';
 
 import { BracketApiProvider } from '../../api/bracketClient';
@@ -32,7 +32,6 @@ import { useBracketScheduleLock } from './useBracketScheduleLock';
 import { BracketTournamentSection } from './BracketTournamentSection';
 import { BracketStructureSection } from './BracketStructureSection';
 import { BracketRosterTab } from './BracketRosterTab';
-import { EventsTab } from './EventsTab';
 import { BracketDrawsTab } from './BracketDrawsTab';
 import { BracketMatchesTab } from './BracketMatchesTab';
 import { BracketViewHeader } from './BracketViewHeader';
@@ -71,8 +70,9 @@ function BracketTabBody() {
   const { data, setData, error, refresh } = useBracket();
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const goToEvents = () =>
-    navigate(`/tournaments/${params.id}/bracket-events`, { replace: true });
+  const [searchParams] = useSearchParams();
+  const goToDraws = () =>
+    navigate(`/tournaments/${params.id}/bracket-draws`, { replace: true });
   const [eventId, setEventId] = useState<string>('');
   const activeTab = useUiStore((s) => s.activeTab);
   const setBracketDataReady = useUiStore((s) => s.setBracketDataReady);
@@ -96,16 +96,23 @@ function BracketTabBody() {
   useEffect(() => () => setBracketDataReady(null), [setBracketDataReady]);
 
   // Keep the selected event valid as data changes (new tournament,
-  // event deleted, etc.).
+  // event deleted, etc.). A ``?event=`` query param — set when the
+  // operator clicks "Open" on a Draws row — wins so the Draw view lands
+  // on the draw they picked, not just the first one.
   useEffect(() => {
     if (!data || data.events.length === 0) {
       setEventId('');
       return;
     }
+    const requested = searchParams.get('event');
+    if (requested && data.events.some((e) => e.id === requested)) {
+      if (eventId !== requested) setEventId(requested);
+      return;
+    }
     if (!data.events.find((e) => e.id === eventId)) {
       setEventId(data.events[0].id);
     }
-  }, [data, eventId]);
+  }, [data, eventId, searchParams]);
 
   const [selectedPlayUnitId, setSelectedPlayUnitId] = useState<string | null>(null);
 
@@ -192,9 +199,9 @@ function BracketTabBody() {
         <BracketEmptyState
           eyebrow={view}
           title="No draws generated"
-          body="Open Events to add events and generate draws. Setup controls the venue and schedule settings for those draws."
-          actionLabel="Open Events"
-          onAction={goToEvents}
+          body="Open Draws to create a draw and generate it. Configuration controls the venue and schedule settings for those draws."
+          actionLabel="Open Draws"
+          onAction={goToDraws}
         />
       </div>
     );
@@ -263,7 +270,12 @@ function BracketTabBody() {
           </div>
         )}
         {view === 'roster' && <BracketRosterTab />}
-        {view === 'events' && <EventsTab />}
+        {/* The standalone Events surface was folded into Draws — creating a
+            draw now opens a layer on the Draws tab instead of a separate
+            page. Old ``bracket-events`` links redirect here. */}
+        {view === 'events' && (
+          <Navigate to={`/tournaments/${params.id}/bracket-draws`} replace />
+        )}
         {view === 'draws' && <BracketDrawsTab />}
         {view === 'matches' && data && <BracketMatchesTab data={data} />}
         {view === 'draw' && data && (
