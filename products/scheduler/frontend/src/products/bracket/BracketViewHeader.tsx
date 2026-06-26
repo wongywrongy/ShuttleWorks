@@ -8,6 +8,7 @@ import { INTERACTIVE_BASE } from "../../lib/utils";
 import { ActionsBar } from "../../components/control-plane";
 import { EventsFilterStrip } from "./EventsFilterStrip";
 import { SourceChip } from "../operations/SourceChip";
+import { formatLabel, disciplineLabel } from "./bracketLabels";
 
 interface Props {
   /** Bare view name — drives the eyebrow. Derived from ``activeTab``
@@ -113,8 +114,7 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
   };
 
   const selectedEvent = data.events.find((e) => e.id === eventId);
-  const formatLabel =
-    selectedEvent?.format === "se" ? "Single Elim" : "Round Robin";
+  const eventFormatLabel = formatLabel(selectedEvent?.format);
 
   return (
     <ActionsBar
@@ -134,12 +134,12 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
                 mono
                 options={data.events.map((e) => ({
                   value: e.id,
-                  label: `${e.id} · ${e.discipline}`,
+                  label: `${e.id} · ${disciplineLabel(e.discipline)}`,
                 }))}
               />
               {selectedEvent && (
-                <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  {formatLabel}
+                <span className="whitespace-nowrap text-xs text-muted-foreground">
+                  {eventFormatLabel}
                 </span>
               )}
             </>

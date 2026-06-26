@@ -7,6 +7,27 @@
  * "Bye" for a structural bye slot.
  */
 import type { PlayUnitDTO } from '../../api/bracketDto';
+import { EVENT_LABEL } from '../meet/roster/positionGrid/helpers';
+
+const FORMAT_LABEL: Record<string, string> = {
+  se: 'Single elimination',
+  rr: 'Round robin',
+};
+
+/** Draw format ('se' / 'rr') → its full name. The codes are storage
+ *  shorthand, not UI copy — never show them bare. Unknown values pass
+ *  through. */
+export function formatLabel(format: string | null | undefined): string {
+  if (!format) return '';
+  return FORMAT_LABEL[format.toLowerCase()] ?? format;
+}
+
+/** Discipline code ('MS' → "Men's Singles"). Free-text disciplines that
+ *  aren't a known code pass through unchanged. */
+export function disciplineLabel(discipline: string | null | undefined): string {
+  if (!discipline) return '';
+  return EVENT_LABEL[discipline]?.full ?? discipline;
+}
 
 export function sideLabel(
   side: string[] | null,

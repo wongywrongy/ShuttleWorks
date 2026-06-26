@@ -14,6 +14,7 @@ import { useBracketApi } from '../../api/bracketClient';
 import { ActionsBar } from '../../components/control-plane';
 import { EmptyState } from '../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { disciplineLabel } from './bracketLabels';
 
 type Status = 'done' | 'live' | 'ready' | 'pending';
 
@@ -190,8 +191,8 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
                     <span className="font-mono text-2xs font-semibold uppercase tracking-[0.12em] text-foreground">
                       {ev.id}
                     </span>
-                    <span className="text-2xs uppercase tracking-[0.18em] text-muted-foreground">
-                      {ev.discipline}
+                    <span className="text-2xs text-muted-foreground">
+                      {disciplineLabel(ev.discipline)}
                     </span>
                     <span className="text-2xs tabular-nums text-muted-foreground">
                       {units.length}

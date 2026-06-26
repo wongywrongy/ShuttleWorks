@@ -21,6 +21,7 @@ import { INTERACTIVE_BASE } from '../../lib/utils';
 import { ActionsBar } from '../../components/control-plane';
 import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
 import { BracketEmptyState } from './BracketEmptyState';
+import { formatLabel, disciplineLabel } from './bracketLabels';
 
 export function EventsTab() {
   const { data, setData, refresh } = useBracket();
@@ -109,8 +110,8 @@ export function EventsTab() {
                 <Fragment key={ev.id}>
                   <tr className="border-b border-border/60 hover:bg-muted/30">
                     <td className="px-4 py-2 font-mono text-xs">{ev.id}</td>
-                    <td className="px-3 py-2">{ev.discipline}</td>
-                    <td className="px-3 py-2">{ev.format.toUpperCase()}</td>
+                    <td className="px-3 py-2">{disciplineLabel(ev.discipline)}</td>
+                    <td className="px-3 py-2">{formatLabel(ev.format)}</td>
                     <td className="px-3 py-2">{targetSize}</td>
                     <td className="px-3 py-2">
                       <button
@@ -290,8 +291,8 @@ function NewEventRow({
           onChange={(e) => setFormat(e.target.value as 'se' | 'rr')}
           className="rounded-sm border border-border bg-bg-elev px-2 py-1 text-xs"
         >
-          <option value="se">SE</option>
-          <option value="rr">RR</option>
+          <option value="se">Single elimination</option>
+          <option value="rr">Round robin</option>
         </select>
       </td>
       <td className="px-3 py-2">—</td>

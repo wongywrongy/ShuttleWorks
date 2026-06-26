@@ -11,6 +11,7 @@ import { useBracket } from '../../hooks/useBracket';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import { ActionsBar, EmptyState } from '../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { formatLabel, disciplineLabel } from './bracketLabels';
 
 export function BracketDrawsTab() {
   const { data } = useBracket();
@@ -63,11 +64,11 @@ export function BracketDrawsTab() {
         ) : (
           <>
             <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              <span className="w-24">Draw</span>
-              <span className="w-24">Discipline</span>
-              <span className="w-20">Format</span>
-              <span className="w-16 text-right tabular-nums">Size</span>
-              <span className="w-24 text-right tabular-nums">Participants</span>
+              <span className="w-16">Draw</span>
+              <span className="w-40">Discipline</span>
+              <span className="w-40">Format</span>
+              <span className="w-14 text-right tabular-nums">Size</span>
+              <span className="w-24 text-right tabular-nums">Players</span>
               <span className="min-w-0 flex-1 text-right">Status</span>
             </div>
             {events.map((ev) => (
@@ -79,14 +80,16 @@ export function BracketDrawsTab() {
                 title={`Open the ${ev.id} draw`}
                 className="flex w-full min-h-[40px] items-center gap-3 border-b border-border px-4 text-left text-sm transition-colors duration-fast ease-brand hover:bg-muted/30"
               >
-                <span className="w-24 truncate font-mono text-xs text-foreground">
+                <span className="w-16 truncate font-mono text-xs text-foreground">
                   {ev.id}
                 </span>
-                <span className="w-24 truncate text-foreground">{ev.discipline}</span>
-                <span className="w-20 uppercase text-muted-foreground">
-                  {ev.format}
+                <span className="w-40 truncate text-foreground">
+                  {disciplineLabel(ev.discipline)}
                 </span>
-                <span className="w-16 text-right tabular-nums text-muted-foreground">
+                <span className="w-40 truncate text-muted-foreground">
+                  {formatLabel(ev.format)}
+                </span>
+                <span className="w-14 text-right tabular-nums text-muted-foreground">
                   {ev.bracket_size ?? ev.participant_count ?? 0}
                 </span>
                 <span className="w-24 text-right tabular-nums text-muted-foreground">

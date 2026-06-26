@@ -134,9 +134,11 @@ describe('EventsTab', () => {
         <EventsTab />
       </MemoryRouter>,
     );
-    // 'MS' appears in both ID and Discipline columns; getAllByText handles that
+    // 'MS' is the event id; the discipline + format columns now spell out
+    // the codes ("Men's Singles", "Single elimination") rather than showing
+    // bare acronyms.
     expect(screen.getAllByText('MS').length).toBeGreaterThan(0);
-    expect(screen.getByText('SE')).toBeInTheDocument();
+    expect(screen.getByText('Single elimination')).toBeInTheDocument();
   });
 
   // --- Status pill rendering ---
