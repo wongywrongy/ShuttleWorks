@@ -12,6 +12,7 @@ import type { OperationalMatch } from '../../lib/operations/operationalMatch';
 import { mergeOperational } from '../../lib/operations/operationalMatch';
 import type { OperationalAction } from './operationalWriteback';
 import { SourceChip } from './SourceChip';
+import { UnifiedCourtBoard } from './UnifiedCourtBoard';
 import { CourtSlot, SideLabels, StatusPill } from './operationalRowParts';
 
 interface Props {
@@ -98,6 +99,9 @@ export function UnifiedLiveView({ meet, bracket, onAction }: Props) {
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
+          {/* The court×time board — the spatial map; the working list below
+              is where the operator runs the day (Start / record winner). */}
+          <UnifiedCourtBoard rows={rows} />
           <ul className="divide-y divide-rule-soft">
             {rows.map((row) => (
               <li

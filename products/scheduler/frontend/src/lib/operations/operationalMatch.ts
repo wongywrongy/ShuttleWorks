@@ -72,8 +72,12 @@ export interface OperationalMatch {
   source: OperationalSource;
   /** `C{court}` when assigned to a court, else undefined. */
   courtLabel?: string;
+  /** 1-based court id when assigned, else undefined. Drives the court×time board. */
+  court?: number;
   /** Scheduled slot index when assigned, else undefined. */
   slot?: number;
+  /** Block width in slots on the board (the match's duration). Absent → 1. */
+  span?: number;
   /** Display name for side A (`TBD` when unknown). */
   sideA: string;
   /** Display name for side B (`TBD` when unknown). */
@@ -131,7 +135,9 @@ export function meetMatchesToOperational(
       id: m.id,
       source: 'meet' as const,
       courtLabel: courtId != null ? `C${courtId}` : undefined,
+      court: courtId != null ? courtId : undefined,
       slot,
+      span: assignment?.durationSlots ?? 1,
       sideA: resolveMeetSide(m.sideA, playerNameById),
       sideB: resolveMeetSide(m.sideB, playerNameById),
       score: state?.score ? { sideA: state.score.sideA, sideB: state.score.sideB } : undefined,
@@ -180,7 +186,9 @@ export function bracketToOperational(data: BracketTournamentDTO): OperationalMat
       id: pu.id,
       source: 'bracket' as const,
       courtLabel: assignment ? `C${assignment.court_id}` : undefined,
+      court: assignment ? assignment.court_id : undefined,
       slot: assignment?.slot_id,
+      span: assignment?.duration_slots ?? 1,
       sideA,
       sideB,
       score: undefined,

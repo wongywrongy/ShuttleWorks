@@ -13,6 +13,7 @@
 import type { OperationalMatch } from '../../lib/operations/operationalMatch';
 import { mergeOperational } from '../../lib/operations/operationalMatch';
 import { SourceChip } from './SourceChip';
+import { UnifiedCourtBoard } from './UnifiedCourtBoard';
 import { CourtSlot, SideLabels, StatusPill } from './operationalRowParts';
 
 interface Props {
@@ -42,6 +43,8 @@ export function UnifiedCourtsView({ meet, bracket }: Props) {
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
+          {/* The court×time board — the spatial map operators run from. */}
+          <UnifiedCourtBoard rows={rows} />
           <ul className="divide-y divide-rule-soft">
             {rows.map((row) => (
               <li
