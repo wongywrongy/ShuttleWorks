@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey } from '../opsBlock';
+import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, packBlockLanes } from '../opsBlock';
+import type { OpsBlock } from '../opsBlock';
 import type { MatchDTO, ScheduleDTO, MatchStateDTO } from '../../../api/dto';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
+
+function ob(p: Partial<OpsBlock> & Pick<OpsBlock, 'source' | 'id'>): OpsBlock {
+  return { key: `${p.source}:${p.id}`, label: p.id, span: 1, status: 'scheduled', sideA: 'A', sideB: 'B', done: false, started: false, ...p };
+}
 
 describe('opsBlock builders', () => {
   it('meetToOpsBlocks carries court/slot/span/status and a source-prefixed key', () => {
@@ -28,5 +33,29 @@ describe('opsBlock builders', () => {
     expect(parseOpsKey('meet:m1')).toEqual({ source: 'meet', id: 'm1' });
     expect(parseOpsKey('bracket:MS-R0-0')).toEqual({ source: 'bracket', id: 'MS-R0-0' });
     expect(parseOpsKey('nope')).toBeNull();
+  });
+});
+
+describe('packBlockLanes', () => {
+  it('puts a cross-engine double-booking (same court+slot) in separate lanes', () => {
+    const meet = ob({ source: 'meet', id: 'm1', court: 1, slot: 0 });
+    const brk = ob({ source: 'bracket', id: 'pu1', court: 1, slot: 0 });
+    const lanes = packBlockLanes([meet, brk]);
+    expect(lanes.get('meet:m1')!.laneCount).toBe(2);
+    expect(lanes.get('bracket:pu1')!.laneCount).toBe(2);
+    expect(lanes.get('meet:m1')!.laneIndex).not.toBe(lanes.get('bracket:pu1')!.laneIndex);
+  });
+
+  it('keeps non-overlapping blocks on the same court in a single lane', () => {
+    const a = ob({ source: 'meet', id: 'a', court: 1, slot: 0 });
+    const b = ob({ source: 'meet', id: 'b', court: 1, slot: 1 });
+    const lanes = packBlockLanes([a, b]);
+    expect(lanes.get('meet:a')!.laneCount).toBe(1);
+    expect(lanes.get('meet:b')!.laneCount).toBe(1);
+  });
+
+  it('ignores unassigned (no court/slot) blocks', () => {
+    const lanes = packBlockLanes([ob({ source: 'bracket', id: 'wait' })]);
+    expect(lanes.get('bracket:wait')).toEqual({ laneIndex: 0, laneCount: 1 });
   });
 });

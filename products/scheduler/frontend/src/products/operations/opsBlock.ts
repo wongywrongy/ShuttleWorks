@@ -112,6 +112,58 @@ export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
   });
 }
 
+/** Lane assignment for one block: which sub-lane it occupies in its court,
+ *  and how many lanes its overlap cluster needs. */
+export interface BlockLane {
+  laneIndex: number;
+  laneCount: number;
+}
+
+/**
+ * Lane-pack court-assigned blocks so overlapping ones render side-by-side.
+ *
+ * Meet and bracket solve the same physical courts independently (ADR 0006),
+ * so they can double-book one (court, slot). Without packing, colliding
+ * blocks share a pixel and z-fight on every re-render (the "random
+ * teleport"). Per court we sweep by start slot, give each block the lowest
+ * free lane, and record the max concurrency as its lane count — mirroring the
+ * meet GanttChart packing. Returns a map keyed by `OpsBlock.key`.
+ */
+export function packBlockLanes(blocks: OpsBlock[]): Map<string, BlockLane> {
+  const byCourt = new Map<number, OpsBlock[]>();
+  for (const b of blocks) {
+    if (b.court == null || b.slot == null) continue;
+    const list = byCourt.get(b.court);
+    if (list) list.push(b);
+    else byCourt.set(b.court, [b]);
+  }
+  const laneOf = new Map<string, number>();
+  const countOf = new Map<string, number>();
+  for (const list of byCourt.values()) {
+    const sorted = [...list].sort((x, y) => (x.slot ?? 0) - (y.slot ?? 0));
+    let active: { key: string; lane: number; end: number }[] = [];
+    for (const b of sorted) {
+      const start = b.slot ?? 0;
+      const end = start + (b.span ?? 1);
+      active = active.filter((x) => x.end > start);
+      const used = new Set(active.map((x) => x.lane));
+      let lane = 0;
+      while (used.has(lane)) lane++;
+      laneOf.set(b.key, lane);
+      active.push({ key: b.key, lane, end });
+      const size = active.length;
+      for (const x of active) {
+        if (size > (countOf.get(x.key) ?? 1)) countOf.set(x.key, size);
+      }
+    }
+  }
+  const out = new Map<string, BlockLane>();
+  for (const b of blocks) {
+    out.set(b.key, { laneIndex: laneOf.get(b.key) ?? 0, laneCount: countOf.get(b.key) ?? 1 });
+  }
+  return out;
+}
+
 /** Split a `${source}:${id}` key back into parts. */
 export function parseOpsKey(key: string): { source: OperationalSource; id: string } | null {
   const i = key.indexOf(':');

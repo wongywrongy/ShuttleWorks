@@ -39,7 +39,7 @@ import { getEventColor } from '../../lib/eventColors';
 import type { MatchDTO, ScheduleDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { OpsBlock } from './opsBlock';
-import { parseOpsKey } from './opsBlock';
+import { parseOpsKey, packBlockLanes } from './opsBlock';
 
 interface Conflict { description: string }
 interface Validation { feasible: boolean; conflicts: Conflict[] }
@@ -93,16 +93,22 @@ export function UnifiedOpsBoard({
     [courtCount],
   );
 
-  const placements = useMemo<Placement[]>(
-    () =>
-      placed.map((b) => ({
+  const placements = useMemo<Placement[]>(() => {
+    // Lane-pack so cross-engine double-bookings render side-by-side instead of
+    // z-fighting on one pixel (the "random teleport"). See packBlockLanes.
+    const lanes = packBlockLanes(placed);
+    return placed.map((b) => {
+      const ln = lanes.get(b.key);
+      return {
         courtIndex: Math.max(0, (b.court ?? 1) - 1),
         startSlot: b.slot ?? 0,
-        span: b.span,
+        span: b.span ?? 1,
+        laneIndex: ln?.laneIndex ?? 0,
+        laneCount: ln?.laneCount ?? 1,
         key: b.key,
-      })),
-    [placed],
-  );
+      };
+    });
+  }, [placed]);
 
   const { minSlot, slotCount } = useMemo(() => {
     if (placements.length === 0) return { minSlot: 0, slotCount: 8 };
