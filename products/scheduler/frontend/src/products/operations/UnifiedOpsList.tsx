@@ -122,7 +122,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         <span className="w-24 flex-shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
           {b.court != null ? `C${b.court} · S${b.slot}` : '—'}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm">
+        <span className="min-w-0 flex-1 truncate text-sm" title={`${b.sideA} vs ${b.sideB}`}>
           {b.sideA}
           <span className="px-1.5 text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</span>
           {b.sideB}

@@ -31,6 +31,8 @@ import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from 
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
 import { OpsDetailRail } from './OpsDetailRail';
+import { CourtStatusBoard } from './CourtStatusBoard';
+import { LiveStatusBar } from './LiveStatusBar';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
 
@@ -158,18 +160,19 @@ function OperationsBody() {
 
   const title = isLive ? 'Live' : 'Courts';
   const subtitle = isLive
-    ? 'Run Meet and Bracket matches from one queue'
-    : 'Drag to reschedule, or build the plan — Meet and Bracket on one court';
+    ? 'Run the floor — by court, then the queue'
+    : 'Plan the day — drag to reschedule, generate, schedule rounds';
+  const intervalMinutes = config?.intervalMinutes ?? data?.interval_minutes ?? 30;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-card">
+    <div className="relative flex h-full min-h-0 flex-col bg-card">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{title}</span>
           <span className="text-xs text-muted-foreground/70">{subtitle}</span>
         </div>
-        {/* Courts is the scheduling surface: build / adjust the plan. Live has
-            no scheduling actions — it runs what Courts produced. */}
+        {/* Courts is the planning surface: build / adjust the plan. Live runs
+            what Courts produced — no scheduling actions there. */}
         {!isLive ? (
           <div className="flex items-center gap-2">
             <button
@@ -200,33 +203,74 @@ function OperationsBody() {
           No matches yet. Generate a schedule in Meet or draws in Bracket to populate Operations.
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1">
-          <div className="min-h-0 flex-1 overflow-auto">
-            <UnifiedOpsBoard
-              blocks={blocks}
-              courtCount={courtCount}
-              currentSlot={currentSlot}
-              selectedKey={selectedKey}
-              onSelect={setSelectedKey}
-              interactive={!isLive}
-              meet={{ config, matches, schedule }}
-              onBracketData={setData}
-            />
-            <UnifiedOpsList
-              blocks={blocks}
-              selectedKey={selectedKey}
-              onSelect={setSelectedKey}
-              onAction={isLive ? onAction : undefined}
-            />
-          </div>
+        <div className="relative min-h-0 flex-1">
+          {isLive ? (
+            // LIVE = operations console. Court status is the hero; the queue
+            // is support beneath it.
+            <div className="flex h-full min-h-0 flex-col">
+              <LiveStatusBar blocks={blocks} courtCount={courtCount} />
+              <div className="min-h-0 flex-1 overflow-auto">
+                <CourtStatusBoard
+                  blocks={blocks}
+                  courtCount={courtCount}
+                  currentSlot={currentSlot}
+                  intervalMinutes={intervalMinutes}
+                  selectedKey={selectedKey}
+                  onSelect={setSelectedKey}
+                  onAction={onAction}
+                />
+                <div className="border-t border-border">
+                  <div className="px-4 pb-1 pt-3 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Queue
+                  </div>
+                  <UnifiedOpsList
+                    blocks={blocks}
+                    selectedKey={selectedKey}
+                    onSelect={setSelectedKey}
+                    onAction={onAction}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            // COURTS = planning. Drag board + the matches overview list.
+            <div className="h-full min-h-0 overflow-auto">
+              <UnifiedOpsBoard
+                blocks={blocks}
+                courtCount={courtCount}
+                currentSlot={currentSlot}
+                selectedKey={selectedKey}
+                onSelect={setSelectedKey}
+                interactive
+                meet={{ config, matches, schedule }}
+                onBracketData={setData}
+              />
+              <UnifiedOpsList blocks={blocks} selectedKey={selectedKey} onSelect={setSelectedKey} />
+            </div>
+          )}
+
+          {/* Detail rail OVERLAYS the content so it never steals layout width
+              (the source of the text cutoff at narrower viewports). */}
           {selectedBlock ? (
-            <OpsDetailRail
-              block={selectedBlock}
-              data={data}
-              onBracketChange={setData}
-              onAction={onAction}
-              live={isLive}
-            />
+            <div className="absolute inset-y-0 right-0 z-20 flex bg-card shadow-xl">
+              <button
+                type="button"
+                onClick={() => setSelectedKey(null)}
+                aria-label="Close details"
+                className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              >
+                ✕
+              </button>
+              <div className="min-h-0 overflow-auto">
+                <OpsDetailRail
+                  block={selectedBlock}
+                  data={data}
+                  onBracketChange={setData}
+                  onAction={onAction}
+                  live={isLive}
+                />
+              </div>
+            </div>
           ) : null}
         </div>
       )}
