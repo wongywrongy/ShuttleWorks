@@ -4,6 +4,7 @@ DTO ↔ engine conversion lives in ``backend/adapters/badminton.py``.
 This module is a thin route surface around it.
 """
 import logging
+from dataclasses import replace
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -55,6 +56,29 @@ class GenerateScheduleRequest(BaseModel):
     matches: List[MatchDTO]
     # Accept both typed and untyped for back-compat; legacy clients sent raw dicts.
     previousAssignments: Optional[List[PreviousAssignmentDTO]] = None
+    # Cross-engine court coordination (hybrid workspaces): extra closed
+    # ``[court, from_slot, to_slot]`` windows the meet solve must avoid —
+    # the bracket's currently-occupied courts. The hybrid Operations
+    # surface passes these so a meet re-solve never double-books a court the
+    # bracket already owns. Empty/absent for single-engine meet.
+    closedCourtWindows: Optional[List[List[int]]] = None
+
+
+def _merge_closed_windows(schedule_config, extra: Optional[List[List[int]]]):
+    """Fold cross-engine closed windows into a built ScheduleConfig."""
+    if not extra:
+        return schedule_config
+    windows = [
+        (int(w[0]), int(w[1]), int(w[2]))
+        for w in extra
+        if isinstance(w, (list, tuple)) and len(w) == 3 and int(w[2]) > int(w[1])
+    ]
+    if not windows:
+        return schedule_config
+    return replace(
+        schedule_config,
+        closed_court_windows=[*schedule_config.closed_court_windows, *windows],
+    )
 
 
 class ValidateMoveRequest(BaseModel):
@@ -83,6 +107,7 @@ async def generate_schedule(request: GenerateScheduleRequest):
     """
     try:
         schedule_config, players, matches, previous_assignments = prepare_solver_input(request.config, request.players, request.matches, request.previousAssignments)
+        schedule_config = _merge_closed_windows(schedule_config, request.closedCourtWindows)
         solver_options = solver_options_for(request.config)
         solver_request = ScheduleRequest(
             config=schedule_config,
@@ -189,6 +214,7 @@ async def generate_schedule_stream(request: GenerateScheduleRequest, http_reques
             """Run solver in thread pool to avoid blocking event loop."""
             try:
                 schedule_config, players, matches, previous_assignments = prepare_solver_input(request.config, request.players, request.matches, request.previousAssignments)
+                schedule_config = _merge_closed_windows(schedule_config, request.closedCourtWindows)
 
                 scheduler = CPSATScheduler(
                     config=schedule_config,

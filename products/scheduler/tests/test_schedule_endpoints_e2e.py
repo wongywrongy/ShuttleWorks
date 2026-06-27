@@ -83,6 +83,25 @@ def test_routes_registered(client):
     assert "/schedule/warm-restart" in routes
 
 
+def test_schedule_honours_cross_engine_closed_windows(client):
+    """Hybrid coordination: the meet solve must avoid courts the bracket
+    already occupies, passed as ``closedCourtWindows`` [court, from, to].
+    Block slot 0 on every court and assert no match lands there."""
+    config, players, matches = _minimal_problem()
+    block = [[c, 0, 1] for c in range(1, config["courtCount"] + 1)]
+    r = client.post("/schedule", json={
+        "config": config,
+        "players": players,
+        "matches": matches,
+        "closedCourtWindows": block,
+    })
+    assert r.status_code == 200, r.text
+    schedule = r.json()
+    assert schedule["status"] in ("optimal", "feasible")
+    on_slot_zero = [a for a in schedule["assignments"] if a["slotId"] == 0]
+    assert on_slot_zero == [], f"matches placed on a closed slot: {on_slot_zero}"
+
+
 def test_generate_then_repair_then_warm_restart(client):
     """One operator flow: generate a schedule, repair after a court
     closure, then warm-restart. All three endpoints accept the

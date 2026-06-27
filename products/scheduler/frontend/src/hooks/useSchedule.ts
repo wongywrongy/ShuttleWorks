@@ -46,7 +46,7 @@ export function useSchedule() {
   // Track abort controller for cancellation
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const generateSchedule = useCallback(async () => {
+  const generateSchedule = useCallback(async (closedCourtWindows?: number[][]) => {
     if (!config) {
       throw new Error('No configuration set');
     }
@@ -72,6 +72,9 @@ export function useSchedule() {
           config,
           players,
           matches,
+          ...(closedCourtWindows && closedCourtWindows.length > 0
+            ? { closedCourtWindows }
+            : {}),
         },
         {
           onProgress: (progress) => {

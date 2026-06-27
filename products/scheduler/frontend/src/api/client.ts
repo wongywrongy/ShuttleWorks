@@ -87,6 +87,9 @@ interface GenerateScheduleRequest {
   players: PlayerDTO[];
   matches: MatchDTO[];
   previousAssignments?: any[];
+  /** Hybrid coordination: extra [court, fromSlot, toSlot] windows the meet
+   *  solve must avoid — the bracket's occupied courts. */
+  closedCourtWindows?: number[][];
 }
 
 export type DisruptionType = 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';

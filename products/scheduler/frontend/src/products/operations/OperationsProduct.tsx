@@ -73,6 +73,18 @@ function OperationsBody() {
   const { generateSchedule, loading: generating } = useSchedule();
   const currentSlot = useCurrentSlot();
   const [scheduling, setScheduling] = useState(false);
+  // Cross-engine coordination: the courts the bracket already occupies, as
+  // [court, fromSlot, toSlot] windows, so a meet re-solve schedules around
+  // them (no double-booking). The bracket side coordinates server-side.
+  const bracketWindows = useMemo<number[][]>(
+    () =>
+      (data?.assignments ?? []).map((a) => [
+        a.court_id,
+        a.slot_id,
+        a.slot_id + a.duration_slots,
+      ]),
+    [data],
+  );
   // Bracket play-units ready to schedule: both sides known, no court yet, no
   // result, all feeders resolved (mirrors the single-engine header count).
   const schedulableCount = useMemo(() => {
@@ -163,7 +175,7 @@ function OperationsBody() {
             <button
               type="button"
               className={schedBtn}
-              onClick={() => void generateSchedule()}
+              onClick={() => void generateSchedule(bracketWindows)}
               disabled={generating}
               data-testid="ops-generate-meet"
             >

@@ -400,6 +400,35 @@ def _pick(camel_cfg: dict, session_cfg: dict, camel_key: str, legacy_key: str, d
     return session_cfg.get(legacy_key, default)
 
 
+def _meet_occupied_windows(
+    data_blob: dict, court_count: int
+) -> List[Tuple[int, int, int]]:
+    """Cross-engine court coordination (hybrid workspaces).
+
+    Meet and Bracket schedule the same physical courts independently. To
+    stop them double-booking, a bracket solve treats every court+slot the
+    MEET schedule already occupies as a closed ``(court, from, to)`` window,
+    so the CP-SAT engine never places a bracket match where a meet match
+    already sits. Reads the meet schedule from the tournament ``data`` blob
+    (``schedule.assignments``); returns ``[]`` when there's no meet schedule.
+    """
+    sched = (data_blob or {}).get("schedule") or {}
+    out: List[Tuple[int, int, int]] = []
+    for a in sched.get("assignments", []) or []:
+        court = a.get("courtId")
+        slot = a.get("slotId")
+        dur = a.get("durationSlots", 1) or 1
+        if court is None or slot is None:
+            continue
+        try:
+            c, s, d = int(court), int(slot), int(dur)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= c <= court_count and d > 0:
+            out.append((c, s, s + d))
+    return out
+
+
 def _hydrate_session(
     repo: LocalRepository, tournament_id: uuid.UUID
 ) -> Optional[BracketSession]:
@@ -431,6 +460,9 @@ def _hydrate_session(
             court_count=court_count,
             total_slots=total_slots,
             interval_minutes=interval_minutes,
+            # Hybrid coordination: schedule bracket matches AROUND the meet
+            # schedule so the two engines never double-book a court.
+            closed_court_windows=_meet_occupied_windows(data_blob, court_count),
         )
     )
 
