@@ -123,6 +123,11 @@ export function UnifiedOpsBoard({
   const [hoverCell, setHoverCell] = useState<{ courtId: number; slotId: number } | null>(null);
   const [validation, setValidation] = useState<Validation | null>(null);
   const [dropFx, setDropFx] = useState<DropFx | null>(null);
+  // Chart zoom — scales the gantt geometry (wider cells) so long labels read
+  // without clipping. Real layout, so drag + scroll keep working.
+  const [scale, setScale] = useState(1);
+  const zoomBy = (f: number) =>
+    setScale((s) => Math.min(2.5, Math.max(0.7, Math.round(s * f * 100) / 100)));
   const validateAbortRef = useRef<AbortController | null>(null);
   const validateTimerRef = useRef<number | null>(null);
   const dropFxTimerRef = useRef<number | null>(null);
@@ -292,6 +297,7 @@ export function UnifiedOpsBoard({
       minSlot={minSlot}
       slotCount={slotCount}
       density="standard"
+      scale={scale}
       placements={placements}
       renderBlock={renderBlock}
       renderCell={interactive ? renderCell : undefined}
@@ -300,12 +306,25 @@ export function UnifiedOpsBoard({
     />
   );
 
+  const zoomBar = (
+    <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/40 px-3 py-1 text-2xs">
+      <span className="text-muted-foreground">Zoom</span>
+      <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)} className="h-5 w-5 rounded border border-border bg-card leading-none hover:bg-muted/60">−</button>
+      <span className="w-9 text-center tabular-nums text-muted-foreground">{Math.round(scale * 100)}%</span>
+      <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.2)} className="h-5 w-5 rounded border border-border bg-card leading-none hover:bg-muted/60">+</button>
+      <button type="button" onClick={() => setScale(1)} className="rounded border border-border bg-card px-1.5 py-0.5 text-muted-foreground hover:bg-muted/60">Reset</button>
+    </div>
+  );
+
   if (!interactive) {
     // Live — read-only spatial map; status + late communicated by the rings.
     return (
       <div data-testid="unified-ops-board" data-mode="live" className="shrink-0 overflow-x-auto border-b border-border">
         {grid}
-        <LiveLegend />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <LiveLegend />
+          {zoomBar}
+        </div>
       </div>
     );
   }
@@ -314,6 +333,7 @@ export function UnifiedOpsBoard({
     <div data-testid="unified-ops-board" data-mode="courts" className="shrink-0 overflow-x-auto border-b border-border">
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
         {grid}
+        {zoomBar}
         <div className="flex items-center gap-2 border-t border-border/60 bg-muted/40 px-3 py-1.5 text-2xs" data-testid="unified-ops-status">
           {hoverCell && validation ? (
             validation.feasible ? (

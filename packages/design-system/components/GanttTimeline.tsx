@@ -119,6 +119,11 @@ export interface GanttTimelineProps {
   renderCourtLabel?: (courtId: number) => ReactNode;
   /** Highlights the current-time column in the header + mesh. */
   currentSlot?: number;
+  /** Geometry zoom multiplier (default 1). Scales the slot/row/label pixels
+   *  — wider columns, taller rows — so a consumer can zoom the chart up to
+   *  read cells without clipping. Real layout (not a CSS transform), so drag
+   *  hit-testing and scrolling keep working. */
+  scale?: number;
   /** Forwarded to the outer wrapper. */
   className?: string;
   /** Forwarded to the outer wrapper (e.g. `data-testid`). */
@@ -224,10 +229,19 @@ export function GanttTimeline({
   renderRow,
   renderCourtLabel = defaultRenderCourtLabel,
   currentSlot,
+  scale = 1,
   className,
   ...rest
 }: GanttTimelineProps) {
-  const tier = GANTT_GEOMETRY[density];
+  const baseTier = GANTT_GEOMETRY[density];
+  const tier =
+    scale === 1
+      ? baseTier
+      : {
+          slot: Math.round(baseTier.slot * scale),
+          row: Math.round(baseTier.row * scale),
+          label: Math.round(baseTier.label * scale),
+        };
   const gridWidth = tier.label + slotCount * tier.slot;
   const bodyHeight = courts.length * tier.row;
 
