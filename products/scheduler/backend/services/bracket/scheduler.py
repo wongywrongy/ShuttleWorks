@@ -8,12 +8,13 @@ caller records results between calls.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from scheduler_core import schedule
 from scheduler_core.domain.models import (
     PreviousAssignment,
     ScheduleConfig,
+    ScheduleRequest,
     ScheduleResult,
     SolverOptions,
     SolverStatus,
@@ -60,13 +61,20 @@ class TournamentDriver:
     solver_options: Optional[SolverOptions] = None
     rest_between_rounds: int = 1
 
-    def schedule_next_round(self) -> RoundResult:
+    def prepare_next_round_problem(
+        self,
+    ) -> Optional[Tuple[List[PlayUnitId], int, ScheduleRequest]]:
+        """Build the CP-SAT problem for the next ready wave of PlayUnits.
+
+        Returns ``(ready, current_slot, problem)`` or ``None`` when no
+        PlayUnits are ready. Factored out of ``schedule_next_round`` so
+        the streaming endpoint (which drives ``CPSATScheduler`` directly
+        for per-solution progress callbacks) and the batch path share one
+        source of truth for the ready-set + current-slot computation.
+        """
         ready = find_ready_play_units(self.state)
         if not ready:
-            return RoundResult(
-                play_unit_ids=[],
-                status=SolverStatus.UNKNOWN,
-            )
+            return None
 
         current_slot = advance_current_slot(
             self.state,
@@ -81,8 +89,22 @@ class TournamentDriver:
             config=round_config,
             solver_options=self.solver_options,
         )
+        return ready, current_slot, problem
 
-        result = schedule(problem, options=self.solver_options)
+    def schedule_next_round(self, candidate_pool_size: int = 0) -> RoundResult:
+        prepared = self.prepare_next_round_problem()
+        if prepared is None:
+            return RoundResult(
+                play_unit_ids=[],
+                status=SolverStatus.UNKNOWN,
+            )
+        ready, current_slot, problem = prepared
+
+        result = schedule(
+            problem,
+            options=self.solver_options,
+            candidate_pool_size=candidate_pool_size,
+        )
 
         if result.status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE):
             for assignment in result.assignments:

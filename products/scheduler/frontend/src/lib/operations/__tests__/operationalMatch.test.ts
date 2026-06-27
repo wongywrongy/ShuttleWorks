@@ -9,7 +9,9 @@ import { describe, expect, it } from 'vitest';
 import {
   bracketToOperational,
   meetMatchesToOperational,
+  mergeOperational,
 } from '../operationalMatch';
+import type { OperationalMatch } from '../operationalMatch';
 import type { MatchDTO, MatchStateDTO, ScheduleDTO } from '../../../api/dto';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
@@ -198,5 +200,50 @@ describe('bracketToOperational', () => {
     };
     const rows = bracketToOperational(withResult);
     expect(rows[0].status).toBe('finished');
+  });
+});
+
+// ---- Hybrid merge ----------------------------------------------------------
+
+describe('mergeOperational', () => {
+  const meet: OperationalMatch[] = [
+    { id: 'm1', source: 'meet', courtLabel: 'C2', slot: 4, sideA: 'Alice', sideB: 'Bob', status: 'scheduled' },
+    { id: 'm3', source: 'meet', sideA: 'X', sideB: 'Y', status: 'scheduled' }, // waiting
+  ];
+  const bracket: OperationalMatch[] = [
+    { id: 'pu1', source: 'bracket', courtLabel: 'C1', slot: 3, sideA: 'A', sideB: 'B', status: 'started' },
+    { id: 'pu2', source: 'bracket', courtLabel: 'C2', slot: 2, sideA: 'C', sideB: 'D', status: 'scheduled' },
+    { id: 'pu9', source: 'bracket', sideA: 'E', sideB: 'F', status: 'scheduled' }, // waiting
+  ];
+
+  it('concatenates both engines and sorts assigned rows by court then slot', () => {
+    const rows = mergeOperational(meet, bracket);
+    // Assigned first, ordered (court asc, slot asc): C1/3, C2/2, C2/4.
+    // Then waiting rows in stable concat order (meet before bracket).
+    expect(rows.map((r) => r.id)).toEqual(['pu1', 'pu2', 'm1', 'm3', 'pu9']);
+  });
+
+  it('keeps both engines represented, each row carrying its own source', () => {
+    const rows = mergeOperational(meet, bracket);
+    expect(rows.filter((r) => r.source === 'meet').map((r) => r.id)).toEqual(['m1', 'm3']);
+    expect(rows.filter((r) => r.source === 'bracket').map((r) => r.id)).toEqual(['pu1', 'pu2', 'pu9']);
+  });
+
+  it('orders courts numerically, not lexically (C10 after C2)', () => {
+    const a: OperationalMatch[] = [
+      { id: 'hi', source: 'meet', courtLabel: 'C10', slot: 0, sideA: 'a', sideB: 'b', status: 'scheduled' },
+    ];
+    const b: OperationalMatch[] = [
+      { id: 'lo', source: 'bracket', courtLabel: 'C2', slot: 0, sideA: 'c', sideB: 'd', status: 'scheduled' },
+    ];
+    expect(mergeOperational(a, b).map((r) => r.id)).toEqual(['lo', 'hi']);
+  });
+
+  it('places every assigned row ahead of every waiting (unassigned) row', () => {
+    const rows = mergeOperational(meet, bracket);
+    const assignedFlags = rows.map((r) => r.courtLabel != null && r.slot != null);
+    const lastAssigned = assignedFlags.lastIndexOf(true);
+    const firstWaiting = assignedFlags.indexOf(false);
+    expect(lastAssigned).toBeLessThan(firstWaiting);
   });
 });

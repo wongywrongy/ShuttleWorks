@@ -87,10 +87,31 @@ export function PanZoomCanvas({
     const ch = content.scrollHeight;
     if (cw === 0 || ch === 0) return;
     const s = clamp(Math.min(vp.clientWidth / (cw + 48), vp.clientHeight / (ch + 48)), MIN_SCALE, 1);
-    setT({ s, x: (vp.clientWidth - cw * s) / 2, y: 24 });
+    // Center the content in BOTH axes. Vertical centering keeps the (centered)
+    // Final mid-viewport instead of parked at the top — but never push the top
+    // above a small margin, so a tall bracket stays reachable from its top edge.
+    setT({
+      s,
+      x: (vp.clientWidth - cw * s) / 2,
+      y: Math.max(24, (vp.clientHeight - ch * s) / 2),
+    });
   };
 
   const reset = () => setT({ x: 24, y: 24, s: 1 });
+
+  // Fit + center the content once on mount, so a freshly opened draw lands
+  // with the (centered) Final in view rather than parked at the top-left.
+  // jsdom reports a 0-sized content, so `fit` no-ops there — safe in tests.
+  const didFit = useRef(false);
+  useEffect(() => {
+    if (didFit.current) return;
+    const id = requestAnimationFrame(() => {
+      didFit.current = true;
+      fit();
+    });
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const focusRound = (i: number) => {
     const content = contentRef.current;

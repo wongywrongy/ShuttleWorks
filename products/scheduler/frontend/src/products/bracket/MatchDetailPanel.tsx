@@ -8,10 +8,16 @@
  * Call and Postpone are not available in the bracket API surface and
  * are therefore not surfaced here.
  */
+import { useState } from 'react';
 import { useBracketApi } from '../../api/bracketClient';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useUiStore } from '../../store/uiStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
+import { BracketScoreEntry } from './BracketScoreEntry';
+import { BracketInlineNotice } from './BracketInlineNotice';
+import { applyOptimisticResult } from './optimisticResult';
 
 interface Props {
   data: BracketTournamentDTO;
@@ -33,6 +39,19 @@ const primaryActionBtn =
 export function MatchDetailPanel({ data, onChange }: Props) {
   const api = useBracketApi();
   const matchId = useUiStore((s) => s.bracketSelectedMatchId);
+  const config = useTournamentStore((s) => s.config);
+  const setsMode = (config?.scoringFormat ?? 'badminton') === 'badminton';
+  const setsToWin = config?.setsToWin ?? 2;
+
+  // Result writes route through the idempotent command queue (SP-F3):
+  // optimistic apply, then commit behind a UUID + version optimistic
+  // concurrency. A stale write (a second operator beat us) surfaces inline.
+  const [conflict, setConflict] = useState<string | null>(null);
+  const { submit: submitResult } = useBracketResultQueue({
+    onOptimistic: (input) => onChange(applyOptimisticResult(data, input)),
+    onSettled: (dto) => onChange(dto),
+    onConflict: (_kind, message) => setConflict(message),
+  });
 
   if (!matchId) {
     return (
@@ -64,6 +83,15 @@ export function MatchDetailPanel({ data, onChange }: Props) {
       <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {pu.id}
       </div>
+
+      {/* Inline conflict surface (SP-F3): a stale or rejected result write. */}
+      {conflict && (
+        <BracketInlineNotice
+          tone="error"
+          title="Could not record result"
+          message={conflict}
+        />
+      )}
 
       {/* Court + slot */}
       <div className="text-sm font-mono">
@@ -104,21 +132,51 @@ export function MatchDetailPanel({ data, onChange }: Props) {
           </button>
         )}
 
-        {/* Record result — available when started and no result yet */}
-        {assignment?.started && !result && (
-          <>
+        {/* Record result — available when started and no result yet. In
+            Sets mode the operator enters a set-by-set score (captured into
+            BracketResult.score); in Simple mode the plain win buttons stay. */}
+        {assignment?.started && !result && setsMode && (
+          <div className="w-full space-y-2">
+            <BracketScoreEntry
+              setsToWin={setsToWin}
+              labelA={labelA}
+              labelB={labelB}
+              onRecord={(winner, sets) => {
+                setConflict(null);
+                void submitResult({
+                  matchId,
+                  winnerSide: winner,
+                  seenVersion: pu.version ?? 1,
+                  finishedAtSlot: assignment.slot_id + assignment.duration_slots,
+                  score: sets.length > 0 ? { sets } : null,
+                });
+              }}
+            />
             <button
               type="button"
               className={actionBtn}
               onClick={async () => {
+                onChange(await api.matchAction({ play_unit_id: matchId, action: 'reset' }));
+              }}
+            >
+              Undo start
+            </button>
+          </div>
+        )}
+        {assignment?.started && !result && !setsMode && (
+          <>
+            <button
+              type="button"
+              className={actionBtn}
+              onClick={() => {
                 if (!window.confirm(`Record ${labelA} as the winner? This cannot be undone.`)) return;
-                onChange(
-                  await api.recordResult({
-                    play_unit_id: matchId,
-                    winner_side: 'A',
-                    finished_at_slot: assignment.slot_id + assignment.duration_slots,
-                  }),
-                );
+                setConflict(null);
+                void submitResult({
+                  matchId,
+                  winnerSide: 'A',
+                  seenVersion: pu.version ?? 1,
+                  finishedAtSlot: assignment.slot_id + assignment.duration_slots,
+                });
               }}
             >
               {labelA} wins
@@ -126,15 +184,15 @@ export function MatchDetailPanel({ data, onChange }: Props) {
             <button
               type="button"
               className={actionBtn}
-              onClick={async () => {
+              onClick={() => {
                 if (!window.confirm(`Record ${labelB} as the winner? This cannot be undone.`)) return;
-                onChange(
-                  await api.recordResult({
-                    play_unit_id: matchId,
-                    winner_side: 'B',
-                    finished_at_slot: assignment.slot_id + assignment.duration_slots,
-                  }),
-                );
+                setConflict(null);
+                void submitResult({
+                  matchId,
+                  winnerSide: 'B',
+                  seenVersion: pu.version ?? 1,
+                  finishedAtSlot: assignment.slot_id + assignment.duration_slots,
+                });
               }}
             >
               {labelB} wins

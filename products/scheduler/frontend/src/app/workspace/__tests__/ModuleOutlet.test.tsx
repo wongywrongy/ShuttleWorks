@@ -12,6 +12,9 @@ vi.mock('../../../products/bracket/BracketProduct', () => ({
 vi.mock('../../../products/display/DisplayProduct', () => ({
   DisplayProduct: () => <div data-testid="display-product" />,
 }));
+vi.mock('../../../products/operations/OperationsProduct', () => ({
+  OperationsProduct: () => <div data-testid="operations-product" />,
+}));
 
 function setTabAndKind(tab: string, kind: 'meet' | 'bracket' | null) {
   useUiStore.getState().setActiveTab(tab as never);
@@ -37,5 +40,33 @@ describe('ModuleOutlet', () => {
     setTabAndKind('bracket-draw', 'bracket');
     render(<ModuleOutlet />);
     expect(screen.getByTestId('bracket-product')).toBeInTheDocument();
+  });
+
+  // --- Unified Operations (both engines enabled) ---------------------------
+
+  it('single-engine: an operations tab still renders the engine product', () => {
+    // Default (bothEnginesEnabled omitted/false) must keep today's behavior.
+    setTabAndKind('schedule', 'meet');
+    render(<ModuleOutlet />);
+    expect(screen.getByTestId('meet-product')).toBeInTheDocument();
+  });
+
+  it('both engines: an operations tab renders the unified OperationsProduct', () => {
+    setTabAndKind('schedule', 'meet');
+    render(<ModuleOutlet bothEnginesEnabled />);
+    expect(screen.getByTestId('operations-product')).toBeInTheDocument();
+    expect(screen.queryByTestId('meet-product')).not.toBeInTheDocument();
+  });
+
+  it('both engines: the bracket operations tab also renders the unified surface', () => {
+    setTabAndKind('bracket-live', 'bracket');
+    render(<ModuleOutlet bothEnginesEnabled />);
+    expect(screen.getByTestId('operations-product')).toBeInTheDocument();
+  });
+
+  it('both engines: a non-operations tab still renders its own engine', () => {
+    setTabAndKind('roster', 'meet');
+    render(<ModuleOutlet bothEnginesEnabled />);
+    expect(screen.getByTestId('meet-product')).toBeInTheDocument();
   });
 });

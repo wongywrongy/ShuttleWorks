@@ -29,7 +29,7 @@ import { ActionsBar } from '../../components/control-plane';
 import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { useBracketScheduleLock } from './useBracketScheduleLock';
-import { BracketTournamentSection } from './BracketTournamentSection';
+import { BracketEngineSection } from './BracketEngineSection';
 import { BracketStructureSection } from './BracketStructureSection';
 import { BracketRosterTab } from './BracketRosterTab';
 import { BracketDrawsTab } from './BracketDrawsTab';
@@ -151,7 +151,7 @@ function BracketTabBody() {
   const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : 'setup';
   const [setupSection, setSetupSection] = useSearchParamState(
     'section',
-    'tournament',
+    'engine',
     { debounceMs: 0 },
   );
   // Per-engine lock signal — independent of the meet schedule. Stubbed
@@ -161,14 +161,14 @@ function BracketTabBody() {
   const bracketSetupSections = useMemo<SettingsSectionDef[]>(
     () => [
       {
-        id: 'tournament',
-        label: 'Tournament',
+        id: 'engine',
+        label: 'Engine',
         icon: Sliders,
-        render: () => <BracketTournamentSection />,
+        render: () => <BracketEngineSection />,
       },
       {
         id: 'structure',
-        label: 'Events and roster',
+        label: 'Structure',
         icon: ListChecks,
         render: () => <BracketStructureSection />,
       },

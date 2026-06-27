@@ -82,14 +82,14 @@ beforeEach(() => {
 });
 
 describe('BracketTab — fresh tournament (data === null)', () => {
-  it('renders the Setup form (engine timing) on bracket-setup tab', () => {
+  it('renders the Engine tab (scoring + rest) on bracket-setup tab', () => {
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
-    // The Tournament section is engine-timing only now — identity + venue
-    // were extracted to workspace settings / Venue & schedule.
+    // The Engine section surfaces scoring + the bracket-specific rest;
+    // identity + venue were extracted to workspace settings / Venue & schedule.
+    expect(screen.getByLabelText('Score type')).toBeInTheDocument();
     expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Tournament name/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Courts/i)).not.toBeInTheDocument();
     // Must NOT show the draw empty-state CTA.
     expect(screen.queryByText(/No draws generated yet/i)).not.toBeInTheDocument();
   });
@@ -206,18 +206,17 @@ describe('BracketTab — Setup chrome', () => {
     // Default mock (null data) is fine — Setup doesn't depend on bracket data.
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
-    // The actions-bar Seg renders a radio per section. Tournament data +
-    // Share were extracted to workspace settings, so only these remain.
-    expect(screen.getByRole('radio', { name: /^Tournament$/i })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /^Events and roster$/i })).toBeInTheDocument();
+    // The actions-bar Seg renders a radio per section: Engine + Structure.
+    expect(screen.getByRole('radio', { name: /^Engine$/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^Structure$/i })).toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: /^Tournament data$/i })).toBeNull();
     expect(screen.queryByRole('radio', { name: /^Share$/i })).toBeNull();
   });
 
-  it('renders the Tournament section content by default', () => {
+  it('renders the Engine section content by default', () => {
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
-    // Tournament section shows the engine-timing field by default.
+    // Engine section shows scoring + the engine-timing field by default.
     expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
   });
 });

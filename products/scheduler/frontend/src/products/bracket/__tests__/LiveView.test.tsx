@@ -17,6 +17,13 @@ vi.mock('../../../api/bracketClient', () => ({
   },
 }));
 
+// SP-F3 — MatchDetailPanel (inside LiveView) routes result writes through the
+// bracket result queue, which reads the tournament id from the route. Mock it
+// so LiveView renders bare without a router.
+vi.mock('../../../hooks/useBracketResultQueue', () => ({
+  useBracketResultQueue: () => ({ submit: vi.fn() }),
+}));
+
 const EMPTY: BracketTournamentDTO = {
   courts: 4, total_slots: 32, rest_between_rounds: 1, interval_minutes: 30,
   start_time: null, events: [], participants: [],

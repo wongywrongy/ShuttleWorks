@@ -4,13 +4,13 @@ import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
 import { Select, StatusBar } from "@scheduler/design-system";
 import type { BracketView } from "../../lib/bracketTabs";
-import { useUiStore } from "../../store/uiStore";
 import { useTournamentId } from "../../hooks/useTournamentId";
 import { INTERACTIVE_BASE } from "../../lib/utils";
 import { ActionsBar } from "../../components/control-plane";
 import { EventsFilterStrip } from "./EventsFilterStrip";
 import { SourceChip } from "../operations/SourceChip";
 import { formatLabel, disciplineLabel } from "./bracketLabels";
+import { BracketScheduleModal } from "./BracketScheduleModal";
 
 interface Props {
   /** Bare view name — drives the eyebrow. Derived from ``activeTab``
@@ -52,7 +52,6 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
   const api = useBracketApi();
   const tid = useTournamentId();
   const navigate = useNavigate();
-  const pushToast = useUiStore((s) => s.pushToast);
   const [scheduling, setScheduling] = useState(false);
   const counts = useMemo(
     () => buckets(data, view === "draw" ? eventId : null),
@@ -79,43 +78,6 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
         pu.dependencies.every((dep) => done.has(dep)),
     ).length;
   }, [data]);
-
-  const handleScheduleNext = async () => {
-    setScheduling(true);
-    try {
-      const out = await api.scheduleNext();
-      // The backend returns ``play_unit_ids`` = the ready set REGARDLESS
-      // of solver outcome, but only writes assignments when the solve is
-      // optimal/feasible. Keying the success toast off the id count alone
-      // reported "Scheduled N matches" on an infeasible / timed-out solve
-      // where nothing was actually scheduled. Gate on status instead.
-      const scheduled =
-        (out.status === 'optimal' || out.status === 'feasible') &&
-        out.play_unit_ids.length > 0;
-      if (scheduled) {
-        pushToast({
-          level: 'success',
-          message: `Scheduled ${out.play_unit_ids.length} match${out.play_unit_ids.length === 1 ? '' : 'es'}`,
-          detail: out.play_unit_ids.join(', '),
-        });
-      } else {
-        pushToast({
-          level: 'warn',
-          message: 'No matches could be scheduled',
-          detail:
-            out.infeasible_reasons.join('; ') ||
-            (out.play_unit_ids.length > 0
-              ? `Solver could not place ${out.play_unit_ids.length} ready match${out.play_unit_ids.length === 1 ? '' : 'es'} (status: ${out.status})`
-              : `Solver status: ${out.status}`),
-        });
-      }
-      await onRefresh();
-    } catch {
-      // Shared axios interceptor already surfaced a toast.
-    } finally {
-      setScheduling(false);
-    }
-  };
 
   const selectedEvent = data.events.find((e) => e.id === eventId);
   const eventFormatLabel = formatLabel(selectedEvent?.format);
@@ -177,12 +139,19 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
       {(view === "schedule" || view === "live") && schedulableCount > 0 && (
         <button
           type="button"
-          onClick={() => void handleScheduleNext()}
+          onClick={() => setScheduling(true)}
           disabled={scheduling}
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
         >
-          {scheduling ? 'Scheduling…' : `Schedule next round (${schedulableCount})`}
+          {`Schedule next round (${schedulableCount})`}
         </button>
+      )}
+      {scheduling && (
+        <BracketScheduleModal
+          api={api}
+          onClose={() => setScheduling(false)}
+          onCommitted={onRefresh}
+        />
       )}
     </ActionsBar>
   );

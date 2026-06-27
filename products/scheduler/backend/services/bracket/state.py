@@ -52,6 +52,9 @@ class EventMeta:
     duration_slots: int
     bracket_size: Optional[int] = None
     participant_count: int = 0
+    # Per-event lifecycle: 'draft' | 'generated' | 'started'. Carried here
+    # so serializers can report it without a second DB read.
+    status: str = "draft"
 
 
 @dataclass
@@ -70,6 +73,11 @@ class BracketSession:
     rest_between_rounds: int
     start_time: Optional[datetime]
     events: Dict[str, EventMeta] = field(default_factory=dict)
+    # ``{play_unit_id: BracketMatch.version}`` — the optimistic-concurrency
+    # token surfaced to the client so result writes can carry ``seen_version``
+    # (SP-F3). Empty for a freshly-built session (every match is version 1);
+    # populated from persisted rows on hydrate.
+    match_versions: Dict[str, int] = field(default_factory=dict)
 
 
 def register_draw(state: TournamentState, draw: Draw) -> None:

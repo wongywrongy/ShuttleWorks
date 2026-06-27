@@ -16,17 +16,18 @@
  * this model yet — they keep their existing engine-specific render
  * paths untouched. These adapters are exercised by their unit tests.
  *
- * ## TODO — the hybrid merge (follow-on, NOT this increment)
+ * ## The hybrid merge (SP-F4)
  *
- *   - Dual load: a hybrid Operations view concatenates
- *     `meetMatchesToOperational(...)` + `bracketToOperational(...)`
- *     into ONE list and sorts by court/slot.
- *   - Per-row source chip: once both engines' rows interleave, move the
- *     `source` chip from the surface header onto each row (keyed on
- *     `OperationalMatch.source`).
+ *   - Dual load: `mergeOperational(...)` concatenates
+ *     `meetMatchesToOperational(...)` + `bracketToOperational(...)` into
+ *     ONE list sorted by court then slot (assigned rows first, waiting
+ *     rows last). The unified `UnifiedCourtsView` / `UnifiedLiveView`
+ *     surfaces render that list.
+ *   - Per-row source chip: the `SourceChip` moves from the surface header
+ *     onto each row, keyed on `OperationalMatch.source`.
  *   - Dual write-back: live actions (start / finish / record winner)
- *     must route back to the correct engine's API by `source`. NOT
- *     attempted here — single-engine write paths stay as-is.
+ *     route back to the correct engine's API by `source` — see
+ *     `products/operations/operationalWriteback.ts`.
  *   - `slot` is the scheduled slot index, never derived from a wall
  *     clock. The "late" decoration (bracket `deriveChipState`) stays a
  *     render-time, clock-derived concern — these adapters are pure and
@@ -186,4 +187,56 @@ export function bracketToOperational(data: BracketTournamentDTO): OperationalMat
       status: deriveBracketStatus(result, assignment),
     };
   });
+}
+
+// ---- Hybrid merge ----------------------------------------------------------
+
+/** A row is "assigned" once it has both a court and a scheduled slot. */
+function isAssigned(row: OperationalMatch): boolean {
+  return row.courtLabel != null && row.slot != null;
+}
+
+/** Numeric court index parsed from the `C{n}` label. Unassigned rows (no
+ *  label) sort to the end via `+Infinity`; an unparseable label does too. */
+function courtSortKey(row: OperationalMatch): number {
+  if (!row.courtLabel) return Number.POSITIVE_INFINITY;
+  const n = Number.parseInt(row.courtLabel.replace(/^C/, ''), 10);
+  return Number.isNaN(n) ? Number.POSITIVE_INFINITY : n;
+}
+
+/**
+ * Concatenate the two engines' operational rows into ONE list for the
+ * unified Operations surfaces, sorted by court then slot.
+ *
+ * Ordering contract (deterministic — the adapters are pure):
+ *   1. Assigned rows (court + slot) come before waiting (unassigned) rows.
+ *   2. Assigned rows sort by court index (numeric, so C2 precedes C10),
+ *      then by slot.
+ *   3. A cross-engine tie on the same court+slot is broken meet-before-
+ *      bracket, then by id — purely to keep the order stable, never a
+ *      claim that two matches truly share a court/slot.
+ *   4. Waiting rows keep their concatenation order (meet rows first, then
+ *      bracket rows) — stable, no clock dependency.
+ */
+export function mergeOperational(
+  meet: OperationalMatch[],
+  bracket: OperationalMatch[],
+): OperationalMatch[] {
+  return [...meet, ...bracket]
+    .map((row, index) => ({ row, index }))
+    .sort((x, y) => {
+      const ax = isAssigned(x.row);
+      const ay = isAssigned(y.row);
+      if (ax !== ay) return ax ? -1 : 1; // assigned before waiting
+      if (!ax) return x.index - y.index; // both waiting: stable concat order
+      const cx = courtSortKey(x.row);
+      const cy = courtSortKey(y.row);
+      if (cx !== cy) return cx - cy;
+      const sx = x.row.slot ?? 0;
+      const sy = y.row.slot ?? 0;
+      if (sx !== sy) return sx - sy;
+      if (x.row.source !== y.row.source) return x.row.source === 'meet' ? -1 : 1;
+      return x.row.id < y.row.id ? -1 : x.row.id > y.row.id ? 1 : 0;
+    })
+    .map((w) => w.row);
 }

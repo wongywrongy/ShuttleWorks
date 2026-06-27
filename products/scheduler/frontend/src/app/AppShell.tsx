@@ -90,6 +90,13 @@ export function AppShell() {
   const meetEnabled = (realModules ?? []).some(
     (m) => m.id === 'meet' && m.status === 'enabled',
   );
+  // Both engines enabled → the Operations Courts/Live segments render ONE
+  // unified cross-engine surface (SP-F4). Gate on the REAL catalog so an
+  // indeterminate/loading state fails safe to single-engine.
+  const bracketEnabled = (realModules ?? []).some(
+    (m) => m.id === 'bracket' && m.status === 'enabled',
+  );
+  const bothEnginesEnabled = meetEnabled && bracketEnabled;
   // Whether to render the module outlet or the unavailable panel.
   const pane = resolveActivePane(activeModule, modules);
 
@@ -201,7 +208,7 @@ export function AppShell() {
               <WorkspaceShellSurface segment={activeTab} modules={modules} />
             </div>
           ) : pane.kind === 'outlet' ? (
-            <ModuleOutlet />
+            <ModuleOutlet bothEnginesEnabled={bothEnginesEnabled} />
           ) : (
             <ModuleUnavailablePanel
               label={pane.label}

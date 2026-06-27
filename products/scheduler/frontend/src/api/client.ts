@@ -47,7 +47,10 @@ import type {
   BracketValidationOut,
   BracketEventUpsertIn,
   BracketEventGenerateIn,
+  BracketScore,
+  BracketCommitRoundIn,
 } from './bracketDto';
+import type { BracketSubmitResult } from '../lib/bracketCommandQueue';
 
 // Use /api proxy in dev, or explicit URL in production
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
@@ -1032,6 +1035,89 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Stream the next bracket round's solve over SSE, mirroring the meet's
+   * ``generateScheduleWithProgress``. Feeds ``model_built`` / ``phase`` /
+   * ``progress`` to the callbacks and resolves with the terminal
+   * ``complete`` payload (a ``BracketScheduleNextOut`` carrying the
+   * candidate pool). Unlike the batch route, this does NOT persist — the
+   * caller commits a chosen candidate via ``commitBracketRound``.
+   */
+  async scheduleNextBracketRoundWithProgress(
+    tid: string,
+    callbacks: {
+      onProgress?: (event: SolverProgressEvent) => void;
+      onModelBuilt?: (event: SolverModelBuiltEvent) => void;
+      onPhase?: (event: SolverPhaseEvent) => void;
+    },
+    abortSignal?: AbortSignal,
+    candidatePoolSize?: number,
+  ): Promise<BracketScheduleNextOut> {
+    const query =
+      candidatePoolSize != null ? `?candidate_pool_size=${candidatePoolSize}` : '';
+    const url = `${API_BASE_URL}/tournaments/${tid}/bracket/schedule-next/stream${query}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: abortSignal,
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('Response body is not readable');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const messages = buffer.split('\n\n');
+      buffer = messages.pop() || '';
+
+      for (const message of messages) {
+        if (!message.trim()) continue;
+        const dataMatch = message.match(/^data: (.+)$/m);
+        if (!dataMatch) continue;
+
+        const event = JSON.parse(dataMatch[1]);
+        switch (event.type) {
+          case 'model_built':
+            callbacks.onModelBuilt?.(event as SolverModelBuiltEvent);
+            break;
+          case 'phase':
+            callbacks.onPhase?.({ phase: event.phase });
+            break;
+          case 'progress':
+            callbacks.onProgress?.(event as SolverProgressEvent);
+            break;
+          case 'complete':
+            return event.result as BracketScheduleNextOut;
+          case 'error':
+            throw new Error(event.message);
+          case 'done':
+            break;
+        }
+      }
+    }
+    throw new Error('Bracket schedule stream ended without a result');
+  }
+
+  async commitBracketRound(
+    tid: string,
+    body: BracketCommitRoundIn,
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/schedule-next/commit`,
+      body,
+    );
+    return response.data;
+  }
+
   async recordBracketResult(
     tid: string,
     body: {
@@ -1039,6 +1125,7 @@ class ApiClient {
       winner_side: 'A' | 'B';
       finished_at_slot?: number | null;
       walkover?: boolean;
+      score?: BracketScore | null;
     },
   ): Promise<BracketTournamentDTO> {
     const response = await this.client.post(
@@ -1046,6 +1133,58 @@ class ApiClient {
       body,
     );
     return response.data;
+  }
+
+  /**
+   * Record a bracket result through the optimistic-concurrency path
+   * (SP-F3). Carries ``seen_version`` and normalises the response into the
+   * bracket queue's discriminated union so ``flush`` can branch on it.
+   *
+   * Mirrors ``submitCommand`` with one deliberate divergence: meet maps an
+   * unknown-409 to ``networkError`` (retry), but the bracket ``/results``
+   * route's legacy already-recorded guard returns a bare ``{detail}`` 409
+   * with no ``error`` field — a *permanent* rejection. So any 409 that is
+   * not ``stale_version`` is treated as ``conflict`` (no retry).
+   */
+  async recordBracketResultVersioned(
+    tid: string,
+    body: {
+      play_unit_id: string;
+      winner_side: 'A' | 'B';
+      finished_at_slot?: number | null;
+      walkover?: boolean;
+      score?: BracketScore | null;
+      seen_version: number;
+    },
+  ): Promise<BracketSubmitResult> {
+    try {
+      const response = await this.client.post<BracketTournamentDTO>(
+        `/tournaments/${tid}/bracket/results`,
+        body,
+      );
+      return { kind: 'ok', dto: response.data };
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: {
+          status?: number;
+          data?: { error?: string; message?: string; detail?: string };
+        };
+        message?: string;
+      };
+      const status = axiosErr.response?.status;
+      const data = axiosErr.response?.data;
+      if (status === 409) {
+        if (data?.error === 'stale_version') {
+          return { kind: 'staleVersion', message: data.message ?? 'stale version' };
+        }
+        const message = data?.message ?? data?.detail ?? 'conflict';
+        return { kind: 'conflict', message };
+      }
+      return {
+        kind: 'networkError',
+        message: axiosErr.message ?? 'submit failed',
+      };
+    }
   }
 
   async bracketMatchAction(

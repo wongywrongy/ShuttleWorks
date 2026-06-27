@@ -22,7 +22,7 @@ import { useTournament } from '../../hooks/useTournament';
 import { useLockGuard } from '../../hooks/useLockGuard';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
-import { TournamentConfigForm } from './tournaments/TournamentConfigForm';
+import { MeetStructureForm } from './tournaments/MeetStructureForm';
 import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
 import { EngineSettings } from './settings/EngineSettings';
 import { MeetActionsBar } from './components/MeetActionsBar';
@@ -33,8 +33,8 @@ import type { TournamentConfig } from '../../api/dto';
 const FORM_ID = 'meet-config-form';
 
 const SECTION_OPTIONS = [
-  { value: 'tournament' as const, label: 'Tournament' },
   { value: 'engine' as const, label: 'Engine' },
+  { value: 'meet' as const, label: 'Meet' },
 ];
 
 export function TournamentSetupPage() {
@@ -42,7 +42,7 @@ export function TournamentSetupPage() {
   const { isLocked, confirmUnlock } = useLockGuard();
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [section, setSection] = useSearchParamState('section', 'tournament', {
+  const [section, setSection] = useSearchParamState('section', 'engine', {
     debounceMs: 0,
   });
   const justSaved = useSuccessFlash(busy);
@@ -74,7 +74,7 @@ export function TournamentSetupPage() {
 
   const displayConfig = config || defaultConfig;
   const isNewTournament = !config && error && error.includes('not found');
-  const activeSection = section === 'engine' ? 'engine' : 'tournament';
+  const activeSection = section === 'meet' ? 'meet' : 'engine';
 
   if (loading && !config && !error) {
     return (
@@ -134,15 +134,15 @@ export function TournamentSetupPage() {
       {/* Scrollable content — the active section's form. Only one form is
           mounted at a time, both share FORM_ID so the bar Save targets it. */}
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 pt-3">
-        {activeSection === 'engine' ? (
-          <EngineSettings formId={FORM_ID} onBusyChange={setBusy} />
-        ) : (
-          <TournamentConfigForm
+        {activeSection === 'meet' ? (
+          <MeetStructureForm
             formId={FORM_ID}
             config={displayConfig}
             onSave={handleSave}
             saving={busy}
           />
+        ) : (
+          <EngineSettings formId={FORM_ID} onBusyChange={setBusy} />
         )}
       </div>
     </div>

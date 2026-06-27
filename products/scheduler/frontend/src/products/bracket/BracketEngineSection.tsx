@@ -1,14 +1,15 @@
 /**
- * BracketTournamentSection — the Tournament section of bracket Setup.
+ * BracketEngineSection — the Engine tab of bracket Configuration.
  *
- * Engine timing only. Tournament identity (name / date) lives in workspace
- * settings, and the venue fields (courts, slot duration, day start / end)
- * live in the workspace Venue & schedule surface — both were duplicated
- * across Meet and Bracket Configuration and have been extracted up. The
- * only field that stays here is the bracket-specific "rest between rounds".
+ * The bracket's CP-SAT input surface. It surfaces the SAME scoring field
+ * set as the Meet Engine tab (via the shared `ScoringFields`) plus the
+ * one bracket-specific timing input, rest between rounds. Courts, slot
+ * duration, and the day window live in workspace settings — the nudge
+ * line points there.
  *
- * Persist path: the field writes through `setConfig` on blur (only when
- * changed); `useTournamentState`'s debounce coalesces the PUT.
+ * Persist path: scoring writes through `setConfig` immediately; the rest
+ * field writes on blur (only when changed). `useTournamentState`'s
+ * debounce coalesces the PUT either way.
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -16,6 +17,10 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import type { TournamentConfig } from '../../api/dto';
 import { Row, SectionHeader } from '../../platform/settings/SettingsControls';
+import {
+  ScoringFields,
+  type ScoringValue,
+} from '../../platform/settings/ScoringFields';
 
 const FALLBACK_CONFIG: TournamentConfig = {
   intervalMinutes: 30,
@@ -31,7 +36,7 @@ const FALLBACK_CONFIG: TournamentConfig = {
 const TEXT_INPUT_CLASSES =
   'h-7 rounded-sm border border-border bg-bg-elev px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring';
 
-export function BracketTournamentSection() {
+export function BracketEngineSection() {
   const config = useTournamentStore((s) => s.config);
   const setConfig = useTournamentStore((s) => s.setConfig);
   const tid = useTournamentId();
@@ -40,7 +45,6 @@ export function BracketTournamentSection() {
     String(config?.restBetweenRounds ?? 1),
   );
 
-  // Resync draft when store config changes (hydrate, another tab, etc.).
   useEffect(() => {
     setRestDraft(String(config?.restBetweenRounds ?? 1));
   }, [config?.restBetweenRounds]);
@@ -49,18 +53,21 @@ export function BracketTournamentSection() {
     setConfig({ ...(config ?? FALLBACK_CONFIG), ...patch });
   };
 
+  const scoring: ScoringValue = {
+    scoringFormat: config?.scoringFormat ?? 'badminton',
+    pointsPerSet: config?.pointsPerSet ?? 21,
+    setsToWin: config?.setsToWin ?? 2,
+    deuceEnabled: config?.deuceEnabled ?? true,
+  };
+
   return (
     <div>
-      <SectionHeader>Schedule</SectionHeader>
+      <SectionHeader>Scoring</SectionHeader>
+      <ScoringFields value={scoring} onChange={(patch) => update(patch)} />
+
+      <SectionHeader>Timing</SectionHeader>
       <p className="pb-1 text-xs text-muted-foreground">
-        Tournament name and date live in{' '}
-        <Link
-          to={`/tournaments/${tid}/ws-settings`}
-          className="text-accent hover:underline"
-        >
-          workspace settings
-        </Link>
-        ; courts and schedule timing live in{' '}
+        Courts, slot duration, and the day window live in{' '}
         <Link
           to={`/tournaments/${tid}/ws-venue`}
           className="text-accent hover:underline"

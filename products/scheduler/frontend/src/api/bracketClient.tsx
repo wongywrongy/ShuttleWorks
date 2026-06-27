@@ -23,8 +23,15 @@ import type {
   BracketValidationOut,
   BracketEventUpsertIn,
   BracketEventGenerateIn,
+  BracketScore,
+  BracketCommitRoundIn,
   WinnerSide,
 } from './bracketDto';
+import type {
+  SolverProgressEvent,
+  SolverModelBuiltEvent,
+  SolverPhaseEvent,
+} from './dto';
 
 export interface BracketApi {
   /** Resolves to ``null`` when no bracket is configured (404). */
@@ -32,11 +39,25 @@ export interface BracketApi {
   create: (body: BracketCreateIn) => Promise<BracketTournamentDTO>;
   remove: () => Promise<{ ok: boolean }>;
   scheduleNext: () => Promise<BracketScheduleNextOut>;
+  /** Stream the next round's solve with live progress; resolves with the
+   *  candidate pool. Does not persist — commit a choice via ``commitRound``. */
+  scheduleNextWithProgress: (
+    callbacks: {
+      onProgress?: (event: SolverProgressEvent) => void;
+      onModelBuilt?: (event: SolverModelBuiltEvent) => void;
+      onPhase?: (event: SolverPhaseEvent) => void;
+    },
+    abortSignal?: AbortSignal,
+    candidatePoolSize?: number,
+  ) => Promise<BracketScheduleNextOut>;
+  /** Persist the operator-chosen candidate's assignments for a round. */
+  commitRound: (body: BracketCommitRoundIn) => Promise<BracketTournamentDTO>;
   recordResult: (body: {
     play_unit_id: string;
     winner_side: Exclude<WinnerSide, 'none'>;
     finished_at_slot?: number | null;
     walkover?: boolean;
+    score?: BracketScore | null;
   }) => Promise<BracketTournamentDTO>;
   matchAction: (body: {
     play_unit_id: string;
@@ -76,6 +97,14 @@ export function BracketApiProvider({
       create: (body) => apiClient.createBracket(tournamentId, body),
       remove: () => apiClient.deleteBracket(tournamentId),
       scheduleNext: () => apiClient.scheduleNextBracketRound(tournamentId),
+      scheduleNextWithProgress: (callbacks, abortSignal, candidatePoolSize) =>
+        apiClient.scheduleNextBracketRoundWithProgress(
+          tournamentId,
+          callbacks,
+          abortSignal,
+          candidatePoolSize,
+        ),
+      commitRound: (body) => apiClient.commitBracketRound(tournamentId, body),
       recordResult: (body) =>
         apiClient.recordBracketResult(tournamentId, body),
       matchAction: (body) => apiClient.bracketMatchAction(tournamentId, body),
