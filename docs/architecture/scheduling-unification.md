@@ -118,4 +118,5 @@ and the full projection table.
 
 - [ADR 0004 — OR-Tools CP-SAT engine](/decisions/0004-ortools-cpsat-engine)
 - [ADR 0006 — Unified scheduling core, non-merged match record](/decisions/0006-unified-scheduling-core)
+- [Bracket schedule streaming](/architecture/bracket-schedule-streaming) — the bracket's SSE + candidate-pool surface over this core
 - [Meet module](/modules/meet) · [Bracket module](/modules/bracket)

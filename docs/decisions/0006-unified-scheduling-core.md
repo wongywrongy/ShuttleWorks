@@ -93,3 +93,5 @@ to, not as new code.
 
 - [Scheduling unification](/architecture/scheduling-unification) (the shared seam) ·
   [ADR 0004 — CP-SAT engine](/decisions/0004-ortools-cpsat-engine)
+- Builds on this non-merge: [ADR 0007 — Bracket results through the command queue](/decisions/0007-bracket-result-command-queue) ·
+  [ADR 0008 — Shared scoring fields](/decisions/0008-shared-scoring-fields)

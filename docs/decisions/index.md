@@ -19,6 +19,8 @@ references a longer source, it names the file rather than duplicating it.
 | [0004](/decisions/0004-ortools-cpsat-engine) | OR-Tools CP-SAT as the scheduling engine | Accepted |
 | [0005](/decisions/0005-coming-soon-elimination) | `coming_soon` elimination | Accepted |
 | [0006](/decisions/0006-unified-scheduling-core) | Unify the scheduling core; do not merge the match record | Accepted |
+| [0007](/decisions/0007-bracket-result-command-queue) | Bracket results through the command queue | Accepted |
+| [0008](/decisions/0008-shared-scoring-fields) | Share the scoring field set; add Bracket Sets scoring without a migration | Accepted |
 
 ## Format
 

@@ -100,6 +100,7 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: 'What ShuttleWorks is', link: '/getting-started/what-is-shuttleworks' },
+          { text: 'User flow', link: '/getting-started/user-flow' },
           { text: 'Running locally', link: '/getting-started/running-locally' },
           { text: 'Repo layout', link: '/getting-started/repo-layout' },
         ],
@@ -114,6 +115,11 @@ export default defineConfig({
           { text: 'State management', link: '/architecture/state-management' },
           { text: 'Backend structure', link: '/architecture/backend-structure' },
           { text: 'Scheduling unification', link: '/architecture/scheduling-unification' },
+          { text: 'Unified configuration', link: '/architecture/unified-configuration' },
+          { text: 'Bracket schedule streaming', link: '/architecture/bracket-schedule-streaming' },
+          { text: 'Bracket result queue', link: '/architecture/bracket-result-queue' },
+          { text: 'Unified operations view', link: '/architecture/unified-operations-view' },
+          { text: 'Bracket draw canvas', link: '/architecture/bracket-draw-canvas' },
         ],
       },
       {
@@ -156,6 +162,8 @@ export default defineConfig({
           { text: '0004 · OR-Tools CP-SAT engine', link: '/decisions/0004-ortools-cpsat-engine' },
           { text: '0005 · coming_soon elimination', link: '/decisions/0005-coming-soon-elimination' },
           { text: '0006 · Unified scheduling core', link: '/decisions/0006-unified-scheduling-core' },
+          { text: '0007 · Bracket result command queue', link: '/decisions/0007-bracket-result-command-queue' },
+          { text: '0008 · Shared scoring fields', link: '/decisions/0008-shared-scoring-fields' },
         ],
       },
     ],
