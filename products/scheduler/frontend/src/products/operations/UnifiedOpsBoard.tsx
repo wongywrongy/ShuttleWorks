@@ -26,6 +26,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   GanttTimeline,
+  GANTT_GEOMETRY,
   type Placement,
   type GanttCell,
   type GanttBlockBox,
@@ -123,12 +124,27 @@ export function UnifiedOpsBoard({
   const [hoverCell, setHoverCell] = useState<{ courtId: number; slotId: number } | null>(null);
   const [validation, setValidation] = useState<Validation | null>(null);
   const [dropFx, setDropFx] = useState<DropFx | null>(null);
-  // Time-axis zoom — stretches the timeline (wider time slots) so cells read
-  // without clipping. Courts (rows) stay fixed. Real layout, so drag + scroll
-  // keep working.
-  const [timeZoom, setTimeZoom] = useState(1);
-  const zoomBy = (f: number) =>
-    setTimeZoom((s) => Math.min(3, Math.max(0.5, Math.round(s * f * 100) / 100)));
+  // Time-axis zoom — AUTO-fits the timeline so cells (including lane-packed
+  // splits) stay readable; the operator can still override manually. Stretches
+  // the time width only; courts (rows) stay fixed. Real layout (drag + scroll
+  // keep working).
+  const [auto, setAuto] = useState(true);
+  const [manualZoom, setManualZoom] = useState(1);
+  const autoZoom = useMemo(() => {
+    if (placed.length === 0) return 1;
+    const lanes = packBlockLanes(placed);
+    const maxLanes = Math.max(1, ...[...lanes.values()].map((l) => l.laneCount));
+    const longest = placed.reduce((m, b) => Math.max(m, b.label.length), 0);
+    // Width one lane needs to read the longest label at text-2xs, plus the
+    // block's horizontal padding + inset (~24px). Generous so nothing clips.
+    const neededLanePx = Math.max(56, longest * 8 + 24);
+    return Math.min(3, Math.max(1, (neededLanePx * maxLanes) / GANTT_GEOMETRY.standard.slot));
+  }, [placed]);
+  const timeZoom = auto ? autoZoom : manualZoom;
+  const zoomBy = (f: number) => {
+    setManualZoom(Math.min(3, Math.max(0.5, Math.round(timeZoom * f * 100) / 100)));
+    setAuto(false);
+  };
   const validateAbortRef = useRef<AbortController | null>(null);
   const validateTimerRef = useRef<number | null>(null);
   const dropFxTimerRef = useRef<number | null>(null);
@@ -310,10 +326,18 @@ export function UnifiedOpsBoard({
   const zoomBar = (
     <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/40 px-3 py-1 text-2xs">
       <span className="text-muted-foreground">Time</span>
+      <button
+        type="button"
+        onClick={() => setAuto(true)}
+        aria-pressed={auto}
+        title="Auto-fit cells to be readable"
+        className={`rounded border px-1.5 py-0.5 ${auto ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-card text-muted-foreground hover:bg-muted/60'}`}
+      >
+        Auto
+      </button>
       <button type="button" aria-label="Less time per cell" onClick={() => zoomBy(1 / 1.25)} className="h-5 w-5 rounded border border-border bg-card leading-none hover:bg-muted/60">−</button>
       <span className="w-9 text-center tabular-nums text-muted-foreground">{Math.round(timeZoom * 100)}%</span>
       <button type="button" aria-label="More time per cell" onClick={() => zoomBy(1.25)} className="h-5 w-5 rounded border border-border bg-card leading-none hover:bg-muted/60">+</button>
-      <button type="button" onClick={() => setTimeZoom(1)} className="rounded border border-border bg-card px-1.5 py-0.5 text-muted-foreground hover:bg-muted/60">Reset</button>
     </div>
   );
 
