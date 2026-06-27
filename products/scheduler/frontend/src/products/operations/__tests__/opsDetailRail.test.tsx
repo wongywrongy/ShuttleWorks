@@ -10,13 +10,13 @@ const meetBlock: OpsBlock = {
 
 describe('OpsDetailRail', () => {
   it('prompts to select when nothing is chosen', () => {
-    render(<OpsDetailRail block={null} data={null} onBracketChange={() => {}} onAction={() => {}} />);
+    render(<OpsDetailRail block={null} data={null} onBracketChange={() => {}} onAction={() => {}} live={true} />);
     expect(screen.getByText(/Select a match to see details/i)).toBeInTheDocument();
   });
 
   it('shows the meet lifecycle rail and routes Start through onAction', () => {
     const onAction = vi.fn();
-    render(<OpsDetailRail block={meetBlock} data={null} onBracketChange={() => {}} onAction={onAction} />);
+    render(<OpsDetailRail block={meetBlock} data={null} onBracketChange={() => {}} onAction={onAction} live={true} />);
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.getByText('Bob')).toBeInTheDocument();
     expect(screen.getByText(/Court C2 · slot 3/)).toBeInTheDocument();
@@ -34,9 +34,18 @@ describe('OpsDetailRail', () => {
         data={null}
         onBracketChange={() => {}}
         onAction={onAction}
+        live={true}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Finish match/i }));
     expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), { kind: 'finish' });
+  });
+
+  it('is read-only on Courts (live=false): details but no run actions', () => {
+    render(<OpsDetailRail block={meetBlock} data={null} onBracketChange={() => {}} onAction={() => {}} live={false} />);
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start match/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Call to court/i })).toBeNull();
+    expect(screen.getByText(/Scheduled/i)).toBeInTheDocument();
   });
 });

@@ -22,13 +22,21 @@ import { useMatchStateStore } from '../../store/matchStateStore';
 import { useUiStore } from '../../store/uiStore';
 import { useCommandQueue } from '../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
+import { useSchedule } from '../../hooks/useSchedule';
+import { useCurrentSlot } from '../../hooks/useCurrentSlot';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { BracketScheduleModal } from '../bracket/BracketScheduleModal';
 import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from './opsBlock';
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
 import { OpsDetailRail } from './OpsDetailRail';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
+
+const schedBtn =
+  `${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs ` +
+  `font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`;
 
 export function OperationsProduct() {
   const tid = useTournamentId();
@@ -57,9 +65,29 @@ function OperationsBody() {
   );
 
   // ---- Bracket blocks (polled snapshot) ----
-  const { data, setData } = useBracket();
+  const { data, setData, refresh } = useBracket();
   const bracketApi = useBracketApi();
   const bracketBlocks = useMemo(() => (data ? bracketToOpsBlocks(data) : []), [data]);
+
+  // ---- scheduling (Courts only) ----
+  const { generateSchedule, loading: generating } = useSchedule();
+  const currentSlot = useCurrentSlot();
+  const [scheduling, setScheduling] = useState(false);
+  // Bracket play-units ready to schedule: both sides known, no court yet, no
+  // result, all feeders resolved (mirrors the single-engine header count).
+  const schedulableCount = useMemo(() => {
+    if (!data) return 0;
+    const assigned = new Set(data.assignments.map((a) => a.play_unit_id));
+    const done = new Set(data.results.map((r) => r.play_unit_id));
+    return data.play_units.filter(
+      (pu) =>
+        !assigned.has(pu.id) &&
+        !done.has(pu.id) &&
+        (pu.side_a?.length ?? 0) > 0 &&
+        (pu.side_b?.length ?? 0) > 0 &&
+        pu.dependencies.every((d) => done.has(d)),
+    ).length;
+  }, [data]);
 
   const blocks = useMemo(() => [...meetBlocks, ...bracketBlocks], [meetBlocks, bracketBlocks]);
   const courtCount = useMemo(() => {
@@ -119,15 +147,40 @@ function OperationsBody() {
   const title = isLive ? 'Live' : 'Courts';
   const subtitle = isLive
     ? 'Run Meet and Bracket matches from one queue'
-    : 'Drag to reschedule — Meet and Bracket on one court plan';
+    : 'Drag to reschedule, or build the plan — Meet and Bracket on one court';
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
-      <header className="shrink-0 border-b border-border px-4 py-2.5">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{title}</span>
           <span className="text-xs text-muted-foreground/70">{subtitle}</span>
         </div>
+        {/* Courts is the scheduling surface: build / adjust the plan. Live has
+            no scheduling actions — it runs what Courts produced. */}
+        {!isLive ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={schedBtn}
+              onClick={() => void generateSchedule()}
+              disabled={generating}
+              data-testid="ops-generate-meet"
+            >
+              {generating ? 'Generating…' : schedule ? 'Re-solve meet' : 'Generate meet'}
+            </button>
+            {schedulableCount > 0 ? (
+              <button
+                type="button"
+                className={schedBtn}
+                onClick={() => setScheduling(true)}
+                data-testid="ops-schedule-next"
+              >
+                Schedule next round ({schedulableCount})
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       {blocks.length === 0 ? (
@@ -140,8 +193,10 @@ function OperationsBody() {
             <UnifiedOpsBoard
               blocks={blocks}
               courtCount={courtCount}
+              currentSlot={currentSlot}
               selectedKey={selectedKey}
               onSelect={setSelectedKey}
+              interactive={!isLive}
               meet={{ config, matches, schedule }}
               onBracketData={setData}
             />
@@ -158,10 +213,19 @@ function OperationsBody() {
               data={data}
               onBracketChange={setData}
               onAction={onAction}
+              live={isLive}
             />
           ) : null}
         </div>
       )}
+
+      {scheduling ? (
+        <BracketScheduleModal
+          api={bracketApi}
+          onClose={() => setScheduling(false)}
+          onCommitted={refresh}
+        />
+      ) : null}
     </div>
   );
 }

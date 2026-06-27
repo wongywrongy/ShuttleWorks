@@ -50,6 +50,9 @@ interface Props {
   currentSlot?: number;
   selectedKey?: string | null;
   onSelect?: (key: string) => void;
+  /** Courts is interactive (drag-to-reschedule); Live is read-only (run the
+   *  day — blocks show live status + late, no reschedule). */
+  interactive: boolean;
   /** Meet validate needs the live schedule inputs (held in the parent). */
   meet: { config: TournamentConfig | null; matches: MatchDTO[]; schedule: ScheduleDTO | null };
   /** Apply the bracket DTO a pin returns. */
@@ -74,6 +77,7 @@ export function UnifiedOpsBoard({
   currentSlot,
   selectedKey,
   onSelect,
+  interactive,
   meet,
   onBracketData,
 }: Props) {
@@ -246,10 +250,19 @@ export function UnifiedOpsBoard({
     [hoverCell, dropFx, validation, currentSlot],
   );
 
+  const isLate = useCallback(
+    (b: OpsBlock) =>
+      currentSlot != null && !b.done && !b.started && b.slot != null && currentSlot >= b.slot + b.span,
+    [currentSlot],
+  );
+
   const renderBlock = useCallback(
     (placement: Placement, box: GanttBlockBox) => {
       const b = blockByKey.get(placement.key);
       if (!b) return null;
+      if (!interactive) {
+        return <StaticBlock block={b} selected={selectedKey === b.key} onSelect={onSelect} late={isLate(b)} />;
+      }
       const hidden = activeKey === placement.key;
       return (
         <BlockView
@@ -262,25 +275,39 @@ export function UnifiedOpsBoard({
         />
       );
     },
-    [blockByKey, activeKey, selectedKey, onSelect, dragDelta],
+    [blockByKey, interactive, isLate, activeKey, selectedKey, onSelect, dragDelta],
   );
 
   if (placed.length === 0) return null;
 
+  const grid = (
+    <GanttTimeline
+      courts={courts}
+      minSlot={minSlot}
+      slotCount={slotCount}
+      density="standard"
+      placements={placements}
+      renderBlock={renderBlock}
+      renderCell={interactive ? renderCell : undefined}
+      currentSlot={currentSlot}
+      renderSlotLabel={(slotId, i) => (i % 2 === 0 ? `S${slotId}` : '')}
+    />
+  );
+
+  if (!interactive) {
+    // Live — read-only spatial map; status + late communicated by the rings.
+    return (
+      <div data-testid="unified-ops-board" data-mode="live" className="shrink-0 overflow-x-auto border-b border-border">
+        {grid}
+        <LiveLegend />
+      </div>
+    );
+  }
+
   return (
-    <div data-testid="unified-ops-board" className="shrink-0 overflow-x-auto border-b border-border">
+    <div data-testid="unified-ops-board" data-mode="courts" className="shrink-0 overflow-x-auto border-b border-border">
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
-        <GanttTimeline
-          courts={courts}
-          minSlot={minSlot}
-          slotCount={slotCount}
-          density="standard"
-          placements={placements}
-          renderBlock={renderBlock}
-          renderCell={renderCell}
-          currentSlot={currentSlot}
-          renderSlotLabel={(slotId, i) => (i % 2 === 0 ? `S${slotId}` : '')}
-        />
+        {grid}
         <div className="flex items-center gap-2 border-t border-border/60 bg-muted/40 px-3 py-1.5 text-2xs" data-testid="unified-ops-status">
           {hoverCell && validation ? (
             validation.feasible ? (
@@ -300,6 +327,60 @@ export function UnifiedOpsBoard({
         </div>
       </DndContext>
     </div>
+  );
+}
+
+function LiveLegend() {
+  const items = [
+    { ring: '', label: 'Scheduled' },
+    { ring: 'ring-2 ring-inset ring-status-live', label: 'Started' },
+    { ring: 'ring-2 ring-inset ring-status-done', label: 'Finished' },
+    { ring: 'ring-2 ring-inset ring-status-warning', label: 'Late' },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-border/60 bg-muted/40 px-3 py-1.5">
+      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status</span>
+      {items.map((it) => (
+        <span key={it.label} className="inline-flex items-center gap-1.5">
+          <span aria-hidden className={`h-3 w-3 rounded-[2px] border border-border bg-card ${it.ring}`} />
+          <span className="text-2xs text-muted-foreground">{it.label}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function StaticBlock({
+  block,
+  selected,
+  onSelect,
+  late,
+}: {
+  block: OpsBlock;
+  selected: boolean;
+  onSelect?: (key: string) => void;
+  late: boolean;
+}) {
+  const color = getEventColor(block.colorKey);
+  const ring = late && !block.done ? 'ring-2 ring-inset ring-status-warning' : STATUS_RING[block.status] ?? '';
+  const sourceEdge = block.source === 'meet' ? 'border-l-2 border-l-sky-500' : 'border-l-2 border-l-violet-500';
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect?.(block.key)}
+      data-testid={`ops-block-${block.key}`}
+      data-source={block.source}
+      style={{ position: 'absolute', left: 0, top: 4, right: 4, bottom: 4 }}
+      className={[
+        'group flex flex-col justify-center overflow-hidden rounded border px-1.5 text-left shadow-sm cursor-pointer',
+        selected ? 'bg-accent/10 border-accent text-accent ring-1 ring-accent/30' : `${color.bg} ${color.border} text-foreground hover:brightness-95`,
+        sourceEdge,
+        ring,
+      ].join(' ')}
+      title={`${block.source === 'meet' ? 'Meet' : 'Bracket'} · ${block.label} — ${block.sideA} vs ${block.sideB} [${late && !block.done ? 'late' : block.status}]`}
+    >
+      <span className="truncate text-2xs font-semibold leading-tight">{block.label}</span>
+    </button>
   );
 }
 

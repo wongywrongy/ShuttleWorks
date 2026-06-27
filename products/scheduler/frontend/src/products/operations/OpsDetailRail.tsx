@@ -1,13 +1,14 @@
 /**
  * OpsDetailRail — the right-rail detail for the unified Operations surface.
  *
- * Click a block or row → this rail shows the selected match's details +
- * actions. A match is a match, but the rich detail differs by engine:
- *   - bracket → the real `MatchDetailPanel` (Start, set-by-set score entry,
- *     winner, Undo start, inline conflict) — reused wholesale, so Sets
- *     scoring and undo come for free.
- *   - meet → a parallel rail with the meet lifecycle (Call / Start / Finish)
- *     routed through the command queue.
+ * Click a block or row → this rail shows the selected match's details. What
+ * it offers depends on the surface (a match is a match, but Courts plans and
+ * Live runs):
+ *   - Live + bracket → the real `MatchDetailPanel` (Start, set-by-set score
+ *     entry, winner, Undo start, inline F3 conflict) — reused wholesale.
+ *   - Live + meet → the command-queue lifecycle (Call / Start / Finish).
+ *   - Courts (either engine) → read-only details (no run actions; Courts is
+ *     for scheduling, not running).
  * The bracket id is synced into `uiStore.bracketSelectedMatchId` by the
  * parent so `MatchDetailPanel` (which reads it from the store) stays in sync.
  */
@@ -25,53 +26,51 @@ const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-primary px-2 py-1 ` +
   `text-2xs font-medium text-primary-foreground hover:opacity-90`;
 
+const RAIL = 'w-72 flex-shrink-0 space-y-3 overflow-auto border-l border-border p-4';
+
 interface Props {
   block: OpsBlock | null;
   data: BracketTournamentDTO | null;
   onBracketChange: (dto: BracketTournamentDTO) => void;
   onAction: (block: OpsBlock, action: OperationalAction) => void;
+  /** Live surfaces run matches (action buttons); Courts is read-only detail. */
+  live: boolean;
 }
 
-export function OpsDetailRail({ block, data, onBracketChange, onAction }: Props) {
-  if (!block) {
-    return (
-      <aside className="w-72 flex-shrink-0 border-l border-border p-4 text-sm text-muted-foreground">
-        Select a match to see details.
-      </aside>
-    );
-  }
-
-  if (block.source === 'bracket') {
-    // Reuse the bracket rail verbatim (it reads the selected id from the
-    // store, which the parent keeps in sync). Falls back if data is absent.
-    if (!data) {
-      return (
-        <aside className="w-72 flex-shrink-0 border-l border-border p-4 text-sm text-muted-foreground">
-          Loading bracket…
-        </aside>
-      );
-    }
-    return <MatchDetailPanel data={data} onChange={onBracketChange} />;
-  }
-
-  // Meet rail — lifecycle through the command queue.
+function Identity({ block }: { block: OpsBlock }) {
   return (
-    <aside className="w-72 flex-shrink-0 space-y-3 overflow-auto border-l border-border p-4">
+    <>
       <div className="flex items-center gap-2">
-        <SourceChip source="meet" />
+        <SourceChip source={block.source} />
         <span className="font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground">{block.label}</span>
       </div>
-      <div className="font-mono text-sm">
-        {block.court != null ? `Court C${block.court} · slot ${block.slot}` : '—'}
-      </div>
+      <div className="font-mono text-sm">{block.court != null ? `Court C${block.court} · slot ${block.slot}` : 'Not scheduled'}</div>
       <div className="space-y-1">
         <div className="text-sm">{block.sideA}</div>
         <div className="text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</div>
         <div className="text-sm">{block.sideB}</div>
       </div>
+    </>
+  );
+}
+
+export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: Props) {
+  if (!block) {
+    return <aside className={`${RAIL} text-sm text-muted-foreground`}>Select a match to see details.</aside>;
+  }
+
+  // Live + bracket → the rich bracket rail verbatim (Start / Sets / winner / undo).
+  if (live && block.source === 'bracket') {
+    if (!data) return <aside className={`${RAIL} text-sm text-muted-foreground`}>Loading bracket…</aside>;
+    return <MatchDetailPanel data={data} onChange={onBracketChange} />;
+  }
+
+  return (
+    <aside className={RAIL}>
+      <Identity block={block} />
       {block.done ? (
         <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-status-done">Done</div>
-      ) : (
+      ) : live && block.source === 'meet' ? (
         <div className="flex flex-wrap gap-2">
           {block.started ? (
             <button type="button" className={actionBtn} onClick={() => onAction(block, { kind: 'finish' })}>
@@ -89,6 +88,10 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction }: Props)
               </button>
             </>
           )}
+        </div>
+      ) : (
+        <div className="text-2xs uppercase tracking-[0.18em] text-muted-foreground">
+          {block.started ? 'In progress' : block.court != null ? 'Scheduled' : 'Awaiting court'}
         </div>
       )}
     </aside>
