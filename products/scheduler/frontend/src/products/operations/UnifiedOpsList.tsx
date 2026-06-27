@@ -10,7 +10,6 @@
 import { useMemo } from 'react';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
-import { SourceChip } from './SourceChip';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 interface Props {
@@ -117,7 +116,6 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         onClick={() => onSelect?.(b.key)}
       >
         <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
-        <SourceChip source={b.source} className="flex-shrink-0" />
         <span className="w-20 flex-shrink-0 truncate font-mono text-2xs tracking-wider text-foreground">{b.label}</span>
         <span className="w-24 flex-shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
           {b.court != null ? `C${b.court} · S${b.slot}` : '—'}

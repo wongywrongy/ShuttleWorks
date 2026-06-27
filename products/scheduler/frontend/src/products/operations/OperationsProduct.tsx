@@ -31,8 +31,10 @@ import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from 
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
 import { OpsDetailRail } from './OpsDetailRail';
-import { CourtStatusBoard } from './CourtStatusBoard';
 import { LiveStatusBar } from './LiveStatusBar';
+import { MatchDetailsPanel } from '../meet/control-center/MatchDetailsPanel';
+import { formatSlotTime } from '../../lib/time';
+import type { MatchStateDTO } from '../../api/dto';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
 
@@ -158,11 +160,36 @@ function OperationsBody() {
     [meetSubmit, bracketApi, bracketSubmit, data, setData],
   );
 
+  // ---- Meet detail: reuse the real MatchDetailsPanel so the meet match
+  // keeps its full operator button set (Call / Start / Finish / Retire /
+  // Score / …). Status changes route through the command queue. ----
+  const groups = useTournamentStore((s) => s.groups);
+  const playerNameMap = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
+  const slotToTime = useCallback((s: number) => (config ? formatSlotTime(s, config) : String(s)), [config]);
+  const meetUpdateStatus = useCallback(
+    async (matchId: string, status: MatchStateDTO['status'], data?: Partial<MatchStateDTO>) => {
+      const action: 'call_to_court' | 'start_match' | 'finish_match' | 'uncall' =
+        status === 'called'
+          ? 'call_to_court'
+          : status === 'started'
+            ? 'start_match'
+            : status === 'finished'
+              ? 'finish_match'
+              : 'uncall';
+      await meetSubmit(action, matchId, (data ?? {}) as Record<string, unknown>);
+    },
+    [meetSubmit],
+  );
+  const selMeetMatch =
+    selectedBlock?.source === 'meet' ? matches.find((m) => m.id === selectedBlock.id) : undefined;
+  const selMeetAssignment =
+    selMeetMatch && schedule ? schedule.assignments.find((a) => a.matchId === selMeetMatch.id) : undefined;
+  const showMeetPanel = isLive && !!selMeetMatch;
+
   const title = isLive ? 'Live' : 'Courts';
   const subtitle = isLive
     ? 'Run the floor — by court, then the queue'
     : 'Plan the day — drag to reschedule, generate, schedule rounds';
-  const intervalMinutes = config?.intervalMinutes ?? data?.interval_minutes ?? 30;
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-card">
@@ -210,14 +237,18 @@ function OperationsBody() {
             <div className="flex h-full min-h-0 flex-col">
               <LiveStatusBar blocks={blocks} courtCount={courtCount} />
               <div className="min-h-0 flex-1 overflow-auto">
-                <CourtStatusBoard
+                {/* The court×time grid — the easy-to-view spatial map of the
+                    whole floor; status rings + late. Click a block for its
+                    details + actions. */}
+                <UnifiedOpsBoard
                   blocks={blocks}
                   courtCount={courtCount}
                   currentSlot={currentSlot}
-                  intervalMinutes={intervalMinutes}
                   selectedKey={selectedKey}
                   onSelect={setSelectedKey}
-                  onAction={onAction}
+                  interactive={false}
+                  meet={{ config, matches, schedule }}
+                  onBracketData={setData}
                 />
                 <div className="border-t border-border">
                   <div className="px-4 pb-1 pt-3 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -261,14 +292,32 @@ function OperationsBody() {
               >
                 ✕
               </button>
-              <div className="min-h-0 overflow-auto">
-                <OpsDetailRail
-                  block={selectedBlock}
-                  data={data}
-                  onBracketChange={setData}
-                  onAction={onAction}
-                  live={isLive}
-                />
+              <div className="min-h-0 w-80 max-w-[88vw] overflow-auto">
+                {showMeetPanel ? (
+                  <MatchDetailsPanel
+                    assignment={selMeetAssignment}
+                    match={selMeetMatch}
+                    matchState={selMeetMatch ? matchStates[selMeetMatch.id] : undefined}
+                    matches={matches}
+                    matchStates={matchStates}
+                    schedule={schedule}
+                    players={players}
+                    groups={groups}
+                    config={config}
+                    currentSlot={currentSlot}
+                    playerNames={playerNameMap}
+                    slotToTime={slotToTime}
+                    onUpdateStatus={meetUpdateStatus}
+                  />
+                ) : (
+                  <OpsDetailRail
+                    block={selectedBlock}
+                    data={data}
+                    onBracketChange={setData}
+                    onAction={onAction}
+                    live={isLive}
+                  />
+                )}
               </div>
             </div>
           ) : null}
