@@ -13,7 +13,7 @@
  * Courts shows the board + a read-only overview list; Live shows the board +
  * the action list. Single-engine workspaces never reach here.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BracketApiProvider, useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
 import { useTournamentId } from '../../hooks/useTournamentId';
@@ -23,9 +23,10 @@ import { useUiStore } from '../../store/uiStore';
 import { useCommandQueue } from '../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
-import { meetToOpsBlocks, bracketToOpsBlocks, type OpsBlock } from './opsBlock';
+import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from './opsBlock';
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
+import { OpsDetailRail } from './OpsDetailRail';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
 
@@ -67,8 +68,19 @@ function OperationsBody() {
     return Math.max(1, fromCfg, fromBlocks);
   }, [config?.courtCount, data?.courts, blocks]);
 
-  // ---- selection (click → highlight; drives row + block emphasis) ----
+  // ---- selection (click → highlight + detail rail) ----
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const selectedBlock = useMemo(
+    () => blocks.find((b) => b.key === selectedKey) ?? null,
+    [blocks, selectedKey],
+  );
+  // Keep the bracket store id in sync so the reused MatchDetailPanel (which
+  // reads `bracketSelectedMatchId` from the store) tracks the selection.
+  const setBracketSelectedMatchId = useUiStore((s) => s.setBracketSelectedMatchId);
+  useEffect(() => {
+    const p = selectedKey ? parseOpsKey(selectedKey) : null;
+    setBracketSelectedMatchId(p?.source === 'bracket' ? p.id : null);
+  }, [selectedKey, setBracketSelectedMatchId]);
 
   // ---- write-back ----
   const { submit: meetSubmit } = useCommandQueue();
@@ -123,21 +135,31 @@ function OperationsBody() {
           No matches yet. Generate a schedule in Meet or draws in Bracket to populate Operations.
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto">
-          <UnifiedOpsBoard
-            blocks={blocks}
-            courtCount={courtCount}
-            selectedKey={selectedKey}
-            onSelect={setSelectedKey}
-            meet={{ config, matches, schedule }}
-            onBracketData={setData}
-          />
-          <UnifiedOpsList
-            blocks={blocks}
-            selectedKey={selectedKey}
-            onSelect={setSelectedKey}
-            onAction={isLive ? onAction : undefined}
-          />
+        <div className="flex min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-auto">
+            <UnifiedOpsBoard
+              blocks={blocks}
+              courtCount={courtCount}
+              selectedKey={selectedKey}
+              onSelect={setSelectedKey}
+              meet={{ config, matches, schedule }}
+              onBracketData={setData}
+            />
+            <UnifiedOpsList
+              blocks={blocks}
+              selectedKey={selectedKey}
+              onSelect={setSelectedKey}
+              onAction={isLive ? onAction : undefined}
+            />
+          </div>
+          {selectedBlock ? (
+            <OpsDetailRail
+              block={selectedBlock}
+              data={data}
+              onBracketChange={setData}
+              onAction={onAction}
+            />
+          ) : null}
         </div>
       )}
     </div>
