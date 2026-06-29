@@ -223,10 +223,18 @@ export function RunSurface({
 
         // Auto-pull: deterministic, synchronous, no useEffect.
         // computeAutoPull returns exactly what to assign — or null.
+        // Note: runAction's can() guard requires the pull head to have status
+        // 'scheduled'. nextEligible keys off `eligible`, not status, so a
+        // 'called' uncourted bracket match could be picked and silently no-op.
+        // Meet-only paths are safe; this edge is rare and no-op is harmless.
         const pull = computeAutoPull(selectedMatch.key, matches, lanes, queue, currentSlot ?? 0);
         if (pull) {
           runAction(pull.head, 'assign', { court: pull.court, slot: pull.slot }, seams);
         }
+
+        // Deselect after recording: the recorded match leaves the lane and the
+        // remaining selectedKey would resolve to a stale 'next-later' role.
+        setSelectedKey(null);
         return;
       }
 

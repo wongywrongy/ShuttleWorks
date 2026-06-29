@@ -102,7 +102,9 @@ function mkLane(court: number, now?: RunMatch, depth?: number): CourtLane {
 }
 
 // Fixture: one playing meet match on court 1, one eligible scheduled meet match
-// in queue. courtCount=1 isolates the single-court auto-pull logic cleanly.
+// in queue, plus one bracket block (bracketData=null → ineligible). Using mixed
+// source exercising both toRunMatches branches + deriveSummary total count.
+// courtCount=1 isolates the single-court auto-pull logic cleanly.
 function makeAutoFillBlocks(): OpsBlock[] {
   return [
     mkBlock({
@@ -113,6 +115,13 @@ function makeAutoFillBlocks(): OpsBlock[] {
     mkBlock({
       id: 'm2', source: 'meet', key: 'meet:m2', label: 'MS2',
       status: 'scheduled', sideA: 'Carol', sideB: 'Dave',
+      court: undefined, slot: undefined,
+    }),
+    // Bracket block (bracketData=null → eligibleBracketIds empty → ineligible).
+    // Exercises the bracket branch of toRunMatches and the mixed-source total.
+    mkBlock({
+      id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+      status: 'scheduled', sideA: 'Team X', sideB: 'Team Y',
       court: undefined, slot: undefined,
     }),
   ];
@@ -202,8 +211,8 @@ describe('RunSurface — summary band derived counts', () => {
       />,
     );
 
-    // 0 done / 2 total, 1 playing, 0 courts free (court 1 has a now match), 0 late
-    expect(screen.getByTestId('run-band-done')).toHaveTextContent('0 / 2');
+    // 0 done / 3 total (2 meet + 1 bracket), 1 playing, 0 courts free, 0 late
+    expect(screen.getByTestId('run-band-done')).toHaveTextContent('0 / 3');
     expect(screen.getByTestId('run-band-playing')).toHaveTextContent('1');
     expect(screen.getByTestId('run-band-courts-free')).toHaveTextContent('0');
     expect(screen.getByTestId('run-band-late')).toHaveTextContent('0');
@@ -301,7 +310,7 @@ describe('RunSurface — auto-pull after record empties a court', () => {
     fireEvent.click(screen.getByTestId('run-act-record'));
     expect(mockMeetSubmit).toHaveBeenCalledTimes(2);
 
-    // Simulate next poll: m1 finished (done), m2 still in queue
+    // Simulate next poll: m1 finished (done), m2 + pu1 still in queue.
     // This models the server state after the record was confirmed.
     const postRecordBlocks: OpsBlock[] = [
       mkBlock({
@@ -312,6 +321,11 @@ describe('RunSurface — auto-pull after record empties a court', () => {
       mkBlock({
         id: 'm2', source: 'meet', key: 'meet:m2', label: 'MS2',
         status: 'scheduled', sideA: 'Carol', sideB: 'Dave',
+        court: undefined, slot: undefined,
+      }),
+      mkBlock({
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+        status: 'scheduled', sideA: 'Team X', sideB: 'Team Y',
         court: undefined, slot: undefined,
       }),
     ];
@@ -328,6 +342,9 @@ describe('RunSurface — auto-pull after record empties a court', () => {
 
     // Count UNCHANGED — rerender did not trigger another auto-pull
     expect(mockMeetSubmit).toHaveBeenCalledTimes(2);
+
+    // m1 is done → leaves the lane → no board card for it
+    expect(screen.queryByTestId('run-card-meet:m1')).toBeNull();
   });
 });
 
