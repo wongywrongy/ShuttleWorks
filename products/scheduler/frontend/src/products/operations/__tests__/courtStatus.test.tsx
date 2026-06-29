@@ -131,10 +131,11 @@ describe('OperationsProduct — Live segment renders RunSurface', () => {
 });
 
 describe('OperationsProduct — Courts (Plan) segment renders the interactive board', () => {
-  it('renders the schedule header (ops-generate-meet) and no run-surface for the Courts tab', () => {
+  it('renders the schedule header (ops-generate-meet), the interactive board, and no run-surface for the Courts tab', () => {
     mockTab.value = 'schedule';
     render(<OperationsProduct />);
     expect(screen.getByTestId('ops-generate-meet')).toBeInTheDocument();
+    expect(screen.getByTestId('unified-ops-board')).toBeInTheDocument();
     expect(screen.queryByTestId('run-surface')).toBeNull();
   });
 });
