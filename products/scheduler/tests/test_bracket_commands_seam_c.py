@@ -126,7 +126,14 @@ def test_seam_c_records_result_and_advances(bracket_client, seeded_bracket):
 
 def test_seam_c_is_idempotent_on_command_id(bracket_client, seeded_bracket):
     """Posting the same command UUID twice returns 200 both times; the result
-    appears exactly once (no double-advance)."""
+    appears exactly once (no double-advance).
+
+    Idempotency is proven at three levels:
+      1. Both POSTs return 200 (replay guard fires instead of 4xx).
+      2. The command id is durably persisted in the data blob so that a
+         fresh hydration on the second POST sees it and short-circuits.
+      3. Exactly one result row for the play unit in the returned DTO.
+    """
     tid, pu_id, version = seeded_bracket
     cid = str(uuid.uuid4())
     body = {
@@ -137,9 +144,28 @@ def test_seam_c_is_idempotent_on_command_id(bracket_client, seeded_bracket):
         "seen_version": version,
     }
     r1 = bracket_client.post(f"/tournaments/{tid}/bracket/commands", json=body)
-    r2 = bracket_client.post(f"/tournaments/{tid}/bracket/commands", json=body)
     assert r1.status_code == 200, r1.text
+
+    # Verify the command id was persisted to the data blob BEFORE the second
+    # POST — this is the mechanism that makes re-hydration on the replay see
+    # the id and short-circuit instead of double-advancing.
+    from sqlalchemy import select
+    from database.models import Tournament
+    from database.session import SessionLocal
+
+    with SessionLocal() as s:
+        row = s.scalar(select(Tournament).where(Tournament.id == uuid.UUID(tid)))
+    assert row is not None
+    persisted_ids = row.data["bracket_session"].get("applied_command_ids", [])
+    assert cid in persisted_ids, (
+        f"Command id {cid!r} was not persisted to the data blob after first POST; "
+        f"got: {persisted_ids}"
+    )
+
+    # Now replay: re-hydration reads the persisted id and returns immediately.
+    r2 = bracket_client.post(f"/tournaments/{tid}/bracket/commands", json=body)
     assert r2.status_code == 200, r2.text
+
     # Exactly one result for pu_id — no double-advance.
     results = [x for x in r2.json()["results"] if x["play_unit_id"] == pu_id]
     assert len(results) == 1, (
