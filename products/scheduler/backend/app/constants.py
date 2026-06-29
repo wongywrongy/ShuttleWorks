@@ -25,13 +25,22 @@ class MatchAction(str, Enum):
     target from the map, then calls ``assert_valid_transition`` to
     verify the move is legal from the current status — the caller
     does *not* specify ``next_status`` directly.
+
+    ``ASSIGN_COURT`` and ``POSTPONE_MATCH`` are non-solver commands:
+    they mutate ``court_id`` / ``time_slot`` on the matches row without
+    invoking the solver.  Both target ``SCHEDULED``; when the match is
+    already SCHEDULED this is a self-transition that the processor
+    short-circuits before calling ``assert_valid_transition`` (see
+    ``_SELF_NOOP_ACTIONS`` in ``repositories/local.py``).
     """
 
-    CALL_TO_COURT = "call_to_court"   # scheduled → called
-    START_MATCH = "start_match"       # called → playing
-    FINISH_MATCH = "finish_match"     # playing → finished
-    RETIRE_MATCH = "retire_match"     # playing → retired
-    UNCALL = "uncall"                 # called → scheduled
+    CALL_TO_COURT = "call_to_court"     # scheduled → called
+    START_MATCH = "start_match"         # called → playing
+    FINISH_MATCH = "finish_match"       # playing → finished
+    RETIRE_MATCH = "retire_match"       # playing → retired
+    UNCALL = "uncall"                   # called → scheduled
+    ASSIGN_COURT = "assign_court"       # set court+slot, no solve; status stays/→ scheduled
+    POSTPONE_MATCH = "postpone_match"   # clear court+slot; status → scheduled
 
 
 ACTION_TO_TARGET_STATUS: dict[MatchAction, MatchStatus] = {
@@ -40,4 +49,6 @@ ACTION_TO_TARGET_STATUS: dict[MatchAction, MatchStatus] = {
     MatchAction.FINISH_MATCH: MatchStatus.FINISHED,
     MatchAction.RETIRE_MATCH: MatchStatus.RETIRED,
     MatchAction.UNCALL: MatchStatus.SCHEDULED,
+    MatchAction.ASSIGN_COURT: MatchStatus.SCHEDULED,
+    MatchAction.POSTPONE_MATCH: MatchStatus.SCHEDULED,
 }

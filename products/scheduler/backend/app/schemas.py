@@ -584,3 +584,28 @@ class CommandResponse(BaseModel):
     time_slot: Optional[int] = None
     applied_at: str   # ISO-8601 UTC
     replay: bool      # True on idempotent replay, False on fresh apply
+
+
+class MatchStateOut(BaseModel):
+    """Operational state of a match from the ``matches`` table.
+
+    Used by the Run surface to render the court grid and the match queue.
+    Mirrors the ``matches`` row columns with camelCase names so the
+    frontend can consume the shape directly.
+
+    ``actualCourtId`` and ``actualSlotId`` are the *live* court/slot as
+    mutated by ``assign_court`` / ``postpone_match`` commands — they may
+    differ from the solver-committed assignment when an operator has
+    manually moved a match since the last solve.
+
+    NOTE (Task 5): This DTO is defined here but not yet wired to a GET
+    endpoint.  The serialisation site will be added in a follow-up task
+    (Run-surface match-state stream).  Defined now so Task-6 frontend
+    work can reference a stable shape.
+    """
+
+    matchId: str
+    status: str
+    version: int
+    actualCourtId: Optional[int] = None    # matches.court_id
+    actualSlotId: Optional[int] = None     # matches.time_slot — NEW (Task 5)

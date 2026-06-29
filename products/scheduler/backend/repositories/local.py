@@ -1623,25 +1623,49 @@ class LocalRepository:
 
         # Step 4 — transition guard. Raises ConflictError on illegal
         # transitions; we catch, stamp the rejection, commit, re-raise.
-        try:
-            assert_valid_transition(match_id, match.status, target_status)
-        except ce_cls as exc:
-            self._stamp_rejection(
-                command_row,
-                command_id=command_id,
-                tournament_id=tournament_id,
-                match_id=match_id,
-                action=action,
-                payload=payload,
-                submitted_by=submitted_by,
-                reason=exc.message,
-            )
-            self.session.commit()
-            raise
+        #
+        # ASSIGN_COURT and POSTPONE_MATCH both target SCHEDULED; when the
+        # match is already SCHEDULED this is a SCHEDULED→SCHEDULED
+        # self-transition that ``assert_valid_transition`` rejects (same-state
+        # moves are not in VALID_TRANSITIONS by design — see the docstring in
+        # services/match_state.py).  We short-circuit for exactly these two
+        # actions so they can act as pure side-effect commands without
+        # changing the status machine's strictness for the other five actions.
+        # postpone from playing/called still reaches assert_valid_transition
+        # because target != current; PLAYING→SCHEDULED is a valid edge.
+        _SELF_NOOP_ACTIONS = {"assign_court", "postpone_match"}
+        current_status_enum = MatchStatus(match.status) if isinstance(match.status, str) else match.status
+        if not (action in _SELF_NOOP_ACTIONS and current_status_enum == target_status):
+            try:
+                assert_valid_transition(match_id, match.status, target_status)
+            except ce_cls as exc:
+                self._stamp_rejection(
+                    command_row,
+                    command_id=command_id,
+                    tournament_id=tournament_id,
+                    match_id=match_id,
+                    action=action,
+                    payload=payload,
+                    submitted_by=submitted_by,
+                    reason=exc.message,
+                )
+                self.session.commit()
+                raise
 
         # Step 5 — apply. Update match status + version; insert/finalise
         # the applied command row; commit once.
         match.status = target_status.value
+
+        # Court/slot side-effects for non-solver live-ops commands.
+        # Applied BEFORE flush so the sync service serialises the new values.
+        if action == "assign_court":
+            _p = payload or {}
+            match.court_id = _p.get("court_id", match.court_id)
+            match.time_slot = _p.get("time_slot", match.time_slot)
+        elif action == "postpone_match":
+            match.court_id = None
+            match.time_slot = None
+
         match.version = match.version + 1
 
         if command_row is None:
