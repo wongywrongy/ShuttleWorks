@@ -59,6 +59,26 @@ describe('runModel', () => {
     expect(q.map((m) => m.id)).toEqual(['feeder', 'ready']); // both shown, slot order
     expect(nextEligible(q)?.id).toBe('ready');               // ineligible feeder skipped
   });
+  it('nextEligible skips eligible-but-called matches; requires scheduled (assignable) status', () => {
+    // bracket match: eligible (in eligibleBracketIds) but status='called' (in calledBracketIds)
+    // meet match: eligible and scheduled → the only assignable head
+    const ms = toRunMatches(
+      [
+        blk({ id: 'called', source: 'bracket', key: 'bracket:called', sideA: 'A', sideB: 'B' }),
+        blk({ id: 'ready', sideA: 'C', sideB: 'D' }),
+      ],
+      { calledBracketIds: new Set(['called']), eligibleBracketIds: new Set(['called']) },
+    );
+    const q = deriveQueue(ms);
+    // 'bracket:called' sorts before 'meet:ready' (b < m); verify it's eligible but called
+    const calledM = q.find((m) => m.id === 'called');
+    expect(calledM?.eligible).toBe(true);
+    expect(calledM?.status).toBe('called');
+    // nextEligible must skip the called match and return the scheduled one
+    expect(nextEligible(q)?.id).toBe('ready');
+    // with only the called match in queue: no assignable head
+    expect(nextEligible([calledM!])).toBeUndefined();
+  });
   it('meet match is eligible when both sides are known', () => {
     const [m] = toRunMatches([blk({ id: 'm', sideA: 'A', sideB: 'B' })], {});
     expect(m.eligible).toBe(true);

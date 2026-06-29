@@ -208,8 +208,12 @@ export function RunSurface({
     (kind: RunActionKind, opts?: { winnerSide?: 'A' | 'B'; court?: number }) => {
       if (!selectedMatch) return;
 
-      // Bracket: clear local "called" flag when the match starts.
-      if (kind === 'start' && selectedMatch.source === 'bracket') {
+      // Bracket: clear local "called" flag whenever the match leaves 'called'
+      // (start → playing, postpone → scheduled, record is defensive cleanup).
+      // Without this, a postponed bracket match stays 'called' in the overlay
+      // and nextEligible (which now requires can(status,'assign')) will skip it,
+      // stranding the queue head.
+      if (selectedMatch.source === 'bracket' && (kind === 'start' || kind === 'postpone' || kind === 'record')) {
         setCalledBracketIds((prev) => {
           const next = new Set(prev);
           next.delete(selectedMatch.id);
@@ -223,10 +227,8 @@ export function RunSurface({
 
         // Auto-pull: deterministic, synchronous, no useEffect.
         // computeAutoPull returns exactly what to assign — or null.
-        // Note: runAction's can() guard requires the pull head to have status
-        // 'scheduled'. nextEligible keys off `eligible`, not status, so a
-        // 'called' uncourted bracket match could be picked and silently no-op.
-        // Meet-only paths are safe; this edge is rare and no-op is harmless.
+        // nextEligible now requires can(status,'assign') so a 'called' queue
+        // head is skipped; only scheduled+eligible matches are auto-pulled.
         const pull = computeAutoPull(selectedMatch.key, matches, lanes, queue, currentSlot ?? 0);
         if (pull) {
           runAction(pull.head, 'assign', { court: pull.court, slot: pull.slot }, seams);

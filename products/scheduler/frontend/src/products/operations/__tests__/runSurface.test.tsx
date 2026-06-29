@@ -13,6 +13,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { RunSurface, computeAutoPull } from '../run/RunSurface';
 import type { OpsBlock } from '../opsBlock';
 import type { CourtLane, RunMatch } from '../runtime/runModel';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 // ── 1. Hoist mock implementations so vi.mock factory closures can close over them ──
 
@@ -192,6 +193,31 @@ describe('computeAutoPull (pure helper)', () => {
     // slotForAssign(court=1, matches=[now{plannedSlot=5}], currentSlot=3)
     //   → Math.max(3, 5) + 1 = 6
     expect(result!.slot).toBe(6);
+  });
+
+  // Fix 1: nextEligible now requires can(status,'assign') — 'called' is not assignable
+  it('returns null when queue head is eligible but called (not assignable)', () => {
+    const now = mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', court: 1, status: 'playing' });
+    const lane = mkLane(1, now, 1);
+    const calledHead = mkMatch({
+      key: 'bracket:p', id: 'p', source: 'bracket', status: 'called', eligible: true,
+    });
+    expect(computeAutoPull(now.key, [now], [lane], [calledHead], 0)).toBeNull();
+  });
+
+  it('skips a called queue head and assigns the next scheduled+eligible match', () => {
+    const now = mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', court: 1, status: 'playing' });
+    const lane = mkLane(1, now, 1);
+    const calledHead = mkMatch({
+      key: 'bracket:p', id: 'p', source: 'bracket', status: 'called', eligible: true,
+    });
+    const scheduledHead = mkMatch({
+      key: 'meet:m2', id: 'm2', source: 'meet', status: 'scheduled', eligible: true,
+    });
+    const result = computeAutoPull(now.key, [now], [lane], [calledHead, scheduledHead], 0);
+    expect(result).not.toBeNull();
+    expect(result!.head.key).toBe('meet:m2');
+    expect(result!.court).toBe(1);
   });
 });
 
@@ -421,5 +447,68 @@ describe('RunSurface — queued match Send to free court fires assign', () => {
       court_id: 1,
       time_slot: 1,
     });
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Section 3: Fix 2 — calledBracketIds must be cleared on postpone (and record)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Minimal bracketData that makes play unit 'pu1' eligible. */
+function mkBracketData(playUnitId: string): BracketTournamentDTO {
+  return {
+    courts: 1, total_slots: 10, rest_between_rounds: 0, interval_minutes: 15,
+    start_time: null, events: [], participants: [],
+    play_units: [{
+      id: playUnitId, event_id: 'e1', round_index: 0, match_index: 0,
+      side_a: ['Alice'], side_b: ['Bob'], duration_slots: 1, dependencies: [],
+      slot_a: { participant_id: null, feeder_play_unit_id: null },
+      slot_b: { participant_id: null, feeder_play_unit_id: null },
+    }],
+    assignments: [], // not assigned → eligible
+    results: [],    // no result → not done
+  };
+}
+
+describe('RunSurface — Fix 2: calledBracketIds cleared on postpone', () => {
+  it('bracket Called → Postponed clears the flag so status re-derives as scheduled', () => {
+    // Bracket match on court 1, scheduled. bracketData makes it eligible.
+    // UI flow: select → Call (status becomes 'called') → Postpone (flag must be cleared
+    // by Fix 2, returning status to 'scheduled').
+    const blocks: OpsBlock[] = [
+      mkBlock({
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+        court: 1, slot: 5, status: 'scheduled', sideA: 'Alice', sideB: 'Bob',
+      }),
+    ];
+
+    render(
+      <RunSurface
+        blocks={blocks}
+        bracketData={mkBracketData('pu1')}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    // Select bracket match (it's the 'now' match on court 1) → inspector shows Call
+    fireEvent.click(screen.getByTestId('run-card-bracket:pu1'));
+    expect(screen.getByTestId('run-act-call')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-act-postpone')).toBeNull();
+
+    // Call → calledBracketIds adds 'pu1' → status overlays to 'called'
+    fireEvent.click(screen.getByTestId('run-act-call'));
+    expect(screen.queryByTestId('run-act-call')).toBeNull();
+    expect(screen.getByTestId('run-act-postpone')).toBeInTheDocument();
+
+    // Postpone → Fix 2: clears calledBracketIds → status re-derives as 'scheduled'
+    // Also fires bracketApi.unassign for the court removal.
+    fireEvent.click(screen.getByTestId('run-act-postpone'));
+
+    // Flag cleared: status is 'scheduled' again → Call button reappears, Postpone gone
+    expect(screen.getByTestId('run-act-call')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-act-postpone')).toBeNull();
+    expect(mockBracketUnassign).toHaveBeenCalledWith({ play_unit_id: 'pu1' });
   });
 });

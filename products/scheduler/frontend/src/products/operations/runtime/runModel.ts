@@ -1,5 +1,5 @@
 import type { OpsBlock } from '../opsBlock';
-import { fromEngineStatus, deriveLate, type RunStatus } from './runMachine';
+import { fromEngineStatus, deriveLate, can, type RunStatus } from './runMachine';
 
 export interface RunMatch {
   key: string; id: string; source: 'meet' | 'bracket';
@@ -57,10 +57,12 @@ export function deriveQueue(matches: RunMatch[]): RunMatch[] {
       || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
-/** The assignable head — first eligible match in queue order. Skips waiting
- *  (TBD-vs-TBD / unresolved-feeder) matches so auto-pull never lands one. */
+/** The assignable head — first eligible+assignable match in queue order.
+ *  Skips waiting (TBD-vs-TBD / unresolved-feeder) matches AND non-assignable
+ *  statuses (e.g. `called`) so auto-pull and "Assign next" never strand a court
+ *  on a match that cannot accept an assign action. */
 export function nextEligible(queue: RunMatch[]): RunMatch | undefined {
-  return queue.find((m) => m.eligible);
+  return queue.find((m) => m.eligible && can(m.status, 'assign'));
 }
 
 export interface RunSummary { done: number; total: number; playing: number; courtsFree: number; late: number; }
