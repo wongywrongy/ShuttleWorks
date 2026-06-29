@@ -26,7 +26,7 @@ import type { BracketTournamentDTO } from '../../api/bracketDto';
 
 vi.mock('../../api/client', () => ({
   apiClient: {
-    recordBracketResultVersioned: vi.fn(),
+    recordBracketResultCommand: vi.fn(),
     getBracket: vi.fn(),
   },
 }));
@@ -63,7 +63,7 @@ function makeHandlers(): BracketResultHandlers & {
 }
 
 beforeEach(async () => {
-  vi.mocked(apiClient.recordBracketResultVersioned).mockReset();
+  vi.mocked(apiClient.recordBracketResultCommand).mockReset();
   vi.mocked(apiClient.getBracket).mockReset();
   await _resetDbHandleForTests();
   await new Promise<void>((resolve, reject) => {
@@ -76,10 +76,9 @@ beforeEach(async () => {
 
 describe('useBracketResultQueue', () => {
   it('applies optimistically, enqueues, and settles on ok', async () => {
-    vi.mocked(apiClient.recordBracketResultVersioned).mockResolvedValue({
-      kind: 'ok',
-      dto: committedDto,
-    });
+    // recordBracketResultCommand returns the raw DTO (unknown); the adapter
+    // wraps it into { kind: 'ok', dto }.
+    vi.mocked(apiClient.recordBracketResultCommand).mockResolvedValue(committedDto);
     const h = makeHandlers();
     const { result } = renderHook(() => useBracketResultQueue(h), {
       wrapper: wrap('t1'),
@@ -99,10 +98,12 @@ describe('useBracketResultQueue', () => {
     expect(h.optimistic).toHaveBeenCalledWith(
       expect.objectContaining({ matchId: 'MS-r0m0', winnerSide: 'A', seenVersion: 1 }),
     );
-    // The command went out with the seen_version token.
-    expect(apiClient.recordBracketResultVersioned).toHaveBeenCalledWith(
+    // The command went out through Seam C with the client-generated UUID as
+    // the idempotency key — reusing the queue's command id.
+    expect(apiClient.recordBracketResultCommand).toHaveBeenCalledWith(
       't1',
       expect.objectContaining({
+        id: outcome.commandId,
         play_unit_id: 'MS-r0m0',
         winner_side: 'A',
         seen_version: 1,
@@ -117,9 +118,14 @@ describe('useBracketResultQueue', () => {
   });
 
   it('refetches and surfaces a conflict on stale_version', async () => {
-    vi.mocked(apiClient.recordBracketResultVersioned).mockResolvedValue({
-      kind: 'staleVersion',
-      message: 'current version 2, you sent 1',
+    // Seam C rejects 409 stale_version as an axios error; the adapter maps it
+    // to { kind: 'staleVersion' }.
+    vi.mocked(apiClient.recordBracketResultCommand).mockRejectedValue({
+      response: {
+        status: 409,
+        data: { error: 'stale_version', message: 'current version 2, you sent 1' },
+      },
+      message: 'Request failed with status code 409',
     });
     vi.mocked(apiClient.getBracket).mockResolvedValue(freshDto as never);
     const h = makeHandlers();
@@ -148,10 +154,11 @@ describe('useBracketResultQueue', () => {
 
   it('enqueues an idempotent command (same id lands once)', async () => {
     // Hold the network so the command stays pending while we inspect it.
-    vi.mocked(apiClient.recordBracketResultVersioned).mockResolvedValue({
-      kind: 'networkError',
-      message: 'offline',
-    });
+    // The adapter catches the thrown error and returns { kind: 'networkError' };
+    // flush then calls markRetryable, leaving the command pending.
+    vi.mocked(apiClient.recordBracketResultCommand).mockRejectedValue(
+      new Error('offline'),
+    );
     const h = makeHandlers();
     const { result } = renderHook(() => useBracketResultQueue(h), {
       wrapper: wrap('t1'),

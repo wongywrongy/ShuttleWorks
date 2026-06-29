@@ -83,15 +83,50 @@ export function useBracketResultQueue(handlers: BracketResultHandlers) {
       };
       await enqueue(command);
 
-      const submitFn: BracketSubmitFn = (cmd) =>
-        apiClient.recordBracketResultVersioned(tid, {
-          play_unit_id: cmd.matchId,
-          winner_side: cmd.winnerSide,
-          finished_at_slot: cmd.finishedAtSlot,
-          walkover: cmd.walkover,
-          score: cmd.score,
-          seen_version: cmd.seenVersion,
-        });
+      // Seam C: route through the Operations command endpoint (SP-G1 Task 10).
+      // The command `id` (queue-generated UUID) doubles as the idempotency key —
+      // the backend deduplicates on it so a replay never re-runs advancement.
+      //
+      // NOTE: `finished_at_slot` is intentionally absent from the Seam C body
+      // type (`recordBracketResultCommand`); it is stored in IndexedDB but does
+      // not currently reach the backend via this path. Tracked for cleanup.
+      //
+      // The adapter wraps the raw response and maps axios 409 errors to the
+      // typed BracketSubmitResult variants so the queue's conflict handling
+      // (flush → markRejected → onConflict) is preserved exactly.
+      const submitFn: BracketSubmitFn = async (cmd) => {
+        try {
+          const raw = await apiClient.recordBracketResultCommand(tid, {
+            id: cmd.id,
+            play_unit_id: cmd.matchId,
+            winner_side: cmd.winnerSide,
+            seen_version: cmd.seenVersion,
+            score: cmd.score,
+            walkover: cmd.walkover,
+          });
+          return { kind: 'ok', dto: raw as BracketTournamentDTO };
+        } catch (err: unknown) {
+          const axiosErr = err as {
+            response?: {
+              status?: number;
+              data?: { error?: string; message?: string; detail?: string };
+            };
+            message?: string;
+          };
+          const status = axiosErr.response?.status;
+          const data = axiosErr.response?.data;
+          if (status === 409) {
+            if (data?.error === 'stale_version') {
+              return { kind: 'staleVersion', message: data.message ?? 'stale version' };
+            }
+            return { kind: 'conflict', message: data?.message ?? data?.detail ?? 'conflict' };
+          }
+          return {
+            kind: 'networkError',
+            message: err instanceof Error ? err.message : String(err),
+          };
+        }
+      };
 
       const outcomes = await flush(submitFn);
       const own = outcomes.find((o) => o.id === commandId);
