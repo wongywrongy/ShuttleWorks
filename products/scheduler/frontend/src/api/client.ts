@@ -1290,6 +1290,42 @@ class ApiClient {
     );
   }
 
+  /**
+   * SP-G1 Seam C: record a bracket result through the command interface.
+   * POST /tournaments/{tid}/bracket/commands with kind:'record_result'.
+   * Carries an optimistic-concurrency `seen_version` so the backend can
+   * detect replays / stale writes.
+   */
+  async recordBracketResultCommand(
+    tid: string,
+    body: {
+      id: string;
+      play_unit_id: string;
+      winner_side: 'A' | 'B';
+      seen_version?: number;
+      score?: unknown;
+      walkover?: boolean;
+    },
+  ): Promise<unknown> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/bracket/commands`,
+      { kind: 'record_result', ...body },
+    );
+    return data;
+  }
+
+  /**
+   * SP-G1 plan-finalize seam: toggle the director's plan-finalized gate.
+   * POST /tournaments/{tid}/plan-finalized.
+   */
+  async setPlanFinalized(tid: string, finalized: boolean): Promise<unknown> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/plan-finalized`,
+      { finalized },
+    );
+    return data;
+  }
+
   bracketExportJsonUrl(tid: string): string {
     return `${API_BASE_URL}/tournaments/${tid}/bracket/export.json`;
   }

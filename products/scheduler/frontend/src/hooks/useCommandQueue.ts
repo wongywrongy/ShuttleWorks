@@ -34,6 +34,7 @@ import {
 } from '../lib/commandQueue';
 import { useMatchStateStore } from '../store/matchStateStore';
 import { useTournamentId } from './useTournamentId';
+import type { MatchStateDTO } from '../api/dto';
 
 const ACTION_TO_LEGACY_STATUS: Record<
   MatchAction,
@@ -56,6 +57,32 @@ const CANONICAL_TO_LEGACY_STATUS: Record<
   finished: 'finished',
   retired: 'finished',
 };
+
+/**
+ * Pure helper: merge a successful command response onto the stored match state.
+ *
+ * Applies the authoritative legacy status and, when the response carries a
+ * non-null `timeSlot`, stores it as `actualSlotId` so `meetToOpsBlocks` can
+ * show the live slot override (SP-G1 carry-over from Task 5).
+ *
+ * NOTE: `actualCourtId` is intentionally NOT sourced here — the backend
+ * serialises `actualCourtId` on the match-state record itself, so it reaches
+ * the store via `getMatchStates` polling / SSE (preserved by the `...previous`
+ * spread). `actualSlotId` has NO backend serialisation site (Task 5 gap) and
+ * therefore must come from the command response; hence the asymmetry.
+ *
+ * Exported with a `_` prefix so the test suite can exercise the mapping in
+ * pure isolation without spinning up the full hook.
+ */
+export function _buildCommandOkPatch(
+  previous: MatchStateDTO,
+  legacyStatus: 'scheduled' | 'called' | 'started' | 'finished',
+  timeSlot: number | null,
+): MatchStateDTO {
+  const patch: MatchStateDTO = { ...previous, status: legacyStatus };
+  if (timeSlot != null) patch.actualSlotId = timeSlot;
+  return patch;
+}
 
 export interface SubmitOutcome {
   commandId: string;
@@ -157,7 +184,9 @@ export function useCommandQueue() {
           const legacy =
             CANONICAL_TO_LEGACY_STATUS[result.matchStatus] ?? 'scheduled';
           const previous = matchStates[matchId] ?? { matchId, status: 'scheduled' as const };
-          setMatchState(matchId, { ...previous, matchId, status: legacy });
+          // _buildCommandOkPatch wires time_slot → actualSlotId (SP-G1).
+          // See the helper's JSDoc for why court is handled differently.
+          setMatchState(matchId, _buildCommandOkPatch(previous, legacy, result.timeSlot));
           // Audit-pass fix: cache the canonical version so the next
           // command on this match doesn't pay the cold-read roundtrip.
           setMatchVersion(matchId, result.matchVersion);

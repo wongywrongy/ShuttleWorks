@@ -9,6 +9,15 @@ function ob(p: Partial<OpsBlock> & Pick<OpsBlock, 'source' | 'id'>): OpsBlock {
 }
 
 describe('opsBlock builders', () => {
+  it('meet block uses the live actualSlotId override over the planned slot', () => {
+    const matches = [{ id: 'm', sideA: ['p1'], sideB: ['p2'], eventRank: 'MS1' } as any];
+    const schedule = { assignments: [{ matchId: 'm', slotId: 2, courtId: 1, durationSlots: 1 }] } as any;
+    const states = { m: { matchId: 'm', status: 'scheduled', actualCourtId: 3, actualSlotId: 9 } } as any;
+    const [b] = meetToOpsBlocks(matches, schedule, states, { p1: 'P1', p2: 'P2' });
+    expect(b.court).toBe(3);
+    expect(b.slot).toBe(9);
+  });
+
   it('meetToOpsBlocks carries court/slot/span/status and a source-prefixed key', () => {
     const matches = [{ id: 'm1', sideA: ['p1'], sideB: ['p2'], eventRank: 'MS1', durationSlots: 1 }] as unknown as MatchDTO[];
     const schedule = { assignments: [{ matchId: 'm1', courtId: 2, slotId: 4, durationSlots: 1 }] } as unknown as ScheduleDTO;

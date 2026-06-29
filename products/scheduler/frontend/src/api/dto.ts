@@ -250,6 +250,7 @@ export interface MatchStateDTO {
   /** ISO-8601 UTC timestamp — see `actualStartTime`. */
   actualEndTime?: string;
   actualCourtId?: number; // Override court if different from scheduled
+  actualSlotId?: number; // Live slot override (set from command response time_slot)
   originalSlotId?: number; // Original scheduled slot before being pushed
   originalCourtId?: number; // Original scheduled court before being pushed
   delayed?: boolean; // Explicitly marked as delayed
@@ -445,6 +446,8 @@ export interface TournamentStateDTO {
   bracketPlayers?: BracketPlayerDTO[];
   /** Set true once the first-load reconcile from `bracket_participants` has run. */
   bracketRosterMigrated?: boolean;
+  /** SP-G1: set true once the operations plan has been finalised by the director. */
+  planFinalized?: boolean;
 }
 
 // ---- Proposal pipeline (two-phase commit) -------------------------------

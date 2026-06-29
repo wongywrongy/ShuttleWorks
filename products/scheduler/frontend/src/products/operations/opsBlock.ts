@@ -63,6 +63,7 @@ export function meetToOpsBlocks(
     const a = assignByMatch.get(m.id);
     const st = matchStates[m.id];
     const court = st?.actualCourtId ?? a?.courtId;
+    const slot = st?.actualSlotId ?? a?.slotId;
     const status: OperationalStatus = st?.status ?? 'scheduled';
     return {
       source: 'meet' as const,
@@ -71,7 +72,7 @@ export function meetToOpsBlocks(
       label: meetLabel(m),
       colorKey: m.eventRank ?? undefined,
       court: court ?? undefined,
-      slot: a?.slotId,
+      slot: slot,
       span: a?.durationSlots ?? 1,
       status,
       sideA: meetSide(m.sideA, nameById),
