@@ -138,6 +138,8 @@ function OperationsBody() {
   }, [selectedKey, setBracketSelectedMatchId]);
 
   // ---- write-back (Courts branch OpsDetailRail; RunSurface owns its own) ----
+  // These hooks serve the Courts (Plan) branch only — RunSurface mounts its own
+  // useCommandQueue + useBracketResultQueue for the Live (Run) branch.
   const { submit: meetSubmit } = useCommandQueue();
   const { submit: bracketSubmit } = useBracketResultQueue({
     onOptimistic: () => {},

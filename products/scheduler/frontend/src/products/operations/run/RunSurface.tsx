@@ -100,7 +100,7 @@ export function RunSurface({
   currentSlot,
   planFinalized,
 }: RunSurfaceProps) {
-  // ── seam hooks (mirror OperationsProduct's Live branch) ──────────────────
+  // ── seam hooks: owns the seam hooks for the Run (live) surface ───────────
   const pushToast = useUiStore((s) => s.pushToast);
   const { submit: meetSubmit } = useCommandQueue();
   const bracketApi = useBracketApi();

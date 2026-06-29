@@ -50,7 +50,6 @@ import type {
   BracketScore,
   BracketCommitRoundIn,
 } from './bracketDto';
-import type { BracketSubmitResult } from '../lib/bracketCommandQueue';
 
 // Use /api proxy in dev, or explicit URL in production
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
@@ -1138,58 +1137,6 @@ class ApiClient {
     return response.data;
   }
 
-  /**
-   * Record a bracket result through the optimistic-concurrency path
-   * (SP-F3). Carries ``seen_version`` and normalises the response into the
-   * bracket queue's discriminated union so ``flush`` can branch on it.
-   *
-   * Mirrors ``submitCommand`` with one deliberate divergence: meet maps an
-   * unknown-409 to ``networkError`` (retry), but the bracket ``/results``
-   * route's legacy already-recorded guard returns a bare ``{detail}`` 409
-   * with no ``error`` field — a *permanent* rejection. So any 409 that is
-   * not ``stale_version`` is treated as ``conflict`` (no retry).
-   */
-  async recordBracketResultVersioned(
-    tid: string,
-    body: {
-      play_unit_id: string;
-      winner_side: 'A' | 'B';
-      finished_at_slot?: number | null;
-      walkover?: boolean;
-      score?: BracketScore | null;
-      seen_version: number;
-    },
-  ): Promise<BracketSubmitResult> {
-    try {
-      const response = await this.client.post<BracketTournamentDTO>(
-        `/tournaments/${tid}/bracket/results`,
-        body,
-      );
-      return { kind: 'ok', dto: response.data };
-    } catch (err: unknown) {
-      const axiosErr = err as {
-        response?: {
-          status?: number;
-          data?: { error?: string; message?: string; detail?: string };
-        };
-        message?: string;
-      };
-      const status = axiosErr.response?.status;
-      const data = axiosErr.response?.data;
-      if (status === 409) {
-        if (data?.error === 'stale_version') {
-          return { kind: 'staleVersion', message: data.message ?? 'stale version' };
-        }
-        const message = data?.message ?? data?.detail ?? 'conflict';
-        return { kind: 'conflict', message };
-      }
-      return {
-        kind: 'networkError',
-        message: axiosErr.message ?? 'submit failed',
-      };
-    }
-  }
-
   async bracketMatchAction(
     tid: string,
     body: {
@@ -1336,6 +1283,7 @@ class ApiClient {
       play_unit_id: string;
       winner_side: 'A' | 'B';
       seen_version?: number;
+      finished_at_slot?: number;
       score?: unknown;
       walkover?: boolean;
     },

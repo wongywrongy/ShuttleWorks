@@ -8,8 +8,6 @@ are relative to that root (no 'backend.' prefix).
 """
 from __future__ import annotations
 
-import pytest
-
 from services.match_state import assert_valid_transition, VALID_TRANSITIONS
 from database.models import MatchStatus
 

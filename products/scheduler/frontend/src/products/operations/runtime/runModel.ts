@@ -50,6 +50,15 @@ export function deriveCourtLanes(matches: RunMatch[], courtCount: number): Court
   });
 }
 
+/**
+ * Queue of unassigned non-done matches sorted by planned slot then key.
+ *
+ * Order is derived (not persisted), so it is always refresh-durable. Postpone
+ * trade-off: a postponed match re-enters the queue by its original key (not
+ * appended to the tail), so it slots back to its planned-slot position. This
+ * is intentional — the director can re-assign it where it belongs rather than
+ * having it jump the line.
+ */
 export function deriveQueue(matches: RunMatch[]): RunMatch[] {
   return matches
     .filter((m) => m.court == null && m.status !== 'done')

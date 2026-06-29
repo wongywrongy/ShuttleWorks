@@ -384,8 +384,8 @@ export function UnifiedOpsBoard({
 function LiveLegend() {
   const items = [
     { ring: '', label: 'Scheduled' },
-    { ring: 'ring-2 ring-inset ring-status-live', label: 'Started' },
-    { ring: 'ring-2 ring-inset ring-status-done', label: 'Finished' },
+    { ring: 'ring-2 ring-inset ring-status-live', label: 'Playing' },
+    { ring: 'ring-2 ring-inset ring-status-done', label: 'Done' },
     { ring: 'ring-2 ring-inset ring-status-warning', label: 'Late' },
   ];
   return (

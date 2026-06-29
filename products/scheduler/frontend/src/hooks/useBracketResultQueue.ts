@@ -87,10 +87,6 @@ export function useBracketResultQueue(handlers: BracketResultHandlers) {
       // The command `id` (queue-generated UUID) doubles as the idempotency key —
       // the backend deduplicates on it so a replay never re-runs advancement.
       //
-      // NOTE: `finished_at_slot` is intentionally absent from the Seam C body
-      // type (`recordBracketResultCommand`); it is stored in IndexedDB but does
-      // not currently reach the backend via this path. Tracked for cleanup.
-      //
       // The adapter wraps the raw response and maps axios 409 errors to the
       // typed BracketSubmitResult variants so the queue's conflict handling
       // (flush → markRejected → onConflict) is preserved exactly.
@@ -101,6 +97,7 @@ export function useBracketResultQueue(handlers: BracketResultHandlers) {
             play_unit_id: cmd.matchId,
             winner_side: cmd.winnerSide,
             seen_version: cmd.seenVersion,
+            finished_at_slot: cmd.finishedAtSlot ?? undefined,
             score: cmd.score,
             walkover: cmd.walkover,
           });
