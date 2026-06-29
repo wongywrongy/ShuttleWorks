@@ -36,3 +36,20 @@ export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   playing: 'Playing',
   done: 'Done',
 };
+
+/** Late = past planned start while still waiting. Cleared on play. Pure. */
+export function deriveLate(input: { status: RunStatus; plannedSlot?: number; currentSlot?: number }): boolean {
+  const { status, plannedSlot, currentSlot } = input;
+  if (status !== 'scheduled' && status !== 'called') return false;
+  if (plannedSlot == null || currentSlot == null) return false;
+  return currentSlot >= plannedSlot;
+}
+
+/** Slots a playing match has run past its planned end (planned + span). Pure. */
+export function deriveDriftSlots(input: {
+  status: RunStatus; plannedSlot?: number; span?: number; currentSlot?: number;
+}): number {
+  const { status, plannedSlot, span = 1, currentSlot } = input;
+  if (status !== 'playing' || plannedSlot == null || currentSlot == null) return 0;
+  return Math.max(0, currentSlot - (plannedSlot + span));
+}
