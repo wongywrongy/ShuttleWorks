@@ -12,6 +12,7 @@
  * Single-engine workspaces never reach here.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiClient } from '../../api/client';
 import { BracketApiProvider, useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
 import { useTournamentId } from '../../hooks/useTournamentId';
@@ -107,8 +108,20 @@ function OperationsBody() {
     return Math.max(1, fromCfg, fromBlocks);
   }, [config?.courtCount, data?.courts, blocks]);
 
-  // ---- planFinalized (read only — Task 17 wires the toggle + snapshot) ----
+  // ---- planFinalized — Plan-side "ready to run" toggle (Task 17) ----
+  const tid = useTournamentId();
   const planFinalized = useTournamentStore((s) => s.planFinalized);
+  const setPlanFinalized = useTournamentStore((s) => s.setPlanFinalized);
+
+  const handlePlanFinalizeToggle = useCallback(async () => {
+    const newVal = !planFinalized;
+    setPlanFinalized(newVal); // optimistic
+    try {
+      await apiClient.setPlanFinalized(tid, newVal);
+    } catch {
+      setPlanFinalized(!newVal); // revert on failure
+    }
+  }, [planFinalized, setPlanFinalized, tid]);
 
   // ---- Courts-only selection (Live uses RunSurface's own selection) ----
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -158,7 +171,7 @@ function OperationsBody() {
     [meetSubmit, bracketApi, bracketSubmit, data, setData],
   );
 
-  const title = isLive ? 'Live' : 'Courts';
+  const title = isLive ? 'Run' : 'Plan';
   const subtitle = isLive
     ? 'Run the floor — by court, then the queue'
     : 'Plan the day — drag to reschedule, generate, schedule rounds';
@@ -170,8 +183,8 @@ function OperationsBody() {
           <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{title}</span>
           <span className="text-xs text-muted-foreground/70">{subtitle}</span>
         </div>
-        {/* Courts is the planning surface: build / adjust the plan. Live runs
-            what Courts produced — no scheduling actions there. */}
+        {/* Plan is the planning surface: build / adjust the plan. Run runs
+            what Plan produced — no scheduling actions there. */}
         {!isLive ? (
           <div className="flex items-center gap-2">
             <button
@@ -193,6 +206,14 @@ function OperationsBody() {
                 Schedule next round ({schedulableCount})
               </button>
             ) : null}
+            <button
+              type="button"
+              className={schedBtn}
+              onClick={() => void handlePlanFinalizeToggle()}
+              data-testid="ops-plan-finalize-toggle"
+            >
+              {planFinalized ? 'Plan ready ✓' : 'Mark plan ready to run'}
+            </button>
           </div>
         ) : null}
       </header>

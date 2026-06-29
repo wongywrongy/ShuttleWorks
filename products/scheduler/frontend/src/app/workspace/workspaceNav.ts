@@ -105,12 +105,12 @@ export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): Workspa
       role: 'shared',
       items: opsBracket
         ? [
-            { segment: 'bracket-schedule', label: 'Courts' },
-            { segment: 'bracket-live', label: 'Live' },
+            { segment: 'bracket-schedule', label: 'Plan' },
+            { segment: 'bracket-live', label: 'Run' },
           ]
         : [
-            { segment: 'schedule', label: 'Courts' },
-            { segment: 'live', label: 'Live' },
+            { segment: 'schedule', label: 'Plan' },
+            { segment: 'live', label: 'Run' },
           ],
     });
   }

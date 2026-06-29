@@ -11,7 +11,7 @@
  * internals of those components (which have their own test files).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // ── 1. Hoist mutable tab so vi.mock factories close over it ───────────────
 
@@ -23,6 +23,12 @@ const { mockTab } = vi.hoisted(() => ({
 
 vi.mock('../../../hooks/useTournamentId', () => ({
   useTournamentId: () => 'test-tid',
+}));
+
+vi.mock('../../../api/client', () => ({
+  apiClient: {
+    setPlanFinalized: vi.fn().mockResolvedValue({}),
+  },
 }));
 
 vi.mock('../../../api/bracketClient', () => ({
@@ -52,6 +58,7 @@ vi.mock('../../../store/tournamentStore', () => ({
       players: [],
       groups: [],
       planFinalized: undefined,
+      setPlanFinalized: vi.fn(),
     }),
 }));
 
@@ -113,6 +120,7 @@ vi.mock('../UnifiedOpsList', () => ({
 // ── 3. Import the component under test (AFTER mocks) ─────────────────────
 
 import { OperationsProduct } from '../OperationsProduct';
+import * as clientModule from '../../../api/client';
 
 // ── 4. Tests ──────────────────────────────────────────────────────────────
 
@@ -137,5 +145,28 @@ describe('OperationsProduct — Courts (Plan) segment renders the interactive bo
     expect(screen.getByTestId('ops-generate-meet')).toBeInTheDocument();
     expect(screen.getByTestId('unified-ops-board')).toBeInTheDocument();
     expect(screen.queryByTestId('run-surface')).toBeNull();
+  });
+});
+
+describe('OperationsProduct — Plan-side "ready to run" toggle (Task 17)', () => {
+  it('renders the toggle with "Mark plan ready to run" when planFinalized is falsy', () => {
+    mockTab.value = 'schedule';
+    render(<OperationsProduct />);
+    const toggle = screen.getByTestId('ops-plan-finalize-toggle');
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveTextContent('Mark plan ready to run');
+  });
+
+  it('clicking the toggle calls apiClient.setPlanFinalized with negated value', async () => {
+    mockTab.value = 'schedule';
+    render(<OperationsProduct />);
+    const toggle = screen.getByTestId('ops-plan-finalize-toggle');
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(vi.mocked(clientModule.apiClient.setPlanFinalized)).toHaveBeenCalledWith(
+        'test-tid',
+        true, // !planFinalized (undefined → true)
+      );
+    });
   });
 });
