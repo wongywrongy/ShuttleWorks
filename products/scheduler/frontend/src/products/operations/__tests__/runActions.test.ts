@@ -3,7 +3,11 @@ import { runAction, planAutoPull } from '../runtime/runActions';
 
 const seams = () => ({
   meetSubmit: vi.fn(),
-  bracketApi: { matchAction: vi.fn().mockResolvedValue({}), pinMatch: vi.fn().mockResolvedValue({}) },
+  bracketApi: {
+    matchAction: vi.fn().mockResolvedValue({}),
+    assignCourt: vi.fn().mockResolvedValue({}),
+    unassign: vi.fn().mockResolvedValue({}),
+  },
   bracketResult: vi.fn(),
   setCalledBracket: vi.fn(),
 });
@@ -49,6 +53,32 @@ describe('runAction routing', () => {
     runAction(m({ id: 'b', source: 'bracket', status: 'called', court: 1 }), 'start', undefined, s);
     expect(s.setCalledBracket).toHaveBeenCalledWith('b', true);
     expect(s.bracketApi.matchAction).toHaveBeenCalledWith({ play_unit_id: 'b', action: 'start' });
+  });
+  it('bracket assign calls assignCourt with play_unit_id, court_id, slot_id', () => {
+    const s = seams();
+    runAction(
+      m({ id: 'bx', source: 'bracket', status: 'scheduled' }),
+      'assign',
+      { court: 3, slot: 7 },
+      s,
+    );
+    expect(s.bracketApi.assignCourt).toHaveBeenCalledWith({
+      play_unit_id: 'bx',
+      court_id: 3,
+      slot_id: 7,
+    });
+    expect(s.bracketApi.matchAction).not.toHaveBeenCalled();
+  });
+  it('bracket postpone calls unassign with play_unit_id', () => {
+    const s = seams();
+    runAction(
+      m({ id: 'by', source: 'bracket', status: 'playing', court: 2 }),
+      'postpone',
+      undefined,
+      s,
+    );
+    expect(s.bracketApi.unassign).toHaveBeenCalledWith({ play_unit_id: 'by' });
+    expect(s.bracketApi.matchAction).not.toHaveBeenCalled();
   });
   it('refuses illegal transitions (no seam call)', () => {
     const s = seams();

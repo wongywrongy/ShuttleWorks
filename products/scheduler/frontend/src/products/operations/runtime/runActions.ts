@@ -2,31 +2,22 @@
  * runActions — Operations Run write router.
  *
  * Routes RunActionKind → the correct backend seam (meet command queue,
- * bracket matchAction, bracket pinMatch) and guards every action with
- * the Run state machine's `can()` predicate.
+ * bracket matchAction, bracket assignCourt/unassign) and guards every action
+ * with the Run state machine's `can()` predicate.
  *
- * ─── BRACKET SEAM FINDINGS (verified 2026-06-29) ─────────────────────────
+ * ─── BRACKET SEAM NOTES (updated 2026-06-29, Task 9b/9c) ─────────────────
  *
- * 1. pinMatch TRIGGERS A FULL CP-SAT RE-SOLVE.
- *    `POST /bracket/pin` calls `driver.repin_and_resolve()` (scheduler.py:127).
- *    This re-schedules ALL non-locked bracket matches around the pinned
- *    position via the shared CP-SAT engine — wrong for a live Run assign.
- *    Additionally, `repin_and_resolve` raises ValueError for any play_unit
- *    that has no existing `state.assignments` entry (scheduler.py:157),
- *    which the route surfaces as 409 — so pinMatch CANNOT assign a queued
- *    bracket match (no assignment row yet). Live bracket auto-pull via
- *    pinMatch is therefore IMPOSSIBLE, not merely suboptimal. A non-solver
- *    single-placement endpoint is needed on the backend (follow-up work).
- *    CURRENT BEHAVIOUR: bracket `assign` calls pinMatch and will 409 for
- *    unscheduled matches. Flagged as DONE_WITH_CONCERNS.
+ * Live bracket court-ops use the non-solver endpoints added in Task 9b:
+ *   - bracket `assign`   → bracketApi.assignCourt({ play_unit_id, court_id, slot_id })
+ *     Directly places a play unit on a court+slot; no solver re-run; works for
+ *     unscheduled units (no 409).  Backend: POST /bracket/assign-court.
+ *   - bracket `postpone` → bracketApi.unassign({ play_unit_id })
+ *     Removes the court assignment from a play unit, returning it to the queue;
+ *     no solver, no result change.  Backend: POST /bracket/unassign.
  *
- * 2. matchAction('reset') does NOT un-assign the court.
- *    The backend reset path (brackets.py) only clears `actual_start_slot`
- *    and `actual_end_slot` on the TournamentAssignment. The assignment
- *    record (court, slot) persists — a postponed bracket match will
- *    continue to appear on its assigned court on the next poll.
- *    CURRENT BEHAVIOUR: bracket `postpone` calls matchAction({action:'reset'}).
- *    Flagged as DONE_WITH_CONCERNS.
+ * pinMatch (POST /bracket/pin) and matchAction('reset') are NOT used for live
+ * court-ops: pinMatch re-runs CP-SAT and 409s for unscheduled units; reset
+ * only clears timing fields and does not remove the court assignment.
  *
  * ─────────────────────────────────────────────────────────────────────────
  */
@@ -47,11 +38,14 @@ export interface BracketApiSeam {
     action: 'start' | 'finish' | 'reset';
     slot?: number;
   }) => Promise<unknown>;
-  pinMatch: (body: {
+  /** Task 9b non-solver placement — places a play unit on court+slot directly. */
+  assignCourt: (body: {
     play_unit_id: string;
     court_id: number;
     slot_id: number;
   }) => Promise<unknown>;
+  /** Task 9b non-solver removal — strips the court assignment, returns to queue. */
+  unassign: (body: { play_unit_id: string }) => Promise<unknown>;
 }
 
 export interface RunSeams {
@@ -135,8 +129,8 @@ export function planAutoPull(
  *   Bracket call → setCalledBracket(id, true)     [local flag only]
  *   Bracket start → bracketApi.matchAction({ action:'start' })
  *   Bracket record → bracketResult({ matchId, winnerSide })
- *   Bracket assign → bracketApi.pinMatch(...)      [CONCERN: re-solve, see top comment]
- *   Bracket postpone → bracketApi.matchAction({ action:'reset' }) [CONCERN: no unassign]
+ *   Bracket assign → bracketApi.assignCourt({ play_unit_id, court_id, slot_id })
+ *   Bracket postpone → bracketApi.unassign({ play_unit_id })
  */
 export function runAction(
   match: RunMatch,
@@ -180,16 +174,13 @@ export function runAction(
         seams.bracketResult({ matchId: match.id, winnerSide: target?.winnerSide });
         break;
       case 'assign': {
-        // CONCERN (see top comment): pinMatch triggers a full CP-SAT re-solve
-        // and cannot assign an unscheduled bracket match (409 if no assignment row).
         const court_id = target?.court ?? match.court ?? 0;
         const slot_id = target?.slot ?? match.plannedSlot ?? 0;
-        void seams.bracketApi.pinMatch({ play_unit_id: match.id, court_id, slot_id });
+        void seams.bracketApi.assignCourt({ play_unit_id: match.id, court_id, slot_id });
         break;
       }
       case 'postpone':
-        // CONCERN (see top comment): reset does NOT un-assign the court.
-        void seams.bracketApi.matchAction({ play_unit_id: match.id, action: 'reset' });
+        void seams.bracketApi.unassign({ play_unit_id: match.id });
         break;
     }
   }
