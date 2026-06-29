@@ -218,3 +218,70 @@ def test_call_to_court_on_already_called_match_is_still_rejected(client, tid):
     assert body["error"] == "conflict"
     assert body["current_status"] == "called"
     assert body["attempted_status"] == "called"
+
+
+# ---------------------------------------------------------------------------
+# 4. Guard: assign_court rejected on non-scheduled matches
+# ---------------------------------------------------------------------------
+
+
+def test_assign_court_on_called_match_is_rejected(client, tid):
+    """assign_court on a CALLED match must be rejected (409); match stays CALLED.
+
+    Without the precondition guard, CALLED→SCHEDULED is a valid 'uncall' edge
+    so assert_valid_transition lets it through and silently demotes the match.
+    """
+    _seed_assigned(client, tid)
+    # Advance to called: scheduled(v1) → called(v2), court+slot preserved from seed
+    r1 = _cmd(client, tid, "m1", "call_to_court", {}, 1)
+    assert r1.status_code == 200, r1.text
+    assert r1.json()["status"] == "called"
+
+    r2 = _cmd(client, tid, "m1", "assign_court", {"court_id": 3, "time_slot": 7}, 2)
+    assert r2.status_code == 409, r2.text
+    body = r2.json()
+    assert body["error"] == "conflict"
+    assert body["current_status"] == "called"
+    assert body["attempted_status"] == "scheduled"
+
+
+def test_assign_court_on_playing_match_is_rejected(client, tid):
+    """assign_court on a PLAYING match must be rejected (409)."""
+    _seed_assigned(client, tid)
+    r1 = _cmd(client, tid, "m1", "call_to_court", {}, 1)
+    assert r1.status_code == 200, r1.text
+    r2 = _cmd(client, tid, "m1", "start_match", {}, 2)
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["status"] == "playing"
+
+    r3 = _cmd(client, tid, "m1", "assign_court", {"court_id": 3, "time_slot": 7}, 3)
+    assert r3.status_code == 409, r3.text
+    body = r3.json()
+    assert body["error"] == "conflict"
+    assert body["current_status"] == "playing"
+    assert body["attempted_status"] == "scheduled"
+
+
+# ---------------------------------------------------------------------------
+# 5. Guard: assign_court requires both court_id and time_slot in payload
+# ---------------------------------------------------------------------------
+
+
+def test_assign_court_missing_time_slot_is_rejected(client, tid):
+    """assign_court without time_slot in payload must be rejected (409); no mutation."""
+    _seed_unassigned(client, tid)
+
+    r = _cmd(client, tid, "m1", "assign_court", {"court_id": 3}, 1)
+    assert r.status_code == 409, r.text
+    body = r.json()
+    assert body["error"] == "conflict"
+
+
+def test_assign_court_missing_court_id_is_rejected(client, tid):
+    """assign_court without court_id in payload must be rejected (409); no mutation."""
+    _seed_unassigned(client, tid)
+
+    r = _cmd(client, tid, "m1", "assign_court", {"time_slot": 7}, 1)
+    assert r.status_code == 409, r.text
+    body = r.json()
+    assert body["error"] == "conflict"

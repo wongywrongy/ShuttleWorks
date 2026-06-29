@@ -1621,6 +1621,54 @@ class LocalRepository:
                 ),
             )
 
+        # Precondition guards for assign_court (checked before the transition
+        # guard and mutation below so rejection short-circuits cleanly).
+        #
+        # Guard 1: assign_court is only valid on a currently-scheduled match.
+        # Without this, CALLED→SCHEDULED is a valid 'uncall' edge so
+        # assert_valid_transition would let it through and silently demote
+        # the match while setting court+slot — an unintended implicit uncall.
+        #
+        # Guard 2: both court_id and time_slot must be supplied in the payload.
+        # Without this, a caller omitting one key silently retains the old
+        # value (partial assign). The frontend always sends both; this guard
+        # hardens the API contract.
+        if action == "assign_court":
+            if match.status != MatchStatus.SCHEDULED.value:
+                reason = "assign_court is only valid on scheduled matches"
+                self._stamp_rejection(
+                    command_row,
+                    command_id=command_id,
+                    tournament_id=tournament_id,
+                    match_id=match_id,
+                    action=action,
+                    payload=payload,
+                    submitted_by=submitted_by,
+                    reason=reason,
+                )
+                self.session.commit()
+                raise ce_cls(
+                    match_id=match_id,
+                    current_status=match.status,
+                    attempted_status=MatchStatus.SCHEDULED.value,
+                    message=reason,
+                )
+            _p = payload or {}
+            if "court_id" not in _p or "time_slot" not in _p:
+                reason = "assign_court requires both court_id and time_slot in payload"
+                self._stamp_rejection(
+                    command_row,
+                    command_id=command_id,
+                    tournament_id=tournament_id,
+                    match_id=match_id,
+                    action=action,
+                    payload=payload,
+                    submitted_by=submitted_by,
+                    reason=reason,
+                )
+                self.session.commit()
+                raise ce_cls(match_id=match_id, message=reason)
+
         # Step 4 — transition guard. Raises ConflictError on illegal
         # transitions; we catch, stamp the rejection, commit, re-raise.
         #
@@ -1660,8 +1708,9 @@ class LocalRepository:
         # Applied BEFORE flush so the sync service serialises the new values.
         if action == "assign_court":
             _p = payload or {}
-            match.court_id = _p.get("court_id", match.court_id)
-            match.time_slot = _p.get("time_slot", match.time_slot)
+            # Both keys are guaranteed present by the precondition guard above.
+            match.court_id = _p["court_id"]
+            match.time_slot = _p["time_slot"]
         elif action == "postpone_match":
             match.court_id = None
             match.time_slot = None
