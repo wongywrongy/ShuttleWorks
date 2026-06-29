@@ -312,6 +312,18 @@ class BracketPinIn(BaseModel):
     court_id: int
 
 
+class BracketAssignIn(BaseModel):
+    """Body for POST /bracket/assign — direct (non-solver) court placement."""
+    play_unit_id: str
+    court_id: int
+    slot_id: int
+
+
+class BracketUnassignIn(BaseModel):
+    """Body for POST /bracket/unassign — remove a play unit's court assignment."""
+    play_unit_id: str
+
+
 class EventUpsertIn(BaseModel):
     """Body of POST /bracket/events/{event_id} — upsert one event."""
     discipline: str
@@ -2304,6 +2316,95 @@ def pin_bracket_match(
                 ],
             },
         )
+
+    _persist_session_metadata(repo, tournament_id, session=session)
+    return _serialize_session(session)
+
+
+@router.post("/assign", response_model=TournamentOut, dependencies=[_OPERATOR])
+def assign_bracket_court(
+    body: BracketAssignIn,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Directly place a play unit on a court+slot — NO solver, NO 409 for
+    unscheduled units.
+
+    Unlike ``/bracket/pin``, this endpoint does NOT re-run the CP-SAT
+    solver and does NOT require the play unit to already have an
+    assignment.  It is the bracket analog of the meet's ``assign_court``
+    command, intended for the live Operations Run surface where the
+    operator places queued bracket matches by hand.
+
+    Behaviour:
+      - Creates the assignment if the unit is unscheduled (no 409).
+      - Overwrites the existing assignment if one already exists.
+      - Does NOT touch any other unit's assignment (read-modify-write
+        through ``_hydrate_session`` + ``_persist_session_metadata``).
+      - Returns the full serialized tournament snapshot (same shape as
+        ``/results`` and ``/match-action``).
+
+    404 when the play unit is not found; 404 when no bracket is
+    configured for this tournament.
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+
+    pu = session.state.play_units.get(body.play_unit_id)
+    if pu is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"play_unit {body.play_unit_id!r} not found",
+        )
+
+    # Use the play unit's own duration (already normalised during hydration);
+    # fall back to 1 slot if somehow absent (belt-and-suspenders).
+    duration_slots = pu.expected_duration_slots or 1
+
+    session.state.assignments[body.play_unit_id] = TournamentAssignment(
+        play_unit_id=body.play_unit_id,
+        slot_id=body.slot_id,
+        court_id=body.court_id,
+        duration_slots=duration_slots,
+        actual_start_slot=None,
+    )
+
+    _persist_session_metadata(repo, tournament_id, session=session)
+    return _serialize_session(session)
+
+
+@router.post("/unassign", response_model=TournamentOut, dependencies=[_OPERATOR])
+def unassign_bracket_court(
+    body: BracketUnassignIn,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Return a play unit to the queue by removing its court assignment.
+
+    Unlike ``matchAction('reset')``, this endpoint removes the assignment
+    entirely (back to the queue) rather than clearing start/end slots.
+    It does NOT alter the play unit's result, does NOT call the solver,
+    and is a no-op when the unit has no assignment.
+
+    Other play units' assignments are untouched (read-modify-write
+    through ``_hydrate_session`` + ``_persist_session_metadata``).
+
+    Returns the full serialized tournament snapshot.  Always 200 — even
+    when the unit was already unassigned.
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+
+    # pop is a no-op when the key is absent — idempotent by design.
+    session.state.assignments.pop(body.play_unit_id, None)
 
     _persist_session_metadata(repo, tournament_id, session=session)
     return _serialize_session(session)

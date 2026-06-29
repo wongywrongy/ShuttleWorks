@@ -1291,6 +1291,39 @@ class ApiClient {
   }
 
   /**
+   * SP-G1 Task 9b: directly place a bracket play unit on a court+slot without
+   * re-running the solver.  Creates an assignment for unscheduled units (no
+   * 409) and overwrites an existing assignment.  The bracket analog of the
+   * meet's assignCourt command.
+   */
+  async assignBracketCourt(
+    tid: string,
+    body: { play_unit_id: string; court_id: number; slot_id: number },
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post<BracketTournamentDTO>(
+      `/tournaments/${tid}/bracket/assign`,
+      body,
+    );
+    return data;
+  }
+
+  /**
+   * SP-G1 Task 9b: return a bracket play unit to the queue by removing its
+   * court assignment — no solver, no result change.  No-op when the unit
+   * has no assignment.
+   */
+  async unassignBracketCourt(
+    tid: string,
+    body: { play_unit_id: string },
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post<BracketTournamentDTO>(
+      `/tournaments/${tid}/bracket/unassign`,
+      body,
+    );
+    return data;
+  }
+
+  /**
    * SP-G1 Seam C: record a bracket result through the command interface.
    * POST /tournaments/{tid}/bracket/commands with kind:'record_result'.
    * Carries an optimistic-concurrency `seen_version` so the backend can

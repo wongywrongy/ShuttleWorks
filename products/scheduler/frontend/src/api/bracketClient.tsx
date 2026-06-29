@@ -77,6 +77,14 @@ export interface BracketApi {
   eventUpsert: (eventId: string, body: BracketEventUpsertIn) => Promise<BracketTournamentDTO>;
   eventGenerate: (eventId: string, body: BracketEventGenerateIn) => Promise<BracketTournamentDTO>;
   eventDelete: (eventId: string) => Promise<void>;
+  /** SP-G1 Task 9b: directly place a play unit on a court+slot without
+   *  re-running the solver.  Creates for unscheduled units (no 409); overwrites
+   *  existing.  Bracket analog of the meet's assign-court command. */
+  assignCourt: (body: { play_unit_id: string; court_id: number; slot_id: number }) => Promise<BracketTournamentDTO>;
+  /** SP-G1 Task 9b: return a play unit to the queue by removing its
+   *  court assignment — no solver, no result change.  No-op when already
+   *  unassigned. */
+  unassign: (body: { play_unit_id: string }) => Promise<BracketTournamentDTO>;
 }
 
 const BracketApiContext = createContext<BracketApi | null>(null);
@@ -119,6 +127,8 @@ export function BracketApiProvider({
       eventUpsert: (eventId, body) => apiClient.bracketEventUpsert(tournamentId, eventId, body),
       eventGenerate: (eventId, body) => apiClient.bracketEventGenerate(tournamentId, eventId, body),
       eventDelete: (eventId) => apiClient.bracketEventDelete(tournamentId, eventId),
+      assignCourt: (body) => apiClient.assignBracketCourt(tournamentId, body),
+      unassign: (body) => apiClient.unassignBracketCourt(tournamentId, body),
     }),
     [tournamentId],
   );
