@@ -529,6 +529,36 @@ def restore_tournament_backup(
     return get_tournament_state(tournament_id, repo)
 
 
+# ---- Plan-finalized flag (SP-G1 Plan→Run handoff) ----------------------
+
+
+class PlanFinalizedDTO(BaseModel):
+    finalized: bool
+
+
+@router.post(
+    "/{tournament_id}/plan-finalized",
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def set_plan_finalized(
+    body: PlanFinalizedDTO,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Toggle the ``planFinalized`` flag stored in the tournament data blob.
+
+    Read-modify-writes the existing blob so all other state (config,
+    players, matches, schedule …) is preserved.  The flag is a pure
+    persisted boolean — no server-side derivation; the Run surface
+    derives "what's missing" client-side.
+    """
+    row = _resolve_tournament(tournament_id, repo)  # 404 if missing
+    data = dict(row.data or {})
+    data["planFinalized"] = bool(body.finalized)
+    repo.tournaments.upsert_data(tournament_id, data)
+    return {"planFinalized": data["planFinalized"]}
+
+
 # ---- Invite-link endpoints scoped under a tournament --------------------
 
 

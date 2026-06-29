@@ -522,6 +522,9 @@ class TournamentStateDTO(BaseModel):
     scheduleHistory: List[ScheduleHistoryEntry] = Field(default_factory=list)
     bracketPlayers: List[BracketPlayerDTO] = Field(default_factory=list)
     bracketRosterMigrated: Optional[bool] = None
+    # SP-G1 Plan→Run handoff: operator marks plan as ready before running.
+    # Stored in the tournament.data JSON blob; no Alembic migration needed.
+    planFinalized: bool = False
 
 
 class SolverOptionsDTO(BaseModel):
