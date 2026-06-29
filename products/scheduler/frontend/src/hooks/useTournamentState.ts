@@ -153,6 +153,8 @@ function hydrate(s: TournamentStateDTO): void {
     // roster hydration from ``bracket_participants`` on first load.
     bracketPlayers: s.bracketPlayers ?? [],
     bracketRosterMigrated: s.bracketRosterMigrated ?? false,
+    // SP-G1: plan-finalized read (setter + snapshot wired in Task 17).
+    planFinalized: s.planFinalized ?? false,
   });
 }
 
@@ -169,6 +171,7 @@ function resetToDefaults(): void {
     isScheduleLocked: false,
     bracketPlayers: [],
     bracketRosterMigrated: false,
+    planFinalized: undefined,
   });
 }
 

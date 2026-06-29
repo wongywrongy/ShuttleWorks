@@ -4,14 +4,12 @@
  * Mounted by `ModuleOutlet` ONLY when both Meet and Bracket are enabled, for
  * an Operations segment (Courts / Live). A match is a match — meet and bracket
  * fold into one `OpsBlock` list that drives:
- *   - UnifiedOpsBoard — one court×time board, drag-to-reschedule for BOTH
- *     engines (drop routes to meet `pinAndResolve` or bracket `pinMatch`).
- *   - UnifiedOpsList  — the sectioned working queue; row actions route by
- *     source (meet → command queue call/start/finish; bracket → start via
- *     matchAction, record winner via the F3 result queue).
+ *   - Courts (Plan): UnifiedOpsBoard (drag) + UnifiedOpsList + OpsDetailRail
+ *     overlay. Scheduling actions (Generate / Schedule next round) live here.
+ *   - Live (Run): RunSurface — the interactive run console. RunSurface owns
+ *     its own selection, inspector, and seam-hook calls for the live branch.
  *
- * Courts shows the board + a read-only overview list; Live shows the board +
- * the action list. Single-engine workspaces never reach here.
+ * Single-engine workspaces never reach here.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BracketApiProvider, useBracketApi } from '../../api/bracketClient';
@@ -31,10 +29,7 @@ import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from 
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
 import { OpsDetailRail } from './OpsDetailRail';
-import { LiveStatusBar } from './LiveStatusBar';
-import { MatchDetailsPanel } from '../meet/control-center/MatchDetailsPanel';
-import { formatSlotTime } from '../../lib/time';
-import type { MatchStateDTO } from '../../api/dto';
+import { RunSurface } from './run/RunSurface';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
 
@@ -112,21 +107,24 @@ function OperationsBody() {
     return Math.max(1, fromCfg, fromBlocks);
   }, [config?.courtCount, data?.courts, blocks]);
 
-  // ---- selection (click → highlight + detail rail) ----
+  // ---- planFinalized (read only — Task 17 wires the toggle + snapshot) ----
+  const planFinalized = useTournamentStore((s) => s.planFinalized);
+
+  // ---- Courts-only selection (Live uses RunSurface's own selection) ----
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selectedBlock = useMemo(
     () => blocks.find((b) => b.key === selectedKey) ?? null,
     [blocks, selectedKey],
   );
-  // Keep the bracket store id in sync so the reused MatchDetailPanel (which
-  // reads `bracketSelectedMatchId` from the store) tracks the selection.
+  // Keep the bracket store id in sync so OpsDetailRail's MatchDetailPanel
+  // (bracket) tracks the Courts-branch selection.
   const setBracketSelectedMatchId = useUiStore((s) => s.setBracketSelectedMatchId);
   useEffect(() => {
     const p = selectedKey ? parseOpsKey(selectedKey) : null;
     setBracketSelectedMatchId(p?.source === 'bracket' ? p.id : null);
   }, [selectedKey, setBracketSelectedMatchId]);
 
-  // ---- write-back ----
+  // ---- write-back (Courts branch OpsDetailRail; RunSurface owns its own) ----
   const { submit: meetSubmit } = useCommandQueue();
   const { submit: bracketSubmit } = useBracketResultQueue({
     onOptimistic: () => {},
@@ -159,32 +157,6 @@ function OperationsBody() {
     },
     [meetSubmit, bracketApi, bracketSubmit, data, setData],
   );
-
-  // ---- Meet detail: reuse the real MatchDetailsPanel so the meet match
-  // keeps its full operator button set (Call / Start / Finish / Retire /
-  // Score / …). Status changes route through the command queue. ----
-  const groups = useTournamentStore((s) => s.groups);
-  const playerNameMap = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
-  const slotToTime = useCallback((s: number) => (config ? formatSlotTime(s, config) : String(s)), [config]);
-  const meetUpdateStatus = useCallback(
-    async (matchId: string, status: MatchStateDTO['status'], data?: Partial<MatchStateDTO>) => {
-      const action: 'call_to_court' | 'start_match' | 'finish_match' | 'uncall' =
-        status === 'called'
-          ? 'call_to_court'
-          : status === 'started'
-            ? 'start_match'
-            : status === 'finished'
-              ? 'finish_match'
-              : 'uncall';
-      await meetSubmit(action, matchId, (data ?? {}) as Record<string, unknown>);
-    },
-    [meetSubmit],
-  );
-  const selMeetMatch =
-    selectedBlock?.source === 'meet' ? matches.find((m) => m.id === selectedBlock.id) : undefined;
-  const selMeetAssignment =
-    selMeetMatch && schedule ? schedule.assignments.find((a) => a.matchId === selMeetMatch.id) : undefined;
-  const showMeetPanel = isLive && !!selMeetMatch;
 
   const title = isLive ? 'Live' : 'Courts';
   const subtitle = isLive
@@ -232,95 +204,60 @@ function OperationsBody() {
       ) : (
         <div className="relative min-h-0 flex-1">
           {isLive ? (
-            // LIVE = operations console. Court status is the hero; the queue
-            // is support beneath it.
-            <div className="flex h-full min-h-0 flex-col">
-              <LiveStatusBar blocks={blocks} courtCount={courtCount} />
-              <div className="min-h-0 flex-1 overflow-auto">
-                {/* The court×time grid — the easy-to-view spatial map of the
-                    whole floor; status rings + late. Click a block for its
-                    details + actions. */}
+            // LIVE = Run surface. RunSurface owns its own selection + inspector
+            // + seam-hook calls. Nothing from the Courts branch leaks in.
+            <RunSurface
+              blocks={blocks}
+              bracketData={data}
+              onBracketData={setData}
+              courtCount={courtCount}
+              currentSlot={currentSlot}
+              planFinalized={planFinalized}
+            />
+          ) : (
+            // COURTS = planning surface. Drag board + the matches overview list
+            // + a detail-rail overlay. Selection and the OpsDetailRail overlay
+            // live entirely inside this branch.
+            <div className="relative h-full min-h-0">
+              <div className="h-full min-h-0 overflow-auto">
                 <UnifiedOpsBoard
                   blocks={blocks}
                   courtCount={courtCount}
                   currentSlot={currentSlot}
                   selectedKey={selectedKey}
                   onSelect={setSelectedKey}
-                  interactive={false}
+                  interactive
                   meet={{ config, matches, schedule }}
                   onBracketData={setData}
                 />
-                <div className="border-t border-border">
-                  <div className="px-4 pb-1 pt-3 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Queue
-                  </div>
-                  <UnifiedOpsList
-                    blocks={blocks}
-                    selectedKey={selectedKey}
-                    onSelect={setSelectedKey}
-                    onAction={onAction}
-                  />
-                </div>
+                <UnifiedOpsList blocks={blocks} selectedKey={selectedKey} onSelect={setSelectedKey} />
               </div>
-            </div>
-          ) : (
-            // COURTS = planning. Drag board + the matches overview list.
-            <div className="h-full min-h-0 overflow-auto">
-              <UnifiedOpsBoard
-                blocks={blocks}
-                courtCount={courtCount}
-                currentSlot={currentSlot}
-                selectedKey={selectedKey}
-                onSelect={setSelectedKey}
-                interactive
-                meet={{ config, matches, schedule }}
-                onBracketData={setData}
-              />
-              <UnifiedOpsList blocks={blocks} selectedKey={selectedKey} onSelect={setSelectedKey} />
+
+              {/* Detail rail OVERLAYS the content so it never steals layout
+                  width (the source of the text cutoff at narrower viewports). */}
+              {selectedBlock ? (
+                <div className="absolute inset-y-0 right-0 z-20 flex bg-card shadow-xl">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedKey(null)}
+                    aria-label="Close details"
+                    className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                  >
+                    ✕
+                  </button>
+                  <div className="min-h-0 w-80 max-w-[88vw] overflow-auto">
+                    <OpsDetailRail
+                      block={selectedBlock}
+                      data={data}
+                      onBracketChange={setData}
+                      onAction={onAction}
+                      live={false}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
-
-          {/* Detail rail OVERLAYS the content so it never steals layout width
-              (the source of the text cutoff at narrower viewports). */}
-          {selectedBlock ? (
-            <div className="absolute inset-y-0 right-0 z-20 flex bg-card shadow-xl">
-              <button
-                type="button"
-                onClick={() => setSelectedKey(null)}
-                aria-label="Close details"
-                className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-              >
-                ✕
-              </button>
-              <div className="min-h-0 w-80 max-w-[88vw] overflow-auto">
-                {showMeetPanel ? (
-                  <MatchDetailsPanel
-                    assignment={selMeetAssignment}
-                    match={selMeetMatch}
-                    matchState={selMeetMatch ? matchStates[selMeetMatch.id] : undefined}
-                    matches={matches}
-                    matchStates={matchStates}
-                    schedule={schedule}
-                    players={players}
-                    groups={groups}
-                    config={config}
-                    currentSlot={currentSlot}
-                    playerNames={playerNameMap}
-                    slotToTime={slotToTime}
-                    onUpdateStatus={meetUpdateStatus}
-                  />
-                ) : (
-                  <OpsDetailRail
-                    block={selectedBlock}
-                    data={data}
-                    onBracketChange={setData}
-                    onAction={onAction}
-                    live={isLive}
-                  />
-                )}
-              </div>
-            </div>
-          ) : null}
         </div>
       )}
 

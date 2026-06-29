@@ -74,6 +74,9 @@ interface TournamentState {
   setScheduleVersion: (version: number) => void;
   setScheduleHistory: (history: ScheduleHistoryEntry[]) => void;
 
+  // SP-G1: operations plan finalization flag (read here; setter in Task 17)
+  planFinalized: boolean | undefined;
+
   // Data management
   reset: () => void;
   exportData: () => string;
@@ -106,6 +109,7 @@ const INITIAL = {
   isScheduleLocked: false,
   scheduleVersion: 0,
   scheduleHistory: [] as ScheduleHistoryEntry[],
+  planFinalized: undefined as boolean | undefined,
 };
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
