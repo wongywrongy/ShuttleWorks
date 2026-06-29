@@ -512,3 +512,69 @@ describe('RunSurface — Fix 2: calledBracketIds cleared on postpone', () => {
     expect(mockBracketUnassign).toHaveBeenCalledWith({ play_unit_id: 'pu1' });
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Section 4: Fix 3 — meet Postpone moves the match from the lane to the queue
+// (RED: currently the match stays courted due to schedule fallback in opsBlock)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('RunSurface — meet Postpone moves the match from the lane to the queue', () => {
+  it('meet Called → Postponed: match leaves the board lane and appears in the queue', () => {
+    // A called meet match on court 1 — it should be in the board, not the queue.
+    const calledBlocks: OpsBlock[] = [
+      mkBlock({
+        id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+        court: 1, slot: 5, status: 'called', sideA: 'Alice', sideB: 'Bob',
+      }),
+    ];
+
+    const { rerender } = render(
+      <RunSurface
+        blocks={calledBlocks}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    // Precondition: match is in the board lane, not the queue.
+    expect(screen.getByTestId('run-card-meet:m1')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-queue-row-meet:m1')).toBeNull();
+
+    // Select the match → inspector opens showing Postpone for a called match.
+    fireEvent.click(screen.getByTestId('run-card-meet:m1'));
+    expect(screen.getByTestId('run-act-postpone')).toBeInTheDocument();
+
+    // Click Postpone → should fire meetSubmit('postpone_match', 'm1', {}).
+    fireEvent.click(screen.getByTestId('run-act-postpone'));
+    expect(mockMeetSubmit).toHaveBeenCalledWith('postpone_match', 'm1', {});
+
+    // Simulate the optimistic store update flowing through:
+    // _buildCommandOkPatch(…, 'postpone_match') → postponed:true, court cleared.
+    // opsBlock.ts honours postponed:true → court:undefined → deriveQueue picks it up.
+    // Here we model the resulting OpsBlock as the parent would pass after the update.
+    const postponedBlocks: OpsBlock[] = [
+      mkBlock({
+        id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+        court: undefined, slot: undefined, status: 'scheduled',
+        sideA: 'Alice', sideB: 'Bob',
+      }),
+    ];
+
+    rerender(
+      <RunSurface
+        blocks={postponedBlocks}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    // Post-postpone: match is NO LONGER in the board lane.
+    expect(screen.queryByTestId('run-card-meet:m1')).toBeNull();
+    // Post-postpone: match IS in the queue.
+    expect(screen.getByTestId('run-queue-row-meet:m1')).toBeInTheDocument();
+  });
+});

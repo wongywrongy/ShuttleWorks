@@ -66,3 +66,38 @@ describe('_buildCommandOkPatch', () => {
     expect(patch.actualCourtId).toBe(2);
   });
 });
+
+// ── action-aware postpone / assign (RED: these fail before the fix) ─────────
+
+describe('_buildCommandOkPatch — action-aware postpone_match / assign_court', () => {
+  const courted: MatchStateDTO = {
+    matchId: 'm1', status: 'scheduled', actualCourtId: 2, actualSlotId: 5,
+  };
+
+  it('postpone_match sets postponed=true and clears actualCourtId + actualSlotId', () => {
+    const patch = _buildCommandOkPatch(courted, 'scheduled', null, null, 'postpone_match');
+    expect(patch.postponed).toBe(true);
+    expect(patch.actualCourtId).toBeUndefined();
+    expect(patch.actualSlotId).toBeUndefined();
+  });
+
+  it('assign_court sets postponed=false and wires actualCourtId + actualSlotId', () => {
+    const prev: MatchStateDTO = { matchId: 'm1', status: 'scheduled', postponed: true };
+    const patch = _buildCommandOkPatch(prev, 'scheduled', 7, 3, 'assign_court');
+    expect(patch.postponed).toBe(false);
+    expect(patch.actualCourtId).toBe(3);
+    expect(patch.actualSlotId).toBe(7);
+  });
+
+  it('other actions leave postponed unchanged (no mutation)', () => {
+    const prev: MatchStateDTO = { matchId: 'm1', status: 'scheduled', postponed: true };
+    const patch = _buildCommandOkPatch(prev, 'called', null, null, 'call_to_court');
+    expect(patch.postponed).toBe(true);
+  });
+
+  it('no action param leaves postponed unchanged (backward compat)', () => {
+    const prev: MatchStateDTO = { matchId: 'm1', status: 'scheduled', postponed: true };
+    const patch = _buildCommandOkPatch(prev, 'called', null);
+    expect(patch.postponed).toBe(true);
+  });
+});

@@ -45,6 +45,43 @@ describe('opsBlock builders', () => {
   });
 });
 
+// ── postponed flag overrides committed schedule (RED before fix) ─────────────
+
+describe('meetToOpsBlocks — postponed flag overrides committed schedule', () => {
+  const matches = [{ id: 'm', sideA: ['p1'], sideB: ['p2'], eventRank: 'MS1' }] as any;
+  const schedule = { assignments: [{ matchId: 'm', slotId: 5, courtId: 2, durationSlots: 1 }] } as any;
+  const names = { p1: 'P1', p2: 'P2' };
+
+  it('postponed=true forces court+slot to undefined regardless of committed assignment', () => {
+    const states = {
+      m: { matchId: 'm', status: 'scheduled', actualCourtId: 2, actualSlotId: 5, postponed: true },
+    } as any;
+    const [b] = meetToOpsBlocks(matches, schedule, states, names);
+    expect(b.court).toBeUndefined();
+    expect(b.slot).toBeUndefined();
+  });
+
+  it('postponed=false still derives court from actualCourtId (non-regression)', () => {
+    const states = {
+      m: { matchId: 'm', status: 'scheduled', actualCourtId: 3, actualSlotId: 9, postponed: false },
+    } as any;
+    const [b] = meetToOpsBlocks(matches, schedule, states, names);
+    expect(b.court).toBe(3);
+    expect(b.slot).toBe(9);
+  });
+
+  it('postponed=true on a match with no actualCourtId (fallback also blocked)', () => {
+    // Even when actualCourtId is absent and schedule provides court 2,
+    // postponed=true must return undefined — not fall back to a?.courtId.
+    const states = {
+      m: { matchId: 'm', status: 'scheduled', postponed: true },
+    } as any;
+    const [b] = meetToOpsBlocks(matches, schedule, states, names);
+    expect(b.court).toBeUndefined();
+    expect(b.slot).toBeUndefined();
+  });
+});
+
 describe('packBlockLanes', () => {
   it('puts a cross-engine double-booking (same court+slot) in separate lanes', () => {
     const meet = ob({ source: 'meet', id: 'm1', court: 1, slot: 0 });

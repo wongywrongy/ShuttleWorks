@@ -62,8 +62,12 @@ export function meetToOpsBlocks(
   return matches.map((m) => {
     const a = assignByMatch.get(m.id);
     const st = matchStates[m.id];
-    const court = st?.actualCourtId ?? a?.courtId;
-    const slot = st?.actualSlotId ?? a?.slotId;
+    // When `postponed` is set, the match was explicitly pulled off court — force
+    // court/slot to undefined so it re-enters the queue, even if the committed
+    // schedule assignment still carries a courtId (the schedule is NOT updated
+    // by the postpone action; only the live match-state flag is authoritative).
+    const court = st?.postponed ? undefined : (st?.actualCourtId ?? a?.courtId);
+    const slot = st?.postponed ? undefined : (st?.actualSlotId ?? a?.slotId);
     const status: OperationalStatus = st?.status ?? 'scheduled';
     return {
       source: 'meet' as const,

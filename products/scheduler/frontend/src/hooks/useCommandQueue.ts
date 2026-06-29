@@ -67,11 +67,19 @@ const CANONICAL_TO_LEGACY_STATUS: Record<
  * non-null `timeSlot`, stores it as `actualSlotId` so `meetToOpsBlocks` can
  * show the live slot override (SP-G1 carry-over from Task 5).
  *
- * NOTE: `actualCourtId` is intentionally NOT sourced here — the backend
- * serialises `actualCourtId` on the match-state record itself, so it reaches
- * the store via `getMatchStates` polling / SSE (preserved by the `...previous`
- * spread). `actualSlotId` has NO backend serialisation site (Task 5 gap) and
- * therefore must come from the command response; hence the asymmetry.
+ * Action-aware behaviour (added to fix meet Postpone → queue regression):
+ *   - `postpone_match`: sets `postponed:true` and clears `actualCourtId` /
+ *     `actualSlotId` so the opsBlock derivation can recognise the override.
+ *   - `assign_court`:   sets `postponed:false` and wires court + slot from
+ *     the response (same as existing behaviour, plus the flag reset).
+ *   - All other actions (+ no action): existing behaviour — null-guarded
+ *     writes to `actualSlotId` / `actualCourtId`.
+ *
+ * NOTE: `actualCourtId` is intentionally NOT sourced here for non-assign
+ * actions — the backend serialises it on the match-state record itself, so
+ * it reaches the store via `getMatchStates` polling / SSE. `actualSlotId`
+ * has NO backend serialisation site (Task 5 gap) and therefore must come
+ * from the command response; hence the asymmetry.
  *
  * Exported with a `_` prefix so the test suite can exercise the mapping in
  * pure isolation without spinning up the full hook.
@@ -81,10 +89,22 @@ export function _buildCommandOkPatch(
   legacyStatus: 'scheduled' | 'called' | 'started' | 'finished',
   timeSlot: number | null,
   courtId?: number | null,
+  action?: MatchAction,
 ): MatchStateDTO {
   const patch: MatchStateDTO = { ...previous, status: legacyStatus };
-  if (timeSlot != null) patch.actualSlotId = timeSlot;
-  if (courtId != null) patch.actualCourtId = courtId;
+  if (action === 'postpone_match') {
+    patch.postponed = true;
+    patch.actualCourtId = undefined;
+    patch.actualSlotId = undefined;
+  } else if (action === 'assign_court') {
+    patch.postponed = false;
+    if (courtId != null) patch.actualCourtId = courtId;
+    if (timeSlot != null) patch.actualSlotId = timeSlot;
+  } else {
+    // Existing behaviour for all other actions (backward-compat when action omitted).
+    if (timeSlot != null) patch.actualSlotId = timeSlot;
+    if (courtId != null) patch.actualCourtId = courtId;
+  }
   return patch;
 }
 
@@ -188,9 +208,10 @@ export function useCommandQueue() {
           const legacy =
             CANONICAL_TO_LEGACY_STATUS[result.matchStatus] ?? 'scheduled';
           const previous = matchStates[matchId] ?? { matchId, status: 'scheduled' as const };
-          // _buildCommandOkPatch wires time_slot → actualSlotId (SP-G1).
+          // _buildCommandOkPatch wires time_slot → actualSlotId (SP-G1) and
+          // sets the `postponed` flag for postpone_match / assign_court actions.
           // See the helper's JSDoc for why court is handled differently.
-          setMatchState(matchId, _buildCommandOkPatch(previous, legacy, result.timeSlot, result.courtId));
+          setMatchState(matchId, _buildCommandOkPatch(previous, legacy, result.timeSlot, result.courtId, action));
           // Audit-pass fix: cache the canonical version so the next
           // command on this match doesn't pay the cold-read roundtrip.
           setMatchVersion(matchId, result.matchVersion);
