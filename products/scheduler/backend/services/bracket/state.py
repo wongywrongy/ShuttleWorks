@@ -19,7 +19,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 from sqlalchemy.orm import Session
 
@@ -78,6 +78,12 @@ class BracketSession:
     # (SP-F3). Empty for a freshly-built session (every match is version 1);
     # populated from persisted rows on hydrate.
     match_versions: Dict[str, int] = field(default_factory=dict)
+    # Persisted set of command UUIDs (as strings) already applied to this
+    # bracket session (SP-G1 Seam C). On replay the endpoint returns the
+    # current serialised snapshot without re-running advancement. Stored as a
+    # sorted list in the JSON blob (sets are not JSON-serialisable); hydrated
+    # back to a Python set so membership checks are O(1).
+    applied_command_ids: Set[str] = field(default_factory=set)
 
 
 def register_draw(state: TournamentState, draw: Draw) -> None:

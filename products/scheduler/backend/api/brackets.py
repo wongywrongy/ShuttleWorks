@@ -54,6 +54,7 @@ from app.dependencies import (
     require_tournament_access,
 )
 from app.exceptions import ConflictError
+from app.schemas import BracketCommandRequest
 from repositories import LocalRepository, get_repository
 from scheduler_core.domain.models import (
     SolverOptions,
@@ -587,6 +588,13 @@ def _hydrate_session(
             actual_end_slot=a.get("actual_end_slot"),
         )
 
+    # SP-G1 Seam C: applied_command_ids is stored as a sorted list in the
+    # JSON blob (Python sets are not JSON-serialisable) and hydrated back
+    # to a set for O(1) membership checks during the replay guard.
+    applied_command_ids: set = set(
+        session_cfg.get("applied_command_ids") or []
+    )
+
     return BracketSession(
         state=state,
         draws=draws,
@@ -595,6 +603,7 @@ def _hydrate_session(
         start_time=start_time,
         events=events_meta,
         match_versions=match_versions,
+        applied_command_ids=applied_command_ids,
     )
 
 
@@ -648,6 +657,9 @@ def _persist_session_metadata(
             }
             for a in session.state.assignments.values()
         ],
+        # SP-G1 Seam C: stored as a sorted list so it round-trips through
+        # JSON without loss; hydrated back to a set in _hydrate_session.
+        "applied_command_ids": sorted(session.applied_command_ids),
     }
     repo.tournaments.upsert_data(tournament_id, existing)
 
@@ -1946,6 +1958,90 @@ def record_match_result(
 
     # Advancement bumped downstream match versions in the DB; refresh the
     # tokens so the returned DTO carries the authoritative versions (SP-F3).
+    session.match_versions = _load_match_versions(repo, tournament_id)
+
+    return _serialize_session(session)
+
+
+@router.post("/commands", response_model=TournamentOut, dependencies=[_OPERATOR])
+def submit_bracket_command(
+    body: BracketCommandRequest,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Record a bracket result (and advance the bracket) via a command.
+
+    Differs from POST /results in two ways:
+      (a) carries a client-generated ``id`` UUID used as an idempotency key —
+          resubmitting the same id returns 200 without re-running advancement.
+      (b) the replay check runs BEFORE the ``seen_version`` guard so a
+          re-delivered command never produces a 409 stale_version even when
+          the match version has advanced since the original send (SP-G1 Seam C).
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+
+    # ---- Idempotency guard (MUST precede seen_version check) ---------------
+    # On a genuine replay the downstream version has already advanced, so the
+    # version guard would produce 409 and break at-least-once delivery. The
+    # replay check short-circuits before we even inspect the version.
+    if str(body.id) in session.applied_command_ids:
+        return _serialize_session(session)
+
+    # ---- Play-unit existence -----------------------------------------------
+    pu = session.state.play_units.get(body.play_unit_id)
+    if pu is None:
+        raise HTTPException(
+            status_code=404, detail=f"play_unit {body.play_unit_id!r} not found"
+        )
+
+    # ---- Optimistic concurrency (mirror record_match_result SP-F3) ---------
+    if body.seen_version is not None:
+        current_version = session.match_versions.get(body.play_unit_id, 1)
+        if body.seen_version != current_version:
+            raise ConflictError(
+                match_id=body.play_unit_id,
+                current_version=current_version,
+                seen_version=body.seen_version,
+                message=(
+                    f"Bracket match {body.play_unit_id!r} was updated since "
+                    f"you last loaded it (current version {current_version}, "
+                    f"you sent {body.seen_version})."
+                ),
+            )
+
+    # ---- Advance -----------------------------------------------------------
+    try:
+        affected = record_result(
+            session.state,
+            session.draws,
+            body.play_unit_id,
+            WinnerSide(body.winner_side),
+            finished_at_slot=body.finished_at_slot,
+            walkover=body.walkover,
+            score=body.score,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # ---- Mark command as applied, then persist both result and command id --
+    session.applied_command_ids.add(str(body.id))
+    _persist_result_advancement(
+        repo,
+        tournament_id,
+        session,
+        body.play_unit_id,
+        affected,
+    )
+    # applied_command_ids lives in the JSON data blob, not the bracket_*
+    # tables, so we must flush it via _persist_session_metadata separately.
+    _persist_session_metadata(repo, tournament_id, session=session)
+
+    # Refresh match versions so the returned DTO carries authoritative tokens.
     session.match_versions = _load_match_versions(repo, tournament_id)
 
     return _serialize_session(session)

@@ -586,6 +586,31 @@ class CommandResponse(BaseModel):
     replay: bool      # True on idempotent replay, False on fresh apply
 
 
+class BracketCommandRequest(BaseModel):
+    """Body of ``POST /tournaments/{tournament_id}/bracket/commands``.
+
+    ``id`` is the client-generated UUID used as the idempotency key.
+    Resubmitting the same id always returns 200 with the current bracket
+    snapshot — advancement is NOT re-run (SP-G1 Seam C).
+
+    ``kind`` is the operation type; currently only ``"record_result"`` is
+    supported. ``seen_version`` is an optional optimistic-concurrency token
+    mirroring ``RecordResultIn.seen_version`` (SP-F3): the server rejects
+    with 409 ``stale_version`` when present and stale.  The replay check
+    always runs BEFORE the version guard so a re-delivered command whose
+    version has advanced is still accepted.
+    """
+
+    id: uuid.UUID
+    kind: Literal["record_result"]
+    play_unit_id: str
+    winner_side: Literal["A", "B"]
+    seen_version: Optional[int] = None
+    finished_at_slot: Optional[int] = None
+    walkover: bool = False
+    score: Optional[Dict[str, Any]] = None
+
+
 class MatchStateOut(BaseModel):
     """Operational state of a match from the ``matches`` table.
 
