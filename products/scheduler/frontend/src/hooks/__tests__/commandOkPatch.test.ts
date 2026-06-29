@@ -54,4 +54,15 @@ describe('_buildCommandOkPatch', () => {
     expect(patch.delayed).toBe(true);
     expect(patch.matchId).toBe('m1');
   });
+
+  it('maps a non-null courtId to actualCourtId (C-2)', () => {
+    const patch = _buildCommandOkPatch(base, 'called', null, 4);
+    expect(patch.actualCourtId).toBe(4);
+  });
+
+  it('does not overwrite actualCourtId when courtId is null (C-2)', () => {
+    const prev: MatchStateDTO = { ...base, actualCourtId: 2 };
+    const patch = _buildCommandOkPatch(prev, 'called', null, null);
+    expect(patch.actualCourtId).toBe(2);
+  });
 });

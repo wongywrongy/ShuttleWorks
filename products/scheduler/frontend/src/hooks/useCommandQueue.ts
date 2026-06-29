@@ -45,6 +45,8 @@ const ACTION_TO_LEGACY_STATUS: Record<
   finish_match: 'finished',
   retire_match: 'finished',
   uncall: 'scheduled',
+  assign_court: 'scheduled',
+  postpone_match: 'scheduled',
 };
 
 const CANONICAL_TO_LEGACY_STATUS: Record<
@@ -78,9 +80,11 @@ export function _buildCommandOkPatch(
   previous: MatchStateDTO,
   legacyStatus: 'scheduled' | 'called' | 'started' | 'finished',
   timeSlot: number | null,
+  courtId?: number | null,
 ): MatchStateDTO {
   const patch: MatchStateDTO = { ...previous, status: legacyStatus };
   if (timeSlot != null) patch.actualSlotId = timeSlot;
+  if (courtId != null) patch.actualCourtId = courtId;
   return patch;
 }
 
@@ -186,7 +190,7 @@ export function useCommandQueue() {
           const previous = matchStates[matchId] ?? { matchId, status: 'scheduled' as const };
           // _buildCommandOkPatch wires time_slot → actualSlotId (SP-G1).
           // See the helper's JSDoc for why court is handled differently.
-          setMatchState(matchId, _buildCommandOkPatch(previous, legacy, result.timeSlot));
+          setMatchState(matchId, _buildCommandOkPatch(previous, legacy, result.timeSlot, result.courtId));
           // Audit-pass fix: cache the canonical version so the next
           // command on this match doesn't pay the cold-read roundtrip.
           setMatchVersion(matchId, result.matchVersion);

@@ -29,7 +29,9 @@ export type MatchAction =
   | 'start_match'
   | 'finish_match'
   | 'retire_match'
-  | 'uncall';
+  | 'uncall'
+  | 'assign_court'
+  | 'postpone_match';
 
 export type CommandStatus = 'pending' | 'applied' | 'rejected' | 'conflict';
 
