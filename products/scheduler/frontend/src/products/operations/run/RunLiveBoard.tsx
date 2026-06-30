@@ -111,13 +111,16 @@ export function RunLiveBoard({
           data-testid={`run-card-${c.key}`}
           title={`${c.source === 'meet' ? 'Meet' : 'Bracket'} · ${c.label} [${c.late ? 'late' : c.state}]`}
           style={{
+            // Inset a 2px gutter on each side (like the Plan board) so a
+            // selection ring / shadow has breathing room and never bleeds into
+            // the abutting chip in the next slot.
             position: 'absolute',
-            left: 0,
+            left: 2,
             top: 2,
-            width: box.width,
+            width: box.width - 4,
             height: box.height - 4,
           }}
-          className="cursor-pointer px-2 transition-shadow hover:shadow-md"
+          className="cursor-pointer px-2"
         >
           {c.overrunSlots > 0 && (
             <span

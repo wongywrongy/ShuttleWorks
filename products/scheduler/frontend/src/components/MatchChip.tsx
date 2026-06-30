@@ -87,7 +87,7 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         })();
 
   const ring = selected
-    ? 'ring-1 ring-accent/30'
+    ? 'ring-1 ring-inset ring-accent/30' // inset so the ring never bleeds into an abutting chip
     : late
       ? 'ring-2 ring-inset ring-status-warning'
       : tone === 'discipline'
