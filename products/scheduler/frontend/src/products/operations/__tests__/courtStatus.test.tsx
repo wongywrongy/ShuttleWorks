@@ -15,8 +15,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // ── 1. Hoist mutable tab so vi.mock factories close over it ───────────────
 
-const { mockTab } = vi.hoisted(() => ({
+const { mockTab, mockPlanFinalized } = vi.hoisted(() => ({
   mockTab: { value: 'live' as string },
+  mockPlanFinalized: { value: undefined as boolean | undefined },
 }));
 
 // ── 2. Mock all hook/store/component dependencies ────────────────────────
@@ -57,7 +58,7 @@ vi.mock('../../../store/tournamentStore', () => ({
       schedule: null,
       players: [],
       groups: [],
-      planFinalized: undefined,
+      planFinalized: mockPlanFinalized.value,
       setPlanFinalized: vi.fn(),
     }),
 }));
@@ -126,6 +127,7 @@ import * as clientModule from '../../../api/client';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPlanFinalized.value = undefined;
 });
 
 describe('OperationsProduct — Live segment renders RunSurface', () => {
@@ -168,5 +170,23 @@ describe('OperationsProduct — Plan-side "ready to run" toggle (Task 17)', () =
         true, // !planFinalized (undefined → true)
       );
     });
+  });
+});
+
+describe('OperationsProduct — Run header readiness pill (single header)', () => {
+  it('Live + planFinalized shows the "ready to run" pill, not the pending note', () => {
+    mockTab.value = 'live';
+    mockPlanFinalized.value = true;
+    render(<OperationsProduct />);
+    expect(screen.getByTestId('run-plan-finalized')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-plan-pending')).toBeNull();
+  });
+
+  it('Live + not finalized shows the "Plan not finalized" note', () => {
+    mockTab.value = 'live';
+    mockPlanFinalized.value = undefined;
+    render(<OperationsProduct />);
+    expect(screen.getByTestId('run-plan-pending')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-plan-finalized')).toBeNull();
   });
 });

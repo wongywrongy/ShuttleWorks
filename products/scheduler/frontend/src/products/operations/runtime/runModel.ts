@@ -12,9 +12,9 @@ const TBD = 'TBD';
 
 export function toRunMatches(
   blocks: OpsBlock[],
-  opts: { currentSlot?: number; calledBracketIds?: ReadonlySet<string>; eligibleBracketIds?: ReadonlySet<string> },
+  opts: { calledBracketIds?: ReadonlySet<string>; eligibleBracketIds?: ReadonlySet<string> },
 ): RunMatch[] {
-  const { currentSlot, calledBracketIds, eligibleBracketIds } = opts;
+  const { calledBracketIds, eligibleBracketIds } = opts;
   return blocks.map((b) => {
     let status = fromEngineStatus(b.status as 'scheduled' | 'called' | 'started' | 'finished');
     // Bracket has no persisted `called`; overlay the Operations-local flag.
@@ -31,7 +31,11 @@ export function toRunMatches(
       key: b.key, id: b.id, source: b.source, label: b.label, colorKey: b.colorKey,
       sideA: b.sideA, sideB: b.sideB, court: b.court ?? undefined, plannedSlot: b.slot,
       span: b.span ?? 1, status,
-      late: deriveLate({ status, plannedSlot: b.slot, currentSlot }),
+      // `late` is NOT a per-match fact: it is a court's CURRENT (Now) match
+      // running past its planned start, and only once the floor is running.
+      // That is lane- and run-state-aware, so it is derived in deriveCourtLanes,
+      // never here. Base matches carry `late: false`.
+      late: false,
       eligible,
     };
   });
@@ -39,14 +43,40 @@ export function toRunMatches(
 
 export interface CourtLane { court: number; now?: RunMatch; next?: RunMatch; later?: RunMatch; depth: number; }
 
-export function deriveCourtLanes(matches: RunMatch[], courtCount: number): CourtLane[] {
+/**
+ * Build per-court Now/Next/Later lanes.
+ *
+ * `late` is applied to the Now match ONLY, and ONLY when the floor is running
+ * (`opts.running`, wired to planFinalized). A Next/Later match was not due to
+ * start yet, so it is never late; before the plan is finalized, nothing is late
+ * (the day has not begun). The Now match is late when it is past its planned
+ * start and still scheduled/called (deriveLate clears it on play). Only the Now
+ * match is cloned (with its `late` set) so the flat `matches`/queue arrays stay
+ * untouched.
+ */
+export function deriveCourtLanes(
+  matches: RunMatch[],
+  courtCount: number,
+  opts?: { running?: boolean; currentSlot?: number },
+): CourtLane[] {
+  const running = opts?.running ?? false;
+  const currentSlot = opts?.currentSlot;
   const n = Math.max(1, courtCount);
   return Array.from({ length: n }, (_, i) => i + 1).map((court) => {
     const lane = matches
       .filter((m) => m.court === court && m.status !== 'done')
       .sort((a, b) => (a.plannedSlot ?? Infinity) - (b.plannedSlot ?? Infinity)
         || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-    return { court, now: lane[0], next: lane[1], later: lane[2], depth: lane.length };
+    const nowRaw = lane[0];
+    const now = nowRaw
+      ? {
+          ...nowRaw,
+          late:
+            running &&
+            deriveLate({ status: nowRaw.status, plannedSlot: nowRaw.plannedSlot, currentSlot }),
+        }
+      : undefined;
+    return { court, now, next: lane[1], later: lane[2], depth: lane.length };
   });
 }
 
@@ -82,6 +112,8 @@ export function deriveSummary(matches: RunMatch[], lanes: CourtLane[]): RunSumma
     total: matches.length,
     playing: matches.filter((m) => m.status === 'playing').length,
     courtsFree: lanes.filter((l) => l.now == null).length,
-    late: matches.filter((m) => m.late).length,
+    // Late is Now-only and running-gated — deriveCourtLanes set it on each
+    // lane's Now match, so count from the lanes, not the flat matches array.
+    late: lanes.filter((l) => l.now?.late).length,
   };
 }

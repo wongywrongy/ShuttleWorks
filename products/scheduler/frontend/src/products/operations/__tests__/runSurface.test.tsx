@@ -244,32 +244,8 @@ describe('RunSurface — summary band derived counts', () => {
     expect(screen.getByTestId('run-band-late')).toHaveTextContent('0');
   });
 
-  it('shows planFinalized pill when planFinalized=true', () => {
-    render(
-      <RunSurface
-        blocks={makeAutoFillBlocks()}
-        bracketData={null}
-        onBracketData={vi.fn()}
-        courtCount={1}
-        planFinalized
-      />,
-    );
-    expect(screen.getByTestId('run-plan-finalized')).toBeInTheDocument();
-    expect(screen.queryByTestId('run-plan-pending')).toBeNull();
-  });
-
-  it('shows "Plan not finalized" note when planFinalized is absent', () => {
-    render(
-      <RunSurface
-        blocks={makeAutoFillBlocks()}
-        bracketData={null}
-        onBracketData={vi.fn()}
-        courtCount={1}
-      />,
-    );
-    expect(screen.getByTestId('run-plan-pending')).toBeInTheDocument();
-    expect(screen.queryByTestId('run-plan-finalized')).toBeNull();
-  });
+  // The Plan→Run readiness pill now lives in OperationsProduct's single header
+  // (RunSurface no longer renders its own header) — see courtStatus.test.tsx.
 });
 
 describe('RunSurface — select Now playing meet match + Record result', () => {

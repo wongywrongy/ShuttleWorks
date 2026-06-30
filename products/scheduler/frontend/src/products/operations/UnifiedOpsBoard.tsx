@@ -36,7 +36,8 @@ import { apiClient } from '../../api/client';
 import { useBracketApi } from '../../api/bracketClient';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useTournamentStore } from '../../store/tournamentStore';
-import { getEventColor } from '../../lib/eventColors';
+import { MatchChip } from '../../components/MatchChip';
+import { fromEngineStatus } from './runtime/runMachine';
 import type { MatchDTO, ScheduleDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { OpsBlock } from './opsBlock';
@@ -412,26 +413,21 @@ function StaticBlock({
   onSelect?: (key: string) => void;
   late: boolean;
 }) {
-  const color = getEventColor(block.colorKey);
-  const ring = late && !block.done ? 'ring-2 ring-inset ring-status-warning' : STATUS_RING[block.status] ?? '';
-  const sourceEdge = block.source === 'meet' ? 'border-l-2 border-l-sky-500' : 'border-l-2 border-l-violet-500';
   return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(block.key)}
+    <MatchChip
+      label={block.label}
+      source={block.source}
+      state={fromEngineStatus(block.status)}
+      late={late && !block.done}
+      selected={selected}
+      tone="discipline"
+      colorKey={block.colorKey}
+      onSelect={() => onSelect?.(block.key)}
       data-testid={`ops-block-${block.key}`}
-      data-source={block.source}
       style={{ position: 'absolute', left: 0, top: 4, right: 4, bottom: 4 }}
-      className={[
-        'group flex flex-col justify-center overflow-hidden rounded border px-1.5 text-left shadow-sm cursor-pointer',
-        selected ? 'bg-accent/10 border-accent text-accent ring-1 ring-accent/30' : `${color.bg} ${color.border} text-foreground hover:brightness-95`,
-        sourceEdge,
-        ring,
-      ].join(' ')}
+      className="cursor-pointer px-1.5"
       title={`${block.source === 'meet' ? 'Meet' : 'Bracket'} · ${block.label} — ${block.sideA} vs ${block.sideB} [${late && !block.done ? 'late' : block.status}]`}
-    >
-      <span className="truncate text-2xs font-semibold leading-tight">{block.label}</span>
-    </button>
+    />
   );
 }
 
@@ -474,13 +470,6 @@ function DropCell({
   );
 }
 
-const STATUS_RING: Record<string, string> = {
-  scheduled: '',
-  called: 'ring-2 ring-inset ring-status-called',
-  started: 'ring-2 ring-inset ring-status-live',
-  finished: 'ring-2 ring-inset ring-status-done',
-};
-
 function BlockView({
   block,
   box,
@@ -503,17 +492,17 @@ function BlockView({
   });
   const eff = dragDelta ?? transform;
   const transformStyle = eff ? CSS.Translate.toString({ x: eff.x, y: eff.y, scaleX: 1, scaleY: 1 }) : undefined;
-  const color = getEventColor(block.colorKey);
-  const ring = STATUS_RING[block.status] ?? '';
-  const sourceEdge =
-    block.source === 'meet' ? 'border-l-2 border-l-sky-500' : 'border-l-2 border-l-violet-500';
   return (
-    <button
+    <MatchChip
       ref={setNodeRef}
-      type="button"
-      onClick={() => onSelect?.(block.key)}
+      label={block.label}
+      source={block.source}
+      state={fromEngineStatus(block.status)}
+      selected={selected}
+      tone="discipline"
+      colorKey={block.colorKey}
+      onSelect={() => onSelect?.(block.key)}
       data-testid={`ops-block-${block.key}`}
-      data-source={block.source}
       {...listeners}
       {...attributes}
       style={{
@@ -527,16 +516,8 @@ function BlockView({
         touchAction: 'none',
         opacity: translucent && !isDragging ? 0.4 : 1,
       }}
-      className={[
-        'group flex flex-col justify-center overflow-hidden rounded border px-1.5 text-left shadow-sm',
-        selected ? 'bg-accent/10 border-accent text-accent ring-1 ring-accent/30' : `${color.bg} ${color.border} text-foreground hover:brightness-95`,
-        sourceEdge,
-        ring,
-        block.done ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing',
-      ].join(' ')}
+      className={`px-1.5 ${block.done ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}`}
       title={`${block.source === 'meet' ? 'Meet' : 'Bracket'} · ${block.label} — ${block.sideA} vs ${block.sideB} [${block.status}]`}
-    >
-      <span className="truncate text-2xs font-semibold leading-tight">{block.label}</span>
-    </button>
+    />
   );
 }

@@ -9,12 +9,41 @@ const blk = (o: Partial<OpsBlock> & { id: string }): OpsBlock => ({
 } as OpsBlock);
 
 describe('runModel', () => {
-  it('maps engine status to RunStatus and derives late', () => {
-    const [m] = toRunMatches([blk({ id: 'a', status: 'started', court: 1, slot: 0 })], { currentSlot: 5 });
+  it('maps engine status to RunStatus; toRunMatches never flags late', () => {
+    const [m] = toRunMatches([blk({ id: 'a', status: 'started', court: 1, slot: 0 })], {});
     expect(m.status).toBe('playing');
-    expect(m.late).toBe(false); // playing clears late
-    const [w] = toRunMatches([blk({ id: 'b', status: 'scheduled', court: 1, slot: 1 })], { currentSlot: 4 });
-    expect(w.late).toBe(true);
+    expect(m.late).toBe(false);
+    // Even an overdue scheduled match is NOT late at this layer — late is a
+    // lane- and run-state-aware fact, derived in deriveCourtLanes.
+    const [w] = toRunMatches([blk({ id: 'b', status: 'scheduled', court: 1, slot: 1 })], {});
+    expect(w.late).toBe(false);
+  });
+
+  it('late: Now match only, and only when the floor is running', () => {
+    const ms = toRunMatches([blk({ id: 'a', court: 1, slot: 1, status: 'scheduled' })], {});
+    // not running → never late, even when overdue
+    expect(deriveCourtLanes(ms, 1, { running: false, currentSlot: 5 })[0].now?.late).toBe(false);
+    // running + past planned start → late
+    expect(deriveCourtLanes(ms, 1, { running: true, currentSlot: 5 })[0].now?.late).toBe(true);
+    // running but not yet due → not late
+    expect(deriveCourtLanes(ms, 1, { running: true, currentSlot: 0 })[0].now?.late).toBe(false);
+  });
+
+  it('late: Next/Later matches are never late — only the Now match', () => {
+    const ms = toRunMatches([
+      blk({ id: 'n1', court: 1, slot: 0, status: 'scheduled' }),
+      blk({ id: 'n2', court: 1, slot: 1, status: 'scheduled' }),
+      blk({ id: 'n3', court: 1, slot: 2, status: 'scheduled' }),
+    ], {});
+    const [lane] = deriveCourtLanes(ms, 1, { running: true, currentSlot: 99 });
+    expect(lane.now?.late).toBe(true);   // overdue Now
+    expect(lane.next?.late).toBe(false); // never late
+    expect(lane.later?.late).toBe(false);
+  });
+
+  it('late: clears when the Now match is playing', () => {
+    const ms = toRunMatches([blk({ id: 'p', court: 1, slot: 0, status: 'started' })], {});
+    expect(deriveCourtLanes(ms, 1, { running: true, currentSlot: 99 })[0].now?.late).toBe(false);
   });
   it('overlays Operations-local called onto bracket matches', () => {
     const [m] = toRunMatches(
@@ -85,15 +114,20 @@ describe('runModel', () => {
     const [u] = toRunMatches([blk({ id: 'u', sideA: 'TBD', sideB: 'B' })], {});
     expect(u.eligible).toBe(false);
   });
-  it('summary counts are all derived', () => {
+  it('summary counts are all derived; late is Now-only and running-gated', () => {
     const ms = toRunMatches([
-      blk({ id: 'p', court: 1, slot: 0, status: 'started' }),
+      blk({ id: 'p', court: 1, slot: 0, status: 'started' }),   // playing Now on C1
       blk({ id: 'd', status: 'finished', done: true }),
-      blk({ id: 'lateq', court: undefined, slot: 1 }), // unassigned, late candidate
-    ], { currentSlot: 9 });
-    const lanes = deriveCourtLanes(ms, 3);
-    const s = deriveSummary(ms, lanes);
-    expect(s).toMatchObject({ done: 1, total: 3, playing: 1, courtsFree: 2 });
-    expect(s.late).toBeGreaterThanOrEqual(1);
+      blk({ id: 'lateNow', court: 2, slot: 1, status: 'scheduled' }), // overdue Now on C2
+      blk({ id: 'q', court: undefined, slot: 1 }),              // queued — never late
+    ], {});
+    // Running → only the overdue Now on C2 is late (playing Now and queued are not).
+    const lanesRunning = deriveCourtLanes(ms, 3, { running: true, currentSlot: 9 });
+    const sRunning = deriveSummary(ms, lanesRunning);
+    expect(sRunning).toMatchObject({ done: 1, total: 4, playing: 1, courtsFree: 1 });
+    expect(sRunning.late).toBe(1);
+    // Not running (plan not finalized) → zero late.
+    const lanesIdle = deriveCourtLanes(ms, 3, { running: false, currentSlot: 9 });
+    expect(deriveSummary(ms, lanesIdle).late).toBe(0);
   });
 });

@@ -217,7 +217,24 @@ function OperationsBody() {
               {planFinalized ? 'Plan ready ✓' : 'Mark plan ready to run'}
             </button>
           </div>
-        ) : null}
+        ) : (
+          // Run: keep the readiness indicator (Plan → Run handoff) in the single
+          // header — Run runs what Plan produced; the toggle itself lives on Plan.
+          <div>
+            {planFinalized ? (
+              <span
+                data-testid="run-plan-finalized"
+                className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:text-green-400"
+              >
+                Plan finalized · ready to run
+              </span>
+            ) : (
+              <span data-testid="run-plan-pending" className="text-xs text-muted-foreground">
+                Plan not finalized
+              </span>
+            )}
+          </div>
+        )}
       </header>
 
       {blocks.length === 0 ? (

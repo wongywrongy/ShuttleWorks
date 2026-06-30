@@ -1,30 +1,21 @@
 /**
  * RunBoard — the Run surface hero: one row per court, three relative columns
- * (Now / Next / Later) with match cards. No clock slots — purely positional.
+ * (Now / Next / Later). No clock slots — purely positional.
  *
- * Design language: mirrors StaticBlock from UnifiedOpsBoard (same card
- * tokens, source left-edge, status rings, selection accent). Status ring uses
- * RunStatus keys, not engine-status strings.
+ * Chips are the shared `MatchChip` primitive (same component Plan renders), at
+ * Plan's compact density. Run uses the `state` tone so live status reads at a
+ * glance; the source is the left-edge. Columns are `minmax(0,1fr)` so chips
+ * truncate instead of pushing the Later column off the right edge. Chips carry
+ * NO action buttons — all operability routes through the inspector.
  */
-import { getEventColor } from '../../../lib/eventColors';
+import { MatchChip } from '../../../components/MatchChip';
 import type { CourtLane, RunMatch } from '../runtime/runModel';
-
-// ── status ring map (RunStatus keys) ──────────────────────────────────────
-const STATUS_RING: Record<string, string> = {
-  scheduled: '',
-  called: 'ring-2 ring-inset ring-status-called',
-  playing: 'ring-2 ring-inset ring-status-live',
-  done: '',
-};
-
-// ── source left-edge ──────────────────────────────────────────────────────
-const SOURCE_EDGE: Record<'meet' | 'bracket', string> = {
-  meet: 'border-l-2 border-l-sky-500',
-  bracket: 'border-l-2 border-l-violet-500',
-};
 
 // ── column header labels ──────────────────────────────────────────────────
 const COLS = ['Now', 'Next', 'Later'] as const;
+
+// ── grid template: court label + three shrinkable columns ─────────────────
+const GRID_COLS = 'grid grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]';
 
 // ── eyebrow text class (matches LiveStatusBar idiom) ─────────────────────
 const EYEBROW = 'text-2xs uppercase tracking-[0.16em] text-muted-foreground';
@@ -45,7 +36,7 @@ export function RunBoard({ lanes, selectedKey, onSelect, onAssignNext, queueHasE
   return (
     <div className="w-full overflow-x-auto">
       {/* Header row */}
-      <div className="grid grid-cols-[4rem_1fr_1fr_1fr] border-b border-border bg-muted/30">
+      <div className={`${GRID_COLS} border-b border-border bg-muted/30`}>
         <div className={`px-3 py-1.5 ${EYEBROW}`}>Court</div>
         {COLS.map((col) => (
           <div key={col} className={`px-3 py-1.5 ${EYEBROW}`}>{col}</div>
@@ -57,14 +48,13 @@ export function RunBoard({ lanes, selectedKey, onSelect, onAssignNext, queueHasE
         <div
           key={lane.court}
           data-testid={`run-court-${lane.court}`}
-          className="grid grid-cols-[4rem_1fr_1fr_1fr] border-b border-border last:border-b-0"
+          className={`${GRID_COLS} border-b border-border last:border-b-0`}
         >
           {/* Court label */}
           <div className="flex items-center px-3 py-2">
             <span className="text-xs font-semibold tabular-nums text-foreground">C{lane.court}</span>
           </div>
 
-          {/* Now */}
           <LaneCell
             match={lane.now}
             slot="now"
@@ -74,8 +64,6 @@ export function RunBoard({ lanes, selectedKey, onSelect, onAssignNext, queueHasE
             onAssignNext={onAssignNext}
             queueHasEligible={queueHasEligible}
           />
-
-          {/* Next */}
           <LaneCell
             match={lane.next}
             slot="next"
@@ -85,8 +73,6 @@ export function RunBoard({ lanes, selectedKey, onSelect, onAssignNext, queueHasE
             onAssignNext={onAssignNext}
             queueHasEligible={false} /* Assign-next only on Now slot */
           />
-
-          {/* Later */}
           <LaneCell
             match={lane.later}
             slot="later"
@@ -118,7 +104,7 @@ function LaneCell({ match, slot, court, selectedKey, onSelect, onAssignNext, que
 
   if (!match) {
     return (
-      <div className="flex items-center px-3 py-2">
+      <div className="flex min-w-0 items-center px-3 py-2">
         {isFreeNow ? (
           queueHasEligible ? (
             <button
@@ -140,51 +126,24 @@ function LaneCell({ match, slot, court, selectedKey, onSelect, onAssignNext, que
     );
   }
 
-  return <MatchCard match={match} selected={selectedKey === match.key} onSelect={onSelect} />;
-}
-
-// ── match card ────────────────────────────────────────────────────────────
-interface MatchCardProps {
-  match: RunMatch;
-  selected: boolean;
-  onSelect(key: string): void;
-}
-
-function MatchCard({ match, selected, onSelect }: MatchCardProps) {
-  const color = getEventColor(match.colorKey);
-  const statusRing = match.late
-    ? 'ring-2 ring-inset ring-status-warning'
-    : (STATUS_RING[match.status] ?? '');
-  const sourceEdge = SOURCE_EDGE[match.source];
-
+  const sourceLabel = match.source === 'meet' ? 'Meet' : 'Bracket';
   return (
-    <div className="flex items-stretch px-2 py-2">
-      <button
-        type="button"
+    <div className="flex min-w-0 items-stretch px-2 py-1.5">
+      <MatchChip
+        label={match.label}
+        source={match.source}
+        state={match.status}
+        late={match.late}
+        selected={selectedKey === match.key}
+        tone="state"
+        sideA={match.sideA}
+        sideB={match.sideB}
+        showSides
+        onSelect={() => onSelect(match.key)}
         data-testid={`run-card-${match.key}`}
-        data-source={match.source}
-        onClick={() => onSelect(match.key)}
-        className={[
-          'group relative flex w-full flex-col justify-center overflow-hidden rounded border px-2.5 py-1.5 text-left shadow-sm transition-all',
-          selected
-            ? 'bg-accent/10 border-accent text-accent ring-1 ring-accent/30'
-            : `${color.bg} ${color.border} text-foreground hover:brightness-95`,
-          sourceEdge,
-          statusRing,
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        title={`${match.source === 'meet' ? 'Meet' : 'Bracket'} · ${match.label} — ${match.sideA} vs ${match.sideB}${match.late ? ' [late]' : ''}`}
+        title={`${sourceLabel} · ${match.label} — ${match.sideA} vs ${match.sideB}${match.late ? ' [late]' : ''}`}
+        className="w-full min-w-0 px-2.5 py-1.5"
       >
-        {/* Match code — mono per spec */}
-        <span className="truncate font-mono text-2xs font-semibold leading-tight">{match.label}</span>
-
-        {/* Sides */}
-        <span className="mt-0.5 truncate text-2xs leading-tight opacity-80">
-          {match.sideA} <span className="opacity-60">v</span> {match.sideB}
-        </span>
-
-        {/* Late marker */}
         {match.late && (
           <span
             data-testid={`run-late-${match.key}`}
@@ -194,7 +153,7 @@ function MatchCard({ match, selected, onSelect }: MatchCardProps) {
             Late
           </span>
         )}
-      </button>
+      </MatchChip>
     </div>
   );
 }

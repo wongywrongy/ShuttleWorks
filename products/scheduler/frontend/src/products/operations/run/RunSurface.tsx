@@ -142,10 +142,15 @@ export function RunSurface({
 
   // ── derivation ────────────────────────────────────────────────────────────
   const matches = useMemo(
-    () => toRunMatches(blocks, { currentSlot, calledBracketIds, eligibleBracketIds }),
-    [blocks, currentSlot, calledBracketIds, eligibleBracketIds],
+    () => toRunMatches(blocks, { calledBracketIds, eligibleBracketIds }),
+    [blocks, calledBracketIds, eligibleBracketIds],
   );
-  const lanes = useMemo(() => deriveCourtLanes(matches, courtCount), [matches, courtCount]);
+  // `late` is gated on the floor running (planFinalized) and applies to the Now
+  // match only — deriveCourtLanes owns that rule.
+  const lanes = useMemo(
+    () => deriveCourtLanes(matches, courtCount, { running: !!planFinalized, currentSlot }),
+    [matches, courtCount, planFinalized, currentSlot],
+  );
   const queue = useMemo(() => deriveQueue(matches), [matches]);
   const summary = useMemo(() => deriveSummary(matches, lanes), [matches, lanes]);
 
@@ -267,34 +272,11 @@ export function RunSurface({
   const queueHasEligible = nextEligible(queue) != null;
 
   // ── render ────────────────────────────────────────────────────────────────
+  // No header here: OperationsProduct owns the single Run header (title +
+  // subtitle + readiness pill). RunSurface starts at the summary band so the
+  // surface never renders a second, duplicate header row.
   return (
     <div data-testid="run-surface" className="relative flex h-full min-h-0 flex-col bg-card">
-      {/* Fixed actions bar */}
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Run
-          </span>
-          <span className="text-xs text-muted-foreground/70">
-            Call matches, track courts, clear the queue.
-          </span>
-        </div>
-        <div>
-          {planFinalized ? (
-            <span
-              data-testid="run-plan-finalized"
-              className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:text-green-400"
-            >
-              Plan finalized · ready to run
-            </span>
-          ) : (
-            <span data-testid="run-plan-pending" className="text-xs text-muted-foreground">
-              Plan not finalized
-            </span>
-          )}
-        </div>
-      </header>
-
       {/* Summary band */}
       <RunSummaryBand summary={summary} />
 
