@@ -358,8 +358,10 @@ describe('RunSurface — auto-pull after record empties a court', () => {
     // Count UNCHANGED — rerender did not trigger another auto-pull
     expect(mockMeetSubmit).toHaveBeenCalledTimes(2);
 
-    // m1 is done → leaves the lane → no board card for it
-    expect(screen.queryByTestId('run-card-meet:m1')).toBeNull();
+    // m1 is done → on the LIVE board it stays as a completed block on the
+    // timeline (buildLiveChips keeps court-assigned done blocks, spanning their
+    // actual length) — unlike the old positional lane that dropped done matches.
+    expect(screen.getByTestId('run-card-meet:m1')).toBeInTheDocument();
     await flushAssignSettle();
   });
 });
@@ -576,12 +578,15 @@ describe('RunSurface — meet Postpone moves the match from the lane to the queu
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('RunSurface — in-flight assign guard (no double-assign across courts)', () => {
-  it('a just-assigned match leaves the queue + occupies its court, so a second free court cannot re-grab it', () => {
+  it('a just-assigned match leaves the queue, so a second free court cannot re-grab it', () => {
     // Submit that never settles → the optimistic overlay persists for the
     // assertion (mimics the round-trip window during which the bug fired).
     mockMeetSubmit.mockReturnValueOnce(new Promise(() => {}));
 
-    // One eligible queued meet match; TWO free courts both offer it.
+    // One eligible queued meet match; TWO free courts. Assignment now flows
+    // through the inspector's "Send to court" (the live board no longer renders
+    // a per-court "Assign next" button), but the in-flight guard is unchanged:
+    // it lives in the overlaid `queue`/`matches`, not in the board.
     const blocks: OpsBlock[] = [
       mkBlock({
         id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
@@ -600,22 +605,25 @@ describe('RunSurface — in-flight assign guard (no double-assign across courts)
       />,
     );
 
-    expect(screen.getByTestId('run-assign-next-1')).toBeInTheDocument();
-    expect(screen.getByTestId('run-assign-next-2')).toBeInTheDocument();
+    // Select the queued match → inspector offers "Send to C1" (freeCourt = the
+    // first court with no Now match).
+    fireEvent.click(screen.getByTestId('run-queue-row-meet:m1'));
+    const sendBtn = screen.getByTestId('run-act-send');
+    expect(sendBtn.textContent).toMatch(/Send to C1/);
 
-    // Assign to court 1.
-    fireEvent.click(screen.getByTestId('run-assign-next-1'));
+    // Send to court 1.
+    fireEvent.click(sendBtn);
     expect(mockMeetSubmit).toHaveBeenCalledTimes(1);
     expect(mockMeetSubmit).toHaveBeenCalledWith('assign_court', 'm1', {
       court_id: 1,
       time_slot: expect.any(Number),
     });
 
-    // Optimistically reflected: the match now sits on court 1 (board chip) and
-    // the queue is empty, so NEITHER court still offers "Assign next" — it
-    // cannot be double-assigned to court 2 during the round-trip window.
-    expect(screen.getByTestId('run-card-meet:m1')).toBeInTheDocument();
-    expect(screen.queryByTestId('run-assign-next-1')).toBeNull();
-    expect(screen.queryByTestId('run-assign-next-2')).toBeNull();
+    // Optimistically reflected: the match has LEFT the queue (deriveQueue
+    // excludes court-assigned matches) and is now the Now match on court 1, so
+    // its inspector no longer offers "Send" — it cannot be double-assigned to
+    // the still-free court 2 during the round-trip window.
+    expect(screen.queryByTestId('run-queue-row-meet:m1')).toBeNull();
+    expect(screen.queryByTestId('run-act-send')).toBeNull();
   });
 });

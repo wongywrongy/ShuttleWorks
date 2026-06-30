@@ -30,7 +30,7 @@ import {
 import { runAction, slotForAssign, type RunSeams } from '../runtime/runActions';
 import type { RunActionKind } from '../runtime/runMachine';
 import { RunSummaryBand } from './RunSummaryBand';
-import { RunBoard } from './RunBoard';
+import { RunLiveBoard } from './RunLiveBoard';
 import { RunQueue } from './RunQueue';
 import { RunInspector } from './RunInspector';
 
@@ -309,20 +309,11 @@ export function RunSurface({
     [selectedMatch, seams, matches, lanes, queue, currentSlot, freeCourt, fireAssign],
   );
 
-  // ── board: Assign next handler ────────────────────────────────────────────
-  const handleAssignNext = useCallback(
-    (court: number) => {
-      // `queue` already excludes in-flight assignments, so a free court can
-      // only ever pull a match not already heading to another court.
-      const head = nextEligible(queue);
-      if (!head) return;
-      const slot = slotForAssign(court, matches, currentSlot ?? 0);
-      fireAssign(head, court, slot);
-    },
-    [queue, matches, currentSlot, fireAssign],
-  );
-
-  const queueHasEligible = nextEligible(queue) != null;
+  // Assign-from-queue is owned by the inspector's "Send to court" affordance
+  // (`handleAction('assign')`); the live board no longer renders a per-court
+  // "Assign next" button, so the former board-only `handleAssignNext`/
+  // `queueHasEligible` helpers are gone. `nextEligible` is still used by the
+  // auto-pull path (`computeAutoPull`).
 
   // ── render ────────────────────────────────────────────────────────────────
   // No header here: OperationsProduct owns the single Run header (title +
@@ -336,13 +327,13 @@ export function RunSurface({
       {/* Content area */}
       <div className="relative min-h-0 flex-1">
         <div className="flex h-full min-h-0 flex-col overflow-auto">
-          {/* Board — the court hero */}
-          <RunBoard
-            lanes={lanes}
+          {/* Board — the live court×time hero (GanttTimeline + MatchChip) */}
+          <RunLiveBoard
+            blocks={blocks}
+            courtCount={courtCount}
+            currentSlot={currentSlot}
             selectedKey={selectedKey}
             onSelect={setSelectedKey}
-            onAssignNext={handleAssignNext}
-            queueHasEligible={queueHasEligible}
           />
 
           {/* Queue — below the board */}
