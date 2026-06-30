@@ -10,7 +10,7 @@ import {
   routeOperationalAction,
   type OperationalWritebackRouter,
 } from '../operationalWriteback';
-import type { OperationalMatch } from '../../../lib/operations/operationalMatch';
+import type { Match } from '../../../platform/domain/match';
 
 function makeRouter() {
   const meet = vi.fn();
@@ -19,25 +19,9 @@ function makeRouter() {
   return { meet, bracket, router };
 }
 
-const meetRow: OperationalMatch = {
-  id: 'm1',
-  source: 'meet',
-  courtLabel: 'C1',
-  slot: 0,
-  sideA: 'Alice',
-  sideB: 'Bob',
-  status: 'scheduled',
-};
-
-const bracketRow: OperationalMatch = {
-  id: 'pu1',
-  source: 'bracket',
-  courtLabel: 'C1',
-  slot: 0,
-  sideA: 'A',
-  sideB: 'B',
-  status: 'started',
-};
+// Routing only reads source + id — pass the minimal canonical-match shape.
+const meetRow: Pick<Match, 'source' | 'id'> = { id: 'm1', source: 'meet' };
+const bracketRow: Pick<Match, 'source' | 'id'> = { id: 'pu1', source: 'bracket' };
 
 describe('routeOperationalAction', () => {
   it('routes a meet row to the meet handler only', () => {

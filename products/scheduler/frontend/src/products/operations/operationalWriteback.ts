@@ -5,15 +5,15 @@
  * action must reach the API of the engine that produced the row — Meet
  * goes through the command queue (`useCommandQueue`), Bracket through the
  * F3 bracket result queue (`useBracketResultQueue`). This module is the
- * pure dispatcher: it inspects `OperationalMatch.source` and forwards to
- * the matching handler. The surface owns ONE router; the engines never
- * cross wires (a meet "start" must never hit the bracket queue).
+ * pure dispatcher: it inspects `Match.source` and forwards to the matching
+ * handler. The surface owns ONE router; the engines never cross wires (a meet
+ * "start" must never hit the bracket queue).
  *
  * Per ADR 0006 the two engines keep separate match models, so the action
  * vocabulary is the shared subset each engine can honour — the handler
  * decides what (if anything) a given action means for its engine.
  */
-import type { OperationalMatch } from '../../lib/operations/operationalMatch';
+import type { Match } from '../../platform/domain/match';
 
 /** A live operator action requested against an operational row. */
 export type OperationalAction =
@@ -34,7 +34,7 @@ export interface OperationalWritebackRouter {
 
 /** Dispatch a row's action to the handler for its originating engine. */
 export function routeOperationalAction(
-  row: OperationalMatch,
+  row: Pick<Match, 'source' | 'id'>,
   action: OperationalAction,
   router: OperationalWritebackRouter,
 ): unknown {

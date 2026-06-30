@@ -1,51 +1,22 @@
 /**
- * OpsBlock — the uniform match the unified Operations board + list speak.
+ * OpsBlock — DEPRECATED alias of the canonical `Match` contract.
  *
- * The operator's mental model (their words): "they are the same cells —
- * the only difference is where it came from." So both engines' matches fold
- * into ONE shape carrying everything the board (drag), the list (actions),
- * and the detail panel need; `source` only decides the chip tint and which
- * API a drag/drop or action routes to.
- *
- * This is richer than `OperationalMatch` (the read-only chip projection): it
- * keeps the color key, the duration span, and the lifecycle flags the
- * interactive surfaces need.
+ * "They are the same cells — the only difference is where it came from." Both
+ * engines' matches fold into ONE shape. That shape is now formalized as the
+ * cross-module `Match` contract (`platform/domain/match.ts`, ADR 0009); this
+ * file keeps `OpsBlock` as an alias so existing imports keep working, and owns
+ * the two engine adapters (`meetToOpsBlocks` / `bracketToOpsBlocks`) plus the
+ * Operations-only helpers (`packBlockLanes`).
  */
-import type { OperationalSource, OperationalStatus } from '../../lib/operations/operationalMatch';
+import type { Match, MatchStatus } from '../../platform/domain/match';
+import { matchKey, parseMatchKey } from '../../platform/domain/match';
 import type { MatchDTO, ScheduleDTO, MatchStateDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { playUnitSideLabels } from '../bracket/bracketLabels';
 import { msToSlot, parseMatchStartMs } from '../../lib/time';
 
-export interface OpsBlock {
-  source: OperationalSource;
-  /** Engine-native id (MatchDTO.id / PlayUnitDTO.id). */
-  id: string;
-  /** `${source}:${id}` — the dnd-kit id, placement key, and React key. */
-  key: string;
-  /** Short label painted on the block (event rank / play-unit id). */
-  label: string;
-  /** Key for `getEventColor` (eventRank / discipline). */
-  colorKey?: string;
-  court?: number;
-  slot?: number;
-  span: number;
-  status: OperationalStatus;
-  sideA: string;
-  sideB: string;
-  /** True once a result exists / match is finished (no more reschedule). */
-  done: boolean;
-  /** True once the match has been started on court. */
-  started: boolean;
-  /**
-   * ACTUAL play-head slot (when known) — derived from live timing, distinct
-   * from the PLANNED `slot`. Present once started/finished; the live board
-   * spans chips from here. Undefined → callers fall back to the planned slot.
-   */
-  actualStartSlot?: number;
-  /** ACTUAL end slot (when known) — present once finished. */
-  actualEndSlot?: number;
-}
+/** @deprecated Use `Match` from `platform/domain/match`. Kept as an alias. */
+export type OpsBlock = Match;
 
 const TBD = 'TBD';
 
@@ -90,7 +61,7 @@ export function meetToOpsBlocks(
     // by the postpone action; only the live match-state flag is authoritative).
     const court = st?.postponed ? undefined : (st?.actualCourtId ?? a?.courtId);
     const slot = st?.postponed ? undefined : (st?.actualSlotId ?? a?.slotId);
-    const status: OperationalStatus = st?.status ?? 'scheduled';
+    const status: MatchStatus = st?.status ?? 'scheduled';
     // ACTUAL timing (PLANNED slot/span above stays untouched): a started or
     // finished match exposes its real start; a finished one also its end.
     const actualStartSlot =
@@ -102,7 +73,7 @@ export function meetToOpsBlocks(
     return {
       source: 'meet' as const,
       id: m.id,
-      key: `meet:${m.id}`,
+      key: matchKey('meet', m.id),
       label: meetLabel(m),
       colorKey: m.eventRank ?? undefined,
       court: court ?? undefined,
@@ -130,11 +101,11 @@ export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
     const result = resultByPu.get(pu.id);
     const { a: sideA, b: sideB } = playUnitSideLabels(pu, nameById);
     const started = a?.actual_start_slot != null;
-    const status: OperationalStatus = result ? 'finished' : started ? 'started' : 'scheduled';
+    const status: MatchStatus = result ? 'finished' : started ? 'started' : 'scheduled';
     return {
       source: 'bracket' as const,
       id: pu.id,
-      key: `bracket:${pu.id}`,
+      key: matchKey('bracket', pu.id),
       label: pu.id,
       colorKey: disciplineByEvent.get(pu.event_id) ?? pu.event_id,
       court: a ? a.court_id : undefined,
@@ -203,11 +174,6 @@ export function packBlockLanes(blocks: OpsBlock[]): Map<string, BlockLane> {
   return out;
 }
 
-/** Split a `${source}:${id}` key back into parts. */
-export function parseOpsKey(key: string): { source: OperationalSource; id: string } | null {
-  const i = key.indexOf(':');
-  if (i < 0) return null;
-  const source = key.slice(0, i);
-  if (source !== 'meet' && source !== 'bracket') return null;
-  return { source, id: key.slice(i + 1) };
-}
+/** Split a `${source}:${id}` key back into parts.
+ *  @deprecated Use `parseMatchKey` from `platform/domain/match`. */
+export const parseOpsKey = parseMatchKey;
