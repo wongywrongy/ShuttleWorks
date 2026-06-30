@@ -33,7 +33,7 @@ A list of reason codes (with labels). The codes:
 | Code | Meaning |
 | --- | --- |
 | `NO_MODULES_ENABLED` | no modules enabled |
-| `DISPLAY_NO_SOURCE` | Display is on but no operational module is enabled |
+| `DISPLAY_NO_SOURCE` | Display is on but no data module is enabled to feed it (`display_dependency_satisfied`) |
 | `NO_BRACKET` | bracket not built yet (bracket-kind workspaces) |
 | `NO_ROSTER` | no players added yet (meet-kind workspaces) |
 | `NOT_SCHEDULED` | schedule not generated yet (meet-kind workspaces) |
@@ -105,3 +105,9 @@ Signals drive the Hub for *every* workspace on every load. Computing them per-ro
 N+1 across six relations. Keeping `build_signals` pure and feeding it batched counts is what makes the
 Hub cheap — change it carefully.
 :::
+
+## See also
+
+- [API reference](/api/) — route ownership + the shared backend conventions
+- [Backend structure](/architecture/backend-structure#signals-computation) — where `build_signals` sits in the layering
+- [Workspace model](/architecture/workspace-model) — the Hub / control plane these signals drive

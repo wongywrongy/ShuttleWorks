@@ -1,7 +1,8 @@
 # Contract: Meet → Operations (Seam A)
 
 The Meet engine produces a solved schedule; the Operations layer turns it into a live court layout.
-This is **Seam A**, the `scheduleFinalized` edge.
+This is **Seam A**, the `scheduleFinalized` edge. This page is for developers working either side of
+the schedule-to-floor boundary.
 
 | | |
 | --- | --- |
@@ -14,13 +15,15 @@ This is **Seam A**, the `scheduleFinalized` edge.
 ## What crosses the boundary
 
 A **`ScheduleDTO`** — the solved meet schedule: the court/slot **assignments** for every match.
-Operations reads these assignments to build its **Courts** view (which match is where, in which
-slot) and to seed the per-match rows its **Live** view tracks.
+Operations reads these assignments to build its **Plan** surface (which match is where, in which
+slot) and to seed the per-match rows its **Run** surface tracks. (Plan and Run were formerly named
+*Courts* and *Live*.)
 
 The reverse direction is also part of this seam: Operations owns **`MatchStateDTO`**, and Meet
 **consumes it back** (`getMatchStates`) as a solve input — a re-plan must respect matches that are
-already `called` / `playing` / `finished`, which the solver pins via `LOCKED_STATUSES`. So the
-boundary carries a schedule *out* of Meet and live status *back in*.
+already `called` / `playing` / `finished`, which the solver pins via `LOCKED_STATUSES`
+(`backend/services/match_state.py`). So the boundary carries a schedule *out* of Meet and live status
+*back in*.
 
 ## Which side owns what
 
@@ -33,7 +36,7 @@ boundary carries a schedule *out* of Meet and live status *back in*.
 
 Meet declares `emits: ['scheduleFinalized']`; Operations declares `reactsTo: ['scheduleFinalized']`.
 The shared `/state` blob is **not** part of this seam — it is consumed by Meet, owned by the control
-plane.
+plane (it co-lives with the control-plane CRUD in the tournaments router).
 
 ## What the current implementation does
 
@@ -41,11 +44,13 @@ plane.
    That store write **is** the `scheduleFinalized` edge.
 2. The Operations surfaces read `tournamentStore.schedule` through a Zustand selector — there is no
    event bus and no explicit `emit('scheduleFinalized')` call; the coupling is the shared store.
-3. Operations' live view also runs an independent **~5 s poll** of `GET …/match-states`
+3. Operations' Run surface also runs an independent **~5 s poll** of `GET …/match-states`
    (`useLiveTracking`) for the live status it owns.
-4. `meetMatchesToOperational(matches, schedule, matchStates, …)` in `lib/operations/operationalMatch.ts`
-   folds the `MatchDTO` + `ScheduleDTO` + `MatchStateDTO` into the engine-agnostic `OperationalMatch`
-   row (a court override beats the planned court).
+4. `meetToOpsBlocks(matches, schedule, matchStates, nameById, config)` in
+   `products/operations/opsBlock.ts` folds the `MatchDTO` + `ScheduleDTO` + `MatchStateDTO` into the
+   canonical engine-agnostic `Match` / `OpsBlock` row (ADR 0009). A live court override beats the
+   planned court (`matchStates[id].actualCourtId ?? assignment.courtId`), and a `postponed` flag
+   forces the row back into the queue.
 
 ## What the intended clean interface looks like
 
@@ -65,3 +70,4 @@ job is to make the boundary nameable and to fail a test if anyone claims an edge
 
 - [System overview](/architecture/system-overview) · [Data flow](/architecture/data-flow)
 - [Meet module](/modules/meet) · [Operations module](/modules/operations)
+- [ADR 0009 — Universal match contract](/decisions/0009-universal-match-contract)

@@ -24,14 +24,17 @@ operate, each shown with operational signal (health, readiness, attention,
 enabled modules). A **workspace** is one event's control plane; inside it
 you enable **modules** — installable product systems:
 
-| Module | What it is |
-| ------ | ---------- |
-| **Meet** | Single-day inter-school meet cockpit — roster, CP-SAT-optimised court assignments, drag-to-reschedule, proposal/repair pipeline, live SSE solver progress, idempotent command queue, inline conflict UX. |
-| **Bracket** | BWF-conformant single-elimination + round-robin draws — seeding, draw generation, advancement, import/export (JSON / CSV / ICS), schedule-next-round via the shared CP-SAT engine, live result recording. |
-| **Display** | Read-only public TV display (live matches / draw / results) for the enabled operator, fed by Supabase Realtime — no auth. |
+| Module | Role | What it is |
+| ------ | ---- | ---------- |
+| **Meet** | engine | Single-day inter-school meet — roster, CP-SAT-optimised court assignments, proposal/repair pipeline, live SSE solver progress. **Produces** a schedule. |
+| **Bracket** | engine | BWF-conformant single-elimination + round-robin draws — seeding, draw generation, advancement, import/export (JSON / CSV / ICS), schedule-next-round via the shared CP-SAT engine. **Produces** matches. |
+| **Operations** | live-ops | The day-of control plane over both engines' matches: a **Plan** board (drag-to-reschedule) and a **Run** surface (live court board, match-state machine, idempotent command queue, inline conflict UX). |
+| **Display** | output | Read-only public TV display (live matches / draw / results), fed by Supabase Realtime — no auth. |
 
-Create a workspace from a template (Meet Day / Bracket Tournament / Hybrid /
-Blank) or a **Custom** module mix. Per-workspace **Settings** cover Overview,
+Operations is **always-on** (a Tier-2 architectural module, no enable toggle);
+Meet, Bracket, and Display are the user-enableable modules. Create a workspace
+from a template (Meet Day / Bracket Tournament / Hybrid / Blank) or a **Custom**
+module mix. Per-workspace **Settings** cover Overview,
 the module catalog, People & Access, Sharing (public display link vs
 collaborator invites), and Sync & Backups. A module dock switches the running
 module; module status (enabled / available / disabled) drives the chrome and
@@ -42,6 +45,30 @@ All modules depend on the shared
 [`scheduler_core/`](./scheduler_core) — a pure-Python CP-SAT engine
 with no HTTP / no I/O. Build your own product on top by importing
 its dataclasses; the scheduler in this repo is the worked example.
+
+---
+
+## Documentation
+
+Full developer docs live in [`docs/`](./docs) — a VitePress site that is the
+single source of truth for architecture, module contracts, data flow, and how to
+extend the codebase.
+
+```bash
+npm run docs:dev     # browse the docs locally (hot reload)
+npm run docs:build   # static build; fails on broken internal links (the CI gate)
+```
+
+Start here:
+
+| Page | For |
+| ---- | --- |
+| [Quickstart](./docs/getting-started/quickstart.md) | Running it in a couple of minutes |
+| [System overview](./docs/architecture/system-overview.md) | The four-module model (Meet · Bracket · Operations · Display) |
+| [Module contracts](./docs/contracts/index.md) | The test-enforced seams between modules |
+| [Extending ShuttleWorks](./docs/how-to/index.md) | How to add a module, surface, endpoint, constraint, or seam |
+| [Build a module (tutorial)](./docs/tutorials/build-a-module.md) | A guided, build-it-together walkthrough |
+| [Data flow](./docs/architecture/data-flow.md) | Seams, the match-state machine, the command pipeline, the outbox |
 
 ---
 
@@ -78,14 +105,14 @@ Director's laptop — Tauri desktop app (today: Docker Compose)
   │     └── Sync service → Supabase Postgres (background outbox)
   │
   └── Tauri WebView (React frontend)
-        ├── Meet tabs: Setup / Roster / Matches / Schedule / Live / TV
-        └── Bracket tab: draws + advancement + import/export
+        ├── Meet · Bracket: roster · configuration · matches (the engines)
+        ├── Operations: Plan (court board) · Run (live match control)
+        └── Display: read-only public TV view
 
 Operators / assistants — browser on any device
-  ├── Read via Supabase Realtime (matches + bracket_* tables)
-  └── Write via idempotent POST /commands → director's FastAPI
-       (bracket actions still use direct API calls + 2.5s polling;
-        unifying onto commandQueue is the T-F follow-up)
+  ├── Read via Supabase Realtime (matches + bracket_* tables), polling fallback
+  └── Write via idempotent commands → director's FastAPI
+       (meet actions: POST /commands · bracket results: POST /bracket/commands)
 
 Public TV display — Vercel
   └── Reads Supabase Realtime (no auth required)
@@ -122,8 +149,8 @@ products/
     │   └── services/          match_state, sync_service (outbox), bracket/ (draws + advancement + I/O)
     ├── frontend/              React 19 + Zustand + IndexedDB command queue
     │   └── src/
-    │       ├── products/      one folder per module: hub (the workspace Hub),
-    │       │                  meet, bracket, display, settings
+    │       ├── products/      per module: hub (the workspace Hub), meet,
+    │       │                  bracket, operations (live-ops), display, settings
     │       ├── platform/      cross-module: product-shell (workspace chrome + module dock),
     │       │                  domain (module model), auth, settings
     │       ├── components/    shared UI incl. control-plane/ (MetricStat / HealthDot /
@@ -188,14 +215,10 @@ via the outbox when connectivity returns.
 
 The Bracket module is feature-complete (create draws, import/export,
 schedule rounds, record results, advance winners) with backend + frontend
-test coverage. One scope item is deliberately deferred:
-
-- **commandQueue integration for bracket actions.** Bracket actions
-  use direct API calls + a 2.5s polling hook today, parallel to the
-  meet surface's optimistic-UI command queue. The outbox already
-  publishes bracket changes to Supabase Realtime; replacing the
-  polling hook with a `subscribeToBracketMatches` subscription is
-  scoped for a follow-up.
+test coverage. Bracket result recording now flows through an idempotent
+command path (`POST /bracket/commands`), matching the meet surface's
+command-queue model. A read-side `subscribeToBracketMatches` Realtime
+subscription (to replace the 2.5 s polling fallback) remains a follow-up.
 
 The **workspace-suite control-plane redesign** (Hub dashboard, workspace +
 module model, New Workspace builder, redesigned per-workspace Settings, and

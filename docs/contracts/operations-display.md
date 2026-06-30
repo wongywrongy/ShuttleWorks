@@ -1,7 +1,8 @@
 # Contract: Operations → Display (Seam D)
 
 The Operations layer produces live match state; the Display reads it to render the public TV view.
-This is **Seam D**, the `matchStateChanged` edge.
+This is **Seam D**, the `matchStateChanged` edge. This page is for developers working either side of
+the floor-to-screen boundary.
 
 | | |
 | --- | --- |
@@ -39,8 +40,8 @@ owns **no backend route**.
 
 ## What the current implementation does
 
-1. An operator action flows through the Operations command pipeline and writes a `match_states` row;
-   that write **is** the `matchStateChanged` edge.
+1. An operator action on the Operations **Run** surface flows through the command pipeline and writes
+   a `match_states` row; that write **is** the `matchStateChanged` edge.
 2. Display runs **two independent polling loops of its own** — ~5 s for `GET …/match-states`
    (`useLiveTracking`) and ~10 s for `GET …/state` (`useDisplaySync`) — plus a read of `…/bracket`
    for bracket events. It never subscribes to another module's Zustand store; it polls the API.

@@ -1,137 +1,124 @@
 # Unified Operations view (Meet · Bracket)
 
-When a workspace has **both** the Meet and the Bracket modules enabled,
-the Operations **Courts** and **Live** surfaces render ONE cross-engine
-view: the two engines' matches interleaved on a single court plan, each
-row tagged with the engine it came from. Single-engine workspaces are
-unchanged — they keep their existing engine-specific Operations surfaces.
+When a workspace has **both** the Meet and the Bracket modules enabled, the
+Operations **Plan** and **Run** surfaces render ONE cross-engine view: the two
+engines' matches interleaved on a single court layout, each row tagged with the
+engine it came from. (Plan and Run were formerly labelled *Courts* and *Live* —
+the rename landed with the Run surface.)
 
-This page describes the view-model that folds the two engines together,
-how the unified surfaces route operator actions back to the right engine,
-and why the feature is a render-swap rather than a navigation change.
+This page describes the uniform block both surfaces speak, the live **Run**
+surface and its Operations-owned state machine, how operator actions route back
+to the right engine, and why the feature is a render-swap rather than a
+navigation change.
 
-## The engine-agnostic row
+## The engine-agnostic block
 
-`lib/operations/operationalMatch.ts` defines `OperationalMatch` — the
-normalised row both Operations surfaces speak, regardless of source. It
-carries a stable `id`, a `source` (`'meet' | 'bracket'`), an optional
-`courtLabel` (`C{n}`) and `slot`, resolved display names for `sideA` /
-`sideB` (joined with `/` for doubles, `TBD` when a side is unknown), an
-optional point `score`, and a unified `status`.
+`products/operations/opsBlock.ts` defines `OpsBlock` — the uniform interactive
+shape both Operations surfaces speak, regardless of source. It carries a stable
+`key` (`${source}:${id}`), a `source` (`'meet' | 'bracket'`), `court` / `slot` /
+`span`, resolved `sideA` / `sideB` names, a `colorKey`, an engine `status`, and
+the `done` / `started` lifecycle flags. Two pure adapters produce these blocks:
 
-Two pure adapters produce these rows:
+- **`meetToOpsBlocks(matches, schedule, matchStates, names)`** folds the meet
+  engine's `MatchDTO` + `ScheduleDTO` + `MatchStateDTO`, with a live match-state
+  court override (`actualCourtId`) beating the planned court.
+- **`bracketToOpsBlocks(data)`** folds the polled `BracketTournamentDTO` snapshot
+  (play units + assignments + results), resolving side names through
+  `playUnitSideLabels`.
 
-- **`meetMatchesToOperational(...)`** folds the meet engine's native
-  shape — `MatchDTO` + `ScheduleDTO` + `MatchStateDTO` — into rows,
-  resolving player UUIDs to names. A match-state court override
-  (`actualCourtId`) wins over the planned court, mirroring the live-ops
-  display logic.
-- **`bracketToOperational(...)`** folds the polled `BracketTournamentDTO`
-  snapshot (play units + assignments + results), resolving side names
-  through the shared `playUnitSideLabels` helper (confirmed participants,
-  a feeder reference, or `Bye` / `TBD`).
+`packBlockLanes` then lane-packs court-assigned blocks so overlapping ones render
+side-by-side instead of z-fighting (the two engines solve the same physical
+courts independently per [ADR 0006](/decisions/0006-unified-scheduling-core), so
+they can double-book a `(court, slot)`).
 
-Both adapters emit ONE row per match — including unassigned ("waiting")
-matches — so the operational list is complete.
-
-::: info Status is unified, but the engines differ
-The unified `status` is `scheduled | called | started | finished`. Meet
-emits all four. Bracket has **no distinct `called` state** in its DTO, so
-bracket rows only ever take `scheduled | started | finished`. The
-clock-derived "late" decoration is **not** a persisted status — the
-adapters are pure and deterministic (no `Date.now()`), so it is excluded
-from the view-model and stays a render-time concern.
+::: info `OpsBlock` vs `OperationalMatch`
+`OpsBlock` is the richer shape the interactive surfaces need. The older
+`lib/operations/operationalMatch.ts` `OperationalMatch` is the lighter **read-only
+chip projection** (with `meetMatchesToOperational` / `bracketToOperational`
+adapters) — kept for read-only consumers, not the interactive Plan/Run surfaces.
 :::
 
-`score` is **meet-only**. Bracket records a `winner_side`, never a point
-tally, so `score` is always undefined on bracket rows — an expected
-asymmetry between the engines, not a gap.
+## The Plan surface
 
-## The hybrid merge
+`Plan` is the planning board: `UnifiedOpsBoard.tsx` (drag-to-reschedule across
+courts and slots, for both engines) plus `UnifiedOpsList.tsx` (the match
+overview), with an `OpsDetailRail` overlay for the selected match. It is where you
+build and adjust the plan before the day starts.
 
-`mergeOperational(meet, bracket)` concatenates the two adapters' output
-into one list and sorts it deterministically:
+## The Run surface — an Operations-owned state machine
 
-1. Assigned rows (those with both a court and a slot) come before waiting
-   (unassigned) rows.
-2. Assigned rows sort by court index — numeric, so court 2 precedes court
-   10 — then by slot.
-3. A cross-engine tie on the same court and slot breaks meet-before-
-   bracket, then by `id`. This only keeps the order stable; it is never a
-   claim that two matches truly share a court and slot.
-4. Waiting rows keep their concatenation order (meet rows first, then
-   bracket rows).
+`Run` is the live, day-of control surface: `products/operations/run/RunSurface.tsx`
+composes a summary band, a court board, a global queue, and a match inspector,
+**all derived from one Operations-owned state machine**.
 
-Both unified surfaces — `products/operations/UnifiedCourtsView.tsx` and
-`UnifiedLiveView.tsx` — call `mergeOperational` and render the merged
-list. Each row carries a per-row `SourceChip` keyed on
-`OperationalMatch.source` (Meet tinted sky, Bracket tinted violet) so a
-mixed list still reads apart at a glance. **Courts** is the read-oriented
-spatial overview; **Live** mirrors it but adds operator actions per row.
+- **`runtime/runMachine.ts`** is the contract. `RunStatus` is
+  `scheduled → called → playing → done`, with `assign` (a court change, keeps
+  `scheduled`) and `postpone` (back to `scheduled`) as the off-status edges. Every
+  surface derives action availability from `can(status, action)` — no surface
+  invents its own vocabulary. `late` is a **derived** flag (`deriveLate`), never a
+  stored state, and the modules stay pure (no `Date.now()` — the current slot is
+  injected).
+- **`runtime/runModel.ts`** derives the view from `court + slot + status`:
+  `toRunMatches` maps blocks → `RunMatch` (overlaying an Operations-local `called`
+  for bracket, which has no persisted `called`); `deriveCourtLanes` builds each
+  court's **Now / Next / Later** lanes (and applies `late` to the Now match once
+  the floor is running); `deriveQueue` orders the unassigned matches by planned
+  slot (refresh-durable — a postponed match returns to its planned position, not
+  the tail); `deriveSummary` feeds the band.
+
+Because lane and queue order are **derived**, a mid-event refresh never loses the
+floor.
 
 ## Write-back routes by source
 
-On the Live surface a single operator action must reach the API of the
-engine that produced the row. `operationalWriteback.ts` is the pure
-dispatcher: `routeOperationalAction(row, action, router)` inspects
-`row.source` and forwards to the matching handler. One surface owns ONE
-router; the engines never cross wires.
+On the Run surface an operator action must reach the API of the engine that
+produced the row. `runtime/runActions.ts` is the Operations write router: it
+guards every action with `can()` and routes by `RunMatch.source`.
 
-`OperationsProduct.tsx` wires the two handlers:
+| Source | Path |
+|---|---|
+| `meet` | the IndexedDB **command queue** (`meetSubmit`) — `call_to_court` / `start_match` / `finish_match` / `assign_court` / `postpone_match` |
+| `bracket` | non-solver **`assignCourt`** / **`unassign`** (`POST /bracket/assign` · `/bracket/unassign`), `matchAction` for start, and `bracketResult` for recording (the [bracket result command queue](/architecture/bracket-result-queue)) |
 
-| Source | Honoured actions | Path |
-|---|---|---|
-| `meet` | `call` / `start` / `finish` | `useCommandQueue` (the same command queue the single-engine Live surface uses) |
-| `bracket` | `recordWinner` | `useBracketResultQueue` (the SP-F3 bracket result queue) |
-
-The action vocabulary is the shared subset each engine can honour, and
-each handler decides what (if anything) an action means for its engine:
-meet honours the lifecycle verbs and ignores `recordWinner`; bracket
-honours only `recordWinner` and returns nothing for the lifecycle verbs.
-In the UI, a bracket row's "record winner" buttons stay **disabled until
-the match is on a court** (`canRecord = row.courtLabel != null`). Per
-[ADR 0006](/decisions/0006-unified-scheduling-core) the two engines keep
-separate match models, so there is no merged write path — only this
-per-source routing.
+The bracket live court-ops deliberately avoid `pinMatch` (which re-runs CP-SAT and
+409s for unscheduled units) and `matchAction('reset')` (which only clears timing,
+not the court) — see the seam notes atop `runActions.ts`. Per
+[ADR 0006](/decisions/0006-unified-scheduling-core) the two engines keep separate
+match models, so there is no merged write path — only this per-source routing.
 
 `OperationsProduct` wraps its body in a `BracketApiProvider` keyed on the
-tournament id, because the bracket rows need `useBracket`, which only
-resolves inside that provider (the meet surfaces never mount it). Keying
-on the id remounts the provider when the operator switches workspaces, so
-bracket data never lingers from the previous tournament.
+tournament id so bracket data never lingers when the operator switches workspaces.
 
 ## Why a render-swap, not a navigation change
 
 The feature is gated, not navigated. `AppShell.tsx` resolves
-`bothEnginesEnabled = meetEnabled && bracketEnabled`, where both flags
-read the **real persisted module catalog** (`useWorkspaceModules`), never
-the kind-derived fallback. An indeterminate or still-loading catalog
-therefore fails safe to single-engine. That flag is passed to
-`ModuleOutlet`, which performs the swap:
+`bothEnginesEnabled = meetEnabled && bracketEnabled` from the **real persisted
+module catalog** (`useWorkspaceModules`), never the kind-derived fallback, so an
+indeterminate catalog fails safe to single-engine. `ModuleOutlet` performs the
+swap:
 
 ```
 ModuleOutlet(bothEnginesEnabled):
   if bothEnginesEnabled and isOperationsSegment(activeTab):
-        → <OperationsProduct/>        (unified cross-engine surface)
+        → <OperationsProduct/>        (unified cross-engine Plan + Run)
   else  → the owning engine's product (Meet / Bracket / Display)
 ```
 
-Crucially, the unified surface **reuses the existing Operations segment
-ids** (`schedule` / `bracket-schedule` for Courts, `live` / `bracket-live`
-for Live — see `operationsSegments.ts`) rather than minting new ones.
+The unified surface **reuses the existing Operations segment ids** (`schedule` /
+`bracket-schedule` for Plan, `live` / `bracket-live` for Run — see
+`operationsSegments.ts`) rather than minting new ones.
 
 ::: tip Deliberately not a workspaceNav change
-Reusing the segment ids and swapping only the rendered surface keeps the
-sidebar navigation model and the module-contract ownership invariant
-exactly as shipped. A new "unified Operations" nav entry would have had to
-claim segment ownership, touching the `moduleContract` ownership
-invariants. The render-swap avoids that entirely: single-engine
-workspaces resolve the same segments to their own engine-specific views,
-and only the both-engines case resolves them to `OperationsProduct`.
+Reusing the segment ids and swapping only the rendered surface keeps the sidebar
+model and the `moduleContract` ownership invariant exactly as shipped. A new
+"unified Operations" nav entry would have had to claim segment ownership; the
+render-swap avoids that — single-engine workspaces resolve the same segments to
+their own engine views, and only the both-engines case resolves them to
+`OperationsProduct`.
 :::
 
 ## See also
 
+- [Operations module](/modules/operations) · [Data flow](/architecture/data-flow)
+- [Bracket result command queue](/architecture/bracket-result-queue)
 - [ADR 0006 — Unified scheduling core, non-merged match record](/decisions/0006-unified-scheduling-core)
-- [Scheduling unification](/architecture/scheduling-unification)
-- [Operations module](/modules/operations) · [Meet module](/modules/meet) · [Bracket module](/modules/bracket)

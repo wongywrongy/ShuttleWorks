@@ -30,6 +30,19 @@ command is a `BracketResultCommand`: a client-generated UUID, the target
 play-unit (match) id, `winnerSide`, an optional set-by-set `score`, and
 the `seenVersion` the client last observed.
 
+::: info The recording route is the command endpoint
+Result writes go through `POST /tournaments/{tid}/bracket/commands`
+(`backend/api/brackets.py::submit_bracket_command`), **not** the legacy
+`POST …/bracket/results` (`record_match_result`). The command endpoint
+carries the queue's UUID as a first-class idempotency key and checks it
+**before** the version guard. The legacy `/results` route still exists for
+older callers; the frontend no longer uses it for recording. (The code
+comment at `useBracketResultQueue.ts` calls this the "Seam C" command path,
+an SP-G1 name — distinct from [data-flow](/architecture/data-flow)'s Seam C,
+the still-unwired Operations→Bracket *advancement* edge. This is bracket-owned
+recording surfaced through the Operations Run UI, not that edge.)
+:::
+
 ## The layered idempotency/concurrency stack
 
 A result write passes through four guards, ordered so a duplicate or stale
@@ -39,17 +52,32 @@ write records — and advances — nothing.
 
 `useBracketResultQueue.submit` mints a UUID as the idempotency key,
 applies the result optimistically (see below), enqueues the command, then
-flushes immediately. `enqueue` is a no-op if a row with the same id
-already exists, and a command that the server accepts is marked `applied`
-so it never reflushes. A double-tap or a reload-then-retry therefore
-cannot enqueue — or replay — the same write twice.
+flushes immediately via `apiClient.recordBracketResultCommand`. `enqueue`
+is a no-op if a row with the same id already exists, and a command the
+server accepts is marked `applied` so it never reflushes. A double-tap or a
+reload-then-retry therefore cannot enqueue — or replay — the same write twice.
 
-### 2. Server guard 1 — `seen_version`, before any mutation
+### 2. Server guard 1 — command-id replay, before any mutation
 
-`RecordResultIn` carries an optional `seen_version`. The result route
-(`POST /tournaments/{tid}/bracket/results`,
-`backend/api/brackets.py::record_match_result`) checks it **first**,
-before the already-recorded or advancement paths:
+`submit_bracket_command` checks the command's UUID against the persisted
+`applied_command_ids` set **first**, before the version guard:
+
+```python
+# Idempotency guard (MUST precede the seen_version check)
+if str(body.id) in session.applied_command_ids:
+    return _serialize_session(session)   # replay → current snapshot, no advance
+```
+
+A genuine replay of an already-applied command returns the current
+tournament snapshot with **200**, advancing nothing. This guard runs first
+on purpose: on a replay the downstream version has usually already moved, so
+the version guard alone would wrongly 409 — the command-id check short-circuits
+before the version is even inspected.
+
+### 3. Server guard 2 — `seen_version`
+
+After the play-unit-exists check (404 if missing), an optional
+`seen_version` is compared to the match's current version:
 
 ```python
 if body.seen_version is not None:
@@ -60,38 +88,29 @@ if body.seen_version is not None:
 
 `ConflictError` carries the version fields, so its flat body reports
 `error: "stale_version"` (HTTP 409). Because the check runs before
-`record_result`, a stale write **records nothing and advances nothing** —
-this is the guard that prevents a double-advance. Omitting `seen_version`
-keeps the legacy un-guarded behaviour for older callers.
+`record_result`, a stale write **records nothing and advances nothing**.
 
 ::: info What `seen_version` actually guards
 The `version` token lives on the `BracketMatch` row and is bumped only
 when **advancement resolves that match's slots** — i.e. when an upstream
 winner (or a re-pin) fills its sides. Recording a result does *not* bump
-the recorded match's own version (`record_result` writes only the
-`bracket_results` row). So `seen_version` catches a write against a match
-whose sides have changed since the client loaded it; it is *not* what
-arbitrates two operators recording the *same* match — guard 3 is.
+the recorded match's own version. So `seen_version` catches a write against
+a match whose sides have changed since the client loaded it. Duplicate
+submissions of the *same* command are arbitrated by guard 2 (the command id),
+not this version check.
 :::
-
-### 3. Server guard 2 — already-recorded
-
-If a result already exists for the match, an **exact replay** (same
-winner, slot, walkover flag, and score) is popped and re-recorded — an
-idempotent no-op for a retried-after-success write. A **non-exact**
-re-record is rejected with a bare-`detail` 409 carrying no `error` field;
-the client maps any 409 that is not `stale_version` to `conflict`, a
-permanent rejection with no retry.
 
 ### 4. Advancement — bracket-owned, versions reloaded
 
 Only after the guards pass does `record_result` (pure Python) mutate the
-in-memory state and resolve downstream slots.
-`_persist_result_advancement` writes the recorded `bracket_results` row
-and, for each affected downstream match, calls `update_match` — which
-bumps that downstream row's `version`. The route then reloads
-`session.match_versions` so the returned DTO carries the authoritative
-tokens, and the next client write starts from a fresh `seen_version`.
+in-memory state and resolve downstream slots. The command id is added to
+`applied_command_ids`, then `_persist_result_advancement` writes the recorded
+`bracket_results` row and, for each affected downstream match, calls
+`update_match` — which bumps that downstream row's `version` —
+and `_persist_session_metadata` flushes the applied-id set. The route then
+reloads `session.match_versions` so the returned DTO carries the
+authoritative tokens, and the next client write starts from a fresh
+`seen_version`.
 
 ## Optimistic UI and conflict surfacing
 
@@ -123,10 +142,10 @@ applyOptimisticResult ──► view-model shows provisional result (no advancem
         │
 enqueue(command, UUID)  ──► IndexedDB: scheduler-bracket-result-queue
         │
-flush ──► POST /bracket/results { ..., seen_version }
+flush ──► POST /bracket/commands { id, ..., seen_version }
         │
-        ├─ guard 1: seen_version stale ─► 409 stale_version (nothing mutates)
-        ├─ guard 2: already recorded   ─► exact replay = no-op · else 409 conflict
+        ├─ guard 1: command id replayed ─► 200 current snapshot (no advance)
+        ├─ guard 2: seen_version stale   ─► 409 stale_version (nothing mutates)
         └─ guards pass ─► record_result + advancement ─► bump downstream versions
                                   │
                           reload match_versions

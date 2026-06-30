@@ -3,7 +3,8 @@
 A **module contract** is an explicit, typed statement of what one architectural module *owns*,
 what it *consumes*, and what crosses the boundary between two modules. In ShuttleWorks these are
 not prose conventions — they are a **test-enforced descriptor layer** in
-`frontend/src/platform/contracts/moduleContract.ts`.
+`frontend/src/platform/contracts/moduleContract.ts`. This page is for developers who need to see the
+module seams without tracing every import.
 
 ## Why it matters
 
@@ -19,12 +20,12 @@ honest**, so a developer can see the seams without tracing every import.
 
 | Field | Meaning |
 | --- | --- |
-| `id` | the `ArchModuleId` — `'meet' | 'bracket' | 'display'` (Tier-1) or `'operations'` (Tier-2) |
+| `id` | the `ArchModuleId` — `'meet' \| 'bracket' \| 'display'` (Tier-1) or `'operations'` (Tier-2) |
 | `enableable` | whether it is a user-facing module with a `workspace_modules` row (Operations: `false`) |
 | `ownedSegments` | the left-nav segments this module's section renders |
 | `ownedEndpoints` / `consumedEndpoints` | **references to real `apiClient` methods** it owns vs consumes |
 | `produces` / `consumes` | the DTO type names that cross the wire (a compile-time union, `DtoName`) |
-| `emits` / `reactsTo` | the named cross-module edges (`scheduleFinalized`, `drawGenerated`, `matchStateChanged`) |
+| `emits` / `reactsTo` | the named cross-module edges — the `SeamEdge` union `scheduleFinalized \| drawGenerated \| matchStateChanged` |
 
 **Honesty is the invariant.** The colocated test (`__tests__/moduleContract.test.ts`) turns each
 field into a checked assertion:
@@ -34,8 +35,8 @@ field into a checked assertion:
   string matching — rename or remove a client method and this breaks.
 - `produces` / `consumes` are constrained to `DtoName`, a union of real DTO type names — a typo or a
   removed DTO is a *type error*.
-- `emits` / `reactsTo` are pinned to the honest edge set, so a descriptor cannot claim an unwired
-  seam.
+- `emits` / `reactsTo` are pinned to the honest `SeamEdge` set, so a descriptor cannot claim an
+  unwired seam.
 
 ::: info Purely additive
 The contract file is imported **only by its test**. It is never on an app runtime path — it
@@ -58,10 +59,19 @@ design names four seams between them; **three are wired** and have a contract pa
 
 ::: warning Mind the lettering
 The three contract pages are the **wired** seams A, B, and **D**. Seam **C** is a *different*,
-**deliberately unwired** seam — Operations → Bracket advancement. Bracket advancement is intra-bracket
-today (`POST …/bracket/results` materialises the winner locally), and the contract test asserts this
-seam stays unwired so it cannot be silently claimed. It is documented in
+**deliberately unwired** seam — Operations → Bracket advancement. Advancement is intra-bracket today
+(recording a result via `POST …/bracket/commands` resolves the next play-unit locally, with no call
+into Operations), and the contract test asserts `bracketContract.reactsTo === []` so this seam cannot
+be silently claimed. It is documented in
 [Data flow](/architecture/data-flow#the-three-wired-seams), not here.
+:::
+
+::: warning Two different "Seam C" names
+The data-flow lettering above reserves **Seam C** for the *unwired* Operations → Bracket advancement
+edge. A code comment on `apiClient.recordBracketResultCommand` also says "Seam C" — but that is an
+SP-G1 name for the **bracket result command path** (`POST …/bracket/commands`,
+`submit_bracket_command`), which is **bracket-owned recording** surfaced through the Operations Run
+UI, *not* a cross-module seam. See [Bracket result command queue](/architecture/bracket-result-queue).
 :::
 
 ## What "the intended clean interface" means here
@@ -75,3 +85,9 @@ name, an owner, and a typed payload, enforced by a test" — with any push-trans
 boundary-lint enforcement called out as an explicit, out-of-scope future.
 
 Read the three seam pages next.
+
+## See also
+
+- [Meet → Operations (Seam A)](/contracts/meet-operations) · [Bracket → Operations (Seam B)](/contracts/bracket-operations) · [Operations → Display (Seam D)](/contracts/operations-display)
+- [Data flow](/architecture/data-flow) — the whole-system seam picture · [System overview](/architecture/system-overview)
+- [ADR 0009 — Universal match contract](/decisions/0009-universal-match-contract) · [ADR 0006 — Unified scheduling core](/decisions/0006-unified-scheduling-core)

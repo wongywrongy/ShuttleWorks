@@ -87,6 +87,8 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Getting started', link: '/getting-started/what-is-shuttleworks' },
+      { text: 'Guides', link: '/how-to/' },
+      { text: 'Tutorials', link: '/tutorials/build-a-module' },
       { text: 'Architecture', link: '/architecture/system-overview' },
       { text: 'Modules', link: '/modules/meet' },
       { text: 'Contracts', link: '/contracts/' },
@@ -99,10 +101,32 @@ export default defineConfig({
         text: 'Getting started',
         collapsed: false,
         items: [
+          { text: 'Quickstart', link: '/getting-started/quickstart' },
           { text: 'What ShuttleWorks is', link: '/getting-started/what-is-shuttleworks' },
           { text: 'User flow', link: '/getting-started/user-flow' },
           { text: 'Running locally', link: '/getting-started/running-locally' },
           { text: 'Repo layout', link: '/getting-started/repo-layout' },
+        ],
+      },
+      {
+        text: 'Extending (how-to)',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/how-to/' },
+          { text: 'Add a module', link: '/how-to/add-a-module' },
+          { text: 'Add a surface', link: '/how-to/add-a-surface' },
+          { text: 'Add an API endpoint', link: '/how-to/add-an-api-endpoint' },
+          { text: 'Add a CP-SAT constraint', link: '/how-to/add-a-cpsat-constraint' },
+          { text: 'Wire a seam', link: '/how-to/wire-a-seam' },
+          { text: 'Enable a module', link: '/how-to/enable-a-module' },
+          { text: 'Build on the engine', link: '/how-to/build-on-the-engine' },
+        ],
+      },
+      {
+        text: 'Tutorials',
+        collapsed: false,
+        items: [
+          { text: 'Build a module', link: '/tutorials/build-a-module' },
         ],
       },
       {
@@ -152,6 +176,20 @@ export default defineConfig({
         ],
       },
       {
+        text: 'Examples',
+        collapsed: false,
+        items: [
+          { text: 'Recipes', link: '/examples/' },
+        ],
+      },
+      {
+        text: 'Templates',
+        collapsed: false,
+        items: [
+          { text: 'Workspace templates', link: '/templates/' },
+        ],
+      },
+      {
         text: 'Decisions',
         collapsed: false,
         items: [
@@ -164,6 +202,7 @@ export default defineConfig({
           { text: '0006 · Unified scheduling core', link: '/decisions/0006-unified-scheduling-core' },
           { text: '0007 · Bracket result command queue', link: '/decisions/0007-bracket-result-command-queue' },
           { text: '0008 · Shared scoring fields', link: '/decisions/0008-shared-scoring-fields' },
+          { text: '0009 · Universal match contract', link: '/decisions/0009-universal-match-contract' },
         ],
       },
     ],

@@ -70,6 +70,20 @@ const AREAS = [
     src: ['products/scheduler/frontend/src/products'],
   },
   {
+    name: 'Extending (how-to guides)',
+    docs: ['docs/how-to'],
+    src: [
+      'products/scheduler/frontend/src/platform/product-shell/types.ts',
+      'products/scheduler/frontend/src/app/workspace/workspaceNav.ts',
+      'products/scheduler/frontend/src/store/uiStore.ts',
+      'products/scheduler/frontend/src/platform/contracts/moduleContract.ts',
+      'products/scheduler/frontend/src/api/client.ts',
+      'products/scheduler/backend/database/models.py',
+      'products/scheduler/backend/api/workspace_modules.py',
+      'scheduler_core/engine/constraints',
+    ],
+  },
+  {
     name: 'Engine (ADR 0004)',
     docs: ['docs/decisions/0004-ortools-cpsat-engine.md'],
     src: ['scheduler_core'],

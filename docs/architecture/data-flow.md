@@ -18,8 +18,8 @@ unwired.
 | **D** | Operations → Display | `matchStateChanged` | dual poll: ~5 s match-state + ~10 s tournament-state | `MatchStateDTO`, `TournamentStateDTO`, `BracketTournamentDTO` | **wired** |
 
 ::: warning Seam C is intentionally not wired
-Bracket advancement (`POST …/bracket/results`) materialises the winner **locally**, with no call
-into Operations. Wiring a bracket-origin match finish to feed advancement would be *new
+Bracket advancement (recording a result via `POST …/bracket/commands`) materialises the winner
+**locally**, with no call into Operations. Wiring a bracket-origin match finish to feed advancement would be *new
 cross-module runtime behaviour* and is deferred to its own behaviour-change PR. The module-contract
 test asserts this seam stays unwired, so it cannot be silently claimed. Do not confuse it with the
 three task-level contract pages (Meet → Operations, Bracket → Operations, Operations → Display),
