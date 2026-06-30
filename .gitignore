@@ -31,6 +31,12 @@ build/
 .cursor/
 .claude/
 .serena/
+# codanna code-intelligence MCP server. The index lives OUTSIDE the repo
+# (~/.codanna), and .codanna/settings.toml holds machine-specific absolute paths
+# + a project-id, so the whole dir is per-developer. Portable bits are committed:
+# .mcp.json (server registration) and .codannaignore. The trailing slash ignores
+# only the DIRECTORY — the .codannaignore file stays tracked.
+.codanna/
 # Claude Code skill plugins installed locally. Skills already committed
 # (design-taste-frontend, full-output-enforcement, high-end-visual-design,
 # redesign-existing-projects) stay tracked — gitignore only applies to
