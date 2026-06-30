@@ -38,6 +38,7 @@ import { useSchedule } from '../../hooks/useSchedule';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { MatchChip } from '../../components/MatchChip';
 import { fromEngineStatus } from './runtime/runMachine';
+import { buildPlanChips, type BoardChip } from './runtime/boardPlacements';
 import type { MatchDTO, ScheduleDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { OpsBlock } from './opsBlock';
@@ -95,22 +96,27 @@ export function UnifiedOpsBoard({
     [courtCount],
   );
 
-  const placements = useMemo<Placement[]>(() => {
-    // Lane-pack so cross-engine double-bookings render side-by-side instead of
-    // z-fighting on one pixel (the "random teleport"). See packBlockLanes.
-    const lanes = packBlockLanes(placed);
-    return placed.map((b) => {
-      const ln = lanes.get(b.key);
-      return {
-        courtIndex: Math.max(0, (b.court ?? 1) - 1),
-        startSlot: b.slot ?? 0,
-        span: b.span ?? 1,
-        laneIndex: ln?.laneIndex ?? 0,
-        laneCount: ln?.laneCount ?? 1,
-        key: b.key,
-      };
-    });
-  }, [placed]);
+  // PLANNED placements — uniform `span = 1` via the shared placement model, so
+  // meet and bracket read identically (duration is NOT encoded as width).
+  const planChips = useMemo<BoardChip[]>(() => buildPlanChips(placed), [placed]);
+
+  // Lane-pack on the UNIFORM width (span=1): only TRUE double-bookings (same
+  // court+slot) collide and split side-by-side; merely-adjacent planned
+  // durations no longer fight for half-width lanes (GanttTimeline divides a
+  // cell by laneCount). A real same-cell conflict is a real conflict — fine.
+  const lanes = useMemo(
+    () => packBlockLanes(placed.map((b) => ({ ...b, span: 1 }))),
+    [placed],
+  );
+
+  const placements = useMemo<Placement[]>(
+    () =>
+      planChips.map((c) => {
+        const ln = lanes.get(c.key);
+        return { ...c.placement, laneIndex: ln?.laneIndex ?? 0, laneCount: ln?.laneCount ?? 1 };
+      }),
+    [planChips, lanes],
+  );
 
   const { minSlot, slotCount } = useMemo(() => {
     if (placements.length === 0) return { minSlot: 0, slotCount: 8 };
@@ -133,14 +139,13 @@ export function UnifiedOpsBoard({
   const [manualZoom, setManualZoom] = useState(1);
   const autoZoom = useMemo(() => {
     if (placed.length === 0) return 1;
-    const lanes = packBlockLanes(placed);
     const maxLanes = Math.max(1, ...[...lanes.values()].map((l) => l.laneCount));
     const longest = placed.reduce((m, b) => Math.max(m, b.label.length), 0);
     // Width one lane needs to read the longest label at text-2xs, plus the
     // block's horizontal padding + inset (~24px). Generous so nothing clips.
     const neededLanePx = Math.max(56, longest * 8 + 24);
     return Math.min(3, Math.max(1, (neededLanePx * maxLanes) / GANTT_GEOMETRY.standard.slot));
-  }, [placed]);
+  }, [placed, lanes]);
   const timeZoom = auto ? autoZoom : manualZoom;
   const zoomBy = (f: number) => {
     setManualZoom(Math.min(3, Math.max(0.5, Math.round(timeZoom * f * 100) / 100)));
@@ -420,8 +425,7 @@ function StaticBlock({
       state={fromEngineStatus(block.status)}
       late={late && !block.done}
       selected={selected}
-      tone="discipline"
-      colorKey={block.colorKey}
+      tone="state"
       onSelect={() => onSelect?.(block.key)}
       data-testid={`ops-block-${block.key}`}
       style={{ position: 'absolute', left: 0, top: 4, right: 4, bottom: 4 }}
@@ -499,8 +503,7 @@ function BlockView({
       source={block.source}
       state={fromEngineStatus(block.status)}
       selected={selected}
-      tone="discipline"
-      colorKey={block.colorKey}
+      tone="state"
       onSelect={() => onSelect?.(block.key)}
       data-testid={`ops-block-${block.key}`}
       {...listeners}
