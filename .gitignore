@@ -48,6 +48,7 @@ build/
 .benchmarks/
 .coverage
 htmlcov/
+coverage/
 
 # Docker
 .docker/
@@ -58,6 +59,7 @@ htmlcov/
 # tracked normally so feature-folder docs stay in version control.
 /*.md
 !/README.md
+!/CLAUDE.md
 
 # Old app folders (legacy)
 apps/
