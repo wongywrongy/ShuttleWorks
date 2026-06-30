@@ -12,7 +12,7 @@ import type { Match, MatchStatus } from '../../platform/domain/match';
 import { matchKey, parseMatchKey } from '../../platform/domain/match';
 import type { MatchDTO, ScheduleDTO, MatchStateDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
-import { playUnitSideLabels } from '../bracket/bracketLabels';
+import { playUnitSideLabels, buildPlayUnitLabels } from '../bracket/bracketLabels';
 import { msToSlot, parseMatchStartMs } from '../../lib/time';
 
 /** @deprecated Use `Match` from `platform/domain/match`. Kept as an alias. */
@@ -96,17 +96,20 @@ export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
   const assignByPu = new Map(data.assignments.map((a) => [a.play_unit_id, a]));
   const resultByPu = new Map(data.results.map((r) => [r.play_unit_id, r]));
   const disciplineByEvent = new Map(data.events.map((e) => [e.id, e.discipline]));
+  // Operator-friendly labels (e.g. "MS QF2") for BOTH the chip label and the
+  // "Winner of …" feeder text — never mix the friendly name with the raw id.
+  const labelById = buildPlayUnitLabels(data);
   return data.play_units.map((pu) => {
     const a = assignByPu.get(pu.id);
     const result = resultByPu.get(pu.id);
-    const { a: sideA, b: sideB } = playUnitSideLabels(pu, nameById);
+    const { a: sideA, b: sideB } = playUnitSideLabels(pu, nameById, labelById);
     const started = a?.actual_start_slot != null;
     const status: MatchStatus = result ? 'finished' : started ? 'started' : 'scheduled';
     return {
       source: 'bracket' as const,
       id: pu.id,
       key: matchKey('bracket', pu.id),
-      label: pu.id,
+      label: labelById.get(pu.id) ?? pu.id,
       colorKey: disciplineByEvent.get(pu.event_id) ?? pu.event_id,
       court: a ? a.court_id : undefined,
       slot: a?.slot_id,
