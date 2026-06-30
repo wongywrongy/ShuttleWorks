@@ -24,6 +24,7 @@ import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { slotToTime } from '../../lib/time';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { BracketScheduleModal } from '../bracket/BracketScheduleModal';
 import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from './opsBlock';
@@ -100,6 +101,13 @@ function OperationsBody() {
         pu.dependencies.every((d) => done.has(d)),
     ).length;
   }, [data]);
+
+  // Wall-clock label for a slot — operators think in time ("9:15"), not slot
+  // indices ("S8"). Shared by BOTH boards so the time axis reads identically.
+  const formatSlot = useCallback(
+    (s: number) => (config ? slotToTime(s, config) : `S${s}`),
+    [config],
+  );
 
   const blocks = useMemo(() => [...meetBlocks, ...bracketBlocks], [meetBlocks, bracketBlocks]);
   const courtCount = useMemo(() => {
@@ -253,6 +261,7 @@ function OperationsBody() {
               courtCount={courtCount}
               currentSlot={currentSlot}
               planFinalized={planFinalized}
+              formatSlot={formatSlot}
             />
           ) : (
             // COURTS = planning surface. Drag board + the matches overview list
@@ -269,6 +278,7 @@ function OperationsBody() {
                   interactive
                   meet={{ config, matches, schedule }}
                   onBracketData={setData}
+                  formatSlot={formatSlot}
                 />
                 <UnifiedOpsList blocks={blocks} selectedKey={selectedKey} onSelect={setSelectedKey} />
               </div>

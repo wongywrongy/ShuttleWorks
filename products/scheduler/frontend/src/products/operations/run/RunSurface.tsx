@@ -47,6 +47,8 @@ export interface RunSurfaceProps {
   courtCount: number;
   currentSlot?: number;
   planFinalized?: boolean;
+  /** Wall-clock label for a slot (operators think in time, not slot indices). */
+  formatSlot?: (slotId: number) => string;
 }
 
 // ── pure auto-pull helper (exported so tests can verify without hooks) ────
@@ -100,6 +102,7 @@ export function RunSurface({
   courtCount,
   currentSlot,
   planFinalized,
+  formatSlot,
 }: RunSurfaceProps) {
   // ── seam hooks: owns the seam hooks for the Run (live) surface ───────────
   const pushToast = useUiStore((s) => s.pushToast);
@@ -333,15 +336,19 @@ export function RunSurface({
       {/* Summary band */}
       <RunSummaryBand summary={summary} />
 
-      {/* Content area */}
-      <div className="relative min-h-0 flex-1">
-        <div className="flex h-full min-h-0 flex-col overflow-auto">
+      {/* Content area — board+queue beside a PERSISTENT inspector. The inspector
+          is always mounted (showing its "Select a match…" empty state) so the
+          surface reads as interactive and operators see where actions live,
+          instead of a board that looks read-only until you happen to click. */}
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col overflow-auto">
           {/* Board — the live court×time hero (GanttTimeline + MatchChip) */}
           <RunLiveBoard
             blocks={blocks}
             courtCount={courtCount}
             currentSlot={currentSlot}
             running={!!planFinalized}
+            formatSlot={formatSlot}
             selectedKey={selectedKey}
             onSelect={setSelectedKey}
           />
@@ -355,9 +362,10 @@ export function RunSurface({
           </div>
         </div>
 
-        {/* Inspector overlay — absolute right so it never steals layout width */}
-        {selectedMatch ? (
-          <div className="absolute inset-y-0 right-0 z-20 flex bg-card shadow-xl">
+        {/* Persistent inspector column. RunInspector renders its own empty state
+            when nothing is selected; the close button only appears on selection. */}
+        <div className="relative flex flex-shrink-0">
+          {selectedMatch ? (
             <button
               type="button"
               onClick={() => setSelectedKey(null)}
@@ -366,16 +374,17 @@ export function RunSurface({
             >
               ✕
             </button>
-            <RunInspector
-              match={selectedMatch}
-              role={selectedRole}
-              nowRef={nowRef}
-              freeCourt={freeCourt}
-              currentSlot={currentSlot}
-              onAction={handleAction}
-            />
-          </div>
-        ) : null}
+          ) : null}
+          <RunInspector
+            match={selectedMatch}
+            role={selectedRole}
+            nowRef={nowRef}
+            freeCourt={freeCourt}
+            currentSlot={currentSlot}
+            formatSlot={formatSlot}
+            onAction={handleAction}
+          />
+        </div>
       </div>
     </div>
   );

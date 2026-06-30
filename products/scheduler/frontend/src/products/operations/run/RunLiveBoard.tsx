@@ -37,6 +37,8 @@ export interface RunLiveBoardProps {
   /** Floor-is-live (plan finalized) — gates the `late` flag so an un-started
    *  plan doesn't paint a wall of LATE badges. */
   running?: boolean;
+  /** Wall-clock label for a slot (operators think in time, not slot indices). */
+  formatSlot?: (slotId: number) => string;
   selectedKey?: string | null;
   onSelect(key: string): void;
 }
@@ -46,6 +48,7 @@ export function RunLiveBoard({
   courtCount,
   currentSlot = 0,
   running = false,
+  formatSlot,
   selectedKey,
   onSelect,
 }: RunLiveBoardProps) {
@@ -114,7 +117,7 @@ export function RunLiveBoard({
             width: box.width,
             height: box.height - 4,
           }}
-          className="cursor-pointer px-2"
+          className="cursor-pointer px-2 transition-shadow hover:shadow-md"
         >
           {c.overrunSlots > 0 && (
             <span
@@ -163,7 +166,9 @@ export function RunLiveBoard({
         placements={placements}
         renderBlock={renderBlock}
         currentSlot={currentSlot}
-        renderSlotLabel={(slotId, i) => (i % 2 === 0 ? `S${slotId}` : '')}
+        renderSlotLabel={(slotId, i) =>
+          i % 2 === 0 ? (formatSlot ? formatSlot(slotId) : `S${slotId}`) : ''
+        }
       />
       <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/40 px-3 py-1 text-2xs">
         <span className="text-muted-foreground">Time</span>

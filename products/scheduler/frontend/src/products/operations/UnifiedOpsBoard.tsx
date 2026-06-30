@@ -60,6 +60,8 @@ interface Props {
   meet: { config: TournamentConfig | null; matches: MatchDTO[]; schedule: ScheduleDTO | null };
   /** Apply the bracket DTO a pin returns. */
   onBracketData: (dto: BracketTournamentDTO) => void;
+  /** Wall-clock label for a slot (operators think in time, not slot indices). */
+  formatSlot?: (slotId: number) => string;
 }
 
 function cellId(courtId: number, slotId: number) {
@@ -83,6 +85,7 @@ export function UnifiedOpsBoard({
   interactive,
   meet,
   onBracketData,
+  formatSlot,
 }: Props) {
   const players = useTournamentStore((s) => s.players);
   const { pinAndResolve } = useSchedule();
@@ -325,7 +328,9 @@ export function UnifiedOpsBoard({
       renderBlock={renderBlock}
       renderCell={interactive ? renderCell : undefined}
       currentSlot={currentSlot}
-      renderSlotLabel={(slotId, i) => (i % 2 === 0 ? `S${slotId}` : '')}
+      renderSlotLabel={(slotId, i) =>
+        i % 2 === 0 ? (formatSlot ? formatSlot(slotId) : `S${slotId}`) : ''
+      }
     />
   );
 
@@ -459,7 +464,9 @@ function DropCell({
       data-testid={`ops-cell-${courtId}-${slotId}`}
       className={[
         'relative h-full w-full border-l border-border/30 transition-colors duration-fast',
-        isCurrent ? 'bg-accent/5' : '',
+        // Now-column tint matches the green now-line in the time header (was a
+        // mismatched accent/pink wash) — one consistent "now" cue.
+        isCurrent ? 'bg-status-live/5' : '',
         isOver ? 'bg-muted/80' : '',
         hovered ? 'motion-safe:animate-cell-pulse' : '',
         infeasible ? 'ring-2 ring-inset ring-destructive bg-destructive/5' : '',
