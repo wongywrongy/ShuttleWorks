@@ -52,7 +52,9 @@ Before grep/Read on anything in `products/scheduler` or `scheduler_core`, use co
 
 Fall back to grep/Read for non-indexed files (markdown, YAML, config) or when semantic search returns nothing above ~0.6 relevance.
 
-**One-time setup** (the index is per-machine; `.codanna/` is gitignored): install codanna **0.9.22**, add `~/.local/bin` to PATH, then from the repo root run `codanna index products/scheduler/backend products/scheduler/frontend/src packages/design-system scheduler_core`, and restart Claude Code to approve the server. On Windows set `parallelism = 4` + `tantivy_heap_mb = 25` in `.codanna/settings.toml` and keep `index_path` outside any OneDrive-synced folder (Defender locks Tantivy writes otherwise). Re-index after large pulls with `codanna index`.
+**One-time setup** (the index is per-machine; `.codanna/` is gitignored): install codanna **0.9.22**, add `~/.local/bin` to PATH, then from the repo root run `codanna index products/scheduler/backend products/scheduler/frontend/src packages/design-system scheduler_core`. On Windows set `parallelism = 4` + `tantivy_heap_mb = 25` in `.codanna/settings.toml` and keep `index_path` outside any OneDrive-synced folder (Defender locks Tantivy writes otherwise). Re-index after large pulls with `codanna index`.
+
+**The MCP server runs in HTTP mode** (`.mcp.json` → `http://127.0.0.1:8080/mcp`) so multiple CLIs share one index. Start it once per work session and leave it running: `codanna serve --http --watch`. Then in each Claude Code session run `/mcp` and authorize `codanna` once (browser approval; token is cached + auto-refreshed). Don't fall back to stdio `serve` — it takes an exclusive per-index `serve.lock`, so a second concurrent CLI's server dies with `-32000`; HTTP excludes via port binding instead, no lock.
 
 ## Architecture boundaries (enforced by dependency-cruiser)
 - `src/platform/` is the foundation layer — it must NOT import from `products/` or `pages/` (**ERROR**, clean), nor from `app/` (**WARN**, a few known violations to ratchet).
