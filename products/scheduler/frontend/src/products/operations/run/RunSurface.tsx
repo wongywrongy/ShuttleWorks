@@ -120,6 +120,20 @@ export function RunSurface({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   /** Bracket has no persisted "called" status — overlay it locally. */
   const [calledBracketIds, setCalledBracketIds] = useState<Set<string>>(new Set());
+  /**
+   * In-flight assignments, keyed by match key → its target court+slot.
+   *
+   * Applied to the model the instant an assign fires, so the match leaves the
+   * queue and occupies its court immediately — before the backend round-trips.
+   * Without it, a just-assigned match lingers in the queue and its court still
+   * reads free, so a rapid second "Assign next"/record could place the SAME
+   * match on a second court, or a DIFFERENT match onto the same not-yet-filled
+   * court. Cleared on settle (success OR failure): a failed assign leaves the
+   * match unplaced, so it must return to the queue rather than stay stuck.
+   */
+  const [optimisticAssigns, setOptimisticAssigns] = useState<ReadonlyMap<string, { court: number; slot: number }>>(
+    new Map(),
+  );
 
   // ── eligibility (reuse OperationsProduct's schedulableCount predicate) ────
   const eligibleBracketIds = useMemo((): ReadonlySet<string> => {
@@ -141,10 +155,20 @@ export function RunSurface({
   }, [bracketData]);
 
   // ── derivation ────────────────────────────────────────────────────────────
-  const matches = useMemo(
+  const baseMatches = useMemo(
     () => toRunMatches(blocks, { calledBracketIds, eligibleBracketIds }),
     [blocks, calledBracketIds, eligibleBracketIds],
   );
+  // Overlay in-flight assignments so a just-assigned match is reflected on its
+  // court (and dropped from the queue) across the WHOLE model — lanes, queue,
+  // summary, auto-pull all derive from this, so nothing can double-assign it.
+  const matches = useMemo(() => {
+    if (optimisticAssigns.size === 0) return baseMatches;
+    return baseMatches.map((m) => {
+      const o = optimisticAssigns.get(m.key);
+      return o ? { ...m, court: o.court, plannedSlot: o.slot } : m;
+    });
+  }, [baseMatches, optimisticAssigns]);
   // `late` is gated on the floor running (planFinalized) and applies to the Now
   // match only — deriveCourtLanes owns that rule.
   const lanes = useMemo(
@@ -157,7 +181,9 @@ export function RunSurface({
   // ── seams object (stable per deps) ────────────────────────────────────────
   const seams: RunSeams = useMemo(
     () => ({
-      meetSubmit: (action, matchId, payload) => void meetSubmit(action, matchId, payload ?? {}),
+      // Return the submit promise (don't `void` it) so an in-flight assign can
+      // await the round-trip before clearing its optimistic overlay.
+      meetSubmit: (action, matchId, payload) => meetSubmit(action, matchId, payload ?? {}),
       bracketApi,
       bracketResult: ({ matchId, winnerSide }) => {
         const pu = bracketData?.play_units.find((u) => u.id === matchId);
@@ -181,6 +207,27 @@ export function RunSurface({
       onBracketData,
     }),
     [meetSubmit, bracketApi, bracketResultSubmit, bracketData, onBracketData],
+  );
+
+  // ── assign with in-flight tracking ────────────────────────────────────────
+  // Single entry point for every assign (queued "Send", board "Assign next",
+  // record auto-pull). Adds the optimistic overlay, fires the action, and
+  // clears the overlay on settle — success OR failure (runAction resolves after
+  // the round-trip is reflected, so on success the real model already shows the
+  // court; on failure the match returns to the queue instead of being stranded).
+  const fireAssign = useCallback(
+    (m: RunMatch, court: number, slot: number) => {
+      setOptimisticAssigns((prev) => new Map(prev).set(m.key, { court, slot }));
+      void runAction(m, 'assign', { court, slot }, seams).finally(() => {
+        setOptimisticAssigns((prev) => {
+          if (!prev.has(m.key)) return prev;
+          const next = new Map(prev);
+          next.delete(m.key);
+          return next;
+        });
+      });
+    },
+    [seams],
   );
 
   // ── selection + role resolution ───────────────────────────────────────────
@@ -232,15 +279,15 @@ export function RunSurface({
 
       if (kind === 'record') {
         // Issue the record action first.
-        runAction(selectedMatch, 'record', { winnerSide: opts?.winnerSide }, seams);
+        void runAction(selectedMatch, 'record', { winnerSide: opts?.winnerSide }, seams);
 
         // Auto-pull: deterministic, synchronous, no useEffect.
-        // computeAutoPull returns exactly what to assign — or null.
-        // nextEligible now requires can(status,'assign') so a 'called' queue
-        // head is skipped; only scheduled+eligible matches are auto-pulled.
+        // computeAutoPull returns exactly what to assign — or null. It reads the
+        // overlaid `queue`/`lanes`, so a match already assigned in-flight is
+        // skipped (no double-pull) and an in-flight court reads occupied.
         const pull = computeAutoPull(selectedMatch.key, matches, lanes, queue, currentSlot ?? 0);
         if (pull) {
-          runAction(pull.head, 'assign', { court: pull.court, slot: pull.slot }, seams);
+          fireAssign(pull.head, pull.court, pull.slot);
         }
 
         // Deselect after recording: the recorded match leaves the lane and the
@@ -253,24 +300,26 @@ export function RunSurface({
         const court = opts?.court ?? freeCourt;
         if (court == null) return;
         const slot = slotForAssign(court, matches, currentSlot ?? 0);
-        runAction(selectedMatch, 'assign', { court, slot }, seams);
+        fireAssign(selectedMatch, court, slot);
         return;
       }
 
-      runAction(selectedMatch, kind, undefined, seams);
+      void runAction(selectedMatch, kind, undefined, seams);
     },
-    [selectedMatch, seams, matches, lanes, queue, currentSlot, freeCourt],
+    [selectedMatch, seams, matches, lanes, queue, currentSlot, freeCourt, fireAssign],
   );
 
   // ── board: Assign next handler ────────────────────────────────────────────
   const handleAssignNext = useCallback(
     (court: number) => {
+      // `queue` already excludes in-flight assignments, so a free court can
+      // only ever pull a match not already heading to another court.
       const head = nextEligible(queue);
       if (!head) return;
       const slot = slotForAssign(court, matches, currentSlot ?? 0);
-      runAction(head, 'assign', { court, slot }, seams);
+      fireAssign(head, court, slot);
     },
-    [queue, matches, currentSlot, seams],
+    [queue, matches, currentSlot, fireAssign],
   );
 
   const queueHasEligible = nextEligible(queue) != null;

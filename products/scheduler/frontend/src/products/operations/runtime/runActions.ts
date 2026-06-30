@@ -50,12 +50,15 @@ export interface BracketApiSeam {
 }
 
 export interface RunSeams {
-  /** Submit a meet command via the IndexedDB command queue. */
+  /** Submit a meet command via the IndexedDB command queue. Returns the submit
+   *  promise (or void) so the caller can await the round-trip — the store gets
+   *  the assigned court on success, so awaiting is how an in-flight assign knows
+   *  when to stop being treated as pending. */
   meetSubmit: (
     action: MatchAction,
     matchId: string,
     payload: Record<string, unknown> | undefined,
-  ) => void;
+  ) => Promise<unknown> | void;
   /** Bracket engine API (partial surface — see BracketApiSeam). */
   bracketApi: BracketApiSeam;
   /** Record a bracket match result (Seam C). */
@@ -145,60 +148,58 @@ export function runAction(
   kind: RunActionKind,
   target: { court?: number; slot?: number; winnerSide?: string } | undefined,
   seams: RunSeams,
-): void {
-  if (!can(match.status, kind)) return;
+): Promise<void> {
+  if (!can(match.status, kind)) return Promise.resolve();
+
+  // Bracket non-solver calls resolve the updated snapshot — apply it, then
+  // settle as Promise<void> AFTER it's applied so the caller (in-flight tracker)
+  // sees the assignment reflected before it stops treating the assign as pending.
+  const applyDto = (p: Promise<unknown>): Promise<void> =>
+    p.then((dto) => seams.onBracketData(dto as BracketTournamentDTO)).catch(() => {});
 
   if (match.source === 'meet') {
     switch (kind) {
       case 'call':
-        seams.meetSubmit('call_to_court', match.id, undefined);
-        break;
+        void seams.meetSubmit('call_to_court', match.id, undefined);
+        return Promise.resolve();
       case 'start':
-        seams.meetSubmit('start_match', match.id, undefined);
-        break;
+        void seams.meetSubmit('start_match', match.id, undefined);
+        return Promise.resolve();
       case 'record':
-        seams.meetSubmit('finish_match', match.id, undefined);
-        break;
+        void seams.meetSubmit('finish_match', match.id, undefined);
+        return Promise.resolve();
       case 'assign': {
         const court_id = target?.court ?? match.court ?? 0;
         const time_slot = target?.slot;
-        seams.meetSubmit('assign_court', match.id, { court_id, time_slot });
-        break;
+        // Awaitable: resolves after the submit round-trip (court set in the store
+        // on success), so the in-flight overlay clears at the right moment.
+        return Promise.resolve(
+          seams.meetSubmit('assign_court', match.id, { court_id, time_slot }),
+        ).then(() => {});
       }
       case 'postpone':
-        seams.meetSubmit('postpone_match', match.id, {});
-        break;
+        void seams.meetSubmit('postpone_match', match.id, {});
+        return Promise.resolve();
     }
   } else {
     // bracket source
     switch (kind) {
       case 'call':
         seams.setCalledBracket(match.id, true);
-        break;
+        return Promise.resolve();
       case 'start':
-        void seams.bracketApi
-          .matchAction({ play_unit_id: match.id, action: 'start' })
-          .then((dto) => seams.onBracketData(dto as BracketTournamentDTO))
-          .catch(() => {});
-        break;
+        return applyDto(seams.bracketApi.matchAction({ play_unit_id: match.id, action: 'start' }));
       case 'record':
         seams.bracketResult({ matchId: match.id, winnerSide: target?.winnerSide });
-        break;
+        return Promise.resolve();
       case 'assign': {
         const court_id = target?.court ?? match.court ?? 0;
         const slot_id = target?.slot ?? match.plannedSlot ?? 0;
-        void seams.bracketApi
-          .assignCourt({ play_unit_id: match.id, court_id, slot_id })
-          .then((dto) => seams.onBracketData(dto as BracketTournamentDTO))
-          .catch(() => {});
-        break;
+        return applyDto(seams.bracketApi.assignCourt({ play_unit_id: match.id, court_id, slot_id }));
       }
       case 'postpone':
-        void seams.bracketApi
-          .unassign({ play_unit_id: match.id })
-          .then((dto) => seams.onBracketData(dto as BracketTournamentDTO))
-          .catch(() => {});
-        break;
+        return applyDto(seams.bracketApi.unassign({ play_unit_id: match.id }));
     }
   }
+  return Promise.resolve();
 }

@@ -9,7 +9,14 @@
  *     the auto-pull lives only in the handler, never in a useEffect.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+
+// Flush the promise chain that clears an in-flight assign's optimistic overlay
+// (fireAssign's settle handler), inside act(), so a settling-assign test doesn't
+// leave a state update dangling past its synchronous body. A macrotask (not a
+// single microtask) guarantees the whole `Promise.resolve().then().finally()`
+// chain drains before act resolves.
+const flushAssignSettle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 import { RunSurface, computeAutoPull } from '../run/RunSurface';
 import type { OpsBlock } from '../opsBlock';
 import type { CourtLane, RunMatch } from '../runtime/runModel';
@@ -249,7 +256,7 @@ describe('RunSurface — summary band derived counts', () => {
 });
 
 describe('RunSurface — select Now playing meet match + Record result', () => {
-  it('calls meetSubmit("finish_match") when Record result is clicked', () => {
+  it('calls meetSubmit("finish_match") when Record result is clicked', async () => {
     render(
       <RunSurface
         blocks={makeAutoFillBlocks()}
@@ -267,13 +274,15 @@ describe('RunSurface — select Now playing meet match + Record result', () => {
     expect(screen.getByTestId('run-act-record')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('run-act-record'));
+    // record auto-pulls m2 → fireAssign → drain its settle microtask in act
+    await flushAssignSettle();
 
     expect(mockMeetSubmit).toHaveBeenCalledWith('finish_match', 'm1', {});
   });
 });
 
 describe('RunSurface — auto-pull after record empties a court', () => {
-  it('fires EXACTLY ONE assign for nextEligible after a court-emptying record', () => {
+  it('fires EXACTLY ONE assign for nextEligible after a court-emptying record', async () => {
     render(
       <RunSurface
         blocks={makeAutoFillBlocks()}
@@ -294,9 +303,10 @@ describe('RunSurface — auto-pull after record empties a court', () => {
       court_id: 1,
       time_slot: expect.any(Number),
     });
+    await flushAssignSettle();
   });
 
-  it('does NOT double-fire after rerender with post-record blocks (no effect-storm)', () => {
+  it('does NOT double-fire after rerender with post-record blocks (no effect-storm)', async () => {
     const { rerender } = render(
       <RunSurface
         blocks={makeAutoFillBlocks()}
@@ -310,6 +320,9 @@ describe('RunSurface — auto-pull after record empties a court', () => {
     // Record → auto-pull: 2 calls
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
     fireEvent.click(screen.getByTestId('run-act-record'));
+    // Drain the auto-pull settle microtask in act BEFORE the rerender below,
+    // so it can't fire un-acted mid-rerender.
+    await flushAssignSettle();
     expect(mockMeetSubmit).toHaveBeenCalledTimes(2);
 
     // Simulate next poll: m1 finished (done), m2 + pu1 still in queue.
@@ -347,6 +360,7 @@ describe('RunSurface — auto-pull after record empties a court', () => {
 
     // m1 is done → leaves the lane → no board card for it
     expect(screen.queryByTestId('run-card-meet:m1')).toBeNull();
+    await flushAssignSettle();
   });
 });
 
@@ -389,7 +403,7 @@ describe('RunSurface — auto-pull skips ineligible queue head', () => {
 });
 
 describe('RunSurface — queued match Send to free court fires assign', () => {
-  it('Send to C1 fires assign_court with a concrete slot', () => {
+  it('Send to C1 fires assign_court with a concrete slot', async () => {
     // m1 in queue (no court); court 1 is free (no matches on it)
     const blocks: OpsBlock[] = [
       mkBlock({
@@ -423,6 +437,7 @@ describe('RunSurface — queued match Send to free court fires assign', () => {
       court_id: 1,
       time_slot: 1,
     });
+    await flushAssignSettle();
   });
 });
 
@@ -552,5 +567,55 @@ describe('RunSurface — meet Postpone moves the match from the lane to the queu
     expect(screen.queryByTestId('run-card-meet:m1')).toBeNull();
     // Post-postpone: match IS in the queue.
     expect(screen.getByTestId('run-queue-row-meet:m1')).toBeInTheDocument();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Section 5: in-flight assign guard — a just-assigned match can't be double-
+// assigned to a second free court before the backend round-trips.
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('RunSurface — in-flight assign guard (no double-assign across courts)', () => {
+  it('a just-assigned match leaves the queue + occupies its court, so a second free court cannot re-grab it', () => {
+    // Submit that never settles → the optimistic overlay persists for the
+    // assertion (mimics the round-trip window during which the bug fired).
+    mockMeetSubmit.mockReturnValueOnce(new Promise(() => {}));
+
+    // One eligible queued meet match; TWO free courts both offer it.
+    const blocks: OpsBlock[] = [
+      mkBlock({
+        id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+        status: 'scheduled', sideA: 'Alice', sideB: 'Bob',
+        court: undefined, slot: undefined,
+      }),
+    ];
+
+    render(
+      <RunSurface
+        blocks={blocks}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={2}
+        currentSlot={0}
+      />,
+    );
+
+    expect(screen.getByTestId('run-assign-next-1')).toBeInTheDocument();
+    expect(screen.getByTestId('run-assign-next-2')).toBeInTheDocument();
+
+    // Assign to court 1.
+    fireEvent.click(screen.getByTestId('run-assign-next-1'));
+    expect(mockMeetSubmit).toHaveBeenCalledTimes(1);
+    expect(mockMeetSubmit).toHaveBeenCalledWith('assign_court', 'm1', {
+      court_id: 1,
+      time_slot: expect.any(Number),
+    });
+
+    // Optimistically reflected: the match now sits on court 1 (board chip) and
+    // the queue is empty, so NEITHER court still offers "Assign next" — it
+    // cannot be double-assigned to court 2 during the round-trip window.
+    expect(screen.getByTestId('run-card-meet:m1')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-assign-next-1')).toBeNull();
+    expect(screen.queryByTestId('run-assign-next-2')).toBeNull();
   });
 });
