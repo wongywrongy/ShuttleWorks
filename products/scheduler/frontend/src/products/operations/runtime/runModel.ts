@@ -1,4 +1,5 @@
 import type { OpsBlock } from '../opsBlock';
+import type { BoardChip } from './boardPlacements';
 import { fromEngineStatus, deriveLate, can, type RunStatus } from './runMachine';
 
 export interface RunMatch {
@@ -106,14 +107,20 @@ export function nextEligible(queue: RunMatch[]): RunMatch | undefined {
 
 export interface RunSummary { done: number; total: number; playing: number; courtsFree: number; late: number; }
 
-export function deriveSummary(matches: RunMatch[], lanes: CourtLane[]): RunSummary {
+export function deriveSummary(
+  matches: RunMatch[],
+  lanes: CourtLane[],
+  liveChips: BoardChip[],
+): RunSummary {
   return {
     done: matches.filter((m) => m.status === 'done').length,
     total: matches.length,
     playing: matches.filter((m) => m.status === 'playing').length,
     courtsFree: lanes.filter((l) => l.now == null).length,
-    // Late is Now-only and running-gated — deriveCourtLanes set it on each
-    // lane's Now match, so count from the lanes, not the flat matches array.
-    late: lanes.filter((l) => l.now?.late).length,
+    // Late now MIRRORS the live board exactly (Task 2 `buildLiveChips`): every
+    // court-assigned scheduled/called chip past its planned slot, NOT the old
+    // Now-only/running-gated lane rule. The time axis shows lateness directly,
+    // so the band's count must equal what the board renders — same chips.
+    late: liveChips.filter((c) => c.late).length,
   };
 }

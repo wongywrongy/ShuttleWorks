@@ -1,7 +1,7 @@
 /**
  * RunSurface — the Operations Run keystone.
  *
- * Composes RunSummaryBand + RunBoard + RunQueue + RunInspector and owns:
+ * Composes RunSummaryBand + RunLiveBoard + RunQueue + RunInspector and owns:
  *   - All seam hooks (meet command queue, bracket API, bracket result queue).
  *   - Selection state (`selectedKey`) and role resolution.
  *   - Transient `calledBracketIds` (bracket has no persisted "called" status).
@@ -27,6 +27,7 @@ import {
   type CourtLane,
   type RunMatch,
 } from '../runtime/runModel';
+import { buildLiveChips } from '../runtime/boardPlacements';
 import { runAction, slotForAssign, type RunSeams } from '../runtime/runActions';
 import type { RunActionKind } from '../runtime/runMachine';
 import { RunSummaryBand } from './RunSummaryBand';
@@ -176,7 +177,12 @@ export function RunSurface({
     [matches, courtCount, planFinalized, currentSlot],
   );
   const queue = useMemo(() => deriveQueue(matches), [matches]);
-  const summary = useMemo(() => deriveSummary(matches, lanes), [matches, lanes]);
+  // Re-build the live chips here purely to count `late` for the summary band so
+  // it equals what RunLiveBoard renders (band == board). We can't lift the chips
+  // out of RunLiveBoard — its prop contract is KEEP-unchanged — so this pure,
+  // cheap re-derive from the SAME raw `blocks`/`currentSlot` is deliberate.
+  const liveChips = useMemo(() => buildLiveChips(blocks, currentSlot ?? 0), [blocks, currentSlot]);
+  const summary = useMemo(() => deriveSummary(matches, lanes, liveChips), [matches, lanes, liveChips]);
 
   // ── seams object (stable per deps) ────────────────────────────────────────
   const seams: RunSeams = useMemo(

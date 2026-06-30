@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { toRunMatches, deriveCourtLanes, deriveQueue, nextEligible, deriveSummary } from '../runtime/runModel';
+import { buildLiveChips } from '../runtime/boardPlacements';
 import type { OpsBlock } from '../opsBlock';
 
 const blk = (o: Partial<OpsBlock> & { id: string }): OpsBlock => ({
@@ -114,20 +115,25 @@ describe('runModel', () => {
     const [u] = toRunMatches([blk({ id: 'u', sideA: 'TBD', sideB: 'B' })], {});
     expect(u.eligible).toBe(false);
   });
-  it('summary counts are all derived; late is Now-only and running-gated', () => {
-    const ms = toRunMatches([
-      blk({ id: 'p', court: 1, slot: 0, status: 'started' }),   // playing Now on C1
-      blk({ id: 'd', status: 'finished', done: true }),
-      blk({ id: 'lateNow', court: 2, slot: 1, status: 'scheduled' }), // overdue Now on C2
-      blk({ id: 'q', court: undefined, slot: 1 }),              // queued — never late
-    ], {});
-    // Running → only the overdue Now on C2 is late (playing Now and queued are not).
-    const lanesRunning = deriveCourtLanes(ms, 3, { running: true, currentSlot: 9 });
-    const sRunning = deriveSummary(ms, lanesRunning);
-    expect(sRunning).toMatchObject({ done: 1, total: 4, playing: 1, courtsFree: 1 });
-    expect(sRunning.late).toBe(1);
-    // Not running (plan not finalized) → zero late.
-    const lanesIdle = deriveCourtLanes(ms, 3, { running: false, currentSlot: 9 });
-    expect(deriveSummary(ms, lanesIdle).late).toBe(0);
+  it('summary counts are all derived; late mirrors the live board (per-chip, not Now-only/running-gated)', () => {
+    const blocks: OpsBlock[] = [
+      blk({ id: 'p', court: 1, slot: 0, status: 'started' }),   // playing chip on C1 — not late
+      blk({ id: 'd', status: 'finished', done: true }),         // done, no court — not a chip
+      blk({ id: 'lateNow', court: 2, slot: 1, status: 'scheduled' }), // overdue scheduled chip on C2
+      blk({ id: 'q', court: undefined, slot: 1 }),              // queued (no court) — not a chip
+    ];
+    const ms = toRunMatches(blocks, {});
+    const lanes = deriveCourtLanes(ms, 3, { currentSlot: 9 });
+    // Late is counted from the SAME live chips the board renders (Task 2):
+    // only `lateNow` is a court-assigned scheduled chip past its planned slot.
+    const chips = buildLiveChips(blocks, 9);
+    const s = deriveSummary(ms, lanes, chips);
+    expect(s).toMatchObject({ done: 1, total: 4, playing: 1, courtsFree: 1, late: 1 });
+
+    // No running-gate any more: the same overdue scheduled chip is late even
+    // when the floor is idle — the time axis shows lateness directly.
+    expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 9)).late).toBe(1);
+    // Before its planned slot, the chip is not yet late.
+    expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 0)).late).toBe(0);
   });
 });
