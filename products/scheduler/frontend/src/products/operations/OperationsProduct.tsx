@@ -60,8 +60,8 @@ function OperationsBody() {
   const matchStates = useMatchStateStore((s) => s.matchStates);
   const nameById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p.name])), [players]);
   const meetBlocks = useMemo(
-    () => meetToOpsBlocks(matches, schedule, matchStates, nameById),
-    [matches, schedule, matchStates, nameById],
+    () => meetToOpsBlocks(matches, schedule, matchStates, nameById, config),
+    [matches, schedule, matchStates, nameById, config],
   );
 
   // ---- Bracket blocks (polled snapshot) ----

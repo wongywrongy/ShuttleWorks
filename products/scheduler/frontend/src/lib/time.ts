@@ -143,7 +143,7 @@ export function parseMatchStartMs(value: string | null | undefined): number | nu
   return null;
 }
 
-function msToSlot(ms: number, config: TournamentConfig): number {
+export function msToSlot(ms: number, config: TournamentConfig): number {
   const d = new Date(ms);
   const minutesOfDay = d.getHours() * 60 + d.getMinutes();
   const start = timeToMinutes(config.dayStart);

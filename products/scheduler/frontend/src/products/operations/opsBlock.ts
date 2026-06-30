@@ -12,9 +12,10 @@
  * interactive surfaces need.
  */
 import type { OperationalSource, OperationalStatus } from '../../lib/operations/operationalMatch';
-import type { MatchDTO, ScheduleDTO, MatchStateDTO } from '../../api/dto';
+import type { MatchDTO, ScheduleDTO, MatchStateDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { playUnitSideLabels } from '../bracket/bracketLabels';
+import { msToSlot, parseMatchStartMs } from '../../lib/time';
 
 export interface OpsBlock {
   source: OperationalSource;
@@ -36,6 +37,14 @@ export interface OpsBlock {
   done: boolean;
   /** True once the match has been started on court. */
   started: boolean;
+  /**
+   * ACTUAL play-head slot (when known) — derived from live timing, distinct
+   * from the PLANNED `slot`. Present once started/finished; the live board
+   * spans chips from here. Undefined → callers fall back to the planned slot.
+   */
+  actualStartSlot?: number;
+  /** ACTUAL end slot (when known) — present once finished. */
+  actualEndSlot?: number;
 }
 
 const TBD = 'TBD';
@@ -51,12 +60,25 @@ function meetLabel(m: MatchDTO): string {
   return m.id.slice(0, 4);
 }
 
+/**
+ * Map live match-state timing to ACTUAL slots. Config-aware (overnight-safe);
+ * pure given `ms` (no clock read here). Returns `undefined` when timing or
+ * config is missing so the caller falls back to the planned slot — never throws.
+ */
+function meetActualSlot(value: string | undefined, config: TournamentConfig | null): number | undefined {
+  if (!config) return undefined;
+  const ms = parseMatchStartMs(value);
+  if (ms === null) return undefined;
+  return msToSlot(ms, config);
+}
+
 /** Build OpsBlocks for the meet engine from its native model. */
 export function meetToOpsBlocks(
   matches: MatchDTO[],
   schedule: ScheduleDTO | null,
   matchStates: Record<string, MatchStateDTO>,
   nameById: Record<string, string>,
+  config: TournamentConfig | null,
 ): OpsBlock[] {
   const assignByMatch = new Map((schedule?.assignments ?? []).map((a) => [a.matchId, a]));
   return matches.map((m) => {
@@ -69,6 +91,14 @@ export function meetToOpsBlocks(
     const court = st?.postponed ? undefined : (st?.actualCourtId ?? a?.courtId);
     const slot = st?.postponed ? undefined : (st?.actualSlotId ?? a?.slotId);
     const status: OperationalStatus = st?.status ?? 'scheduled';
+    // ACTUAL timing (PLANNED slot/span above stays untouched): a started or
+    // finished match exposes its real start; a finished one also its end.
+    const actualStartSlot =
+      status === 'started' || status === 'finished'
+        ? meetActualSlot(st?.actualStartTime, config)
+        : undefined;
+    const actualEndSlot =
+      status === 'finished' ? meetActualSlot(st?.actualEndTime, config) : undefined;
     return {
       source: 'meet' as const,
       id: m.id,
@@ -83,6 +113,8 @@ export function meetToOpsBlocks(
       sideB: meetSide(m.sideB, nameById),
       done: status === 'finished',
       started: status === 'started' || status === 'finished',
+      actualStartSlot,
+      actualEndSlot,
     };
   });
 }
@@ -113,6 +145,8 @@ export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
       sideB,
       done: result != null,
       started,
+      actualStartSlot: a?.actual_start_slot ?? undefined,
+      actualEndSlot: a?.actual_end_slot ?? undefined,
     };
   });
 }
