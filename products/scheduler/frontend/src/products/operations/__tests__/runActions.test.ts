@@ -1,15 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runAction, planAutoPull } from '../runtime/runActions';
 
+const DTO = { tag: 'updated-bracket-snapshot' };
+
 const seams = () => ({
   meetSubmit: vi.fn(),
   bracketApi: {
-    matchAction: vi.fn().mockResolvedValue({}),
-    assignCourt: vi.fn().mockResolvedValue({}),
-    unassign: vi.fn().mockResolvedValue({}),
+    matchAction: vi.fn().mockResolvedValue(DTO),
+    assignCourt: vi.fn().mockResolvedValue(DTO),
+    unassign: vi.fn().mockResolvedValue(DTO),
   },
   bracketResult: vi.fn(),
   setCalledBracket: vi.fn(),
+  onBracketData: vi.fn(),
 });
 
 const m = (o: any) => {
@@ -84,6 +87,23 @@ describe('runAction routing', () => {
     const s = seams();
     runAction(m({ id: 'a', status: 'scheduled', court: 1 }), 'start', undefined, s);
     expect(s.meetSubmit).not.toHaveBeenCalled();
+  });
+
+  // Regression: bracket start/assign/postpone must APPLY the DTO they return
+  // (not discard it), or a just-assigned unit lingers in the queue for ~2.5s
+  // and can be re-pulled onto a second court.
+  it('bracket start/assign/postpone apply the returned DTO via onBracketData', async () => {
+    const s = seams();
+    runAction(m({ id: 'b', source: 'bracket', status: 'called', court: 1 }), 'start', undefined, s);
+    runAction(m({ id: 'b', source: 'bracket', status: 'scheduled' }), 'assign', { court: 2, slot: 3 }, s);
+    runAction(m({ id: 'b', source: 'bracket', status: 'playing', court: 2 }), 'postpone', undefined, s);
+    // .then runs on a microtask — flush before asserting.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(s.onBracketData).toHaveBeenCalledTimes(3);
+    expect(s.onBracketData).toHaveBeenNthCalledWith(1, DTO);
+    expect(s.onBracketData).toHaveBeenNthCalledWith(2, DTO);
+    expect(s.onBracketData).toHaveBeenNthCalledWith(3, DTO);
   });
 });
 

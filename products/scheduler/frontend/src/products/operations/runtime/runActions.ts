@@ -25,6 +25,7 @@
 import { can, type RunActionKind } from './runMachine';
 import { nextEligible, type CourtLane, type RunMatch } from './runModel';
 import type { MatchAction } from '../../../lib/commandQueue';
+import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 // Re-export so callers don't need a separate import.
 export type { RunActionKind };
@@ -61,6 +62,13 @@ export interface RunSeams {
   bracketResult: (input: { matchId: string; winnerSide?: string }) => void;
   /** Toggle the Operations-local "called" flag for bracket matches. */
   setCalledBracket: (id: string, on: boolean) => void;
+  /** Apply the authoritative bracket snapshot a non-solver call returns.
+   *  bracketApi.matchAction/assignCourt/unassign all resolve the updated
+   *  BracketTournamentDTO; applying it immediately (instead of waiting for the
+   *  ~2.5s poll) is what keeps a just-assigned unit from lingering in the queue
+   *  and being re-pulled onto a second court. Mirrors the Plan branch's
+   *  `.then(setData)` and the Run record path's `onSettled`. */
+  onBracketData: (dto: BracketTournamentDTO) => void;
 }
 
 /**
@@ -168,7 +176,10 @@ export function runAction(
         seams.setCalledBracket(match.id, true);
         break;
       case 'start':
-        void seams.bracketApi.matchAction({ play_unit_id: match.id, action: 'start' });
+        void seams.bracketApi
+          .matchAction({ play_unit_id: match.id, action: 'start' })
+          .then((dto) => seams.onBracketData(dto as BracketTournamentDTO))
+          .catch(() => {});
         break;
       case 'record':
         seams.bracketResult({ matchId: match.id, winnerSide: target?.winnerSide });
@@ -176,11 +187,17 @@ export function runAction(
       case 'assign': {
         const court_id = target?.court ?? match.court ?? 0;
         const slot_id = target?.slot ?? match.plannedSlot ?? 0;
-        void seams.bracketApi.assignCourt({ play_unit_id: match.id, court_id, slot_id });
+        void seams.bracketApi
+          .assignCourt({ play_unit_id: match.id, court_id, slot_id })
+          .then((dto) => seams.onBracketData(dto as BracketTournamentDTO))
+          .catch(() => {});
         break;
       }
       case 'postpone':
-        void seams.bracketApi.unassign({ play_unit_id: match.id });
+        void seams.bracketApi
+          .unassign({ play_unit_id: match.id })
+          .then((dto) => seams.onBracketData(dto as BracketTournamentDTO))
+          .catch(() => {});
         break;
     }
   }

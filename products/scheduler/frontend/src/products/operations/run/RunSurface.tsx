@@ -175,8 +175,12 @@ export function RunSurface({
           return next;
         });
       },
+      // Apply the snapshot bracket non-solver calls return, so a just-assigned
+      // unit leaves the queue immediately instead of after the ~2.5s poll
+      // (otherwise it can be re-pulled onto a second court).
+      onBracketData,
     }),
-    [meetSubmit, bracketApi, bracketResultSubmit, bracketData],
+    [meetSubmit, bracketApi, bracketResultSubmit, bracketData, onBracketData],
   );
 
   // ── selection + role resolution ───────────────────────────────────────────

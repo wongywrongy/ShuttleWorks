@@ -14,8 +14,9 @@
  * Color encoding is per-surface via `tone`:
  *   - `discipline` (Plan): fill = event-type colour; live state = the ring.
  *   - `state`      (Run):  fill = live state; discipline is not encoded.
- * `late` always wins the ring (warning) and `selected` always wins the fill
- * (accent), regardless of tone.
+ * Priority, regardless of tone: `selected` wins both the fill (accent) and the
+ * ring (accent); otherwise `late` wins the ring (warning). The Run board also
+ * paints its own "Late" text badge off `match.late` independent of selection.
  */
 import { forwardRef } from 'react';
 import { getEventColor } from '../lib/eventColors';

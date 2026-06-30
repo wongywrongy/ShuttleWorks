@@ -58,7 +58,11 @@ COPY --from=builder --chown=101:101 \
 
 EXPOSE 8080
 
+# Probe 127.0.0.1 (not `localhost`): in this image `localhost` resolves to
+# `::1` (IPv6) first, but nginx listens on IPv4 only, so a `localhost` probe is
+# refused and the container reads "unhealthy" even though it serves fine over
+# the IPv4 port map. 127.0.0.1 pins the check to the stack nginx actually binds.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
