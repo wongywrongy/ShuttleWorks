@@ -275,7 +275,6 @@ function OperationsBody() {
                   currentSlot={currentSlot}
                   selectedKey={selectedKey}
                   onSelect={setSelectedKey}
-                  interactive
                   meet={{ config, matches, schedule }}
                   onBracketData={setData}
                   formatSlot={formatSlot}

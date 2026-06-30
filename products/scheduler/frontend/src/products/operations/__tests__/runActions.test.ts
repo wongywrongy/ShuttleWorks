@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runAction, planAutoPull } from '../runtime/runActions';
+import { runAction } from '../runtime/runActions';
 
 const DTO = { tag: 'updated-bracket-snapshot' };
 
@@ -107,26 +107,3 @@ describe('runAction routing', () => {
   });
 });
 
-describe('planAutoPull', () => {
-  it('fills only free courts, from the eligible queue head, with a concrete slot', () => {
-    const lanes = [
-      { court: 1, now: undefined, depth: 0 },
-      { court: 2, now: { id: 'on', plannedSlot: 4 } as any, depth: 1 },
-    ] as any;
-    const queue = [
-      { ...m({ id: 'wait' }), eligible: false },
-      { ...m({ id: 'q1' }), eligible: true, plannedSlot: 2 },
-    ];
-    const plan = planAutoPull(lanes, queue, [...queue], 6);
-    // court 1 is free → gets q1 (the eligible head); court 2 is busy → untouched.
-    // slot = max(currentSlot 6, court-1 lane slots none) + 1 = 7.
-    expect(plan).toEqual([{ matchKey: 'meet:q1', court: 1, slot: 7 }]);
-  });
-  it('does not assign the same match to two free courts', () => {
-    const lanes = [{ court: 1, now: undefined, depth: 0 }, { court: 2, now: undefined, depth: 0 }] as any;
-    const queue = [{ ...m({ id: 'only' }), eligible: true, plannedSlot: 0 }];
-    const plan = planAutoPull(lanes, queue, [...queue], 3);
-    expect(plan).toHaveLength(1);
-    expect(plan[0].court).toBe(1);
-  });
-});

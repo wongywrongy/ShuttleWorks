@@ -23,7 +23,7 @@
  */
 
 import { can, type RunActionKind } from './runMachine';
-import { nextEligible, type CourtLane, type RunMatch } from './runModel';
+import type { RunMatch } from './runModel';
 import type { MatchAction } from '../../../lib/commandQueue';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
@@ -92,36 +92,6 @@ export function slotForAssign(
     .filter((s): s is number => s != null);
 
   return Math.max(currentSlot, ...courtSlots) + 1;
-}
-
-/**
- * Pure: for each free court (`now == null`), take `nextEligible` from the
- * remaining queue — consuming it so two free courts cannot grab the same match.
- * Returns a deterministic list of `{ matchKey, court, slot }` assignments.
- * No clock read; uses injected `currentSlot`.
- */
-export function planAutoPull(
-  lanes: CourtLane[],
-  queue: RunMatch[],
-  allMatches: RunMatch[],
-  currentSlot: number,
-): Array<{ matchKey: string; court: number; slot: number }> {
-  const result: Array<{ matchKey: string; court: number; slot: number }> = [];
-  let remaining = [...queue];
-
-  for (const lane of lanes) {
-    if (lane.now != null) continue; // court is busy
-    const match = nextEligible(remaining);
-    if (!match) break; // queue exhausted — no more free courts can be filled
-    remaining = remaining.filter((m) => m.key !== match.key);
-    result.push({
-      matchKey: match.key,
-      court: lane.court,
-      slot: slotForAssign(lane.court, allMatches, currentSlot),
-    });
-  }
-
-  return result;
 }
 
 /**

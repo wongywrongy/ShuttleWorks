@@ -11,7 +11,6 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { PendingBadge } from '../../../../components/PendingBadge';
 import { ConflictBanner } from '../../../../components/ConflictBanner';
-import { ConnectionIndicator } from '../../../../components/ConnectionIndicator';
 import { useMatchStateStore } from '../../../../store/matchStateStore';
 
 beforeEach(() => {
@@ -138,121 +137,5 @@ describe('ConflictBanner — subscriber mode', () => {
   it('renders nothing when the store has no conflict for the match id', () => {
     const { container } = render(<ConflictBanner matchId="m-clean" />);
     expect(container.firstChild).toBeNull();
-  });
-});
-
-// ---- ConnectionIndicator ---------------------------------------------
-
-describe('ConnectionIndicator', () => {
-  it('renders green dot, no text, when both signals are healthy', () => {
-    render(<ConnectionIndicator reachability="online" realtime="connected" />);
-    const indicator = screen.getByTestId('connection-indicator');
-    expect(indicator).toHaveAttribute('data-state', 'green');
-    expect(screen.queryByTestId('connection-text')).not.toBeInTheDocument();
-  });
-
-  it('renders amber + "Reconnecting…" when reachability is offline but realtime is connected', () => {
-    render(<ConnectionIndicator reachability="offline" realtime="connected" />);
-    expect(screen.getByTestId('connection-indicator')).toHaveAttribute(
-      'data-state',
-      'amber',
-    );
-    expect(screen.getByTestId('connection-text').textContent).toBe('Reconnecting…');
-  });
-
-  it('renders amber when reachability is online but realtime is reconnecting', () => {
-    render(<ConnectionIndicator reachability="online" realtime="reconnecting" />);
-    expect(screen.getByTestId('connection-indicator')).toHaveAttribute(
-      'data-state',
-      'amber',
-    );
-  });
-
-  it('stays amber until the 60-second threshold elapses with both offline', () => {
-    vi.useFakeTimers();
-    const { rerender } = render(
-      <ConnectionIndicator
-        reachability="offline"
-        realtime="disconnected"
-        redThresholdMs={60_000}
-      />,
-    );
-    expect(screen.getByTestId('connection-indicator')).toHaveAttribute(
-      'data-state',
-      'amber',
-    );
-
-    // 59 999 ms in — still amber.
-    act(() => {
-      vi.advanceTimersByTime(59_999);
-    });
-    rerender(
-      <ConnectionIndicator
-        reachability="offline"
-        realtime="disconnected"
-        redThresholdMs={60_000}
-      />,
-    );
-    expect(screen.getByTestId('connection-indicator')).toHaveAttribute(
-      'data-state',
-      'amber',
-    );
-
-    // One more ms — flips to red + "Offline".
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    rerender(
-      <ConnectionIndicator
-        reachability="offline"
-        realtime="disconnected"
-        redThresholdMs={60_000}
-      />,
-    );
-    expect(screen.getByTestId('connection-indicator')).toHaveAttribute(
-      'data-state',
-      'red',
-    );
-    expect(screen.getByTestId('connection-text').textContent).toBe('Offline');
-  });
-
-  it('flips back to amber the moment either signal recovers', () => {
-    vi.useFakeTimers();
-    const { rerender } = render(
-      <ConnectionIndicator
-        reachability="offline"
-        realtime="disconnected"
-        redThresholdMs={1_000}
-      />,
-    );
-    // Advance past the threshold so we go red.
-    act(() => {
-      vi.advanceTimersByTime(1_001);
-    });
-    rerender(
-      <ConnectionIndicator
-        reachability="offline"
-        realtime="disconnected"
-        redThresholdMs={1_000}
-      />,
-    );
-    expect(screen.getByTestId('connection-indicator')).toHaveAttribute(
-      'data-state',
-      'red',
-    );
-
-    // Realtime recovers — indicator should go back to amber
-    // (reachability is still offline).
-    rerender(
-      <ConnectionIndicator
-        reachability="offline"
-        realtime="connected"
-        redThresholdMs={1_000}
-      />,
-    );
-    expect(screen.getByTestId('connection-indicator')).toHaveAttribute(
-      'data-state',
-      'amber',
-    );
   });
 });
