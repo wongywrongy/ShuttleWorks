@@ -181,7 +181,10 @@ export function RunSurface({
   // it equals what RunLiveBoard renders (band == board). We can't lift the chips
   // out of RunLiveBoard — its prop contract is KEEP-unchanged — so this pure,
   // cheap re-derive from the SAME raw `blocks`/`currentSlot` is deliberate.
-  const liveChips = useMemo(() => buildLiveChips(blocks, currentSlot ?? 0), [blocks, currentSlot]);
+  const liveChips = useMemo(
+    () => buildLiveChips(blocks, currentSlot ?? 0, !!planFinalized),
+    [blocks, currentSlot, planFinalized],
+  );
   const summary = useMemo(() => deriveSummary(matches, lanes, liveChips), [matches, lanes, liveChips]);
 
   // ── seams object (stable per deps) ────────────────────────────────────────
@@ -338,6 +341,7 @@ export function RunSurface({
             blocks={blocks}
             courtCount={courtCount}
             currentSlot={currentSlot}
+            running={!!planFinalized}
             selectedKey={selectedKey}
             onSelect={setSelectedKey}
           />

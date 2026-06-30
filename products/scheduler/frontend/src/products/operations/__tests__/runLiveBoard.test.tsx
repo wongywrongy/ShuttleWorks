@@ -51,18 +51,18 @@ describe('RunLiveBoard', () => {
     expect(screen.getByTestId('run-card-bracket:pu')).toHaveAttribute('data-source', 'bracket');
   });
 
-  it('an overdue scheduled chip shows the run-late marker', () => {
-    render(
-      <RunLiveBoard
-        blocks={[blk({ id: 'late', court: 1, slot: 0, status: 'scheduled' })]}
-        courtCount={1}
-        currentSlot={3}
-        onSelect={vi.fn()}
-      />,
+  it('an overdue scheduled chip shows the run-late marker only when running', () => {
+    const blocks = [blk({ id: 'late', court: 1, slot: 0, status: 'scheduled' })];
+    const { rerender } = render(
+      <RunLiveBoard blocks={blocks} courtCount={1} currentSlot={3} running onSelect={vi.fn()} />,
     );
-
     expect(screen.getByTestId('run-card-meet:late')).toBeInTheDocument();
     expect(screen.getByTestId('run-late-meet:late')).toBeInTheDocument();
+
+    // NOT running (plan not finalized) → no late marker even though overdue —
+    // the fix for the wall of LATE badges on an un-started plan.
+    rerender(<RunLiveBoard blocks={blocks} courtCount={1} currentSlot={3} onSelect={vi.fn()} />);
+    expect(screen.queryByTestId('run-late-meet:late')).toBeNull();
   });
 
   it('an early scheduled chip carries no late marker', () => {

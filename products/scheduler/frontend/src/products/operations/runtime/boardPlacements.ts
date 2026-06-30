@@ -71,8 +71,16 @@ export function buildPlanChips(blocks: OpsBlock[]): BoardChip[] {
   });
 }
 
-/** Run board: LIVE/ACTUAL spans. See the per-state rules in the module doc. */
-export function buildLiveChips(blocks: OpsBlock[], currentSlot: number): BoardChip[] {
+/**
+ * Run board: LIVE/ACTUAL spans. See the per-state rules in the module doc.
+ *
+ * `running` (the plan-finalized / floor-is-live flag) gates `late`: before the
+ * day is running, the wall clock being past a DRAFT slot does not mean a match
+ * is late, so nothing is flagged (avoids a wall of LATE badges on an un-started
+ * plan). Once running, every overdue scheduled/called chip is late — the time
+ * axis shows the position and the flag confirms it.
+ */
+export function buildLiveChips(blocks: OpsBlock[], currentSlot: number, running = false): BoardChip[] {
   return courtAssigned(blocks).map((b) => {
     const state = fromEngineStatus(b.status);
     const plannedSlot = b.slot as number;
@@ -109,8 +117,9 @@ export function buildLiveChips(blocks: OpsBlock[], currentSlot: number): BoardCh
       },
       source: b.source,
       state,
-      // Per-chip late (NOT Now-only/running-gated): the time axis renders it.
-      late: deriveLate({ status: state, plannedSlot, currentSlot }),
+      // Per-chip late, gated on the floor running: the time axis shows the
+      // overdue position; the flag only lights once the day is live.
+      late: running && deriveLate({ status: state, plannedSlot, currentSlot }),
       // Overrun measures past the PLANNED end (plannedSlot + plannedSpan).
       overrunSlots: deriveDriftSlots({ status: state, plannedSlot, span: plannedSpan, currentSlot }),
       label: b.label,

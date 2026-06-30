@@ -34,6 +34,9 @@ export interface RunLiveBoardProps {
   courtCount: number;
   /** Live play-head slot; injected (never read from the clock here). */
   currentSlot?: number;
+  /** Floor-is-live (plan finalized) — gates the `late` flag so an un-started
+   *  plan doesn't paint a wall of LATE badges. */
+  running?: boolean;
   selectedKey?: string | null;
   onSelect(key: string): void;
 }
@@ -42,12 +45,13 @@ export function RunLiveBoard({
   blocks,
   courtCount,
   currentSlot = 0,
+  running = false,
   selectedKey,
   onSelect,
 }: RunLiveBoardProps) {
   const chips = useMemo<BoardChip[]>(
-    () => buildLiveChips(blocks, currentSlot),
-    [blocks, currentSlot],
+    () => buildLiveChips(blocks, currentSlot, running),
+    [blocks, currentSlot, running],
   );
   const chipByKey = useMemo(() => new Map(chips.map((c) => [c.key, c])), [chips]);
 

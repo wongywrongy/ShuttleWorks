@@ -72,18 +72,21 @@ describe('boardPlacements — buildLiveChips', () => {
     expect(c.overrunSlots).toBe(0);     // overrun is a playing-only concern
   });
 
-  it('scheduled chip is span=1 and flips late once currentSlot >= plannedSlot', () => {
+  it('scheduled chip is span=1; late only when RUNNING and currentSlot >= plannedSlot', () => {
     const blocks = [blk({ id: 's', court: 1, slot: 3, span: 2, status: 'scheduled' })];
-    const [overdue] = buildLiveChips(blocks, 3);
+    // running + overdue → late
+    const [overdue] = buildLiveChips(blocks, 3, true);
     expect(overdue.placement.span).toBe(1);
     expect(overdue.placement.startSlot).toBe(3);
     expect(overdue.late).toBe(true);
-    const [early] = buildLiveChips(blocks, 1);
-    expect(early.late).toBe(false);
+    // NOT running (plan not finalized) → never late, even when overdue
+    expect(buildLiveChips(blocks, 3, false)[0].late).toBe(false);
+    // running but not yet due → not late
+    expect(buildLiveChips(blocks, 1, true)[0].late).toBe(false);
   });
 
-  it('called chip is span=1 at the planned slot and can be late', () => {
-    const [c] = buildLiveChips([blk({ id: 'c', court: 1, slot: 2, status: 'called' })], 4);
+  it('called chip is span=1 at the planned slot and can be late (when running)', () => {
+    const [c] = buildLiveChips([blk({ id: 'c', court: 1, slot: 2, status: 'called' })], 4, true);
     expect(c.state).toBe('called');
     expect(c.placement.span).toBe(1);
     expect(c.placement.startSlot).toBe(2);

@@ -115,7 +115,7 @@ describe('runModel', () => {
     const [u] = toRunMatches([blk({ id: 'u', sideA: 'TBD', sideB: 'B' })], {});
     expect(u.eligible).toBe(false);
   });
-  it('summary counts are all derived; late mirrors the live board (per-chip, not Now-only/running-gated)', () => {
+  it('summary counts are all derived; late mirrors the live board (per-chip, running-gated)', () => {
     const blocks: OpsBlock[] = [
       blk({ id: 'p', court: 1, slot: 0, status: 'started' }),   // playing chip on C1 — not late
       blk({ id: 'd', status: 'finished', done: true }),         // done, no court — not a chip
@@ -124,16 +124,16 @@ describe('runModel', () => {
     ];
     const ms = toRunMatches(blocks, {});
     const lanes = deriveCourtLanes(ms, 3, { currentSlot: 9 });
-    // Late is counted from the SAME live chips the board renders (Task 2):
-    // only `lateNow` is a court-assigned scheduled chip past its planned slot.
-    const chips = buildLiveChips(blocks, 9);
-    const s = deriveSummary(ms, lanes, chips);
+    // Late is counted from the SAME live chips the board renders (Task 2),
+    // gated on running: only `lateNow` is a court-assigned scheduled chip past
+    // its planned slot.
+    const s = deriveSummary(ms, lanes, buildLiveChips(blocks, 9, true));
     expect(s).toMatchObject({ done: 1, total: 4, playing: 1, courtsFree: 1, late: 1 });
 
-    // No running-gate any more: the same overdue scheduled chip is late even
-    // when the floor is idle — the time axis shows lateness directly.
-    expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 9)).late).toBe(1);
-    // Before its planned slot, the chip is not yet late.
-    expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 0)).late).toBe(0);
+    // NOT running (plan not finalized) → zero late, even past the slots — this
+    // is the fix for the "wall of LATE badges" on an un-started plan.
+    expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 9, false)).late).toBe(0);
+    // Running but before the planned slot → not yet late.
+    expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 0, true)).late).toBe(0);
   });
 });
