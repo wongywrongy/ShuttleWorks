@@ -13,7 +13,7 @@
  * reason attached. See VALID_TRANSITIONS below for the authoritative
  * table.
  */
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useMatchStateStore } from '../store/matchStateStore';
@@ -418,33 +418,36 @@ export function useLiveTracking() {
   // whether its match was still scheduled, which let the percentage
   // exceed 100 after a cancellation/court-closure removed a played
   // match from the plan.
-  const scheduledAssignments = schedule?.assignments ?? [];
-  const finishedScheduled = scheduledAssignments.filter(
-    (a) => matchStates[a.matchId]?.status === 'finished',
-  ).length;
-  const startedScheduled = scheduledAssignments.filter(
-    (a) => matchStates[a.matchId]?.status === 'started',
-  ).length;
-  const totalScheduled = scheduledAssignments.length;
-  const progressStats = {
-    total: totalScheduled,
-    finished: finishedScheduled,
-    inProgress: startedScheduled,
-    get remaining() {
-      return this.total - this.finished;
-    },
-    get percentage() {
-      return this.total > 0 ? Math.round((this.finished / this.total) * 100) : 0;
-    },
-  };
+  // Memoized so the per-second clock tick (setCurrentTime) doesn't re-run these
+  // filters or hand consumers fresh array references every second — they
+  // recompute only when the schedule or match states actually change.
+  const scheduledAssignments = useMemo(() => schedule?.assignments ?? [], [schedule]);
+  const progressStats = useMemo(() => {
+    const finished = scheduledAssignments.filter((a) => matchStates[a.matchId]?.status === 'finished').length;
+    const inProgress = scheduledAssignments.filter((a) => matchStates[a.matchId]?.status === 'started').length;
+    const total = scheduledAssignments.length;
+    return {
+      total,
+      finished,
+      inProgress,
+      get remaining() {
+        return this.total - this.finished;
+      },
+      get percentage() {
+        return this.total > 0 ? Math.round((this.finished / this.total) * 100) : 0;
+      },
+    };
+  }, [scheduledAssignments, matchStates]);
 
-  // Group matches by status
-  const matchesByStatus = {
-    scheduled: schedule?.assignments.filter(a => !matchStates[a.matchId] || matchStates[a.matchId].status === 'scheduled') || [],
-    called: schedule?.assignments.filter(a => matchStates[a.matchId]?.status === 'called') || [],
-    started: schedule?.assignments.filter(a => matchStates[a.matchId]?.status === 'started') || [],
-    finished: schedule?.assignments.filter(a => matchStates[a.matchId]?.status === 'finished') || [],
-  };
+  const matchesByStatus = useMemo(
+    () => ({
+      scheduled: scheduledAssignments.filter((a) => !matchStates[a.matchId] || matchStates[a.matchId].status === 'scheduled'),
+      called: scheduledAssignments.filter((a) => matchStates[a.matchId]?.status === 'called'),
+      started: scheduledAssignments.filter((a) => matchStates[a.matchId]?.status === 'started'),
+      finished: scheduledAssignments.filter((a) => matchStates[a.matchId]?.status === 'finished'),
+    }),
+    [scheduledAssignments, matchStates],
+  );
 
   return {
     schedule,

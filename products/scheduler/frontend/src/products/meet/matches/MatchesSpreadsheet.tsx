@@ -12,7 +12,7 @@
  * subscribes to the same `?q=` search param as the page header so the
  * URL is the shared source of truth.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { CaretRight, Check, Warning } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
 import { useTournamentStore } from '../../../store/tournamentStore';
@@ -122,16 +122,19 @@ export function MatchesSpreadsheet({
       return next;
     });
 
-  // Configured event ranks — derived from `config.rankCounts`. These
-  // populate the per-row event select. Plain derivation (no useMemo)
-  // so React Compiler can auto-memoize the whole component; a manual
-  // useMemo with an optional-chained dep was blocking compilation.
-  const configuredRanks: string[] = [];
-  if (config?.rankCounts) {
-    for (const [prefix, count] of Object.entries(config.rankCounts)) {
-      for (let i = 1; i <= (count ?? 0); i++) configuredRanks.push(`${prefix}${i}`);
+  // Configured event ranks — derived from `config.rankCounts`. Memoized so every
+  // row gets a STABLE `configuredRanks` reference (the React Compiler is not
+  // enabled here, so without this the array was rebuilt every render and
+  // defeated `MatchRow`'s memo on every keystroke).
+  const configuredRanks = useMemo<string[]>(() => {
+    const ranks: string[] = [];
+    if (config?.rankCounts) {
+      for (const [prefix, count] of Object.entries(config.rankCounts)) {
+        for (let i = 1; i <= (count ?? 0); i++) ranks.push(`${prefix}${i}`);
+      }
     }
-  }
+    return ranks;
+  }, [config?.rankCounts]);
 
   if (matches.length === 0) {
     return (
@@ -267,7 +270,11 @@ function ColumnHeaderRow() {
 /* =========================================================================
  * MatchRow — `padding: 0 20px`, `min-height: 44px`, border-b only.
  * ========================================================================= */
-function MatchRow({
+// Memoized: with many rows, a search keystroke (or any store write) re-renders
+// the parent; without memo every row re-rendered in full. Props are stable
+// references (zustand actions, memoized configuredRanks, the EMPTY_ISSUES
+// fallback), so unchanged rows now skip re-render.
+const MatchRow = memo(function MatchRow({
   match,
   index,
   players,
@@ -454,7 +461,7 @@ function MatchRow({
       </button>
     </div>
   );
-}
+});
 
 /* =========================================================================
  * PlayerCellEditor — comma-separated underlined names with inline × per
