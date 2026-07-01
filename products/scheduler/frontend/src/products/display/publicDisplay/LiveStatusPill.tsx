@@ -19,9 +19,9 @@ export function LiveStatusPill({ status, error }: LiveStatusPillProps) {
         : 'border-status-blocked/40 bg-status-blocked/10 text-status-blocked';
   const dot =
     status === 'live'
-      ? 'bg-status-live animate-pulse'
+      ? 'bg-status-live sw-pulse'
       : status === 'reconnecting'
-        ? 'bg-status-warning animate-pulse'
+        ? 'bg-status-warning sw-pulse'
         : 'bg-status-blocked';
   const label =
     status === 'live'

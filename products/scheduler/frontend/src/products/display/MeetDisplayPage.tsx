@@ -246,13 +246,13 @@ export function MeetDisplayPage() {
   const totalCount = schedule.assignments.length;
   const progressPct = totalCount === 0 ? 0 : Math.round((finishedCount / totalCount) * 100);
 
-  // TV view tabs: square 1px-border chip in sentence-case sans, active
-  // = brand-orange border + tinted bg + brand text. Readable across a
+  // TV view tabs: rounded 1px-border chip in sentence-case sans, active
+  // = accent (azure) border + tinted bg + accent text. Readable across a
   // gym without the mono-uppercase shouting.
   const tabClass = (mode: ViewMode) =>
     [
       INTERACTIVE_BASE,
-      'border px-4 py-2 text-base font-semibold',
+      'rounded border px-4 py-2 text-base font-semibold',
       view === mode
         ? 'border-accent bg-accent/15 text-accent'
         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
@@ -310,7 +310,7 @@ export function MeetDisplayPage() {
     <div
       ref={rootRef}
       data-tv-preset={tvPreset}
-      className="min-h-[100dvh] bg-background text-foreground selection:bg-primary/30"
+      className="min-h-[100dvh] bg-background text-foreground selection:bg-accent/30"
     >
       {/* Subtle film-grain overlay — adds a barely-there texture to the
           full-screen TV surface so the pure flats don't read as
@@ -424,7 +424,7 @@ export function MeetDisplayPage() {
               {matchesByStatus.started.length} active
             </span>
             <span className="inline-flex items-center gap-2 text-status-called">
-              <span className="h-2 w-2 rounded-full bg-status-called animate-pulse" />
+              <span className="h-2 w-2 rounded-full bg-status-called sw-pulse" />
               {matchesByStatus.called.length} called
             </span>
           </div>

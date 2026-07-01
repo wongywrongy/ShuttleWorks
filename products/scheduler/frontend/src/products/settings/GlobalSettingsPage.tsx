@@ -305,7 +305,7 @@ export function GlobalSettingsPage() {
         <nav className="w-56 shrink-0 space-y-4 overflow-y-auto border-r border-border p-3">
           {NAV.map((g) => (
             <div key={g.group} className="space-y-0.5">
-              <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
+              <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
                 {g.group}
               </div>
               {g.items.map((it) => (

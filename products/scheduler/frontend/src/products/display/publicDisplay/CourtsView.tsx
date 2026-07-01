@@ -229,7 +229,7 @@ function CourtCard({
       >
         {/* Court number — anchor of the card */}
         <div className="flex items-baseline gap-2">
-          <span className="text-3xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <span className="text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Court
           </span>
           <span className={`${courtNumSize} font-black tabular-nums leading-none`}>{courtId}</span>
@@ -275,7 +275,7 @@ function CourtCard({
             <span
               className={`inline-flex items-center gap-1.5 rounded-full bg-status-called/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-status-called`}
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-status-called animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-status-called sw-pulse" />
               Calling
             </span>
           )}
@@ -295,7 +295,7 @@ function CourtCard({
       {/* Per-set breakdown */}
       {tvShowScores && status === 'active' && state?.sets && state.sets.length > 0 && (
         <div
-          className={`border-t border-border px-4 ${isFullscreen ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} flex flex-wrap gap-1.5 font-mono`}
+          className={`border-t border-border px-4 ${isFullscreen ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} flex flex-wrap gap-1.5 sw-num`}
         >
           {state.sets.map((s, i) => (
             <span
@@ -352,7 +352,7 @@ function NextUp({
   return (
     <div className="flex flex-col gap-0.5 text-muted-foreground">
       <span
-        className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.18em]`}
+        className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.08em]`}
       >
         Next up{nextStartTime ? ` · ${nextStartTime}` : ''}
       </span>
@@ -386,7 +386,7 @@ function StatusPill({
       style={{ backgroundColor: bgAlpha, color }}
     >
       <span
-        className={`h-1.5 w-1.5 rounded-full ${pulse ? 'animate-pulse' : ''}`}
+        className={`h-1.5 w-1.5 rounded-full ${pulse ? 'sw-pulse' : ''}`}
         style={{ backgroundColor: dotColor }}
       />
       {label}
