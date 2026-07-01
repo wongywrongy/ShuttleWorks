@@ -628,7 +628,9 @@ function PlayerCellEditor({
                   toggle(p.id);
                 }}
                 aria-label={`Remove ${p.name}`}
-                className="ml-0.5 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:text-destructive group-hover:opacity-100"
+                // Zero width at rest so the trailing comma hugs the name
+                // ("Kim, Novak" not "Kim , Novak"); expands on row hover.
+                className="w-0 overflow-hidden text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:text-destructive group-hover:ml-0.5 group-hover:w-auto group-hover:opacity-100"
               >
                 ×
               </button>

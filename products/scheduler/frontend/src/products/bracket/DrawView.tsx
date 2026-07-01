@@ -294,6 +294,7 @@ function BracketView({
                         nameById={nameById}
                         result={resultByPu[puId]}
                         assignment={assignmentByPu[puId]}
+                        final={isFinal}
                         seeding={editing && col.roundIndex === 0}
                         selectedPos={selectedPos}
                         scoringFormat={scoringFormat}
@@ -462,6 +463,7 @@ function BracketCell({
   nameById,
   result,
   assignment,
+  final = false,
   seeding = false,
   selectedPos = null,
   scoringFormat = "badminton",
@@ -473,6 +475,8 @@ function BracketCell({
   nameById: Record<string, string>;
   result: ResultDTO | undefined;
   assignment: AssignmentDTO | undefined;
+  /** Final-round cell — carries the accent ring + glow (the draw's hero). */
+  final?: boolean;
   /** Round-0 cell in seeding-edit mode: sides swap instead of recording. */
   seeding?: boolean;
   selectedPos?: number | null;
@@ -490,9 +494,22 @@ function BracketCell({
   const posB = posA + 1;
   const setsMode = scoringFormat === "badminton";
   const [scoring, setScoring] = useState(false);
+  // Winner-perspective set score ("21-18 21-15"); "w/o" for a walkover.
+  const score = result
+    ? result.walkover
+      ? "w/o"
+      : result.score?.sets
+          .map((s) =>
+            winner === "A" ? `${s.sideA}-${s.sideB}` : `${s.sideB}-${s.sideA}`,
+          )
+          .join(" ")
+    : undefined;
 
   return (
-    <Card variant="frame" className="p-3 space-y-2">
+    <Card
+      variant="frame"
+      className={`p-3 space-y-2${final ? " border-accent/40 ring-1 ring-accent/30 shadow-glow" : ""}`}
+    >
       <div className="flex justify-between text-3xs text-muted-foreground font-mono">
         <span>{pu.id}</span>
         <span>
@@ -505,6 +522,7 @@ function BracketCell({
         label={aName}
         winning={winner === "A"}
         loser={result && winner === "B"}
+        score={winner === "A" ? score : undefined}
         bye={pu.side_a === null}
         seeding={seeding}
         selected={seeding && selectedPos === posA}
@@ -517,6 +535,7 @@ function BracketCell({
         label={bName}
         winning={winner === "B"}
         loser={result && winner === "A"}
+        score={winner === "B" ? score : undefined}
         bye={pu.side_b === null}
         seeding={seeding}
         selected={seeding && selectedPos === posB}
@@ -554,6 +573,7 @@ function Side({
   winning,
   loser,
   bye,
+  score,
   seeding = false,
   selected = false,
   onSlotClick,
@@ -563,6 +583,8 @@ function Side({
   winning?: boolean;
   loser?: boolean;
   bye?: boolean;
+  /** Winner-perspective score, shown on the winning side only. */
+  score?: string;
   seeding?: boolean;
   selected?: boolean;
   onSlotClick?: () => void;
@@ -580,7 +602,7 @@ function Side({
         (selected
           ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
           : winning
-          ? "bg-status-done-bg border border-status-done/40 text-status-done font-medium"
+          ? "bg-status-live-solid border border-status-live-border text-status-live-ink font-medium"
           : loser
           ? "bg-muted text-muted-foreground line-through"
           : bye
@@ -593,6 +615,8 @@ function Side({
       <span className="truncate">{label}</span>
       {seeding && !bye ? (
         <span className="text-3xs text-muted-foreground">⇄</span>
+      ) : winning && score ? (
+        <span className="text-2xs font-semibold sw-num">{score}</span>
       ) : onWin && !bye ? (
         <span className="text-3xs text-muted-foreground">↵ wins</span>
       ) : null}

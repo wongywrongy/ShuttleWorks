@@ -107,6 +107,12 @@ export function RunLiveBoard({
           late={c.late}
           selected={selectedKey === c.key}
           tone="state"
+          sideA={c.sideA}
+          sideB={c.sideB}
+          // Playing chips grow with the clock, so they have the width to show
+          // teams — the floor reads who's on court at a glance (quiet span=1
+          // chips stay label-only; there's no room).
+          showSides={c.state === 'playing'}
           onSelect={() => onSelect(c.key)}
           data-testid={`run-card-${c.key}`}
           title={`${c.source === 'meet' ? 'Meet' : 'Bracket'} · ${c.label} [${c.late ? 'late' : c.state}]`}
@@ -123,12 +129,19 @@ export function RunLiveBoard({
           className="cursor-pointer px-2"
         >
           {c.overrunSlots > 0 && (
+            // Over-portion: the left border IS the planned-end marker; the
+            // amber "+N" badge carries the signal (a translucent wash is
+            // invisible on the muted-solid playing fill).
             <span
               aria-hidden
               data-testid={`run-overrun-${c.key}`}
-              className="pointer-events-none absolute inset-y-0 right-0 border-l-2 border-status-warning bg-status-warning/20"
+              className="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end border-l border-status-warning/60 pr-1.5"
               style={{ width: `${overFrac * 100}%` }}
-            />
+            >
+              <span className="rounded-xs bg-status-warning px-1 text-[9px] font-semibold leading-4 text-background sw-num">
+                +{c.overrunSlots}
+              </span>
+            </span>
           )}
           {c.late && (
             <span

@@ -180,13 +180,25 @@ export function RunSurface({
     [matches, courtCount, planFinalized, currentSlot],
   );
   const queue = useMemo(() => deriveQueue(matches), [matches]);
+  // Bracket "called" is Operations-local (no persisted status), overlaid onto
+  // `matches` by toRunMatches — but the BOARD renders from raw blocks, so
+  // without this overlay a called bracket chip would stay painted 'scheduled'
+  // while the queue/inspector already say Called. Board == inspector.
+  const liveBlocks = useMemo(() => {
+    if (calledBracketIds.size === 0) return blocks;
+    return blocks.map((b) =>
+      b.source === 'bracket' && b.status === 'scheduled' && calledBracketIds.has(b.id)
+        ? { ...b, status: 'called' as const }
+        : b,
+    );
+  }, [blocks, calledBracketIds]);
   // Re-build the live chips here purely to count `late` for the summary band so
   // it equals what RunLiveBoard renders (band == board). We can't lift the chips
   // out of RunLiveBoard — its prop contract is KEEP-unchanged — so this pure,
-  // cheap re-derive from the SAME raw `blocks`/`currentSlot` is deliberate.
+  // cheap re-derive from the SAME `liveBlocks`/`currentSlot` is deliberate.
   const liveChips = useMemo(
-    () => buildLiveChips(blocks, currentSlot ?? 0, !!planFinalized),
-    [blocks, currentSlot, planFinalized],
+    () => buildLiveChips(liveBlocks, currentSlot ?? 0, !!planFinalized),
+    [liveBlocks, currentSlot, planFinalized],
   );
   const summary = useMemo(() => deriveSummary(matches, lanes, liveChips), [matches, lanes, liveChips]);
 
@@ -344,7 +356,7 @@ export function RunSurface({
         <div className="flex min-w-0 flex-1 flex-col overflow-auto">
           {/* Board — the live court×time hero (GanttTimeline + MatchChip) */}
           <RunLiveBoard
-            blocks={blocks}
+            blocks={liveBlocks}
             courtCount={courtCount}
             currentSlot={currentSlot}
             running={!!planFinalized}

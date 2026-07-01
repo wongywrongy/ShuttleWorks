@@ -35,6 +35,10 @@ export interface BoardChip {
   colorKey?: string;
   /** The planned duration — drives the planned-end marker on the live board. */
   plannedSpan: number;
+  /** Side labels — the live board paints them on wide (playing) chips so the
+   *  floor sees teams at a glance; the plan board stays label-only. */
+  sideA?: string;
+  sideB?: string;
 }
 
 /** Court-assigned blocks only (court + slot present) become chips; the rest
@@ -125,6 +129,8 @@ export function buildLiveChips(blocks: OpsBlock[], currentSlot: number, running 
       label: b.label,
       colorKey: b.colorKey,
       plannedSpan,
+      sideA: b.sideA,
+      sideB: b.sideB,
     };
   });
 }

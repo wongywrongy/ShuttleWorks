@@ -64,6 +64,23 @@ in the characterization commit, then **fixed in a follow-up** on Kyle's call
 | **`build` config field-drop** | `scheduler_core/engine/bridge.py:118–137` | Both rebuilds switched from a hand-listed copy to `dataclasses.replace(config, …)` (prior art: `handle_court_outage`), so every field is preserved except the overridden one(s). The tripwire test flipped to a preservation regression-guard (`test_freeze_override_preserves_all_config_fields` + `..._rolling_horizon_..._preserving_fields`). **No production impact** — the override path had no in-repo caller. |
 | **Stale example** | `examples/badminton_event_setup.py` | Rewritten to the current API (manual `PlayUnit`s → `SchedulingProblemBuilder.build` → `CPSATBackend`); the cut generation layer (`PoolGenerationPolicy`/`CompetitionGraph`) is gone for good. Verified runnable (`Status: optimal, assignments: 6`). |
 
+## Live-ops match-state divergence (found 2026-07-01, frontend-revamp verification) — OPEN
+
+Found while visually verifying the Run surface (not fixed there — backend command
+pipeline is out of scope for a re-skin pass). **Reproduced end-to-end.**
+
+| What | Where | Why it matters | Size |
+| --- | --- | --- | --- |
+| **Commands don't write through to `match_states`** | `repositories/local.py:1707` (`process_command` Step 5 sets `matches.status` only) vs. `api/match_state.py` (reads/writes the legacy `match_states` table; its PUT/DELETE dual-write, the command path doesn't) | The Run surface polls `/match-states`, so a call/start applied via `POST /commands` **never reaches the board after reload** — the chip re-reads `scheduled` while the transition guard holds `playing`. Repro: call+start a meet match on Run → reload → chip shows scheduled; a fresh Call now 409s ("Cannot transition from 'playing' to 'called'"), and the client command queue **replays the rejected command on every drain**, re-toasting the 409 indefinitely. Optimistic UI masks the loss until reload. | M — dual-write in `process_command` (mirroring the PUT route), or repoint the Run read path at canonical `matches.status`; plus a queue rule to drop permanently-rejected commands |
+| **409 toast leaks internals** | conflict toast on the Run surface | Shows the raw match UUID + `request <id>` to the operator instead of the match code ("WS2") | S — map id→label at the toast call-site |
+
+QA residue of the repro (local dev DB, `QA All Modules`): meet matches WS1 + WS2
+carry canonical `matches.status='playing'` while `match_states` still says
+scheduled — harmless today (the board reads `match_states`), but they will pop to
+"playing" the moment the divergence is fixed.
+
+---
+
 ## High complexity but well-covered (decompose *when touched*, not locked)
 
 Complex, but the tests exist — so they are **not** high-risk in the locked sense.

@@ -99,6 +99,8 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
   const squareCls = solidFill
     ? 'bg-white/20 text-inherit'
     : 'bg-surface-chip text-muted-foreground';
+  // A finished match's code reads struck-through on the state-tone board.
+  const doneLabel = tone === 'state' && state === 'done' && !selected;
 
   return (
     <button
@@ -124,7 +126,7 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         >
           {SOURCE_INITIAL[source]}
         </span>
-        <span className="truncate text-2xs font-semibold sw-num">{label}</span>
+        <span className={`truncate text-2xs font-semibold sw-num${doneLabel ? ' line-through' : ''}`}>{label}</span>
       </span>
       {showSides && sideA != null && sideB != null && (
         <span className="mt-0.5 truncate text-2xs leading-tight opacity-80">

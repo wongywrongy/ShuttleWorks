@@ -50,18 +50,15 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Program started:** 2026-07-01
 - **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb`
 - **Scope:** Foundation + keystones
-- **Current phase:** ALL PHASES COMPLETE — "Foundation + keystones" scope delivered.
-- **Status:** Phases 0–4 done + committed (`02f1cc8`, `99213d0`, `a46db9b`, `c8ed474`, `5c64fde`, `05f01b4`).
-  Final gate green: build ✓, vitest **743**, eslint **0 err** (85 pre-existing warns), depcruise **0 err**
-  (11 pre-existing warns; MatchChip still doesn't import `products/*`). Backend untouched.
+- **Current phase:** ALL PHASES COMPLETE, **including Phase 5 (verification pass + fixes)**.
+- **Status:** Phases 0–4 committed (`02f1cc8`, `99213d0`, `a46db9b`, `c8ed474`, `5c64fde`, `05f01b4`), then the
+  requested **light-theme spot-check + prototype re-verification** ran 2026-07-01 as **Phase 5** (see below):
+  all four keystones verified in light AND dark against the prototype HTMLs, the 3b solids finally verified
+  LIVE (called amber + playing green, both themes), and 6 visual fixes landed. Gate green after fixes:
+  build ✓, vitest **743**, eslint **0 err** (85 pre-existing warns), depcruise **0 err** (11 pre-existing warns).
   **Nav tip:** deep-link `page.goto` resets to Config — navigate client-side (click the sidebar); Operations
   sub-items are **Plan/Run** (segments `/courts`,`/live`), Bracket is **Draws**→Open→`/bracket-draw`.
-  **NEXT UP (requested, IN PROGRESS at compact):** light-theme spot-check of the keystones (Run / Meet Matches /
-  Bracket Draw — Hub light already ✓ in P1), THEN re-verify all keystones against the original design prototype
-  (`ShuttleWorks Prototype/ShuttleWorks - Final Direction[ Light].dc.html` on disk; also the token/guideline cards
-  in `.agents/skills/shuttleworks-design/`). App theme was just switched to light in the running dev browser.
-  To navigate: go to `/` (Hub), Open workspace, then client-side clicks (Operations→Run `/live`;
-  Meet→Matches; Bracket→Draws→Open→`/bracket-draw`). After that: other 9 screens + uncovered surfaces; optional push.
+  **Next:** the Follow-up screens below; optional push (nothing pushed yet).
 
 ## Phase log
 
@@ -158,6 +155,44 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - [x] Gates: eslint **0 err**, vitest **743**, `tsc`/build ✓, depcruise **0 err** (11 pre-existing warns).
       Backend untouched (no Python changes) so pytest/ruff unaffected; `make check` not needed for a
       frontend-only pass.
+
+### Phase 5 — Verification pass vs. the original prototype + visual fixes
+- **Status: COMPLETE** (2026-07-01)
+- [x] **Light spot-check** of all 4 keystones (Hub / Run / Meet Matches / Bracket Draw) — on-language, no
+      contrast issues (`.playwright-mcp/verify-*-light*.png`).
+- [x] **3b solids verified LIVE for the first time** (the P3 caveat): called a meet match on Run → amber
+      called-solid; started it → green playing-solid; dark solids verified via class injection + a real
+      playing chip. Both themes match the prototype's muted-solid values.
+- [x] **Prototype comparison** — served both `ShuttleWorks - Final Direction[ Light].dc.html` over local HTTP,
+      screenshotted the Hub/Run/Matches/Draw sections, diffed against the app. NOTE: the prototype header
+      *copy* says "Vitest-green" but its rendered accent is azure — stale copy; azure is correct.
+- [x] **Visual fixes landed** (all gated: vitest 743 ✓, eslint 0 err ✓, build ✓, depcruise 0 err ✓):
+      1. **Overrun encoding restored on solids** (re-skin regression): the `bg-status-warning/20` wash is
+         invisible on the new solid playing fill → replaced with the prototype's amber **"+N" badge** at the
+         chip's right edge; planned-end marker line kept; `run-overrun-*` testid + status-warning class kept
+         (`RunLiveBoard.tsx`).
+      2. **Playing chips show teams** (prototype floor-readability): `showSides` on playing (wide) chips;
+         `BoardChip` now carries `sideA/sideB` (`RunLiveBoard.tsx`, `boardPlacements.ts`).
+      3. **Done chips strike through the code** on the state-tone board, per prototype (`MatchChip.tsx`).
+      4. **Called bracket chips now paint on the board**: RunSurface overlays `calledBracketIds` onto the
+         blocks passed to RunLiveBoard + the summary-band re-derive (board == inspector; bracket "called"
+         is Operations-local by design) (`RunSurface.tsx`).
+      5. **Matches doubles comma fixed** ("Kim , Novak" → "Kim, Novak"): the hover-reveal × was reserving
+         width at rest → zero-width until row hover (`MatchesSpreadsheet.tsx`).
+      6. **Draw decided-match treatment**: winner row → green muted-solid + winner-perspective set-score
+         badge ("21-18 21-15", "w/o" for walkovers; hidden when no score recorded); **FINAL card** gets the
+         prototype's azure ring + glow (`DrawView.tsx`).
+- [x] **Functional bug found (NOT fixed — out of re-skin scope), logged to `docs/audits/debt-log.md`:**
+      `POST /commands` writes canonical `matches.status` only, never the legacy `match_states` table the Run
+      surface polls → call/start survives only optimistically, vanishes on reload, and a retried Call 409s
+      ("cannot transition from 'playing' to 'called'") with the client queue re-toasting it on every drain.
+      QA residue: WS1+WS2 in `QA All Modules` carry canonical `status='playing'`.
+- **Prototype deltas seen and deliberately NOT taken this pass** (log-only; candidates for Follow-up):
+  queue-row inline "↵ send" + LATE badge (send lives in the inspector today); playing-chip elapsed-time
+  stamp (board is clock-pure by design); hairline now-line through lanes (we highlight the playhead header
+  cell instead); Hub filter chips (All/Active/Draft/Shared) + ⌘K search hint + amber attention-actions;
+  school names beside players on Matches rows; prototype band headers are title-case (ours stay uppercase
+  eyebrows — deliberate P3 grammar choice).
 
 ---
 
