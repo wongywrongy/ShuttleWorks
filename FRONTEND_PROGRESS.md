@@ -50,7 +50,7 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Program started:** 2026-07-01
 - **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb`
 - **Scope:** Foundation + keystones
-- **Current phase:** ALL PHASES COMPLETE, **including Phase 6 (bugs + unification + follow-up screens)**.
+- **Current phase:** ALL PHASES COMPLETE, **including Phase 7 (reusable archetypes + lock parity + follow-up close-out)**.
 - **Status:** Phases 0–4 committed (`02f1cc8`, `99213d0`, `a46db9b`, `c8ed474`, `5c64fde`, `05f01b4`), then the
   requested **light-theme spot-check + prototype re-verification** ran 2026-07-01 as **Phase 5** (see below):
   all four keystones verified in light AND dark against the prototype HTMLs, the 3b solids finally verified
@@ -225,6 +225,32 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   school tabs + position-grid matrix + drawer; Bracket = flat list + bottom detail) — grammar is now unified,
   layout convergence would be a redesign, not a re-skin.
 
+### Phase 7 — Reusable archetypes, bracket lock parity, follow-up close-out
+- **Status: COMPLETE** (2026-07-01) — commits `7751ec0`, `cb9e03b`, `f86b57a`, `13f8421`.
+- [x] **`ConfigSurface` archetype** (`platform/settings/ConfigSurface.tsx`, `7751ec0`): Meet + Bracket
+      Configuration render through ONE shared shell (same ActionsBar anatomy: eyebrow · section Seg ·
+      right-aligned actions; same ribbon + scroll region). Bracket Engine adopts Meet's two-column grid.
+- [x] **Bracket lock parity** (`7751ec0`): `useBracketScheduleLock` de-stubbed — locks when any event is
+      `started` (mirrors the meet's committed-schedule lock). Bracket persists immediately (no Save to
+      guard), so the new `LockedFieldset` disables the section outright + the same lock ribbon. Verified
+      live on the QA workspace (MS event Started → ribbon + dimmed fields).
+- [x] **`BandedList` archetype** (`components/control-plane/BandedList.tsx`, `cb9e03b`):
+      `ColumnHeaderRow` + `GroupBandHeader` + `COLUMN_HEADER_ROW_CLASSES` now BACK Meet Matches, Bracket
+      Matches, Bracket Roster and the schedule matches table — the band grammar is shared code, not
+      copied classes. Meet rendering pixel-identical; testids kept.
+- [x] **Prototype deltas landed** (`f86b57a`): Run queue LATE badge + "send" (straight to first free
+      court); playing-chip elapsed stamp (`span × intervalMinutes`, board stays clock-pure); GanttTimeline
+      hairline now-line; Hub filter chips + Ctrl/⌘K search focus + amber attention actions; Meet Matches
+      shows muted school names beside players.
+- [x] **Backend match-state divergence FIXED** (`13f8421`): `process_command` now mirrors applies into the
+      legacy `match_states` table in the same transaction — Run call/start survives reload; the 409 retry
+      loop is gone for fresh commands. Pinned by 2 new pytest cases (622 total green). QA residue healed
+      (WS1/WS2 → consistent `finished`). Debt-log entry closed; the 409-toast-shows-UUID nit stays open.
+- **Verified:** vitest **747**, eslint **0 err**, build ✓, depcruise **0 err** (11 pre-existing warns),
+  pytest **622**, ruff clean. Browser-checked: Hub chips/⌘K/amber, bracket config lock live, Run board.
+- **Deliberately untouched (per Kyle):** the Meet position grid and the Bracket draw canvas — the two
+  genuinely-different module hearts. Structural roster-pair convergence stays a product call.
+
 ---
 
 ## Token remap reference (prototype hex → intent; convert to HSL-triplet)
@@ -259,11 +285,10 @@ Theme (unchanged): `frontend/src/hooks/useAppliedTheme.ts`, `…/store/preferenc
   extraction into the skill. *Default: gitignore-and-keep; revisit at end of pass.*
 
 ## Follow-up
-**All previously-listed follow-up screens landed in Phase 6** (Meet/Bracket Roster + Config, Operations
-Plan, Bracket Matches, New Workspace, Settings tabs, Public Display, SchedulePage, MatchControlCenterPage;
-GanttChart was audited clean — already fully on tokens). Still open (small, log-only):
-- Prototype deltas deliberately not taken (feature-level): queue-row inline "↵ send" + LATE badge, Hub
-  filter chips (All/Active/Draft/Shared) + ⌘K search hint + amber attention-actions, playing-chip
-  elapsed-time stamp, hairline now-line through board lanes, school names beside players on Matches rows.
-- Structural roster-pair convergence (see Phase 6 note) — a product redesign decision, not a re-skin.
-- Backend match-state divergence (`docs/audits/debt-log.md`) blocks Run states surviving reload.
+**Everything previously listed here has landed** (screens in Phase 6; prototype deltas, archetypes,
+bracket lock and the backend match-state fix in Phase 7). Still open (small):
+- Structural roster-pair convergence (Meet school-tabs/position-grid vs Bracket flat list) — a product
+  redesign decision, not a re-skin; the grammar + archetypes are already shared.
+- 409 conflict toast shows the raw match UUID + request id — map id→label at the toast call-site
+  (`docs/audits/debt-log.md`).
+- Optional: `git push` (nothing pushed yet).
