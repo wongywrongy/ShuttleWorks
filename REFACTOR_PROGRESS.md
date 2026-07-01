@@ -201,11 +201,14 @@ escalate it before making any further code change.
   build" (the Meet/Bracket paths build `ScheduleRequest` directly — `api/schedule.py:111`,
   `services/bracket/adapter.py:89`). Both are library-internal-unused, **not** deletable
   dead code (exported API) → characterize, don't delete.
-- **Step 3 (cover):** 28 characterization tests (commit `caf5275`, **test-only, zero
-  non-test files**): `test_backends_greedy_characterization.py` + `test_bridge_build_characterization.py`.
-  Coverage **19→97%** (backends) / **19→96%** (bridge); the 6 unhit lines are
-  defensive-unreachable branches. Full backend suite **618 passed** (+28), ruff-F clean.
-  Both functions are **no longer locked** (now high-complexity-but-*covered*).
+- **Step 3 (cover):** 30 characterization tests (commits `caf5275` + `ccfe57d`,
+  **test-only, zero non-test files**): `test_backends_greedy_characterization.py` +
+  `test_bridge_build_characterization.py`. Coverage **19→97%** (backends) / **19→96%**
+  (bridge); the 6 unhit lines are defensive-unreachable branches. Full backend suite
+  **620 passed** (+30), ruff-F clean. Both functions are **no longer locked** (now
+  high-complexity-but-*covered*). An **independent fresh-context review** (CODE_HEALTH
+  #4) verified no vacuous assertions, both latent-bug claims, all call-graph claims,
+  and unreachable-branch soundness; its 3 nits were folded in as tripwires (`ccfe57d`).
 - **Two latent bugs found + logged (NOT fixed — Part-2 STOP rule):** (a) `build`'s
   config rebuild hand-lists fields → silently drops newer `ScheduleConfig` fields on
   any freeze/rolling override (same bug class `handle_court_outage` fixed via

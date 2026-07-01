@@ -146,8 +146,9 @@ design-gated items above + engine coverage.
   are library surface with **no in-repo production caller** (corrected the "build
   guards every schedule build" claim). They are no longer *locked*. Decomposition
   (Steps 4–5) **held** as decompose-when-touched (low blast radius). Found + logged
-  two latent bugs (config field-drop; stale example) above. See
-  `docs/audits/07-locked-functions.md`.
+  two latent bugs (config field-drop; stale example) above. An independent
+  fresh-context review verified all claims + added 2 tripwires (30 tests total, full
+  suite 620 green). See `docs/audits/07-locked-functions.md`.
 - **2026-07-01 (Phase 5 — practice install)** — stale `no-cross-product` comment
   in `.dependency-cruiser.cjs` ("16 known" → 11); 5 truly-dead FE symbols removed +
   `DEFAULT_EVENT_COLOR` un-exported.

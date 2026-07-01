@@ -215,9 +215,10 @@ decomposition.
 
 ---
 
-## 6. Re-measure — coverage delivered (Step 3 done, `caf5275`)
+## 6. Re-measure — coverage delivered (Step 3 done, `caf5275` + `ccfe57d`)
 
-**28 characterization tests** (commit `caf5275`, test-only — zero non-test files):
+**30 characterization tests** (commits `caf5275` + `ccfe57d`, test-only — zero
+non-test files):
 
 | File | Before | After | Still-missing lines |
 | --- | --- | --- | --- |
@@ -249,8 +250,17 @@ open is well past the "trust a change not to break something" bar.
   filtering + missing-participant default); empty/`None` side (bye) handling;
   in-scope-only previous_assignments; end-to-end bridge→CP-SAT solve.
 
-**Gate:** full backend suite **618 passed** (590 baseline + 28) in 92s; ruff-F
-clean on both new files.
+**Gate:** full backend suite **620 passed** (590 baseline + 30); ruff-F clean on
+both new files.
+
+**Independent review pass (CODE_HEALTH #4, fresh-context subagent):** verified —
+no vacuous/wrong-reason assertions (each would fail if its named behavior broke);
+both latent-bug claims real and the config-drop test asserts the correct
+dropped-vs-preserved field set; all call-graph claims true (`SchedulingProblemBuilder`
+appears **nowhere** under `products/scheduler/backend`); all 6 unhit lines
+genuinely unreachable. Its three low-value nits were folded in as tripwires
+(`ccfe57d`): greedy ignores `solver_options`/`locked_assignments`; `build` treats
+negative `max_units` as no-limit; `closed_court_windows` added to the drop set.
 
 **Verdict:** both functions are **no longer "locked"** — the highest-risk
 category (high complexity **and** ~0% coverage) no longer applies; they are now
