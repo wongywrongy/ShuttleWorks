@@ -43,12 +43,14 @@ Operations owns the live status of every match. The canonical transitions live i
 
 ```
 scheduled ──call──▶ called ──start──▶ playing ──finish──▶ finished
-                     ▲   │                └────retire──▶ retired
-                     └───┘ (uncall: called → scheduled)
+                     ▲   │              │  └───────retire──▶ retired
+                     └───┘              └──postpone──▶ scheduled
+     (uncall: called → scheduled; postpone: playing → scheduled)
 ```
 
 `VALID_TRANSITIONS` is exactly: `scheduled → [called]`, `called → [playing, scheduled]`,
-`playing → [finished, retired]`, and `finished` / `retired` are terminal (`[]`).
+`playing → [finished, retired, scheduled]` (the last edge is `postpone`), and
+`finished` / `retired` are terminal (`[]`).
 
 - **Terminal states**: `finished`, `retired`.
 - **`LOCKED_STATUSES`** = `{ called, playing, finished, retired }`. The solver **pins** matches in

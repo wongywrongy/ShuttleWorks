@@ -1,9 +1,16 @@
 # ShuttleWorks — Workspace Suite Session Handoff
 
+> **⚠️ SUPERSEDED / HISTORICAL (banner added 2026-07-01).** This was the session
+> handoff as of 2026-06-25 (`HEAD 96cc468`) and was accurate then. It is **no
+> longer** the source of truth — the SP-REFACTOR 1–6 program has since changed the
+> code and docs substantially. For current state read `REFACTOR_PROGRESS.md`,
+> `docs/audits/06-state-of-codebase.md`, and the VitePress docs site
+> (`docs/architecture/`, `docs/modules/`). Kept for historical reference only.
+
 **Date:** 2026-06-25
 **Branch:** `dev/workspace-suite` (unmerged) · **HEAD:** `96cc468` · pushed to `origin/dev/workspace-suite`
 **Repo:** github.com/wongywrongy/ShuttleWorks · ~125 commits ahead of `main`
-**Read this whole file before touching code.** It is the single source of truth for where the work is and what we are trying to achieve.
+**Read this whole file before touching code.** _(Historical note: this line called the file "the single source of truth" at the time — that is no longer true; see the superseded banner above.)_
 
 ---
 

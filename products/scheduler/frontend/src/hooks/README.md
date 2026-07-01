@@ -5,19 +5,16 @@ folder. The convention: anything used by ≥2 features lives here.
 
 ## Index
 
+> Representative index — not every hook is listed; the source directory is authoritative.
+
 | Hook | Purpose |
 |---|---|
 | `useTournament.ts` | Read-only convenience selectors over the tournament config. |
-| `useTournamentState.ts` | Hydrate `appStore` from `/tournament-state` on mount; debounce PUTs back on change. The single owner of that round-trip. |
-| `useSchedule.ts` | Trigger `/schedule/stream` (SSE), feed events into the solver-HUD slice, and write the final result into `appStore.schedule`. |
-| `useRepair.ts` | Calls `/schedule/repair` and `/schedule/warm-restart`; surfaces loading state for the disruption / re-plan dialogs. |
-| `useLiveTracking.ts` | Match status state machine (`scheduled` → `called` → `started` → `finished`). Validates transitions and writes through to `/match-state`. |
+| `useTournamentState.ts` | Hydrate `tournamentStore` from `/tournaments/{id}/state` on mount; debounce PUTs back on change. The single owner of that round-trip. |
+| `useSchedule.ts` | Trigger `/schedule/stream` (SSE), feed events into the solver-HUD slice, and write the final result into `tournamentStore.schedule`. |
+| `useLiveTracking.ts` | Match status state machine (`scheduled` → `called` → `playing` → `finished` \| `retired`). Validates transitions and writes through to `/tournaments/{id}/match-states`. |
 | `useLiveOperations.ts` | Drag-target validation + optimistic pin during the live ops flow. |
 | `useCurrentSlot.ts` | Wall-clock slot index for the current tournament config, refreshed every minute. |
-| `useMatches.ts` | Selectors + helpers over `appStore.matches`. |
-| `useRoster.ts` | Selectors over players + groups. |
-| `useRosterGroups.ts` | School / group helpers. |
-| `usePlayerNames.ts` | `playerId → display name` memoised lookup. |
 | `useTrafficLights.ts` | Memoised wrapper over `utils/trafficLight.ts` that computes per-match readiness lights. |
 | `useSmoothedAssignments.ts` | Smooth out solver-progress flicker when many partial solutions arrive in quick succession. |
 | `useLockGuard.ts` | Block destructive actions while a tournament is locked. |
@@ -44,5 +41,6 @@ folder. The convention: anything used by ≥2 features lives here.
 2. If it talks to the backend, route through
    `frontend/src/api/client.ts` so the request-id middleware + toast
    plumbing wires up automatically.
-3. If it mutates `appStore`, call store actions — never `set(...)`
-   from outside the store file.
+3. If it mutates a store (`tournamentStore` / `matchStateStore` / `uiStore` /
+   `preferencesStore`), call store actions — never `set(...)` from outside the
+   store file.

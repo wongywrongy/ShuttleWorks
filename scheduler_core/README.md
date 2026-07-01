@@ -25,7 +25,6 @@ scheduler_core/
 │   ├── backends.py          # backend selector (CPSATBackend, GreedyBackend)
 │   └── bridge.py            # SchedulingProblemBuilder — TournamentState → ScheduleRequest
 ├── schedule.py              # public entry: schedule(...) / schedule_from_api(...)
-├── api_compat.py            # legacy DTO compat shims for the FastAPI route
 └── _log.py                  # solver logger (scheduler_core._log namespace)
 ```
 
@@ -101,5 +100,5 @@ serialised to `ScheduleDTO`.
 ## Tests
 
 ```
-cd src && pytest
+cd products/scheduler && pytest   # rootdir is products/scheduler; uses the repo .venv
 ```

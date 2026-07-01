@@ -19,7 +19,7 @@ products/
     │   └── services/          match_state, sync_service (outbox), bracket/, suggestions_worker
     ├── frontend/              React 19 + Zustand + Vite
     │   └── src/
-    │       ├── app/           router, AppShell, workspace nav model
+    │       ├── app/           router, AppShell, ModuleOutlet (workspace nav model lives in platform/product-shell)
     │       ├── products/      one folder per module: hub, meet, bracket, operations, display, settings, workspace
     │       ├── platform/      cross-module: product-shell, domain (module model), contracts, auth, settings
     │       ├── components/    shared UI incl. control-plane/ primitives

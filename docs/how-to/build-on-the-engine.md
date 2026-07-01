@@ -45,7 +45,7 @@ statistics — everything the HTTP layer serialises to `ScheduleDTO`.
 ## Verify
 
 ```bash
-cd scheduler_core/src && pytest
+cd products/scheduler && pytest   # rootdir is products/scheduler; uses the repo .venv
 ```
 
 ::: tip The non-merged match record

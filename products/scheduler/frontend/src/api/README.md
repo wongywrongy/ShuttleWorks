@@ -24,7 +24,7 @@ The axios response interceptor (in `client.ts`) does three things:
 1. **Cancellations** (`axios.isCancel` / `ERR_CANCELED`) re-throw
    silently — they are user-initiated and should not produce a toast.
 2. **Real errors** are turned into a sticky toast via
-   `useAppStore.getState().pushToast`, with the request id pulled from
+   `useUiStore.getState().pushToast`, with the request id pulled from
    the `X-Request-ID` response header so a user can paste it into a
    bug report.
 3. The original error still throws so the caller can branch on it.

@@ -47,7 +47,7 @@ see [Unified Operations view](/architecture/unified-operations-view).
 | **Backend routes** | `/tournaments/{id}/match-states*` (get/put with `ETag`/`If-Match`, reset, export/import) and `/tournaments/{id}/commands` |
 | **`apiClient` methods** | `getMatchStates`, `getMatchState`, `getMatchVersion`, `updateMatchState`, `resetMatchStates`, `submitCommand`, `exportMatchStates`, `importMatchStates`, `importMatchStatesBulk` |
 | **Store slice** | `matchStateStore` (match states, optimistic command state, conflict records, canonical versions) |
-| **Frontend code** | `products/operations/` — `opsBlock.ts` (the uniform block), `run/` + `runtime/` (the Run surface + its machine), `UnifiedOpsBoard.tsx` / `UnifiedOpsList.tsx` (the Plan board), `OpsDetailRail.tsx`, `SourceChip.tsx`, and the read-only projection in `lib/operations/operationalMatch.ts` |
+| **Frontend code** | `products/operations/` — `opsBlock.ts` (the uniform block), `run/` + `runtime/` (the Run surface + its machine), `UnifiedOpsBoard.tsx` / `UnifiedOpsList.tsx` (the Plan board), `OpsDetailRail.tsx`, and `operationalWriteback.ts`. The shared `SourceChip.tsx` provenance badge lives in `components/` (used by 3 products), not here. |
 | **Backend** | `services/match_state.py`; tables `match_states`, `commands` |
 
 ## The uniform block
