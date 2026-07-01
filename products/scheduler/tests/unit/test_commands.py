@@ -317,3 +317,65 @@ def test_idempotent_replay_returns_current_state_after_third_party_update(client
     assert body["replay"] is True
     assert body["status"] == "playing"   # current, not "called"
     assert body["version"] == 3          # current, not 2
+
+
+# ---- 8. Legacy match_states mirror --------------------------------------
+#
+# The Run surface polls GET /match-states (the legacy table); the PUT
+# route there dual-writes toward ``matches``. These pin the REVERSE
+# write-through: a command apply must land in ``match_states`` too, or
+# a call/start disappears on reload while the transition guard still
+# holds the canonical status (409 loop — see docs/audits/debt-log.md).
+
+
+def _match_state(client, tid: str, match_id: str = "m1") -> dict:
+    r = client.get(f"/tournaments/{tid}/match-states/{match_id}")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_command_apply_mirrors_into_match_states(client, tid):
+    _seed_match(client, tid)
+
+    r = client.post(
+        _commands_url(tid),
+        json=_new_command_body(action="call_to_court", seen_version=1),
+    )
+    assert r.status_code == 200, r.text
+    st = _match_state(client, tid)
+    assert st["status"] == "called"
+    assert st["calledAt"]
+
+    r = client.post(
+        _commands_url(tid),
+        json=_new_command_body(action="start_match", seen_version=2),
+    )
+    assert r.status_code == 200, r.text
+    st = _match_state(client, tid)
+    assert st["status"] == "started"  # legacy spelling of PLAYING
+    assert st["actualStartTime"]
+
+    # The list route — what the Run board actually polls — sees it too.
+    listing = client.get(f"/tournaments/{tid}/match-states")
+    assert listing.status_code == 200
+    assert listing.json()["m1"]["status"] == "started"
+
+
+def test_postpone_clears_live_timing_in_match_states(client, tid):
+    _seed_match(client, tid)
+    for action, version in (("call_to_court", 1), ("start_match", 2)):
+        r = client.post(
+            _commands_url(tid),
+            json=_new_command_body(action=action, seen_version=version),
+        )
+        assert r.status_code == 200, r.text
+
+    r = client.post(
+        _commands_url(tid),
+        json=_new_command_body(action="postpone_match", seen_version=3, payload={}),
+    )
+    assert r.status_code == 200, r.text
+    st = _match_state(client, tid)
+    assert st["status"] == "scheduled"
+    assert st["calledAt"] is None
+    assert st["actualStartTime"] is None

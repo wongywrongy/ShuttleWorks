@@ -1719,6 +1719,41 @@ class LocalRepository:
 
         match.version = match.version + 1
 
+        # Mirror the transition into the legacy ``match_states`` row — the
+        # live Run surface polls GET /match-states, and the PUT/DELETE
+        # routes there dual-write in the other direction. Without this
+        # write a command-applied call/start is invisible after reload:
+        # the board re-reads ``scheduled`` while the transition guard
+        # holds the canonical status, so the retried command 409s
+        # forever. Same transaction, same single commit below.
+        # ``retired`` has no legacy spelling; the floor reads it as
+        # ``finished`` (the match is over either way).
+        _canonical_to_legacy = {
+            MatchStatus.SCHEDULED: "scheduled",
+            MatchStatus.CALLED: "called",
+            MatchStatus.PLAYING: "started",
+            MatchStatus.FINISHED: "finished",
+            MatchStatus.RETIRED: "finished",
+        }
+        state_row = self.session.get(MatchState, (tournament_id, match_id))
+        if state_row is None:
+            state_row = MatchState(tournament_id=tournament_id, match_id=match_id)
+            self.session.add(state_row)
+        state_row.status = _canonical_to_legacy[target_status]
+        _stamp = now_iso()
+        if target_status == MatchStatus.CALLED:
+            state_row.called_at = _stamp
+        elif target_status == MatchStatus.PLAYING:
+            state_row.actual_start_time = state_row.actual_start_time or _stamp
+        elif target_status in (MatchStatus.FINISHED, MatchStatus.RETIRED):
+            state_row.actual_end_time = state_row.actual_end_time or _stamp
+        else:
+            # uncall / postpone / assign land back on ``scheduled`` —
+            # clear live timing so the match re-enters the queue clean.
+            state_row.called_at = None
+            state_row.actual_start_time = None
+            state_row.actual_end_time = None
+
         if command_row is None:
             command_row = Command(
                 id=command_id,
