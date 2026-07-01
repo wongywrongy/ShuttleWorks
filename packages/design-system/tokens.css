@@ -1,38 +1,53 @@
 /* ============================================================================
  * @scheduler/design-system — tokens.css
  *
- * Implements design/BRAND.md §1 (palette), §2 (typography), §4 (spacing),
- * §5 (motion budget), §6 (shadow/elevation). Two substrates: Swiss
- * Industrial Print (light) and Tactical Telemetry (dark). Same brutalist
- * grammar across both; only substrate vars and texture overlays differ.
+ * Design language: "warmed-B blue-glow" (see .agents/skills/shuttleworks-design).
+ * Dark-first near-black substrate warmed with a luminous azure accent + gentle
+ * glow; a daylight light theme pairs it. Both themes share one grammar; only the
+ * substrate ramp + accent lightness flip.
  *
- * All values are HSL triplets (space-separated, no commas) so consumers
- * can do `hsl(var(--token))` and `hsl(var(--token) / 0.5)` for alpha.
- * Hex equivalents noted inline for human review.
+ * All values are HSL triplets (space-separated, no commas) so consumers can do
+ * `hsl(var(--token))` and `hsl(var(--token) / 0.5)` for alpha (glow/tint/status
+ * fills all rely on this). Hex equivalents noted inline for human review.
  *
- * NEW canonical tokens follow BRAND.md naming: --bg, --ink, --rule,
- * --accent, etc. LEGACY aliases (--background, --foreground, --primary…)
- * remap to the canonical layer so scheduler's existing components don't
- * break during migration; Phase 6 strips the legacy aliases.
+ * NEW canonical tokens follow --bg / --ink / --rule / --accent naming; a richer
+ * substrate + text ramp (--surface-*, --ink-2/3, --border-control/strong), the
+ * 3b muted-solid status fills, module-identity hues, and the glow system are
+ * added for the shell + primitives (Phases 2–3). LEGACY aliases (--background,
+ * --foreground, --primary…) remap to the canonical layer so existing components
+ * restyle automatically; a later phase strips the legacy aliases.
  * ========================================================================= */
 
 @layer base {
   :root {
     color-scheme: light;
 
-    /* ----- Canonical substrate (Swiss Industrial Print) ------------------- */
-    --bg:           60 13% 95%;    /* #F4F4F0 unbleached documentation paper */
-    --bg-elev:       0  0% 100%;   /* #FFFFFF crisp white sheet (elevated)   */
-    --ink:          40  7%  13%;   /* #24221D soft carbon (dialed back from #0A0A0A) */
-    --ink-muted:    60  1%  29%;   /* #4A4A48 secondary text                  */
-    --ink-faint:    60  1%  60%;   /* #9A9A98 disabled, ghost                 */
-    --rule:         38  6%  24%;   /* #423E37 softened divider/border (was #0A0A0A) */
-    --rule-soft:    45 11%  83%;   /* #D8D6D0 inner divider in dense tables  */
-    --accent:       22 100% 55%;   /* #FF6B1A Signal Orange (single accent)   */
-    --accent-bg:    25 100% 95%;   /* #FFF1E8 tinted callout surface          */
+    /* ----- Canonical substrate (daylight light theme) -------------------- */
+    --bg:           217 22% 93%;   /* #E9ECF1 page background                 */
+    --bg-elev:       0  0% 100%;   /* #FFFFFF elevated surface / screen panel */
+    --ink:          222 47% 11%;   /* #0F172A primary text / headings         */
+    --ink-2:        220 15% 12%;   /* #1A1D23 body                            */
+    --ink-3:        215 25% 27%;   /* #334155 secondary label                 */
+    --ink-muted:    215 16% 47%;   /* #64748B meta / inactive                 */
+    --ink-faint:    215 20% 65%;   /* #94A3B8 captions / disabled             */
+    --rule:         214 32% 91%;   /* #E2E8F0 structural divider / card edge  */
+    --rule-soft:    220 20% 94%;   /* #EDEFF3 in-table row divider            */
+    --accent:       221 83% 53%;   /* #2563EB luminous azure (single accent)  */
+    --accent-bg:    221 70% 95%;   /* #E8EEFB tinted callout surface          */
     --accent-ink:    0  0% 100%;   /* #FFFFFF text on accent fill             */
 
-    /* ----- Spacing ladder (BRAND.md §4) ---------------------------------- */
+    /* ----- Finer substrate ramp (shell chrome consumes these) ------------ */
+    --surface-rail:   220 23% 97%; /* #F7F8FA rails / inspectors              */
+    --surface-screen:  0  0% 100%; /* #FFFFFF screen surface                  */
+    --surface-band:   220 25% 95%; /* #F0F2F6 table group bands / gutters     */
+    --surface-active: 221 70% 95%; /* #E8EEFB active nav row                  */
+    --chip-tag:       218 20% 92%; /* #E7EAEF source-initial squares          */
+
+    /* ----- Emphasis borders ---------------------------------------------- */
+    --border-control: 217 17% 85%; /* #D3D8E0 control borders                 */
+    --border-strong:  213 27% 84%; /* #CBD5E1 wordmark frame / emphasis       */
+
+    /* ----- Spacing ladder ------------------------------------------------- */
     --space-0:    0;
     --space-1:    2px;
     --space-2:    4px;
@@ -45,11 +60,13 @@
     --space-9:   64px;
     --space-10:  96px;
 
-    /* ----- Radii (dialed back — gently rounded, keeps the grid honest) --- */
-    --radius:    6px;      /* default surface corner (cards, panels)         */
-    --radius-sm: 4px;      /* interactive controls (buttons, inputs)         */
-    --radius-md: 8px;      /* larger cards / grouped surfaces                */
-    --radius-lg: 12px;     /* modals / prominent surfaces                    */
+    /* ----- Radii (warmed — rounded corners + gentle elevation) ----------- */
+    --radius-xs: 4px;      /* micro tags, source-initial squares             */
+    --radius-sm: 6px;      /* status pills, small controls                   */
+    --radius:    8px;      /* default: buttons, chips, inputs                */
+    --radius-md: 10px;     /* grouped surfaces                               */
+    --radius-lg: 12px;     /* cards, metric tiles, modals                    */
+    --radius-xl: 14px;     /* screen frame                                   */
 
     /* ----- Easing (canonical app curves) -------------------------------- */
     --ease-brand:      cubic-bezier(0.22, 1, 0.36, 1);
@@ -73,7 +90,7 @@
     --density-section-gap:  24px;
     --density-badge-h:      22px;
 
-    /* ----- Type ladder px (BRAND.md §2 — strict 10/11/12/14/16/18/24) --- */
+    /* ----- Type ladder px (strict 10/11/12/14/16/18/24) ----------------- */
     --text-3xs:  0.625rem;  /* 10px footnote / status pill / micro-stamp     */
     --text-2xs:  0.6875rem; /* 11px overline / eyebrow / SectionHeader       */
     --text-xs:   0.75rem;   /* 12px metadata / mono ids                      */
@@ -82,18 +99,13 @@
     --text-lg:   1.125rem;  /* 18px                                          */
     --text-2xl:  1.5rem;    /* 24px card titles                              */
 
-    /* ----- Type stacks (BRAND.md §2) -------------------------------------
-     * The fallback chain matters per product:
-     *   • Scheduler self-hosts @fontsource-variable/geist + jetbrains-mono.
-     *     Both register as `Geist Variable` / `JetBrains Mono Variable`.
-     *   • Tournament currently loads Inter via the rsms.me CDN, which
-     *     registers as `Inter` (NOT `Inter Variable`). The chain must
-     *     include plain `'Inter'` or tournament falls all the way through
-     *     to system-ui — which is exactly the bug Phase 2b(ii.b)
-     *     introduced. Plain `'Inter'` stays in every chain. */
-    --font-display: 'Inter', 'Archivo Black', 'Monument Extended',
-                    -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                    sans-serif;
+    /* ----- Type stacks --------------------------------------------------
+     * One family everywhere: Geist. Data/figures use tabular-nums via the
+     * `.sw-num` utility (globals.css), NOT a separate mono face, so nothing
+     * reads "robotic". JetBrains Mono stays available for terminal/code-only
+     * surfaces (solver log). Scheduler self-hosts both as variable fonts. */
+    --font-display: 'Geist Variable', 'Inter', -apple-system, BlinkMacSystemFont,
+                    'Segoe UI', sans-serif;
     --font-sans:    'Geist Variable', 'Inter Variable', 'Inter',
                     -apple-system, BlinkMacSystemFont, 'Segoe UI',
                     'Roboto', 'Helvetica Neue', sans-serif;
@@ -108,11 +120,11 @@
     --h3-size: 1rem;       --h3-weight: 600;
     --p-size:  0.875rem;   --p-weight:  400; --p-leading: 1.5;
     --label-size:   0.75rem;    --label-weight:   500;
-    --eyebrow-size: 0.6875rem;  --eyebrow-weight: 600; --eyebrow-tracking: 0.06em;
+    --eyebrow-size: 0.625rem;   --eyebrow-weight: 600; --eyebrow-tracking: 0.08em;
 
-    /* ----- Display type — heavy and tight, but eased off the full wall --- */
-    --display-tracking: -0.022em;
-    --display-leading:  0.96;
+    /* ----- Display type — tight, eased off the full wall ----------------- */
+    --display-tracking: -0.03em;
+    --display-leading:  1.0;
     --display-min:      clamp(2.5rem, 6vw, 6rem);
     --display-section:  clamp(1.5rem, 3vw, 2.5rem);
 
@@ -123,41 +135,60 @@
     --shadow-md: 0 2px 8px hsl(var(--ink) / 0.10);
     --shadow-lg: 0 10px 28px hsl(var(--ink) / 0.12);
 
+    /* ----- Glow — the signature. Primary actions + live signals. -------- */
+    --glow-accent:    0 0 22px hsl(var(--accent) / 0.22);
+    --glow-accent-lg: 0 6px 18px hsl(var(--accent) / 0.16);
+    --glow-live:      0 0 8px hsl(var(--status-live) / 0.5);
+    /* Ambient page glow behind app surfaces (top-right azure bloom). */
+    --page-glow: radial-gradient(1100px 480px at 72% -6%,
+                   hsl(var(--accent) / 0.08), transparent 62%);
+
     /* ----- Z-index scale ------------------------------------------------- */
     /* Popovers sit ABOVE modals so dropdowns/tooltips opened inside a
      * dialog render in front of the dialog body (the standard a11y
-     * expectation). The earlier hierarchy put popover below modal,
-     * which clipped Select menus inside DisruptionDialog/MoveMatchDialog.
-     */
+     * expectation). */
     --z-hud:      10;
     --z-chrome:   20;
     --z-overlay:  40;
     --z-modal:    50;
     --z-popover:  60;
 
-    /* ----- Status palette (inherited from scheduler, unchanged) ---------- */
-    /* Status colors live in their own semantic namespace and are NEVER
-     * brand accents (BRAND.md §1). Light values: saturated hue + 38-50%L.
-     */
-    --status-live:        142 71% 38%;
-    --status-live-bg:     142 71% 92%;
-    --status-called:       38 92% 42%;
-    --status-called-bg:    38 92% 92%;
-    --status-started:     199 89% 38%;
-    --status-started-bg:  199 89% 93%;
-    --status-blocked:       0 72% 45%;
-    --status-blocked-bg:    0 72% 95%;
-    --status-warning:      38 92% 42%;
-    --status-warning-bg:   38 92% 92%;
-    --status-idle:        220  9% 46%;
-    --status-idle-bg:     220 14% 92%;
-    --status-done:        220 13% 50%;
-    --status-done-bg:     220 14% 94%;
+    /* ----- Status palette ------------------------------------------------ *
+     * Status colors live in their own semantic namespace and are NEVER the
+     * brand accent. Base = dot/text hue + a soft `-bg` tint (quiet states).
+     * The `-solid` / `-border` / `-ink` triplet drives the 3b muted-solid
+     * chips on live boards (active states fill; quiet states stay outlined). */
+    --status-live:         142 71% 38%;   /* dot / text                       */
+    --status-live-bg:      142 71% 92%;   /* quiet tint                       */
+    --status-live-solid:   142 76% 36%;   /* #16A34A muted-solid fill         */
+    --status-live-border:  142 72% 29%;
+    --status-live-ink:     154 50% 95%;   /* text on the solid fill           */
+    --status-called:        38 92% 42%;
+    --status-called-bg:     38 92% 92%;
+    --status-called-solid:  26 90% 37%;   /* #B45309 muted-solid fill         */
+    --status-called-border: 37 90% 32%;
+    --status-called-ink:    33 100% 96%;
+    --status-started:      200 98% 39%;   /* #0284C7 scheduled / sky          */
+    --status-started-bg:   199 89% 93%;
+    --status-blocked:        0 72% 45%;
+    --status-blocked-bg:     0 72% 95%;
+    --status-warning:       38 92% 42%;
+    --status-warning-bg:    38 92% 92%;
+    --status-idle:         220  9% 46%;
+    --status-idle-bg:      220 14% 92%;
+    --status-done:         220 13% 50%;
+    --status-done-bg:      220 14% 94%;
 
-    /* ----- Legacy aliases (scheduler compat — stripped in Phase 6) ------- *
-     * Existing scheduler components reference these names. They remap to  *
-     * the canonical layer so the visual palette swap is automatic without *
-     * touching every component.                                            */
+    /* ----- Module identity (Meet / Bracket / Operations / Display) ------- */
+    --module-meet:    221 83% 53%;   /* azure   */
+    --module-bracket: 262 83% 58%;   /* violet  */
+    --module-ops:     142 76% 36%;   /* green   */
+    --module-display: 200 98% 39%;   /* sky     */
+
+    /* ----- Legacy aliases (scheduler compat — stripped later) ----------- *
+     * Existing scheduler components reference these names. They remap to    *
+     * the canonical layer so the palette swap is automatic without touching *
+     * every component.                                                      */
     --background:           var(--bg);
     --foreground:           var(--ink);
     --card:                 var(--bg-elev);
@@ -166,13 +197,13 @@
     --popover-foreground:   var(--ink);
     --primary:              var(--ink);        /* scheduler used primary as text/ink */
     --primary-foreground:   var(--bg-elev);
-    --secondary:           60  8% 90%;          /* light gray surface */
+    --secondary:           220 20% 94%;         /* light gray surface */
     --secondary-foreground: var(--ink);
-    --muted:               60  8% 90%;
+    --muted:               220 20% 94%;
     --muted-foreground:     var(--ink-muted);
     --destructive:           0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border:               var(--rule-soft);
+    --border:               var(--rule);
     --input:                var(--rule-soft);
     --ring:                 var(--accent);     /* focus ring = brand accent */
 
@@ -196,45 +227,72 @@
   }
 
   /* ============================================================== DARK ==
-   * Tactical Telemetry substrate. Same brutalist grammar; same single
-   * accent; substrate flips. .dark class on <html> triggers it (matches
-   * scheduler's existing AppearanceSettings toggle).
+   * Dark-first near-black substrate + ambient azure glow. Same grammar; the
+   * substrate ramp deepens and the accent brightens. `.dark` on <html>
+   * triggers it (matches scheduler's existing AppearanceSettings toggle).
    * ====================================================================== */
   .dark {
     color-scheme: dark;
 
-    --bg:           0  0%   4%;    /* #0A0A0A deactivated CRT (NEVER pure black) */
-    --bg-elev:      0  0%   8%;    /* #141414 elevated panel                      */
-    --ink:          0  0%  92%;    /* #EAEAEA white phosphor (NEVER pure white)   */
-    --ink-muted:    0  0%  60%;    /* #9A9A9A secondary                            */
-    --ink-faint:    0  0%  33%;    /* #555555 disabled                             */
-    --rule:         0  0%  70%;    /* softened phosphor line (was 92%)             */
-    --rule-soft:    0  0%  16%;    /* #2A2A2A inner divider                        */
-    --accent:      22 100% 55%;    /* same orange both modes (brutalist rule)      */
-    --accent-bg:   22  70% 10%;    /* #2A1808 tinted callout on dark substrate     */
-    --accent-ink:   0  0%   4%;    /* #0A0A0A text on accent fill                  */
+    --bg:           240 17%  2%;   /* #050507 near-black page                 */
+    --bg-elev:      223 14% 10%;   /* #16181D raised card / input / chip      */
+    --ink:          220 16% 96%;   /* #F4F5F7 headings / primary values       */
+    --ink-2:        220 14% 91%;   /* #E6E8EC body                            */
+    --ink-3:        216 10% 80%;   /* #C7CBD1 secondary label                 */
+    --ink-muted:    219  6% 57%;   /* #8A8F98 meta / inactive nav             */
+    --ink-faint:    221  9% 37%;   /* #565B66 captions / table headers        */
+    --rule:         222 12% 16%;   /* #23262D structural divider / card edge  */
+    --rule-soft:    222 14% 14%;   /* #1F2229 in-table row divider            */
+    --accent:       216 100% 68%;  /* #5B9DFF luminous azure                  */
+    --accent-bg:    216 55% 14%;   /* dark azure tinted callout               */
+    --accent-ink:   213 70% 11%;   /* #08192E text on accent fill             */
 
-    /* Shadow rule on dark: none; elevation via --bg-elev contrast only */
+    --surface-rail:   225 15% 5%;  /* #0B0C0F rails / inspectors              */
+    --surface-screen: 228 15% 6%;  /* #0E0F13 screen surface                  */
+    --surface-band:   220 14% 9%;  /* #131519 table group bands / court gutter*/
+    --surface-active: 220 14% 12%; /* #1B1E24 active nav row                  */
+    --chip-tag:       222 14% 14%; /* #1E2128 source-initial squares          */
+
+    --border-control: 222 12% 21%; /* #2E323B control borders                 */
+    --border-strong:  220 11% 26%; /* #3A3F49 wordmark frame / emphasis       */
+
+    /* Shadow rule on dark: none; elevation via substrate contrast + glow */
     --shadow-sm:   none;
     --shadow-md:   none;
     --shadow-hard: none;
     --shadow-lg:   none;
 
-    /* Status palette — desaturated text + lower-lightness backgrounds */
-    --status-live:        142 71% 60%;
-    --status-live-bg:     142 71% 25%;
-    --status-called:       38 92% 65%;
-    --status-called-bg:    38 92% 25%;
-    --status-started:     199 89% 65%;
-    --status-started-bg:  199 89% 25%;
-    --status-blocked:       0 72% 65%;
-    --status-blocked-bg:    0 72% 25%;
-    --status-warning:      38 92% 65%;
-    --status-warning-bg:   38 92% 25%;
-    --status-idle:          0  0% 60%;
-    --status-idle-bg:       0  0% 16%;
-    --status-done:          0  0% 50%;
-    --status-done-bg:       0  0% 14%;
+    /* Glow reads stronger on the dark substrate */
+    --glow-accent:    0 0 22px hsl(var(--accent) / 0.35);
+    --glow-accent-lg: 0 0 28px hsl(var(--accent) / 0.16);
+
+    /* Status palette — brighter dots, muted-solid fills for the 3b chips */
+    --status-live:         158 64% 52%;   /* #34D399 */
+    --status-live-bg:      142 71% 25%;
+    --status-live-solid:   159 62% 30%;   /* #1D7D5C */
+    --status-live-border:  159 62% 28%;
+    --status-live-ink:     155 44% 90%;   /* #DBF1E8 */
+    --status-called:        42 71% 58%;   /* #E0B24A */
+    --status-called-bg:     38 92% 25%;
+    --status-called-solid:  42 56% 42%;   /* #A5822F */
+    --status-called-border: 43 56% 39%;
+    --status-called-ink:    43 78% 93%;   /* #FBF3DF */
+    --status-started:      198 93% 60%;   /* #38BDF8 */
+    --status-started-bg:   199 89% 25%;
+    --status-blocked:        0 72% 65%;
+    --status-blocked-bg:     0 72% 25%;
+    --status-warning:       38 92% 65%;
+    --status-warning-bg:    38 92% 25%;
+    --status-idle:           0  0% 60%;
+    --status-idle-bg:        0  0% 16%;
+    --status-done:           0  0% 50%;
+    --status-done-bg:        0  0% 14%;
+
+    /* Module identity — dark variants */
+    --module-meet:    216 100% 68%;
+    --module-bracket: 255 92% 76%;   /* #A78BFA */
+    --module-ops:     158 64% 52%;
+    --module-display: 198 93% 60%;
 
     /* Semantic data colors */
     --success:           142 71% 55%;
@@ -247,7 +305,7 @@
     --destructive-foreground: 0 0% 98%;
 
     /* Legacy surface tokens — gray surfaces become charcoal */
-    --secondary:           0  0% 14%;
-    --muted:               0  0% 14%;
+    --secondary:          222 12% 14%;
+    --muted:              222 12% 14%;
   }
 }

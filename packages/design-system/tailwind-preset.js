@@ -7,11 +7,12 @@
  * product-specific extensions.
  *
  * Strict rules baked in:
- *   - darkMode via `.dark` class (BRAND.md §0 — same toggle both products)
- *   - 90° corners default (BRAND.md §3); 2px on interactive controls only
+ *   - darkMode via `.dark` class (same toggle both products)
+ *   - Warmed radii (--radius-xs..-xl); rounded-full stays for dots
  *   - Spacing locked to ladder --space-0..--space-10
- *   - Type tied to canonical --text-* + --font-display/sans/mono
+ *   - Type tied to canonical --text-* + --font-display/sans/mono (one family: Geist)
  *   - All colors via HSL CSS vars from tokens.css; no raw hex anywhere
+ *   - Signature azure glow via shadow-glow / shadow-glow-lg
  *
  * Animations + keyframes lifted from scheduler so both products share the
  * same solver-theater + phase motion vocabulary.
@@ -41,17 +42,36 @@ module.exports = {
       },
 
       colors: {
-        // -------- Canonical BRAND.md tokens --------
+        // -------- Canonical tokens --------
         bg:         'hsl(var(--bg))',
         'bg-elev':  'hsl(var(--bg-elev))',
         ink: {
           DEFAULT: 'hsl(var(--ink))',
+          2:       'hsl(var(--ink-2))',      // body
+          3:       'hsl(var(--ink-3))',      // secondary label
           muted:   'hsl(var(--ink-muted))',
           faint:   'hsl(var(--ink-faint))',
         },
         rule: {
           DEFAULT: 'hsl(var(--rule))',
           soft:    'hsl(var(--rule-soft))',
+          control: 'hsl(var(--border-control))',
+          strong:  'hsl(var(--border-strong))',
+        },
+        // Finer substrate ramp (shell chrome): bg-surface-rail / -screen / -band / -active / -chip
+        surface: {
+          rail:   'hsl(var(--surface-rail))',
+          screen: 'hsl(var(--surface-screen))',
+          band:   'hsl(var(--surface-band))',
+          active: 'hsl(var(--surface-active))',
+          chip:   'hsl(var(--chip-tag))',
+        },
+        // Module identity: border-module-meet / bg-module-bracket / text-module-ops …
+        module: {
+          meet:    'hsl(var(--module-meet))',
+          bracket: 'hsl(var(--module-bracket))',
+          ops:     'hsl(var(--module-ops))',
+          display: 'hsl(var(--module-display))',
         },
         // -------- Legacy scheduler aliases (still used by many components) --------
         border: 'hsl(var(--border))',
@@ -108,10 +128,16 @@ module.exports = {
         // -------- Status palette --------
         // bg-status-live / text-status-live / border-status-live + -bg variant
         status: {
-          live:         'hsl(var(--status-live))',
-          'live-bg':    'hsl(var(--status-live-bg))',
-          called:       'hsl(var(--status-called))',
-          'called-bg':  'hsl(var(--status-called-bg))',
+          live:            'hsl(var(--status-live))',
+          'live-bg':       'hsl(var(--status-live-bg))',
+          'live-solid':    'hsl(var(--status-live-solid))',
+          'live-border':   'hsl(var(--status-live-border))',
+          'live-ink':      'hsl(var(--status-live-ink))',
+          called:          'hsl(var(--status-called))',
+          'called-bg':     'hsl(var(--status-called-bg))',
+          'called-solid':  'hsl(var(--status-called-solid))',
+          'called-border': 'hsl(var(--status-called-border))',
+          'called-ink':    'hsl(var(--status-called-ink))',
           started:      'hsl(var(--status-started))',
           'started-bg': 'hsl(var(--status-started-bg))',
           blocked:      'hsl(var(--status-blocked))',
@@ -156,14 +182,16 @@ module.exports = {
         cell: 'var(--density-cell-py) var(--density-cell-px)',
       },
 
-      // -------- Radii (dialed back — gently rounded surfaces) --------
+      // -------- Radii (warmed — rounded corners + gentle elevation) --------
       borderRadius: {
         none: '0',
-        DEFAULT: 'var(--radius)',         // 6px
-        sm: 'var(--radius-sm)',           // 4px — interactive controls
-        md: 'var(--radius-md)',           // 8px — cards / grouped surfaces
-        lg: 'var(--radius-lg)',           // 12px — modals / prominent surfaces
-        // Full removed (was rounded-full) — replace with rounded-none in code
+        xs: 'var(--radius-xs)',           // 4px  — micro tags / initial squares
+        sm: 'var(--radius-sm)',           // 6px  — status pills / small controls
+        DEFAULT: 'var(--radius)',         // 8px  — buttons / chips / inputs
+        md: 'var(--radius-md)',           // 10px — grouped surfaces
+        lg: 'var(--radius-lg)',           // 12px — cards / metric tiles / modals
+        xl: 'var(--radius-xl)',           // 14px — screen frame
+        // rounded-full (9999px) remains available from Tailwind core defaults
       },
 
       // -------- Shadows (soft elevation; hard offset is opt-in) ----------
@@ -179,6 +207,10 @@ module.exports = {
         xl:   'var(--shadow-hard)',
         '2xl':'var(--shadow-hard)',
         inner: 'inset 0 1px 0 hsl(var(--rule) / 0.4)',
+        // Signature glow — primary actions (shadow-glow) + selected cards (shadow-glow-lg)
+        glow:      'var(--glow-accent)',
+        'glow-lg': 'var(--glow-accent-lg)',
+        'glow-live': 'var(--glow-live)',
       },
 
       // -------- Brand easing + duration scale (see MOTION.md) --------

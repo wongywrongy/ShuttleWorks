@@ -19,6 +19,10 @@
   html,
   body {
     background-color: hsl(var(--bg));
+    /* Ambient azure bloom, top-right, behind every app surface (subtle). */
+    background-image: var(--page-glow);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
     color:            hsl(var(--ink));
     transition:
       background-color 150ms ease,
@@ -36,18 +40,30 @@
     line-height: 1.5;
   }
 
-  /* Tabular numerics on all data-bearing elements. Critical for live
-   * timers, scores, IDs — digits don't jitter as values change. */
-  code, kbd, pre, samp, time, output, data, [data-numeric] {
+  /* Genuine code/terminal content stays mono. */
+  code, kbd, pre, samp {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
 
-  /* Brutalist eyebrow — uppercase mono overline above section titles.
-   * Replaces the old gray "small label" pattern that read as generic SaaS.
-   */
+  /* Data-bearing elements (timers, scores, IDs) keep tabular figures but on
+   * the one family (Geist) — no separate "robotic" mono for data. */
+  time, output, data, [data-numeric] {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  /* Utility: tabular figures for any numeric/code content (match codes, dates,
+   * times, scores, counts). The one-family data treatment. */
+  .sw-num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  /* Eyebrow — plain uppercase micro-label above section titles (Geist, not
+   * mono; no ASCII framing). The tracking + tiny size do the work. */
   .eyebrow {
-    font-family:    var(--font-mono);
+    font-family:    var(--font-sans);
     font-size:      var(--eyebrow-size);
     font-weight:    var(--eyebrow-weight);
     letter-spacing: var(--eyebrow-tracking);
@@ -223,6 +239,23 @@
 .animate-slide-up { animation: slide-up 0.3s ease-out; }
 
 /* ===========================================================================
+ * Signature motion — live-signal breathe + mount rise.
+ * sw-pulse: slow opacity breathe on status dots / LIVE badges.
+ * sw-float-in: gentle 6px rise + fade for rows/cards on mount.
+ * ======================================================================== */
+@keyframes sw-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+.sw-pulse { animation: sw-pulse 1.6s ease-in-out infinite; }
+
+@keyframes sw-float-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sw-float-in { animation: sw-float-in var(--motion-slow) var(--ease-brand) both; }
+
+/* ===========================================================================
  * prefers-reduced-motion: kill infinite motion, keep short signals.
  * BRAND.md §5 reduced-motion contract.
  * ======================================================================== */
@@ -231,6 +264,8 @@
   .animate-phase-glow,
   .animate-marching-ants,
   .animate-cell-pulse,
+  .sw-pulse,
+  .sw-float-in,
   .pin-marquee,
   .scan-bar::after {
     animation: none !important;

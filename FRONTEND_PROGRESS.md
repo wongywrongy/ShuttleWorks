@@ -50,8 +50,9 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Program started:** 2026-07-01
 - **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb`
 - **Scope:** Foundation + keystones
-- **Current phase:** Phase 0 COMPLETE → Phase 1 ready to start
-- **Status:** Housekeeping done (ledger + skill extracted, temp folder neutralized). Next: Phase 1 token remap.
+- **Current phase:** Phase 1 COMPLETE → Phase 2 ready (core primitives)
+- **Status:** Token layer remapped + verified (build ✓, vitest 743 ✓, dark+light Hub screenshots on-language,
+  no contrast disasters). Accent = prototype azure. Commit cadence = per phase.
 
 ## Phase log
 
@@ -68,29 +69,30 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
       that the skill doesn't bundle). *Disposition: gitignore-and-keep; revisit at end of pass.*
 
 ### Phase 1 — Token layer remap (restyles ~80% of the app app-wide)
-- **Status: NOT STARTED**
-- Files: `packages/design-system/tokens.css`, `…/tailwind-preset.js`, `…/globals.css`,
-  `products/scheduler/frontend/src/main.tsx`, `…/src/index.css`.
-- [ ] **Substrate ramp** — prototype dark values → `.dark`, prototype light values → `:root` (both
-      palettes first-class). Dark: page `#050507`, sidebar `#0B0C0F`, panel `#0E0F13`, raised `#16181D`,
-      band `#131519`, active `#1B1E24`. Convert each hex → HSL-triplet.
-- [ ] **Accent** `--accent`: `#5B9DFF` (≈`217 100% 68%`) `.dark` / `#2563EB` (≈`221 83% 53%`) `:root`;
-      add `--accent-ink` (`#08192E` / `#FFFFFF`). Verify every converted triplet against its hex.
-- [ ] **Glow system** (new): `--glow-accent: 0 0 22px hsl(var(--accent)/.35)`, `-lg`, `--glow-live`,
-      `--page-glow` radial. Wire `boxShadow.glow`/`glow-lg` into the preset + ambient page glow behind
-      `AppShell`/`WorkspaceShell`.
-- [ ] **Radii** warmed — revalue tokens toward controls 8–9 / cards 12 / frame 14 / micro-tag 4.
-- [ ] **Status ramp → "3b muted-solid"** — add solid + ink tokens the system lacks:
-      `--status-live-solid` (`#1D7D5C`), `--status-called-solid` (`#A5822F`), `-border`/`-ink`, + light
-      variants. Keep existing tint tokens for quiet states.
-- [ ] **Module identity** — meet `#5B9DFF`, bracket `#A78BFA`, ops `#34D399`, display `#38BDF8`;
-      reconcile `lib/eventColors.ts` + `lib/schoolAccent.ts` (only files hardcoding old orange `#ea580c`).
-- [ ] **Type** — Geist stays; add tabular-nums utility (prototype `.sw-num`); begin retiring
-      `font-mono` for *data* (numbers → Geist tabular-nums); keep JetBrains Mono only for terminal/code
-      (`SolverProgressLog`).
-- [ ] **Textures** — drop brutalist hard-offset shadow / hatch / scanline utilities; add `sw-pulse` /
-      `sw-float-in` motion (reconcile with existing preset keyframes).
-- **Gate + visual check after Phase 1.**
+- **Status: COMPLETE** (2026-07-01) — `packages/design-system/{tokens.css,tailwind-preset.js,globals.css}`.
+- [x] **Substrate ramp** — prototype dark → `.dark`, light → `:root` (both first-class). Added finer
+      ramp `--surface-{rail,screen,band,active}` + `--chip-tag` + `--ink-2/3` + `--border-control/strong`.
+      All hexes converted to HSL-triplets via `scratchpad/hex2hsl.py`.
+- [x] **Accent** = `216 100% 68%` (#5B9DFF) `.dark` / `221 83% 53%` (#2563EB) `:root`; `--accent-ink`
+      `213 70% 11%` / `#FFFFFF`. Verified live: computed `--accent` = `216 100% 68%`, body bg `#040406`.
+- [x] **Glow system** — `--glow-accent`/`-lg`/`--glow-live` + `--page-glow` radial (ambient bloom wired
+      onto `html,body` in globals). Preset exposes `shadow-glow` / `shadow-glow-lg` / `shadow-glow-live`.
+- [x] **Radii warmed** — `--radius-xs 4 / -sm 6 / DEFAULT 8 / -md 10 / -lg 12 / -xl 14`; preset adds
+      `rounded-xs`/`rounded-xl` (rounded-full still available from core).
+- [x] **Status "3b muted-solid"** — added `--status-{live,called}-{solid,border,ink}` (dark + light);
+      preset exposes `bg-status-live-solid` / `text-status-live-ink` etc. Quiet-state tints retained.
+- [x] **Module identity** — `--module-{meet,bracket,ops,display}` + `border-module-*`/`bg-module-*`
+      classes. NOTE: `eventColors.ts` (categorical discipline palette) + `schoolAccent.ts` (school team
+      colors) are **data palettes, not the brand accent** → left unchanged (no reconcile needed).
+- [x] **Type** — `--font-display` Inter→Geist; `.eyebrow` + `time/output/data` moved off `font-mono`
+      to Geist tabular-nums; added `.sw-num` utility. JetBrains Mono kept for `code/kbd/pre/samp` only.
+- [x] **Motion** — added `sw-pulse` (live breathe) + `sw-float-in` (mount rise) keyframes + reduced-motion.
+      Brutalist textures (hatch/scanlines/grid-lines) left in place but unused (harmless; prune later).
+- **Verified:** `npm run build` ✓ (7.4s), `test:run` **743 passed**, Hub dark+light screenshots
+  (`.playwright-mcp/p1-hub-{dark,light}.png`) — palette + glow + chips correct, no contrast issues.
+- **Carry to Phase 2 (already in scope):** (a) primary CTA "New workspace" still uses the ink-inverse
+  `primary` variant (white in dark / black in light) → make it the azure **glow** button; (b) Hub group
+  eyebrows still render `[ UPCOMING ]` framing → Eyebrow component drop.
 
 ### Phase 2 — Core primitives re-skin
 - **Status: NOT STARTED**
