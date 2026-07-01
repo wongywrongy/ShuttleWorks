@@ -17,6 +17,7 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import type { TournamentConfig } from '../../api/dto';
 import { Row, SectionHeader } from '../../platform/settings/SettingsControls';
+import { LockedFieldset } from '../../platform/settings/ConfigSurface';
 import {
   ScoringFields,
   type ScoringValue,
@@ -36,7 +37,7 @@ const FALLBACK_CONFIG: TournamentConfig = {
 const TEXT_INPUT_CLASSES =
   'h-7 rounded-sm border border-border bg-bg-elev px-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30';
 
-export function BracketEngineSection() {
+export function BracketEngineSection({ locked = false }: { locked?: boolean }) {
   const config = useTournamentStore((s) => s.config);
   const setConfig = useTournamentStore((s) => s.setConfig);
   const tid = useTournamentId();
@@ -61,42 +62,53 @@ export function BracketEngineSection() {
   };
 
   return (
-    <div>
-      <SectionHeader>Scoring</SectionHeader>
-      <ScoringFields value={scoring} onChange={(patch) => update(patch)} />
+    // Same two-column section grid as the Meet Engine tab, so the two
+    // engines' Configuration pages read as one surface. The fieldset is
+    // the bracket's lock mechanism: writes here persist immediately (no
+    // Save step to guard), so while a draw is in play the controls
+    // disable outright instead of confirm-to-unlock.
+    <LockedFieldset locked={locked}>
+      <div className="grid grid-cols-1 gap-x-10 lg:grid-cols-2 items-start">
+        <div>
+          <SectionHeader>Scoring</SectionHeader>
+          <ScoringFields value={scoring} onChange={(patch) => update(patch)} />
+        </div>
 
-      <SectionHeader>Timing</SectionHeader>
-      <p className="pb-1 text-xs text-muted-foreground">
-        Courts, slot duration, and the day window live in{' '}
-        <Link
-          to={`/tournaments/${tid}/ws-venue`}
-          className="text-accent hover:underline"
-        >
-          Venue &amp; schedule
-        </Link>
-        .
-      </p>
-      <Row
-        label="Rest between rounds (slots)"
-        control={
-          <input
-            type="number"
-            min={0}
-            max={32}
-            aria-label="Rest between rounds (slots)"
-            value={restDraft}
-            onChange={(e) => setRestDraft(e.target.value)}
-            onBlur={(e) => {
-              const next = Number(e.target.value);
-              if (next !== (config?.restBetweenRounds ?? 1)) {
-                update({ restBetweenRounds: next });
-              }
-            }}
-            className={`${TEXT_INPUT_CLASSES} w-20 tabular-nums`}
+        <div>
+          <SectionHeader>Timing</SectionHeader>
+          <p className="pb-1 text-xs text-muted-foreground">
+            Courts, slot duration, and the day window live in{' '}
+            <Link
+              to={`/tournaments/${tid}/ws-venue`}
+              className="text-accent hover:underline"
+            >
+              Venue &amp; schedule
+            </Link>
+            .
+          </p>
+          <Row
+            label="Rest between rounds (slots)"
+            control={
+              <input
+                type="number"
+                min={0}
+                max={32}
+                aria-label="Rest between rounds (slots)"
+                value={restDraft}
+                onChange={(e) => setRestDraft(e.target.value)}
+                onBlur={(e) => {
+                  const next = Number(e.target.value);
+                  if (next !== (config?.restBetweenRounds ?? 1)) {
+                    update({ restBetweenRounds: next });
+                  }
+                }}
+                className={`${TEXT_INPUT_CLASSES} w-20 tabular-nums`}
+              />
+            }
+            last
           />
-        }
-        last
-      />
-    </div>
+        </div>
+      </div>
+    </LockedFieldset>
   );
 }

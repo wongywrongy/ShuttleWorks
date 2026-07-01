@@ -25,8 +25,7 @@ import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { MeetStructureForm } from './tournaments/MeetStructureForm';
 import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
 import { EngineSettings } from './settings/EngineSettings';
-import { MeetActionsBar } from './components/MeetActionsBar';
-import { Seg } from '../../platform/settings/SettingsControls';
+import { ConfigSurface } from '../../platform/settings/ConfigSurface';
 import { IconDone } from '@scheduler/design-system';
 import type { TournamentConfig } from '../../api/dto';
 
@@ -85,14 +84,11 @@ export function TournamentSetupPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <MeetActionsBar title="Configuration">
-        <Seg
-          options={SECTION_OPTIONS}
-          value={activeSection}
-          onChange={(v) => setSection(v)}
-          ariaLabel="Configuration section"
-        />
+    <ConfigSurface
+      sections={SECTION_OPTIONS}
+      section={activeSection}
+      onSectionChange={(v) => setSection(v)}
+      actions={
         <button
           type="submit"
           form={FORM_ID}
@@ -110,41 +106,42 @@ export function TournamentSetupPage() {
             'Save'
           )}
         </button>
-      </MeetActionsBar>
-
-      {/* Page-level banners — full-bleed border-b ribbons, each shrink-0. */}
-      {isLocked ? <ScheduleLockIndicator showUnlockHint /> : null}
-      {isNewTournament ? (
-        <div className="motion-enter shrink-0 border-b border-status-started/40 bg-status-started/5 px-4 py-2 text-xs text-status-started">
-          <span className="font-semibold">New tournament — </span>
-          configure settings below. Saved on first save.
-        </div>
-      ) : null}
-      {error && !isNewTournament ? (
-        <div className="motion-enter shrink-0 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          {error}
-        </div>
-      ) : null}
-      {saveError ? (
-        <div className="motion-enter shrink-0 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          {saveError}
-        </div>
-      ) : null}
-
-      {/* Scrollable content — the active section's form. Only one form is
-          mounted at a time, both share FORM_ID so the bar Save targets it. */}
-      <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 pt-3">
-        {activeSection === 'meet' ? (
-          <MeetStructureForm
-            formId={FORM_ID}
-            config={displayConfig}
-            onSave={handleSave}
-            saving={busy}
-          />
-        ) : (
-          <EngineSettings formId={FORM_ID} onBusyChange={setBusy} />
-        )}
-      </div>
-    </div>
+      }
+      ribbons={
+        <>
+          {/* Page-level banners — full-bleed border-b ribbons, each shrink-0. */}
+          {isLocked ? <ScheduleLockIndicator showUnlockHint /> : null}
+          {isNewTournament ? (
+            <div className="motion-enter shrink-0 border-b border-status-started/40 bg-status-started/5 px-4 py-2 text-xs text-status-started">
+              <span className="font-semibold">New tournament — </span>
+              configure settings below. Saved on first save.
+            </div>
+          ) : null}
+          {error && !isNewTournament ? (
+            <div className="motion-enter shrink-0 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          ) : null}
+          {saveError ? (
+            <div className="motion-enter shrink-0 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+              {saveError}
+            </div>
+          ) : null}
+        </>
+      }
+    >
+      {/* Only one form is mounted at a time; both share FORM_ID so the bar
+          Save targets the active one. */}
+      {activeSection === 'meet' ? (
+        <MeetStructureForm
+          formId={FORM_ID}
+          config={displayConfig}
+          onSave={handleSave}
+          saving={busy}
+        />
+      ) : (
+        <EngineSettings formId={FORM_ID} onBusyChange={setBusy} />
+      )}
+    </ConfigSurface>
   );
 }

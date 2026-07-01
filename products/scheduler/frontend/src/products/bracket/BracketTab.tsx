@@ -24,8 +24,7 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
 import { reconcileBracketRoster } from './bracketMigration';
 import { type SettingsSectionDef } from '../../platform/settings/SettingsShell';
-import { Seg } from '../../platform/settings/SettingsControls';
-import { ActionsBar } from '../../components/control-plane';
+import { ConfigSurface } from '../../platform/settings/ConfigSurface';
 import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { useBracketScheduleLock } from './useBracketScheduleLock';
@@ -154,9 +153,9 @@ function BracketTabBody() {
     'engine',
     { debounceMs: 0 },
   );
-  // Per-engine lock signal — independent of the meet schedule. Stubbed
-  // false today; the affordance is wired for when the backend supports it.
-  const { isLocked: bracketScheduleLocked } = useBracketScheduleLock();
+  // Per-engine lock signal — independent of the meet schedule. Derived
+  // from the bracket DTO (any event in play locks Configuration).
+  const { isLocked: bracketScheduleLocked } = useBracketScheduleLock(data);
 
   const bracketSetupSections = useMemo<SettingsSectionDef[]>(
     () => [
@@ -164,7 +163,7 @@ function BracketTabBody() {
         id: 'engine',
         label: 'Engine',
         icon: Sliders,
-        render: () => <BracketEngineSection />,
+        render: () => <BracketEngineSection locked={bracketScheduleLocked} />,
       },
       {
         id: 'structure',
@@ -176,7 +175,7 @@ function BracketTabBody() {
       // switcher — they live in workspace settings (Sync and backups /
       // Sharing) now, the same as Meet.
     ],
-    [],
+    [bracketScheduleLocked],
   );
 
   // Setup, Roster, and Events do NOT depend on bracket-events data.
@@ -240,34 +239,27 @@ function BracketTabBody() {
         className="min-h-0 flex-1 overflow-auto animate-block-in"
       >
         {view === 'setup' && (
-          <div className="flex h-full min-h-0 flex-col">
-            <ActionsBar
-              title="Configuration"
-              status={
-                <Seg
-                  options={bracketSetupSections.map((s) => ({
-                    value: s.id,
-                    label: s.label,
-                  }))}
-                  value={setupSection}
-                  onChange={(v) => setSetupSection(v)}
-                  ariaLabel="Configuration section"
+          <ConfigSurface
+            sections={bracketSetupSections.map((s) => ({
+              value: s.id,
+              label: s.label,
+            }))}
+            section={setupSection}
+            onSectionChange={(v) => setSetupSection(v)}
+            ribbons={
+              bracketScheduleLocked ? (
+                <ScheduleLockIndicator
+                  locked={bracketScheduleLocked}
+                  showUnlockHint={false}
                 />
-              }
-            />
-            {bracketScheduleLocked ? (
-              <ScheduleLockIndicator
-                locked={bracketScheduleLocked}
-                showUnlockHint
-              />
-            ) : null}
-            <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 pt-3">
-              {(
-                bracketSetupSections.find((s) => s.id === setupSection) ??
-                bracketSetupSections[0]
-              ).render()}
-            </div>
-          </div>
+              ) : null
+            }
+          >
+            {(
+              bracketSetupSections.find((s) => s.id === setupSection) ??
+              bracketSetupSections[0]
+            ).render()}
+          </ConfigSurface>
         )}
         {view === 'roster' && <BracketRosterTab />}
         {/* The standalone Events surface was folded into Draws — creating a
