@@ -91,3 +91,4 @@ Read the three seam pages next.
 - [Meet → Operations (Seam A)](/contracts/meet-operations) · [Bracket → Operations (Seam B)](/contracts/bracket-operations) · [Operations → Display (Seam D)](/contracts/operations-display)
 - [Data flow](/architecture/data-flow) — the whole-system seam picture · [System overview](/architecture/system-overview)
 - [ADR 0009 — Universal match contract](/decisions/0009-universal-match-contract) · [ADR 0006 — Unified scheduling core](/decisions/0006-unified-scheduling-core)
+- [Glossary](/glossary) — seam, module, contract, and the rest of the vocabulary · [Operational scenarios](/architecture/operational-scenarios) — the seams in a day's flow

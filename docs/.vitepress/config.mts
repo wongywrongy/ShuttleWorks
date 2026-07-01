@@ -94,6 +94,7 @@ export default defineConfig({
       { text: 'Contracts', link: '/contracts/' },
       { text: 'API', link: '/api/' },
       { text: 'Decisions', link: '/decisions/' },
+      { text: 'Glossary', link: '/glossary' },
     ],
 
     sidebar: [
@@ -144,7 +145,9 @@ export default defineConfig({
           { text: 'Bracket schedule streaming', link: '/architecture/bracket-schedule-streaming' },
           { text: 'Bracket result queue', link: '/architecture/bracket-result-queue' },
           { text: 'Unified operations view', link: '/architecture/unified-operations-view' },
+          { text: 'Operational scenarios', link: '/architecture/operational-scenarios' },
           { text: 'Bracket draw canvas', link: '/architecture/bracket-draw-canvas' },
+          { text: 'Quality attributes', link: '/architecture/quality-attributes' },
         ],
       },
       {
@@ -174,6 +177,13 @@ export default defineConfig({
         items: [
           { text: 'Overview & route ownership', link: '/api/' },
           { text: 'Signals API', link: '/api/signals' },
+        ],
+      },
+      {
+        text: 'Reference',
+        collapsed: false,
+        items: [
+          { text: 'Glossary', link: '/glossary' },
         ],
       },
       {

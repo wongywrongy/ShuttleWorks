@@ -133,6 +133,24 @@ and Display (preview source).
 | `POST · GET /tournaments/{id}/invites`, `GET …/members` | create / list invites (owner-gated) + list members |
 | `GET /invites/{token}` (public) · `POST …/accept` (auth) · `DELETE …/{token}` (owner, revoke) | resolve / accept / revoke an invite link |
 
+### Cross-module consumers
+
+Ownership above says who *serves* a route; this says who *calls* it across a module
+boundary. It is the read-side of the [seam contracts](/contracts/), derived from
+`operationsContract` / `displayContract` / `meetContract`'s `consumedEndpoints` in
+`platform/contracts/moduleContract.ts` — Swagger shows neither. Only the routes that
+are read by a module other than their owner appear here.
+
+| Endpoint (owner) | Also consumed by | Why · criticality |
+| --- | --- | --- |
+| `GET …/match-states` (**Operations**) | **Meet**, **Display** | Meet reads live status as a **solve input** (a re-plan must pin `locked` matches); Display renders it on the public TV. Read-only both ways. |
+| `GET …/bracket` (**Bracket**) | **Operations**, **Display** | Operations lays out bracket-origin live matches ([Seam B](/contracts/bracket-operations)); Display renders bracket events. ~2.5 s poll; self-healing. |
+| `GET · PUT …/state` (**Control plane**, shared) | **Meet**, **Display** | Meet reads `/state` as a solve input; Display draws the static layout from it. Shared, **not** owned by any engine. |
+
+Everything else is called only by its owning module (Bracket consumes nothing
+cross-module; `consumedEndpoints = []`). Display owns no route and only consumes,
+which is why it appears as a consumer everywhere and an owner nowhere.
+
 ### Health probes — unauthenticated
 
 | Method · Path | Purpose |

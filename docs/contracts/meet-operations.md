@@ -11,6 +11,8 @@ the schedule-to-floor boundary.
 | **Payload** | `ScheduleDTO` (in) → `MatchStateDTO` (out, Operations-owned) |
 | **Transport today** | store-subscription edge (`tournamentStore.setSchedule`) + ~5 s match-state poll |
 | **Status** | **wired** |
+| **Criticality** | **High** — Operations has nothing to lay out until a schedule exists. But it degrades *safely*: the edge is in-process (no network to partially fail), and a missing/stale schedule yields an empty or mislaid board, never corrupted state. The reverse `MatchStateDTO` poll is independent. |
+| **Risk / fragility** | The edge is an *implicit* Zustand store subscription, not a typed push — a refactor that renames or bypasses `setSchedule` could silently stop seeding with **no compile error**. The contract test pins `emits`/`reactsTo`, but the transport itself is unenforced (a boundary-lint rule is a noted, out-of-scope future). |
 
 ## What crosses the boundary
 

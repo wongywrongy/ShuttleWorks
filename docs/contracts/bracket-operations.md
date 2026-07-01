@@ -11,6 +11,8 @@ either side of the draw-to-floor boundary.
 | **Payload** | `BracketTournamentDTO` |
 | **Transport today** | ~2.5 s poll of `GET …/bracket` (`useBracket`) |
 | **Status** | **wired** |
+| **Criticality** | **High** for bracket-origin live layout, but **self-healing**: it is a poll, so a transient failure only delays a refresh (the next poll recovers) and Meet-origin matches are unaffected. No write crosses here, so nothing can be corrupted. |
+| **Risk / fragility** | Up to ~2.5 s staleness; the coarse aggregate `BracketTournamentDTO` re-sends the whole snapshot on any change. Note the semantics: Operations **pulls** via `getBracket` and declares `reactsTo: ['scheduleFinalized']` only — it does *not* "react to" `drawGenerated`, so code that assumes a push notification on a new draw would be wrong. |
 
 ## What crosses the boundary
 

@@ -43,6 +43,8 @@ features:
 | Understand a coupling seam | [Module contracts](/contracts/) |
 | Find an endpoint | [API reference](/api/) |
 | Know why a choice was made | [Decisions (ADRs)](/decisions/) |
+| Look up a term | [Glossary](/glossary) |
+| See a day play out | [Operational scenarios](/architecture/operational-scenarios) |
 
 ::: tip This site is curated, not exhaustive
 The full design record — per-slice specs, dated change logs, audits, and the historical

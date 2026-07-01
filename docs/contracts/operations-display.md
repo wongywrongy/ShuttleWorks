@@ -11,6 +11,8 @@ the floor-to-screen boundary.
 | **Payload** | `MatchStateDTO` (plus `TournamentStateDTO`, `BracketTournamentDTO`) |
 | **Transport today** | Display's own dual poll: ~5 s match-state + ~10 s tournament-state |
 | **Status** | **wired** |
+| **Criticality** | **Medium** — Display is a read-only projection. If it lags or fails, the public TV goes stale but nothing operational breaks and no data is at risk; strictly degrade-gracefully. |
+| **Risk / fragility** | Dual-poll staleness (~5 s / ~10 s); in cloud mode the Supabase Realtime path can momentarily diverge from the poll fallback. The load-bearing guarantee — Display can never become a **writer** — is contract-pinned (`displayContract.emits === []`), so this seam cannot grow a back-channel without the test failing. |
 
 ## What crosses the boundary
 
