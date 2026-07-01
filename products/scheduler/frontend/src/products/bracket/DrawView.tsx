@@ -254,20 +254,26 @@ function BracketView({
               styles (not flex) so the layout is deterministic and testable. */}
           <div
             data-testid="bracket-canvas"
-            className="relative"
+            className="relative gantt-grid"
             style={{
               width: `${layout.contentWidth}px`,
               height: `${layout.contentHeight}px`,
             }}
           >
-            {layout.columns.map((col) => (
+            {layout.columns.map((col) => {
+              const isFinal = col.roundIndex === event.rounds.length - 1;
+              return (
               <div
                 key={col.key}
                 data-round={col.roundIndex}
                 className="absolute top-0"
                 style={{ left: `${col.left}px`, width: `${BRACKET_CARD_WIDTH}px` }}
               >
-                <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.18em]">
+                <h3
+                  className={`text-2xs font-semibold uppercase tracking-[0.08em] ${
+                    isFinal ? 'text-accent' : 'text-ink-faint'
+                  }`}
+                >
                   {roundLabel(col.roundIndex, event.rounds.length)}
                 </h3>
                 {col.matches.map((m) => {
@@ -301,7 +307,8 @@ function BracketView({
                   );
                 })}
               </div>
-            ))}
+              );
+            })}
           </div>
         </PanZoomCanvas>
       </div>

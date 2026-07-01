@@ -50,10 +50,11 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Program started:** 2026-07-01
 - **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb`
 - **Scope:** Foundation + keystones
-- **Current phase:** Phase 3 — IN PROGRESS (keystones; Operations Run DONE → Hub / Meet Matches / Bracket Draw next)
-- **Status:** Phases 0–2 committed. **Run keystone done + verified live** (nav: click sidebar Operations→**Run**,
-  segment `/live`; hard-nav deep-links reset to Config). Next keystones: Meet Matches (event codes→azure tabular,
-  Regenerate→glow), Hub, Bracket Draw.
+- **Current phase:** Phase 3 COMPLETE (all 4 keystones) → Phase 4 (final gate) ready
+- **Status:** Phases 0–3 committed. Keystones: Run (`c8ed474`) + Meet Matches (`5c64fde`) dedicated re-skins;
+  Hub delivered by the foundation (no dedicated changes needed); Bracket Draw dotted canvas + FINAL accent.
+  All verified live. **Nav tip:** deep-link `page.goto` resets to Config — navigate client-side (click the
+  sidebar); Operations sub-items are **Plan/Run** (segments `/live`,`/courts`), Bracket is **Draws**→Open→`/bracket-draw`.
 
 ## Phase log
 
@@ -118,7 +119,7 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   `platform/product-shell/{WorkspaceShell,WorkspaceSidebar,WorkspaceIdentityBar}`.
 
 ### Phase 3 — Keystone screens (hands-on to match the prototype)
-- **Status: IN PROGRESS** — Operations Run DONE (2026-07-01); Hub / Meet Matches / Bracket Draw next.
+- **Status: COMPLETE** (2026-07-01) — all 4 keystones addressed.
 - [x] **Shell chrome** (carried from P2) — already strong from tokens/P2: module sidebar renders role tags,
       azure left-accent bar + `surface-active` on the selected row, boxed wordmark, identity bar. Role-tag
       *abbreviation* (ENGINE→ENG etc.) is a nice-to-have, deferred.
@@ -130,14 +131,15 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
       **Caveat:** the 3b *solid* (playing/called) fills weren't shown live (seed plan is Idle/not-finalized) —
       they're unit-tested + class-correct; will render when a plan runs.
 - [ ] `MetricStat`/`SectionCard` tile-style refinement (they already recolor via tokens).
-- [ ] **Hub** — `products/hub/HubPage.tsx`: time-grouped rows + right inspector (3-up metric grid, To-do,
-      Modules, primary/secondary CTA).
+- [x] **Hub** — delivered by the foundation (Phases 1–2): time-grouped rows, glow "New workspace" CTA,
+      clean un-bracketed eyebrows, azure module chips, inspector. No dedicated changes needed.
 - [x] **Meet Matches** — event codes → **azure + tabular** (`MatchesSpreadsheet` dropdown + free-input,
       dropped `mono`); **Regenerate from roster** → azure glow primary (`RegenerateMenu`, was ink-inverse);
       band/column-header eyebrows aligned to `0.08em` tabular. Verified live (`.playwright-mcp/p3-matches-after.png`).
-- [ ] **Bracket Draw** — `products/bracket/DrawView.tsx`: dotted-lane canvas, seeded/decided cards, dashed
-      "Winner QF-x" placeholders, glowing FINAL card.
-- **Gate + visual check (both themes) after each keystone.**
+- [x] **Bracket Draw** — `products/bracket/DrawView.tsx`: added the dotted-lane canvas texture
+      (`gantt-grid`) + accented **FINAL** round label (QF/SF stay muted); round labels aligned to `0.08em`.
+      Cards/winner/loser/"Winner of…" placeholders already recolored via tokens. Verified live.
+- **Verified each keystone:** build ✓, vitest **743**, live screenshots in `.playwright-mcp/p3-*`.
 
 ### Phase 4 — Verification + test reconciliation
 - **Status: NOT STARTED**
