@@ -102,6 +102,32 @@ Registering a scheduled task is a persistence action, so Claude Code (in auto mo
 up for you — run the snippet yourself.
 :::
 
+### Auth & re-auth troubleshooting
+
+codanna's HTTP OAuth keys / client registration are held **in memory only** (nothing is written
+under `~/.codanna`). Two consequences worth knowing:
+
+- **Re-auth ≈ once per reboot is the floor.** Each server (re)start regenerates those keys,
+  invalidating whatever token Claude Code had cached. With the always-on task above, one server
+  survives across sessions, so re-auth drops to about once per login/reboot. codanna 0.9.22 has no
+  on-disk OAuth persistence and no no-auth HTTP mode, so that floor can't be lowered by config.
+- **Re-authenticating _far_ more often than that means the task isn't registered.** Confirm with
+  `Get-ScheduledTaskInfo -TaskName 'codanna-http-mcp'`; if it errors, the server only lives as long
+  as the terminal that started it, so it dies (and re-issues keys) constantly. Register the task
+  (snippet above) — this is the single biggest reliability win.
+
+**An on-click "Authenticate" error in `/mcp`** is almost always a stale cached credential. Clear
+it and re-auth:
+
+```powershell
+claude mcp logout codanna     # or: /mcp → codanna → Logout
+# then: /mcp → codanna → Authenticate
+```
+
+If it still errors, delete the stale marker `~/.claude/mcp-needs-auth-cache.json` and retry.
+Concurrent CLIs share the one HTTP server + one token, so you approve once per server lifetime,
+not once per CLI.
+
 ## Using it from the CLI
 
 The same index is queryable without Claude Code — handy for a quick lookup:
