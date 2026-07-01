@@ -62,6 +62,7 @@ Fall back to grep/Read for non-indexed files (markdown, YAML, config) or when se
 - Layer conventions are documented in `src/components/README.md`, `src/store/README.md`, `src/hooks/README.md`, and `src/platform/contracts/moduleContract.ts`.
 
 ## Working practices
+- **`CODE_HEALTH.md` is the standing code-health discipline** (applies to normal feature work, not just refactor programs): follow prior art, bounded Boy-Scout cleanup, cover-before-modify for high-complexity/low-coverage "locked" functions, and log out-of-scope debt to `docs/audits/debt-log.md` instead of silently fixing or ignoring it. `REFACTOR_PROGRESS.md` is the ledger for the (complete) SP-REFACTOR program + its Phase-5 practice install.
 - Before calling a task done, run the relevant gate (`make check`, or the specific test/lint command) — don't report success on an unverified change.
 - State the files in scope before editing; don't touch files outside that scope without flagging it.
 - Refactors must not change behavior. If a test would need to change to keep passing, stop and flag it instead of editing the test to match new behavior.
