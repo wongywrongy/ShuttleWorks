@@ -8,8 +8,12 @@ found, strike rows as it is cleared, and keep it honest so "the log growing
 faster than it shrinks" stays a real signal (that's the trigger to run another
 bounded program, per `CODE_HEALTH.md`).
 
-Seeded 2026-07-01 (SP-REFACTOR **Phase 5** — see `REFACTOR_PROGRESS.md`) from a
-fresh measurement pass + the design-gated items deferred out of Phases 1–4.
+Seeded 2026-07-01 (SP-REFACTOR **Phase 5**) from a fresh measurement pass + the
+design-gated items deferred out of Phases 1–4; reconciled again in **Phase 6**
+(doc-consolidation sweep — a fresh knip/radon/depcruise **diff** confirmed no code
+drift since Phase 5, so no entries changed state). The current authoritative
+snapshot is `docs/audits/06-state-of-codebase.md`; the ledger is
+`REFACTOR_PROGRESS.md`.
 
 ---
 
@@ -142,3 +146,11 @@ design-gated items above + engine coverage.
   **Corrected a prior mis-finding:** the "design-system undeclared deps" latent bug
   was wrong — `react-dialog`/`react-tooltip`/`date-fns` are imported nowhere; they
   were dead `manualChunks` strings, now removed.
+- **2026-07-01 (Phase 6 — doc consolidation + staleness sweep)** — grounded the
+  canonical docs against code (codanna down → grep/Read; 4 Explore agents + a
+  change-set pass). Fixed **9** canonical docs (5 layer/package READMEs + `data-flow`,
+  `operations`, `repo-layout`, `build-on-the-engine`) and banner-labeled the
+  historical trees (`superpowers/**`, `architecture/workspace-suite/**`, the
+  2026-06-25 handoff). Code sweep was a **diff** vs this log: no new dead code, no new
+  complexity crossings → nothing removed. Outputs: `06-doc-inventory.md`,
+  `06-stale-doc-findings.md`, `06-state-of-codebase.md`.

@@ -14,15 +14,16 @@ escalate it before making any further code change.
 
 - **Program started:** 2026-06-30
 - **Baseline tag:** `pre-refactor-20260630` (commit `6d8d6e8`)
-- **Current phase:** DONE — Phases 1–4 (bounded program) + Phase 5 (practice install), 2026-06-30/07-01
-- **Status:** COMPLETE. Full program summary: `docs/audits/04-refactor-program-summary.md`.
+- **Current phase:** DONE — Phases 1–4 (bounded program) + Phase 5 (practice install) + Phase 6 (doc consolidation), 2026-06-30/07-01
+- **Status:** COMPLETE. Program summary: `docs/audits/04-refactor-program-summary.md`;
+  **authoritative current snapshot: `docs/audits/06-state-of-codebase.md` — read that first.**
   depcruise 17→11, dead files 18→3 (kept), tests 1289→1333, all gates green.
-  **Phase 5** installed the ongoing code-health discipline: `CODE_HEALTH.md` (standing
-  practice) + `docs/audits/debt-log.md` (the visible backlog it feeds). The remaining
-  deferred items are now tracked in the **debt-log**, not here — read it for the live
-  backlog (F-ARCH-3, 2 operations→bracket-UI edges, unused export/type + dep cleanup,
-  engine coverage, broad ruff, frontend complexity). Resume feature work from here,
-  under `CODE_HEALTH.md`.
+  **Phase 5** installed the code-health discipline (`CODE_HEALTH.md` + `docs/audits/debt-log.md`).
+  **Phase 6** consolidated the docs + swept staleness (9 canonical docs fixed, historical
+  trees banner-labeled) and produced the state record. The live backlog is the
+  **debt-log**; remaining items are design/coverage calls (F-ARCH-3, 3 operations→bracket
+  edges, engine 19%-coverage locked functions, broad ruff, frontend complexity). Resume
+  feature work from here, under `CODE_HEALTH.md`.
 
 ## Phase log
 
@@ -144,6 +145,39 @@ escalate it before making any further code change.
   (design calls); engine 19% coverage safety nets; broad ruff; frontend complexity
   unmeasured. (The dto/type + dep backlog is DONE; `slotToTime`/`formatSlotTime`
   accepted as intentional; `displayPresets` kept by product decision.)
+
+### Phase 6 — Documentation consolidation, staleness sweep & state record
+- Status: **COMPLETE** (2026-07-01)
+- **Doc-only phase** (ABSOLUTE RULE): **zero source files changed — only markdown.**
+  The Step-5 code sweep was a *diff* against the Phase-5 debt-log (per the reframe),
+  not a re-derivation: fresh radon/knip/depcruise showed **no drift** since Phase 5
+  (690 blocks / avg A 3.94 / 54 >10; knip = only the documented intentional-kept set;
+  depcruise 11/0), so nothing met the removal bar → no code removed.
+- **Grounding:** codanna MCP was down (token expired → needs `/mcp` re-auth); grounded
+  against real code via grep/Read + 4 read-only Explore agents + a change-set pass
+  (grepped canonical docs for everything Phases 3/5 deleted/moved — highest precision).
+- **Delivered:**
+  - `docs/audits/06-doc-inventory.md`, `06-stale-doc-findings.md`, `06-state-of-codebase.md`.
+  - **9 canonical docs fixed** to match code: `hooks/README` (5 phantom hooks + store
+    names), `components/README` (4 phantom entries), `api/README` (useUiStore),
+    `scheduler_core/README` (api_compat.py + test cmd), `backend/README` (banner + routes
+    + test cmd), `data-flow.md` (VALID_TRANSITIONS postpone edge), `operations.md`
+    (SourceChip is shared / operationalWriteback), `repo-layout.md` (workspaceNav path),
+    `build-on-the-engine.md` (pytest cmd).
+  - **Historical trees banner-labeled** (not deleted/rewritten): `docs/superpowers/**`,
+    `docs/architecture/workspace-suite/**`, the 2026-06-25 session-handoff (it claimed to
+    be "the single source of truth"). Roadmap left forward-looking (STOP condition honored).
+  - Refreshed `debt-log.md` (Phase 6 diff note + cleared entry).
+- **Verified CURRENT (no change):** all VitePress architecture docs except data-flow;
+  all modules/contracts/api except operations; most getting-started/how-to. Phase 4's
+  reconciliation held up — staleness concentrated in the older layer/package READMEs.
+- Gate green: **docs:build 0** (dead-link), tsc 0, eslint 0-err/85, depcruise 0-err/11,
+  vitest 743, ruff clean, pytest 590.
+- **Next highest-priority candidate** (per Phase-5 precedent; see `06-state-of-codebase.md §4`):
+  the engine **locked functions** — `GreedyBackend.solve` (E 37 @ 19% cov) + `bridge.py:build`
+  (C 19 @ 19%) — a deliberately scoped **cover-then-modify** pass (characterization tests
+  first, per CODE_HEALTH Part 2) before any engine refactor. Then the 3 operations→bracket
+  edges + F-ARCH-3 (design calls).
 
 ## Open questions / stops
 <Anything a prior session flagged as a STOP condition and hasn't been
