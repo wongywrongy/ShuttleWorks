@@ -24,12 +24,11 @@ from __future__ import annotations
 import sys
 import time
 import types
-import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
