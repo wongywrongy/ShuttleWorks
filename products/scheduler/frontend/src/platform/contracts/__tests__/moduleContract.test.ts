@@ -27,7 +27,7 @@ import {
   type SeamEdge,
 } from '../moduleContract';
 import { apiClient } from '../../../api/client';
-import { buildWorkspaceNav, type WsSection } from '../../../app/workspace/workspaceNav';
+import { buildWorkspaceNav, type WsSection } from '../../product-shell/workspaceNav';
 import type { ModuleId } from '../../product-shell/types';
 import type { AppTab } from '../../../store/uiStore';
 

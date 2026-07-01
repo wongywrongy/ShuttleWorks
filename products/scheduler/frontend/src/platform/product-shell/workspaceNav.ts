@@ -14,7 +14,7 @@
  * cross-engine merge is a follow-on).
  */
 import type { AppTab } from '../../store/uiStore';
-import type { ModuleId } from '../../platform/product-shell/types';
+import type { ModuleId } from './types';
 
 export type WsKind = 'meet' | 'bracket' | null;
 export type SectionRole = 'engine' | 'shared' | 'output';

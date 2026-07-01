@@ -4,7 +4,7 @@ import { WorkspaceIdentityBar } from './WorkspaceIdentityBar';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import type { WorkspaceModule, WorkspaceIdentity } from './types';
 import type { AppTab } from '../../store/uiStore';
-import type { WsKind } from '../../app/workspace/workspaceNav';
+import type { WsKind } from './workspaceNav';
 
 interface WorkspaceShellProps {
   identity: WorkspaceIdentity;

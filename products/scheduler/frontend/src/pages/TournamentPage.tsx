@@ -23,7 +23,7 @@ import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
 import { MEET_TAB_IDS, BRACKET_TAB_IDS } from '../lib/bracketTabs';
-import { SHELL_SEGMENTS } from '../app/workspace/workspaceNav';
+import { SHELL_SEGMENTS } from '../platform/product-shell/workspaceNav';
 
 // URL-routable trailing segments: every meet tab id + every bracket tab id +
 // the workspace-shell segments (overview / display-config / ws-* admin).

@@ -20,7 +20,7 @@ import {
   sectionOfSegment,
   type WsKind,
   type WsNavItem,
-} from '../../app/workspace/workspaceNav';
+} from './workspaceNav';
 
 interface WorkspaceSidebarProps {
   tid: string;

@@ -12,8 +12,8 @@ module.exports = {
     {
       name: 'platform-no-app',
       comment:
-        'platform/ should not import the app shell/orchestration layer (app/) — that inverts the dependency direction. 3 known violations today (WorkspaceShell + WorkspaceSidebar + a contract test all import app/workspace/workspaceNav). Starts as warn; ratchet to error after the shared nav config is relocated out of app/.',
-      severity: 'warn',
+        'platform/ should not import the app shell/orchestration layer (app/) — that inverts the dependency direction. Previously 3 violations (WorkspaceShell + WorkspaceSidebar + a contract test all imported app/workspace/workspaceNav); resolved by relocating the shared nav config to platform/product-shell/workspaceNav. Now 0 violations — locked to error.',
+      severity: 'error',
       from: { path: '^src/platform/' },
       to: { path: '^src/app/' },
     },
