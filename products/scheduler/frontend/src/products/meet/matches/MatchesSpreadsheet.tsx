@@ -242,10 +242,10 @@ function GroupHeader({
           collapsed ? '' : 'rotate-90',
         ].join(' ')}
       />
-      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-foreground">
+      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-3">
         {label}
       </span>
-      <span className="text-2xs tabular-nums text-muted-foreground">{count}</span>
+      <span className="text-2xs sw-num text-muted-foreground">{count}</span>
     </button>
   );
 }
@@ -255,7 +255,7 @@ function GroupHeader({
  * ========================================================================= */
 function ColumnHeaderRow() {
   return (
-    <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-5 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+    <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-5 py-1.5 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
       <span className="w-4" aria-hidden />
       <span className="w-8">#</span>
       <span className="w-20">Event</span>
@@ -403,10 +403,9 @@ const MatchRow = memo(function MatchRow({
               : []),
           ]}
           clearable
-          mono
           size="sm"
           ariaLabel="Event rank"
-          triggerClassName="w-20 border-transparent px-1.5 py-0.5 hover:border-border/60 focus:bg-card"
+          triggerClassName="w-20 border-transparent px-1.5 py-0.5 text-accent font-semibold sw-num hover:border-border/60 focus:bg-card"
         />
       ) : (
         <input
@@ -418,7 +417,7 @@ const MatchRow = memo(function MatchRow({
           placeholder="MS1, WD2…"
           aria-label="Event rank"
           className={[
-            'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-mono tabular-nums outline-none',
+            'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-semibold text-accent sw-num outline-none',
             'transition-colors duration-fast ease-brand',
             'hover:border-border/60 focus:border-accent focus:bg-card',
           ].join(' ')}

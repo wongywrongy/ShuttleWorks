@@ -132,8 +132,9 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - [ ] `MetricStat`/`SectionCard` tile-style refinement (they already recolor via tokens).
 - [ ] **Hub** — `products/hub/HubPage.tsx`: time-grouped rows + right inspector (3-up metric grid, To-do,
       Modules, primary/secondary CTA).
-- [ ] **Meet Matches** — `products/meet/matches/MatchesTab.tsx`: event codes → **azure + tabular** (currently
-      mono/white), **Regenerate** → glow primary, grouped-band polish.
+- [x] **Meet Matches** — event codes → **azure + tabular** (`MatchesSpreadsheet` dropdown + free-input,
+      dropped `mono`); **Regenerate from roster** → azure glow primary (`RegenerateMenu`, was ink-inverse);
+      band/column-header eyebrows aligned to `0.08em` tabular. Verified live (`.playwright-mcp/p3-matches-after.png`).
 - [ ] **Bracket Draw** — `products/bracket/DrawView.tsx`: dotted-lane canvas, seeded/decided cards, dashed
       "Winner QF-x" placeholders, glowing FINAL card.
 - **Gate + visual check (both themes) after each keystone.**

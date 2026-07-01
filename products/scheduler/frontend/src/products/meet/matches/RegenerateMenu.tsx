@@ -152,7 +152,7 @@ export function RegenerateMenu() {
         aria-haspopup="dialog"
         aria-expanded={open}
         data-testid="regenerate-toggle"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded bg-accent px-2.5 text-xs font-semibold text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
       >
         <ArrowsClockwise aria-hidden="true" className="h-3.5 w-3.5" />
         Regenerate from roster
