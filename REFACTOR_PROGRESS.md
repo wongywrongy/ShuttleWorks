@@ -134,17 +134,16 @@ escalate it before making any further code change.
   deletion. Accepted `slotToTime`/`formatSlotTime` as an intentional alias.
   **Corrected a mis-finding:** the earlier "design-system undeclared deps" latent bug
   was wrong — those deps are imported nowhere (dead `manualChunks` strings, now gone).
-- **One item left, by design — a product call:** the `displayPresets` unit
-  (`DISPLAY_PRESETS`/`getPreset`/`DisplayPreset`) is authored feature scaffolding in
-  the live Display module; unwired but not accidental cruft, so not deleted
-  unilaterally. Tracked in `debt-log.md`.
+- **`displayPresets` — product decision (2026-07-01): KEEP** for the future
+  preset-picker. Authored feature scaffolding in the live Display module; unwired
+  but intentionally retained (Kyle's call). Not debt — tracked in `debt-log.md`.
 - Gate green after the finish: `tsc` 0 + real `vite build`, eslint **0 err / 85 warn**,
   depcruise **0 err / 11 warn**, vitest **743**, knip **unused-deps 0**, ruff-F clean,
   pytest **590**.
 - **Still logged for later (in `debt-log.md`):** F-ARCH-3 + the 2 ops→bracket UI edges
-  (design calls); the `displayPresets` unit (product call); engine 19% coverage safety
-  nets; broad ruff; frontend complexity unmeasured. (The dto/type + dep backlog is now
-  DONE; `slotToTime`/`formatSlotTime` accepted as intentional.)
+  (design calls); engine 19% coverage safety nets; broad ruff; frontend complexity
+  unmeasured. (The dto/type + dep backlog is DONE; `slotToTime`/`formatSlotTime`
+  accepted as intentional; `displayPresets` kept by product decision.)
 
 ## Open questions / stops
 <Anything a prior session flagged as a STOP condition and hasn't been
