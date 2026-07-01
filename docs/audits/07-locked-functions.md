@@ -212,9 +212,8 @@ default if the decision can't be reached: **coverage in, decomposition deferred 
 logged** — nothing is lost, since the tests are the prerequisite for any future
 decomposition.
 
-> **Checkpoint decision (Kyle, 2026-07-01): HOLD both.** Decompose-when-touched;
-> no Steps 4–5 now. The characterization safety net stays as the prerequisite for
-> whenever a future task brings work into these functions.
+> **Checkpoint decision (Kyle, 2026-07-01): initially HOLD, then REVERSED —**
+> Kyle asked to "finish the last part," so Steps 4–5 were executed. See §7.
 
 ---
 
@@ -266,7 +265,43 @@ genuinely unreachable. Its three low-value nits were folded in as tripwires
 negative `max_units` as no-limit; `closed_court_windows` added to the drop set.
 
 **Verdict:** both functions are **no longer "locked"** — the highest-risk
-category (high complexity **and** ~0% coverage) no longer applies; they are now
-high-complexity-**but-covered**, i.e. decompose-*when-touched*, per the debt-log's
-own second table. The remaining Part-2 steps (seam/decompose) are routed to the
-checkpoint in §5.
+category (high complexity **and** ~0% coverage) no longer applies. Steps 4–5
+(seam/decompose) then ran — see §7.
+
+---
+
+## 7. Decompose — Steps 4–5 (done, `d09396c` + `1534756`)
+
+The HOLD was reversed (Kyle: "finish the last part"). With the characterization
+net in place, both functions were decomposed along intake → engine → emit, each
+extraction verified against the 30 tests (behavior frozen — the safety net never
+went red).
+
+| Function | Complexity before | after | Extracted units (largest) |
+| --- | --- | --- | --- |
+| `GreedyBackend.solve` | **E (37)**, class E(38) | **A (5)**, class B(7) | `_GreedyPlacer` (engine: occupancy map + `_feasible`/`_player_busy`/`_available` + `pin_locked`/`place_greedy`/`place_all`), `_locked_match_ids` (intake), `_result` (emit). Max unit `place_greedy` **B(9)**. |
+| `SchedulingProblemBuilder.build` | **C (19)**, class C(20) | **A (2)**, class A(3) | `_select_unit_ids` (intake), `_apply_horizon` (config), `_build_players`/`_build_matches`/`_build_previous_assignments` (emit). Max unit `_apply_horizon` **B(8)**. |
+
+The scores genuinely dropped and **distributed** — no new function approaches the
+old E37/C19 (largest is B9); this is not complexity relabeled. Coverage held/rose
+(backends **99%**, bridge **97%** — only the same defensive-unreachable branches
+open). Full backend suite **620 passed**; full ruff-F clean.
+
+**Independent behavior-equivalence review (CODE_HEALTH #4, fresh-context subagent
+over both `git show` diffs):** verified equivalent line-by-line, **no divergence**.
+Specifically confirmed: the locked-set `< freeze_until` rule; pin-with-no-feasibility
+overlap quirk + the `>T` fall-through; `place_greedy`'s `return`-after-first ≡ the
+old `placed`-flag/break-outer; the `if not m` → `if m` and `and prev` →
+`and match_id in prev_by_match` guard swaps (equivalent via `locked ⊆
+prev_by_match.keys()` + dataclass truthiness); **iteration order and
+occupancy-mutation timing unchanged** (two non-interleaved passes preserved);
+`_result` byte-identical strings; and for `build` — `_apply_horizon`'s
+freeze-then-rolling order reading the already-replaced config, the `sorted(pids)`
+ordering, the None-side → `[]` coercion, and the in-scope `unit_id_set` filter.
+
+**Done condition (CODE_HEALTH Part 2) — met:** complexity measured before+after;
+characterization tests existed before the first structural edit; real seams exist
+(`_GreedyPlacer` is the placement engine as an injectable/observable unit; the
+bridge's pipeline stages are independently callable); full gate green; both are
+now smaller, cohesive, and traceable to the same intake → engine → emit boundaries
+the rest of the architecture uses.

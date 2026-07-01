@@ -43,15 +43,15 @@ the ⏳ note below.
 
 | Function | Location | Complexity | Coverage | Status |
 | --- | --- | --- | --- | --- |
-| `GreedyBackend.solve` | `scheduler_core/engine/backends.py:67` | **E (37)**, class E(38) | ~~19%~~ → **97%** | ✅ characterized (Phase 7). **Open Q resolved:** confirmed a *fallback / alt-backend with no in-repo production caller* (`analyze_impact` → isolated; live path uses `CPSATBackend`). Low blast radius → decomposition low-value. |
-| `SchedulingProblemBuilder.build` | `scheduler_core/engine/bridge.py:99` | **C (19)**, class C(20) | ~~19%~~ → **96%** | ✅ characterized (Phase 7). **Corrected claim:** it does **NOT** "guard every schedule build" — the Meet/Bracket production paths build `ScheduleRequest` directly (`api/schedule.py:111`, `services/bracket/adapter.py:89`); `build` is only reached via `live_ops.reschedule` (itself in-repo-unused). |
+| `GreedyBackend.solve` | `scheduler_core/engine/backends.py` | ~~E (37)~~ → **A (5)** (class ~~E38~~→B7) | ~~19%~~ → **99%** | ✅ characterized **+ decomposed** (Phase 7). Split into `_GreedyPlacer` (engine) + `_locked_match_ids` (intake) + `_result` (emit). **Open Q resolved:** confirmed a *fallback with no in-repo production caller*. |
+| `SchedulingProblemBuilder.build` | `scheduler_core/engine/bridge.py` | ~~C (19)~~ → **A (2)** (class ~~C20~~→A3) | ~~19%~~ → **97%** | ✅ characterized **+ decomposed** (Phase 7). Split into `_select_unit_ids`/`_apply_horizon`/`_build_players`/`_build_matches`/`_build_previous_assignments`. **Corrected claim:** does **NOT** "guard every schedule build" — Meet/Bracket build `ScheduleRequest` directly (`api/schedule.py:111`, `services/bracket/adapter.py:89`). |
 
-⏳ **Decomposition HELD (decompose-when-touched).** Cover-before-modify is done;
-the risk-reduction goal is met. Because both functions have **zero in-repo
-production callers**, decomposition (Steps 4–5) is low-risk *and* low-value, and
-`build`'s is entangled with the config-drop bug below. **Kyle decided HOLD at the
-Phase-7 Step-3→4 checkpoint (2026-07-01)** (see `07-locked-functions.md §5`). Do it
-*when a future task brings you into these functions*, not speculatively.
+✅ **Decomposition DONE (2026-07-01, `d09396c` + `1534756`).** Initially held at
+the Step-3→4 checkpoint, then reversed on Kyle's call ("finish the last part").
+Both decomposed along intake → engine → emit with the characterization net green
+throughout; complexity dropped and distributed (largest new unit B9); an independent
+fresh-context review verified behavior-equivalence line-by-line. Neither is *locked*
+any longer. See `07-locked-functions.md §7`.
 
 ## Latent bugs found while characterizing (Phase 7) — FIXED 2026-07-01
 
@@ -140,6 +140,12 @@ design-gated items above + engine coverage.
 
 ## Cleared
 
+- **2026-07-01 (Phase 7 — decompose, Steps 4–5)** — decomposed both engine functions
+  along intake → engine → emit: `GreedyBackend.solve` **E37→A5** (extracted `_GreedyPlacer`
+  + `_locked_match_ids` + `_result`); `SchedulingProblemBuilder.build` **C19→A2** (extracted
+  `_select_unit_ids`/`_apply_horizon`/`_build_*`). Largest new unit B9; coverage held (99%/97%);
+  full suite 620 green; independent review verified behavior-equivalence line-by-line. Commits
+  `d09396c` + `1534756`. See `07-locked-functions.md §7`.
 - **2026-07-01 (Phase 7 — bug fixes, follow-up)** — fixed the two latent bugs found
   during characterization: (1) `bridge.build` config field-drop → `dataclasses.replace`
   on both rebuilds (`bridge.py:118–137`), tripwire tests flipped to preservation

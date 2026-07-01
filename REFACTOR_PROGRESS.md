@@ -17,12 +17,13 @@ escalate it before making any further code change.
 - **Current phase:** Phases 1–4 (bounded program) + Phase 5 (practice install) +
   Phase 6 (doc consolidation) + **Phase 7 (cover-before-modify, locked functions)**,
   2026-06-30/07-01
-- **Status:** bounded program COMPLETE; Phase 7 (a CODE_HEALTH Part-2 application)
-  **coverage done, decomposition HELD by Kyle's decision (decompose-when-touched)**.
-  Program summary:
+- **Status:** bounded program COMPLETE; **Phase 7 (CODE_HEALTH Part-2 application)
+  COMPLETE** — both engine locked functions characterized (30 tests) AND decomposed
+  (`solve` E37→A5, `build` C19→A2); 2 latent bugs found + fixed; independent review
+  verified behavior-equivalence. Program summary:
   `docs/audits/04-refactor-program-summary.md`;
   **authoritative current snapshot: `docs/audits/06-state-of-codebase.md` — read that first.**
-  depcruise 17→11, dead files 18→3 (kept), tests 1289→**1361**, all gates green.
+  depcruise 17→11, dead files 18→3 (kept), tests 1289→**1363**, all gates green.
   **Phase 5** installed the code-health discipline (`CODE_HEALTH.md` + `docs/audits/debt-log.md`).
   **Phase 6** consolidated the docs + swept staleness. **Phase 7** covered the two
   engine locked functions (`GreedyBackend.solve` 19→97%, `bridge.build` 19→96%) →
@@ -187,9 +188,9 @@ escalate it before making any further code change.
   edges + F-ARCH-3 (design calls).
 
 ### Phase 7 — Cover-and-modify: engine locked functions
-- Status: **COMPLETE-with-hold (2026-07-01).** Steps 1–3 done; Steps 4–5
-  (seam/decompose) **HELD by Kyle's decision at the Step-3→4 checkpoint** —
-  decompose-when-touched (see Open questions).
+- Status: **COMPLETE (2026-07-01).** Steps 1–6 all done: measure → understand →
+  cover → (initial hold, then Kyle-reversed) seam/decompose → re-measure + review.
+  `GreedyBackend.solve` **E37→A5**, `SchedulingProblemBuilder.build` **C19→A2**.
 - Scope: exactly `GreedyBackend.solve` (backends.py) + `SchedulingProblemBuilder.build`
   (bridge.py) — the two functions flagged locked (high complexity **and** 19% cov).
 - **Step 1–2 (measure + understand):** `docs/audits/07-locked-functions.md`. Complexity
@@ -218,13 +219,19 @@ escalate it before making any further code change.
   (imported the cut `PoolGenerationPolicy`/`CompetitionGraph`) → **rewritten** to the
   current manual-PlayUnits→bridge→CPSAT API, verified runnable. Audit confirmed the
   copy-and-override bug class exists nowhere else. Full suite 620 green. See `debt-log.md` Cleared.
-- **Steps 4–5 HELD (recommendation, awaiting Kyle):** the seam finding is that neither
-  function is coupling-locked (both are pure functions of their args — no DB/shared
-  state), so seam == decomposition. With zero in-repo callers, decomposing is low-risk
-  **and** low-value, and `build`'s is entangled with the config-drop bug. Recommend
-  **decompose-when-touched**, not now. Reversible autonomous default already recorded in
-  the docs: coverage in, decomposition deferred + logged. Decision routed via the
-  Open-questions stop below.
+- **Steps 4–5 DONE (`d09396c` + `1534756`):** initially held (recommendation:
+  decompose-when-touched, since zero in-repo callers = low value), then **reversed on
+  Kyle's call** ("finish the last part"). Seam == decomposition (both are pure functions
+  of their args — no DB/shared state to inject). Decomposed along intake → engine → emit:
+  `GreedyBackend.solve` **E37→A5** (extracted `_GreedyPlacer` engine + `_locked_match_ids`
+  intake + `_result` emit); `SchedulingProblemBuilder.build` **C19→A2** (extracted
+  `_select_unit_ids`/`_apply_horizon`/`_build_players`/`_build_matches`/`_build_previous_assignments`).
+  Complexity dropped **and distributed** (largest new unit B9, not relabeled); coverage held
+  (backends 99%, bridge 97%); characterization net green after every extraction.
+- **Step 6 DONE:** full backend suite **620 green**, full ruff-F clean; complexity re-measured
+  (confirmed the score dropped, not moved); an **independent fresh-context review** verified
+  behavior-equivalence line-by-line (iteration order, occupancy-mutation timing, the guard
+  swaps, `moved_count`, config-field preservation, None-side coercion — all confirmed, no divergence).
 - Executed inline (single session) under `CODE_HEALTH.md` Part 2, not a workflow.
 
 ## Open questions / stops
@@ -233,14 +240,12 @@ resolved yet goes here, with a link to the relevant docs/audits/*.md
 file. A new session must read this before touching code — an unresolved
 stop here means pick up the conversation with Kyle, not the keyboard.>
 
-- **[RESOLVED 2026-07-01 — Kyle chose HOLD] Phase-7 Step-3→4 checkpoint
-  (decomposition of the two engine locked functions)** — coverage is delivered and
-  committed (`caf5275`); the functions are no longer locked. Steps 4–5 (seam/decompose)
-  were a **value call**, not a safety one: low-risk (well-covered, pure functions) but
-  low-value (both have **zero in-repo production callers**), and `build`'s is entangled
-  with the config field-drop bug. **Kyle decided: HOLD as decompose-when-touched** —
-  revisit only when a future task brings you into these functions. See
-  `docs/audits/07-locked-functions.md §5`.
+- **[RESOLVED 2026-07-01 — HOLD, then reversed → DONE] Phase-7 Step-3→4 checkpoint
+  (decomposition of the two engine locked functions)** — Kyle initially chose HOLD
+  (decompose-when-touched; a value call, since both have zero in-repo callers), then
+  **reversed** ("finish the last part"). Both were decomposed (solve E37→A5, build
+  C19→A2), gate green, behavior-equivalence independently verified. Nothing left open.
+  See `docs/audits/07-locked-functions.md §7`.
 - **F-ARCH-3 (matchStateStore ownership)** — pre-flagged STOP for Phase 2. The
   prior "move it to Operations" would create new `no-cross-product` violations
   from Meet (3 files) + Bracket (`LiveView`), since the store is cross-cutting,
