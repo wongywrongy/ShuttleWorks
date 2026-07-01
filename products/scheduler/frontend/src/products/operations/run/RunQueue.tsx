@@ -4,23 +4,18 @@
  * Renders the queue in the exact order passed by the surface (do NOT re-sort).
  * Position is meaningful: each row shows `#{i+1}`.
  *
- * Design language mirrors UnifiedOpsList rows: same dense layout, tokens,
- * and selection treatment. Source dot: sky = meet, violet = bracket (same
- * as RunBoard's left-edge colour).
+ * Design language mirrors the Run board: a compact M/B source square, an
+ * UPPERCASE tabular match code, then the sides. Selection matches the board.
  */
 import type { RunMatch } from '../runtime/runModel';
 
-// ── source dot colour (sky = meet, violet = bracket) ─────────────────────
-const SOURCE_DOT: Record<'meet' | 'bracket', string> = {
-  meet: 'bg-sky-500',
-  bracket: 'bg-violet-500',
+// ── source initial + square tint (M=meet azure, B=bracket violet) ─────────
+const SOURCE_INITIAL: Record<'meet' | 'bracket', string> = { meet: 'M', bracket: 'B' };
+const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
+  meet: 'bg-module-meet/15 text-module-meet',
+  bracket: 'bg-module-bracket/15 text-module-bracket',
 };
-
-// ── eyebrow label (source word) ───────────────────────────────────────────
-const SOURCE_LABEL: Record<'meet' | 'bracket', string> = {
-  meet: 'Meet',
-  bracket: 'Brkt',
-};
+const SOURCE_LABEL: Record<'meet' | 'bracket', string> = { meet: 'Meet', bracket: 'Bracket' };
 
 // ── props ─────────────────────────────────────────────────────────────────
 export interface RunQueueProps {
@@ -43,7 +38,6 @@ export function RunQueue({ queue, selectedKey, onSelect }: RunQueueProps) {
     <ul className="divide-y divide-border/60 border-t border-border">
       {queue.map((match, i) => {
         const isSelected = selectedKey === match.key;
-        const dot = SOURCE_DOT[match.source];
         const sidesLabel = `${match.sideA} vs ${match.sideB}`;
 
         return (
@@ -57,24 +51,21 @@ export function RunQueue({ queue, selectedKey, onSelect }: RunQueueProps) {
             onClick={() => onSelect(match.key)}
           >
             {/* Position */}
-            <span className="w-6 flex-shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground">
+            <span className="w-6 flex-shrink-0 text-right text-2xs sw-num text-ink-faint">
               #{i + 1}
             </span>
 
-            {/* Source dot */}
+            {/* Source initial square */}
             <span
               aria-hidden
-              className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`}
               title={SOURCE_LABEL[match.source]}
-            />
-
-            {/* Source eyebrow word */}
-            <span className="w-8 flex-shrink-0 text-2xs uppercase tracking-[0.16em] text-muted-foreground">
-              {SOURCE_LABEL[match.source]}
+              className={`inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-xs text-[9px] font-semibold sw-num ${SOURCE_SQUARE[match.source]}`}
+            >
+              {SOURCE_INITIAL[match.source]}
             </span>
 
-            {/* Match code — mono */}
-            <span className="w-16 flex-shrink-0 truncate font-mono text-2xs tracking-wider text-foreground">
+            {/* Match code — tabular */}
+            <span className="w-16 flex-shrink-0 truncate text-2xs font-semibold sw-num text-ink-3">
               {match.label}
             </span>
 
@@ -84,7 +75,7 @@ export function RunQueue({ queue, selectedKey, onSelect }: RunQueueProps) {
               title={sidesLabel}
             >
               {match.sideA}
-              <span className="px-1.5 text-2xs uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
                 v
               </span>
               {match.sideB}

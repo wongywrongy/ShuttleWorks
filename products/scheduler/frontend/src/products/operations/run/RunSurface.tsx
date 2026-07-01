@@ -355,7 +355,7 @@ export function RunSurface({
 
           {/* Queue — below the board */}
           <div className="border-t border-border">
-            <div className="px-4 pb-1 pt-3 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="px-4 pb-1 pt-3 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
               Queue
             </div>
             <RunQueue queue={queue} selectedKey={selectedKey} onSelect={setSelectedKey} />

@@ -81,8 +81,8 @@ export function RunLiveBoard({
     if (chips.length === 0) return 1;
     const longest = chips.reduce((m, c) => Math.max(m, c.label.length), 0);
     // Width a span=1 cell needs to read the longest label at text-2xs plus the
-    // chip's horizontal padding + inset (~24px). Generous so nothing clips.
-    const neededPx = Math.max(56, longest * 8 + 24);
+    // chip's horizontal padding + inset + the M/B source square (~42px total).
+    const neededPx = Math.max(72, longest * 8 + 42);
     return Math.min(3, Math.max(1, neededPx / GANTT_GEOMETRY.standard.slot));
   }, [chips]);
   const timeZoom = auto ? autoZoom : manualZoom;

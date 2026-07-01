@@ -25,11 +25,8 @@ type MatchChipState = 'scheduled' | 'called' | 'playing' | 'done';
 type MatchChipSource = 'meet' | 'bracket';
 type MatchChipTone = 'discipline' | 'state';
 
-// ── source left-edge (module identity: meet=azure, bracket=violet) ─────────
-const SOURCE_EDGE: Record<MatchChipSource, string> = {
-  meet: 'border-l-2 border-l-module-meet',
-  bracket: 'border-l-2 border-l-module-bracket',
-};
+// ── source initial (M=meet, B=bracket) painted as a small square ───────────
+const SOURCE_INITIAL: Record<MatchChipSource, string> = { meet: 'M', bracket: 'B' };
 
 // ── ring per state (discipline tone surfaces state via the ring) ──────────
 const STATE_RING: Record<MatchChipState, string> = {
@@ -96,6 +93,13 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         ? STATE_RING[state]
         : '';
 
+  // Muted-solid active fills carry a light ink; the source square sits on a
+  // translucent white so it reads on the solid. Quiet chips use the tag surface.
+  const solidFill = tone === 'state' && (state === 'playing' || state === 'called') && !selected;
+  const squareCls = solidFill
+    ? 'bg-white/20 text-inherit'
+    : 'bg-surface-chip text-muted-foreground';
+
   return (
     <button
       ref={ref}
@@ -105,7 +109,6 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
       className={[
         'group relative flex flex-col justify-center overflow-hidden rounded border text-left shadow-sm transition-all',
         fill,
-        SOURCE_EDGE[source],
         ring,
         className ?? '',
       ]
@@ -113,7 +116,16 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         .join(' ')}
       {...rest}
     >
-      <span className="truncate text-2xs font-semibold leading-tight">{label}</span>
+      <span className="flex items-center gap-1 leading-tight">
+        {/* Source initial square (M=meet, B=bracket) */}
+        <span
+          aria-hidden
+          className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-xs text-[8px] font-semibold sw-num ${squareCls}`}
+        >
+          {SOURCE_INITIAL[source]}
+        </span>
+        <span className="truncate text-2xs font-semibold sw-num">{label}</span>
+      </span>
       {showSides && sideA != null && sideB != null && (
         <span className="mt-0.5 truncate text-2xs leading-tight opacity-80">
           {sideA} <span className="opacity-60">v</span> {sideB}

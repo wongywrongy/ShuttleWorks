@@ -50,10 +50,10 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Program started:** 2026-07-01
 - **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb`
 - **Scope:** Foundation + keystones
-- **Current phase:** Phase 2 COMPLETE (primitives) → Phase 3 ready (keystones)
-- **Status:** Phase 0 (`02f1cc8`) + Phase 1 (`99213d0`) committed. Primitives re-skinned + verified
-  (vitest 743 ✓, eslint 0-err, Hub dark screenshot: azure glow button + un-bracketed eyebrows).
-  Deep shell-chrome polish + MatchChip M/B square folded into Phase 3 (render with the keystones).
+- **Current phase:** Phase 3 — IN PROGRESS (keystones; Operations Run DONE → Hub / Meet Matches / Bracket Draw next)
+- **Status:** Phases 0–2 committed. **Run keystone done + verified live** (nav: click sidebar Operations→**Run**,
+  segment `/live`; hard-nav deep-links reset to Config). Next keystones: Meet Matches (event codes→azure tabular,
+  Regenerate→glow), Hub, Bracket Draw.
 
 ## Phase log
 
@@ -118,22 +118,25 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   `platform/product-shell/{WorkspaceShell,WorkspaceSidebar,WorkspaceIdentityBar}`.
 
 ### Phase 3 — Keystone screens (hands-on to match the prototype)
-- **Status: NOT STARTED**
-- [ ] **Shell chrome polish** (carried from P2; renders with every keystone) — `app/{AppSidebar,AppShell}`,
-      `platform/product-shell/{WorkspaceShell,WorkspaceSidebar,WorkspaceIdentityBar}`: module role tags
-      (ENG/SHR/OUT), left 2px accent bar + `surface-active` on the selected nav row, boxed wordmark lockup.
-- [ ] **MatchChip M/B initial square** (carried from P2) — add the compact source square on the Run board
-      where chip width is controlled; bump the auto-zoom padding to fit it.
-- [ ] `MetricStat`/`SectionCard` tile-style refinement (18px tabular value, 10px uppercase label).
-- [ ] **Hub** — `products/hub/HubPage.tsx`: time-grouped rows (Date · Workspace · Next action) + right
-      inspector (3-up metric grid, To-do, Modules, primary/secondary CTA).
-- [ ] **Operations Run** — `products/operations/run/RunSurface.tsx` + `RunLiveBoard.tsx`: summary tiles,
-      court×time board with 3b chips, queue rows, inspector (Record-result glow button).
-- [ ] **Meet Matches** — `products/meet/matches/MatchesTab.tsx`: grouped DataTable (event bands, accent
-      `MS1` codes, side A/B, slots) + action bar (Search / Add / Export / Regenerate).
-- [ ] **Bracket Draw** — `products/bracket/DrawView.tsx`: dotted-lane canvas, round columns,
-      seeded/decided cards, dashed "Winner QF-x" placeholders, glowing FINAL card.
-- **Gate + visual check (both themes) after Phase 3.**
+- **Status: IN PROGRESS** — Operations Run DONE (2026-07-01); Hub / Meet Matches / Bracket Draw next.
+- [x] **Shell chrome** (carried from P2) — already strong from tokens/P2: module sidebar renders role tags,
+      azure left-accent bar + `surface-active` on the selected row, boxed wordmark, identity bar. Role-tag
+      *abbreviation* (ENGINE→ENG etc.) is a nice-to-have, deferred.
+- [x] **MatchChip M/B initial square** — added the compact source square (M=meet, B=bracket) replacing the
+      colored left-edge (prototype-faithful); RunLiveBoard auto-zoom bumped (`+42`, min 72) so nothing clips.
+- [x] **Operations Run** — `RunSummaryBand` → bordered stat tiles (18px tabular value + 10px label);
+      `RunQueue` → M/B source square + tabular code (off `font-mono`); `RunSurface` queue eyebrow tracking.
+      Verified live: board + tiles + M/B squares + queue + selection + populated inspector all on-language.
+      **Caveat:** the 3b *solid* (playing/called) fills weren't shown live (seed plan is Idle/not-finalized) —
+      they're unit-tested + class-correct; will render when a plan runs.
+- [ ] `MetricStat`/`SectionCard` tile-style refinement (they already recolor via tokens).
+- [ ] **Hub** — `products/hub/HubPage.tsx`: time-grouped rows + right inspector (3-up metric grid, To-do,
+      Modules, primary/secondary CTA).
+- [ ] **Meet Matches** — `products/meet/matches/MatchesTab.tsx`: event codes → **azure + tabular** (currently
+      mono/white), **Regenerate** → glow primary, grouped-band polish.
+- [ ] **Bracket Draw** — `products/bracket/DrawView.tsx`: dotted-lane canvas, seeded/decided cards, dashed
+      "Winner QF-x" placeholders, glowing FINAL card.
+- **Gate + visual check (both themes) after each keystone.**
 
 ### Phase 4 — Verification + test reconciliation
 - **Status: NOT STARTED**
