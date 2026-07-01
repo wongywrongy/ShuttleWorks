@@ -206,9 +206,9 @@ describe('BracketTab — Setup chrome', () => {
     // Default mock (null data) is fine — Setup doesn't depend on bracket data.
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
-    // The actions-bar Seg renders a radio per section: Engine + Structure.
+    // The actions-bar Seg renders a radio per section: Engine + Events.
     expect(screen.getByRole('radio', { name: /^Engine$/i })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /^Structure$/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^Events$/i })).toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: /^Tournament data$/i })).toBeNull();
     expect(screen.queryByRole('radio', { name: /^Share$/i })).toBeNull();
   });

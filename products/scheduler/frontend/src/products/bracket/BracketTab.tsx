@@ -166,8 +166,10 @@ function BracketTabBody() {
         render: () => <BracketEngineSection locked={bracketScheduleLocked} />,
       },
       {
+        // Label is 'Events' (shared grammar with Meet Configuration); the
+        // id stays 'structure' — it's URL state (?section=structure).
         id: 'structure',
-        label: 'Structure',
+        label: 'Events',
         icon: ListChecks,
         render: () => <BracketStructureSection />,
       },

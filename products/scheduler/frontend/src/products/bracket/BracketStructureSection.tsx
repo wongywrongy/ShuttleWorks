@@ -1,10 +1,12 @@
 /**
- * BracketStructureSection — the Structure tab of bracket Configuration.
+ * BracketStructureSection — the Events tab of bracket Configuration.
  *
  * Read-only summary of the bracket's draw structure: the active
  * disciplines, and per draw its type (single elimination / round robin),
- * size, and seeded count. Seeding and the draw structure itself are owned
- * by the Draw surface (Edit seeding) and the Draws spreadsheet — this tab
+ * size, and seeded count — rendered as the same Row-stack "Events"
+ * grammar Meet Configuration uses (SectionHeader + per-discipline Rows),
+ * not a table. Seeding and the draw structure itself are owned by the
+ * Draw surface (Edit seeding) and the Draws spreadsheet — this tab
  * surfaces the facts and routes there, it does not re-model them (the
  * draw / seeding data model is off-limits for SP-E4).
  *
@@ -35,7 +37,7 @@ export function BracketStructureSection() {
 
   return (
     <div>
-      <SectionHeader>Structure</SectionHeader>
+      <SectionHeader>Events</SectionHeader>
       <p className="pb-2 text-xs leading-5 text-muted-foreground">
         Each draw is one event. Draw type, size, and seeding are set per
         draw — open a draw to edit its seeding.
@@ -52,32 +54,26 @@ export function BracketStructureSection() {
       />
 
       {events.length > 0 ? (
-        <div className="mt-3 overflow-hidden rounded-sm border border-border">
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-muted/40">
-              <tr className="text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Discipline</th>
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Draw type</th>
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Draw size</th>
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Seeding</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((ev) => (
-                <tr key={ev.id} className="border-b border-border/60 last:border-0">
-                  <td className="px-3 py-2">{disciplineLabel(ev.discipline)}</td>
-                  <td className="px-3 py-2">{formatLabel(ev.format)}</td>
-                  <td className="px-3 py-2 tabular-nums">
-                    {ev.bracket_size ?? ev.participant_count}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {ev.participant_count} seeded
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        events.map((ev, i) => (
+          <Row
+            key={ev.id}
+            label={
+              <span className="inline-flex items-baseline gap-2">
+                {disciplineLabel(ev.discipline)}
+                <span className="text-xs font-semibold text-accent sw-num">
+                  {ev.id}
+                </span>
+              </span>
+            }
+            control={
+              <span className="text-xs text-muted-foreground sw-num">
+                {formatLabel(ev.format)} · {ev.bracket_size ?? ev.participant_count} ·{' '}
+                {ev.participant_count} seeded
+              </span>
+            }
+            last={i === events.length - 1}
+          />
+        ))
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">
           No draws yet. Create a draw to set its type, size, and seeding.

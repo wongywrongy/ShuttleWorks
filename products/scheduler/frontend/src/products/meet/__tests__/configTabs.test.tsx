@@ -1,10 +1,12 @@
 /**
- * SP-E4 — Meet Configuration is two tabs: Engine and Meet.
+ * SP-E4 — Meet Configuration is two tabs: Engine and Events.
  *
  * Engine tab = the CP-SAT input surface: the shared scoring field set
  * (score type / points / match format / deuce) + rest, with the solver
- * knobs below. Meet tab = meet type + lineup position counts (rankCounts);
- * the player-assignment grid stays in Roster.
+ * knobs below. Events tab = meet type + lineup position counts
+ * (rankCounts); the player-assignment grid stays in Roster. The section
+ * label is 'Events' (shared grammar with Bracket Configuration); its URL
+ * value stays 'meet'.
  *
  * These render the real `TournamentSetupPage`; `useTournament` reads the
  * Zustand store directly (no network), so seeding the store is enough.
@@ -52,12 +54,12 @@ beforeEach(() => {
 });
 
 describe('Meet Configuration — two tabs', () => {
-  it('renders exactly two tabs: Engine and Meet', () => {
+  it('renders exactly two tabs: Engine and Events', () => {
     renderPage();
     const seg = screen.getByRole('radiogroup', { name: /Configuration section/i });
     expect(seg).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Engine' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Meet' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Events' })).toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: 'Tournament' })).toBeNull();
   });
 
@@ -70,9 +72,9 @@ describe('Meet Configuration — two tabs', () => {
     expect(screen.getByLabelText('Rest between matches')).toBeInTheDocument();
   });
 
-  it('Meet tab shows meet type + per-discipline position counts', () => {
+  it('Events tab shows meet type + per-discipline position counts', () => {
     renderPage();
-    fireEvent.click(screen.getByRole('radio', { name: 'Meet' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Events' }));
     expect(screen.getByLabelText('Meet type')).toBeInTheDocument();
     expect(screen.getByLabelText("Men's singles positions")).toBeInTheDocument();
     expect(screen.getByLabelText("Women's singles positions")).toBeInTheDocument();
@@ -84,7 +86,7 @@ describe('Meet Configuration — two tabs', () => {
   it('changing a position count then saving persists the new rankCounts', async () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderPage();
-    fireEvent.click(screen.getByRole('radio', { name: 'Meet' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Events' }));
     const ms = screen.getByLabelText("Men's singles positions") as HTMLInputElement;
     fireEvent.change(ms, { target: { value: '5' } });
     fireEvent.click(screen.getByTestId('config-save'));
@@ -93,11 +95,11 @@ describe('Meet Configuration — two tabs', () => {
     expect(last.rankCounts?.MS).toBe(5);
   });
 
-  it('Meet tab save never blanks identity that lives at the workspace level', async () => {
+  it('Events tab save never blanks identity that lives at the workspace level', async () => {
     seed({ tournamentName: undefined, tournamentDate: undefined });
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderPage();
-    fireEvent.click(screen.getByRole('radio', { name: 'Meet' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Events' }));
     fireEvent.click(screen.getByTestId('config-save'));
     await waitFor(() => expect(setConfig).toHaveBeenCalled());
     const last = setConfig.mock.calls[setConfig.mock.calls.length - 1][0] as TournamentConfig;

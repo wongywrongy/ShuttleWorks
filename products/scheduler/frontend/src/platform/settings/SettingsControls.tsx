@@ -19,7 +19,10 @@ import { Select } from '@scheduler/design-system/components';
  * Row — the only layout primitive in the Setup form.
  * ========================================================================= */
 interface RowProps {
-  label: string;
+  /** Usually a plain string; a ReactNode is allowed for labels that carry
+   *  an inline accent code (e.g. discipline name + azure event code). The
+   *  layout contract above is unchanged. */
+  label: ReactNode;
   control: ReactNode;
   last?: boolean;
 }

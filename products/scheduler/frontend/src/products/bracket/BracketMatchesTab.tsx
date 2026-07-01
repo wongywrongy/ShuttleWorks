@@ -19,7 +19,7 @@ import {
   type BandedListColumn,
 } from '../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-import { disciplineLabel } from './bracketLabels';
+import { buildPlayUnitLabels, disciplineLabel } from './bracketLabels';
 
 type Status = 'done' | 'live' | 'ready' | 'pending';
 
@@ -38,8 +38,9 @@ const STATUS_CLASS: Record<Status, string> = {
 };
 
 /** Column set for the bracket match list — same `px-5` rhythm as the
- *  match rows below. */
+ *  match rows below, same leading `#` index column as Meet Matches. */
 const MATCH_COLUMNS: BandedListColumn[] = [
+  { label: '#', className: 'w-8' },
   { label: 'Match', className: 'w-20' },
   { label: 'Side A', className: 'min-w-0 flex-1' },
   { label: 'Side B', className: 'min-w-0 flex-1' },
@@ -70,6 +71,10 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
     () => new Set(data.results.map((r) => r.play_unit_id)),
     [data.results],
   );
+  // Operator-friendly play-unit labels ("MS QF1") — the same names the
+  // Draw / Live / Operations surfaces show, instead of the raw
+  // R{round}·M{match} indices.
+  const labelById = useMemo(() => buildPlayUnitLabels(data), [data]);
 
   const resolveSide = (ids: string[] | null): string => {
     if (!ids || ids.length === 0) return 'TBD';
@@ -191,7 +196,7 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
                     data-testid={`bracket-match-group-${ev.id}`}
                   />
                   {!isCollapsed
-                    ? units.map((pu) => {
+                    ? units.map((pu, i) => {
                         const status = statusOf(pu.id);
                         return (
                           <div
@@ -199,8 +204,16 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
                             data-testid={`bracket-match-row-${pu.id}`}
                             className="flex min-h-[40px] items-center gap-3 border-b border-border px-5 text-sm transition-colors duration-fast ease-brand hover:bg-muted/30"
                           >
-                            <span className="w-20 text-xs text-muted-foreground sw-num">
-                              R{pu.round_index}·M{pu.match_index}
+                            <span className="w-8 text-2xs text-muted-foreground sw-num">
+                              {i + 1}
+                            </span>
+                            {/* Friendly label; raw id kept on title for
+                                traceability (it's also the row testid). */}
+                            <span
+                              className="w-20 text-xs font-semibold text-accent sw-num"
+                              title={pu.id}
+                            >
+                              {labelById.get(pu.id) ?? pu.id}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-foreground">
                               {resolveSide(pu.side_a)}

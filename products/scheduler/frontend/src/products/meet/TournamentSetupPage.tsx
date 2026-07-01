@@ -33,7 +33,9 @@ const FORM_ID = 'meet-config-form';
 
 const SECTION_OPTIONS = [
   { value: 'engine' as const, label: 'Engine' },
-  { value: 'meet' as const, label: 'Meet' },
+  // Label is 'Events' (shared grammar with Bracket Configuration); the
+  // value stays 'meet' — it's URL state (?section=meet).
+  { value: 'meet' as const, label: 'Events' },
 ];
 
 export function TournamentSetupPage() {
