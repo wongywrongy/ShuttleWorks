@@ -38,11 +38,15 @@ escalate it before making any further code change.
 - Status: **IN PROGRESS** (started 2026-06-30) — at the Phase 2→3 checkpoint, awaiting Kyle
 - Findings resolved:
   - **F-SAFETY-1** — safety-net characterization tests (`bc8dd3e`): sync_service.py 72%→86%, matchStateStore.ts 36%→100%.
-  - **F-ARCH-1** — relocate workspaceNav to platform/product-shell (`fef1c3b`); 3 platform-no-app violations gone, rule ratcheted warn→error; 3 adversarial reviewers APPROVE, gate green (depcruise 17→14). See `docs/audits/02-review-1.md`.
-- Findings triaged (NOT executed): **F-ARCH-2** (14 cross-product edges) — 8 accept-as-legit, 1 dead-code (Phase 3), 3 relocate-shared-code, 2 needs-design-decision (operations rendering bracket UI). Full breakdown in `02-review-1.md`.
-- Deferred to Kyle's judgment: **F-ARCH-3** (matchStateStore ownership) + the 2 F-ARCH-2 needs-design-decision edges.
-- Last commit in this phase: `fef1c3b`
-- Executed via the `sp-refactor-phase2` workflow (one-workflow-per-phase model).
+  - **F-ARCH-1** — relocate workspaceNav to platform/product-shell (`fef1c3b`); 3 platform-no-app violations gone, rule ratcheted warn→error. See `02-review-1.md`.
+  - **F-ARCH-2 / A** — move AppearanceSettings meet→settings (`13a0a6a`); settings→meet edge gone. See `02-review-2-3.md`.
+  - **F-ARCH-2 / C** — extract shared discipline names to lib/disciplineNames (`028a96e`); bracket→meet edge gone. Adversarial review caught a real prototype-key divergence → fixed (null-prototype map) + regression test. See `02-review-2-3.md`.
+  - depcruise no-cross-product: 17 baseline → 14 (F-ARCH-1) → 13 (A) → **12 (C)**; gate green throughout (vitest now 743).
+- F-ARCH-2 remaining (NOT executed): 8 accept-as-legit (incl. **B** operations→bracketLabels, reclassified legit), 1 resolve-via-dead-code (`settings/OverviewTab.tsx` → Phase 3), 2 needs-design-decision.
+- Deferred to Kyle's judgment: **F-ARCH-3** (matchStateStore ownership) + the 2 F-ARCH-2 needs-design-decision edges (operations rendering bracket UI).
+- **Phase 2 actionable refactors COMPLETE** — at the Phase 2→3 checkpoint.
+- Last commit in this phase: `028a96e`
+- Executed via `sp-refactor-phase2` + `sp-refactor-phase2-relocations` workflows (one-workflow-per-phase model, each slice: exec → gate → adversarial review → commit).
 
 ### Phase 3 — Directory cleanup
 - Status: NOT STARTED
