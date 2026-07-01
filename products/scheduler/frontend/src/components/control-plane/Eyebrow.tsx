@@ -3,19 +3,18 @@ import type { ReactNode } from 'react';
 /**
  * Eyebrow — the design-system section overline.
  *
- * The brand grammar uses an UPPERCASE *mono* overline (not a sans small-caps
- * label, which reads as generic SaaS). Mirrors `globals.css .eyebrow` and the
- * Design-project `Eyebrow` component. `framed` wraps the label in the brand's
- * `[ … ]` ASCII syntax — reserve it for section headers, keep dense inline
- * labels unframed.
+ * "Warmed-B blue-glow" language: a plain UPPERCASE micro-label in Geist (one
+ * family; tabular tracking does the work). The old brutalist `[ … ]` ASCII
+ * framing is retired — the `framed` prop is kept for API compatibility but is
+ * now a no-op (renders the same plain label), so existing call-sites don't break.
  */
 export function Eyebrow({
   children,
-  framed = false,
   tone = 'muted',
   className = '',
 }: {
   children: ReactNode;
+  /** @deprecated `[ … ]` framing was retired; this prop is now a no-op. */
   framed?: boolean;
   tone?: 'muted' | 'accent' | 'destructive';
   className?: string;
@@ -27,24 +26,11 @@ export function Eyebrow({
         ? 'text-destructive'
         : 'text-muted-foreground';
   // Uppercase the *text content* (not just via CSS) so the DOM matches the
-  // visual — mirrors the design-system Eyebrow and keeps framed labels a
-  // single text node ("[ MODULES ]") for the DOM and text queries.
-  const isString = typeof children === 'string';
-  const text = isString ? children.toUpperCase() : children;
-  const content = framed
-    ? isString
-      ? `[ ${text as string} ]`
-      : (
-          <>
-            {'[ '}
-            {children}
-            {' ]'}
-          </>
-        )
-    : text;
+  // visual and text queries resolve the plain label.
+  const content = typeof children === 'string' ? children.toUpperCase() : children;
   return (
     <span
-      className={`font-mono text-2xs font-semibold uppercase tracking-[0.08em] ${toneClass} ${className}`}
+      className={`text-2xs font-semibold uppercase tracking-[0.08em] ${toneClass} ${className}`}
     >
       {content}
     </span>

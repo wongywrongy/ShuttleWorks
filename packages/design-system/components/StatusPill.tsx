@@ -18,12 +18,11 @@ import { cn } from '../lib/utils';
  *   done   → status-done    (slate   — finished / archived)
  *
  * Routing through `--status-*` keeps every pill on the same hue ladder
- * as the Gantt blocks, toast borders, and TabBar app-status chip.
+ * as the Gantt blocks, toast borders, and app-status chip.
  *
- * BRAND.md §3 — `rounded` becomes `rounded-none` per brutalist default.
- * The pill is a square-cornered badge with mono-uppercase children for
- * the brutalist style. Tournament's `.pill` CSS class will be replaced
- * with `<StatusPill>` in Phase 6.
+ * "Warmed-B blue-glow" language: a soft-cornered (`rounded-sm`) badge with a
+ * leading swatch dot and an UPPERCASE Geist micro-label (one family — no mono).
+ * A live pill breathes via `sw-pulse`.
  */
 
 export type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber' | 'idle' | 'done';
@@ -68,7 +67,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-1.5 py-0.5 text-2xs font-mono font-medium uppercase tracking-wider',
+        'inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.04em]',
         TONE_BG[tone],
         className
       )}
@@ -77,9 +76,9 @@ export function StatusPill({
       {dot && (
         <span
           className={cn(
-            'h-1 w-1 rounded-full',
+            'h-1.5 w-1.5 rounded-full',
             TONE_DOT[tone],
-            pulse ? 'animate-pulse' : ''
+            pulse ? 'sw-pulse' : ''
           )}
         />
       )}

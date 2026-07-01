@@ -29,7 +29,7 @@ describe('control-plane primitives', () => {
   });
   it('SectionCard shows the eyebrow + children', () => {
     render(<SectionCard eyebrow="MODULES"><p>body</p></SectionCard>);
-    expect(screen.getByText('[ MODULES ]')).toBeInTheDocument();
+    expect(screen.getByText('MODULES')).toBeInTheDocument();
     expect(screen.getByText('body')).toBeInTheDocument();
   });
 });

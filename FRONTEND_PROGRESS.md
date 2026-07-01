@@ -50,9 +50,10 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Program started:** 2026-07-01
 - **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb`
 - **Scope:** Foundation + keystones
-- **Current phase:** Phase 1 COMPLETE → Phase 2 ready (core primitives)
-- **Status:** Token layer remapped + verified (build ✓, vitest 743 ✓, dark+light Hub screenshots on-language,
-  no contrast disasters). Accent = prototype azure. Commit cadence = per phase.
+- **Current phase:** Phase 2 COMPLETE (primitives) → Phase 3 ready (keystones)
+- **Status:** Phase 0 (`02f1cc8`) + Phase 1 (`99213d0`) committed. Primitives re-skinned + verified
+  (vitest 743 ✓, eslint 0-err, Hub dark screenshot: azure glow button + un-bracketed eyebrows).
+  Deep shell-chrome polish + MatchChip M/B square folded into Phase 3 (render with the keystones).
 
 ## Phase log
 
@@ -95,27 +96,35 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   eyebrows still render `[ UPCOMING ]` framing → Eyebrow component drop.
 
 ### Phase 2 — Core primitives re-skin
-- **Status: NOT STARTED**
-- [ ] `packages/design-system/components/Button.tsx` — glow on the brand/primary variant, warmed radius,
-      no press-shrink.
-- [ ] `…/components/StatusPill.tsx` — squared, mono-tabular, leading swatch, live pulse; new status ramp.
-- [ ] `src/components/control-plane/{MetricStat,SectionCard}.tsx` + a MetricTile equivalent — new tile
-      style (18px tabular value, 10px uppercase label).
-- [ ] **`src/components/MatchChip.tsx` — the ONE semantic change.** Active states go **muted-solid**
-      (`bg` = `--status-live-solid`, `text` = `--status-live-ink`) instead of tint; quiet states stay
-      outlined. Source moves from colored **left-edge** → small **M/B initial square**. Integration
-      unchanged — still renders via `GanttTimeline.renderBlock` in `RunLiveBoard.tsx` /
-      `UnifiedOpsBoard.tsx`; **preserve all `data-testid`s** (`run-card-*`, `run-late-*`, `run-overrun-*`),
-      the `tone="state"`/`tone="discipline"` split, overrun/late markers, and the no-`products/*`-import rule.
-- [ ] `src/components/control-plane/Eyebrow.tsx` — **drop the `[ … ]` framing**; plain uppercase
-      micro-labels (10px, `0.08em`, Geist). Retire the `framed` prop.
-- [ ] Shell chrome polish — `app/{AppSidebar,AppShell}.tsx`,
-      `platform/product-shell/{WorkspaceShell,WorkspaceSidebar,WorkspaceIdentityBar}.tsx`: role tags
-      (ENG/SHR/OUT), left 2px accent bar + `surface-active` selected row, boxed wordmark, ambient glow.
-- **Gate + visual check after Phase 2.**
+- **Status: COMPLETE** (2026-07-01)
+- [x] `Button.tsx` — `default`/`brand` are now the **azure glow** primary (accent fill + accent-ink +
+      `shadow-glow`, `hover:brightness-110`); `outline`/`ghost` quieted; base radius `rounded-sm`→`rounded`.
+- [x] `StatusPill.tsx` — off `font-mono` → Geist uppercase, `rounded-sm`, leading swatch, `sw-pulse` breathe.
+- [x] **`MatchChip.tsx` — the 3b fill-model change.** Active states (playing/called) → muted-solid
+      (`bg-status-*-solid` + `text-status-*-ink` + `border-status-*-border`); quiet states (scheduled/done)
+      outlined. Source left-edge recolored to module tokens (`border-l-module-meet/-bracket`). Integration
+      unchanged (renders via `GanttTimeline.renderBlock`; all `data-testid`s + tone split preserved).
+      **Deferred to Phase 3:** the M/B initial *square* (layout change; do it with the Run board where
+      chip width is controlled).
+- [x] `Eyebrow.tsx` — **`[ … ]` framing dropped**; plain uppercase Geist micro-label. `framed` prop kept
+      in the type as a deprecated no-op (call-sites unchanged).
+- [x] Test updates (enumerated intended): `controlPlane.test.tsx` + `HubPage.test.tsx` ×2 —
+      `[ MODULES ]`/`[ UPCOMING ]` → `MODULES`/`UPCOMING`. Behavior assertions untouched.
+- **Verified:** vitest **743 passed**, eslint **0 errors** (85 pre-existing warns), Hub dark screenshot
+  (`.playwright-mcp/p2-hub-dark.png`) — azure glow "New workspace" + clean un-bracketed eyebrows.
+- **Moved to Phase 3** (render with the keystones): `MetricStat`/`SectionCard` tile-style refinement
+  (they already recolor via tokens), and the deep shell-chrome polish (role tags ENG/SHR/OUT, boxed
+  wordmark, accent selection bar) on `app/{AppSidebar,AppShell}` +
+  `platform/product-shell/{WorkspaceShell,WorkspaceSidebar,WorkspaceIdentityBar}`.
 
 ### Phase 3 — Keystone screens (hands-on to match the prototype)
 - **Status: NOT STARTED**
+- [ ] **Shell chrome polish** (carried from P2; renders with every keystone) — `app/{AppSidebar,AppShell}`,
+      `platform/product-shell/{WorkspaceShell,WorkspaceSidebar,WorkspaceIdentityBar}`: module role tags
+      (ENG/SHR/OUT), left 2px accent bar + `surface-active` on the selected nav row, boxed wordmark lockup.
+- [ ] **MatchChip M/B initial square** (carried from P2) — add the compact source square on the Run board
+      where chip width is controlled; bump the auto-zoom padding to fit it.
+- [ ] `MetricStat`/`SectionCard` tile-style refinement (18px tabular value, 10px uppercase label).
 - [ ] **Hub** — `products/hub/HubPage.tsx`: time-grouped rows (Date · Workspace · Next action) + right
       inspector (3-up metric grid, To-do, Modules, primary/secondary CTA).
 - [ ] **Operations Run** — `products/operations/run/RunSurface.tsx` + `RunLiveBoard.tsx`: summary tiles,

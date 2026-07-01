@@ -98,7 +98,7 @@ describe('HubPage time-oriented control plane', () => {
   it('groups workspaces chronologically (Upcoming section present)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    expect(screen.getByText('[ UPCOMING ]')).toBeInTheDocument();
+    expect(screen.getByText('UPCOMING')).toBeInTheDocument();
   });
 
   it('search filters the workspace list by name', async () => {
@@ -115,7 +115,7 @@ describe('HubPage time-oriented control plane', () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Meet A'));
-    expect(screen.getByText('[ MODULES ]')).toBeInTheDocument();
+    expect(screen.getByText('MODULES')).toBeInTheDocument();
   });
 
   it('module chips show only enabled modules (one per row, kind-derived)', async () => {

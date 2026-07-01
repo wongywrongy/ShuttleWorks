@@ -25,10 +25,10 @@ type MatchChipState = 'scheduled' | 'called' | 'playing' | 'done';
 type MatchChipSource = 'meet' | 'bracket';
 type MatchChipTone = 'discipline' | 'state';
 
-// ── source left-edge (sky=meet, violet=bracket) ───────────────────────────
+// ── source left-edge (module identity: meet=azure, bracket=violet) ─────────
 const SOURCE_EDGE: Record<MatchChipSource, string> = {
-  meet: 'border-l-2 border-l-sky-500',
-  bracket: 'border-l-2 border-l-violet-500',
+  meet: 'border-l-2 border-l-module-meet',
+  bracket: 'border-l-2 border-l-module-bracket',
 };
 
 // ── ring per state (discipline tone surfaces state via the ring) ──────────
@@ -39,12 +39,14 @@ const STATE_RING: Record<MatchChipState, string> = {
   done: 'ring-2 ring-inset ring-status-done',
 };
 
-// ── fill per state (state tone encodes state in the body) ─────────────────
+// ── fill per state — "3b muted-solid" (state tone) ────────────────────────
+// Active states (playing/called) fill with a muted solid + light ink; quiet
+// states (scheduled/done) stay outlined. Hover lifts brightness, never restyles.
 const STATE_FILL: Record<MatchChipState, string> = {
-  scheduled: 'bg-card border-border text-foreground hover:brightness-95',
-  called: 'bg-status-called/10 border-status-called/40 text-foreground hover:brightness-95',
-  playing: 'bg-status-live/10 border-status-live/40 text-foreground hover:brightness-95',
-  done: 'bg-status-done/10 border-status-done/40 text-foreground hover:brightness-95',
+  scheduled: 'bg-card border-border text-ink-3 hover:brightness-110',
+  called: 'bg-status-called-solid border-status-called-border text-status-called-ink hover:brightness-110',
+  playing: 'bg-status-live-solid border-status-live-border text-status-live-ink hover:brightness-110',
+  done: 'bg-surface-band border-border text-muted-foreground opacity-70 hover:brightness-110',
 };
 
 export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
