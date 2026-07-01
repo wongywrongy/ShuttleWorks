@@ -49,8 +49,15 @@ escalate it before making any further code change.
 - Executed via `sp-refactor-phase2` + `sp-refactor-phase2-relocations` workflows (one-workflow-per-phase model, each slice: exec → gate → adversarial review → commit).
 
 ### Phase 3 — Directory cleanup
-- Status: NOT STARTED
-- Summary: <fill in when done>
+- Status: **IN PROGRESS** — inventory done (`wf_769efbab-f79`), awaiting Kyle's deletion approval
+- Inventory: `docs/audits/03-cleanup-inventory.md` + `03-cleanup-unclear.md`
+- Proposed: delete 15 confirmed-dead source files (orphaned meet/schedule+setup+tournaments
+  subtree + services/api.ts + settings/OverviewTab.tsx + types/schedule.ts); delete disposable
+  artifacts (29 root *.png, .playwright-mcp/, already gitignored); add gitignore entries
+  (.ruff_cache/, **/e2e/shots/). OverviewTab deletion also clears an F-ARCH-2 edge.
+- Kyle-decides: retain-vs-delete useBulkOperations.ts + usePlayerSelection.ts (design doc says
+  keep for planned Phase-2 engines); the ~92 export/type source-edits (separate follow-up).
+- codanna MCP token expired mid-run; agents used grep + dependency-graph BFS (two methods agreed).
 
 ### Phase 4 — Documentation
 - Status: NOT STARTED
