@@ -25,7 +25,7 @@ export function nextActionFor(t: TournamentSummaryDTO): { label: string; reasonC
  *  - undated → "Set date" (opens General settings — there is no date route).
  *  - past    → "View results" (opens the workspace, receded — it's done).
  *  - upcoming → the most useful setup step, else "Open workspace". */
-export type RowActionKind = 'open' | 'set-date' | 'results';
+type RowActionKind = 'open' | 'set-date' | 'results';
 export interface RowAction {
   label: string;
   kind: RowActionKind;

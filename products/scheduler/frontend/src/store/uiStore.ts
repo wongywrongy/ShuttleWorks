@@ -46,7 +46,7 @@ export type AppTab =
 
 export type SolverPhase = 'presolve' | 'search' | 'proving' | null;
 
-export interface SolverHudState {
+interface SolverHudState {
   phase: SolverPhase;
   numMatches?: number;
   numIntervals?: number;
@@ -59,13 +59,13 @@ export interface SolverHudState {
   elapsedMs: number;
 }
 
-export interface PendingPin {
+interface PendingPin {
   matchId: string;
   slotId: number;
   courtId: number;
 }
 
-export interface ValidationSnapshot {
+interface ValidationSnapshot {
   matchId: string;
   slotId: number;
   courtId: number;
@@ -81,9 +81,9 @@ export interface ValidationSnapshot {
   }>;
 }
 
-export type ToastLevel = 'info' | 'success' | 'warn' | 'error';
+type ToastLevel = 'info' | 'success' | 'warn' | 'error';
 
-export interface Toast {
+interface Toast {
   id: string;
   level: ToastLevel;
   message: string;
@@ -100,7 +100,7 @@ export interface SolverLogEntry {
   type: 'info' | 'solution' | 'violation' | 'stats' | 'progress';
 }
 
-export interface ScheduleGenerationStats {
+interface ScheduleGenerationStats {
   elapsed: number;
   solutionCount?: number;
   objectiveScore?: number;
@@ -108,7 +108,7 @@ export interface ScheduleGenerationStats {
   assignments: ScheduleAssignment[];
 }
 
-export interface UnlockModalState {
+interface UnlockModalState {
   open: boolean;
   actionDescription?: string;
   resolve: (confirmed: boolean) => void;

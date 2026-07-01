@@ -21,7 +21,7 @@ import { useTournamentId } from './useTournamentId';
  * Exported so the BackupPanel's XLSX-recover orchestrator can reuse
  * the same hydration shape (it owns its own apiClient.putTournamentState
  * call as a documented one-off orchestrator). */
-export function applyStateToStore(state: TournamentStateDTO): void {
+function applyStateToStore(state: TournamentStateDTO): void {
   useTournamentStore.setState({
     config: state.config ?? null,
     groups: state.groups ?? [],

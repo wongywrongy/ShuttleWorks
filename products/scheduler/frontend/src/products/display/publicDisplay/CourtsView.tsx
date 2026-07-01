@@ -19,10 +19,10 @@ import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto
 import { formatElapsed } from '../../../lib/timeFormatters';
 import { formatPlayers, isCourtClosedNow } from './helpers';
 
-export type CourtStatus = 'active' | 'called' | 'empty';
-export type CourtDisplayMode = 'list' | 'strip' | 'grid';
+type CourtStatus = 'active' | 'called' | 'empty';
+type CourtDisplayMode = 'list' | 'strip' | 'grid';
 
-export interface CourtRow {
+interface CourtRow {
   courtId: number;
   match: MatchDTO | null;
   state: MatchStateDTO | null;

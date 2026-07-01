@@ -36,7 +36,7 @@ export interface WorkspaceNav {
 }
 
 /** Admin (WORKSPACE) segments — also drive the top-bar gear "active" indicator. */
-export const ADMIN_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
+const ADMIN_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   'ws-venue',
   'ws-members',
   'ws-sharing',
@@ -55,9 +55,6 @@ export const SHELL_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
 export function isAdminSegment(tab: AppTab): boolean {
   return ADMIN_SEGMENTS.has(tab);
 }
-
-/** Default landing segment when a workspace opens. */
-export const WORKSPACE_HOME: AppTab = 'overview';
 
 const ROLE_LABEL: Record<SectionRole, string> = {
   engine: 'Engine',

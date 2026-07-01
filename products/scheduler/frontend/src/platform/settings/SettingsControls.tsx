@@ -146,53 +146,6 @@ export function Toggle({
 const INPUT_CLASS =
   'h-7 rounded-sm border border-border bg-bg-elev px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring';
 
-export function TextInput({
-  value,
-  onChange,
-  width = 200,
-  placeholder,
-  ariaLabel,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  width?: number;
-  placeholder?: string;
-  ariaLabel?: string;
-}) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      aria-label={ariaLabel}
-      className={INPUT_CLASS}
-      style={{ width: `${width}px` }}
-    />
-  );
-}
-
-export function DateInput({
-  value,
-  onChange,
-  ariaLabel,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  ariaLabel?: string;
-}) {
-  return (
-    <input
-      type="date"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label={ariaLabel}
-      className={INPUT_CLASS}
-      style={{ width: '160px' }}
-    />
-  );
-}
-
 export function TimeInput({
   value,
   onChange,
@@ -340,55 +293,5 @@ export function RangeSlider({
         {value}
       </span>
     </span>
-  );
-}
-
-/* =========================================================================
- * Color-swatch palette — 8 picker dots for the Public-display accent.
- * ========================================================================= */
-export const ACCENT_PALETTE: readonly { name: string; hex: string }[] = [
-  { name: 'emerald', hex: '#10b981' },
-  { name: 'amber',   hex: '#f59e0b' },
-  { name: 'rose',    hex: '#f43f5e' },
-  { name: 'blue',    hex: '#3b82f6' },
-  { name: 'violet',  hex: '#8b5cf6' },
-  { name: 'cyan',    hex: '#06b6d4' },
-  { name: 'orange',  hex: '#FF6B1A' },
-  { name: 'slate',   hex: '#64748b' },
-];
-
-export function ColorSwatchRow({
-  value,
-  onChange,
-  palette = ACCENT_PALETTE,
-}: {
-  value: string;
-  onChange: (hex: string) => void;
-  palette?: readonly { name: string; hex: string }[];
-}) {
-  const normalized = value?.toLowerCase() ?? '';
-  return (
-    <div role="radiogroup" aria-label="Accent colour" className="inline-flex gap-1.5">
-      {palette.map(({ name, hex }) => {
-        const isActive = normalized === hex.toLowerCase();
-        return (
-          <button
-            key={hex}
-            type="button"
-            role="radio"
-            aria-checked={isActive}
-            aria-label={`Set accent to ${name}`}
-            onClick={() => onChange(hex)}
-            className={[
-              'flex h-5 w-5 items-center justify-center rounded-full transition-shadow',
-              isActive
-                ? 'ring-2 ring-foreground ring-offset-2 ring-offset-bg-elev'
-                : 'hover:ring-2 hover:ring-muted-foreground/40 hover:ring-offset-2 hover:ring-offset-bg-elev',
-            ].join(' ')}
-            style={{ backgroundColor: hex }}
-          />
-        );
-      })}
-    </div>
   );
 }

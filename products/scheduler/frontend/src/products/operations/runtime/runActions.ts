@@ -33,7 +33,7 @@ export type { RunActionKind };
 /** Minimal bracket API surface needed by runActions. Structural interface —
  *  lets tests pass vi.fn() mocks without importing the full BracketApi class
  *  (which has 20+ methods the mocks don't implement). */
-export interface BracketApiSeam {
+interface BracketApiSeam {
   matchAction: (body: {
     play_unit_id: string;
     action: 'start' | 'finish' | 'reset';

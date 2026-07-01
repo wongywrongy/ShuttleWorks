@@ -203,7 +203,7 @@ export async function getById(id: string): Promise<QueuedCommand | undefined> {
  * Mark a command as applied. The hook calls this after a successful
  * 200; UI surfaces (Step G) react to the status change.
  */
-export async function markApplied(id: string): Promise<void> {
+async function markApplied(id: string): Promise<void> {
   await withStore('readwrite', async (store) => {
     const row = (await reqAsPromise(store.get(id))) as QueuedCommand | undefined;
     if (!row) return;
@@ -218,7 +218,7 @@ export async function markApplied(id: string): Promise<void> {
  * different terminal states the UI may want to distinguish (e.g. only
  * the conflict flavour needs an explicit dismiss).
  */
-export async function markRejected(
+async function markRejected(
   id: string,
   kind: 'stale_version' | 'conflict',
   reason: string,
@@ -236,7 +236,7 @@ export async function markRejected(
  * Record a transient failure — increments ``attempts``, leaves the
  * row in ``pending`` so the next flush retries.
  */
-export async function markRetryable(id: string): Promise<void> {
+async function markRetryable(id: string): Promise<void> {
   await withStore('readwrite', async (store) => {
     const row = (await reqAsPromise(store.get(id))) as QueuedCommand | undefined;
     if (!row) return;
@@ -288,16 +288,4 @@ export async function flush(
     }
   }
   return outcomes;
-}
-
-/**
- * Wipe every command — pending and terminal alike. Tests call this
- * between cases; production code shouldn't need it (terminal-state
- * rows are visible audit trail and can be trimmed by a future
- * housekeeping pass).
- */
-export async function _clearAllForTests(): Promise<void> {
-  await withStore('readwrite', async (store) => {
-    store.clear();
-  });
 }

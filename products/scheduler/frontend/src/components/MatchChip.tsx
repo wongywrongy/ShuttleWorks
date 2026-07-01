@@ -21,9 +21,9 @@
 import { forwardRef } from 'react';
 import { getEventColor } from '../lib/eventColors';
 
-export type MatchChipState = 'scheduled' | 'called' | 'playing' | 'done';
-export type MatchChipSource = 'meet' | 'bracket';
-export type MatchChipTone = 'discipline' | 'state';
+type MatchChipState = 'scheduled' | 'called' | 'playing' | 'done';
+type MatchChipSource = 'meet' | 'bracket';
+type MatchChipTone = 'discipline' | 'state';
 
 // ── source left-edge (sky=meet, violet=bracket) ───────────────────────────
 const SOURCE_EDGE: Record<MatchChipSource, string> = {

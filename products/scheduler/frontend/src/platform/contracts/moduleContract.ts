@@ -66,7 +66,7 @@ export type ArchModuleId = ModuleId | 'operations';
  * derive `DtoName` as a compile-time union — referencing the real exported
  * types means a renamed/removed DTO surfaces as a type error here.
  */
-export interface DtoRegistry {
+interface DtoRegistry {
   TournamentConfig: TournamentConfig;
   PlayerDTO: PlayerDTO;
   MatchDTO: MatchDTO;
@@ -82,7 +82,7 @@ export interface DtoRegistry {
 }
 
 /** A DTO type name that exists in the wire vocabulary (compile-time checked). */
-export type DtoName = keyof DtoRegistry;
+type DtoName = keyof DtoRegistry;
 
 /**
  * A backend endpoint, referenced as the actual `apiClient` method. The

@@ -30,7 +30,7 @@ export const LIGHT_LABEL = {
  * in a list. The title expands so a director who hasn't memorised the
  * codes can still read it.
  */
-export const RANK_PREFIX_LABELS: Record<string, string> = {
+const RANK_PREFIX_LABELS: Record<string, string> = {
   MS: "Men's Singles",
   WS: "Women's Singles",
   MD: "Men's Doubles",

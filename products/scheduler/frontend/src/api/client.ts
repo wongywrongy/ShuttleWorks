@@ -130,7 +130,7 @@ export interface ManualEditProposalRequest {
 }
 
 // Director-action proposal — runtime time-axis + court-state adjustments.
-export type DirectorActionKind =
+type DirectorActionKind =
   | 'delay_start'
   | 'insert_blackout'
   | 'remove_blackout'
@@ -1321,4 +1321,3 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
-export default apiClient;

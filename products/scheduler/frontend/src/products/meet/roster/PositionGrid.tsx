@@ -24,11 +24,9 @@ import { usePositionGridColumns } from './positionGrid/usePositionGridColumns';
 import { GridTable } from './positionGrid/GridTable';
 
 // Re-export for existing call sites — RosterTab imports DraggablePlayerChip
-// from './PositionGrid'. usePositionGridColumns now lives in its own module;
-// re-export to keep the public surface stable. Column management (reorder /
-// hide / reset) now lives in the grid header itself — no separate menu.
+// from './PositionGrid'. Column management (reorder / hide / reset) now lives
+// in the grid header itself — no separate menu.
 export { DraggablePlayerChip } from './positionGrid/DraggablePlayerChip';
-export { usePositionGridColumns } from './positionGrid/usePositionGridColumns';
 
 export function PositionGrid({
   schoolId,

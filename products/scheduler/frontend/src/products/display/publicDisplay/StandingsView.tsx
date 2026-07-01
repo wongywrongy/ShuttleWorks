@@ -5,7 +5,7 @@
  * `standings` memo. Top-1 team gets a gold-tinted card to draw the eye.
  */
 
-export interface StandingRow {
+interface StandingRow {
   groupId: string;
   groupName: string;
   wins: number;

@@ -21,8 +21,6 @@ export const workspaceNoun = {
   titlePlural: 'Workspaces',
 } as const;
 
-export type WorkspaceNoun = typeof workspaceNoun;
-
 /** User-facing copy for the Hub and shell chrome, derived from {@link workspaceNoun}. */
 export const workspaceCopy = {
   dashboardDescription: `${workspaceNoun.titlePlural} you own or have been invited to.`,

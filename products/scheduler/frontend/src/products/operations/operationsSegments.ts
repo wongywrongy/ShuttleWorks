@@ -11,19 +11,19 @@
 import type { AppTab } from '../../store/uiStore';
 
 /** "Courts" (schedule overview) segments, per engine. */
-export const COURTS_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
+const COURTS_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   'schedule',
   'bracket-schedule',
 ]);
 
 /** "Live" (operator) segments, per engine. */
-export const LIVE_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
+const LIVE_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   'live',
   'bracket-live',
 ]);
 
 /** Every Operations segment (Courts + Live, both engines). */
-export const OPERATIONS_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
+const OPERATIONS_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   ...COURTS_SEGMENTS,
   ...LIVE_SEGMENTS,
 ]);

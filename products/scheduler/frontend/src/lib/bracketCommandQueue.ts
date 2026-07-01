@@ -188,7 +188,7 @@ export async function getById(
 }
 
 /** Mark a command as applied (server returned 200). */
-export async function markApplied(id: string): Promise<void> {
+async function markApplied(id: string): Promise<void> {
   await withStore('readwrite', async (store) => {
     const row = (await reqAsPromise(store.get(id))) as
       | BracketResultCommand
@@ -204,7 +204,7 @@ export async function markApplied(id: string): Promise<void> {
  * persisted status — ``stale_version`` → ``rejected`` (recoverable via
  * refetch), ``conflict`` → ``conflict`` (permanent).
  */
-export async function markRejected(
+async function markRejected(
   id: string,
   kind: 'stale_version' | 'conflict',
   reason: string,
@@ -221,7 +221,7 @@ export async function markRejected(
 }
 
 /** Record a transient failure — bump ``attempts``, leave ``pending``. */
-export async function markRetryable(id: string): Promise<void> {
+async function markRetryable(id: string): Promise<void> {
   await withStore('readwrite', async (store) => {
     const row = (await reqAsPromise(store.get(id))) as
       | BracketResultCommand
@@ -269,11 +269,4 @@ export async function flush(
     }
   }
   return outcomes;
-}
-
-/** Wipe every command — tests call this between cases. */
-export async function _clearAllForTests(): Promise<void> {
-  await withStore('readwrite', async (store) => {
-    store.clear();
-  });
 }

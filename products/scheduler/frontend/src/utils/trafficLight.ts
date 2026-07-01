@@ -18,7 +18,7 @@ import type {
 } from '../api/dto';
 import { timeToSlot } from '../lib/time';
 
-export type TrafficLight = 'green' | 'yellow' | 'red';
+type TrafficLight = 'green' | 'yellow' | 'red';
 
 export interface TrafficLightResult {
   status: TrafficLight;

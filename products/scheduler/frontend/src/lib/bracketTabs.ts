@@ -48,19 +48,19 @@ export const MEET_TAB_IDS = [
   'tv',
 ] as const;
 
-export type MeetTabId = (typeof MEET_TAB_IDS)[number];
+type MeetTabId = (typeof MEET_TAB_IDS)[number];
 
 /** The meet operator tab ids the TabBar renders. Excludes ``tv`` — TV is
  *  reached through the Display module (dock / ``/tournaments/:id/tv`` route),
  *  not the tab strip — while ``tv`` stays in ``MEET_TAB_IDS`` so the route
  *  keeps treating it as valid. */
-export const MEET_OPERATOR_TAB_IDS = MEET_TAB_IDS.filter(
+const MEET_OPERATOR_TAB_IDS = MEET_TAB_IDS.filter(
   (id) => id !== 'tv',
 ) as Exclude<MeetTabId, 'tv'>[];
 
 /** Display labels for the meet operator tabs. Single-sourced here so the
  *  TabBar doesn't redefine the id list. */
-export const MEET_TAB_LABELS: Record<Exclude<MeetTabId, 'tv'>, string> = {
+const MEET_TAB_LABELS: Record<Exclude<MeetTabId, 'tv'>, string> = {
   setup: 'Setup',
   roster: 'Roster',
   matches: 'Matches',
@@ -69,7 +69,7 @@ export const MEET_TAB_LABELS: Record<Exclude<MeetTabId, 'tv'>, string> = {
 };
 
 /** The `{id,label}` rows the TabBar renders for a meet workspace. */
-export const MEET_TABS: { id: AppTab; label: string }[] = MEET_OPERATOR_TAB_IDS.map(
+const MEET_TABS: { id: AppTab; label: string }[] = MEET_OPERATOR_TAB_IDS.map(
   (id) => ({ id, label: MEET_TAB_LABELS[id] }),
 );
 
