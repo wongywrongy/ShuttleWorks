@@ -68,6 +68,40 @@ serves concurrent clients from a single process (exclusion via port binding, no 
 own lock error recommends exactly this.
 :::
 
+### Keep the server running
+
+Nothing connects unless the server is up. If the codanna tools report
+`ConnectionRefused at http://127.0.0.1:8080/mcp`, it simply isn't running. (A CLI that was
+already open when you switched `.mcp.json` to HTTP shows `-32000` instead — restart that CLI so it
+re-reads the config.)
+
+Two ways to keep it alive:
+
+- **A terminal you leave open** — simplest: `codanna serve --http --watch` from the repo root.
+- **Always-on (Windows) — a per-user logon task.** Starts it hidden on every login, with
+  restart-on-crash, so you never think about it. Run once from the repo root (as yourself, no
+  admin):
+
+```powershell
+$exe = "$env:USERPROFILE\.local\bin\codanna.exe"
+$me  = "$env:USERDOMAIN\$env:USERNAME"
+$ps  = "-NoProfile -WindowStyle Hidden -Command `"& '$exe' serve --http --watch -c '$PWD\.codanna\settings.toml'`""
+Register-ScheduledTask -TaskName 'codanna-http-mcp' -Force `
+  -Action    (New-ScheduledTaskAction     -Execute 'powershell.exe' -Argument $ps -WorkingDirectory $PWD) `
+  -Trigger   (New-ScheduledTaskTrigger     -AtLogOn -User $me) `
+  -Principal (New-ScheduledTaskPrincipal   -UserId $me -LogonType Interactive) `
+  -Settings  (New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew)
+Start-ScheduledTask -TaskName 'codanna-http-mcp'
+```
+
+Check it with `Get-ScheduledTaskInfo -TaskName 'codanna-http-mcp'`; remove it with
+`Unregister-ScheduledTask -TaskName 'codanna-http-mcp' -Confirm:$false`.
+
+::: tip
+Registering a scheduled task is a persistence action, so Claude Code (in auto mode) can't set it
+up for you — run the snippet yourself.
+:::
+
 ## Using it from the CLI
 
 The same index is queryable without Claude Code — handy for a quick lookup:
