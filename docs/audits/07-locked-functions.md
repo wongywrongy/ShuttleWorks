@@ -154,7 +154,7 @@ decomposed.
 
 ---
 
-## 4. Latent bug pinned (not fixed here) — `build` config field-drop
+## 4. Latent bug — `build` config field-drop  (FIXED 2026-07-01)
 
 Steps 3 and 4 of `build` rebuild `ScheduleConfig` by **hand-listing** fields to
 copy (`bridge.py:119–131` and `:136–148`). Both omit the newer fields:
@@ -167,16 +167,19 @@ shrink silently **resets those fields to dataclass defaults**.
 This is the *exact* class of bug `live_ops.handle_court_outage` was fixed for by
 switching to `dataclasses.replace` (see its docstring, `live_ops.py:127`).
 
-**Handling (per the STOP condition + advisor):** this is a real latent bug but is
-**not** currently relied upon (no in-repo caller exercises the override path with
-those fields set). Per `CODE_HEALTH.md` Part 2 and the phase STOP rule, we do
-**not** fix it here. Instead:
-- The characterization test **asserts the drop explicitly** (after a
-  freeze/current-slot override, the newer fields come back as defaults), with a
-  comment pointing at the debt-log entry — so if Kyle later fixes it with
-  `dataclasses.replace`, the test fails **loudly and self-documents** rather than
-  breaking silently.
-- Logged in `docs/audits/debt-log.md` for Kyle's decision (fix vs. formalize).
+**Original handling (Phase-7 cover pass):** pinned but *not* fixed inside the
+characterization commit — the test asserted the drop as a loud tripwire, and the
+bug was logged for a deliberate decision (it is not relied upon: no in-repo caller
+exercises the override path with those fields set).
+
+**Fixed 2026-07-01 (Kyle: "fix the bugs"):** both rebuilds now use
+`dataclasses.replace(config, …overrides)` (`bridge.py:118–137`) — the same idiom
+`live_ops.handle_court_outage` already uses (prior art, `CODE_HEALTH.md` #1), so
+every field is preserved except the two/one actually overridden. The tripwire test
+was **flipped** to a regression guard: `test_freeze_override_preserves_all_config_fields`
++ `test_rolling_horizon_shrinks_total_slots_preserving_fields` now assert *preservation*.
+No production impact (the override path had no in-repo caller); complexity of `build`
+is unchanged (C19 — the fix is correctness, not decomposition). Full suite 620 green.
 
 ---
 

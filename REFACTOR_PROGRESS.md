@@ -209,12 +209,15 @@ escalate it before making any further code change.
   high-complexity-but-*covered*). An **independent fresh-context review** (CODE_HEALTH
   #4) verified no vacuous assertions, both latent-bug claims, all call-graph claims,
   and unreachable-branch soundness; its 3 nits were folded in as tripwires (`ccfe57d`).
-- **Two latent bugs found + logged (NOT fixed — Part-2 STOP rule):** (a) `build`'s
-  config rebuild hand-lists fields → silently drops newer `ScheduleConfig` fields on
-  any freeze/rolling override (same bug class `handle_court_outage` fixed via
-  `dataclasses.replace`); pinned by a test asserting the drop. (b) `examples/badminton_event_setup.py`
-  is stale (imports `PoolGenerationPolicy`/`CompetitionGraph`, which no longer exist).
-  Both in `debt-log.md`.
+- **Two latent bugs found during characterization, then FIXED (Kyle: "fix the bugs"):**
+  (a) `build`'s config rebuild hand-listed fields → silently dropped newer `ScheduleConfig`
+  fields on any freeze/rolling override → **fixed** by switching both rebuilds to
+  `dataclasses.replace` (`bridge.py:118–137`, prior art `handle_court_outage`); the
+  tripwire tests were flipped to preservation regression-guards. No production impact
+  (override path had no in-repo caller). (b) stale `examples/badminton_event_setup.py`
+  (imported the cut `PoolGenerationPolicy`/`CompetitionGraph`) → **rewritten** to the
+  current manual-PlayUnits→bridge→CPSAT API, verified runnable. Audit confirmed the
+  copy-and-override bug class exists nowhere else. Full suite 620 green. See `debt-log.md` Cleared.
 - **Steps 4–5 HELD (recommendation, awaiting Kyle):** the seam finding is that neither
   function is coupling-locked (both are pure functions of their args — no DB/shared
   state), so seam == decomposition. With zero in-repo callers, decomposing is low-risk

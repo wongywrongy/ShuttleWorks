@@ -53,16 +53,16 @@ production callers**, decomposition (Steps 4–5) is low-risk *and* low-value, a
 Phase-7 Step-3→4 checkpoint (2026-07-01)** (see `07-locked-functions.md §5`). Do it
 *when a future task brings you into these functions*, not speculatively.
 
-## Latent bugs found while characterizing (Phase 7 — pinned, not fixed)
+## Latent bugs found while characterizing (Phase 7) — FIXED 2026-07-01
 
-Per the Part-2 STOP rule, these were **not** fixed inside the characterization
-pass (that would change behavior); they are pinned by a test asserting the
-*current* behavior and logged here for a deliberate decision.
+Found while characterizing; per the Part-2 STOP rule they were pinned (not fixed)
+in the characterization commit, then **fixed in a follow-up** on Kyle's call
+("fix the bugs"). Both verified — full backend suite 620 green.
 
-| Bug | Where | Why it matters | Handling |
-| --- | --- | --- | --- |
-| **`build` config field-drop** | `scheduler_core/engine/bridge.py:119–131` (freeze/current-slot) + `:136–148` (rolling-horizon) | Both rebuild `ScheduleConfig` from a **hand-listed** field set, silently resetting every newer field to default (`enable_court_utilization`, game-proximity, compact-schedule, `allow_player_overlap`, `break_slots`, `closed_court_windows`, `closed_court_ids`). Exactly the bug `live_ops.handle_court_outage` was fixed for via `dataclasses.replace`. Latent only because no in-repo caller exercises the override path with those fields set. | Pinned by `test_freeze_override_drops_newer_config_fields` (asserts the drop; fails loudly if fixed). **Fix = switch both rebuilds to `dataclasses.replace(config, **overrides)`**, then flip those asserts. S. |
-| **Stale example** | `examples/badminton_event_setup.py` | Imports `PoolGenerationPolicy` + `CompetitionGraph` from `scheduler_core` — **neither exists** (the competition/generation layer was cut; `__init__.py:44–49` documents it). The example cannot run as written. | Either restore a runnable example against the current API, or delete it. XS. |
+| Bug | Where | Fix ✅ |
+| --- | --- | --- |
+| **`build` config field-drop** | `scheduler_core/engine/bridge.py:118–137` | Both rebuilds switched from a hand-listed copy to `dataclasses.replace(config, …)` (prior art: `handle_court_outage`), so every field is preserved except the overridden one(s). The tripwire test flipped to a preservation regression-guard (`test_freeze_override_preserves_all_config_fields` + `..._rolling_horizon_..._preserving_fields`). **No production impact** — the override path had no in-repo caller. |
+| **Stale example** | `examples/badminton_event_setup.py` | Rewritten to the current API (manual `PlayUnit`s → `SchedulingProblemBuilder.build` → `CPSATBackend`); the cut generation layer (`PoolGenerationPolicy`/`CompetitionGraph`) is gone for good. Verified runnable (`Status: optimal, assignments: 6`). |
 
 ## High complexity but well-covered (decompose *when touched*, not locked)
 
@@ -140,6 +140,14 @@ design-gated items above + engine coverage.
 
 ## Cleared
 
+- **2026-07-01 (Phase 7 — bug fixes, follow-up)** — fixed the two latent bugs found
+  during characterization: (1) `bridge.build` config field-drop → `dataclasses.replace`
+  on both rebuilds (`bridge.py:118–137`), tripwire tests flipped to preservation
+  guards; (2) rewrote the stale `examples/badminton_event_setup.py` to the current
+  API (verified runnable). Full backend suite 620 green, ruff-F clean. Verified the
+  same copy-and-override bug class exists nowhere else (grep: all other `ScheduleConfig`
+  builds are from params/DTO inputs, not config copies; `handle_court_outage` already
+  used `replace`).
 - **2026-07-01 (Phase 7 — cover-before-modify)** — characterized both locked
   engine functions: `GreedyBackend.solve` **19%→97%**, `SchedulingProblemBuilder.build`
   **19%→96%** (28 golden-master tests, commit `caf5275`, test-only). Confirmed both

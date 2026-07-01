@@ -4,7 +4,7 @@ Maps ready PlayUnits + TournamentState -> ScheduleRequest for the
 scheduling backend. Supports rolling horizon and freeze.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List, Optional, Set
 
 from scheduler_core.domain.models import (
@@ -114,38 +114,31 @@ class SchedulingProblemBuilder:
         if opts.max_units is not None and opts.max_units >= 0:
             unit_ids = unit_ids[: opts.max_units]
 
+        # Override freeze/current-slot via ``dataclasses.replace`` so every other
+        # field is preserved — including newer knobs (break_slots,
+        # closed_court_windows, court-utilization / game-proximity / compact /
+        # player-overlap). The same fix ``live_ops.handle_court_outage`` uses. An
+        # earlier hand-listed copy here silently reset those to dataclass defaults.
         use_config = config
         if opts.freeze_horizon_slots is not None or opts.current_slot is not None:
-            use_config = ScheduleConfig(
-                total_slots=config.total_slots,
-                court_count=config.court_count,
-                interval_minutes=config.interval_minutes,
-                default_rest_slots=config.default_rest_slots,
-                freeze_horizon_slots=opts.freeze_horizon_slots if opts.freeze_horizon_slots is not None else config.freeze_horizon_slots,
-                current_slot=opts.current_slot if opts.current_slot is not None else config.current_slot,
-                soft_rest_enabled=config.soft_rest_enabled,
-                rest_slack_penalty=config.rest_slack_penalty,
-                disruption_penalty=config.disruption_penalty,
-                late_finish_penalty=config.late_finish_penalty,
-                court_change_penalty=config.court_change_penalty,
+            use_config = replace(
+                config,
+                freeze_horizon_slots=(
+                    opts.freeze_horizon_slots
+                    if opts.freeze_horizon_slots is not None
+                    else config.freeze_horizon_slots
+                ),
+                current_slot=(
+                    opts.current_slot
+                    if opts.current_slot is not None
+                    else config.current_slot
+                ),
             )
 
         if opts.rolling_horizon_slots is not None and opts.rolling_horizon_slots > 0:
             max_slot = use_config.current_slot + opts.rolling_horizon_slots
             if max_slot < use_config.total_slots:
-                use_config = ScheduleConfig(
-                    total_slots=max_slot,
-                    court_count=use_config.court_count,
-                    interval_minutes=use_config.interval_minutes,
-                    default_rest_slots=use_config.default_rest_slots,
-                    freeze_horizon_slots=use_config.freeze_horizon_slots,
-                    current_slot=use_config.current_slot,
-                    soft_rest_enabled=use_config.soft_rest_enabled,
-                    rest_slack_penalty=use_config.rest_slack_penalty,
-                    disruption_penalty=use_config.disruption_penalty,
-                    late_finish_penalty=use_config.late_finish_penalty,
-                    court_change_penalty=use_config.court_change_penalty,
-                )
+                use_config = replace(use_config, total_slots=max_slot)
 
         pids = _participant_ids_from_units(state, unit_ids)
         players = [_participant_to_player(state, pid) for pid in sorted(pids)]

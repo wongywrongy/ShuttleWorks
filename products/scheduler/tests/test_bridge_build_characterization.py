@@ -132,29 +132,27 @@ def test_negative_max_units_is_ignored():
 # Config override — LATENT BUG pinned (field-drop on rebuild)
 # --------------------------------------------------------------------------- #
 
-def test_freeze_override_drops_newer_config_fields():
-    """LATENT BUG (docs/audits/debt-log.md): ``build`` rebuilds ScheduleConfig from
-    a hand-listed field set, silently resetting every newer field to its default.
-    This asserts the CURRENT (wrong) behavior on purpose — if it is later fixed
-    (e.g. via ``dataclasses.replace``, like ``handle_court_outage``), this test
-    fails loudly, which is the intended signal.
+def test_freeze_override_preserves_all_config_fields():
+    """Freeze/current-slot override rebuilds ScheduleConfig via ``dataclasses.replace``,
+    so EVERY field is preserved except the two overridden. Regression guard for the
+    former hand-listed-copy field-drop bug (fixed 2026-07-01; see debt-log 'Cleared').
     """
     config = ScheduleConfig(
         total_slots=20,
         court_count=3,
         interval_minutes=15,
         default_rest_slots=2,
-        disruption_penalty=3.0,          # copied field (preserved)
-        allow_player_overlap=True,       # dropped
-        player_overlap_penalty=99.0,     # dropped
-        enable_court_utilization=False,  # dropped
-        court_utilization_penalty=12.0,  # dropped
-        break_slots=[(5, 7)],            # dropped
-        closed_court_windows=[(2, 0, 5)],  # dropped
-        closed_court_ids=[2],            # dropped
-        enable_game_proximity=True,      # dropped
-        min_game_spacing_slots=3,        # dropped
-        enable_compact_schedule=True,    # dropped
+        disruption_penalty=3.0,
+        allow_player_overlap=True,
+        player_overlap_penalty=99.0,
+        enable_court_utilization=False,
+        court_utilization_penalty=12.0,
+        break_slots=[(5, 7)],
+        closed_court_windows=[(2, 0, 5)],
+        closed_court_ids=[2],
+        enable_game_proximity=True,
+        min_game_spacing_slots=3,
+        enable_compact_schedule=True,
     )
     state = _state([_unit("u1", a=["p1"], b=["p2"])])
 
@@ -162,35 +160,34 @@ def test_freeze_override_drops_newer_config_fields():
     uc = req.config
 
     assert uc is not config  # a fresh object was built
-    # Override applied:
+    # Overridden fields:
     assert uc.freeze_horizon_slots == 2
     assert uc.current_slot == 1
-    # Hand-copied fields preserved:
+    # Every other field preserved (not reset to defaults):
     assert (uc.total_slots, uc.court_count) == (20, 3)
     assert (uc.interval_minutes, uc.default_rest_slots) == (15, 2)
     assert uc.disruption_penalty == 3.0
-    # Newer fields silently reset to dataclass defaults (the bug):
-    assert uc.allow_player_overlap is False
-    assert uc.player_overlap_penalty == 50.0
-    assert uc.enable_court_utilization is True
-    assert uc.court_utilization_penalty == 50.0
-    assert uc.break_slots == []
-    assert uc.closed_court_windows == []
-    assert uc.closed_court_ids == []
-    assert uc.enable_game_proximity is False
-    assert uc.min_game_spacing_slots is None
-    assert uc.enable_compact_schedule is False
+    assert uc.allow_player_overlap is True
+    assert uc.player_overlap_penalty == 99.0
+    assert uc.enable_court_utilization is False
+    assert uc.court_utilization_penalty == 12.0
+    assert uc.break_slots == [(5, 7)]
+    assert uc.closed_court_windows == [(2, 0, 5)]
+    assert uc.closed_court_ids == [2]
+    assert uc.enable_game_proximity is True
+    assert uc.min_game_spacing_slots == 3
+    assert uc.enable_compact_schedule is True
 
 
-def test_rolling_horizon_shrinks_total_slots_and_also_drops_fields():
+def test_rolling_horizon_shrinks_total_slots_preserving_fields():
     config = ScheduleConfig(total_slots=20, court_count=2, allow_player_overlap=True)
     state = _state([_unit("u1", a=["p1"], b=["p2"])])
 
     # rolling < total -> total_slots shrinks to current_slot(0) + rolling(8) = 8.
     req = _build(state, ["u1"], config, BridgeOptions(rolling_horizon_slots=8))
     assert req.config.total_slots == 8
-    # Same rebuild path -> same field-drop (see debt-log latent bug):
-    assert req.config.allow_player_overlap is False
+    # Same replace()-based rebuild -> other fields preserved (fixed field-drop bug):
+    assert req.config.allow_player_overlap is True
 
     # rolling >= total -> no shrink, and (no other override) the config passes
     # through unchanged.
