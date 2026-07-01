@@ -20,7 +20,7 @@ module.exports = {
     {
       name: 'no-cross-product',
       comment:
-        'Products should not import each others internals. Starts as warn: 16 known violations across 3 buckets — (1) workspace -> settings/hub is a legit aggregator edge, (2) operations/SourceChip + meet EVENT_LABEL are misplaced shared code to relocate, (3) operations <-> bracket coupling is the real debt. Ratchet to error after cleanup.',
+        'Products should not import each others internals. Warn: 11 known violations (2026-07-01, down from 16). Most are legit aggregator/consumer edges (workspace -> settings/hub). The real remaining debt is the operations -> bracket UI coupling (OpsDetailRail -> MatchDetailPanel, OperationsProduct -> BracketScheduleModal) — 2 edges whose removal-or-acceptance is a design decision (see ADR 0011 + docs/audits/debt-log.md). Ratchet to error once those land. The earlier "misplaced shared code" buckets (operations SourceChip, meet EVENT_LABEL) were cleared in SP-REFACTOR Phase 2/3.',
       severity: 'warn',
       from: { path: '^src/products/([^/]+)/' },
       to: { path: '^src/products/([^/]+)/', pathNot: ['^src/products/$1/'] },

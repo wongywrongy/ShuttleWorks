@@ -14,12 +14,15 @@ escalate it before making any further code change.
 
 - **Program started:** 2026-06-30
 - **Baseline tag:** `pre-refactor-20260630` (commit `6d8d6e8`)
-- **Current phase:** DONE (all 4 phases complete, 2026-06-30/07-01)
+- **Current phase:** DONE — Phases 1–4 (bounded program) + Phase 5 (practice install), 2026-06-30/07-01
 - **Status:** COMPLETE. Full program summary: `docs/audits/04-refactor-program-summary.md`.
   depcruise 17→11, dead files 18→3 (kept), tests 1289→1333, all gates green.
-  Deferred (need design decisions, not mechanical work): F-ARCH-3 (matchStateStore
-  ownership), 2 operations→bracket-UI edges, ~92 export/type source-edits, engine
-  coverage, broad ruff. Resume feature work from here.
+  **Phase 5** installed the ongoing code-health discipline: `CODE_HEALTH.md` (standing
+  practice) + `docs/audits/debt-log.md` (the visible backlog it feeds). The remaining
+  deferred items are now tracked in the **debt-log**, not here — read it for the live
+  backlog (F-ARCH-3, 2 operations→bracket-UI edges, unused export/type + dep cleanup,
+  engine coverage, broad ruff, frontend complexity). Resume feature work from here,
+  under `CODE_HEALTH.md`.
 
 ## Phase log
 
@@ -76,6 +79,39 @@ escalate it before making any further code change.
   /commands canonical per ADR 0007). Left for follow-up: the stale "16" comment in
   .dependency-cruiser.cjs + the moduleContract.ts advancement comment (both source/
   config comments, out of docs-only scope).
+
+### Phase 5 — Ongoing code-health practice (install the discipline)
+- Status: **COMPLETE** (2026-07-01)
+- **Framing (important):** Phase 5 is NOT another bounded campaign. Per the standing
+  practice's own rule ("continuous small discipline, not periodic heroics"), it
+  *installs* the discipline + clears only already-verified-safe backlog, then hands
+  back to normal feature work. Deliberately did NOT force design-gated or open-ended
+  work (that's the anti-pattern the practice exists to prevent).
+- **Delivered (did now):**
+  - `CODE_HEALTH.md` (repo root, un-ignored like CLAUDE.md) — the standing practice,
+    verbatim + wired to the debt-log; linked from CLAUDE.md "Working practices".
+  - `docs/audits/debt-log.md` (NEW) — the visible backlog the practice feeds
+    (`CODE_HEALTH.md` #6). **This is the primary Phase-5 artifact** — it makes the
+    practice real. Seeded from a fresh measurement pass + the Phase 1–4 deferred items.
+  - **Measurement** (`radon` added to `requirements-dev.txt`, local-only, not a gate):
+    690 blocks, **avg A (3.94)**, 54 blocks rank >10; engine coverage **80%**. Identified
+    the 2 true locked functions (`backends.py:GreedyBackend.solve` E37 @19%,
+    `bridge.py:build` C19 @19%) vs. complex-but-*covered* (`validation.py:find_conflicts`
+    F68 @83% — worst score, but tested, so a decompose-when-touched, not locked).
+  - **Dead code (#9):** removed 5 truly-dead symbols (`cn`, `INPUT_CELL_STYLE` in
+    `lib/utils.ts`; `closuresForCourt` in `lib/courtClosures.ts`; `getSchoolAccent` in
+    `lib/schoolAccent.ts`; `computeMoveDelta` in `meet/schedule/ScheduleDiffView.tsx`) +
+    un-exported `DEFAULT_EVENT_COLOR` (used internally). Orphaned imports cleaned.
+    Each verified project-wide-unused (grep, knip counts tests).
+  - **Stale comment:** `.dependency-cruiser.cjs` no-cross-product "16 known" → 11 +
+    current buckets (SourceChip/EVENT_LABEL cleared in Phase 2/3; ops→bracket is the debt).
+- Gate green: tsc 0, eslint **0 err / 88 warn** (89→88), depcruise **0 err / 11 warn**,
+  vitest **743**, ruff-F clean, pytest **590** (no Python source changed).
+- **Logged for later (in `debt-log.md`, deliberately NOT done):** F-ARCH-3, the 2
+  ops→bracket UI edges (design calls); ~32 remaining unused exports + 59 unused types
+  (careful: `dto.ts` codegen, `moduleContract` `*_SEGMENTS`/`DtoName`); 12+2 unused
+  package deps (risky — needs design-system cross-check); `slotToTime`/`formatSlotTime`
+  dup; engine 19% coverage safety nets; broad ruff; frontend complexity unmeasured.
 
 ## Open questions / stops
 <Anything a prior session flagged as a STOP condition and hasn't been
