@@ -107,6 +107,9 @@ vi.mock('../opsBlock', () => ({
     const [source, id] = key.split(':');
     return { source, id };
   },
+  // RunLiveBoard lane-packs live spans; a single-lane no-op keeps this
+  // branching-focused test away from real packing geometry.
+  packBlockLanes: () => new Map(),
 }));
 
 // Mock inner components so the test focuses on branching, not internals.

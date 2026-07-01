@@ -254,7 +254,7 @@ function BracketView({
               styles (not flex) so the layout is deterministic and testable. */}
           <div
             data-testid="bracket-canvas"
-            className="relative gantt-grid"
+            className="relative"
             style={{
               width: `${layout.contentWidth}px`,
               height: `${layout.contentHeight}px`,

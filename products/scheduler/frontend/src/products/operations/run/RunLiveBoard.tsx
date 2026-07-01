@@ -26,6 +26,7 @@ import {
 } from '@scheduler/design-system/components';
 import { MatchChip } from '../../../components/MatchChip';
 import type { OpsBlock } from '../opsBlock';
+import { packBlockLanes } from '../opsBlock';
 import { buildLiveChips, type BoardChip } from '../runtime/boardPlacements';
 
 export interface RunLiveBoardProps {
@@ -63,7 +64,32 @@ export function RunLiveBoard({
     [courtCount],
   );
 
-  const placements = useMemo<Placement[]>(() => chips.map((c) => c.placement), [chips]);
+  // Lane-pack on the LIVE spans: a playing chip that grows toward `currentSlot`
+  // can cross a later chip on the same court (or meet+bracket can double-book
+  // a cell) — without packing the two render stacked in the same pixels and
+  // the lower one disappears. Same idiom as UnifiedOpsBoard, but on rendered
+  // (grown) spans rather than uniform planned ones.
+  const lanes = useMemo(
+    () =>
+      packBlockLanes(
+        chips.map((c) => ({
+          key: c.key,
+          court: c.placement.courtIndex + 1,
+          slot: c.placement.startSlot,
+          span: c.placement.span,
+        })),
+      ),
+    [chips],
+  );
+
+  const placements = useMemo<Placement[]>(
+    () =>
+      chips.map((c) => {
+        const ln = lanes.get(c.key);
+        return { ...c.placement, laneIndex: ln?.laneIndex ?? 0, laneCount: ln?.laneCount ?? 1 };
+      }),
+    [chips, lanes],
+  );
 
   const { minSlot, slotCount } = useMemo(() => {
     if (placements.length === 0) return { minSlot: 0, slotCount: 8 };
@@ -83,7 +109,7 @@ export function RunLiveBoard({
     // Width a span=1 cell needs to read the longest label at text-2xs plus the
     // chip's horizontal padding + inset + the M/B source square (~42px total).
     const neededPx = Math.max(72, longest * 8 + 42);
-    return Math.min(3, Math.max(1, neededPx / GANTT_GEOMETRY.standard.slot));
+    return Math.min(3, Math.max(1, neededPx / GANTT_GEOMETRY.roomy.slot));
   }, [chips]);
   const timeZoom = auto ? autoZoom : manualZoom;
   const zoomBy = (f: number) => {
@@ -111,8 +137,9 @@ export function RunLiveBoard({
           sideB={c.sideB}
           // Playing chips grow with the clock, so they have the width to show
           // teams — the floor reads who's on court at a glance (quiet span=1
-          // chips stay label-only; there's no room).
-          showSides={c.state === 'playing'}
+          // chips stay label-only; there's no room). Skip the second line when
+          // a vertical lane split leaves too little height for it.
+          showSides={c.state === 'playing' && box.height >= 48}
           onSelect={() => onSelect(c.key)}
           data-testid={`run-card-${c.key}`}
           title={`${c.source === 'meet' ? 'Meet' : 'Bracket'} · ${c.label} [${c.late ? 'late' : c.state}]`}
@@ -177,7 +204,8 @@ export function RunLiveBoard({
         courts={courts}
         minSlot={minSlot}
         slotCount={slotCount}
-        density="standard"
+        density="roomy"
+        laneOrientation="vertical"
         slotScale={timeZoom}
         placements={placements}
         renderBlock={renderBlock}

@@ -132,6 +132,10 @@ export interface BlockLane {
   laneCount: number;
 }
 
+/** The minimal shape `packBlockLanes` needs — `OpsBlock` satisfies it, and the
+ *  Run board can feed LIVE placements (grown playing spans) instead. */
+type LanePackable = Pick<OpsBlock, 'key' | 'court' | 'slot' | 'span'>;
+
 /**
  * Lane-pack court-assigned blocks so overlapping ones render side-by-side.
  *
@@ -142,8 +146,8 @@ export interface BlockLane {
  * free lane, and record the max concurrency as its lane count — mirroring the
  * meet GanttChart packing. Returns a map keyed by `OpsBlock.key`.
  */
-export function packBlockLanes(blocks: OpsBlock[]): Map<string, BlockLane> {
-  const byCourt = new Map<number, OpsBlock[]>();
+export function packBlockLanes(blocks: readonly LanePackable[]): Map<string, BlockLane> {
+  const byCourt = new Map<number, LanePackable[]>();
   for (const b of blocks) {
     if (b.court == null || b.slot == null) continue;
     const list = byCourt.get(b.court);

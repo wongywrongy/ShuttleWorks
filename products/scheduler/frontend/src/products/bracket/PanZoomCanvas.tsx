@@ -86,7 +86,9 @@ export function PanZoomCanvas({
     const cw = content.scrollWidth;
     const ch = content.scrollHeight;
     if (cw === 0 || ch === 0) return;
-    const s = clamp(Math.min(vp.clientWidth / (cw + 48), vp.clientHeight / (ch + 48)), MIN_SCALE, 1);
+    // Fill the pane: big draws shrink to fit; small draws scale UP (capped at
+    // 1.25 so cards stay proportionate) instead of floating tiny mid-canvas.
+    const s = clamp(Math.min(vp.clientWidth / (cw + 48), vp.clientHeight / (ch + 48)), MIN_SCALE, 1.25);
     // Center the content in BOTH axes. Vertical centering keeps the (centered)
     // Final mid-viewport instead of parked at the top — but never push the top
     // above a small margin, so a tall bracket stays reachable from its top edge.
@@ -121,7 +123,9 @@ export function PanZoomCanvas({
   };
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-card">
+    // The dotted-lane texture covers the WHOLE pane (not just the content
+    // box) so the draw reads as one full-bleed canvas, not a floating card.
+    <div className="gantt-grid relative h-full w-full overflow-hidden bg-card">
       <div
         ref={viewportRef}
         onPointerDown={onPointerDown}

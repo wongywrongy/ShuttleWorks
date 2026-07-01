@@ -40,6 +40,7 @@ export {
   GANTT_GEOMETRY,
   placementBox,
   type GanttDensity,
+  type GanttLaneOrientation,
   type GanttGeometryTier,
   type Placement,
   type GanttCell,
