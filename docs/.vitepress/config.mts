@@ -147,6 +147,7 @@ export default defineConfig({
           { text: 'Unified operations view', link: '/architecture/unified-operations-view' },
           { text: 'Operational scenarios', link: '/architecture/operational-scenarios' },
           { text: 'Bracket draw canvas', link: '/architecture/bracket-draw-canvas' },
+          { text: 'Draw formats', link: '/architecture/draw-formats' },
           { text: 'Quality attributes', link: '/architecture/quality-attributes' },
         ],
       },
