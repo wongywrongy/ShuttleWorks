@@ -10,9 +10,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from scheduler_core.domain.models import (
     Assignment,
     Match,
-    Player,
     PreviousAssignment,
-    ScheduleConfig,
     ScheduleRequest,
     ScheduleResult,
     SolverOptions,

@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # Bracket Court×Time Views — Decomposition
 
 **Status:** Decomposition record. Strategic shape agreed 2026-05-14 (brainstorming session). This is the *parent* of four sub-projects; each gets its own spec → plan → implementation cycle. Not itself an implementation spec.

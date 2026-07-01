@@ -2,6 +2,11 @@
 
 _Last updated: 2026-05-13_
 
+> **Note (2026-06):** This roadmap covers the historical backend-merge arc and is kept as a
+> record. The current arc is the **workspace-suite control-plane redesign** (Hub, workspace +
+> module model, redesigned Settings, module dock) — see
+> [`superpowers/specs/`](./superpowers/specs).
+
 > **Status: 7/8 steps shipped** as of PR 4. The arc landed across
 > four PRs on branch `dev2`:
 >

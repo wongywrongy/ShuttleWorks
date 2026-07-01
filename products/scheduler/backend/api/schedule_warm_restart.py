@@ -13,10 +13,11 @@ makespan/rest objective.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.error_codes import ErrorCode, http_error
 from pydantic import BaseModel
@@ -138,7 +139,13 @@ def _run_warm_restart(
 @router.post("/schedule/warm-restart", response_model=WarmRestartResponse)
 async def warm_restart_schedule(request: WarmRestartRequest) -> WarmRestartResponse:
     """Re-solve the whole problem with a stay-close bias."""
-    new_schedule, moved = _run_warm_restart(request)
+    # Offload the CPU-bound solve to a threadpool so the event loop stays
+    # responsive to concurrent requests during the solve. The sync helper
+    # keeps its signature; ``await`` re-raises any exception it raises.
+    loop = asyncio.get_running_loop()
+    new_schedule, moved = await loop.run_in_executor(
+        None, lambda: _run_warm_restart(request)
+    )
     return WarmRestartResponse(schedule=new_schedule, movedMatchIds=moved)
 
 

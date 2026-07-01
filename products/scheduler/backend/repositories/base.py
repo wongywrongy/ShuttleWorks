@@ -8,7 +8,7 @@ the migration tractable.
 from __future__ import annotations
 
 import uuid
-from typing import Iterable, List, Optional, Protocol
+from typing import Iterable, Optional, Protocol
 
 from database.models import (
     InviteLink,

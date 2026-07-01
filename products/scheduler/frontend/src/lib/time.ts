@@ -31,11 +31,11 @@ export function getCurrentTime(): string {
   });
 }
 
-export function isOvernightSchedule(config: TournamentConfig): boolean {
+function isOvernightSchedule(config: TournamentConfig): boolean {
   return timeToMinutes(config.dayEnd) <= timeToMinutes(config.dayStart);
 }
 
-export function getAdjustedEndMinutes(config: TournamentConfig): number {
+function getAdjustedEndMinutes(config: TournamentConfig): number {
   const start = timeToMinutes(config.dayStart);
   let end = timeToMinutes(config.dayEnd);
   if (end <= start) end += MIN_PER_DAY;
@@ -143,7 +143,7 @@ export function parseMatchStartMs(value: string | null | undefined): number | nu
   return null;
 }
 
-function msToSlot(ms: number, config: TournamentConfig): number {
+export function msToSlot(ms: number, config: TournamentConfig): number {
   const d = new Date(ms);
   const minutesOfDay = d.getHours() * 60 + d.getMinutes();
   const start = timeToMinutes(config.dayStart);

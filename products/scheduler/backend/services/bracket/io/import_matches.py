@@ -20,11 +20,10 @@ from __future__ import annotations
 
 import csv
 import io
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-from scheduler_core.domain.models import ScheduleConfig, SolverOptions
+from scheduler_core.domain.models import ScheduleConfig
 from scheduler_core.domain.tournament import (
     Event,
     Participant,

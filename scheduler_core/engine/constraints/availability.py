@@ -8,7 +8,6 @@ work lives there. This plugin just applies the result via
 from __future__ import annotations
 
 from scheduler_core.engine.constraints import (
-    Constraint,
     ConstraintContext,
     register_constraint,
 )

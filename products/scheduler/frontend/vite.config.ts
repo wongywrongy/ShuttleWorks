@@ -14,7 +14,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
@@ -27,8 +27,8 @@ export default defineConfig({
         manualChunks: {
           // Split vendor chunks
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-tooltip', '@headlessui/react', '@phosphor-icons/react'],
-          'utils': ['date-fns', 'axios', 'zustand', 'clsx', 'tailwind-merge'],
+          'ui-vendor': ['@radix-ui/react-select', '@headlessui/react', '@phosphor-icons/react'],
+          'utils': ['axios', 'zustand', 'clsx', 'tailwind-merge'],
         },
       },
     },

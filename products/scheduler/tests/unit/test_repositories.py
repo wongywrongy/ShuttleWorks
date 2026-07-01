@@ -8,6 +8,7 @@ restore-from-backup) under explicit tournament-id scoping.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine
@@ -19,7 +20,6 @@ from database.models import (
     Base,
     InviteLink,
     MatchState,
-    Tournament,
     TournamentBackup,
     TournamentMember,
 )
@@ -94,10 +94,17 @@ def test_get_by_id_returns_row_or_none(repo):
     assert repo.tournaments.get_by_id(uuid.uuid4()) is None
 
 
-def test_list_all_returns_newest_first(repo):
+def test_list_all_returns_newest_first(repo, session):
     a = repo.tournaments.create(name="A")
     b = repo.tournaments.create(name="B")
     c = repo.tournaments.create(name="C")
+    # Stamp strictly increasing created_at so we assert against the repo's
+    # ORDER BY, not the host clock's resolution: rapid inserts otherwise tie
+    # created_at on coarse clocks (e.g. Windows) and ordered non-deterministically.
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for offset, row in enumerate((a, b, c)):
+        row.created_at = base + timedelta(seconds=offset)
+    session.commit()
     listed = [t.id for t in repo.tournaments.list_all()]
     # Newest first.
     assert listed == [c.id, b.id, a.id]
@@ -252,10 +259,14 @@ def test_backup_get_by_filename(repo):
     assert repo.backups.get_by_filename(tid, "missing.json") is None
 
 
-def test_backup_rotate_keeps_newest_n(repo):
+def test_backup_rotate_keeps_newest_n(repo, session):
     tid = _seed_tournament(repo, name="A")
-    for i in range(5):
-        repo.backups.create(tid, {"i": i}, f"snap-{i}.json")
+    created = [repo.backups.create(tid, {"i": i}, f"snap-{i}.json") for i in range(5)]
+    # Stamp strictly increasing created_at (see test_list_all_returns_newest_first).
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for offset, row in enumerate(created):
+        row.created_at = base + timedelta(seconds=offset)
+    session.commit()
     deleted = repo.backups.rotate(tid, keep=3)
     assert deleted == 2
     remaining = repo.backups.list_for_tournament(tid)
@@ -456,3 +467,84 @@ def test_invite_link_repo_cascade_on_tournament_delete(repo):
     repo.invite_links.create(tid, role="viewer", created_by=uuid.uuid4())
     repo.tournaments.delete(tid)
     assert repo.session.query(InviteLink).count() == 0
+
+
+# ---- Grouped *_by_tournament count helpers (Task 5) -------------------
+
+
+def test_count_by_tournament_helpers(repo, session):
+    from datetime import timedelta, timezone
+    from datetime import datetime as _dt
+
+    from database.models import BracketEvent
+
+    now = _dt.now(timezone.utc)
+    t1 = repo.tournaments.create(
+        name="A", kind="meet", tournament_date=None,
+        owner_id=uuid.uuid4(), owner_email="a@x.io",
+    )
+    t2 = repo.tournaments.create(
+        name="B", kind="bracket", tournament_date=None,
+        owner_id=uuid.uuid4(), owner_email="b@x.io",
+    )
+    # Members: 2 on t1, 0 on t2.
+    session.add(TournamentMember(tournament_id=t1.id, user_id=uuid.uuid4(), role="owner"))
+    session.add(TournamentMember(tournament_id=t1.id, user_id=uuid.uuid4(), role="viewer"))
+    # Invites on t1: 1 active, 1 revoked, 1 expired → active count 1.
+    session.add(InviteLink(tournament_id=t1.id, role="operator", created_by=uuid.uuid4()))
+    session.add(InviteLink(
+        tournament_id=t1.id, role="viewer", created_by=uuid.uuid4(),
+        revoked_at=now,
+    ))
+    session.add(InviteLink(
+        tournament_id=t1.id, role="viewer", created_by=uuid.uuid4(),
+        expires_at=now - timedelta(days=1),
+    ))
+    # Bracket data on t2 — use real column set (discipline/format/duration_slots).
+    session.add(BracketEvent(
+        tournament_id=t2.id, id="E1",
+        discipline="Men's Singles", format="se", duration_slots=2,
+        status="draft",
+    ))
+    session.commit()
+
+    ids = [t1.id, t2.id]
+    assert repo.members.count_by_tournament(ids) == {t1.id: 2}
+    assert repo.invite_links.count_active_by_tournament(ids) == {t1.id: 1}
+    assert repo.brackets.count_events_by_tournament(ids) == {t2.id: 1}
+    assert repo.members.count_by_tournament([]) == {}
+
+
+def test_count_matches_results_and_match_states_by_tournament(repo):
+    """Cover the three grouped helpers not exercised by test_count_by_tournament_helpers."""
+    t1 = repo.tournaments.create(name="C1")
+    t2 = repo.tournaments.create(name="C2")
+
+    # Bracket event on t2.
+    repo.brackets.create_event(
+        t2.id, "E1",
+        discipline="Men's Singles", format="se", duration_slots=2,
+    )
+    # One BracketMatch on t2/E1.
+    repo.brackets.bulk_create_matches(
+        t2.id, "E1",
+        [
+            {
+                "id": "M1",
+                "round_index": 0,
+                "match_index": 0,
+                "slot_a": {"participant_id": "P1"},
+                "slot_b": {"participant_id": "P2"},
+                "expected_duration_slots": 2,
+            }
+        ],
+    )
+    # One BracketResult on t2/E1/M1.
+    repo.brackets.record_result(t2.id, "E1", "M1", winner_side="A")
+    # One MatchState on t1.
+    repo.match_states.upsert(t1.id, "m1", {"status": "called"})
+
+    ids = [t1.id, t2.id]
+    assert repo.brackets.count_matches_by_tournament(ids) == {t2.id: 1}
+    assert repo.brackets.count_results_by_tournament(ids) == {t2.id: 1}
+    assert repo.match_states.count_by_tournament(ids) == {t1.id: 1}

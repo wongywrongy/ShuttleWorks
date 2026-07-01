@@ -16,7 +16,6 @@ Also asserts:
 from __future__ import annotations
 
 import random
-from dataclasses import asdict
 
 from scheduler_core.domain.models import (
     Match,

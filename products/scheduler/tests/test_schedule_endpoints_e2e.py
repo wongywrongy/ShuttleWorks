@@ -76,11 +76,37 @@ def _minimal_problem():
 
 
 def test_routes_registered(client):
-    """The three schedule endpoints all exist."""
-    routes = {r.path for r in client.app.routes if hasattr(r, "path")}
-    assert "/schedule" in routes
-    assert "/schedule/repair" in routes
-    assert "/schedule/warm-restart" in routes
+    """The three schedule endpoints all exist.
+
+    Inspect the OpenAPI schema rather than walking ``app.routes``: newer
+    FastAPI keeps each ``include_router`` as a nested ``_IncludedRouter``
+    object (``path=None``) instead of flattening the child ``APIRoute``s
+    onto the app, so ``app.routes`` no longer surfaces these paths. The
+    OpenAPI ``paths`` map is the version-independent source of truth.
+    """
+    paths = client.app.openapi()["paths"]
+    assert "/schedule" in paths
+    assert "/schedule/repair" in paths
+    assert "/schedule/warm-restart" in paths
+
+
+def test_schedule_honours_cross_engine_closed_windows(client):
+    """Hybrid coordination: the meet solve must avoid courts the bracket
+    already occupies, passed as ``closedCourtWindows`` [court, from, to].
+    Block slot 0 on every court and assert no match lands there."""
+    config, players, matches = _minimal_problem()
+    block = [[c, 0, 1] for c in range(1, config["courtCount"] + 1)]
+    r = client.post("/schedule", json={
+        "config": config,
+        "players": players,
+        "matches": matches,
+        "closedCourtWindows": block,
+    })
+    assert r.status_code == 200, r.text
+    schedule = r.json()
+    assert schedule["status"] in ("optimal", "feasible")
+    on_slot_zero = [a for a in schedule["assignments"] if a["slotId"] == 0]
+    assert on_slot_zero == [], f"matches placed on a closed slot: {on_slot_zero}"
 
 
 def test_generate_then_repair_then_warm_restart(client):

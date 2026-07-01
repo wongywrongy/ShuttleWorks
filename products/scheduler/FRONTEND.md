@@ -1,8 +1,15 @@
 # Frontend architecture
 
-Single-page React 19 + Vite app. One shell, one tab bar, lazy-loaded
-tab panels. State is split between two Zustand stores; the larger one
-is persisted via debounced PUTs to a server-side snapshot.
+> Reflects the 2026-06 workspace-suite control-plane redesign. Full per-slice
+> design record: [`../../docs/superpowers/specs/`](../../docs/superpowers/specs).
+
+React 19 + Vite app organised as a **workspace control plane**. The router
+(`app/App.tsx`) splits the public display and login from the authenticated
+operator app; inside a workspace, `AppShell` renders the workspace chrome
+(`WorkspaceShell` + the `ModuleDock`) around the active **module** — Meet /
+Bracket / Display / Settings — chosen by route and the workspace's module
+status. State is split across four Zustand stores; the tournament store is
+persisted via debounced PUTs to a server-side snapshot.
 
 ## Top-level shape
 
@@ -10,34 +17,44 @@ is persisted via debounced PUTs to a server-side snapshot.
 frontend/src/
 ├── main.tsx                  # entry: mount <App />
 ├── index.css                 # Tailwind base + theme tokens (:root + .dark)
-├── App.css                   # legacy file, mostly empty
 ├── app/
-│   ├── App.tsx               # router shell (/display vs admin shell)
-│   ├── AppShell.tsx          # mounts hydration + theme hooks, renders TabBar + active tab
-│   └── TabBar.tsx            # tab nav + ThemeToggle + AppStatusPopover
-├── pages/                    # one component per top-level surface (Setup, Schedule, MCC, TV)
-├── features/                 # feature-scoped UI (see frontend/src/features/README.md)
-├── components/               # primitives + cross-feature widgets (Toast, SolverHud, …)
-├── hooks/                    # data hooks + UI hooks (see frontend/src/hooks/README.md)
+│   ├── App.tsx               # router: /login, /display (public), and the workspace shell
+│   ├── AppShell.tsx          # workspace chrome: WorkspaceShell + ModuleDock; renders the active module
+│   ├── AuthGuard.tsx         # gates the operator app behind auth
+│   ├── TabBar.tsx            # in-module tab nav (e.g. the Meet tabs)
+│   └── workspace/            # ModuleOutlet + ModuleUnavailablePanel (the active-module slot)
+├── products/                 # one folder per module / surface
+│   ├── hub/                  # the workspace Hub (dashboard at `/`) + New Workspace + inspector
+│   ├── meet/                 # Meet module (Setup / Roster / Matches / Schedule / Live)
+│   ├── bracket/              # Bracket module (draws / schedule / live / results)
+│   ├── display/              # public TV display (meet + bracket)
+│   └── settings/             # per-workspace Settings (Overview / Modules / People / Sharing / Sync)
+├── platform/                 # cross-module
+│   ├── product-shell/        # WorkspaceShell, ModuleDock, WorkspaceIdentityBar, types
+│   ├── domain/               # module model (moduleModel, useWorkspaceModules)
+│   ├── auth/                 # LoginPage, InvitePage
+│   └── settings/             # shared settings primitives
+├── components/               # shared UI incl. control-plane/ (MetricStat / HealthDot / OverflowMenu / SectionCard / …)
+├── hooks/                    # data + UI hooks (see frontend/src/hooks/README.md)
 ├── store/                    # Zustand stores (see frontend/src/store/README.md)
 ├── api/                      # axios client + DTO types (see frontend/src/api/README.md)
-├── utils/                    # pure helpers (traffic-light, exporters, importers, …)
 ├── lib/                      # cross-feature primitives — cn(), INTERACTIVE_BASE, slot math (time.ts), school accents
-├── styles/                   # token overrides (rare)
-├── types/                    # ambient TS types
-└── services/                 # service-layer wrappers (small)
+├── utils/ · types/ · services/ · context/ · assets/
+└── pages/                    # thin route components (TournamentPage)
 ```
 
 ## State model
 
-Two stores, one storage key each:
+Four stores, split by lifetime + persistence:
 
-| Store | File | Storage key | What it holds |
+| Store | File | Persistence | What it holds |
 |---|---|---|---|
-| Tournament | `store/appStore.ts` | (server-side `/tournament-state`) | tournament config, roster, matches, schedule, match states, solver HUD, toasts, lock state |
-| Preferences | `store/preferencesStore.ts` | `scheduler-app-preferences` (localStorage) | per-device theme + density |
+| Tournament | `store/tournamentStore.ts` | server snapshot via `useTournamentState` (debounced ~1s PUTs to `/tournament-state`) | config, roster, matches, schedule, lock state |
+| Match state | `store/matchStateStore.ts` | `/match-state` PUT on every mutation (no debounce) | live-ops match transitions (called / started / finished) |
+| UI | `store/uiStore.ts` | none — ephemeral | solver HUD, toast queue, drag pins, validation snapshots |
+| Preferences | `store/preferencesStore.ts` | `localStorage` | per-device theme + density |
 
-Selectors that span the store live in `store/selectors.ts`.
+Selectors that span stores live in `store/selectors.ts`.
 
 The split is deliberate: tournament state moves between machines via
 import/export; theme and density must not. See `store/README.md` for
@@ -73,7 +90,7 @@ keeps optimistic updates and rollback in one place.
   density.
 - `<ThemeToggle />` is the three-state pill (Sun / Monitor / Moon)
   rendered in the header and inside the Setup page.
-- `pages/PublicDisplayPage.tsx` (the TV view) is **intentionally
+- `products/display/PublicDisplayPage.tsx` (the TV view) is **intentionally
   dark-only**, audience is gym projection. Don't add a toggle there.
 
 When adding a new surface: prefer semantic tokens. For status colour
@@ -81,26 +98,32 @@ When adding a new surface: prefer semantic tokens. For status colour
 `dark:bg-*-500/15 dark:text-*-300` companions so it stays legible in
 dark mode.
 
-## Adding a new tab
+## Adding a module or a tab
 
-1. Add the tab key to `AppTab` in `store/appStore.ts`.
-2. Add a `lazy(() => import(...))` line in `app/AppShell.tsx` and
-   route it inside the `switch (activeTab)` block.
-3. Add a tab button in `app/TabBar.tsx`.
-4. Build the panel under `features/<your-feature>/` (or `pages/` if
-   it's a pure page-level view).
+Modules (Meet / Bracket / Display) are routed; the dock + chrome key off the
+workspace's module status via `platform/domain/moduleModel` (`moduleForTab`,
+`defaultTabForModule`, `primaryModuleForOpen`). The active module renders in
+`app/workspace/ModuleOutlet`.
 
-## Adding a new feature folder
+- **A tab within a module** (e.g. a new Meet tab): add it to the module's
+  tab list in `moduleModel`, add a route segment, and build the panel under
+  `products/<module>/`.
+- **A new module** is a larger change — add its `ModuleId` + status mapping in
+  `platform/product-shell/types` + `moduleModel`, a folder under `products/`,
+  and wire it into the dock/outlet. See the SP-B/SP-D specs in
+  `docs/superpowers/specs/` for the module-driven-chrome contract.
 
-Each `features/<x>/` folder typically contains:
+## Adding a product/module folder
 
-- `<X>Tab.tsx` — top-level panel rendered by `AppShell`.
-- `components/` — feature-private components.
-- `hooks/` (sometimes) — feature-private hooks. Cross-feature hooks
-  live in `frontend/src/hooks/`.
+Each `products/<module>/` folder typically contains:
 
-If a hook or component is reused by ≥2 features, hoist it to
-`frontend/src/hooks/` or `frontend/src/components/`.
+- the top-level panel(s) rendered by the outlet,
+- `components/` — module-private components,
+- pure logic in `*.ts` (tested) + co-located `__tests__/`.
+
+If a hook or component is reused by ≥2 modules, hoist it to
+`frontend/src/hooks/` or `frontend/src/components/` (control-plane primitives
+shared across the suite live in `components/control-plane/`).
 
 ## Click feedback contract
 
@@ -111,6 +134,9 @@ focus-ring behaviour.
 
 ## Testing
 
-End-to-end specs live in `e2e/` and run against the docker-compose
-build. There is no frontend unit-test suite — UI work is verified
-through `make test-e2e` and visual smoke (Playwright MCP).
+- **Unit / component** — Vitest + jsdom + React Testing Library, co-located in
+  `__tests__/` folders next to the code (`npm run test:run`; `npx tsc -b` for
+  types; `npm run build` for the build gate). Pure logic (`*.ts`) is TDD'd;
+  components get render/interaction tests.
+- **End-to-end** — Playwright specs in `e2e/`, run against the docker-compose
+  build (`make test-e2e`), plus visual smoke via the browser harness.

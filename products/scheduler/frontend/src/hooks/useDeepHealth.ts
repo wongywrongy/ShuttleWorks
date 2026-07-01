@@ -9,7 +9,7 @@
  */
 import { useCallback, useState } from 'react';
 
-export interface DeepHealth {
+interface DeepHealth {
   status: 'healthy' | 'degraded';
   version: string;
   schemaVersion: number;

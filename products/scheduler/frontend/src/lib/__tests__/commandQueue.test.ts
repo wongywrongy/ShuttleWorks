@@ -15,7 +15,6 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  _clearAllForTests,
   _resetDbHandleForTests,
   enqueue,
   flush,

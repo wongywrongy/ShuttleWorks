@@ -112,6 +112,29 @@ def test_create_bracket_persists_event_rows(client, tid):
     assert final["slot_a"]["feeder_play_unit_id"] is not None
 
 
+def test_event_status_round_trips_through_dto(client, tid):
+    """Regression: the serialized event must carry its lifecycle status.
+
+    EventOut previously omitted ``status`` entirely, so the Draws page —
+    which defaults a missing status to 'draft' — showed every generated
+    draw as DRAFT with a Generate (not Open) affordance. The DTO must
+    report draft -> generated as the event is generated.
+    """
+    client.post(_bracket_url(tid), json=_se_4_body())
+    # Freshly created: draft.
+    before = client.get(_bracket_url(tid)).json()
+    assert before["events"][0]["status"] == "draft"
+
+    # Generate the event.
+    g = client.post(_bracket_url(tid, "events", "MS", "generate"), json={"wipe": False})
+    assert g.status_code == 200, g.text
+    assert g.json()["events"][0]["status"] == "generated"
+
+    # And it survives a fresh GET (hydration path), not just the response.
+    after = client.get(_bracket_url(tid)).json()
+    assert after["events"][0]["status"] == "generated"
+
+
 def test_create_bracket_rejects_empty_events(client, tid):
     payload = _se_4_body()
     payload["events"] = []
@@ -384,6 +407,7 @@ def test_record_result_replay_rejects_changed_metadata(client, tid):
             "winner_side": "A",
             "walkover": False,
             "finished_at_slot": 4,
+            "score": None,
         }
     ]
 

@@ -42,7 +42,7 @@ function saveDismissed(set: Set<string>) {
  * Hook form: returns ``[shouldShow, dismiss, reset]``. Use when the
  * caller wants control over render placement (e.g., a dialog header).
  */
-export function useHint(id: string): [boolean, () => void, () => void] {
+function useHint(id: string): [boolean, () => void, () => void] {
   const [dismissed, setDismissed] = useState<boolean>(() => loadDismissed().has(id));
   // Re-check on mount in case localStorage was updated by a sibling
   // surface that mounted before this one.

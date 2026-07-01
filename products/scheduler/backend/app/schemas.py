@@ -453,6 +453,28 @@ class MatchScore(BaseModel):
 # WarmRestartRequest typed against the stub.
 
 
+# ---- Workspace modules (workspace-modules program, sub-project #1) -----
+
+
+class WorkspaceModuleDTO(BaseModel):
+    """Wire shape for one persisted per-workspace module row.
+
+    ``moduleId`` is one of ``meet`` / ``bracket`` / ``display``;
+    ``status`` is one of ``enabled`` / ``available`` / ``disabled``. (The legacy
+    ``coming_soon`` is retired — all modules are built; migrations convert any
+    existing such rows to ``available`` and seeding it is rejected.) ``config`` is
+    the module's catch-all settings blob (``None`` until set).
+    """
+    moduleId: str
+    status: str
+    config: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_row(cls, row) -> "WorkspaceModuleDTO":
+        """Build the DTO from a ``WorkspaceModule`` ORM row (duck-typed)."""
+        return cls(moduleId=row.module_id, status=row.status, config=row.config)
+
+
 # Health
 class HealthResponse(BaseModel):
     status: str
@@ -500,6 +522,9 @@ class TournamentStateDTO(BaseModel):
     scheduleHistory: List[ScheduleHistoryEntry] = Field(default_factory=list)
     bracketPlayers: List[BracketPlayerDTO] = Field(default_factory=list)
     bracketRosterMigrated: Optional[bool] = None
+    # SP-G1 Plan→Run handoff: operator marks plan as ready before running.
+    # Stored in the tournament.data JSON blob; no Alembic migration needed.
+    planFinalized: bool = False
 
 
 class SolverOptionsDTO(BaseModel):
@@ -562,3 +587,53 @@ class CommandResponse(BaseModel):
     time_slot: Optional[int] = None
     applied_at: str   # ISO-8601 UTC
     replay: bool      # True on idempotent replay, False on fresh apply
+
+
+class BracketCommandRequest(BaseModel):
+    """Body of ``POST /tournaments/{tournament_id}/bracket/commands``.
+
+    ``id`` is the client-generated UUID used as the idempotency key.
+    Resubmitting the same id always returns 200 with the current bracket
+    snapshot — advancement is NOT re-run (SP-G1 Seam C).
+
+    ``kind`` is the operation type; currently only ``"record_result"`` is
+    supported. ``seen_version`` is an optional optimistic-concurrency token
+    mirroring ``RecordResultIn.seen_version`` (SP-F3): the server rejects
+    with 409 ``stale_version`` when present and stale.  The replay check
+    always runs BEFORE the version guard so a re-delivered command whose
+    version has advanced is still accepted.
+    """
+
+    id: uuid.UUID
+    kind: Literal["record_result"]
+    play_unit_id: str
+    winner_side: Literal["A", "B"]
+    seen_version: Optional[int] = None
+    finished_at_slot: Optional[int] = None
+    walkover: bool = False
+    score: Optional[Dict[str, Any]] = None
+
+
+class MatchStateOut(BaseModel):
+    """Operational state of a match from the ``matches`` table.
+
+    Used by the Run surface to render the court grid and the match queue.
+    Mirrors the ``matches`` row columns with camelCase names so the
+    frontend can consume the shape directly.
+
+    ``actualCourtId`` and ``actualSlotId`` are the *live* court/slot as
+    mutated by ``assign_court`` / ``postpone_match`` commands — they may
+    differ from the solver-committed assignment when an operator has
+    manually moved a match since the last solve.
+
+    NOTE (Task 5): This DTO is defined here but not yet wired to a GET
+    endpoint.  The serialisation site will be added in a follow-up task
+    (Run-surface match-state stream).  Defined now so Task-6 frontend
+    work can reference a stable shape.
+    """
+
+    matchId: str
+    status: str
+    version: int
+    actualCourtId: Optional[int] = None    # matches.court_id
+    actualSlotId: Optional[int] = None     # matches.time_slot — NEW (Task 5)

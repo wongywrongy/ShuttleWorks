@@ -18,6 +18,7 @@ import type {
   ValidationResponseDTO,
   TournamentStateDTO,
   TournamentSummaryDTO,
+  WorkspaceModuleDTO,
   TournamentCreateDTO,
   TournamentUpdateDTO,
   TournamentMemberDTO,
@@ -46,6 +47,8 @@ import type {
   BracketValidationOut,
   BracketEventUpsertIn,
   BracketEventGenerateIn,
+  BracketScore,
+  BracketCommitRoundIn,
 } from './bracketDto';
 
 // Use /api proxy in dev, or explicit URL in production
@@ -83,6 +86,9 @@ interface GenerateScheduleRequest {
   players: PlayerDTO[];
   matches: MatchDTO[];
   previousAssignments?: any[];
+  /** Hybrid coordination: extra [court, fromSlot, toSlot] windows the meet
+   *  solve must avoid — the bracket's occupied courts. */
+  closedCourtWindows?: number[][];
 }
 
 export type DisruptionType = 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
@@ -124,7 +130,7 @@ export interface ManualEditProposalRequest {
 }
 
 // Director-action proposal — runtime time-axis + court-state adjustments.
-export type DirectorActionKind =
+type DirectorActionKind =
   | 'delay_start'
   | 'insert_blackout'
   | 'remove_blackout'
@@ -349,6 +355,31 @@ class ApiClient {
   /** Delete a tournament. CASCADE wipes match-states + backups. */
   async deleteTournament(tid: string): Promise<void> {
     await this.client.delete(`/tournaments/${tid}`);
+  }
+
+  // ---- Workspace modules (control-plane sub-project #1) ----------------
+
+  /** The persisted module catalog for a workspace. */
+  async getWorkspaceModules(tid: string): Promise<WorkspaceModuleDTO[]> {
+    const response = await this.client.get<WorkspaceModuleDTO[]>(
+      `/tournaments/${tid}/modules`,
+    );
+    return response.data;
+  }
+
+  /** Enable / disable / configure a workspace module. 409 (toasted by the
+   *  interceptor) on dependency / last-operational / has-data / coming_soon
+   *  rule violations. */
+  async patchWorkspaceModule(
+    tid: string,
+    moduleId: string,
+    body: { status?: string; config?: Record<string, unknown> | null },
+  ): Promise<WorkspaceModuleDTO> {
+    const response = await this.client.patch<WorkspaceModuleDTO>(
+      `/tournaments/${tid}/modules/${moduleId}`,
+      body,
+    );
+    return response.data;
   }
 
   // ---- Invite links (Step 7) -------------------------------------------
@@ -1006,6 +1037,89 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Stream the next bracket round's solve over SSE, mirroring the meet's
+   * ``generateScheduleWithProgress``. Feeds ``model_built`` / ``phase`` /
+   * ``progress`` to the callbacks and resolves with the terminal
+   * ``complete`` payload (a ``BracketScheduleNextOut`` carrying the
+   * candidate pool). Unlike the batch route, this does NOT persist — the
+   * caller commits a chosen candidate via ``commitBracketRound``.
+   */
+  async scheduleNextBracketRoundWithProgress(
+    tid: string,
+    callbacks: {
+      onProgress?: (event: SolverProgressEvent) => void;
+      onModelBuilt?: (event: SolverModelBuiltEvent) => void;
+      onPhase?: (event: SolverPhaseEvent) => void;
+    },
+    abortSignal?: AbortSignal,
+    candidatePoolSize?: number,
+  ): Promise<BracketScheduleNextOut> {
+    const query =
+      candidatePoolSize != null ? `?candidate_pool_size=${candidatePoolSize}` : '';
+    const url = `${API_BASE_URL}/tournaments/${tid}/bracket/schedule-next/stream${query}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: abortSignal,
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('Response body is not readable');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const messages = buffer.split('\n\n');
+      buffer = messages.pop() || '';
+
+      for (const message of messages) {
+        if (!message.trim()) continue;
+        const dataMatch = message.match(/^data: (.+)$/m);
+        if (!dataMatch) continue;
+
+        const event = JSON.parse(dataMatch[1]);
+        switch (event.type) {
+          case 'model_built':
+            callbacks.onModelBuilt?.(event as SolverModelBuiltEvent);
+            break;
+          case 'phase':
+            callbacks.onPhase?.({ phase: event.phase });
+            break;
+          case 'progress':
+            callbacks.onProgress?.(event as SolverProgressEvent);
+            break;
+          case 'complete':
+            return event.result as BracketScheduleNextOut;
+          case 'error':
+            throw new Error(event.message);
+          case 'done':
+            break;
+        }
+      }
+    }
+    throw new Error('Bracket schedule stream ended without a result');
+  }
+
+  async commitBracketRound(
+    tid: string,
+    body: BracketCommitRoundIn,
+  ): Promise<BracketTournamentDTO> {
+    const response = await this.client.post(
+      `/tournaments/${tid}/bracket/schedule-next/commit`,
+      body,
+    );
+    return response.data;
+  }
+
   async recordBracketResult(
     tid: string,
     body: {
@@ -1013,6 +1127,7 @@ class ApiClient {
       winner_side: 'A' | 'B';
       finished_at_slot?: number | null;
       walkover?: boolean;
+      score?: BracketScore | null;
     },
   ): Promise<BracketTournamentDTO> {
     const response = await this.client.post(
@@ -1122,6 +1237,76 @@ class ApiClient {
     );
   }
 
+  /**
+   * SP-G1 Task 9b: directly place a bracket play unit on a court+slot without
+   * re-running the solver.  Creates an assignment for unscheduled units (no
+   * 409) and overwrites an existing assignment.  The bracket analog of the
+   * meet's assignCourt command.
+   */
+  async assignBracketCourt(
+    tid: string,
+    body: { play_unit_id: string; court_id: number; slot_id: number },
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post<BracketTournamentDTO>(
+      `/tournaments/${tid}/bracket/assign`,
+      body,
+    );
+    return data;
+  }
+
+  /**
+   * SP-G1 Task 9b: return a bracket play unit to the queue by removing its
+   * court assignment — no solver, no result change.  No-op when the unit
+   * has no assignment.
+   */
+  async unassignBracketCourt(
+    tid: string,
+    body: { play_unit_id: string },
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post<BracketTournamentDTO>(
+      `/tournaments/${tid}/bracket/unassign`,
+      body,
+    );
+    return data;
+  }
+
+  /**
+   * SP-G1 Seam C: record a bracket result through the command interface.
+   * POST /tournaments/{tid}/bracket/commands with kind:'record_result'.
+   * Carries an optimistic-concurrency `seen_version` so the backend can
+   * detect replays / stale writes.
+   */
+  async recordBracketResultCommand(
+    tid: string,
+    body: {
+      id: string;
+      play_unit_id: string;
+      winner_side: 'A' | 'B';
+      seen_version?: number;
+      finished_at_slot?: number;
+      score?: unknown;
+      walkover?: boolean;
+    },
+  ): Promise<unknown> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/bracket/commands`,
+      { kind: 'record_result', ...body },
+    );
+    return data;
+  }
+
+  /**
+   * SP-G1 plan-finalize seam: toggle the director's plan-finalized gate.
+   * POST /tournaments/{tid}/plan-finalized.
+   */
+  async setPlanFinalized(tid: string, finalized: boolean): Promise<unknown> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/plan-finalized`,
+      { finalized },
+    );
+    return data;
+  }
+
   bracketExportJsonUrl(tid: string): string {
     return `${API_BASE_URL}/tournaments/${tid}/bracket/export.json`;
   }
@@ -1136,4 +1321,3 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
-export default apiClient;

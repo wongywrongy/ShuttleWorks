@@ -16,7 +16,7 @@
  */
 import type { ReactNode } from 'react';
 
-export type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber';
+type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber';
 
 const TONE_BG: Record<PillTone, string> = {
   green:  'bg-status-live-bg text-status-live border border-status-live/40',

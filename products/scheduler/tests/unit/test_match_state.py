@@ -20,7 +20,7 @@ from sqlalchemy.pool import StaticPool
 import sys
 
 # conftest.py adds backend/ to sys.path before this module is collected.
-from database.models import Base, Match, MatchStatus
+from database.models import Base, MatchStatus
 from repositories.local import LocalRepository
 from services.match_state import (
     LOCKED_STATUSES,
@@ -94,7 +94,7 @@ def test_valid_transitions_match_prompt_specification():
     assert VALID_TRANSITIONS == {
         MatchStatus.SCHEDULED: [MatchStatus.CALLED],
         MatchStatus.CALLED: [MatchStatus.PLAYING, MatchStatus.SCHEDULED],
-        MatchStatus.PLAYING: [MatchStatus.FINISHED, MatchStatus.RETIRED],
+        MatchStatus.PLAYING: [MatchStatus.FINISHED, MatchStatus.RETIRED, MatchStatus.SCHEDULED],
         MatchStatus.FINISHED: [],
         MatchStatus.RETIRED: [],
     }
@@ -125,7 +125,6 @@ def test_every_valid_transition_succeeds(current, next_status):
         # Going backwards from played-out state.
         (MatchStatus.CALLED, MatchStatus.FINISHED),
         (MatchStatus.PLAYING, MatchStatus.CALLED),
-        (MatchStatus.PLAYING, MatchStatus.SCHEDULED),
         # Re-opening a terminal state.
         (MatchStatus.FINISHED, MatchStatus.SCHEDULED),
         (MatchStatus.FINISHED, MatchStatus.CALLED),

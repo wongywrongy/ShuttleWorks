@@ -74,6 +74,10 @@ interface TournamentState {
   setScheduleVersion: (version: number) => void;
   setScheduleHistory: (history: ScheduleHistoryEntry[]) => void;
 
+  // SP-G1: operations plan finalization flag
+  planFinalized: boolean | undefined;
+  setPlanFinalized: (finalized: boolean) => void;
+
   // Data management
   reset: () => void;
   exportData: () => string;
@@ -106,6 +110,7 @@ const INITIAL = {
   isScheduleLocked: false,
   scheduleVersion: 0,
   scheduleHistory: [] as ScheduleHistoryEntry[],
+  planFinalized: undefined as boolean | undefined,
 };
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -243,6 +248,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
 
   setScheduleVersion: (scheduleVersion) => set({ scheduleVersion }),
   setScheduleHistory: (scheduleHistory) => set({ scheduleHistory }),
+  setPlanFinalized: (planFinalized) => set({ planFinalized }),
 
   // Reset is scoped to this store. Wiping match-state + UI on a full
   // "Clear all data" is the job of `useClearAllData` in hooks/, which

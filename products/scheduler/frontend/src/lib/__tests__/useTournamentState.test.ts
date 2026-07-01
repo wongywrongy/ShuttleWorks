@@ -141,3 +141,54 @@ describe('forceSaveNow — in-flight race safety', () => {
     expect(putSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---- Snapshot round-trip: planFinalized (Task 17) -----------------------
+
+describe('snapshot — planFinalized persistence', () => {
+  it('includes planFinalized=true in the PUT payload so a config save preserves it', async () => {
+    // This test proves the core persistence fix: before Task 17, snapshot()
+    // omitted planFinalized, so any state PUT reset it to false via
+    // Pydantic's default. Now planFinalized must appear in every PUT body.
+    const put1 = makePut();
+    const putSpy = vi
+      .spyOn(clientModule.apiClient, 'putTournamentState')
+      .mockReturnValueOnce(
+        put1.promise as unknown as ReturnType<
+          typeof clientModule.apiClient.putTournamentState
+        >,
+      );
+
+    useTournamentStore.setState({ planFinalized: true });
+    const p = forceSaveNow();
+
+    expect(putSpy).toHaveBeenCalledWith(
+      'test-tournament-1',
+      expect.objectContaining({ planFinalized: true }),
+    );
+
+    put1.resolve();
+    await p;
+  });
+
+  it('includes planFinalized=false in the PUT payload when not yet finalized', async () => {
+    const put1 = makePut();
+    const putSpy = vi
+      .spyOn(clientModule.apiClient, 'putTournamentState')
+      .mockReturnValueOnce(
+        put1.promise as unknown as ReturnType<
+          typeof clientModule.apiClient.putTournamentState
+        >,
+      );
+
+    useTournamentStore.setState({ planFinalized: false });
+    const p = forceSaveNow();
+
+    expect(putSpy).toHaveBeenCalledWith(
+      'test-tournament-1',
+      expect.objectContaining({ planFinalized: false }),
+    );
+
+    put1.resolve();
+    await p;
+  });
+});

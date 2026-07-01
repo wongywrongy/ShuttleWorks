@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/main.tsx", "src/setupTests.ts"],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["src/api/dto.generated.ts"],
+  "ignoreDependencies": ["@radix-ui/react-select", "clsx", "tailwind-merge", "openapi-typescript"]
+}

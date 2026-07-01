@@ -21,8 +21,6 @@ calls; all tests are sub-second.
 """
 from __future__ import annotations
 
-import threading
-import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock

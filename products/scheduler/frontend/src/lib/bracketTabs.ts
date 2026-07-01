@@ -7,12 +7,15 @@
  * ``schedule`` / ``live`` ids and stay unambiguous in dispatch.
  */
 import type { AppTab } from '../store/uiStore';
+import type { ModuleId } from '../platform/product-shell/types';
 
 export const BRACKET_TAB_IDS = [
   'bracket-setup',
   'bracket-roster',
   'bracket-events',
+  'bracket-draws',
   'bracket-draw',
+  'bracket-matches',
   'bracket-schedule',
   'bracket-live',
 ] as const;
@@ -25,7 +28,9 @@ export const BRACKET_TABS: { id: BracketTabId; label: string }[] = [
   { id: 'bracket-setup', label: 'Setup' },
   { id: 'bracket-roster', label: 'Roster' },
   { id: 'bracket-events', label: 'Events' },
+  { id: 'bracket-draws', label: 'Draws' },
   { id: 'bracket-draw', label: 'Draw' },
+  { id: 'bracket-matches', label: 'Matches' },
   { id: 'bracket-schedule', label: 'Schedule' },
   { id: 'bracket-live', label: 'Live' },
 ];
@@ -43,7 +48,42 @@ export const MEET_TAB_IDS = [
   'tv',
 ] as const;
 
-export type MeetTabId = (typeof MEET_TAB_IDS)[number];
+type MeetTabId = (typeof MEET_TAB_IDS)[number];
+
+/** The meet operator tab ids the TabBar renders. Excludes ``tv`` — TV is
+ *  reached through the Display module (dock / ``/tournaments/:id/tv`` route),
+ *  not the tab strip — while ``tv`` stays in ``MEET_TAB_IDS`` so the route
+ *  keeps treating it as valid. */
+const MEET_OPERATOR_TAB_IDS = MEET_TAB_IDS.filter(
+  (id) => id !== 'tv',
+) as Exclude<MeetTabId, 'tv'>[];
+
+/** Display labels for the meet operator tabs. Single-sourced here so the
+ *  TabBar doesn't redefine the id list. */
+const MEET_TAB_LABELS: Record<Exclude<MeetTabId, 'tv'>, string> = {
+  setup: 'Setup',
+  roster: 'Roster',
+  matches: 'Matches',
+  schedule: 'Schedule',
+  live: 'Live',
+};
+
+/** The `{id,label}` rows the TabBar renders for a meet workspace. */
+const MEET_TABS: { id: AppTab; label: string }[] = MEET_OPERATOR_TAB_IDS.map(
+  (id) => ({ id, label: MEET_TAB_LABELS[id] }),
+);
+
+/** The TabBar rows for a module: meet → meet operator tabs, bracket → the
+ *  bracket tabs, display → [] (single surface reached via the dock / tv
+ *  route, no operator strip). */
+export function tabsForModule(module: ModuleId): { id: AppTab; label: string }[] {
+  if (module === 'bracket') return BRACKET_TABS;
+  // Display has no operator strip and is unreachable from the TabBar (the
+  // TabBar mounts inside MeetProduct/BracketProduct, not DisplayProduct);
+  // returned for defensiveness / completeness.
+  if (module === 'display') return [];
+  return MEET_TABS;
+}
 
 /** The bare view name a ``bracket-`` tab maps to — drives the
  *  ``BracketViewHeader`` eyebrow and the content switch. */
@@ -51,7 +91,9 @@ export type BracketView =
   | 'setup'
   | 'roster'
   | 'events'
+  | 'draws'
   | 'draw'
+  | 'matches'
   | 'schedule'
   | 'live';
 
@@ -61,24 +103,4 @@ export function isBracketTab(tab: AppTab): tab is BracketTabId {
 
 export function bracketTabView(tab: BracketTabId): BracketView {
   return tab.slice('bracket-'.length) as BracketView;
-}
-
-/**
- * Normalize ``activeTab`` when the active tournament kind resolves.
- * ``activeTab`` is shared store state: for a bracket the URL segment
- * is the bare ``/bracket`` (→ ``activeTab`` ``'bracket'``, not a
- * renderable section), and ``activeTab`` can also be stale from a
- * prior tournament of the other kind.
- *
- * Returns the tab id to set, or ``null`` when no change is needed
- * (kind still loading, or the tab is already valid for the kind).
- */
-export function normalizeActiveTab(
-  activeTab: AppTab,
-  kind: 'meet' | 'bracket' | null,
-): AppTab | null {
-  if (kind === 'bracket' && !isBracketTab(activeTab)) return 'bracket-setup';
-  if (kind === 'meet' && !(MEET_TAB_IDS as readonly string[]).includes(activeTab))
-    return 'setup';
-  return null;
 }

@@ -16,7 +16,7 @@ export interface Participant {
   members?: string[] | null;
 }
 
-export interface ParticipantInput {
+interface ParticipantInput {
   id: string;
   name: string;
   members?: string[];
@@ -35,7 +35,7 @@ export interface EventIn {
   randomize?: boolean;
 }
 
-export interface CreateTournamentIn {
+interface CreateTournamentIn {
   courts: number;
   total_slots: number;
   rest_between_rounds: number;
@@ -45,7 +45,7 @@ export interface CreateTournamentIn {
   events: EventIn[];
 }
 
-export interface BracketSlotDTO {
+interface BracketSlotDTO {
   participant_id: string | null;
   feeder_play_unit_id: string | null;
 }
@@ -61,6 +61,10 @@ export interface PlayUnitDTO {
   dependencies: string[];
   slot_a: BracketSlotDTO;
   slot_b: BracketSlotDTO;
+  /** Optimistic-concurrency token echoed back as ``seen_version`` when
+   *  recording a result (SP-F3). Optional for older fixtures; the backend
+   *  always serializes it (defaults to 1 for a freshly generated match). */
+  version?: number;
 }
 
 export interface AssignmentDTO {
@@ -74,14 +78,29 @@ export interface AssignmentDTO {
   finished: boolean;
 }
 
+/** One set's score in a Sets-mode bracket result. */
+export interface BracketSetScore {
+  sideA: number;
+  sideB: number;
+}
+
+/** Opaque set-by-set score blob carried on a Sets-mode bracket result.
+ *  Mirrors the meet's `sets` shape (api/dto.ts `SetScore`) so both engines
+ *  speak the same score JSON — see ADR 0006. */
+export interface BracketScore {
+  sets: BracketSetScore[];
+}
+
 export interface ResultDTO {
   play_unit_id: string;
   winner_side: WinnerSide;
   walkover: boolean;
   finished_at_slot: number | null;
+  /** Present only when the bracket Engine runs in Sets mode. */
+  score?: BracketScore | null;
 }
 
-export interface EventDTO {
+interface EventDTO {
   id: string;
   discipline: string;
   format: "se" | "rr";
@@ -106,12 +125,38 @@ export interface TournamentDTO {
   results: ResultDTO[];
 }
 
+/** One bracket assignment cell — solver-produced or operator-chosen. */
+interface BracketAssignmentInput {
+  play_unit_id: string;
+  slot_id: number;
+  court_id: number;
+  duration_slots: number;
+}
+
+/** One near-optimal alternative the streaming solve kept; the operator
+ *  picks one before committing the round (Task F2). Snake-case sibling of
+ *  the meet's ``ScheduleCandidate``. */
+export interface BracketScheduleCandidate {
+  solution_id: string;
+  objective_score: number;
+  found_at_seconds: number;
+  assignments: BracketAssignmentInput[];
+}
+
 export interface ScheduleNextOut {
   status: string;
   play_unit_ids: string[];
   started_at_current_slot: number;
   runtime_ms: number;
   infeasible_reasons: string[];
+  // Candidate pool — empty from the batch endpoint, populated by the
+  // streaming endpoint's terminal ``complete`` event.
+  candidates: BracketScheduleCandidate[];
+}
+
+/** Body of ``POST /bracket/schedule-next/commit``. */
+export interface BracketCommitRoundIn {
+  assignments: BracketAssignmentInput[];
 }
 
 // Bracket-prefixed aliases (new names for the same shapes — used by the
@@ -147,7 +192,7 @@ export interface BracketPinIn {
   court_id: number;
 }
 
-export interface BracketValidationConflict {
+interface BracketValidationConflict {
   type: string;
   description: string;
   play_unit_id: string | null;

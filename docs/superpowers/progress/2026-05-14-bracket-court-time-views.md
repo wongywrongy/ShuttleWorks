@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # Working Log — Bracket Court×Time Views
 
 **Purpose:** Durable session-state log. This session has run long; context will be summarised. If you are resuming with thin context, read this file first, then the docs it points to. It is the source of truth for *where we are*.

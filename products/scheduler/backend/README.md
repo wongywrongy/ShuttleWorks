@@ -1,5 +1,11 @@
 # backend/
 
+> **⚠️ PARTIALLY SUPERSEDED (2026-07-01).** This README predates the
+> workspace-suite control-plane model; its file/route lists below are incomplete
+> and a few names are out of date. For **current** backend architecture + route
+> ownership use the canonical docs: `docs/architecture/backend-structure.md` and
+> `products/scheduler/BACKEND.md`. The local conventions notes below are still useful.
+
 FastAPI HTTP layer in front of the CP-SAT scheduler. Stateless per
 request — the solver receives the full problem in the body and
 returns the full solution. The only persisted state is the tournament
@@ -22,8 +28,8 @@ backend/
 │   ├── schedule.py              # /schedule, /schedule/stream, /schedule/validate
 │   ├── schedule_repair.py       # /schedule/repair
 │   ├── schedule_warm_restart.py # /schedule/warm-restart
-│   ├── match_state.py           # /match-state
-│   ├── tournament_state.py      # /tournament-state
+│   ├── match_state.py           # /tournaments/{id}/match-states, /commands
+│   ├── tournaments.py           # /tournaments/{id}/state (+ control-plane routes)
 │   ├── _backups.py              # tournament-state backup helpers
 │   └── _validate.py             # shared validation utilities
 ├── services/
@@ -68,9 +74,9 @@ import it directly via `from scheduler_core...`.
 ## Tests
 
 ```
-cd backend && pytest
+cd products/scheduler && pytest   # rootdir is products/scheduler; uses the repo .venv
 ```
 
 The HTTP layer has no integration tests of its own — coverage lives
-in `e2e/` (Playwright). Unit tests for solver logic are under
-`src/tests/`.
+in `e2e/` (Playwright). Unit + integration tests are under
+`products/scheduler/tests/`.

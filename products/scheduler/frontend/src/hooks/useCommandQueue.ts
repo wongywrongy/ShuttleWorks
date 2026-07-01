@@ -34,6 +34,7 @@ import {
 } from '../lib/commandQueue';
 import { useMatchStateStore } from '../store/matchStateStore';
 import { useTournamentId } from './useTournamentId';
+import type { MatchStateDTO } from '../api/dto';
 
 const ACTION_TO_LEGACY_STATUS: Record<
   MatchAction,
@@ -44,6 +45,8 @@ const ACTION_TO_LEGACY_STATUS: Record<
   finish_match: 'finished',
   retire_match: 'finished',
   uncall: 'scheduled',
+  assign_court: 'scheduled',
+  postpone_match: 'scheduled',
 };
 
 const CANONICAL_TO_LEGACY_STATUS: Record<
@@ -56,6 +59,54 @@ const CANONICAL_TO_LEGACY_STATUS: Record<
   finished: 'finished',
   retired: 'finished',
 };
+
+/**
+ * Pure helper: merge a successful command response onto the stored match state.
+ *
+ * Applies the authoritative legacy status and, when the response carries a
+ * non-null `timeSlot`, stores it as `actualSlotId` so `meetToOpsBlocks` can
+ * show the live slot override (SP-G1 carry-over from Task 5).
+ *
+ * Action-aware behaviour (added to fix meet Postpone → queue regression):
+ *   - `postpone_match`: sets `postponed:true` and clears `actualCourtId` /
+ *     `actualSlotId` so the opsBlock derivation can recognise the override.
+ *   - `assign_court`:   sets `postponed:false` and wires court + slot from
+ *     the response (same as existing behaviour, plus the flag reset).
+ *   - All other actions (+ no action): existing behaviour — null-guarded
+ *     writes to `actualSlotId` / `actualCourtId`.
+ *
+ * NOTE: `actualCourtId` is intentionally NOT sourced here for non-assign
+ * actions — the backend serialises it on the match-state record itself, so
+ * it reaches the store via `getMatchStates` polling / SSE. `actualSlotId`
+ * has NO backend serialisation site (Task 5 gap) and therefore must come
+ * from the command response; hence the asymmetry.
+ *
+ * Exported with a `_` prefix so the test suite can exercise the mapping in
+ * pure isolation without spinning up the full hook.
+ */
+export function _buildCommandOkPatch(
+  previous: MatchStateDTO,
+  legacyStatus: 'scheduled' | 'called' | 'started' | 'finished',
+  timeSlot: number | null,
+  courtId?: number | null,
+  action?: MatchAction,
+): MatchStateDTO {
+  const patch: MatchStateDTO = { ...previous, status: legacyStatus };
+  if (action === 'postpone_match') {
+    patch.postponed = true;
+    patch.actualCourtId = undefined;
+    patch.actualSlotId = undefined;
+  } else if (action === 'assign_court') {
+    patch.postponed = false;
+    if (courtId != null) patch.actualCourtId = courtId;
+    if (timeSlot != null) patch.actualSlotId = timeSlot;
+  } else {
+    // Existing behaviour for all other actions (backward-compat when action omitted).
+    if (timeSlot != null) patch.actualSlotId = timeSlot;
+    if (courtId != null) patch.actualCourtId = courtId;
+  }
+  return patch;
+}
 
 export interface SubmitOutcome {
   commandId: string;
@@ -157,7 +208,10 @@ export function useCommandQueue() {
           const legacy =
             CANONICAL_TO_LEGACY_STATUS[result.matchStatus] ?? 'scheduled';
           const previous = matchStates[matchId] ?? { matchId, status: 'scheduled' as const };
-          setMatchState(matchId, { ...previous, matchId, status: legacy });
+          // _buildCommandOkPatch wires time_slot → actualSlotId (SP-G1) and
+          // sets the `postponed` flag for postpone_match / assign_court actions.
+          // See the helper's JSDoc for why court is handled differently.
+          setMatchState(matchId, _buildCommandOkPatch(previous, legacy, result.timeSlot, result.courtId, action));
           // Audit-pass fix: cache the canonical version so the next
           // command on this match doesn't pay the cold-read roundtrip.
           setMatchVersion(matchId, result.matchVersion);

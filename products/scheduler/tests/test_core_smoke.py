@@ -1,5 +1,4 @@
 """Core engine smoke tests - test scheduler_core without FastAPI."""
-import pytest
 
 from scheduler_core import (
     CPSATScheduler,

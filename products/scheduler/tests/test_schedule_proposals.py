@@ -7,10 +7,8 @@ endpoints continue to work unchanged.
 from __future__ import annotations
 
 import sys
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch
 
 
 _BACKEND_ROOT = str(Path(__file__).resolve().parents[1] / "backend")
@@ -33,7 +31,7 @@ def client(tmp_path, monkeypatch):
     returns instances of the *previous* `Impact` class while `Proposal`
     expects the *current* one (Pydantic class identity is strict).
     """
-    from _helpers import isolate_test_database, seed_tournament
+    from _helpers import isolate_test_database
     isolate_test_database(tmp_path, monkeypatch)
 
     from api import (

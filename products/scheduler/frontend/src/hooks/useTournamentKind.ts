@@ -19,11 +19,15 @@ export function useTournamentKind(tournamentId: string | null): void {
   const setActiveTournamentKind = useUiStore(
     (s) => s.setActiveTournamentKind,
   );
+  const setActiveTournamentStatus = useUiStore(
+    (s) => s.setActiveTournamentStatus,
+  );
 
   useEffect(() => {
     let cancelled = false;
     if (!tournamentId) {
       setActiveTournamentKind(null);
+      setActiveTournamentStatus(null);
       return () => {
         cancelled = true;
       };
@@ -33,16 +37,15 @@ export function useTournamentKind(tournamentId: string | null): void {
       .then((row) => {
         if (cancelled) return;
         setActiveTournamentKind(row.kind);
+        setActiveTournamentStatus(row.status ?? null);
       })
       .catch(() => {
-        // 403 / 404 / network — leave kind null; the AppShell falls
-        // back to its default chrome (meet tabs). A real error has
-        // already been surfaced by the axios response interceptor.
         if (cancelled) return;
         setActiveTournamentKind(null);
+        setActiveTournamentStatus(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [tournamentId, setActiveTournamentKind]);
+  }, [tournamentId, setActiveTournamentKind, setActiveTournamentStatus]);
 }

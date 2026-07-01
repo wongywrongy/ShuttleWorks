@@ -1,44 +1,66 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { ArrowSquareOut, GearSix } from '@phosphor-icons/react';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUiStore } from '../store/uiStore';
 import { useTournamentState } from '../hooks/useTournamentState';
 import { useAdvisories } from '../hooks/useAdvisories';
 import { useSuggestions } from '../hooks/useSuggestions';
-import { TabBar } from './TabBar';
 import { SolverHud } from '../components/SolverHud';
 import { UnsavedBanner } from '../components/UnsavedBanner';
 import { ToastStack } from '../components/Toast';
 import { UnlockModalHost } from '../components/common/UnlockModalHost';
-import { TabSkeleton } from '../components/TabSkeleton';
-import { INTERACTIVE_BASE } from '../lib/utils';
+import { AppStatusPopover } from '../components/AppStatusPopover';
+import { useTournamentId } from '../hooks/useTournamentId';
+import { WorkspaceShell } from '../platform/product-shell/WorkspaceShell';
+import { ModuleOutlet } from './workspace/ModuleOutlet';
+import { useWorkspaceIdentity } from '../platform/domain/useWorkspaceIdentity';
+import {
+  moduleForTab,
+  defaultTabForModule,
+  modulesForWorkspace,
+  primaryModuleForOpen,
+  isModuleEnterable,
+} from '../platform/domain/moduleModel';
+import type { ModuleId, WorkspaceModule } from '../platform/product-shell/types';
+import { useWorkspaceModules } from '../platform/domain/useWorkspaceModules';
+import { ModuleUnavailablePanel } from './workspace/ModuleUnavailablePanel';
+import { WorkspaceShellSurface } from '../products/workspace/WorkspaceShellSurface';
+import { SHELL_SEGMENTS, isAdminSegment } from '../platform/product-shell/workspaceNav';
 
-// Tabs are wired to the existing pages during Step 4. Each tab is replaced with
-// a dedicated Tab component in Step 5 (inline authoring). Using lazy() keeps
-// the tab-switch fast and matches the previous per-page load behaviour.
-const TournamentSetupPage = lazy(() =>
-  import('../pages/TournamentSetupPage').then((m) => ({ default: m.TournamentSetupPage })),
-);
-const RosterTab = lazy(() =>
-  import('../features/roster/RosterTab').then((m) => ({ default: m.RosterTab })),
-);
-const MatchesTab = lazy(() =>
-  import('../features/matches/MatchesTab').then((m) => ({ default: m.MatchesTab })),
-);
-const SchedulePage = lazy(() =>
-  import('../pages/SchedulePage').then((m) => ({ default: m.SchedulePage })),
-);
-const MatchControlCenterPage = lazy(() =>
-  import('../pages/MatchControlCenterPage').then((m) => ({ default: m.MatchControlCenterPage })),
-);
-const PublicDisplayPage = lazy(() =>
-  import('../pages/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
-);
-const BracketTab = lazy(() =>
-  import('../features/bracket/BracketTab').then((m) => ({ default: m.BracketTab })),
-);
+/** Whether the active module's pane is the normal module outlet or the
+ *  unavailable panel. A missing active module (empty/partial list) resolves
+ *  to the outlet defensively. In practice no false guard fires during load
+ *  for a second reason: the caller passes `modulesForWorkspace(kind)` until
+ *  the real catalog arrives, and that fallback always has the workspace's own
+ *  operator module enterable (and TournamentPage sets the optimistic kind
+ *  synchronously before paint), so the active tab's module is enterable. */
+export type ActivePane =
+  | { kind: 'outlet' }
+  | {
+      kind: 'panel';
+      label: string;
+      note?: string;
+      primary: ModuleId;
+      primaryLabel: string;
+      canOpenSettings: boolean;
+    };
 
-// FALLBACK is now built per-tab via TabSkeleton so the Suspense
-// shape matches the layout that's about to mount.
+export function resolveActivePane(
+  activeModule: ModuleId,
+  modules: WorkspaceModule[],
+): ActivePane {
+  const active = modules.find((m) => m.id === activeModule);
+  if (!active || isModuleEnterable(active.status)) return { kind: 'outlet' };
+  const primary = primaryModuleForOpen(modules);
+  const primaryWm = modules.find((m) => m.id === primary);
+  return {
+    kind: 'panel',
+    label: active.label,
+    note: active.note,
+    primary,
+    primaryLabel: primaryWm?.label ?? primary,
+    canOpenSettings: active.status === 'disabled',
+  };
+}
 
 export function AppShell() {
   // Theme + density hooks live at App.tsx level so they fire on every
@@ -51,6 +73,32 @@ export function AppShell() {
   const activeTournamentKind = useUiStore((s) => s.activeTournamentKind);
   const pushToast = useUiStore((s) => s.pushToast);
   const setActiveProposal = useUiStore((s) => s.setActiveProposal);
+  const navigate = useNavigate();
+  const tid = useTournamentId();
+  const identity = useWorkspaceIdentity();
+  const activeModule = moduleForTab(activeTab, activeTournamentKind);
+  // Real persisted module state (sub-project #2); fall back to the kind-derived
+  // catalog while loading or on error.
+  const { modules: realModules } = useWorkspaceModules(tid);
+  const modules = realModules ?? modulesForWorkspace(activeTournamentKind);
+  // Meet-only polling runs when the Meet module is enabled (data exists), not
+  // by kind — so a hybrid keeps polling and a bracket-only workspace doesn't.
+  // Gate on the REAL catalog, never the kind-derived fallback: on the
+  // kind-agnostic Overview `kind` is briefly null and the fallback would
+  // default to meet-enabled, firing stray meet polls on a bracket-only
+  // workspace. Until the real modules load, meet polling stays off.
+  const meetEnabled = (realModules ?? []).some(
+    (m) => m.id === 'meet' && m.status === 'enabled',
+  );
+  // Both engines enabled → the Operations Courts/Live segments render ONE
+  // unified cross-engine surface (SP-F4). Gate on the REAL catalog so an
+  // indeterminate/loading state fails safe to single-engine.
+  const bracketEnabled = (realModules ?? []).some(
+    (m) => m.id === 'bracket' && m.status === 'enabled',
+  );
+  const bothEnginesEnabled = meetEnabled && bracketEnabled;
+  // Whether to render the module outlet or the unavailable panel.
+  const pane = resolveActivePane(activeModule, modules);
 
   // Discard any in-flight proposal when the operator switches tabs.
   // Otherwise the next visit to the originating tab re-opens the
@@ -124,8 +172,8 @@ export function AppShell() {
         }}
       />
       {/* Skip-link: hidden until focused. Lets keyboard users jump past the
-          TabBar straight into the active pane. The target id (#main) is on
-          the <main> element below. */}
+          WorkspaceShell chrome straight into the active pane. The target
+          id (#main) is on the <main> element inside WorkspaceShell below. */}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-modal focus:rounded-sm focus:bg-primary focus:px-3 focus:py-1.5 focus:text-sm focus:text-primary-foreground focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -139,35 +187,50 @@ export function AppShell() {
       {/* Meet-only polling hooks: advisories + suggestions are meet-specific
           and should not fire on bracket-kind tournaments where those
           endpoints have no meaningful data. */}
-      {activeTournamentKind !== 'bracket' ? <MeetOnlyPollingHooks /> : null}
-      <TabBar />
-      <UnsavedBannerSlot />
-      <main id="main" className="flex-1 min-h-0 overflow-auto">
-        <Suspense fallback={<TabSkeleton tab={activeTab} />}>
-          {/* Bracket-kind tournaments skip the activeTab dispatch and
-              render BracketTab directly — the meet tabs aren't
-              relevant. ``activeTournamentKind`` is loaded by
-              ``useTournamentKind`` on mount; while it's ``null`` the
-              shell falls back to the meet-style tab dispatch below. */}
-          {activeTournamentKind === 'bracket' ? (
-            <div key="bracket" className="h-full animate-block-in">
-              <BracketTab />
+      {meetEnabled ? <MeetOnlyPollingHooks /> : null}
+      <WorkspaceShell
+        identity={identity}
+        modules={modules}
+        tid={tid ?? ''}
+        kind={activeTournamentKind}
+        activeTab={activeTab}
+        adminActive={isAdminSegment(activeTab)}
+        onOpenAdmin={() => {
+          if (tid) navigate(`/tournaments/${tid}/ws-members`);
+        }}
+        onBackToHub={() => navigate('/')}
+        statusSlot={<AppStatusPopover />}
+      >
+        <UnsavedBannerSlot />
+        <main id="main" className="min-h-0 flex-1 overflow-hidden">
+          {SHELL_SEGMENTS.has(activeTab) ? (
+            <div className="h-full overflow-auto">
+              <WorkspaceShellSurface segment={activeTab} modules={modules} />
             </div>
+          ) : pane.kind === 'outlet' ? (
+            <ModuleOutlet bothEnginesEnabled={bothEnginesEnabled} />
           ) : (
-            // Re-keying on activeTab forces a remount and re-runs the
-            // animate-block-in entry so each tab switch reads as a
-            // deliberate arrival, not a flash.
-            <div key={activeTab} className="h-full animate-block-in">
-              {activeTab === 'setup' ? <TournamentSetupPage /> : null}
-              {activeTab === 'roster' ? <RosterTab /> : null}
-              {activeTab === 'matches' ? <MatchesTab /> : null}
-              {activeTab === 'schedule' ? <SchedulePage /> : null}
-              {activeTab === 'live' ? <MatchControlCenterPage /> : null}
-              {activeTab === 'tv' ? <TvPreviewTab /> : null}
-            </div>
+            <ModuleUnavailablePanel
+              label={pane.label}
+              note={pane.note}
+              primaryLabel={pane.primaryLabel}
+              onGoToPrimary={() => {
+                if (tid)
+                  navigate(`/tournaments/${tid}/${defaultTabForModule(pane.primary)}`, {
+                    replace: true,
+                  });
+              }}
+              onOpenSettings={
+                pane.canOpenSettings && tid
+                  ? // Deep-link to the in-workspace Modules admin — this panel
+                    // shows for a disabled module, so that's where it's enabled.
+                    () => navigate(`/tournaments/${tid}/ws-modules`)
+                  : undefined
+              }
+            />
           )}
-        </Suspense>
-      </main>
+        </main>
+      </WorkspaceShell>
       <SolverHud />
       <ToastStack />
       <UnlockModalHost />
@@ -205,56 +268,6 @@ function UnsavedBannerSlot() {
   return (
     <div className="empty:hidden border-b border-border bg-background px-4 py-1.5">
       <UnsavedBanner />
-    </div>
-  );
-}
-
-// TV tab: presentation-grade preview with primary CTA + secondary action.
-// The PublicDisplayPage is fullscreen-designed; embedding it inline used to
-// look broken. We keep the embed but frame it as an aspect-ratio preview
-// card with clear hierarchy and pointer-events disabled so it reads as a
-// preview, not a live surface.
-function TvPreviewTab() {
-  const setActiveTab = useUiStore((s) => s.setActiveTab);
-  return (
-    <div className="mx-auto flex h-full max-w-[1400px] flex-col gap-4 px-4 py-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-foreground">Public display</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Preview of the venue TV. Open fullscreen on the display device.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('setup');
-              const url = new URL(window.location.href);
-              url.searchParams.set('section', 'display');
-              window.history.replaceState({}, '', url.toString());
-            }}
-            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded border border-border bg-card px-3 py-1.5 text-sm text-card-foreground hover:bg-muted/40 hover:text-foreground`}
-          >
-            <GearSix aria-hidden="true" className="h-4 w-4" />
-            Configure display
-          </button>
-          <a
-            href="/display"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90`}
-          >
-            <ArrowSquareOut aria-hidden="true" className="h-4 w-4" />
-            Open fullscreen
-          </a>
-        </div>
-      </header>
-      <div className="relative flex-1 min-h-0 overflow-hidden border border-border bg-card">
-        <div className="pointer-events-none absolute inset-0 overflow-auto">
-          <PublicDisplayPage />
-        </div>
-      </div>
     </div>
   );
 }

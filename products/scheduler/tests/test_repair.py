@@ -13,7 +13,6 @@ from __future__ import annotations
 import time
 
 from scheduler_core.domain.models import (
-    Assignment,
     Match,
     Player,
     ScheduleConfig,

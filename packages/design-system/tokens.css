@@ -23,10 +23,10 @@
     /* ----- Canonical substrate (Swiss Industrial Print) ------------------- */
     --bg:           60 13% 95%;    /* #F4F4F0 unbleached documentation paper */
     --bg-elev:       0  0% 100%;   /* #FFFFFF crisp white sheet (elevated)   */
-    --ink:           0  0%   4%;   /* #0A0A0A carbon ink                     */
+    --ink:          40  7%  13%;   /* #24221D soft carbon (dialed back from #0A0A0A) */
     --ink-muted:    60  1%  29%;   /* #4A4A48 secondary text                  */
     --ink-faint:    60  1%  60%;   /* #9A9A98 disabled, ghost                 */
-    --rule:          0  0%   4%;   /* #0A0A0A full-strength divider/border   */
+    --rule:         38  6%  24%;   /* #423E37 softened divider/border (was #0A0A0A) */
     --rule-soft:    45 11%  83%;   /* #D8D6D0 inner divider in dense tables  */
     --accent:       22 100% 55%;   /* #FF6B1A Signal Orange (single accent)   */
     --accent-bg:    25 100% 95%;   /* #FFF1E8 tinted callout surface          */
@@ -45,11 +45,11 @@
     --space-9:   64px;
     --space-10:  96px;
 
-    /* ----- Radii (BRAND.md §3 — 90° default, 2px max on form controls) --- */
-    --radius:    0;        /* default = sharp brutalist corner               */
-    --radius-sm: 2px;      /* max allowed on interactive controls            */
-    --radius-md: 0;        /* alias for cards (legacy md = same as default)  */
-    --radius-lg: 0;        /* alias for legacy callers                       */
+    /* ----- Radii (dialed back — gently rounded, keeps the grid honest) --- */
+    --radius:    6px;      /* default surface corner (cards, panels)         */
+    --radius-sm: 4px;      /* interactive controls (buttons, inputs)         */
+    --radius-md: 8px;      /* larger cards / grouped surfaces                */
+    --radius-lg: 12px;     /* modals / prominent surfaces                    */
 
     /* ----- Easing (canonical app curves) -------------------------------- */
     --ease-brand:      cubic-bezier(0.22, 1, 0.36, 1);
@@ -110,19 +110,18 @@
     --label-size:   0.75rem;    --label-weight:   500;
     --eyebrow-size: 0.6875rem;  --eyebrow-weight: 600; --eyebrow-tracking: 0.06em;
 
-    /* ----- Display type — BRAND.md §2.a (brutalist macro) ---------------- */
-    --display-tracking: -0.04em;
-    --display-leading:  0.9;
+    /* ----- Display type — heavy and tight, but eased off the full wall --- */
+    --display-tracking: -0.022em;
+    --display-leading:  0.96;
     --display-min:      clamp(2.5rem, 6vw, 6rem);
     --display-section:  clamp(1.5rem, 3vw, 2.5rem);
 
-    /* ----- Shadow (BRAND.md §6 — none on light; hard offsets for modal) -- */
+    /* ----- Shadow (soft elevation; hard offset kept as an opt-in token) -- */
     --shadow-none: none;
-    --shadow-hard: 0 4px 0 hsl(var(--rule));  /* modal/popover only         */
-    /* legacy aliases for scheduler components mid-migration: stripped P6  */
-    --shadow-sm: var(--shadow-none);
-    --shadow-md: var(--shadow-none);
-    --shadow-lg: var(--shadow-hard);
+    --shadow-hard: 0 3px 0 hsl(var(--rule));            /* opt-in hard offset */
+    --shadow-sm: 0 1px 2px hsl(var(--ink) / 0.08);
+    --shadow-md: 0 2px 8px hsl(var(--ink) / 0.10);
+    --shadow-lg: 0 10px 28px hsl(var(--ink) / 0.12);
 
     /* ----- Z-index scale ------------------------------------------------- */
     /* Popovers sit ABOVE modals so dropdowns/tooltips opened inside a
@@ -209,13 +208,15 @@
     --ink:          0  0%  92%;    /* #EAEAEA white phosphor (NEVER pure white)   */
     --ink-muted:    0  0%  60%;    /* #9A9A9A secondary                            */
     --ink-faint:    0  0%  33%;    /* #555555 disabled                             */
-    --rule:         0  0%  92%;    /* phosphor on substrate                        */
+    --rule:         0  0%  70%;    /* softened phosphor line (was 92%)             */
     --rule-soft:    0  0%  16%;    /* #2A2A2A inner divider                        */
     --accent:      22 100% 55%;    /* same orange both modes (brutalist rule)      */
     --accent-bg:   22  70% 10%;    /* #2A1808 tinted callout on dark substrate     */
     --accent-ink:   0  0%   4%;    /* #0A0A0A text on accent fill                  */
 
-    /* Shadow rule on dark: none; elevation via --bg-elev only */
+    /* Shadow rule on dark: none; elevation via --bg-elev contrast only */
+    --shadow-sm:   none;
+    --shadow-md:   none;
     --shadow-hard: none;
     --shadow-lg:   none;
 

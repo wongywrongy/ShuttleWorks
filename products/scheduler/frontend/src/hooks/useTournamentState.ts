@@ -128,6 +128,10 @@ function snapshot(
     scheduleHistory: state.scheduleHistory,
     bracketPlayers: state.bracketPlayers,
     bracketRosterMigrated: state.bracketRosterMigrated,
+    // SP-G1: must be included in every PUT so a config-field save does not
+    // reset planFinalized to false via Pydantic's default. Mirror of the
+    // scheduleVersion/scheduleHistory pattern (Task 17).
+    planFinalized: state.planFinalized ?? false,
   };
 }
 
@@ -153,6 +157,8 @@ function hydrate(s: TournamentStateDTO): void {
     // roster hydration from ``bracket_participants`` on first load.
     bracketPlayers: s.bracketPlayers ?? [],
     bracketRosterMigrated: s.bracketRosterMigrated ?? false,
+    // SP-G1: plan-finalized read (setter + snapshot wired in Task 17).
+    planFinalized: s.planFinalized ?? false,
   });
 }
 
@@ -169,6 +175,7 @@ function resetToDefaults(): void {
     isScheduleLocked: false,
     bracketPlayers: [],
     bracketRosterMigrated: false,
+    planFinalized: undefined,
   });
 }
 
@@ -236,7 +243,11 @@ export function useTournamentState(): void {
         state.schedule !== prev.schedule ||
         state.scheduleIsStale !== prev.scheduleIsStale ||
         state.bracketPlayers !== prev.bracketPlayers ||
-        state.bracketRosterMigrated !== prev.bracketRosterMigrated;
+        state.bracketRosterMigrated !== prev.bracketRosterMigrated ||
+        // SP-G1: planFinalized toggle (Task 17). The toggle also calls the
+        // dedicated POST endpoint; this ensures the full snapshot (which now
+        // includes planFinalized) round-trips even if changed via other paths.
+        state.planFinalized !== prev.planFinalized;
       if (!changed) return;
 
       // Mark dirty immediately so the unsaved-changes UI can react before

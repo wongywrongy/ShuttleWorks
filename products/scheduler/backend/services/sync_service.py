@@ -28,10 +28,8 @@ call ``flush_queue()`` directly to drain synchronously.
 """
 from __future__ import annotations
 
-import json
 import logging
 import threading
-import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional

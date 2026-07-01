@@ -1,0 +1,8 @@
+{
+  "threshold": 100,
+  "reporters": ["console"],
+  "gitignore": true,
+  "pattern": "**/*.{ts,tsx,py}",
+  "path": ["products/scheduler/frontend/src", "products/scheduler/backend"],
+  "ignore": ["**/__tests__/**", "**/tests/**", "**/*.generated.ts", "**/node_modules/**", "**/.venv/**", "**/alembic/**"]
+}

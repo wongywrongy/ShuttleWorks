@@ -9,6 +9,7 @@ import type {
   ConstraintViolation,
 } from '../api/dto';
 import { indexById } from '../lib/indexById';
+import { getMatchPlayerIds } from './trafficLight';
 
 /**
  * Compute constraint violations from current schedule assignments
@@ -37,17 +38,6 @@ export function computeConstraintViolations(
 }
 
 /**
- * Get all player IDs from a match
- */
-function getMatchPlayerIds(match: MatchDTO): string[] {
-  const players: string[] = [];
-  if (match.sideA) players.push(...match.sideA);
-  if (match.sideB) players.push(...match.sideB);
-  if (match.sideC) players.push(...match.sideC);
-  return players;
-}
-
-/**
  * Get match display label (M1, M2, etc. or eventRank)
  */
 function getMatchLabel(match: MatchDTO): string {
@@ -61,20 +51,18 @@ function getMatchLabel(match: MatchDTO): string {
 }
 
 /**
- * Check for player overlap violations (hard constraint)
+ * Build a per-player slot-occupancy map ({start, end, matchId} per
+ * assignment a player appears in). Shared by checkPlayerOverlap and
+ * checkRestViolations so the traversal lives in exactly one place.
  */
-function checkPlayerOverlap(
+function buildPlayerSlots(
   assignments: ScheduleAssignment[],
   matchMap: Map<string, MatchDTO>
-): ConstraintViolation[] {
-  const violations: ConstraintViolation[] = [];
-
-  // Build player slot occupancy
-  const playerSlots = new Map<string, Array<{
-    start: number;
-    end: number;
-    matchId: string;
-  }>>();
+): Map<string, Array<{ start: number; end: number; matchId: string }>> {
+  const playerSlots = new Map<
+    string,
+    Array<{ start: number; end: number; matchId: string }>
+  >();
 
   for (const assignment of assignments) {
     const match = matchMap.get(assignment.matchId);
@@ -92,6 +80,21 @@ function checkPlayerOverlap(
       });
     }
   }
+
+  return playerSlots;
+}
+
+/**
+ * Check for player overlap violations (hard constraint)
+ */
+function checkPlayerOverlap(
+  assignments: ScheduleAssignment[],
+  matchMap: Map<string, MatchDTO>
+): ConstraintViolation[] {
+  const violations: ConstraintViolation[] = [];
+
+  // Build player slot occupancy (shared traversal).
+  const playerSlots = buildPlayerSlots(assignments, matchMap);
 
   // Check for overlaps per player
   for (const [playerId, slots] of playerSlots) {
@@ -131,29 +134,8 @@ function checkRestViolations(
   // Default rest slots (convert minutes to slots)
   const defaultRestSlots = Math.ceil(config.defaultRestMinutes / config.intervalMinutes);
 
-  // Build player match schedule
-  const playerSchedule = new Map<string, Array<{
-    start: number;
-    end: number;
-    matchId: string;
-  }>>();
-
-  for (const assignment of assignments) {
-    const match = matchMap.get(assignment.matchId);
-    if (!match) continue;
-
-    const playerIds = getMatchPlayerIds(match);
-    for (const playerId of playerIds) {
-      if (!playerSchedule.has(playerId)) {
-        playerSchedule.set(playerId, []);
-      }
-      playerSchedule.get(playerId)!.push({
-        start: assignment.slotId,
-        end: assignment.slotId + assignment.durationSlots,
-        matchId: assignment.matchId,
-      });
-    }
-  }
+  // Build player match schedule (shared traversal).
+  const playerSchedule = buildPlayerSlots(assignments, matchMap);
 
   // Check rest time between consecutive matches
   for (const [playerId, schedule] of playerSchedule) {

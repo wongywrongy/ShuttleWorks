@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # Bracket Interactive-Scheduling Backend — Design
 
 **Status:** Approved design — ready for implementation planning. Written 2026-05-14. Sub-project **#1** of `docs/superpowers/specs/2026-05-14-bracket-court-time-views-decomposition.md`.

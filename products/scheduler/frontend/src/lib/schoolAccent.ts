@@ -69,26 +69,6 @@ export function getPlayerSchoolAccent(
   return { color, name: group.name, abbrev };
 }
 
-/** Same logic by groupId only (when the caller already resolved the
- *  group instead of the player). */
-export function getSchoolAccent(
-  group: RosterGroupDTO | undefined | null,
-): SchoolAccent {
-  if (!group) return { color: 'transparent', name: '', abbrev: '' };
-  const explicit = (group.metadata?.color ?? '').trim();
-  const color =
-    explicit && /^#?[0-9a-fA-F]{6}$/.test(explicit.replace(/^#/, ''))
-      ? (explicit.startsWith('#') ? explicit : `#${explicit}`)
-      : PALETTE[hash(group.id) % PALETTE.length];
-  const abbrev = group.name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 3)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-  return { color, name: group.name, abbrev };
-}
-
 /** Build a Map<groupId → group> once per render so callers don't
  *  rebuild it for each chip. Use inside ``useMemo`` over ``groups``. */
 export function buildGroupIndex(groups: RosterGroupDTO[]): Map<string, RosterGroupDTO> {

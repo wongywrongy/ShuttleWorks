@@ -1,6 +1,12 @@
 # ShuttleWorks — Tech Stack
 _Last updated: 2026-05-13 (post backend-merge arc)_
 
+> **Note (2026-06):** This describes the post-merge meet/bracket backend + data model. The
+> **workspace-suite control-plane redesign** layered a control plane on top — a workspace +
+> module model (`workspace_modules`), per-workspace signals, and backup endpoints. For the
+> current architecture see the design record in
+> [`superpowers/specs/`](./superpowers/specs) (the 2026-06 SP-A…SP-D specs).
+
 This file describes the system as it stands at the end of the
 backend-merge arc (PRs 1–4 of T-A through T-H). The arc folded the
 prior tournament product into the scheduler — one FastAPI, one
@@ -129,20 +135,35 @@ FastAPI; the sync service replicates *out* from there.
 
 ---
 
-## Data model (twelve tables + alembic_version)
+## Data model (thirteen tables + alembic_version)
 
 All tables live in `public` and share the `tournament_id` UUID FK.
 Schema migrations live under `products/scheduler/backend/alembic/`;
-the chain at end-of-arc is `c6361600d776 → 7a473c9e7048 →
-c2e587494c07 → b7e3a9f4c8d2 → d8c4f1a7e6b2 → e2a5f3b8c1d6 →
-f7a3c9b2e8d4` (the trailing revision is T-A, adding the four
-bracket tables).
+the chain runs `… → f7a3c9b2e8d4` (T-A, the four bracket tables) `→
+g9d4e2a3b7c1 → h1c5f4d8e2a9` (the workspace-suite `workspace_modules`
+table) `→ i2d6e8f0a4b7 → j3e7f9a1b5c8` — **head `j3e7f9a1b5c8`** (the last
+two convert legacy `coming_soon` module rows to `available`).
 
 ### `tournaments`
-Per-tournament document. Cloud-prep arc table.
+Per-tournament document — one row per **workspace**. Cloud-prep arc table.
 - `id UUID PK`, `owner_id UUID`, `owner_email TEXT`, `name`, `status`,
-  `tournament_date TEXT`, `data JSON` (full TournamentStateDTO blob),
-  `schema_version`, `created_at`, `updated_at`.
+  `kind TEXT` (meet | bracket — schema-family selector), `tournament_date TEXT`,
+  `data JSON` (full TournamentStateDTO blob), `schema_version`,
+  `created_at`, `updated_at`.
+
+### `workspace_modules` (NEW — workspace-suite / SP-A)
+The per-workspace module catalog that drives the control plane.
+- Unique on `(tournament_id, module_id)` — at most one row per module.
+- `module_id` ∈ `meet | bracket | display`; `status` ∈ `enabled | available |
+  disabled` (`coming_soon` is retired — kept only as migration/guard
+  vocabulary; never seeded). `config JSON NULL`.
+- Seeded lazily from `derive_modules(kind)` on first read, or from an explicit
+  create-time `modules[]` seed (`normalize_module_seed`). Enable/disable rules
+  (Display needs an operator; keep ≥1 operational; no disable-with-data) are
+  enforced in `api/workspace_modules.py`.
+- The Hub's per-workspace **signals** (health / readiness / attention / module
+  counts / collaboration) are *computed* from this table + batched row counts in
+  `build_signals` — not stored.
 
 ### `matches` (NEW — Step A)
 Per-match operational row. Source of truth for `status` (typed enum)

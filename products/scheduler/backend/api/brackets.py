@@ -34,28 +34,30 @@ the scheduler shell.
 """
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import time
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Dict, List, Literal, Optional, Set, Tuple
+from datetime import datetime
+from typing import AsyncGenerator, Dict, List, Literal, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.dependencies import (
-    AuthUser,
-    get_current_user,
     require_tournament_access,
 )
+from app.exceptions import ConflictError
+from app.schemas import BracketCommandRequest
 from repositories import LocalRepository, get_repository
 from scheduler_core.domain.models import (
-    ScheduleConfig,
     SolverOptions,
     SolverStatus,
 )
+from scheduler_core.engine.cpsat_backend import CPSATScheduler
 from scheduler_core.domain.tournament import (
     Event as EngineEvent,
     Participant,
@@ -83,10 +85,12 @@ from services.bracket.io.import_matches import (
 from services.bracket.state import (
     BracketSession,
     EventMeta,
+    find_ready_play_units,
     is_assignment_locked,
     register_draw,
 )
 from services.bracket.validation import BracketConflict, validate_bracket_move
+from services.scheduling.params import SchedulingParams, build_schedule_config
 
 router = APIRouter(
     prefix="/tournaments/{tournament_id}/bracket",
@@ -95,6 +99,18 @@ router = APIRouter(
 
 _VIEWER = Depends(require_tournament_access("viewer"))
 _OPERATOR = Depends(require_tournament_access("operator"))
+
+log = logging.getLogger("scheduler.brackets")
+
+# Upper bound on the SSE progress queue — same rationale as the meet's
+# ``schedule.py``: bound memory if a client stops draining (the
+# disconnect poll in the generator notices a closed tab within ~1 s).
+_SSE_QUEUE_MAX = 512
+
+# Default near-optimal candidate pool the streaming solve keeps, when the
+# caller doesn't override it via the ``candidate_pool_size`` query param
+# or the persisted bracket-session blob. Matches the meet default.
+_DEFAULT_CANDIDATE_POOL_SIZE = 5
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +181,11 @@ class PlayUnitOut(BaseModel):
     dependencies: List[str] = []
     slot_a: BracketSlotOut
     slot_b: BracketSlotOut
+    # Optimistic-concurrency token (SP-F3): the client echoes this back as
+    # ``seen_version`` when recording a result so concurrent writes from a
+    # second operator are rejected with a stale-version conflict. Defaults to
+    # 1 (a freshly generated match) when version tracking has no row yet.
+    version: int = 1
 
 
 class AssignmentOut(BaseModel):
@@ -183,6 +204,8 @@ class ResultOut(BaseModel):
     winner_side: str
     walkover: bool = False
     finished_at_slot: Optional[int] = None
+    # Opaque set-by-set score JSON (Sets mode). None for winner-only results.
+    score: Optional[dict] = None
 
 
 class EventOut(BaseModel):
@@ -192,6 +215,9 @@ class EventOut(BaseModel):
     bracket_size: Optional[int] = None
     participant_count: int
     rounds: List[List[str]]
+    # Per-event lifecycle status: 'draft' | 'generated' | 'started'.
+    # Drives the Draws-page status pill + Generate/Open affordances.
+    status: Optional[str] = None
 
 
 class TournamentOut(BaseModel):
@@ -207,12 +233,44 @@ class TournamentOut(BaseModel):
     results: List[ResultOut]
 
 
+class BracketAssignmentIn(BaseModel):
+    """One solver-produced (or operator-chosen) assignment cell."""
+    play_unit_id: str
+    slot_id: int
+    court_id: int
+    duration_slots: int = 1
+
+
+class BracketScheduleCandidate(BaseModel):
+    """One near-optimal alternative the solver kept while improving.
+
+    Mirrors the meet's ``ScheduleCandidate`` (SP-F1) in the bracket's
+    snake_case wire dialect: the operator can pick any of the captured
+    candidates before committing the round (Task F2's
+    candidate-selection-before-commit step). ``candidates[0]`` is the
+    best one found.
+    """
+    solution_id: str
+    objective_score: float = 0.0
+    found_at_seconds: float = 0.0
+    assignments: List[BracketAssignmentIn] = Field(default_factory=list)
+
+
 class ScheduleNextRoundOut(BaseModel):
     status: str
     play_unit_ids: List[str]
     started_at_current_slot: int
     runtime_ms: float = 0.0
     infeasible_reasons: List[str] = []
+    # Top-N near-optimal alternatives the solver kept (empty when no
+    # pool was requested). The streaming endpoint always populates it;
+    # the batch endpoint leaves it empty to preserve its wire shape.
+    candidates: List[BracketScheduleCandidate] = Field(default_factory=list)
+
+
+class CommitRoundIn(BaseModel):
+    """Persist the operator-chosen candidate's assignments for a round."""
+    assignments: List[BracketAssignmentIn]
 
 
 class RecordResultIn(BaseModel):
@@ -220,6 +278,15 @@ class RecordResultIn(BaseModel):
     winner_side: Literal["A", "B"]
     finished_at_slot: Optional[int] = None
     walkover: bool = False
+    # Opaque set-by-set score JSON for Sets-mode brackets (see ADR 0006:
+    # the bracket carries an opaque score blob + winner_side, the meet
+    # carries integer side scores). Omitted in winner-only / simple mode.
+    score: Optional[dict] = None
+    # Optimistic-concurrency token (SP-F3). When present, the route rejects
+    # the write with 409 stale_version if it doesn't match the match's
+    # current ``BracketMatch.version``. Omitted by legacy callers, which keep
+    # the un-guarded behavior.
+    seen_version: Optional[int] = None
 
 
 class MatchActionIn(BaseModel):
@@ -240,6 +307,18 @@ class BracketPinIn(BaseModel):
     play_unit_id: str
     slot_id: int
     court_id: int
+
+
+class BracketAssignIn(BaseModel):
+    """Body for POST /bracket/assign — direct (non-solver) court placement."""
+    play_unit_id: str
+    court_id: int
+    slot_id: int
+
+
+class BracketUnassignIn(BaseModel):
+    """Body for POST /bracket/unassign — remove a play unit's court assignment."""
+    play_unit_id: str
 
 
 class EventUpsertIn(BaseModel):
@@ -331,6 +410,35 @@ def _pick(camel_cfg: dict, session_cfg: dict, camel_key: str, legacy_key: str, d
     return session_cfg.get(legacy_key, default)
 
 
+def _meet_occupied_windows(
+    data_blob: dict, court_count: int
+) -> List[Tuple[int, int, int]]:
+    """Cross-engine court coordination (hybrid workspaces).
+
+    Meet and Bracket schedule the same physical courts independently. To
+    stop them double-booking, a bracket solve treats every court+slot the
+    MEET schedule already occupies as a closed ``(court, from, to)`` window,
+    so the CP-SAT engine never places a bracket match where a meet match
+    already sits. Reads the meet schedule from the tournament ``data`` blob
+    (``schedule.assignments``); returns ``[]`` when there's no meet schedule.
+    """
+    sched = (data_blob or {}).get("schedule") or {}
+    out: List[Tuple[int, int, int]] = []
+    for a in sched.get("assignments", []) or []:
+        court = a.get("courtId")
+        slot = a.get("slotId")
+        dur = a.get("durationSlots", 1) or 1
+        if court is None or slot is None:
+            continue
+        try:
+            c, s, d = int(court), int(slot), int(dur)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= c <= court_count and d > 0:
+            out.append((c, s, s + d))
+    return out
+
+
 def _hydrate_session(
     repo: LocalRepository, tournament_id: uuid.UUID
 ) -> Optional[BracketSession]:
@@ -353,10 +461,19 @@ def _hydrate_session(
     total_slots = int(session_cfg.get("total_slots", 128))
     rest = int(_pick(camel_cfg, session_cfg, "restBetweenRounds", "rest_between_rounds", 1))
 
-    config = ScheduleConfig(
-        total_slots=total_slots,
-        court_count=court_count,
-        interval_minutes=interval_minutes,
+    # Built through the shared scheduling-parameter builder so courts /
+    # time window / slot duration are read into a ``ScheduleConfig`` the
+    # same way the meet path reads them (see
+    # ``services/scheduling/params.py``).
+    config = build_schedule_config(
+        SchedulingParams(
+            court_count=court_count,
+            total_slots=total_slots,
+            interval_minutes=interval_minutes,
+            # Hybrid coordination: schedule bracket matches AROUND the meet
+            # schedule so the two engines never double-book a court.
+            closed_court_windows=_meet_occupied_windows(data_blob, court_count),
+        )
     )
 
     start_time_iso = session_cfg.get("start_time")
@@ -369,6 +486,7 @@ def _hydrate_session(
     state = TournamentState()
     draws: Dict[str, Draw] = {}
     events_meta: Dict[str, EventMeta] = {}
+    match_versions: Dict[str, int] = {}
 
     for event_row in event_rows:
         # Participants for this event.
@@ -423,6 +541,7 @@ def _hydrate_session(
             )
             state.play_units[m.id] = pu
             event_play_units[m.id] = pu
+            match_versions[m.id] = m.version
             slots[m.id] = (
                 _dict_to_slot(m.slot_a),
                 _dict_to_slot(m.slot_b),
@@ -449,6 +568,7 @@ def _hydrate_session(
             duration_slots=event_row.duration_slots,
             bracket_size=event_row.bracket_size,
             participant_count=len(participant_rows),
+            status=event_row.status or "draft",
         )
 
         # Results.
@@ -477,6 +597,13 @@ def _hydrate_session(
             actual_end_slot=a.get("actual_end_slot"),
         )
 
+    # SP-G1 Seam C: applied_command_ids is stored as a sorted list in the
+    # JSON blob (Python sets are not JSON-serialisable) and hydrated back
+    # to a set for O(1) membership checks during the replay guard.
+    applied_command_ids: set = set(
+        session_cfg.get("applied_command_ids") or []
+    )
+
     return BracketSession(
         state=state,
         draws=draws,
@@ -484,6 +611,8 @@ def _hydrate_session(
         rest_between_rounds=rest,
         start_time=start_time,
         events=events_meta,
+        match_versions=match_versions,
+        applied_command_ids=applied_command_ids,
     )
 
 
@@ -537,6 +666,9 @@ def _persist_session_metadata(
             }
             for a in session.state.assignments.values()
         ],
+        # SP-G1 Seam C: stored as a sorted list so it round-trips through
+        # JSON without loss; hydrated back to a set in _hydrate_session.
+        "applied_command_ids": sorted(session.applied_command_ids),
     }
     repo.tournaments.upsert_data(tournament_id, existing)
 
@@ -656,6 +788,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                             participant_id=slot_b.participant_id,
                             feeder_play_unit_id=slot_b.feeder_play_unit_id,
                         ),
+                        version=session.match_versions.get(pu_id, 1),
                     )
                 )
         events_out.append(
@@ -666,6 +799,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                 bracket_size=meta.bracket_size if meta else None,
                 participant_count=meta.participant_count if meta else 0,
                 rounds=list(draw.rounds),
+                status=meta.status if meta else None,
             )
         )
 
@@ -689,6 +823,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
             winner_side=r.winner_side.value,
             walkover=r.walkover,
             finished_at_slot=r.finished_at_slot,
+            score=r.score,
         )
         for pu_id, r in state.results.items()
     ]
@@ -807,6 +942,19 @@ def _clear_bracket(repo: LocalRepository, tournament_id: uuid.UUID) -> None:
             payload = dict(tournament.data)
             payload.pop("bracket_session", None)
             repo.tournaments.upsert_data(tournament_id, payload)
+
+
+def _load_match_versions(
+    repo: LocalRepository, tournament_id: uuid.UUID
+) -> Dict[str, int]:
+    """``{play_unit_id: BracketMatch.version}`` across all of the
+    tournament's events — the optimistic-concurrency tokens surfaced on
+    the serialized play units (SP-F3)."""
+    versions: Dict[str, int] = {}
+    for event_row in repo.brackets.list_events(tournament_id):
+        for m in repo.brackets.list_matches(tournament_id, event_row.id):
+            versions[m.id] = m.version
+    return versions
 
 
 def _persist_result_advancement(
@@ -980,16 +1128,19 @@ def create_bracket(
             duration_slots=ev.duration_slots,
             bracket_size=bracket_size,
             participant_count=len(ev.participants),
+            status="draft",
         )
 
     session_obj = BracketSession(
         state=state,
         draws=draws,
         events=events_meta,
-        config=ScheduleConfig(
-            total_slots=body.total_slots,
-            court_count=body.courts,
-            interval_minutes=body.interval_minutes,
+        config=build_schedule_config(
+            SchedulingParams(
+                court_count=body.courts,
+                total_slots=body.total_slots,
+                interval_minutes=body.interval_minutes,
+            )
         ),
         rest_between_rounds=body.rest_between_rounds,
         start_time=body.start_time,
@@ -1113,6 +1264,273 @@ def schedule_next_round(
             else []
         ),
     )
+
+
+def _candidates_from_schedule_result(result) -> List[BracketScheduleCandidate]:
+    """Convert a ``ScheduleResult``'s candidate snapshots to the bracket
+    wire shape. Each snapshot's ``Assignment.match_id`` is a PlayUnit id."""
+    return [
+        BracketScheduleCandidate(
+            solution_id=snap.solution_id,
+            objective_score=snap.objective_value,
+            found_at_seconds=snap.found_at_seconds,
+            assignments=[
+                BracketAssignmentIn(
+                    play_unit_id=a.match_id,
+                    slot_id=a.slot_id,
+                    court_id=a.court_id,
+                    duration_slots=a.duration_slots,
+                )
+                for a in snap.assignments
+            ],
+        )
+        for snap in (result.candidates or [])
+    ]
+
+
+def _resolve_candidate_pool_size(
+    session_cfg: dict, override: Optional[int]
+) -> int:
+    """Pick the candidate-pool size: explicit query override > persisted
+    bracket-session value > the shared default."""
+    if override is not None and override >= 1:
+        return override
+    stored = session_cfg.get("candidate_pool_size")
+    if isinstance(stored, int) and stored >= 1:
+        return stored
+    return _DEFAULT_CANDIDATE_POOL_SIZE
+
+
+@router.post(
+    "/schedule-next/stream",
+    dependencies=[_OPERATOR],
+)
+async def schedule_next_round_stream(
+    http_request: Request,
+    tournament_id: uuid.UUID = Path(...),
+    candidate_pool_size: Optional[int] = Query(None, ge=1),
+    repo: LocalRepository = Depends(get_repository),
+) -> StreamingResponse:
+    """Solve the next ready wave with real-time progress over SSE.
+
+    Mirrors the meet's ``POST /schedule/stream`` shape exactly:
+
+    - ``{type: 'model_built', ...}``  — once, after ``build()``.
+    - ``{type: 'phase', phase: 'presolve' | 'search' | 'proving'}``
+    - ``{type: 'progress', ...}``      — each intermediate solution.
+    - ``{type: 'complete', result: ScheduleNextRoundOut}`` — carries the
+      candidate pool the operator chooses from.
+    - ``{type: 'error', message: str}``
+    - ``{type: 'done'}``               — always last; stream terminator.
+
+    Unlike the batch ``/schedule-next``, this route does **not** write or
+    persist assignments — the operator picks a candidate first, then
+    ``/schedule-next/commit`` persists the chosen one (Task F2's
+    candidate-selection-before-commit step).
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+
+    tournament = repo.tournaments.get_by_id(tournament_id)
+    session_cfg = (
+        (tournament.data or {}).get("bracket_session") if tournament else None
+    ) or {}
+    time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
+    pool_size = _resolve_candidate_pool_size(session_cfg, candidate_pool_size)
+    solver_options = SolverOptions(time_limit_seconds=time_limit_seconds)
+
+    driver = TournamentDriver(
+        state=session.state,
+        config=session.config,
+        solver_options=solver_options,
+        rest_between_rounds=session.rest_between_rounds,
+    )
+    prepared = driver.prepare_next_round_problem()
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        progress_queue: asyncio.Queue = asyncio.Queue(maxsize=_SSE_QUEUE_MAX)
+        cancel_event = asyncio.Event()
+        result_holder: dict = {}
+        error_holder: dict = {}
+        state = {"phase": None, "solutions": 0}
+
+        loop = asyncio.get_running_loop()
+
+        def emit(event: dict, *, critical: bool = False) -> None:
+            if cancel_event.is_set():
+                return
+            if critical:
+                loop.call_soon_threadsafe(progress_queue.put_nowait, event)
+                return
+            try:
+                loop.call_soon_threadsafe(progress_queue.put_nowait, event)
+            except asyncio.QueueFull:
+                pass
+
+        def set_phase(phase: str) -> None:
+            if state["phase"] != phase:
+                state["phase"] = phase
+                emit({"type": "phase", "phase": phase}, critical=True)
+
+        def progress_callback(progress_data: dict):
+            state["solutions"] += 1
+            if state["solutions"] == 1:
+                set_phase("search")
+            emit({"type": "progress", **progress_data})
+
+        def solve_in_thread():
+            try:
+                if prepared is None:
+                    # No ready PlayUnits — emit a no-op complete so the
+                    # client renders an empty result rather than hanging.
+                    result_holder["result"] = ScheduleNextRoundOut(
+                        status=SolverStatus.UNKNOWN.value,
+                        play_unit_ids=[],
+                        started_at_current_slot=session.config.current_slot,
+                    )
+                    return
+                ready, current_slot, problem = prepared
+
+                scheduler = CPSATScheduler(
+                    config=problem.config,
+                    solver_options=solver_options,
+                )
+                scheduler.add_players(problem.players)
+                scheduler.add_matches(problem.matches)
+                scheduler.set_previous_assignments(problem.previous_assignments)
+                scheduler.build()
+
+                stats = scheduler._compute_model_stats()
+                emit(
+                    {
+                        "type": "model_built",
+                        "numMatches": stats["num_matches"],
+                        "numPlayers": stats["num_players"],
+                        "numIntervals": stats["num_intervals"],
+                        "numNoOverlap": stats["num_no_overlap"],
+                        "numVariables": stats["num_variables"],
+                        "multiMatchPlayers": stats["multi_match_players"],
+                        "totalSlots": stats["total_slots"],
+                        "courtCount": stats["court_count"],
+                    },
+                    critical=True,
+                )
+                set_phase("presolve")
+
+                solve_result = scheduler.solve(
+                    progress_callback=progress_callback,
+                    candidate_pool_size=pool_size,
+                )
+                result_holder["result"] = ScheduleNextRoundOut(
+                    status=solve_result.status.value,
+                    play_unit_ids=list(ready),
+                    started_at_current_slot=current_slot,
+                    runtime_ms=round(solve_result.runtime_ms, 2),
+                    infeasible_reasons=list(solve_result.infeasible_reasons),
+                    candidates=_candidates_from_schedule_result(solve_result),
+                )
+                result_holder["status_value"] = solve_result.status.value
+            except Exception as exc:  # pragma: no cover - defensive
+                log.exception("bracket SSE solver worker failed")
+                error_holder["error"] = str(exc)
+            finally:
+                emit({"type": "done"}, critical=True)
+
+        executor_future = loop.run_in_executor(None, solve_in_thread)
+
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(
+                        progress_queue.get(), timeout=1.0
+                    )
+                except asyncio.TimeoutError:
+                    if await http_request.is_disconnected():
+                        log.info("bracket SSE client disconnected; cancelling")
+                        cancel_event.set()
+                        return
+                    continue
+
+                if event["type"] == "done":
+                    if "error" in error_holder:
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'solver failed'})}\n\n"
+                    elif "result" in result_holder:
+                        if result_holder.get("status_value") == "optimal":
+                            yield f"data: {json.dumps({'type': 'phase', 'phase': 'proving'})}\n\n"
+                        out = result_holder["result"].model_dump()
+                        yield f"data: {json.dumps({'type': 'complete', 'result': out})}\n\n"
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                    break
+                else:
+                    yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            cancel_event.set()
+            executor_future.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post(
+    "/schedule-next/commit",
+    response_model=TournamentOut,
+    dependencies=[_OPERATOR],
+)
+def commit_next_round(
+    body: CommitRoundIn,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Persist the operator-chosen candidate's assignments for a round.
+
+    The streaming solve returns a candidate pool but writes nothing; the
+    client posts the chosen candidate's assignment cells here to commit
+    them. Each cell must reference a ready (unassigned, unplayed,
+    sides-resolved) PlayUnit so a stale/foreign payload can't pin a
+    played or already-scheduled match.
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+
+    ready = set(find_ready_play_units(session.state))
+    for cell in body.assignments:
+        if cell.play_unit_id not in session.state.play_units:
+            raise HTTPException(
+                status_code=404,
+                detail=f"play_unit {cell.play_unit_id!r} not found",
+            )
+        if cell.play_unit_id not in ready:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"play_unit {cell.play_unit_id!r} is not ready to "
+                    f"schedule (already assigned, played, or unresolved)"
+                ),
+            )
+        session.state.assignments[cell.play_unit_id] = TournamentAssignment(
+            play_unit_id=cell.play_unit_id,
+            slot_id=cell.slot_id,
+            court_id=cell.court_id,
+            duration_slots=cell.duration_slots,
+        )
+
+    _persist_session_metadata(repo, tournament_id, session=session)
+    return _serialize_session(session)
 
 
 @router.post(
@@ -1248,6 +1666,16 @@ def generate_event_route(
             detail=f"event {event_id!r} needs at least 2 participants to generate",
         )
 
+    # Honour the explicit ``seed`` (the documented contract): the draw
+    # generators treat input ORDER as seed order, so order the rows by
+    # ascending seed — seeded first, unseeded trailing by id. This is what
+    # lets the operator place players in specific bracket slots (the UI
+    # sends each participant the seed for its chosen position).
+    participant_rows = sorted(
+        participant_rows,
+        key=lambda p: (p.seed is None, p.seed if p.seed is not None else 0, p.id),
+    )
+
     participants = [
         Participant(
             id=p.id,
@@ -1316,6 +1744,7 @@ def generate_event_route(
         duration_slots=existing.duration_slots,
         bracket_size=bracket_size,
         participant_count=len(participant_rows),
+        status="generated",
     )
 
     # Run the solver (in memory only — no DB writes until success).
@@ -1481,12 +1910,32 @@ def record_match_result(
             status_code=404, detail=f"play_unit {body.play_unit_id!r} not found"
         )
 
+    # Optimistic concurrency (SP-F3): when the client carries the version it
+    # last saw, reject a write whose token is stale — a second operator
+    # already moved this match. Checked BEFORE the already-recorded /
+    # advancement paths so a stale write records nothing and advances
+    # nothing. Omitting ``seen_version`` keeps the legacy behavior.
+    if body.seen_version is not None:
+        current_version = session.match_versions.get(body.play_unit_id, 1)
+        if body.seen_version != current_version:
+            raise ConflictError(
+                match_id=body.play_unit_id,
+                current_version=current_version,
+                seen_version=body.seen_version,
+                message=(
+                    f"Bracket match {body.play_unit_id!r} was updated since "
+                    f"you last loaded it (current version {current_version}, "
+                    f"you sent {body.seen_version})."
+                ),
+            )
+
     existing = session.state.results.get(body.play_unit_id)
     if existing is not None:
         is_exact_replay = (
             existing.winner_side.value == body.winner_side
             and existing.finished_at_slot == body.finished_at_slot
             and existing.walkover == body.walkover
+            and existing.score == body.score
         )
         if not is_exact_replay:
             raise HTTPException(
@@ -1503,6 +1952,7 @@ def record_match_result(
             WinnerSide(body.winner_side),
             finished_at_slot=body.finished_at_slot,
             walkover=body.walkover,
+            score=body.score,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -1514,6 +1964,94 @@ def record_match_result(
         body.play_unit_id,
         affected,
     )
+
+    # Advancement bumped downstream match versions in the DB; refresh the
+    # tokens so the returned DTO carries the authoritative versions (SP-F3).
+    session.match_versions = _load_match_versions(repo, tournament_id)
+
+    return _serialize_session(session)
+
+
+@router.post("/commands", response_model=TournamentOut, dependencies=[_OPERATOR])
+def submit_bracket_command(
+    body: BracketCommandRequest,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Record a bracket result (and advance the bracket) via a command.
+
+    Differs from POST /results in two ways:
+      (a) carries a client-generated ``id`` UUID used as an idempotency key —
+          resubmitting the same id returns 200 without re-running advancement.
+      (b) the replay check runs BEFORE the ``seen_version`` guard so a
+          re-delivered command never produces a 409 stale_version even when
+          the match version has advanced since the original send (SP-G1 Seam C).
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+
+    # ---- Idempotency guard (MUST precede seen_version check) ---------------
+    # On a genuine replay the downstream version has already advanced, so the
+    # version guard would produce 409 and break at-least-once delivery. The
+    # replay check short-circuits before we even inspect the version.
+    if str(body.id) in session.applied_command_ids:
+        return _serialize_session(session)
+
+    # ---- Play-unit existence -----------------------------------------------
+    pu = session.state.play_units.get(body.play_unit_id)
+    if pu is None:
+        raise HTTPException(
+            status_code=404, detail=f"play_unit {body.play_unit_id!r} not found"
+        )
+
+    # ---- Optimistic concurrency (mirror record_match_result SP-F3) ---------
+    if body.seen_version is not None:
+        current_version = session.match_versions.get(body.play_unit_id, 1)
+        if body.seen_version != current_version:
+            raise ConflictError(
+                match_id=body.play_unit_id,
+                current_version=current_version,
+                seen_version=body.seen_version,
+                message=(
+                    f"Bracket match {body.play_unit_id!r} was updated since "
+                    f"you last loaded it (current version {current_version}, "
+                    f"you sent {body.seen_version})."
+                ),
+            )
+
+    # ---- Advance -----------------------------------------------------------
+    try:
+        affected = record_result(
+            session.state,
+            session.draws,
+            body.play_unit_id,
+            WinnerSide(body.winner_side),
+            finished_at_slot=body.finished_at_slot,
+            walkover=body.walkover,
+            score=body.score,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # ---- Mark command as applied, then persist both result and command id --
+    session.applied_command_ids.add(str(body.id))
+    _persist_result_advancement(
+        repo,
+        tournament_id,
+        session,
+        body.play_unit_id,
+        affected,
+    )
+    # applied_command_ids lives in the JSON data blob, not the bracket_*
+    # tables, so we must flush it via _persist_session_metadata separately.
+    _persist_session_metadata(repo, tournament_id, session=session)
+
+    # Refresh match versions so the returned DTO carries authoritative tokens.
+    session.match_versions = _load_match_versions(repo, tournament_id)
 
     return _serialize_session(session)
 
@@ -1780,6 +2318,95 @@ def pin_bracket_match(
     return _serialize_session(session)
 
 
+@router.post("/assign", response_model=TournamentOut, dependencies=[_OPERATOR])
+def assign_bracket_court(
+    body: BracketAssignIn,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Directly place a play unit on a court+slot — NO solver, NO 409 for
+    unscheduled units.
+
+    Unlike ``/bracket/pin``, this endpoint does NOT re-run the CP-SAT
+    solver and does NOT require the play unit to already have an
+    assignment.  It is the bracket analog of the meet's ``assign_court``
+    command, intended for the live Operations Run surface where the
+    operator places queued bracket matches by hand.
+
+    Behaviour:
+      - Creates the assignment if the unit is unscheduled (no 409).
+      - Overwrites the existing assignment if one already exists.
+      - Does NOT touch any other unit's assignment (read-modify-write
+        through ``_hydrate_session`` + ``_persist_session_metadata``).
+      - Returns the full serialized tournament snapshot (same shape as
+        ``/results`` and ``/match-action``).
+
+    404 when the play unit is not found; 404 when no bracket is
+    configured for this tournament.
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+
+    pu = session.state.play_units.get(body.play_unit_id)
+    if pu is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"play_unit {body.play_unit_id!r} not found",
+        )
+
+    # Use the play unit's own duration (already normalised during hydration);
+    # fall back to 1 slot if somehow absent (belt-and-suspenders).
+    duration_slots = pu.expected_duration_slots or 1
+
+    session.state.assignments[body.play_unit_id] = TournamentAssignment(
+        play_unit_id=body.play_unit_id,
+        slot_id=body.slot_id,
+        court_id=body.court_id,
+        duration_slots=duration_slots,
+        actual_start_slot=None,
+    )
+
+    _persist_session_metadata(repo, tournament_id, session=session)
+    return _serialize_session(session)
+
+
+@router.post("/unassign", response_model=TournamentOut, dependencies=[_OPERATOR])
+def unassign_bracket_court(
+    body: BracketUnassignIn,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Return a play unit to the queue by removing its court assignment.
+
+    Unlike ``matchAction('reset')``, this endpoint removes the assignment
+    entirely (back to the queue) rather than clearing start/end slots.
+    It does NOT alter the play unit's result, does NOT call the solver,
+    and is a no-op when the unit has no assignment.
+
+    Other play units' assignments are untouched (read-modify-write
+    through ``_hydrate_session`` + ``_persist_session_metadata``).
+
+    Returns the full serialized tournament snapshot.  Always 200 — even
+    when the unit was already unassigned.
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket configured for this tournament"
+        )
+
+    # pop is a no-op when the key is absent — idempotent by design.
+    session.state.assignments.pop(body.play_unit_id, None)
+
+    _persist_session_metadata(repo, tournament_id, session=session)
+    return _serialize_session(session)
+
+
 @router.post("/import", response_model=TournamentOut, dependencies=[_OPERATOR])
 def import_tournament_json(
     body: ImportTournamentIn,
@@ -1813,6 +2440,7 @@ def import_tournament_json(
             duration_slots=meta.duration_slots if meta else 1,
             bracket_size=meta.bracket_size if meta else None,
             participant_count=len(draw.participants),
+            status=meta.status if meta else "draft",
         )
     session = BracketSession(
         state=slot.state,
@@ -1902,6 +2530,7 @@ async def import_tournament_csv(
             duration_slots=meta.duration_slots if meta else 1,
             bracket_size=meta.bracket_size if meta else None,
             participant_count=len(draw.participants),
+            status=meta.status if meta else "draft",
         )
     session = BracketSession(
         state=slot.state,

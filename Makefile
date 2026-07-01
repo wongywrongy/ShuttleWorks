@@ -1,7 +1,7 @@
 .PHONY: help \
         scheduler scheduler-dev scheduler-rebuild \
         stop logs ps clean \
-        test test-e2e \
+        test test-e2e check \
         engine-readme
 
 # Default target — list everything.
@@ -20,6 +20,7 @@ help:
 	@echo "Tests:"
 	@echo "  make test               Run scheduler pytest suite"
 	@echo "  make test-e2e           Run scheduler Playwright e2e (boots stack)"
+	@echo "  make check              Run all local checks (lint, vitest, depcruise, ruff, pytest)"
 	@echo ""
 	@echo "Misc:"
 	@echo "  make clean              Down + remove images / volumes"
@@ -64,3 +65,12 @@ clean:
 
 engine-readme:
 	@$${PAGER:-less} scheduler_core/README.md
+
+# === Local CI checks ===
+
+check:
+	npm run lint:scheduler
+	npm --prefix products/scheduler/frontend run test:run
+	npm run depcruise
+	ruff check products/scheduler scheduler_core
+	cd products/scheduler && pytest

@@ -140,38 +140,6 @@ export interface BreakWindow {
   end: string; // HH:mm format
 }
 
-export interface TournamentConfigDTO {
-  intervalMinutes: number;
-  dayStart: string;
-  dayEnd: string;
-  tournamentDate?: string; // ISO date string: "2026-02-15"
-  breaks: BreakWindow[];
-  courtCount: number;
-  defaultRestMinutes: number;
-  freezeHorizonSlots: number;
-  rankCounts?: Record<string, number>;
-  enableCourtUtilization?: boolean;
-  courtUtilizationPenalty?: number;
-  // Game proximity constraint
-  enableGameProximity?: boolean;
-  minGameSpacingSlots?: number | null;
-  maxGameSpacingSlots?: number | null;
-  gameProximityPenalty?: number;
-  // Compact schedule - minimize makespan or eliminate gaps
-  enableCompactSchedule?: boolean;
-  compactScheduleMode?: 'minimize_makespan' | 'no_gaps' | 'finish_by_time';
-  compactSchedulePenalty?: number;
-  targetFinishSlot?: number | null;
-  // Allow player overlap
-  allowPlayerOverlap?: boolean;
-  playerOverlapPenalty?: number;
-  // Scoring format for badminton
-  scoringFormat?: 'simple' | 'badminton';
-  setsToWin?: number;
-  pointsPerSet?: number;
-  deuceEnabled?: boolean;
-}
-
 // Schedule Views
 export type ScheduleView = 'timeslot' | 'court';
 
@@ -225,16 +193,9 @@ export interface SetScore {
 }
 
 // Delay reason options
-export type DelayReason = 'player_not_present' | 'injury' | 'court_issue' | 'other';
+type DelayReason = 'player_not_present' | 'injury' | 'court_issue' | 'other';
 
 // Player confirmation entry for tracking who caused a delay
-export interface PlayerDelayEntry {
-  matchId: string;
-  playerId: string;
-  reason: DelayReason;
-  timestamp: string;
-}
-
 // Match State (for Match Desk operations)
 export interface MatchStateDTO {
   matchId: string;
@@ -250,6 +211,7 @@ export interface MatchStateDTO {
   /** ISO-8601 UTC timestamp — see `actualStartTime`. */
   actualEndTime?: string;
   actualCourtId?: number; // Override court if different from scheduled
+  actualSlotId?: number; // Live slot override (set from command response time_slot)
   originalSlotId?: number; // Original scheduled slot before being pushed
   originalCourtId?: number; // Original scheduled court before being pushed
   delayed?: boolean; // Explicitly marked as delayed
@@ -289,7 +251,7 @@ export interface RosterGroupDTO {
 }
 
 // Withdrawal reason
-export type WithdrawalReason = 'injury' | 'no_show' | 'disqualification' | 'personal' | 'other';
+type WithdrawalReason = 'injury' | 'no_show' | 'disqualification' | 'personal' | 'other';
 
 // Player
 export interface PlayerDTO {
@@ -310,10 +272,6 @@ export interface AvailabilityWindow {
   end: string; // HH:mm format
 }
 
-export interface RosterImportDTO {
-  csv: string; // CSV content
-}
-
 /** Roster entry for bracket-kind tournaments. */
 export interface BracketPlayerDTO {
   id: string;
@@ -323,20 +281,7 @@ export interface BracketPlayerDTO {
 }
 
 // Match Type - used for UI selection mode and match categorization
-export type MatchType = 'individual' | 'roster_vs_roster' | 'roster_match' | 'auto_generated';
-
 // Match Generation Rule
-export interface MatchGenerationRule {
-  type: 'all_vs_all' | 'round_robin' | 'bracket' | 'custom';
-  rosterAId: string;
-  rosterBId?: string;
-  playersPerSide: number;
-  constraints?: {
-    avoidSameGroup?: boolean;
-    maxMatchesPerPlayer?: number;
-  };
-}
-
 // Match - simplified for school sparring (supports dual and tri-meets)
 export interface MatchDTO {
   id: string;
@@ -352,23 +297,9 @@ export interface MatchDTO {
   tags?: string[]; // Optional tags like ['School A', 'School B']
 }
 
-export interface MatchesImportDTO {
-  csv: string; // CSV content
-}
-
 // Tournament Export/Import (Complete tournament data - v2.0 format)
-export interface TournamentExportV2 {
-  version: '2.0';
-  exportedAt: string; // ISO timestamp
-  config: TournamentConfig;
-  players: PlayerDTO[];
-  matches: MatchDTO[];
-  schedule?: ScheduleDTO;
-  matchStates?: Record<string, MatchStateDTO>;
-}
-
 // Verbose message from solver
-export interface SolverProgressMessage {
+interface SolverProgressMessage {
   type: 'progress';
   text: string;
 }
@@ -397,7 +328,7 @@ export interface SolverModelBuiltEvent {
 }
 
 // SSE "phase" event — emitted on solver phase transitions.
-export type SolverPhaseName = 'presolve' | 'search' | 'proving';
+type SolverPhaseName = 'presolve' | 'search' | 'proving';
 export interface SolverPhaseEvent {
   phase: SolverPhaseName;
 }
@@ -409,7 +340,7 @@ export interface ProposedMove {
   courtId: number;
 }
 
-export interface ValidationConflictDTO {
+interface ValidationConflictDTO {
   type: string;
   description: string;
   matchId?: string;
@@ -445,6 +376,8 @@ export interface TournamentStateDTO {
   bracketPlayers?: BracketPlayerDTO[];
   /** Set true once the first-load reconcile from `bracket_participants` has run. */
   bracketRosterMigrated?: boolean;
+  /** SP-G1: set true once the operations plan has been finalised by the director. */
+  planFinalized?: boolean;
 }
 
 // ---- Proposal pipeline (two-phase commit) -------------------------------
@@ -514,7 +447,7 @@ export interface Proposal {
 
 // ---- Advisories (live operations) --------------------------------------
 
-export type AdvisoryKind =
+type AdvisoryKind =
   | 'overrun'
   | 'no_show'
   | 'running_behind'
@@ -579,7 +512,7 @@ export interface BackupCreatedDTO {
 // Multi-tournament CRUD (Step 2; widened in Step 6)
 export type TournamentStatus = 'draft' | 'active' | 'archived';
 
-export type TournamentRole = 'owner' | 'operator' | 'viewer';
+type TournamentRole = 'owner' | 'operator' | 'viewer';
 
 /** Top-level kind of event a tournament row represents. ``meet`` is
  *  the intercollegiate dual / tri-meet workflow (Setup / Roster /
@@ -588,7 +521,47 @@ export type TournamentRole = 'owner' | 'operator' | 'viewer';
  *  tabs hidden). User-facing copy calls ``bracket`` a "Tournament";
  *  the wire-format keeps ``bracket`` for code symmetry with the
  *  bracket_* table family. */
-export type TournamentKind = 'meet' | 'bracket';
+type TournamentKind = 'meet' | 'bracket';
+
+/** A persisted workspace module (from the backend `workspace_modules` table).
+ *  Statuses: enabled | available | disabled | coming_soon. All modules are fully
+ *  built, so `coming_soon` is legacy/defensive only — the frontend maps any such
+ *  value to `available` in `modulesFromDto` (it never renders a "coming soon" state). */
+export interface WorkspaceModuleDTO {
+  moduleId: 'meet' | 'bracket' | 'display';
+  status: 'enabled' | 'available' | 'disabled' | 'coming_soon';
+  config: Record<string, unknown> | null;
+}
+
+/** Server-computed control-plane signals (mirrors backend
+ *  `api/workspace_signals.py`). Surfaced on `TournamentSummaryDTO.signals`. */
+export interface AttentionReasonDTO {
+  /** Stable machine code, e.g. "NO_ROSTER". */
+  code: string;
+  /** Human label, e.g. "No players added yet". */
+  label: string;
+}
+
+interface ModuleCountsDTO {
+  enabled: number;
+  available: number;
+  disabled: number;
+  comingSoon: number;
+}
+
+interface CollaborationDTO {
+  memberCount: number;
+  activeInviteCount: number;
+}
+
+export interface WorkspaceSignalsDTO {
+  health: 'good' | 'attention' | 'draft' | 'archived';
+  attention: AttentionReasonDTO[];
+  modules: ModuleCountsDTO;
+  /** Per-kind readiness checklist (keys vary by kind), e.g. `{ roster: true }`. */
+  setup: Record<string, boolean>;
+  collaboration: CollaborationDTO;
+}
 
 export interface TournamentSummaryDTO {
   id: string;
@@ -604,12 +577,21 @@ export interface TournamentSummaryDTO {
   /** Owner's email, denormalised at tournament-create time. Used by
    *  the "Shared with You" dashboard section. */
   ownerName: string | null;
+  /** Persisted module catalog for this workspace (sub-project #1). Optional
+   *  for backward compatibility with older payloads. */
+  modules?: WorkspaceModuleDTO[];
+  /** Server-computed control-plane signals (SP-A). Optional for backward
+   *  compatibility with older payloads. */
+  signals?: WorkspaceSignalsDTO;
 }
 
 export interface TournamentCreateDTO {
   name?: string | null;
   kind?: TournamentKind;
   tournamentDate?: string | null;
+  /** Optional explicit module seed (control-plane templates). When present,
+   *  the backend persists this set instead of the kind-derived one. */
+  modules?: WorkspaceModuleDTO[];
 }
 
 export interface TournamentUpdateDTO {
@@ -668,12 +650,14 @@ export interface TournamentMemberDTO {
 
 // ---- Operator commands (Step F of the architecture-adjustment arc) -------
 
-export type MatchAction =
+type MatchAction =
   | 'call_to_court'
   | 'start_match'
   | 'finish_match'
   | 'retire_match'
-  | 'uncall';
+  | 'uncall'
+  | 'assign_court'
+  | 'postpone_match';
 
 /**
  * Body of ``POST /tournaments/{tid}/commands``. The ``id`` is the
@@ -727,26 +711,5 @@ export interface ConstraintViolation {
   playerIds: string[];
   matchIds: string[];
   description: string;
-}
-
-export interface GraphNode {
-  id: string;
-  name: string;
-  groupId: string;
-  matchCount: number;
-  x?: number;
-  y?: number;
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-  matchId: string;
-  status: 'conflict' | 'resolved' | 'soft_violation';
-}
-
-export interface GraphData {
-  nodes: GraphNode[];
-  links: GraphEdge[];
 }
 

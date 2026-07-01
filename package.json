@@ -15,6 +15,20 @@
     "dev:scheduler": "npm run -w products/scheduler/frontend dev",
     "build:scheduler": "npm run -w products/scheduler/frontend build",
     "build:all": "npm run build:scheduler",
-    "lint:scheduler": "npm run -w products/scheduler/frontend lint"
+    "lint:scheduler": "npm run -w products/scheduler/frontend lint",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "docs:freshness": "node scripts/docs-freshness.mjs",
+    "depcruise": "npm --prefix products/scheduler/frontend run depcruise",
+    "jscpd": "jscpd",
+    "knip": "npm --prefix products/scheduler/frontend run knip",
+    "test:scheduler": "npm --prefix products/scheduler/frontend run test:run",
+    "test:cov": "npm --prefix products/scheduler/frontend run test:cov"
+  },
+  "devDependencies": {
+    "jscpd": "^5.0.11",
+    "vitepress": "^1.6.4",
+    "vitest": "^3.2.6"
   }
 }

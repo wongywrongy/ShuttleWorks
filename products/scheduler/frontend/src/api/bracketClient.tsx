@@ -23,8 +23,15 @@ import type {
   BracketValidationOut,
   BracketEventUpsertIn,
   BracketEventGenerateIn,
+  BracketScore,
+  BracketCommitRoundIn,
   WinnerSide,
 } from './bracketDto';
+import type {
+  SolverProgressEvent,
+  SolverModelBuiltEvent,
+  SolverPhaseEvent,
+} from './dto';
 
 export interface BracketApi {
   /** Resolves to ``null`` when no bracket is configured (404). */
@@ -32,11 +39,25 @@ export interface BracketApi {
   create: (body: BracketCreateIn) => Promise<BracketTournamentDTO>;
   remove: () => Promise<{ ok: boolean }>;
   scheduleNext: () => Promise<BracketScheduleNextOut>;
+  /** Stream the next round's solve with live progress; resolves with the
+   *  candidate pool. Does not persist — commit a choice via ``commitRound``. */
+  scheduleNextWithProgress: (
+    callbacks: {
+      onProgress?: (event: SolverProgressEvent) => void;
+      onModelBuilt?: (event: SolverModelBuiltEvent) => void;
+      onPhase?: (event: SolverPhaseEvent) => void;
+    },
+    abortSignal?: AbortSignal,
+    candidatePoolSize?: number,
+  ) => Promise<BracketScheduleNextOut>;
+  /** Persist the operator-chosen candidate's assignments for a round. */
+  commitRound: (body: BracketCommitRoundIn) => Promise<BracketTournamentDTO>;
   recordResult: (body: {
     play_unit_id: string;
     winner_side: Exclude<WinnerSide, 'none'>;
     finished_at_slot?: number | null;
     walkover?: boolean;
+    score?: BracketScore | null;
   }) => Promise<BracketTournamentDTO>;
   matchAction: (body: {
     play_unit_id: string;
@@ -56,6 +77,14 @@ export interface BracketApi {
   eventUpsert: (eventId: string, body: BracketEventUpsertIn) => Promise<BracketTournamentDTO>;
   eventGenerate: (eventId: string, body: BracketEventGenerateIn) => Promise<BracketTournamentDTO>;
   eventDelete: (eventId: string) => Promise<void>;
+  /** SP-G1 Task 9b: directly place a play unit on a court+slot without
+   *  re-running the solver.  Creates for unscheduled units (no 409); overwrites
+   *  existing.  Bracket analog of the meet's assign-court command. */
+  assignCourt: (body: { play_unit_id: string; court_id: number; slot_id: number }) => Promise<BracketTournamentDTO>;
+  /** SP-G1 Task 9b: return a play unit to the queue by removing its
+   *  court assignment — no solver, no result change.  No-op when already
+   *  unassigned. */
+  unassign: (body: { play_unit_id: string }) => Promise<BracketTournamentDTO>;
 }
 
 const BracketApiContext = createContext<BracketApi | null>(null);
@@ -76,6 +105,14 @@ export function BracketApiProvider({
       create: (body) => apiClient.createBracket(tournamentId, body),
       remove: () => apiClient.deleteBracket(tournamentId),
       scheduleNext: () => apiClient.scheduleNextBracketRound(tournamentId),
+      scheduleNextWithProgress: (callbacks, abortSignal, candidatePoolSize) =>
+        apiClient.scheduleNextBracketRoundWithProgress(
+          tournamentId,
+          callbacks,
+          abortSignal,
+          candidatePoolSize,
+        ),
+      commitRound: (body) => apiClient.commitBracketRound(tournamentId, body),
       recordResult: (body) =>
         apiClient.recordBracketResult(tournamentId, body),
       matchAction: (body) => apiClient.bracketMatchAction(tournamentId, body),
@@ -90,6 +127,8 @@ export function BracketApiProvider({
       eventUpsert: (eventId, body) => apiClient.bracketEventUpsert(tournamentId, eventId, body),
       eventGenerate: (eventId, body) => apiClient.bracketEventGenerate(tournamentId, eventId, body),
       eventDelete: (eventId) => apiClient.bracketEventDelete(tournamentId, eventId),
+      assignCourt: (body) => apiClient.assignBracketCourt(tournamentId, body),
+      unassign: (body) => apiClient.unassignBracketCourt(tournamentId, body),
     }),
     [tournamentId],
   );

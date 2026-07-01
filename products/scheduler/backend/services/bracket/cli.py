@@ -37,8 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict
-from typing import Iterable, List
+from typing import List
 
 from scheduler_core.domain.models import ScheduleConfig, SolverOptions
 from scheduler_core.domain.tournament import (

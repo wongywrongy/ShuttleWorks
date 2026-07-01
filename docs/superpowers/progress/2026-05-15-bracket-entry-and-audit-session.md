@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # Session log — bracket entry + court-time views, audit, merge
 
 **Status:** Complete. Merged + pushed to origin/main as `85b4c00` on 2026-05-15.

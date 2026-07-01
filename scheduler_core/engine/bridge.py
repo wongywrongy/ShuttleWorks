@@ -5,7 +5,7 @@ scheduling backend. Supports rolling horizon and freeze.
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import List, Optional, Set
 
 from scheduler_core.domain.models import (
     Match,
@@ -16,10 +16,8 @@ from scheduler_core.domain.models import (
 )
 from scheduler_core.domain.tournament import (
     ParticipantId,
-    PlayUnit,
     PlayUnitId,
     PlayUnitKind,
-    TournamentAssignment,
     TournamentState,
 )
 

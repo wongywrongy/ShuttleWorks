@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, "dev/**"]
+  push:
+    branches: [main, "dev/**"]
+
+jobs:
+  frontend:
+    name: Frontend (lint + tests + boundaries)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install workspaces
+        run: npm ci
+      - name: Lint
+        run: npm run lint:scheduler
+      - name: Unit tests
+        run: npm --prefix products/scheduler/frontend run test:run
+      - name: Architecture boundaries (dependency-cruiser)
+        run: npm run depcruise
+
+  backend:
+    name: Backend (ruff + pytest)
+    runs-on: ubuntu-latest
+    # Required gate. The 3 previously-flaky tests (repository ordering ×2 +
+    # a stale route-registration assertion) are fixed and the suite is
+    # deterministically green, so this blocks like the frontend job.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install scheduler_core + backend deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install ./scheduler_core
+          pip install -r products/scheduler/backend/requirements.txt
+          pip install -r products/scheduler/backend/requirements-dev.txt
+      - name: Lint (ruff)
+        run: ruff check products/scheduler scheduler_core
+      - name: Unit tests (pytest)
+        run: pytest products/scheduler/tests

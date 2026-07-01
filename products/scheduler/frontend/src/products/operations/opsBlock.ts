@@ -1,0 +1,182 @@
+/**
+ * OpsBlock — DEPRECATED alias of the canonical `Match` contract.
+ *
+ * "They are the same cells — the only difference is where it came from." Both
+ * engines' matches fold into ONE shape. That shape is now formalized as the
+ * cross-module `Match` contract (`platform/domain/match.ts`, ADR 0009); this
+ * file keeps `OpsBlock` as an alias so existing imports keep working, and owns
+ * the two engine adapters (`meetToOpsBlocks` / `bracketToOpsBlocks`) plus the
+ * Operations-only helpers (`packBlockLanes`).
+ */
+import type { Match, MatchStatus } from '../../platform/domain/match';
+import { matchKey, parseMatchKey } from '../../platform/domain/match';
+import type { MatchDTO, ScheduleDTO, MatchStateDTO, TournamentConfig } from '../../api/dto';
+import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { playUnitSideLabels, buildPlayUnitLabels } from '../bracket/bracketLabels';
+import { msToSlot, parseMatchStartMs } from '../../lib/time';
+
+/** @deprecated Use `Match` from `platform/domain/match`. Kept as an alias. */
+export type OpsBlock = Match;
+
+const TBD = 'TBD';
+
+function meetSide(ids: string[] | undefined, nameById: Record<string, string>): string {
+  if (!ids || ids.length === 0) return TBD;
+  return ids.map((id) => nameById[id] ?? id).join(' / ');
+}
+
+function meetLabel(m: MatchDTO): string {
+  if (m.eventRank) return m.eventRank;
+  if (m.matchNumber) return `M${m.matchNumber}`;
+  return m.id.slice(0, 4);
+}
+
+/**
+ * Map live match-state timing to ACTUAL slots. Config-aware (overnight-safe);
+ * pure given `ms` (no clock read here). Returns `undefined` when timing or
+ * config is missing so the caller falls back to the planned slot — never throws.
+ */
+function meetActualSlot(value: string | undefined, config: TournamentConfig | null): number | undefined {
+  if (!config) return undefined;
+  const ms = parseMatchStartMs(value);
+  if (ms === null) return undefined;
+  return msToSlot(ms, config);
+}
+
+/** Build OpsBlocks for the meet engine from its native model. */
+export function meetToOpsBlocks(
+  matches: MatchDTO[],
+  schedule: ScheduleDTO | null,
+  matchStates: Record<string, MatchStateDTO>,
+  nameById: Record<string, string>,
+  config: TournamentConfig | null,
+): OpsBlock[] {
+  const assignByMatch = new Map((schedule?.assignments ?? []).map((a) => [a.matchId, a]));
+  return matches.map((m) => {
+    const a = assignByMatch.get(m.id);
+    const st = matchStates[m.id];
+    // When `postponed` is set, the match was explicitly pulled off court — force
+    // court/slot to undefined so it re-enters the queue, even if the committed
+    // schedule assignment still carries a courtId (the schedule is NOT updated
+    // by the postpone action; only the live match-state flag is authoritative).
+    const court = st?.postponed ? undefined : (st?.actualCourtId ?? a?.courtId);
+    const slot = st?.postponed ? undefined : (st?.actualSlotId ?? a?.slotId);
+    const status: MatchStatus = st?.status ?? 'scheduled';
+    // ACTUAL timing (PLANNED slot/span above stays untouched): a started or
+    // finished match exposes its real start; a finished one also its end.
+    const actualStartSlot =
+      status === 'started' || status === 'finished'
+        ? meetActualSlot(st?.actualStartTime, config)
+        : undefined;
+    const actualEndSlot =
+      status === 'finished' ? meetActualSlot(st?.actualEndTime, config) : undefined;
+    return {
+      source: 'meet' as const,
+      id: m.id,
+      key: matchKey('meet', m.id),
+      label: meetLabel(m),
+      colorKey: m.eventRank ?? undefined,
+      court: court ?? undefined,
+      slot: slot,
+      span: a?.durationSlots ?? 1,
+      status,
+      sideA: meetSide(m.sideA, nameById),
+      sideB: meetSide(m.sideB, nameById),
+      done: status === 'finished',
+      started: status === 'started' || status === 'finished',
+      actualStartSlot,
+      actualEndSlot,
+    };
+  });
+}
+
+/** Build OpsBlocks for the bracket engine from its polled snapshot. */
+export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
+  const nameById = Object.fromEntries(data.participants.map((p) => [p.id, p.name]));
+  const assignByPu = new Map(data.assignments.map((a) => [a.play_unit_id, a]));
+  const resultByPu = new Map(data.results.map((r) => [r.play_unit_id, r]));
+  const disciplineByEvent = new Map(data.events.map((e) => [e.id, e.discipline]));
+  // Operator-friendly labels (e.g. "MS QF2") for BOTH the chip label and the
+  // "Winner of …" feeder text — never mix the friendly name with the raw id.
+  const labelById = buildPlayUnitLabels(data);
+  return data.play_units.map((pu) => {
+    const a = assignByPu.get(pu.id);
+    const result = resultByPu.get(pu.id);
+    const { a: sideA, b: sideB } = playUnitSideLabels(pu, nameById, labelById);
+    const started = a?.actual_start_slot != null;
+    const status: MatchStatus = result ? 'finished' : started ? 'started' : 'scheduled';
+    return {
+      source: 'bracket' as const,
+      id: pu.id,
+      key: matchKey('bracket', pu.id),
+      label: labelById.get(pu.id) ?? pu.id,
+      colorKey: disciplineByEvent.get(pu.event_id) ?? pu.event_id,
+      court: a ? a.court_id : undefined,
+      slot: a?.slot_id,
+      span: a?.duration_slots ?? 1,
+      status,
+      sideA,
+      sideB,
+      done: result != null,
+      started,
+      actualStartSlot: a?.actual_start_slot ?? undefined,
+      actualEndSlot: a?.actual_end_slot ?? undefined,
+    };
+  });
+}
+
+/** Lane assignment for one block: which sub-lane it occupies in its court,
+ *  and how many lanes its overlap cluster needs. */
+export interface BlockLane {
+  laneIndex: number;
+  laneCount: number;
+}
+
+/**
+ * Lane-pack court-assigned blocks so overlapping ones render side-by-side.
+ *
+ * Meet and bracket solve the same physical courts independently (ADR 0006),
+ * so they can double-book one (court, slot). Without packing, colliding
+ * blocks share a pixel and z-fight on every re-render (the "random
+ * teleport"). Per court we sweep by start slot, give each block the lowest
+ * free lane, and record the max concurrency as its lane count — mirroring the
+ * meet GanttChart packing. Returns a map keyed by `OpsBlock.key`.
+ */
+export function packBlockLanes(blocks: OpsBlock[]): Map<string, BlockLane> {
+  const byCourt = new Map<number, OpsBlock[]>();
+  for (const b of blocks) {
+    if (b.court == null || b.slot == null) continue;
+    const list = byCourt.get(b.court);
+    if (list) list.push(b);
+    else byCourt.set(b.court, [b]);
+  }
+  const laneOf = new Map<string, number>();
+  const countOf = new Map<string, number>();
+  for (const list of byCourt.values()) {
+    const sorted = [...list].sort((x, y) => (x.slot ?? 0) - (y.slot ?? 0));
+    let active: { key: string; lane: number; end: number }[] = [];
+    for (const b of sorted) {
+      const start = b.slot ?? 0;
+      const end = start + (b.span ?? 1);
+      active = active.filter((x) => x.end > start);
+      const used = new Set(active.map((x) => x.lane));
+      let lane = 0;
+      while (used.has(lane)) lane++;
+      laneOf.set(b.key, lane);
+      active.push({ key: b.key, lane, end });
+      const size = active.length;
+      for (const x of active) {
+        if (size > (countOf.get(x.key) ?? 1)) countOf.set(x.key, size);
+      }
+    }
+  }
+  const out = new Map<string, BlockLane>();
+  for (const b of blocks) {
+    out.set(b.key, { laneIndex: laneOf.get(b.key) ?? 0, laneCount: countOf.get(b.key) ?? 1 });
+  }
+  return out;
+}
+
+/** Split a `${source}:${id}` key back into parts.
+ *  @deprecated Use `parseMatchKey` from `platform/domain/match`. */
+export const parseOpsKey = parseMatchKey;

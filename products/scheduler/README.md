@@ -1,5 +1,11 @@
 # CP-SAT Tournament Scheduler
 
+> **Note (2026-06):** This product is now a **workspace control plane** — the Hub lists your
+> workspaces; each enables **modules** (Meet / Bracket / Display). The text below describes the
+> **Meet** module. See the root [`README.md`](../../README.md#workspaces--modules--the-control-plane)
+> for the workspace model and [`../../docs/superpowers/specs/`](../../docs/superpowers/specs) for
+> the design record.
+
 A single-day inter-school dual / tri-meet scheduler for badminton (and adjacent racquet sports). Built on Google OR-Tools CP-SAT with an interval-variable formulation, it produces optimal court assignments for tournaments where the same players play multiple events back-to-back.
 
 It's designed for the operator running the day from a laptop in the corner of the gym: drag-to-reschedule, live solver progress, public TV display, and a proposal-review-commit pipeline so the schedule never silently changes.

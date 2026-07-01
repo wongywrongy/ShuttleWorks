@@ -24,7 +24,8 @@ Public API (used by ``backend/api/schedule.py``,
 """
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from dataclasses import replace
+from typing import List, Tuple
 
 from app.error_codes import ErrorCode, http_error
 from app.schemas import (
@@ -44,6 +45,7 @@ from scheduler_core.domain.models import (  # noqa: E402
     ScheduleConfig,
     SolverOptions,
 )
+from services.scheduling.params import SchedulingParams, build_schedule_config
 
 
 # Default tuning for both sync and streaming endpoints. 30 s is a
@@ -153,13 +155,34 @@ def schedule_config_from_dto(config: TournamentConfig) -> ScheduleConfig:
         if e > s:
             break_slots.append((s, e))
 
-    return ScheduleConfig(
-        total_slots=total_slots,
-        court_count=config.courtCount,
-        interval_minutes=config.intervalMinutes,
-        default_rest_slots=default_rest_slots,
-        freeze_horizon_slots=config.freezeHorizonSlots,
-        current_slot=0,
+    # Structural scheduling parameters (courts, time window, slot
+    # duration, rest, breaks, closures, freeze) are built through the
+    # shared ``build_schedule_config`` — the one place those inputs map
+    # onto a ``ScheduleConfig`` for both the Meet and Bracket modules.
+    base = build_schedule_config(
+        SchedulingParams(
+            court_count=config.courtCount,
+            total_slots=total_slots,
+            interval_minutes=config.intervalMinutes,
+            default_rest_slots=default_rest_slots,
+            freeze_horizon_slots=config.freezeHorizonSlots,
+            current_slot=0,
+            break_slots=break_slots,
+            # Defensive copy — only keep court ids that fall inside the
+            # configured court range; ignore stale entries from a
+            # previous tournament with more courts.
+            closed_court_ids=[
+                c for c in (config.closedCourts or []) if 1 <= c <= config.courtCount
+            ],
+            closed_court_windows=_build_closed_court_windows(config, total_slots),
+        )
+    )
+
+    # Meet-specific solver objective tuning is layered on top — these
+    # weights are unique to the meet workflow and are not "scheduling
+    # parameters" shared with the bracket module.
+    return replace(
+        base,
         soft_rest_enabled=False,
         rest_slack_penalty=10.0,
         disruption_penalty=5.0,
@@ -177,14 +200,6 @@ def schedule_config_from_dto(config: TournamentConfig) -> ScheduleConfig:
         target_finish_slot=config.targetFinishSlot,
         allow_player_overlap=config.allowPlayerOverlap if config.allowPlayerOverlap is not None else False,
         player_overlap_penalty=config.playerOverlapPenalty if config.playerOverlapPenalty is not None else 50.0,
-        break_slots=break_slots,
-        # Defensive copy — only keep court ids that fall inside the
-        # configured court range; ignore stale entries from a previous
-        # tournament with more courts.
-        closed_court_ids=[
-            c for c in (config.closedCourts or []) if 1 <= c <= config.courtCount
-        ],
-        closed_court_windows=_build_closed_court_windows(config, total_slots),
     )
 
 

@@ -45,7 +45,7 @@ def _conflict_error_class():
 VALID_TRANSITIONS: dict[MatchStatus, list[MatchStatus]] = {
     MatchStatus.SCHEDULED: [MatchStatus.CALLED],
     MatchStatus.CALLED: [MatchStatus.PLAYING, MatchStatus.SCHEDULED],
-    MatchStatus.PLAYING: [MatchStatus.FINISHED, MatchStatus.RETIRED],
+    MatchStatus.PLAYING: [MatchStatus.FINISHED, MatchStatus.RETIRED, MatchStatus.SCHEDULED],
     MatchStatus.FINISHED: [],
     MatchStatus.RETIRED: [],
 }

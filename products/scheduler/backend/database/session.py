@@ -12,12 +12,35 @@ from __future__ import annotations
 
 from typing import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
+
+
+def _enable_sqlite_wal(engine: Engine) -> None:
+    """Set per-connection PRAGMAs on a file-backed SQLite engine.
+
+    WAL lets readers run concurrently with a writer (the default
+    rollback-journal mode locks the whole DB on write), and
+    ``busy_timeout`` makes a contended connection wait+retry for 5 s
+    instead of failing immediately with "database is locked" — which
+    matters here because a single solve can hold a write for tens of
+    seconds. Both are connection-scoped, so they must be issued on
+    every checkout via the ``connect`` event, not passed as engine
+    kwargs. In-memory SQLite (the test fixture) never reaches this.
+    """
+
+    @event.listens_for(engine, "connect")
+    def _set_pragmas(dbapi_connection, _connection_record):  # noqa: ANN001
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+        finally:
+            cursor.close()
 
 
 def _build_engine(url: str) -> Engine:
@@ -33,7 +56,18 @@ def _build_engine(url: str) -> Engine:
                 poolclass=StaticPool,
                 future=True,
             )
-        return create_engine(url, connect_args=connect_args, future=True)
+        # File-backed SQLite: pre-allocate a fixed pool (no overflow) so
+        # the connection ceiling is predictable under uvicorn's
+        # threadpool, and turn on WAL + busy_timeout for write contention.
+        engine = create_engine(
+            url,
+            connect_args=connect_args,
+            pool_size=20,
+            max_overflow=0,
+            future=True,
+        )
+        _enable_sqlite_wal(engine)
+        return engine
     return create_engine(url, future=True)
 
 

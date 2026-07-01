@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import { useUiStore } from '../store/uiStore';
-import { useCreateBackup } from '../features/setup/hooks/useTournamentBackups';
+import { useCreateBackup } from '../hooks/useTournamentBackups';
 import { useDeepHealth } from '../hooks/useDeepHealth';
 import { INTERACTIVE_BASE } from '../lib/utils';
 

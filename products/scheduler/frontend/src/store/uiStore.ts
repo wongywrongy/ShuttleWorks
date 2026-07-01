@@ -27,13 +27,26 @@ export type AppTab =
   | 'bracket-setup'
   | 'bracket-roster'
   | 'bracket-events'
+  | 'bracket-draws'
   | 'bracket-draw'
+  | 'bracket-matches'
   | 'bracket-schedule'
-  | 'bracket-live';
+  | 'bracket-live'
+  // Workspace-shell segments (left-sidebar IA): the readiness landing,
+  // the Display configuration page, and the in-workspace admin sections
+  // (the former standalone /settings tabs, re-homed under WORKSPACE).
+  | 'overview'
+  | 'display-config'
+  | 'ws-venue'
+  | 'ws-members'
+  | 'ws-sharing'
+  | 'ws-modules'
+  | 'ws-sync'
+  | 'ws-settings';
 
 export type SolverPhase = 'presolve' | 'search' | 'proving' | null;
 
-export interface SolverHudState {
+interface SolverHudState {
   phase: SolverPhase;
   numMatches?: number;
   numIntervals?: number;
@@ -46,13 +59,13 @@ export interface SolverHudState {
   elapsedMs: number;
 }
 
-export interface PendingPin {
+interface PendingPin {
   matchId: string;
   slotId: number;
   courtId: number;
 }
 
-export interface ValidationSnapshot {
+interface ValidationSnapshot {
   matchId: string;
   slotId: number;
   courtId: number;
@@ -68,9 +81,9 @@ export interface ValidationSnapshot {
   }>;
 }
 
-export type ToastLevel = 'info' | 'success' | 'warn' | 'error';
+type ToastLevel = 'info' | 'success' | 'warn' | 'error';
 
-export interface Toast {
+interface Toast {
   id: string;
   level: ToastLevel;
   message: string;
@@ -87,7 +100,7 @@ export interface SolverLogEntry {
   type: 'info' | 'solution' | 'violation' | 'stats' | 'progress';
 }
 
-export interface ScheduleGenerationStats {
+interface ScheduleGenerationStats {
   elapsed: number;
   solutionCount?: number;
   objectiveScore?: number;
@@ -95,7 +108,7 @@ export interface ScheduleGenerationStats {
   assignments: ScheduleAssignment[];
 }
 
-export interface UnlockModalState {
+interface UnlockModalState {
   open: boolean;
   actionDescription?: string;
   resolve: (confirmed: boolean) => void;
@@ -126,6 +139,15 @@ interface UiState {
   // out meet-only tabs on a bracket-kind tournament and vice versa.
   activeTournamentKind: 'meet' | 'bracket' | null;
   setActiveTournamentKind: (kind: 'meet' | 'bracket' | null) => void;
+
+  // Active tournament's lifecycle status (draft | active | archived).
+  // Fetched alongside ``kind`` by ``useTournamentKind`` from the summary
+  // endpoint; ``null`` while loading or on failure. The Workspace Shell
+  // reads this to show a status badge.
+  activeTournamentStatus: 'draft' | 'active' | 'archived' | null;
+  setActiveTournamentStatus: (
+    status: 'draft' | 'active' | 'archived' | null,
+  ) => void;
 
   // Whether the active bracket-kind tournament has a generated draw.
   // Written by ``BracketTab`` from ``useBracket().data``; ``null`` when
@@ -212,6 +234,7 @@ const INITIAL: Pick<
   | 'activeTab'
   | 'activeTournamentId'
   | 'activeTournamentKind'
+  | 'activeTournamentStatus'
   | 'bracketDataReady'
   | 'solverHud'
   | 'pendingPin'
@@ -236,6 +259,7 @@ const INITIAL: Pick<
   activeTab: 'setup',
   activeTournamentId: null,
   activeTournamentKind: null,
+  activeTournamentStatus: null,
   bracketDataReady: null,
   solverHud: DEFAULT_SOLVER_HUD,
   pendingPin: null,
@@ -264,6 +288,7 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
   setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
+  setActiveTournamentStatus: (activeTournamentStatus) => set({ activeTournamentStatus }),
   setBracketDataReady: (bracketDataReady) => set({ bracketDataReady }),
 
   setSolverHud: (patch) =>

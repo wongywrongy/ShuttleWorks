@@ -48,6 +48,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -142,6 +143,9 @@ class Tournament(Base):
         back_populates="tournament", cascade="all, delete-orphan"
     )
     bracket_events: Mapped[list["BracketEvent"]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan"
+    )
+    modules: Mapped[list["WorkspaceModule"]] = relationship(
         back_populates="tournament", cascade="all, delete-orphan"
     )
 
@@ -597,5 +601,146 @@ class BracketResult(Base):
                 "bracket_matches.id",
             ],
             ondelete="CASCADE",
+        ),
+    )
+
+
+# ---- Workspace modules (workspace-modules program, sub-project #1) -------
+#
+# First-class per-workspace module state, tied to ``tournaments.id``. The
+# legacy ``kind`` column becomes a compatibility seed: a tournament's
+# initial module set is *derived* from ``kind`` (see ``derive_modules``)
+# the first time anyone reads its modules, then persisted as real rows so
+# later sub-projects (hub / settings / sharing redesigns, hybrid
+# enablement) read and mutate first-class state rather than re-deriving.
+
+# Canonical module ids. ``meet`` / ``bracket`` are the data-producing
+# operator modules; ``display`` is the read-only public surface.
+MODULE_IDS = ("meet", "bracket", "display")
+
+# Module lifecycle vocabulary. ``enabled`` — active/operable; ``available``
+# — installable but off; ``disabled`` — turned off by the operator;
+# ``coming_soon`` — retired: all modules are fully built. Kept in the tuple only
+# as migration / immutable-guard vocabulary (the migrations convert legacy
+# coming_soon rows to ``available``); seeding it is rejected (normalize_module_seed).
+MODULE_STATUSES = ("enabled", "available", "disabled", "coming_soon")
+
+# Operator (data-producing) modules — the dependency + last-operational
+# rules in the PATCH path key off this set.
+OPERATIONAL_MODULES = ("meet", "bracket")
+
+
+def derive_modules(kind: Optional[str]) -> dict[str, str]:
+    """Map a tournament's legacy ``kind`` to its seed module status set.
+
+    The kind's own operator is ``enabled``; the foreign operator is
+    ``available`` — installable / directly usable, and promotable to
+    ``enabled`` via the control plane (SP-B2 multi-module enablement).
+    ``display`` is ``available`` for both kinds — the bracket public display
+    (SP-B3) renders the draw / live matches / results. Unknown / ``None``
+    kinds fall back to the meet shape.
+    """
+    if kind == "bracket":
+        return {"bracket": "enabled", "display": "available", "meet": "available"}
+    # ``meet`` and any unknown / None kind.
+    return {"meet": "enabled", "display": "available", "bracket": "available"}
+
+
+def display_dependency_satisfied(statuses: dict[str, str]) -> bool:
+    """Whether the Display-dependency rule holds for a module status map.
+
+    ``display`` may be ``enabled`` only if a data-producing (operational)
+    module — ``meet`` or ``bracket`` — is also ``enabled``. Returns ``True``
+    whenever ``display`` is not ``enabled`` (the rule is vacuously satisfied).
+    Shared by the create-seed validation and the PATCH handler so the rule
+    lives in exactly one place.
+    """
+    if statuses.get("display") != "enabled":
+        return True
+    return any(statuses.get(m) == "enabled" for m in OPERATIONAL_MODULES)
+
+
+def normalize_module_seed(seeds: list[dict]) -> list[dict]:
+    """Validate and complete an explicit create-time module seed.
+
+    ``seeds`` is the create endpoint's optional ``modules[]`` — each item a
+    dict with ``moduleId``, ``status``, and optional ``config``. Validates
+    structure (known id, no duplicates, valid status), backfills any of the
+    three modules not named, and returns an ordered (by ``MODULE_IDS``) list
+    of ``{"module_id", "status", "config"}`` rows ready to persist.
+
+    Backfill: any unnamed module becomes ``available`` (installable) — display
+    included, since it is fully built for both operators (meet + bracket). Raises
+    ``ValueError`` on malformed input; the caller maps that to a 400 and separately
+    applies ``display_dependency_satisfied``.
+    """
+    named: dict[str, dict] = {}
+    for item in seeds:
+        module_id = item.get("moduleId")
+        status = item.get("status")
+        if module_id not in MODULE_IDS:
+            raise ValueError(f"unknown moduleId: {module_id!r}")
+        if module_id in named:
+            raise ValueError(f"duplicate moduleId: {module_id!r}")
+        if status not in MODULE_STATUSES:
+            raise ValueError(f"invalid status: {status!r}")
+        # All modules are fully built — `coming_soon` is not a seedable status.
+        # (It remains in MODULE_STATUSES only as immutable-guard / migration
+        # vocabulary; a seed must never persist a row in that state.)
+        if status == "coming_soon":
+            raise ValueError("coming_soon is not a seedable module status")
+        named[module_id] = {
+            "module_id": module_id,
+            "status": status,
+            "config": item.get("config"),
+        }
+
+    # Display is fully built for both operators (meet + bracket public displays),
+    # so an unnamed display backfills to 'available' (installable). It can only be
+    # *enabled* when an operational module is enabled — the dependency rule
+    # (display_dependency_satisfied), applied separately by the caller.
+    rows: list[dict] = []
+    for module_id in MODULE_IDS:
+        if module_id in named:
+            rows.append(named[module_id])
+        else:
+            rows.append({"module_id": module_id, "status": "available", "config": None})
+    return rows
+
+
+class WorkspaceModule(Base):
+    """One persisted module row for a workspace (tournament).
+
+    Unique on ``(tournament_id, module_id)`` — at most one row per module
+    per workspace. Seeded lazily from ``derive_modules(tournament.kind)``
+    by ``LocalRepository.modules.ensure_modules`` the first time a read or
+    mutate path touches a workspace's modules; the Alembic migration
+    backfills the same set for rows that predate this table.
+    """
+
+    __tablename__ = "workspace_modules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    module_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    tournament: Mapped[Tournament] = relationship(back_populates="modules")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tournament_id", "module_id", name="uq_workspace_modules_tournament_module"
         ),
     )

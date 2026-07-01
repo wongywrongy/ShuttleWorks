@@ -21,8 +21,8 @@ from app.dependencies import (
     require_tournament_access,
 )
 from app.error_codes import ErrorCode, http_error
-from app.schemas import TournamentStateDTO
-from database.models import Tournament
+from app.schemas import TournamentStateDTO, WorkspaceModuleDTO
+from database.models import Tournament, normalize_module_seed, display_dependency_satisfied
 from repositories import LocalRepository, get_repository
 from api.invites import (
     InviteCreateDTO,
@@ -30,6 +30,7 @@ from api.invites import (
     InviteSummaryDTO,
     _to_summary as _invite_summary,
 )
+from api.workspace_signals import RowCounts, WorkspaceSignalsDTO, build_signals
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 log = logging.getLogger("scheduler.tournaments")
@@ -63,12 +64,24 @@ class TournamentSummaryDTO(BaseModel):
     updatedAt: str
     role: Optional[str] = None
     ownerName: Optional[str] = None
+    # Workspace-modules program (#1): first-class per-workspace module
+    # state, derived-and-persisted from ``kind``. Existing summary
+    # consumers ignore the new field.
+    modules: List[WorkspaceModuleDTO] = Field(default_factory=list)
+    signals: Optional[WorkspaceSignalsDTO] = None
+
+
+class WorkspaceModuleSeedDTO(BaseModel):
+    moduleId: str = Field(max_length=20)
+    status: str = Field(max_length=20)
+    config: Optional[dict] = None
 
 
 class TournamentCreateDTO(BaseModel):
     name: Optional[str] = Field(default=None, max_length=200)
     kind: str = Field(default="meet", max_length=20)
     tournamentDate: Optional[str] = Field(default=None, max_length=32)
+    modules: Optional[List[WorkspaceModuleSeedDTO]] = None
 
 
 class TournamentUpdateDTO(BaseModel):
@@ -99,6 +112,8 @@ def _to_summary(
     row: Tournament,
     *,
     role: Optional[str] = None,
+    modules: Optional[List[WorkspaceModuleDTO]] = None,
+    signals: Optional[WorkspaceSignalsDTO] = None,
 ) -> TournamentSummaryDTO:
     return TournamentSummaryDTO(
         id=str(row.id),
@@ -110,7 +125,43 @@ def _to_summary(
         updatedAt=row.updated_at.isoformat() if row.updated_at else "",
         role=role,
         ownerName=row.owner_email,
+        modules=modules or [],
+        signals=signals,
     )
+
+
+def _modules_for(row: Tournament, repo: LocalRepository) -> List[WorkspaceModuleDTO]:
+    """Derive-and-persist the workspace's modules, as DTOs for the summary."""
+    return [
+        WorkspaceModuleDTO.from_row(m) for m in repo.modules.ensure_modules(row)
+    ]
+
+
+def _counts_for(
+    ids: List[uuid.UUID], repo: LocalRepository
+) -> dict[uuid.UUID, RowCounts]:
+    """``{tournament_id: RowCounts}`` from the 6 grouped count queries.
+
+    Computed once for a set of ids (the list path) or a single id (the
+    get/create/update paths). No per-row DB round-trips.
+    """
+    members = repo.members.count_by_tournament(ids)
+    invites = repo.invite_links.count_active_by_tournament(ids)
+    bevents = repo.brackets.count_events_by_tournament(ids)
+    bmatches = repo.brackets.count_matches_by_tournament(ids)
+    bresults = repo.brackets.count_results_by_tournament(ids)
+    mstates = repo.match_states.count_by_tournament(ids)
+    return {
+        tid: RowCounts(
+            members=members.get(tid, 0),
+            active_invites=invites.get(tid, 0),
+            bracket_events=bevents.get(tid, 0),
+            bracket_matches=bmatches.get(tid, 0),
+            bracket_results=bresults.get(tid, 0),
+            match_states=mstates.get(tid, 0),
+        )
+        for tid in ids
+    }
 
 
 def _backup_entry(row) -> BackupEntryDTO:
@@ -152,19 +203,27 @@ def list_tournaments(
     user_uuid = user.as_uuid()
     if user_uuid is None:
         return []
-    # Resolve every (tournament_id, role) pair for the caller up front
-    # so the list response can carry the role per row without an N+1
-    # lookup. ``list_all`` is already newest-first.
-    role_by_tournament: dict = {}
-    for tid in repo.members.list_tournament_ids_for_user(user_uuid):
-        role = repo.members.get_role(tid, user_uuid)
-        if role is not None:
-            role_by_tournament[tid] = role
-    return [
-        _to_summary(t, role=role_by_tournament[t.id])
-        for t in repo.tournaments.list_all()
-        if t.id in role_by_tournament
-    ]
+    # Resolve every (tournament_id, role) pair for the caller in one query so the
+    # list response carries the role per row without an N+1 lookup. ``list_all`` is
+    # already newest-first.
+    role_by_tournament = repo.members.list_roles_for_user(user_uuid)
+    visible = [t for t in repo.tournaments.list_all() if t.id in role_by_tournament]
+    # Modules + signals are both gathered in batch (one query for all module rows,
+    # six grouped count queries) rather than per-row.
+    modules_by_tid = repo.modules.ensure_modules_for(visible)
+    counts = _counts_for([t.id for t in visible], repo)
+    out: List[TournamentSummaryDTO] = []
+    for t in visible:
+        modules = [WorkspaceModuleDTO.from_row(m) for m in modules_by_tid[t.id]]
+        out.append(
+            _to_summary(
+                t,
+                role=role_by_tournament[t.id],
+                modules=modules,
+                signals=build_signals(t, modules, counts[t.id]),
+            )
+        )
+    return out
 
 
 @router.post("", response_model=TournamentSummaryDTO, status_code=201)
@@ -185,9 +244,26 @@ def create_tournament(
     if body.kind not in ("meet", "bracket"):
         raise http_error(
             400,
-            ErrorCode.VALIDATION_FAILED,
+            ErrorCode.INVALID_INPUT,
             f"kind must be 'meet' or 'bracket', got {body.kind!r}",
         )
+    # Validate the seed up front (both checks are pure — no row needed) so a
+    # rejected seed never leaves an orphan tournament/member row behind.
+    if body.modules is not None:
+        try:
+            seed_rows = normalize_module_seed([m.model_dump() for m in body.modules])
+        except ValueError as exc:
+            raise http_error(400, ErrorCode.INVALID_INPUT, str(exc))
+        statuses = {r["module_id"]: r["status"] for r in seed_rows}
+        if not display_dependency_satisfied(statuses):
+            raise http_error(
+                400,
+                ErrorCode.INVALID_INPUT,
+                "display may be enabled only with an enabled operational module",
+            )
+    else:
+        seed_rows = None
+
     row = repo.tournaments.create(
         name=body.name,
         kind=body.kind,
@@ -197,6 +273,12 @@ def create_tournament(
     )
     if user_uuid is not None:
         repo.members.add_member(row.id, user_uuid, role="owner")
+
+    # Explicit module seed (control-plane templates / custom create). When
+    # present, persist before any module read so ensure_modules is a no-op.
+    if seed_rows is not None:
+        repo.modules.seed_modules(row, seed_rows)
+
     # Seed a fully-valid config so SetupTab reads the dashboard name + date
     # on first open instead of blank fields, AND so the first frontend PUT
     # (which snapshots the Zustand store) passes Pydantic validation on all
@@ -223,7 +305,14 @@ def create_tournament(
             row.id,
             {"config": seeded_config},
         )
-    return _to_summary(row, role="owner")
+    modules = _modules_for(row, repo)
+    counts = _counts_for([row.id], repo)
+    return _to_summary(
+        row,
+        role="owner",
+        modules=modules,
+        signals=build_signals(row, modules, counts[row.id]),
+    )
 
 
 @router.get(
@@ -248,7 +337,14 @@ def get_tournament(
     user_uuid = user.as_uuid()
     if user_uuid is not None:
         role = repo.members.get_role(tournament_id, user_uuid)
-    return _to_summary(row, role=role)
+    modules = _modules_for(row, repo)
+    counts = _counts_for([row.id], repo)
+    return _to_summary(
+        row,
+        role=role,
+        modules=modules,
+        signals=build_signals(row, modules, counts[row.id]),
+    )
 
 
 @router.patch(
@@ -286,7 +382,14 @@ def update_tournament(
     user_uuid = user.as_uuid()
     if user_uuid is not None:
         role = repo.members.get_role(tournament_id, user_uuid)
-    return _to_summary(row, role=role)
+    modules = _modules_for(row, repo)
+    counts = _counts_for([row.id], repo)
+    return _to_summary(
+        row,
+        role=role,
+        modules=modules,
+        signals=build_signals(row, modules, counts[row.id]),
+    )
 
 
 @router.delete(
@@ -424,6 +527,36 @@ def restore_tournament_backup(
             f"restore failed: {e}",
         )
     return get_tournament_state(tournament_id, repo)
+
+
+# ---- Plan-finalized flag (SP-G1 Plan→Run handoff) ----------------------
+
+
+class PlanFinalizedDTO(BaseModel):
+    finalized: bool
+
+
+@router.post(
+    "/{tournament_id}/plan-finalized",
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def set_plan_finalized(
+    body: PlanFinalizedDTO,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Toggle the ``planFinalized`` flag stored in the tournament data blob.
+
+    Read-modify-writes the existing blob so all other state (config,
+    players, matches, schedule …) is preserved.  The flag is a pure
+    persisted boolean — no server-side derivation; the Run surface
+    derives "what's missing" client-side.
+    """
+    row = _resolve_tournament(tournament_id, repo)  # 404 if missing
+    data = dict(row.data or {})
+    data["planFinalized"] = bool(body.finalized)
+    repo.tournaments.upsert_data(tournament_id, data)
+    return {"planFinalized": data["planFinalized"]}
 
 
 # ---- Invite-link endpoints scoped under a tournament --------------------

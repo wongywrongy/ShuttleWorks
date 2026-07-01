@@ -6,7 +6,6 @@ file-based read path with a tmp data dir.
 """
 from __future__ import annotations
 
-import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -392,7 +391,7 @@ def test_collect_advisories_returns_empty_when_no_schedule():
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    from _helpers import isolate_test_database, seed_tournament
+    from _helpers import isolate_test_database
     isolate_test_database(tmp_path, monkeypatch)
 
     from api import schedule_advisories, match_state, tournaments

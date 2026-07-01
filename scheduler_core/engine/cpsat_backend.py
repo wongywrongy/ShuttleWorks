@@ -302,7 +302,7 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
 
 @lru_cache(maxsize=4096)
 def _player_allowed_starts_cached(
-    availability: Tuple[Tuple[int, int], ...],
+    availability: Tuple[Tuple[int, int], ...],  # noqa: F811 — local param; shadows the side-effect plugin import above
     max_start: int,
     duration: int,
 ) -> FrozenSet[int]:
