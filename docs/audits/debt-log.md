@@ -98,6 +98,15 @@ design-gated items above + engine coverage.
 > Note: knip still reports the 8 retained contract mirrors + the displayPresets
 > unit + the `slotToTime` alias as "unused." That is expected and intentional —
 > they are kept for the reasons above, not overlooked.
+>
+> Classification caveat: mirror-vs-private was decided by name-matching each
+> flagged type against `dto.generated.ts`. If a hand-written `dto.ts` name ever
+> diverged from its generated counterpart, a mirror type could have been
+> classified private and deleted. This cannot affect runtime (types are
+> compile-time only, tsc-verified) — worst case is minor reconcile drift, and the
+> deleted set is unmistakably frontend-private by nature (import DTOs, Graph viz,
+> the `TournamentExportV2` tied to the removed file manager). Flagged so a future
+> `generate-api` reconcile isn't surprised.
 
 ---
 
