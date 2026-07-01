@@ -34,7 +34,7 @@ browser-scoped, not workspace-scoped, and is out of scope here.
 Every surface below is rendered by the shell, not by a module router:
 `products/workspace/WorkspaceShellSurface.tsx` switches on the URL segment
 (`uiStore.activeTab`) and mounts the matching component. The set of shell-owned
-segments is fixed in `app/workspace/workspaceNav.ts` (`SHELL_SEGMENTS` =
+segments is fixed in `platform/product-shell/workspaceNav.ts` (`SHELL_SEGMENTS` =
 `overview`, `display-config`, plus the six `ADMIN_SEGMENTS`).
 
 In the left nav, **Overview** sits at the top (it is `buildWorkspaceNav`'s
@@ -54,10 +54,10 @@ always-present `nav.overview` item), and the six `ws-*` segments form the
 (`display-config` is also a shell-rendered surface, but it belongs to the
 [Display module](/modules/display), not to the admin block.)
 
-:::warning Overview renders `WorkspaceOverview`, not `OverviewTab`
-`products/settings/OverviewTab.tsx` is a superseded, counts-oriented variant that
-is no longer wired into the shell. The live Overview is the readiness-checklist
-`WorkspaceOverview` in `products/workspace/`.
+:::tip Overview is `WorkspaceOverview`
+The live Overview is the readiness-checklist `WorkspaceOverview` in
+`products/workspace/`. (A superseded, counts-oriented `settings/OverviewTab.tsx`
+variant was removed in the 2026-06 debt-paydown cleanup.)
 :::
 
 ## Venue & schedule — a shared surface worth noting

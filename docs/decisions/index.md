@@ -21,6 +21,9 @@ references a longer source, it names the file rather than duplicating it.
 | [0006](/decisions/0006-unified-scheduling-core) | Unify the scheduling core; do not merge the match record | Accepted |
 | [0007](/decisions/0007-bracket-result-command-queue) | Bracket results through the command queue | Accepted |
 | [0008](/decisions/0008-shared-scoring-fields) | Share the scoring field set; add Bracket Sets scoring without a migration | Accepted |
+| [0009](/decisions/0009-universal-match-contract) | Universal match contract | Accepted |
+| [0010](/decisions/0010-nav-model-in-platform) | Nav model in the platform layer; `platform ↛ app` enforced as error | Accepted |
+| [0011](/decisions/0011-cross-product-boundary-policy) | Cross-product boundary policy (accept legit edges, relocate misplaced code, defer debt) | Accepted |
 
 ## Format
 

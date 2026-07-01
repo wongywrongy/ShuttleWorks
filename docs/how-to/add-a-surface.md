@@ -26,7 +26,7 @@ export type AppTab =
 ## 2 · Add it to the module's nav section
 
 Insert a `WsNavItem` in the module's section inside
-`buildWorkspaceNav` (`app/workspace/workspaceNav.ts:71`), in
+`buildWorkspaceNav` (`platform/product-shell/workspaceNav.ts:71`), in
 **intake → engine → emit** order (Configuration before outputs):
 
 ```ts

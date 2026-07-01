@@ -96,7 +96,7 @@ last-operational rule.
 Once a workspace is open, the **workspace shell** renders the common chrome: workspace
 identity/status, the **module dock** (which switches between enterable modules), role and
 connection indicators, and sync health. The left sidebar is built by `buildWorkspaceNav(kind,
-enabled)` in `app/workspace/workspaceNav.ts`, which emits:
+enabled)` in `platform/product-shell/workspaceNav.ts`, which emits:
 
 - **Overview** (always, top).
 - One **section per enabled module** — Meet / Bracket (engines), Operations (shared), Display

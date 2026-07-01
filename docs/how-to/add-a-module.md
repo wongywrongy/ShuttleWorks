@@ -79,12 +79,12 @@ export type AppTab =
 
 ## 4 · Give it a nav section
 
-`buildWorkspaceNav` (`app/workspace/workspaceNav.ts:71`) renders a section per
+`buildWorkspaceNav` (`platform/product-shell/workspaceNav.ts:71`) renders a section per
 enabled module. Push yours, ordered **intake → engine → emit** (Configuration
 before the output surface).
 
 ```ts
-// app/workspace/workspaceNav.ts — inside buildWorkspaceNav
+// platform/product-shell/workspaceNav.ts — inside buildWorkspaceNav
 if (enabled.has('scoreboard')) {
   sections.push({
     id: 'scoreboard',

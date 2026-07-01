@@ -117,8 +117,8 @@ and the only code that mutates a store from outside the store file. The conventi
 The persistence hooks are the owners of each store's server round-trip: `useTournamentState`
 hydrates the tournament store on mount and debounces the PUT back; `useLiveTracking` /
 `useLiveOperations` round-trip the match-state store against `/match-states` immediately on every
-transition. Read-only composition (`usePlayerNames`, `useTrafficLights`, `useMatches`, …) lives here
-too when it does non-trivial memoisation.
+transition. Read-only composition hooks (e.g. `useTrafficLights`, …) live here
+too when they do non-trivial memoisation.
 
 ## Optimistic command queues
 

@@ -57,8 +57,8 @@ Fall back to grep/Read for non-indexed files (markdown, YAML, config) or when se
 **The MCP server runs in HTTP mode** (`.mcp.json` → `http://127.0.0.1:8080/mcp`) so multiple CLIs share one index. **It must be running or no CLI connects** — `codanna serve --http --watch` (leave it up). If codanna tools fail with `ConnectionRefused at …:8080/mcp` the server is down; a CLI still on the pre-switch stdio config instead shows `-32000` and needs a restart. Then per session run `/mcp` → authorize `codanna` once (browser approval; token cached + auto-refreshed). Keep it always-on with a per-user logon Scheduled Task (`codanna-http-mcp`) — reproducible snippet + troubleshooting live in the docs at `getting-started/code-intelligence`. Don't fall back to stdio `serve`: it takes an exclusive per-index `serve.lock`, so a second concurrent CLI's server dies with `-32000`; HTTP excludes via port binding, no lock.
 
 ## Architecture boundaries (enforced by dependency-cruiser)
-- `src/platform/` is the foundation layer — it must NOT import from `products/` or `pages/` (**ERROR**, clean), nor from `app/` (**WARN**, a few known violations to ratchet).
-- Feature products under `src/products/{meet,bracket,operations,display,hub,settings,workspace}/` must NOT import each other's internals (**WARN**, known violations being ratcheted to error). Shared code lives in `components/`, `hooks/`, `lib/`, `utils/`, `store/`, `api/` — e.g. `SourceChip` (used by 3 products) lives in `components/`.
+- `src/platform/` is the foundation layer — it must NOT import from `products/` or `pages/` (**ERROR**, clean), nor from `app/` (**ERROR** since the `workspaceNav` relocation, clean — the nav model now lives in `platform/product-shell/`).
+- Feature products under `src/products/{meet,bracket,operations,display,hub,settings,workspace}/` must NOT import each other's internals (**WARN**, ~11 known violations being ratcheted to error; most remaining are legit aggregator/consumer edges). Shared code lives in `components/`, `hooks/`, `lib/`, `utils/`, `store/`, `api/` — e.g. `SourceChip` (used by 3 products) lives in `components/`.
 - Layer conventions are documented in `src/components/README.md`, `src/store/README.md`, `src/hooks/README.md`, and `src/platform/contracts/moduleContract.ts`.
 
 ## Working practices
@@ -72,7 +72,7 @@ Fall back to grep/Read for non-indexed files (markdown, YAML, config) or when se
 - Backend ordering: list queries need a stable tiebreaker (`created_at DESC, id DESC` — `id` is a random UUID; `created_at` alone ties non-deterministically across SQLite/Postgres).
 - Route registration: newer FastAPI keeps each `include_router` as a nested `_IncludedRouter` (`path=None`) rather than flattening onto `app.routes` — assert a route exists via `app.openapi()["paths"]`, not `app.routes`.
 - vitest hoisting: `vitest` must stay hoisted to the **root** `node_modules` (root `@testing-library/jest-dom` resolves it there) and is a root devDep; pin `@vitest/coverage-v8` to vitest's major (project is on vitest 3).
-- Dead nav code: the left sidebar (`src/app/workspace/workspaceNav.ts`, `buildWorkspaceNav`) is the real in-workspace navigation. The old horizontal `TabBar` / `ModuleDock` / `BRACKET_TABS` are vestigial — editing them changes nothing users see.
+- Dead nav code: the left sidebar (`src/platform/product-shell/workspaceNav.ts`, `buildWorkspaceNav`) is the real in-workspace navigation. The old horizontal `TabBar` / `ModuleDock` / `BRACKET_TABS` are vestigial — editing them changes nothing users see.
 
 ## CI & the lean-gate philosophy
 `.github/workflows/ci.yml` runs frontend (eslint + vitest + depcruise) and backend (ruff + pytest) — **both required** — on every PR/push to main and dev/**. e2e is intentionally NOT in the PR gate (it boots the Docker stack). The gates are deliberately **lean so they stay green** — don't "fix" them by blindly tightening:

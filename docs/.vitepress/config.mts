@@ -204,6 +204,8 @@ export default defineConfig({
           { text: '0007 · Bracket result command queue', link: '/decisions/0007-bracket-result-command-queue' },
           { text: '0008 · Shared scoring fields', link: '/decisions/0008-shared-scoring-fields' },
           { text: '0009 · Universal match contract', link: '/decisions/0009-universal-match-contract' },
+          { text: '0010 · Nav model in platform', link: '/decisions/0010-nav-model-in-platform' },
+          { text: '0011 · Cross-product boundary policy', link: '/decisions/0011-cross-product-boundary-policy' },
         ],
       },
     ],

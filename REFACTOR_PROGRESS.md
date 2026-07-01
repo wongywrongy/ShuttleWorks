@@ -14,11 +14,12 @@ escalate it before making any further code change.
 
 - **Program started:** 2026-06-30
 - **Baseline tag:** `pre-refactor-20260630` (commit `6d8d6e8`)
-- **Current phase:** 2-REFACTOR (**IN PROGRESS** — Kyle authorized 2026-06-30, "proceed as ordered")
-- **Status:** IN PROGRESS. Entry sequence: (1) safety-net characterization tests
-  for F-SAFETY-1 (`sync_service.py`, `matchStateStore.ts`) → (2) F-ARCH-1
-  (platform→app) → … → **STOP at F-ARCH-3** (matchStateStore ownership, needs
-  Kyle's judgment). Each slice: scope → change → full gate → independent review.
+- **Current phase:** DONE (all 4 phases complete, 2026-06-30/07-01)
+- **Status:** COMPLETE. Full program summary: `docs/audits/04-refactor-program-summary.md`.
+  depcruise 17→11, dead files 18→3 (kept), tests 1289→1333, all gates green.
+  Deferred (need design decisions, not mechanical work): F-ARCH-3 (matchStateStore
+  ownership), 2 operations→bracket-UI edges, ~92 export/type source-edits, engine
+  coverage, broad ruff. Resume feature work from here.
 
 ## Phase log
 
@@ -63,8 +64,18 @@ escalate it before making any further code change.
 - codanna MCP token expired mid-run; agents used grep + dependency-graph BFS (two methods agreed).
 
 ### Phase 4 — Documentation
-- Status: NOT STARTED
-- Summary: <fill in when done>
+- Status: **COMPLETE** (2026-07-01)
+- Summary: Reconciled docs to post-refactor reality. CLAUDE.md boundary section
+  corrected (platform↛app now error; current counts; workspaceNav path). Fixed
+  stale references to deleted/moved files in state-management, workspace-model,
+  settings, and the how-to/tutorial guides (changelogs in docs/changes/ left as
+  historical record). Added ADR 0010 (nav model in platform) + ADR 0011
+  (cross-product boundary policy); reconciled the decisions index (0009 was
+  missing) + vitepress sidebar. Produced 04-refactor-program-summary.md.
+  docs:build (dead-link gate) green. F-DOC-2 resolved (both bracket routes exist;
+  /commands canonical per ADR 0007). Left for follow-up: the stale "16" comment in
+  .dependency-cruiser.cjs + the moduleContract.ts advancement comment (both source/
+  config comments, out of docs-only scope).
 
 ## Open questions / stops
 <Anything a prior session flagged as a STOP condition and hasn't been

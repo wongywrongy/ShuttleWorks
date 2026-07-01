@@ -148,11 +148,11 @@ the next two milestones use them.
 
 ## Milestone 4 · Give it a section — and watch it appear
 
-`buildWorkspaceNav` (`app/workspace/workspaceNav.ts:71`) renders one section per
+`buildWorkspaceNav` (`platform/product-shell/workspaceNav.ts:71`) renders one section per
 enabled module. Push yours, ordered **intake → emit**.
 
 ```ts
-// app/workspace/workspaceNav.ts — inside buildWorkspaceNav
+// platform/product-shell/workspaceNav.ts — inside buildWorkspaceNav
 if (enabled.has('standings')) {
   sections.push({
     id: 'standings',                // MUST equal the ModuleId — the test asserts it
@@ -358,7 +358,7 @@ Each milestone added one declaration at one seam. This is the whole map:
 | `platform/domain/moduleModel.ts` | dock label + order, `moduleForTab` route | `tsc` + the blank board |
 | `backend/database/models.py` | `MODULE_IDS`, `derive_modules` seed | the seeded `available` row |
 | `store/uiStore.ts` | the `AppTab` surface segments | (inert until referenced) |
-| `app/workspace/workspaceNav.ts` | the sidebar section | the appearing section |
+| `platform/product-shell/workspaceNav.ts` | the sidebar section | the appearing section |
 | `products/standings/StandingsProduct.tsx` | the product component | the rendering board |
 | `app/workspace/ModuleOutlet.tsx` | the mount branch | the rendering board |
 | `platform/contracts/moduleContract.ts` (+ its test) | the honest contract + roster | the green contract test |
