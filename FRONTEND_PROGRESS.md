@@ -251,6 +251,21 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Deliberately untouched (per Kyle):** the Meet position grid and the Bracket draw canvas — the two
   genuinely-different module hearts. Structural roster-pair convergence stays a product call.
 
+### Phase 8 — Events grammar, match codes, Draws entryway, draw-formats research
+- **Status: COMPLETE** (2026-07-01) — commits `3175f74`, `05a7b57`, `8412da3`.
+- [x] Both Configurations read **Engine | Events** (labels renamed; URL values kept); Bracket's structure
+      table became the Meet Row-stack grammar (per-discipline rows, azure codes, compact facts).
+- [x] Bracket Matches shows the operator-friendly labels ("MS QF1", azure `sw-num`, raw id in tooltip)
+      + a `#` column — both matches lists read `# · code · Side A · Side B · (Slots|Status)`.
+- [x] **Draws tab = card-grid entryway**: clickable draw cards (code + discipline + status pill, meta,
+      DONE/LIVE/READY/PEND progress, Generate/Open actions); "＋ New draw" onto the glow primary.
+- [x] **`docs/architecture/draw-formats.md`** — 8 formats (one-sided/double elim, RR, groups, Monrad,
+      compass, qualifying, Swiss, ladder) mapped to the play-unit DAG. Headline: `feeder_take:
+      winner|loser` unlocks double elim + Monrad + compass; **R1 = one-sided single-elim as the default
+      layout (renderer-only)**; Swiss/ladder fit the schedule-next rhythm. Roadmap R1–R4 + format-picker UI.
+- **Gate:** vitest **751**, eslint 0 err, build ✓, depcruise 0 err, docs:build ✓.
+- **Next (from the research):** implement R1 (one-sided layout default; re-pin `DrawView.centered.test`).
+
 ---
 
 ## Token remap reference (prototype hex → intent; convert to HSL-triplet)
