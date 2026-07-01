@@ -77,7 +77,10 @@ re-reads the config.)
 
 Two ways to keep it alive:
 
-- **A terminal you leave open** — simplest: `codanna serve --http --watch` from the repo root.
+- **A terminal you leave open (self-healing)** — simplest: `.\scripts\codanna-serve.ps1` from
+  the repo root. It's a restart loop around `codanna serve --http --watch`, so if codanna exits
+  (crash, reload hiccup) it's back in ~2s; Ctrl+C stops it. (Bare `codanna serve --http --watch`
+  also works if you don't want the loop.)
 - **Always-on (Windows) — a per-user logon task.** Starts it hidden on every login, with
   restart-on-crash, so you never think about it. Run once from the repo root (as yourself, no
   admin):
