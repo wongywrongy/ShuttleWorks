@@ -83,12 +83,16 @@ they are decisions to make, then execute.
 
 ## Cleanup backlog (behavior-preserving; mechanical but not free)
 
+Phase 5's backlog pass cleared the safe majority (see **Cleared** below). What
+remains needs the codegen path verified, a coordinated config edit, or a product call:
+
 | Item | Detail | Careful-of | Size |
 | --- | --- | --- | --- |
-| **Unused exports** | knip 2026-07-01 (post-Phase-5): **31** remain (was 37; Phase 5 deleted the truly-dead whole-symbol subset). Most of the rest are "drop the `export`" (used internally) | `ADMIN_SEGMENTS`/`*_SEGMENTS`/`WORKSPACE_HOME` and `DtoName`/`DtoRegistry` are contract surface — the `moduleContract.test.ts` pins them; verify before un-exporting | M |
-| **Unused exported types** | knip: **60** types. (The +1 vs the pre-Phase-5 count is `CourtClosure` in `api/dto.ts`, orphaned when `closuresForCourt` was removed — a truly-dead delete now) | Most in `api/dto.ts` — feeds `make generate-api` (hand-reconciled). A type "unused" to knip may be an intentional codegen/public surface. Verify against the codegen path first | M |
-| **Unused package deps** | knip: **14** deps + **2** devDeps (`@radix-ui/*`, `class-variance-authority`, `date-fns`, `tailwindcss-animate`, plus `clsx` + `tailwind-merge` — the last two newly orphaned when Phase 5 removed the dead `cn` helper; devDeps `@types/uuid`, `openapi-typescript`) | **Do NOT remove blind.** Cross-check the `packages/design-system` package and any dynamic/string usage first — removing a still-needed dep breaks the build/runtime, not the gate | M, risky |
-| **Duplicate exports** | `slotToTime` \| `formatSlotTime` (`src/lib/time.ts`) — pick one canonical name; `apiClient` \| `default` (`src/api/client.ts`) | both live; rename touches call sites | S |
+| **Unused exported types (dto)** | knip: **36** remain — all in `api/dto.ts` (30) + `api/bracketDto.ts` (6); left untouched in Phase 5 | These feed `make generate-api` (hand-reconciled). A type "unused" to knip may be an intentional codegen / public-API surface — deleting fights the reconcile. **Verify against the codegen path first**, then delete the genuinely-dead ones (`TournamentExportV2`, `GraphNode/Edge/Data`, the import-DTOs, …) | M |
+| **Unused exports (display presets)** | knip: **3** remain — `DISPLAY_PRESETS` / `getPreset` / `DisplayPreset` (`products/display/publicDisplay/displayPresets.ts`) | A coherent, carefully-authored preset-picker unit in the live Display module. Retain pending the picker or delete as a set — a product call, not accidental cruft | S |
+| **Unused package deps (manualChunks-coupled)** | knip: **7** deps + **1** devDep remain: `@radix-ui/react-dialog`/`react-select`/`react-tooltip`, `date-fns`, `clsx`, `tailwind-merge` (all named in `vite.config.ts` `manualChunks`), `tailwindcss-animate` (tailwind plugin), `openapi-typescript` (the `generate-api` CLI) | Removing the manualChunks-named ones needs a **coordinated `vite.config.ts` edit** (prune the chunk arrays); the tailwind plugin + CLI tool are knip false-positives (used outside `src`). Do the deps + vite.config together | M |
+| **design-system undeclared deps** (latent bug, found in Phase 5) | `packages/design-system` **uses** `@radix-ui/react-dialog`, `@radix-ui/react-tooltip`, `date-fns` but does **not** declare them in its `package.json` — they resolve today only by hoisting from the frontend's declarations | If the frontend ever drops those deps, design-system breaks on a **clean install** — and no gate catches it. Add them to `packages/design-system/package.json` `dependencies` | S |
+| **Duplicate export** | `slotToTime` \| `formatSlotTime` (`src/lib/time.ts`) — pick one canonical name | both live; rename touches call sites | S |
 | **Engine coverage** | `backends.py`/`bridge.py` 19%, `live_ops.py` 40%, `extraction.py` 68% | cover-before-modify candidates (see locked table) | see above |
 
 ---
@@ -105,6 +109,12 @@ they are decisions to make, then execute.
 
 ## Cleared
 
-- **2026-07-01 (Phase 5)** — stale `no-cross-product` comment in
-  `.dependency-cruiser.cjs` ("16 known" → current count); truly-dead
-  whole-symbol exports removed (see `REFACTOR_PROGRESS.md` Phase 5 for the list).
+- **2026-07-01 (Phase 5 — practice install)** — stale `no-cross-product` comment
+  in `.dependency-cruiser.cjs` ("16 known" → 11); 5 truly-dead FE symbols removed +
+  `DEFAULT_EVENT_COLOR` un-exported.
+- **2026-07-01 (Phase 5 — backlog pass)** — unused **exports 37→3**, **exported
+  types 60→36**, **duplicate exports 2→1** (dropped the redundant `apiClient`
+  default), and **7 unused deps + `@types/uuid`** removed. 44 symbols un-exported
+  (used internally, tsc-verified), the rest deleted. Dep removals verified by
+  `npm install` (clean −107-line lockfile diff) + a real `vite build` + 743 tests
+  green. See `REFACTOR_PROGRESS.md` Phase 5.

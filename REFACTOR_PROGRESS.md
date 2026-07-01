@@ -105,14 +105,31 @@ escalate it before making any further code change.
     Each verified project-wide-unused (grep, knip counts tests).
   - **Stale comment:** `.dependency-cruiser.cjs` no-cross-product "16 known" → 11 +
     current buckets (SourceChip/EVENT_LABEL cleared in Phase 2/3; ops→bracket is the debt).
-- Gate green: tsc 0, eslint **0 err / 88 warn** (89→88), depcruise **0 err / 11 warn**,
-  vitest **743**, ruff-F clean, pytest **590** (no Python source changed).
-- **Logged for later (in `debt-log.md`, deliberately NOT done):** F-ARCH-3, the 2
-  ops→bracket UI edges (design calls); 31 remaining unused exports + 60 unused types
-  (careful: `dto.ts` codegen, `moduleContract` `*_SEGMENTS`/`DtoName`); 14+2 unused
-  package deps (risky — incl. clsx/tailwind-merge orphaned by the cn deletion; needs
-  design-system cross-check); `slotToTime`/`formatSlotTime`
-  dup; engine 19% coverage safety nets; broad ruff; frontend complexity unmeasured.
+- **Backlog pass (Kyle chose "work the debt-log backlog"):** cleared the safe majority
+  of the unused export/type/dep backlog, batched + gated:
+  - Unused **exports 37→3**, **exported types 60→36**, **duplicate exports 2→1**
+    (dropped the redundant `apiClient` default). 44 symbols un-exported (used
+    internally, by line-number, tsc-verified); ~11 truly-dead symbols deleted (incl.
+    `SettingsShell` component, `TextInput`/`DateInput`/`ColorSwatchRow`/`ACCENT_PALETTE`,
+    the 3 dead `selectors.ts` hooks, `_clearAllForTests` ×2, `WORKSPACE_HOME`,
+    `WorkspaceNoun`, the stale `usePositionGridColumns` re-export) with import cleanup.
+  - Unused **deps 14→7** + **devDeps 2→1**: removed 7 provably-safe deps
+    (`@radix-ui/react-checkbox`/`label`/`separator`/`slider`/`slot`/`switch`, `cva`) +
+    `@types/uuid`. Verified by `npm install` (clean −107-line lockfile diff) + a real
+    `vite build` + 743 tests. **Kept + logged** the 7 manualChunks-coupled / CLI-tool
+    deps (removal needs a coordinated `vite.config.ts` edit).
+  - **Held back deliberately** (logged, not forced): `dto.ts`/`bracketDto.ts` types
+    (36 — codegen surface, needs the `generate-api` path verified first); the
+    `displayPresets` unit (3 — coherent authored feature, product call).
+- **Latent bug found + logged:** `packages/design-system` uses `@radix-ui/react-dialog`,
+  `@radix-ui/react-tooltip`, `date-fns` without declaring them (resolves only via
+  hoisting from the frontend) — a clean-install hazard no gate catches.
+- Gate green after the full pass: tsc 0 (real `vite build` too), eslint **0 err / 85 warn**
+  (89→85), depcruise **0 err / 11 warn**, vitest **743**, ruff-F clean, pytest **590**.
+- **Still logged for later (in `debt-log.md`):** F-ARCH-3, the 2 ops→bracket UI edges
+  (design calls); the held-back dto types + displayPresets + manualChunks-coupled deps
+  above; `slotToTime`/`formatSlotTime` dup; engine 19% coverage safety nets; broad ruff;
+  frontend complexity unmeasured.
 
 ## Open questions / stops
 <Anything a prior session flagged as a STOP condition and hasn't been
