@@ -57,12 +57,16 @@ refactor would actually touch are the ones that matter — hotspots:
 | `src/lib` | 79.4 | 85.13 | |
 | `src/utils` | 100 | 100 | |
 
-### Backend (`pytest --cov=backend --cov=scheduler_core`)
+### Backend + engine (`pytest --cov=backend --cov=scheduler_core`)
 
-**TOTAL: 7173 statements, 1348 missed — 81%.**
+**TOTAL: 7173 statements, 1348 missed — 81%.** Verified to include **both**
+`backend/` and the `scheduler_core/` engine (31 `scheduler_core\…` rows present;
+the editable install reports absolute paths, so the engine rows sit above the
+`backend\…` block in the raw report). The 81% floor therefore covers the typed
+domain core, not just the API layer.
 
-Lowest-coverage backend modules (high blast-radius candidates; safety-net before
-touching):
+Lowest-coverage backend + engine modules (high blast-radius candidates;
+safety-net before touching):
 
 | Module | Stmts | % | Note |
 | --- | --- | --- | --- |
@@ -70,6 +74,8 @@ touching):
 | `backend/services/csv_importer.py` | 69 | **0** | untested importer |
 | `backend/app/paths.py` | 9 | **0** | |
 | `backend/services/bracket/formats/round_robin.py` | 39 | **13** | draw format |
+| `scheduler_core/engine/backends.py` | 115 | **19** | ⚙️ engine core (solver backend selection) — low floor on the typed domain core |
+| `scheduler_core/engine/bridge.py` | 81 | **19** | ⚙️ engine core (CP-SAT bridge) — low floor; highest-value refactor target |
 | `backend/services/bracket/io/import_matches.py` | 152 | **43** | |
 | `backend/services/bracket/io/export_schedule.py` | 68 | **50** | |
 | `backend/app/main.py` | 111 | 68 | |
@@ -165,5 +171,7 @@ anyway.
 - eslint: **0 errors** (warnings may only decrease).
 - depcruise: **0 errors**, **≤ 17 warnings** (must not increase).
 - ruff (gate): `All checks passed!`.
-- Coverage: frontend lines **≥ 34.92%**, backend **≥ 81%** — and must *rise* on
-  any file a Phase-2 slice touches (safety-net-first rule).
+- Coverage: frontend lines **≥ 34.92%**, backend + engine **≥ 81%** — and must
+  *rise* on any file a Phase-2 slice touches (safety-net-first rule). The engine
+  core (`scheduler_core/engine/backends.py`, `bridge.py`) is at 19% — if a slice
+  touches it, safety-net first (see `01-findings.md` F-COV-1).

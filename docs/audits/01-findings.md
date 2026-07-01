@@ -19,6 +19,21 @@ does it touch a live/critical path (match state, scheduling, sync outbox).
 
 ---
 
+## ⚠️ Program hazard — read before Phase 3
+
+**SP-REFACTOR-3C step 3 runs `git clean -fdx`. The `-x` deletes *ignored*
+files.** `REFACTOR_PROGRESS.md` (the program ledger) and the SP-REFACTOR prompt
+files live at repo root and are **gitignored** by the `/*.md` rule — so Phase 3's
+own mandated cleanup would **destroy the single source of truth mid-program**,
+plus any gitignored plan files you care about.
+
+**Recommendation (Kyle's call at the checkpoint):** un-ignore + track
+`REFACTOR_PROGRESS.md` the same way CLAUDE.md was un-ignored (commit `ecdc48e`),
+so it survives Phase 3. Until that's decided, Phase 3 must **not** run
+`git clean -fdx`, or must run it with an explicit exclude for the ledger.
+
+---
+
 ## Re-validation of the 4 known coupling findings (Phase 1B)
 
 | # | Prior finding | Status today | Evidence |
@@ -44,7 +59,7 @@ does it touch a live/critical path (match state, scheduling, sync outbox).
 | F-DEAD-5 | 37 unused exports + 59 unused exported types — many are "un-export (used internally)" not "delete" (e.g. `DtoName`/`DtoRegistry`); triage each | many | low | 3-CLEANUP |
 | F-DEP-1 | 12 unused deps + 2 unused devDeps in frontend `package.json` (incl. several `@radix-ui/*`) — **knip dep-detection over-reports**; verify each import path before removing | 1 | low | 3-CLEANUP |
 | F-DUP-1 | Duplication 2.38% (107 clones) — low; no action beyond opportunistic dedup when a slice is already in the file | varies | low | defer / opportunistic |
-| F-COV-1 | Backend 0%-coverage modules — confirm used-vs-dead first: `bracket/cli.py` (129 LOC), `csv_importer.py` (69), `round_robin.py` (13%) | ~3 | med | 3 (if dead) / 2 (safety-net if live) |
+| F-COV-1 | Low-coverage modules. **Dead-vs-untested unknown** (verify first): `bracket/cli.py` 0% (129 LOC), `csv_importer.py` 0% (69), `round_robin.py` 13%. **Live-but-untested** (safety-net if a slice touches): `scheduler_core/engine/backends.py` 19%, `bridge.py` 19% — the CP-SAT core, exercised on every solve, the highest-value refactor target | ~5 | med (engine: high) | 3 (if dead) / 2 (safety-net if live) |
 | F-SAFETY-1 | Safety-net-first: characterization tests for critical low-coverage before ANY refactor touches them — `sync_service.py` (72%, crash-safe outbox), `matchStateStore.ts` (36%/16% funcs) | tests only | **high path** | 2-REFACTOR (prereq) |
 | F-LINT-1 | 87 eslint warnings (34 `set-state-in-effect`, 22 `no-explicit-any`, 14 `exhaustive-deps`, 9 `only-export-components`). Ratchet candidates — but fixing the hooks rules **changes behavior**, so out of scope for a behavior-preserving program | many | med | note / defer (not Phase 2) |
 | F-ARCH-1 | `platform-no-app` (3): `WorkspaceSidebar`/`WorkspaceShell`/`moduleContract.test` → `src/app/workspace/workspaceNav.ts`. Fix = relocate `workspaceNav` out of `app/` into a platform-visible layer | ~4 | med | 2-REFACTOR |
