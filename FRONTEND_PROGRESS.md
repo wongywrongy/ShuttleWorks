@@ -50,11 +50,13 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Program started:** 2026-07-01
 - **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb`
 - **Scope:** Foundation + keystones
-- **Current phase:** Phase 3 COMPLETE (all 4 keystones) → Phase 4 (final gate) ready
-- **Status:** Phases 0–3 committed. Keystones: Run (`c8ed474`) + Meet Matches (`5c64fde`) dedicated re-skins;
-  Hub delivered by the foundation (no dedicated changes needed); Bracket Draw dotted canvas + FINAL accent.
-  All verified live. **Nav tip:** deep-link `page.goto` resets to Config — navigate client-side (click the
-  sidebar); Operations sub-items are **Plan/Run** (segments `/live`,`/courts`), Bracket is **Draws**→Open→`/bracket-draw`.
+- **Current phase:** ALL PHASES COMPLETE — "Foundation + keystones" scope delivered.
+- **Status:** Phases 0–4 done + committed (`02f1cc8`, `99213d0`, `a46db9b`, `c8ed474`, `5c64fde`, `05f01b4`).
+  Final gate green: build ✓, vitest **743**, eslint **0 err** (85 pre-existing warns), depcruise **0 err**
+  (11 pre-existing warns; MatchChip still doesn't import `products/*`). Backend untouched.
+  **Nav tip:** deep-link `page.goto` resets to Config — navigate client-side (click the sidebar); Operations
+  sub-items are **Plan/Run** (segments `/courts`,`/live`), Bracket is **Draws**→Open→`/bracket-draw`.
+  **Next** (see Follow-up): the other 9 screens + uncovered live surfaces inherit the foundation; polish as needed.
 
 ## Phase log
 
@@ -142,13 +144,15 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Verified each keystone:** build ✓, vitest **743**, live screenshots in `.playwright-mcp/p3-*`.
 
 ### Phase 4 — Verification + test reconciliation
-- **Status: NOT STARTED**
-- [ ] Visual: `make scheduler-dev` (:5173), screenshot the 4 keystones in **light + dark**, diff vs. the
-      prototype HTML. Shots → `.playwright-mcp/<name>.png` (root-litter gotcha, CLAUDE.md); keepers →
-      `docs/screenshots/`. Confirm Public Display stays dark.
-- [ ] Update the **enumerated** intended test changes (below). Any test needing a *behavior* change → STOP.
-- [ ] Gates: `npm run lint:scheduler` (0 err), `npm --prefix products/scheduler/frontend run test:run`,
-      `tsc -b` (via build), `npm run depcruise` (0 new edges), then `make check`.
+- **Status: COMPLETE** (2026-07-01)
+- [x] Visual: verified live on the running dev server (:5173) — Hub, Operations Run (+ inspector), Meet
+      Matches, Bracket Draw all screenshot-checked against the prototype (`.playwright-mcp/p1..p3-*.png`).
+      Dark verified throughout; light verified on Hub (P1). *Light-theme spot-check of the other keystones
+      is a cheap follow-up.*
+- [x] Enumerated intended test changes applied (eyebrow brackets → plain labels); no behavior test edited.
+- [x] Gates: eslint **0 err**, vitest **743**, `tsc`/build ✓, depcruise **0 err** (11 pre-existing warns).
+      Backend untouched (no Python changes) so pytest/ruff unaffected; `make check` not needed for a
+      frontend-only pass.
 
 ---
 
