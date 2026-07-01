@@ -33,7 +33,7 @@ import { computeConstraintViolations } from '../../utils/constraintChecker';
 import { formatSlotTime } from '../../lib/time';
 import { MatchesTable, type TableView } from './schedule/MatchesTable';
 import { ScheduleSidebar } from './schedule/ScheduleSidebar';
-import { SourceChip } from '../operations/SourceChip';
+import { SourceChip } from '../../components/SourceChip';
 import { ActionsBar } from '../../components/control-plane';
 
 export function SchedulePage() {

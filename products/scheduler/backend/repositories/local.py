@@ -138,7 +138,9 @@ class _LocalTournamentRepo:
         """Newest-first list."""
         return list(
             self.session.scalars(
-                select(Tournament).order_by(Tournament.created_at.desc())
+                select(Tournament).order_by(
+                    Tournament.created_at.desc(), Tournament.id.desc()
+                )
             )
         )
 
@@ -955,7 +957,9 @@ class _LocalTournamentBackupRepo:
             self.session.scalars(
                 select(TournamentBackup)
                 .where(TournamentBackup.tournament_id == tournament_id)
-                .order_by(TournamentBackup.created_at.desc())
+                .order_by(
+                    TournamentBackup.created_at.desc(), TournamentBackup.id.desc()
+                )
             )
         )
 
@@ -1572,10 +1576,8 @@ class LocalRepository:
             # collision if we try to insert another row, so we update
             # the existing one in place via the apply / reject branches.
             command_row = existing
-            command_was_pre_existing = True
         else:
             command_row = None
-            command_was_pre_existing = False
 
         # Step 3 — version check.
         match = self.session.get(Match, (tournament_id, match_id))

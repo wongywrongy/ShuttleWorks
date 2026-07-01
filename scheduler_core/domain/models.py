@@ -5,7 +5,7 @@ They mirror the API schemas but are independent of FastAPI.
 """
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 
 class SolverStatus(str, Enum):

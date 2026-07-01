@@ -96,7 +96,6 @@ def _upsert_body(participants=None) -> dict:
 
 def _get_event_status(client, tid: str, event_id: str) -> str:
     """Read the event status directly from the DB (not just from route response)."""
-    from repositories import get_repository
     from database.session import SessionLocal
     from database.models import BracketEvent
     from sqlalchemy.orm import Session
@@ -289,7 +288,6 @@ def test_generate_infeasible_returns_409(client, tid):
     # With only 1 total slot and a match needing 2 slots, it's infeasible.
     assert rg.status_code == 409
     # DB must have rolled back — no bracket_matches rows for MS.
-    from repositories import get_repository
     from database.session import SessionLocal
     from database.models import BracketMatch
     import uuid as _uuid
@@ -449,7 +447,6 @@ def test_generate_bye_result_persisted(client, tid):
     assert rg.status_code == 200, rg.text
 
     # Query the DB directly for walkover result rows for this event.
-    from repositories import get_repository
     from database.session import SessionLocal
     from database.models import BracketResult
     import uuid as _uuid

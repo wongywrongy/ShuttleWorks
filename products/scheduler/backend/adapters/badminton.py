@@ -25,7 +25,7 @@ Public API (used by ``backend/api/schedule.py``,
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from app.error_codes import ErrorCode, http_error
 from app.schemas import (

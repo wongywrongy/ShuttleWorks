@@ -23,7 +23,7 @@ repository pipeline is exercised end-to-end, including the
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 from fastapi import FastAPI

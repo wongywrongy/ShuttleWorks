@@ -35,7 +35,7 @@ import { SuggestionsRail } from './suggestions/SuggestionsRail';
 import { GanttLegend } from './control-center/GanttLegend';
 import { exportScheduleXlsx } from './exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-import { SourceChip } from '../operations/SourceChip';
+import { SourceChip } from '../../components/SourceChip';
 import { ActionsBar } from '../../components/control-plane';
 import type { Advisory } from '../../api/dto';
 

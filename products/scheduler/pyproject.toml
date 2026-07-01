@@ -5,3 +5,19 @@ testpaths = ["tests"]
 # Async tests are opt-in via explicit ``@pytest.mark.asyncio`` markers
 # (see test_suggestions_worker.py, test_proposal_pipeline_integration.py).
 asyncio_mode = "strict"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["alembic", ".venv", "archive", "**/migrations"]
+
+[tool.ruff.lint]
+# Gate on F (pyflakes: undefined names, unused imports/vars/redefinitions) —
+# high signal, low noise. The broader set ["E","I","B","UP"] is a deferred
+# one-time cleanup (~1400 mostly-stylistic findings; note B008 false-positives
+# on FastAPI Depends()). To run it later:
+#   ruff check products/scheduler --select I,UP --fix && ruff format products/scheduler
+select = ["F"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # package re-exports are not "unused"

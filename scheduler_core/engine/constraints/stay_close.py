@@ -18,7 +18,6 @@ from typing import Mapping
 
 from scheduler_core.domain.models import Assignment
 from scheduler_core.engine.constraints import (
-    Constraint,
     ConstraintContext,
     register_constraint,
 )

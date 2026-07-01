@@ -8,7 +8,6 @@ so the operator gets a clear message rather than a generic INFEASIBLE.
 from __future__ import annotations
 
 from scheduler_core.engine.constraints import (
-    Constraint,
     ConstraintContext,
     register_constraint,
 )

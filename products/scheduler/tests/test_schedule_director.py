@@ -29,7 +29,7 @@ from _helpers import seed_tournament
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    from _helpers import isolate_test_database, seed_tournament
+    from _helpers import isolate_test_database
     isolate_test_database(tmp_path, monkeypatch)
 
     from api import (

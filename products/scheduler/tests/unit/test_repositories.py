@@ -8,6 +8,7 @@ restore-from-backup) under explicit tournament-id scoping.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine
@@ -19,7 +20,6 @@ from database.models import (
     Base,
     InviteLink,
     MatchState,
-    Tournament,
     TournamentBackup,
     TournamentMember,
 )
@@ -94,10 +94,17 @@ def test_get_by_id_returns_row_or_none(repo):
     assert repo.tournaments.get_by_id(uuid.uuid4()) is None
 
 
-def test_list_all_returns_newest_first(repo):
+def test_list_all_returns_newest_first(repo, session):
     a = repo.tournaments.create(name="A")
     b = repo.tournaments.create(name="B")
     c = repo.tournaments.create(name="C")
+    # Stamp strictly increasing created_at so we assert against the repo's
+    # ORDER BY, not the host clock's resolution: rapid inserts otherwise tie
+    # created_at on coarse clocks (e.g. Windows) and ordered non-deterministically.
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for offset, row in enumerate((a, b, c)):
+        row.created_at = base + timedelta(seconds=offset)
+    session.commit()
     listed = [t.id for t in repo.tournaments.list_all()]
     # Newest first.
     assert listed == [c.id, b.id, a.id]
@@ -252,10 +259,14 @@ def test_backup_get_by_filename(repo):
     assert repo.backups.get_by_filename(tid, "missing.json") is None
 
 
-def test_backup_rotate_keeps_newest_n(repo):
+def test_backup_rotate_keeps_newest_n(repo, session):
     tid = _seed_tournament(repo, name="A")
-    for i in range(5):
-        repo.backups.create(tid, {"i": i}, f"snap-{i}.json")
+    created = [repo.backups.create(tid, {"i": i}, f"snap-{i}.json") for i in range(5)]
+    # Stamp strictly increasing created_at (see test_list_all_returns_newest_first).
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for offset, row in enumerate(created):
+        row.created_at = base + timedelta(seconds=offset)
+    session.commit()
     deleted = repo.backups.rotate(tid, keep=3)
     assert deleted == 2
     remaining = repo.backups.list_for_tournament(tid)

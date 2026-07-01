@@ -1,7 +1,7 @@
 """generate_event: per-event scheduling that respects locked other-event matches."""
 from __future__ import annotations
 import pytest
-from scheduler_core.domain.models import ScheduleConfig, SolverStatus
+from scheduler_core.domain.models import ScheduleConfig
 from scheduler_core.domain.tournament import Participant, ParticipantType, TournamentState, WinnerSide
 from services.bracket import (
     TournamentDriver,

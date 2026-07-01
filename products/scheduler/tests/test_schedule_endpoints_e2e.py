@@ -76,11 +76,18 @@ def _minimal_problem():
 
 
 def test_routes_registered(client):
-    """The three schedule endpoints all exist."""
-    routes = {r.path for r in client.app.routes if hasattr(r, "path")}
-    assert "/schedule" in routes
-    assert "/schedule/repair" in routes
-    assert "/schedule/warm-restart" in routes
+    """The three schedule endpoints all exist.
+
+    Inspect the OpenAPI schema rather than walking ``app.routes``: newer
+    FastAPI keeps each ``include_router`` as a nested ``_IncludedRouter``
+    object (``path=None``) instead of flattening the child ``APIRoute``s
+    onto the app, so ``app.routes`` no longer surfaces these paths. The
+    OpenAPI ``paths`` map is the version-independent source of truth.
+    """
+    paths = client.app.openapi()["paths"]
+    assert "/schedule" in paths
+    assert "/schedule/repair" in paths
+    assert "/schedule/warm-restart" in paths
 
 
 def test_schedule_honours_cross_engine_closed_windows(client):

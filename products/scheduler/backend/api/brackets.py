@@ -40,8 +40,7 @@ import logging
 import time
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import AsyncGenerator, Dict, List, Literal, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
@@ -49,8 +48,6 @@ from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.dependencies import (
-    AuthUser,
-    get_current_user,
     require_tournament_access,
 )
 from app.exceptions import ConflictError

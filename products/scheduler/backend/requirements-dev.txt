@@ -8,3 +8,7 @@
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
 httpx>=0.26.0
+# ruff pinned to a minor series: new minor releases can add/retune lint
+# rules and would redden the F-only gate on an unrelated PR. Bump deliberately.
+ruff>=0.15,<0.16
+pytest-cov>=5.0.0

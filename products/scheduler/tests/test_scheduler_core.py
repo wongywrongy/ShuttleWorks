@@ -268,11 +268,10 @@ class TestGameProximity:
 
         assert result.status in [SolverStatus.OPTIMAL, SolverStatus.FEASIBLE]
 
-        # Player 1's games should have at least min_game_spacing_slots gap
-        slots = {a.match_id: a.slot_id for a in result.assignments}
-        gap = abs(slots['m1'] - slots['m2'])
-        # With penalty, solver should try to maintain spacing
-        # (may not always achieve if other constraints conflict)
+        # With a spacing penalty the solver should still return a valid
+        # schedule; exact spacing isn't asserted here (other constraints may
+        # dominate), so the OPTIMAL/FEASIBLE status check above is the
+        # invariant under test.
 
 
 class TestLockedAssignments:

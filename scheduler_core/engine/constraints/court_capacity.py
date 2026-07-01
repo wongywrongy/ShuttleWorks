@@ -7,7 +7,6 @@ applies ``AddNoOverlap`` per court.
 from __future__ import annotations
 
 from scheduler_core.engine.constraints import (
-    Constraint,
     ConstraintContext,
     register_constraint,
 )

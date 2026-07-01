@@ -6,7 +6,7 @@ This module is a thin route surface around it.
 import logging
 from dataclasses import replace
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 
 from app.error_codes import ErrorCode, http_error
 from fastapi.responses import StreamingResponse
@@ -16,8 +16,7 @@ import json
 import asyncio
 from app.schemas import (
     TournamentConfig, PlayerDTO, MatchDTO, ScheduleDTO,
-    ScheduleAssignment, SolverStatus,
-    PreviousAssignmentDTO, ProposedMoveDTO, ValidationResponseDTO,
+    ScheduleAssignment, PreviousAssignmentDTO, ProposedMoveDTO, ValidationResponseDTO,
 )
 
 # Import directly from scheduler_core domain models and engine

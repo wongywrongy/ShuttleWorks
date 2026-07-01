@@ -16,7 +16,7 @@ import asyncio
 import logging
 from typing import Dict, List, Literal, Optional, Set
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.error_codes import ErrorCode, http_error
 from pydantic import BaseModel

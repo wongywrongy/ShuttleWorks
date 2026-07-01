@@ -8,7 +8,7 @@ import { useTournamentId } from "../../hooks/useTournamentId";
 import { INTERACTIVE_BASE } from "../../lib/utils";
 import { ActionsBar } from "../../components/control-plane";
 import { EventsFilterStrip } from "./EventsFilterStrip";
-import { SourceChip } from "../operations/SourceChip";
+import { SourceChip } from "../../components/SourceChip";
 import { formatLabel, disciplineLabel } from "./bracketLabels";
 import { BracketScheduleModal } from "./BracketScheduleModal";
 

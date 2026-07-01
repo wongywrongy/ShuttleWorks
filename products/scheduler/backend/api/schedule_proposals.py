@@ -43,7 +43,6 @@ from app.schemas import (
     PlayerDTO,
     Proposal,
     ProposalKind,
-    PreviousAssignmentDTO,
     RosterGroupDTO,
     ScheduleDTO,
     ScheduleHistoryEntry,

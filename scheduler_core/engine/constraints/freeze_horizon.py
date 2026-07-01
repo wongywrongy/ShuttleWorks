@@ -8,7 +8,6 @@ re-solve doesn't yank a match that's about to be called.
 from __future__ import annotations
 
 from scheduler_core.engine.constraints import (
-    Constraint,
     ConstraintContext,
     register_constraint,
 )

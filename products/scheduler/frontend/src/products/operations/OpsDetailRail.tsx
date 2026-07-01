@@ -17,7 +17,7 @@ import { MatchDetailPanel } from '../bracket/MatchDetailPanel';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
-import { SourceChip } from './SourceChip';
+import { SourceChip } from '../../components/SourceChip';
 
 const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card ` +

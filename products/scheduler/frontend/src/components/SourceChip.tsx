@@ -10,8 +10,12 @@
  *
  * The hybrid Operations view interleaves meet + bracket matches, so the chip
  * is fed by `Match.source` per row.
+ *
+ * Lives in `components/` (not a single product) because it is consumed by
+ * the meet, bracket, and operations surfaces alike — a shared cross-feature
+ * component per the boundary rules enforced by dependency-cruiser.
  */
-import type { MatchSource } from '../../platform/domain/match';
+import type { MatchSource } from '../platform/domain/match';
 
 const LABEL: Record<MatchSource, string> = {
   meet: 'Meet',

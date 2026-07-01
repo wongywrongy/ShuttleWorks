@@ -14,7 +14,7 @@ import io
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from scheduler_core.domain.tournament import ParticipantType, TournamentState
+from scheduler_core.domain.tournament import TournamentState
 
 
 def to_csv(

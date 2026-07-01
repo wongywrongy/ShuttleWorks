@@ -21,7 +21,6 @@ from scheduler_core.domain.models import (
 from scheduler_core.engine import CPSATBackend
 from scheduler_core.engine.cpsat_backend import CPSATScheduler
 from scheduler_core.engine.validation import (
-    ScheduleValidationError,
     find_conflicts,
     verify_schedule,
 )

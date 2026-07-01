@@ -14,5 +14,12 @@ export default defineConfig({
       // off-by-one bugs that would be masked under UTC.
       TZ: 'America/Los_Angeles',
     },
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/__tests__/**', 'src/api/dto.generated.ts', 'src/**/*.d.ts', 'src/main.tsx'],
+    },
   },
 });

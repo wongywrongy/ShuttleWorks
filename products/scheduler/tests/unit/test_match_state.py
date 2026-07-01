@@ -20,7 +20,7 @@ from sqlalchemy.pool import StaticPool
 import sys
 
 # conftest.py adds backend/ to sys.path before this module is collected.
-from database.models import Base, Match, MatchStatus
+from database.models import Base, MatchStatus
 from repositories.local import LocalRepository
 from services.match_state import (
     LOCKED_STATUSES,

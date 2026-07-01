@@ -9,7 +9,6 @@ list and adds it to the minimised expression.
 from __future__ import annotations
 
 from scheduler_core.engine.constraints import (
-    Constraint,
     ConstraintContext,
     register_constraint,
 )
