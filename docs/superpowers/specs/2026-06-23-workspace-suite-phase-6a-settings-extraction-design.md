@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # Workspace Suite — Meet untangle, sub-phase 1: shared settings-UI extraction — design
 
 **Date:** 2026-06-23

@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # PR plan — `dev/workspace-suite` → `main`
 
 **Scope:** 226 commits · 483 files · +41,687 / −8,400. `main` has not moved past the merge-base (`cab713d`), so the merge is clean. This is the entire **workspace-suite rearchitecture** of the ShuttleWorks badminton scheduler.

@@ -73,9 +73,9 @@ Status legend: **CURRENT** · **FIXED** (had stale claims, corrected this phase 
 
 | Doc / tree | Decision |
 | --- | --- |
-| `docs/superpowers/**` (~55 plans/specs/progress) | **HISTORICAL** — added `docs/superpowers/README.md` banner declaring the whole tree a design archive. Already `srcExclude`d. A directory banner (not 55 per-file banners) is the proportionate move. |
+| `docs/superpowers/**` (plans/specs/progress) | **HISTORICAL** — `docs/superpowers/README.md` tree banner **plus** a one-line HISTORICAL banner prepended to each of the **66** dated plan/spec/progress files (scripted, idempotent), so a file opened directly via search — not just the directory — is labeled. Already `srcExclude`d. |
 | `docs/superpowers/2026-06-25-workspace-suite-session-handoff.md` | **HISTORICAL** — banner added; it claimed to be "the single source of truth" (the exact mislead risk), now neutralized with a pointer to current docs. |
-| `docs/architecture/workspace-suite/**` (ownership maps, glossary, import-boundaries, meet-design-inventory) | **HISTORICAL** — added `docs/architecture/workspace-suite/README.md` banner. Already `srcExclude`d. |
+| `docs/architecture/workspace-suite/**` (ownership maps, glossary, import-boundaries, meet-design-inventory) | **HISTORICAL** — `README.md` tree banner **plus** a per-file banner on each of the 5 analysis maps. Already `srcExclude`d. |
 | `docs/architectural-roadmap.md` | **HISTORICAL / forward-looking** — already carries a "Note (2026-06): historical" banner. **Not** rewritten to match present (STOP condition). |
 | `docs/tech-stack.md` | **HISTORICAL** — already carries a "Note (2026-06)" banner noting it's pre-control-plane. |
 | `docs/changes/**`, `docs/deploy/cloud.md` | HISTORICAL (dated changelogs / deploy notes; `srcExclude`d; left in place). |
@@ -97,6 +97,8 @@ Status legend: **CURRENT** · **FIXED** (had stale claims, corrected this phase 
    vs. the current `docs/architecture/backend-structure.md` + `products/scheduler/BACKEND.md`;
    resolved by bannering `backend/README.md` as partially superseded and pointing to the
    canonical pair (kept for its still-useful local conventions section).
-3. **Historical trees get one directory banner each**, not per-file — proportionate for
-   dated-snapshot trees already excluded from the built site.
+3. **Historical trees get a directory banner *and* a per-file banner.** The per-file
+   line (scripted + idempotent) is what protects a file opened directly via search —
+   the directory banner alone does not, since a searcher opens the file, not the README.
+   Applied to all 66 `superpowers/` snapshot files + the 5 `workspace-suite/` maps.
 4. **Roadmap stays forward-looking** — labeled, not "fixed" into present-day code.

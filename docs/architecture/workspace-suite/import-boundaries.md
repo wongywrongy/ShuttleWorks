@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time analysis map from the 2026-06 workspace-suite redesign, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and the VitePress site. (Labeled in SP-REFACTOR Phase 6.)
+
 # Import Boundary Rules
 
 Dependency rules for the suite. These are *conventions* in Phase 1 (no lint

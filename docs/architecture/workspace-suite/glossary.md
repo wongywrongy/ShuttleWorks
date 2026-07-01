@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time analysis map from the 2026-06 workspace-suite redesign, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and the VitePress site. (Labeled in SP-REFACTOR Phase 6.)
+
 # Workspace Suite — Glossary & Migration Rules
 
 Companion to `docs/superpowers/specs/2026-06-23-workspace-suite-architecture-design.md`.

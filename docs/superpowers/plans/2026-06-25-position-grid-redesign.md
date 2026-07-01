@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # Position Grid — Custom Redesign Plan
 
 _Authored 2026-06-25. Decision: rebuild the meet roster "position grid" **fully custom** on the existing stack (React 19 + Compiler, Tailwind, **@dnd-kit/core v6**, Radix, `@scheduler/design-system`, Zustand) — NOT a data-grid library. Prior research confirmed every grid library (AG Grid, react-data-grid, Glide, Handsontable, MUI X, even headless TanStack Table) is a poor fit because this is a tiny fixed **assignment matrix** (≤5 event columns × ~6–8 position rows), where the value is the drag-drop + cell semantics, not tabular data handling. The most stable path is custom on the OSS primitives already vendored._

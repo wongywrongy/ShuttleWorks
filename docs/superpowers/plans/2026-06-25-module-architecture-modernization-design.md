@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # Module-Contract Modernization — Design
 
 _Generated 2026-06-25 (branch dev/workspace-suite) by a read-only research workflow: 5 parallel mappers (module contract, frontend state, backend routes, cross-module seams, module internals) -> synthesize -> adversarial review -> revise. The reviewer caught control-plane touches + stale-behavior assumptions in the draft; this is the revised, additive-only design._

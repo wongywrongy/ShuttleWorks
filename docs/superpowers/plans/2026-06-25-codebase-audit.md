@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # ShuttleWorks Audit — Consolidated & Prioritized
 
 _Generated 2026-06-25 (branch `dev/workspace-suite`) by a 5-auditor read-only sweep (perf×2, dead code, forgotten features, structure) + Opus synthesis. The `perf-frontend` auditor finished reading but didn't emit structured output, so the Performance section is backend-weighted — re-run that single sweep for frontend render/polling/virtualization findings._

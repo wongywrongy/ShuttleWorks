@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # Operations Live Board (SP-G1b) Implementation Plan
 
 > **For agentic workers:** This plan is executed by a Workflow (sequential implementer + per-task reviewer per task). Each task is self-contained; read the named files before editing.

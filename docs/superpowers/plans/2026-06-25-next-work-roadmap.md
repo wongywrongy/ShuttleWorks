@@ -1,3 +1,5 @@
+> ⚠️ **HISTORICAL SNAPSHOT** — point-in-time design/plan/spec doc, not current truth. For current state see `docs/audits/06-state-of-codebase.md` and `REFACTOR_PROGRESS.md`. (Labeled in SP-REFACTOR Phase 6.)
+
 # Next-work roadmap (post-workspace-restructure)
 
 _Authored 2026-06-25. Derived from the two research reports in this folder: `2026-06-25-codebase-audit.md` and `2026-06-25-module-architecture-modernization-design.md`. Sequenced by risk/value: cheap+safe first, big structural arcs last. Every phase keeps the suite green (frontend `npx tsc -b && npx vitest run && npm run build` from `products/scheduler/frontend`; backend `pytest` — 526 must stay green). Branch `dev/workspace-suite`, nothing pushed without sign-off._
