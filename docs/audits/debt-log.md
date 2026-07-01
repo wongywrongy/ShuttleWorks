@@ -83,17 +83,21 @@ they are decisions to make, then execute.
 
 ## Cleanup backlog (behavior-preserving; mechanical but not free)
 
-Phase 5's backlog pass cleared the safe majority (see **Cleared** below). What
-remains needs the codegen path verified, a coordinated config edit, or a product call:
+The backlog pass was **finished** 2026-07-01 (see **Cleared**). The mechanical
+export/type/dep items are done; what remains is **one product call** + the
+design-gated items above + engine coverage.
 
-| Item | Detail | Careful-of | Size |
-| --- | --- | --- | --- |
-| **Unused exported types (dto)** | knip: **36** remain — all in `api/dto.ts` (30) + `api/bracketDto.ts` (6); left untouched in Phase 5 | These feed `make generate-api` (hand-reconciled). A type "unused" to knip may be an intentional codegen / public-API surface — deleting fights the reconcile. **Verify against the codegen path first**, then delete the genuinely-dead ones (`TournamentExportV2`, `GraphNode/Edge/Data`, the import-DTOs, …) | M |
-| **Unused exports (display presets)** | knip: **3** remain — `DISPLAY_PRESETS` / `getPreset` / `DisplayPreset` (`products/display/publicDisplay/displayPresets.ts`) | A coherent, carefully-authored preset-picker unit in the live Display module. Retain pending the picker or delete as a set — a product call, not accidental cruft | S |
-| **Unused package deps (manualChunks-coupled)** | knip: **7** deps + **1** devDep remain: `@radix-ui/react-dialog`/`react-select`/`react-tooltip`, `date-fns`, `clsx`, `tailwind-merge` (all named in `vite.config.ts` `manualChunks`), `tailwindcss-animate` (tailwind plugin), `openapi-typescript` (the `generate-api` CLI) | Removing the manualChunks-named ones needs a **coordinated `vite.config.ts` edit** (prune the chunk arrays); the tailwind plugin + CLI tool are knip false-positives (used outside `src`). Do the deps + vite.config together | M |
-| **design-system undeclared deps** (latent bug, found in Phase 5) | `packages/design-system` **uses** `@radix-ui/react-dialog`, `@radix-ui/react-tooltip`, `date-fns` but does **not** declare them in its `package.json` — they resolve today only by hoisting from the frontend's declarations | If the frontend ever drops those deps, design-system breaks on a **clean install** — and no gate catches it. Add them to `packages/design-system/package.json` `dependencies` | S |
-| **Duplicate export** | `slotToTime` \| `formatSlotTime` (`src/lib/time.ts`) — pick one canonical name | both live; rename touches call sites | S |
-| **Engine coverage** | `backends.py`/`bridge.py` 19%, `live_ops.py` 40%, `extraction.py` 68% | cover-before-modify candidates (see locked table) | see above |
+| Item | Detail | Status |
+| --- | --- | --- |
+| **Unused exported types (dto)** | Verified each against `dto.generated.ts` (the authoritative backend contract): **deleted 10** truly-dead frontend-private types + **un-exported 11** used-internally-by-kept-types in `dto.ts`, and **un-exported 6** back-compat internal shapes in `bracketDto.ts`. **8 backend-mirror types intentionally retained** (`CourtClosure`, `SoftViolation`, `AvailabilityWindow`, `PlayerImpact`, `SchoolImpact`, `MetricDelta`, `ProposalKind`, `SuggestedAction`) — present in the generated contract, so deleting would create reconcile drift. They read "unused" to knip but are the hand-maintained mirror | ✅ done |
+| **Unused package deps** | Removed `@radix-ui/react-dialog` + `@radix-ui/react-tooltip` + `date-fns` (genuinely dead — verified zero imports anywhere; existed only as dead `vite.config.ts` `manualChunks` strings, which were pruned too) and `tailwindcss-animate` (design-system's tailwind preset provides it). knip-ignored `@radix-ui/react-select` + `clsx` + `tailwind-merge` (live via design-system, named in `manualChunks`) and `openapi-typescript` (the `generate-api` CLI). **knip unused-deps → 0** | ✅ done |
+| **Duplicate export** (`slotToTime`\|`formatSlotTime`) | **Accepted as intentional** — `formatSlotTime` is a live alias (`export const formatSlotTime = slotToTime`) with ~20 call sites each. Renaming is risky cosmetic churn with no behavior benefit; not debt | ✅ accept |
+| **Unused exports (display presets)** | **The one remaining product call.** `DISPLAY_PRESETS` / `getPreset` / `DisplayPreset` (`displayPresets.ts`) — a coherent, carefully-authored preset-picker unit (8 venue presets) in the live Display module. Unwired today (behavior-preserving to delete) but authored feature scaffolding — a product owner should decide keep-for-picker vs remove. **Not deleted unilaterally.** | ⏳ product call |
+| **Engine coverage** | `backends.py`/`bridge.py` 19%, `live_ops.py` 40%, `extraction.py` 68% | ⏳ cover-before-modify (see locked table) |
+
+> Note: knip still reports the 8 retained contract mirrors + the displayPresets
+> unit + the `slotToTime` alias as "unused." That is expected and intentional —
+> they are kept for the reasons above, not overlooked.
 
 ---
 
@@ -118,3 +122,14 @@ remains needs the codegen path verified, a coordinated config edit, or a product
   (used internally, tsc-verified), the rest deleted. Dep removals verified by
   `npm install` (clean −107-line lockfile diff) + a real `vite build` + 743 tests
   green. See `REFACTOR_PROGRESS.md` Phase 5.
+- **2026-07-01 (Phase 5 — backlog finish)** — dto/bracketDto **types 36→9** (the 9
+  = 8 retained contract mirrors + `DisplayPreset`): deleted 10 dead + un-exported
+  17, verified vs `dto.generated.ts`. Deps: removed 4 more (`react-dialog`,
+  `react-tooltip`, `date-fns`, `tailwindcss-animate`) + pruned their dead
+  `manualChunks` entries; knip-ignored the 4 legit config/CLI deps → **knip
+  unused-deps 0**. Cleaned the `SettingsNav` orphan left by the `SettingsShell`
+  deletion. `slotToTime`/`formatSlotTime` accepted as an intentional alias.
+  Verified: `tsc` + real `vite build` + eslint 0-err + **743 tests** + pytest 590.
+  **Corrected a prior mis-finding:** the "design-system undeclared deps" latent bug
+  was wrong — `react-dialog`/`react-tooltip`/`date-fns` are imported nowhere; they
+  were dead `manualChunks` strings, now removed.

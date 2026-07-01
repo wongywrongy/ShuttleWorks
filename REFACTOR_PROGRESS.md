@@ -118,18 +118,33 @@ escalate it before making any further code change.
     `@types/uuid`. Verified by `npm install` (clean −107-line lockfile diff) + a real
     `vite build` + 743 tests. **Kept + logged** the 7 manualChunks-coupled / CLI-tool
     deps (removal needs a coordinated `vite.config.ts` edit).
-  - **Held back deliberately** (logged, not forced): `dto.ts`/`bracketDto.ts` types
-    (36 — codegen surface, needs the `generate-api` path verified first); the
-    `displayPresets` unit (3 — coherent authored feature, product call).
-- **Latent bug found + logged:** `packages/design-system` uses `@radix-ui/react-dialog`,
-  `@radix-ui/react-tooltip`, `date-fns` without declaring them (resolves only via
-  hoisting from the frontend) — a clean-install hazard no gate catches.
-- Gate green after the full pass: tsc 0 (real `vite build` too), eslint **0 err / 85 warn**
-  (89→85), depcruise **0 err / 11 warn**, vitest **743**, ruff-F clean, pytest **590**.
-- **Still logged for later (in `debt-log.md`):** F-ARCH-3, the 2 ops→bracket UI edges
-  (design calls); the held-back dto types + displayPresets + manualChunks-coupled deps
-  above; `slotToTime`/`formatSlotTime` dup; engine 19% coverage safety nets; broad ruff;
-  frontend complexity unmeasured.
+  - Held back at the time (codegen surface): `dto.ts`/`bracketDto.ts` types — now
+    FINISHED (see next bullet).
+- **Backlog finish (Kyle: "finish it, preserve functionality"):** verified the codegen
+  path first — `make generate-api` writes a *separate* `dto.generated.ts`; `dto.ts` is
+  the hand-maintained mirror. Classified each flagged type against the generated
+  contract: **deleted 10** dead frontend-private dto types + **un-exported 17**
+  used-internally (11 dto + 6 bracketDto); **retained 8 backend-mirror types**
+  (present in the contract — deleting would create reconcile drift). Types **36→9**
+  (8 mirrors + `DisplayPreset`). Removed **4 more dead deps** (`react-dialog`/
+  `react-tooltip`/`date-fns` — verified zero imports, only dead `manualChunks`
+  strings, which were pruned too; + `tailwindcss-animate`, provided by the
+  design-system preset) and knip-ignored the 4 legit config/CLI deps → **knip
+  unused-deps 0**. Cleaned the `SettingsNav` orphan created by the `SettingsShell`
+  deletion. Accepted `slotToTime`/`formatSlotTime` as an intentional alias.
+  **Corrected a mis-finding:** the earlier "design-system undeclared deps" latent bug
+  was wrong — those deps are imported nowhere (dead `manualChunks` strings, now gone).
+- **One item left, by design — a product call:** the `displayPresets` unit
+  (`DISPLAY_PRESETS`/`getPreset`/`DisplayPreset`) is authored feature scaffolding in
+  the live Display module; unwired but not accidental cruft, so not deleted
+  unilaterally. Tracked in `debt-log.md`.
+- Gate green after the finish: `tsc` 0 + real `vite build`, eslint **0 err / 85 warn**,
+  depcruise **0 err / 11 warn**, vitest **743**, knip **unused-deps 0**, ruff-F clean,
+  pytest **590**.
+- **Still logged for later (in `debt-log.md`):** F-ARCH-3 + the 2 ops→bracket UI edges
+  (design calls); the `displayPresets` unit (product call); engine 19% coverage safety
+  nets; broad ruff; frontend complexity unmeasured. (The dto/type + dep backlog is now
+  DONE; `slotToTime`/`formatSlotTime` accepted as intentional.)
 
 ## Open questions / stops
 <Anything a prior session flagged as a STOP condition and hasn't been
