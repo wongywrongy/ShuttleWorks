@@ -45,6 +45,7 @@ build/
 
 # Testing
 .pytest_cache/
+.ruff_cache/
 .benchmarks/
 .coverage
 htmlcov/
@@ -99,6 +100,7 @@ packages/*/dist/
 **/e2e/test-results/
 **/e2e/blob-report/
 **/e2e/.playwright/
+**/e2e/shots/
 
 # Playwright MCP scratch dir — screenshots, page snapshots, console logs,
 # and any downloaded artifacts from browser_navigate / browser_take_screenshot.
