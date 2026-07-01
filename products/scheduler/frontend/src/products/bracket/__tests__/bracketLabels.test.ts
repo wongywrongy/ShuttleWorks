@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { playUnitLabel, buildPlayUnitLabels, sideLabel } from '../bracketLabels';
+import { playUnitLabel, buildPlayUnitLabels, sideLabel, disciplineLabel } from '../bracketLabels';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 describe('playUnitLabel — single elimination stage names', () => {
@@ -61,5 +61,35 @@ describe('sideLabel feeder reference', () => {
   });
   it('falls back to the raw id when no label map is given', () => {
     expect(sideLabel(null, slot, {})).toBe('Winner of pu-a');
+  });
+});
+
+describe('disciplineLabel', () => {
+  it('maps the five known codes to full names', () => {
+    expect(disciplineLabel('MS')).toBe("Men's Singles");
+    expect(disciplineLabel('WS')).toBe("Women's Singles");
+    expect(disciplineLabel('MD')).toBe("Men's Doubles");
+    expect(disciplineLabel('WD')).toBe("Women's Doubles");
+    expect(disciplineLabel('XD')).toBe('Mixed Doubles');
+  });
+
+  it('passes an unknown code through unchanged', () => {
+    expect(disciplineLabel('GEN')).toBe('GEN');
+  });
+
+  it('returns empty string for empty/nullish input', () => {
+    expect(disciplineLabel('')).toBe('');
+    expect(disciplineLabel(null)).toBe('');
+    expect(disciplineLabel(undefined)).toBe('');
+  });
+
+  // Regression: the discipline-name lookup must not leak Object.prototype
+  // members. A plain-object map would make disciplineLabel('toString') return
+  // a function; the null-prototype map keeps these as pass-through raw codes.
+  it('treats Object.prototype keys as unknown codes (pass-through)', () => {
+    expect(disciplineLabel('toString')).toBe('toString');
+    expect(disciplineLabel('constructor')).toBe('constructor');
+    expect(disciplineLabel('valueOf')).toBe('valueOf');
+    expect(disciplineLabel('hasOwnProperty')).toBe('hasOwnProperty');
   });
 });

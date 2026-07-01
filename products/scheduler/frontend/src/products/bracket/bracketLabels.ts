@@ -7,7 +7,7 @@
  * "Bye" for a structural bye slot.
  */
 import type { PlayUnitDTO, BracketTournamentDTO } from '../../api/bracketDto';
-import { EVENT_LABEL } from '../meet/roster/positionGrid/helpers';
+import { DISCIPLINE_NAMES } from '../../lib/disciplineNames';
 
 /** Round-of-K stage name, derived from how many rounds remain to the final.
  *  0 ⇒ Final, 1 ⇒ SF, 2 ⇒ QF, n≥3 ⇒ R16/R32/R64… (round of 2^(n+1)). */
@@ -91,7 +91,7 @@ export function formatLabel(format: string | null | undefined): string {
  *  aren't a known code pass through unchanged. */
 export function disciplineLabel(discipline: string | null | undefined): string {
   if (!discipline) return '';
-  return EVENT_LABEL[discipline]?.full ?? discipline;
+  return DISCIPLINE_NAMES[discipline] ?? discipline;
 }
 
 export function sideLabel(
