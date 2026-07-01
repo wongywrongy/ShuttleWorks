@@ -10,7 +10,7 @@ help:
 	@echo ""
 	@echo "Run:"
 	@echo "  make scheduler          Build + start the scheduler stack"
-	@echo "                          (frontend on :80, backend on :8000)"
+	@echo "                          (frontend :80, backend :8000, docs :8081)"
 	@echo "  make scheduler-dev      Backend in Docker, Vite dev server on :5173"
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
 	@echo "  make stop               Stop the stack"

@@ -37,6 +37,7 @@ run:
 	@echo "  Frontend: http://localhost"
 	@echo "  Backend:  http://localhost:8000"
 	@echo "  API Docs: http://localhost:8000/docs"
+	@echo "  Docs:     http://localhost:8081"
 	@echo ""
 	@echo "Run 'make logs' to view logs"
 
@@ -52,6 +53,7 @@ rebuild:
 	@echo "Fresh rebuild complete."
 	@echo "  Frontend: http://localhost  (hard-refresh the browser: Cmd+Shift+R)"
 	@echo "  Backend:  http://localhost:8000"
+	@echo "  Docs:     http://localhost:8081"
 	@echo ""
 
 stop:
