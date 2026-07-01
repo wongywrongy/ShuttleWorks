@@ -9,7 +9,7 @@
  * grids can grey only the affected cells (not entire rows) and the
  * validator can quickly check overlap.
  */
-import type { CourtClosure, TournamentConfig } from '../api/dto';
+import type { TournamentConfig } from '../api/dto';
 import { timeToSlot } from './time';
 
 export interface ClosedSlotWindow {
@@ -90,21 +90,4 @@ export function isCourtFullyClosed(
     if (covered >= visibleToSlot) return true;
   }
   return covered >= visibleToSlot;
-}
-
-/** Collect the unique closure entries that mention ``courtId``, sorted
- *  by start slot. Useful for tooltip rendering. */
-export function closuresForCourt(
-  config: TournamentConfig | null | undefined,
-  courtId: number,
-): CourtClosure[] {
-  if (!config) return [];
-  const out: CourtClosure[] = [];
-  if ((config.closedCourts ?? []).includes(courtId)) {
-    out.push({ courtId });
-  }
-  for (const c of config.courtClosures ?? []) {
-    if (c.courtId === courtId) out.push(c);
-  }
-  return out;
 }

@@ -44,7 +44,7 @@ export const EVENT_COLORS: Record<string, EventColor> = {
   },
 };
 
-export const DEFAULT_EVENT_COLOR: EventColor = {
+const DEFAULT_EVENT_COLOR: EventColor = {
   // Theme tokens already adapt to dark mode via the global CSS vars.
   bg: 'bg-muted',
   border: 'border-border',

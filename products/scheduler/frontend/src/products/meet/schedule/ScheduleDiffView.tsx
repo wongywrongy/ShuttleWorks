@@ -26,7 +26,6 @@ import type {
   MatchMove,
   PlayerDTO,
   RosterGroupDTO,
-  ScheduleAssignment,
 } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
 
@@ -495,24 +494,3 @@ function Pill({
   );
 }
 
-// Helper for callers that want to compute slot moves without going
-// through compute_impact (kept here as the canonical implementation
-// — CandidatesPanel uses the same signature internally).
-export function computeMoveDelta(
-  before: ScheduleAssignment[],
-  after: ScheduleAssignment[],
-): number {
-  const beforeMap = new Map(before.map((a) => [a.matchId, a]));
-  let count = 0;
-  for (const a of after) {
-    const b = beforeMap.get(a.matchId);
-    if (!b) {
-      count++;
-      continue;
-    }
-    if (b.slotId !== a.slotId || b.courtId !== a.courtId) {
-      count++;
-    }
-  }
-  return count;
-}
