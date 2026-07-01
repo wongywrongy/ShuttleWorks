@@ -1,22 +1,24 @@
 /**
  * Bracket Draws — the single surface for a bracket's draws.
  *
- * One row per event (an event *is* a draw): ID · Discipline · Format ·
- * Size · Participants · Status · Action · Open. It both lists and
- * manages — create a draw (in a layer, not a separate page), enter
- * participants (in-grid picker), generate / re-generate, and open a
- * draw's bracket visualization. This absorbed the former standalone
- * "Events" surface so creating a draw no longer teleports the operator
- * to another tab; "New draw" opens a layer right here.
+ * One card per event (an event *is* a draw): event code + discipline +
+ * status, a format/size/participants meta line, a DONE/LIVE/READY/PEND
+ * progress line once matches exist, and a Generate / Open footer. It
+ * both lists and manages — create a draw (in a layer, not a separate
+ * page), enter participants (in-card picker), generate / re-generate,
+ * and open a draw's bracket visualization (the whole card is the
+ * entryway). This absorbed the former standalone "Events" surface so
+ * creating a draw no longer teleports the operator to another tab;
+ * "New draw" opens a layer right here.
  */
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, StatusPill } from '@scheduler/design-system';
+import { Button, Card, StatusBar, StatusPill } from '@scheduler/design-system';
 import { useBracket } from '../../hooks/useBracket';
 import { useBracketApi } from '../../api/bracketClient';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import { useTournamentStore } from '../../store/tournamentStore';
-import type { BracketEventStatus } from '../../api/bracketDto';
+import type { BracketEventStatus, BracketTournamentDTO } from '../../api/bracketDto';
 import { ActionsBar, EmptyState } from '../../components/control-plane';
 import { Modal } from '../../components/common/Modal';
 import { INTERACTIVE_BASE } from '../../lib/utils';
@@ -47,6 +49,14 @@ export function BracketDrawsTab() {
   }, [searchParams, setSearchParams]);
 
   const events = data?.events ?? [];
+
+  // Per-draw match-progress tallies (same bucketing as the Draw header's
+  // DONE/LIVE/READY/PEND strip). Draft draws have no play-units and so no
+  // entry — their cards show the participants meta only.
+  const countsByEvent = useMemo(
+    () => (data ? drawCountsByEvent(data) : new Map<string, DrawCounts>()),
+    [data],
+  );
 
   const handleGenerate = useCallback(
     async (eventId: string, wipe: boolean) => {
@@ -81,7 +91,7 @@ export function BracketDrawsTab() {
           type="button"
           onClick={() => setCreating(true)}
           data-testid="bracket-new-draw"
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
         >
           ＋ New draw
         </button>
@@ -103,104 +113,130 @@ export function BracketDrawsTab() {
             }
           />
         ) : (
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-muted/40">
-              <tr className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                <th className="px-4 py-1.5 text-left font-semibold border-b border-border">ID</th>
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Discipline</th>
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Format</th>
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Size</th>
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Participants</th>
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Status</th>
-                <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Action</th>
-                <th className="px-3 py-1.5 text-right font-semibold border-b border-border">Open</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((ev) => {
-                const status: BracketEventStatus = ev.status ?? 'draft';
-                const partCount = ev.participant_count ?? 0;
-                const targetSize = ev.bracket_size ?? partCount;
-                const pickerOpen = openPickerFor === ev.id;
-                const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
-                const generated = status !== 'draft';
-                return (
-                  <Fragment key={ev.id}>
-                    <tr className="border-b border-border/60 hover:bg-muted/30">
-                      <td className="px-4 py-2 font-mono text-xs">{ev.id}</td>
-                      <td className="px-3 py-2">{disciplineLabel(ev.discipline)}</td>
-                      <td className="px-3 py-2">{formatLabel(ev.format)}</td>
-                      <td className="px-3 py-2">{targetSize}</td>
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => setOpenPickerFor(pickerOpen ? null : ev.id)}
-                          className="text-xs hover:underline"
-                        >
-                          {partCount} entered
-                        </button>
-                      </td>
-                      <td className="px-3 py-2"><StatusPillFor status={status} /></td>
-                      <td className="px-3 py-2">
-                        <ActionCell
-                          status={status}
-                          eventReady={partCount > 0 && partCount === targetSize}
-                          onGenerate={() => handleGenerate(ev.id, false)}
-                          onRegenerate={() => handleGenerate(ev.id, true)}
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => openDraw(ev.id)}
-                          disabled={!generated}
-                          data-testid={`bracket-open-draw-${ev.id}`}
-                          title={generated ? `Open the ${ev.id} draw` : 'Generate the draw first'}
-                          className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          Open →
-                        </button>
-                      </td>
-                    </tr>
-                    {pickerOpen && (
-                      <tr>
-                        <td colSpan={8} className="bg-bg-elev p-2">
-                          <ParticipantPicker
-                            mode={isDoubles ? 'doubles' : 'singles'}
-                            eventId={ev.id}
-                            players={players}
-                            initialIds={[]}
-                            onCommit={async (picks) => {
-                              const participants = isDoubles
-                                ? (picks as PickedPair[]).map((p) => ({
-                                    id: p.id, name: p.name, members: p.members,
-                                  }))
-                                : (picks as PickedSingle[]).map((p) => ({
-                                    id: p.id, name: p.name,
-                                  }));
-                              try {
-                                const next = await api.eventUpsert(ev.id, {
-                                  discipline: ev.discipline,
-                                  format: ev.format,
-                                  bracket_size: ev.bracket_size,
-                                  duration_slots: 1,
-                                  participants,
-                                });
-                                setData(next);
-                              } finally {
-                                setOpenPickerFor(null);
-                              }
-                            }}
-                            onCancel={() => setOpenPickerFor(null)}
-                          />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+            {events.map((ev) => {
+              const status: BracketEventStatus = ev.status ?? 'draft';
+              const partCount = ev.participant_count ?? 0;
+              const targetSize = ev.bracket_size ?? partCount;
+              const pickerOpen = openPickerFor === ev.id;
+              const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
+              const generated = status !== 'draft';
+              const counts = countsByEvent.get(ev.id);
+              return (
+                <Card
+                  key={ev.id}
+                  variant="frame"
+                  data-testid={`bracket-draw-card-${ev.id}`}
+                  // Whole-card click is a pointer convenience; the footer's
+                  // "Open draw →" button is the accessible control (giving
+                  // the card role="button" would swallow the inner buttons'
+                  // accessible names into one giant card label).
+                  title={generated ? `Open the ${ev.id} draw` : undefined}
+                  onClick={generated ? () => openDraw(ev.id) : undefined}
+                  className={`flex flex-col gap-2 rounded-lg p-4 transition-[border-color,box-shadow] duration-fast ease-brand hover:border-accent/40 hover:shadow-glow${generated ? ' cursor-pointer' : ''}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-accent sw-num">{ev.id}</span>
+                    <span className="truncate text-sm font-semibold">
+                      {disciplineLabel(ev.discipline)}
+                    </span>
+                    <span className="ml-auto flex-shrink-0">
+                      <StatusPillFor status={status} />
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    <span>{formatLabel(ev.format)}</span>
+                    {' · '}
+                    <span className="sw-num">{targetSize}</span>
+                    {' players · '}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenPickerFor(pickerOpen ? null : ev.id);
+                      }}
+                      className="sw-num hover:text-foreground hover:underline"
+                    >
+                      {partCount} entered
+                    </button>
+                  </div>
+
+                  {/* Same voice as the Draw header's DONE/LIVE/READY/PEND strip. */}
+                  {counts && (
+                    <span className="font-mono">
+                      <StatusBar
+                        items={[
+                          { tone: 'done', label: 'DONE', count: counts.done },
+                          { tone: 'green', label: 'LIVE', count: counts.live },
+                          { tone: 'amber', label: 'READY', count: counts.ready },
+                          { tone: 'idle', label: 'PEND', count: counts.pending },
+                        ]}
+                      />
+                    </span>
+                  )}
+
+                  {pickerOpen && (
+                    <div
+                      className="rounded-sm bg-bg-elev p-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ParticipantPicker
+                        mode={isDoubles ? 'doubles' : 'singles'}
+                        eventId={ev.id}
+                        players={players}
+                        initialIds={[]}
+                        onCommit={async (picks) => {
+                          const participants = isDoubles
+                            ? (picks as PickedPair[]).map((p) => ({
+                                id: p.id, name: p.name, members: p.members,
+                              }))
+                            : (picks as PickedSingle[]).map((p) => ({
+                                id: p.id, name: p.name,
+                              }));
+                          try {
+                            const next = await api.eventUpsert(ev.id, {
+                              discipline: ev.discipline,
+                              format: ev.format,
+                              bracket_size: ev.bracket_size,
+                              duration_slots: 1,
+                              participants,
+                            });
+                            setData(next);
+                          } finally {
+                            setOpenPickerFor(null);
+                          }
+                        }}
+                        onCancel={() => setOpenPickerFor(null)}
+                      />
+                    </div>
+                  )}
+
+                  <div
+                    className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ActionCell
+                      status={status}
+                      eventReady={partCount > 0 && partCount === targetSize}
+                      onGenerate={() => handleGenerate(ev.id, false)}
+                      onRegenerate={() => handleGenerate(ev.id, true)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => openDraw(ev.id)}
+                      disabled={!generated}
+                      data-testid={`bracket-open-draw-${ev.id}`}
+                      title={generated ? `Open the ${ev.id} draw` : 'Generate the draw first'}
+                      className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Open draw →
+                    </button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -224,6 +260,47 @@ export function BracketDrawsTab() {
       )}
     </div>
   );
+}
+
+interface DrawCounts {
+  done: number;
+  live: number;
+  ready: number;
+  pending: number;
+}
+
+/**
+ * Per-draw DONE / LIVE / READY / PEND tallies, bucketed exactly like the
+ * Draw header's counts (``BracketViewHeader``'s ``buckets``) so a card's
+ * progress line and the header strip never disagree: done = has result,
+ * live = assigned + started, ready = assigned, pending = the rest.
+ * Computed for every event in one pass; events with no play-units yet
+ * (draft draws) have no entry.
+ */
+function drawCountsByEvent(data: BracketTournamentDTO): Map<string, DrawCounts> {
+  const resultsById = new Set(data.results.map((r) => r.play_unit_id));
+  const assignmentByPu = new Map(data.assignments.map((a) => [a.play_unit_id, a]));
+  const byEvent = new Map<string, DrawCounts>();
+  for (const pu of data.play_units) {
+    let c = byEvent.get(pu.event_id);
+    if (!c) {
+      c = { done: 0, live: 0, ready: 0, pending: 0 };
+      byEvent.set(pu.event_id, c);
+    }
+    if (resultsById.has(pu.id)) {
+      c.done += 1;
+      continue;
+    }
+    const a = assignmentByPu.get(pu.id);
+    if (a?.started && !a.finished) {
+      c.live += 1;
+    } else if (a) {
+      c.ready += 1;
+    } else {
+      c.pending += 1;
+    }
+  }
+  return byEvent;
 }
 
 function StatusPillFor({ status }: { status: BracketEventStatus }) {

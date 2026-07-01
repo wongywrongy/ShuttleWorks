@@ -3,10 +3,12 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { BracketDrawsTab } from '../BracketDrawsTab';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import type { PlayUnitDTO, AssignmentDTO, ResultDTO } from '../../../api/bracketDto';
 
 // The Draws surface is the unified create + manage + open surface (it
-// absorbed the former Events spreadsheet). These tests cover the ported
-// management behaviors plus the new create-in-a-layer and open-draw flows.
+// absorbed the former Events spreadsheet; the list is a grid of draw
+// cards). These tests cover the ported management behaviors plus the
+// create-in-a-layer and open-draw flows.
 
 const mockEventUpsert = vi.fn();
 const mockEventGenerate = vi.fn();
@@ -48,6 +50,9 @@ function makeBracketData(overrides?: {
   status?: 'draft' | 'generated' | 'started';
   participantCount?: number;
   bracketSize?: number;
+  playUnits?: PlayUnitDTO[];
+  assignments?: AssignmentDTO[];
+  results?: ResultDTO[];
 }) {
   return {
     courts: 4,
@@ -67,9 +72,25 @@ function makeBracketData(overrides?: {
       },
     ],
     participants: [],
-    play_units: [],
-    assignments: [],
-    results: [],
+    play_units: overrides?.playUnits ?? [],
+    assignments: overrides?.assignments ?? [],
+    results: overrides?.results ?? [],
+  };
+}
+
+function makePlayUnit(id: string, over?: Partial<PlayUnitDTO>): PlayUnitDTO {
+  return {
+    id,
+    event_id: 'MS',
+    round_index: 0,
+    match_index: 0,
+    side_a: ['p-a'],
+    side_b: ['p-b'],
+    duration_slots: 1,
+    dependencies: [],
+    slot_a: { participant_id: null, feeder_play_unit_id: null },
+    slot_b: { participant_id: null, feeder_play_unit_id: null },
+    ...over,
   };
 }
 
@@ -96,15 +117,17 @@ beforeEach(() => {
   });
 });
 
-describe('BracketDrawsTab — spreadsheet', () => {
-  it('renders the column headers', () => {
+describe('BracketDrawsTab — draw cards', () => {
+  it('renders a card per draw with format, size, and participant meta', () => {
+    mockBracketData = makeBracketData({ participantCount: 3, bracketSize: 8 });
     renderDraws();
-    for (const col of ['ID', 'Discipline', 'Format', 'Size', 'Participants', 'Status', 'Action', 'Open']) {
-      expect(screen.getByText(col)).toBeInTheDocument();
-    }
+    const card = screen.getByTestId('bracket-draw-card-MS');
+    expect(within(card).getByText('Single elimination')).toBeInTheDocument();
+    expect(within(card).getByText('8')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /3 entered/i })).toBeInTheDocument();
   });
 
-  it('renders a row for each event', () => {
+  it('renders a card for each event', () => {
     renderDraws();
     expect(screen.getAllByText('MS').length).toBeGreaterThan(0);
     expect(screen.getByText('Single elimination')).toBeInTheDocument();
@@ -114,6 +137,38 @@ describe('BracketDrawsTab — spreadsheet', () => {
     mockBracketData = { ...makeBracketData(), events: [] };
     renderDraws();
     expect(screen.getByText('No draws yet')).toBeInTheDocument();
+  });
+
+  it('shows the DONE/LIVE/READY/PEND progress line when the draw has matches', () => {
+    mockBracketData = makeBracketData({
+      status: 'started',
+      playUnits: [
+        makePlayUnit('pu-1'),
+        makePlayUnit('pu-2'),
+        makePlayUnit('pu-3'),
+        makePlayUnit('pu-4'),
+      ],
+      assignments: [
+        { play_unit_id: 'pu-2', slot_id: 1, court_id: 1, duration_slots: 1, actual_start_slot: null, actual_end_slot: null, started: true, finished: false },
+        { play_unit_id: 'pu-3', slot_id: 2, court_id: 2, duration_slots: 1, actual_start_slot: null, actual_end_slot: null, started: false, finished: false },
+      ],
+      results: [
+        { play_unit_id: 'pu-1', winner_side: 'A', walkover: false, finished_at_slot: null },
+      ],
+    });
+    renderDraws();
+    const card = screen.getByTestId('bracket-draw-card-MS');
+    // done=1 (pu-1) · live=1 (pu-2) · ready=1 (pu-3) · pending=1 (pu-4)
+    expect(within(card).getByText('DONE').parentElement).toHaveTextContent(/DONE\s*1/);
+    expect(within(card).getByText('LIVE').parentElement).toHaveTextContent(/LIVE\s*1/);
+    expect(within(card).getByText('READY').parentElement).toHaveTextContent(/READY\s*1/);
+    expect(within(card).getByText('PEND').parentElement).toHaveTextContent(/PEND\s*1/);
+  });
+
+  it('omits the progress line while the draw has no matches', () => {
+    renderDraws();
+    const card = screen.getByTestId('bracket-draw-card-MS');
+    expect(within(card).queryByText('DONE')).not.toBeInTheDocument();
   });
 });
 
@@ -238,11 +293,28 @@ describe('BracketDrawsTab — open draw', () => {
     renderDraws();
     fireEvent.click(screen.getByTestId('bracket-open-draw-MS'));
     expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/bracket-draw?event=MS'));
+    // The footer action must not also bubble into the card-level click.
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
   });
 
   it('disables Open until the draw is generated', () => {
     mockBracketData = makeBracketData({ status: 'draft' });
     renderDraws();
     expect(screen.getByTestId('bracket-open-draw-MS')).toBeDisabled();
+  });
+
+  it('opens the draw when the card itself is clicked once generated', () => {
+    mockBracketData = makeBracketData({ status: 'generated' });
+    renderDraws();
+    fireEvent.click(screen.getByTestId('bracket-draw-card-MS'));
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/bracket-draw?event=MS'));
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not navigate on card click while the draw is draft', () => {
+    mockBracketData = makeBracketData({ status: 'draft' });
+    renderDraws();
+    fireEvent.click(screen.getByTestId('bracket-draw-card-MS'));
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
