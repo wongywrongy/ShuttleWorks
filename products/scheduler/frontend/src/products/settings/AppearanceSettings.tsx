@@ -11,8 +11,8 @@ import {
   usePreferencesStore,
   type ThemePreference,
   type DensityPreference,
-} from '../../../store/preferencesStore';
-import { Row, SectionHeader, Seg } from '../../../platform/settings/SettingsControls';
+} from '../../store/preferencesStore';
+import { Row, SectionHeader, Seg } from '../../platform/settings/SettingsControls';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'light',  label: 'Light'  },

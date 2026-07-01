@@ -13,7 +13,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useMemo } from 'react';
 import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
-import { AppearanceSettings } from '../meet/settings/AppearanceSettings';
+import { AppearanceSettings } from './AppearanceSettings';
 import { useAuth } from '../../context/AuthContext';
 
 // The Compose stack runs local-only by default (synthetic local-dev session);
