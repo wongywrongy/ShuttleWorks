@@ -50,7 +50,7 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Program started:** 2026-07-01
 - **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb`
 - **Scope:** Foundation + keystones
-- **Current phase:** ALL PHASES COMPLETE, **including Phase 5 (verification pass + fixes)**.
+- **Current phase:** ALL PHASES COMPLETE, **including Phase 6 (bugs + unification + follow-up screens)**.
 - **Status:** Phases 0–4 committed (`02f1cc8`, `99213d0`, `a46db9b`, `c8ed474`, `5c64fde`, `05f01b4`), then the
   requested **light-theme spot-check + prototype re-verification** ran 2026-07-01 as **Phase 5** (see below):
   all four keystones verified in light AND dark against the prototype HTMLs, the 3b solids finally verified
@@ -194,6 +194,37 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   school names beside players on Matches rows; prototype band headers are title-case (ours stay uppercase
   eyebrows — deliberate P3 grammar choice).
 
+### Phase 6 — Run overlap fix, Draw canvas, engine-pair unification, follow-up screens
+- **Status: COMPLETE** (2026-07-01) — commits `be75604`, `5e7a082`, `3892c5d`, `c0aa3dd`.
+- [x] **Run "two shells in the same place" bug** (`be75604`): the Run board never lane-packed, so
+      double-booked (court,slot) cells — the QA seed stacks meet+bracket pairs on C1–C4 — and grown playing
+      bars hid other chips entirely. `GanttTimeline` gained a **`vertical` lane orientation** (splits row
+      height, keeps the full time span; `horizontal` stays default for the Plan board) + a **`roomy` 64px
+      tier**; `RunLiveBoard` packs lanes over LIVE spans (`packBlockLanes` widened to a structural param).
+      Every overlapping chip is now visible, stacked within its court row.
+- [x] **Draw fills its window** (`be75604`): the dotted `gantt-grid` texture moved from the content box to
+      the whole `PanZoomCanvas` pane (full-bleed canvas, not a floating card) and `fit()` may now scale small
+      draws UP (capped 1.25) — an 8-draw opens at ~106% filling the pane instead of floating tiny mid-canvas.
+- [x] **Meet↔Bracket unification** (`5e7a082`) — one visual grammar, modules stay separate:
+      **Rosters** (azure glow primaries both sides; Bracket column row/Events cell/detail eyebrows adopt the
+      Meet band grammar; mono rank codes → `sw-num`), **Matches** (BracketMatchesTab/Table drop `font-mono`,
+      adopt the Meet column/band grammar + px-5 gutter), **Config** (Meet `config-save` → glow primary;
+      Bracket structure thead → column grammar; accent focus rings). Shared one-line converges: `ActionsBar`
+      title eyebrow + `SettingsControls` SectionHeader → 0.08em.
+- [x] **Follow-up screens done** (`3892c5d`, `c0aa3dd`) — the systemic sweep (~30 files): every old
+      `bg-primary` ink-inverse primary → azure glow (Run inspector Call/Start/Record, workflow cards, score
+      Save, dialog commits, sidebar/view-toggle actives…); 0.16–0.2em eyebrows → 0.08em; `font-mono` data →
+      `sw-num` (kept for genuinely code-like: SolverProgressLog, env vars, URLs, filenames); `animate-pulse`
+      → `sw-pulse`; hardcoded green-500 finalized pill → `status-done`; PendingBadge amber-500 →
+      `status-warning` (+ its pinned test updated — the one enumerated test change); Display TV chips gain
+      radius; New Workspace selected card → accent.
+- **Verified:** vitest **746**, eslint **0 err** (85 pre-existing warns), build ✓, depcruise **0 err**
+  (11 pre-existing warns). Browser-checked: Run board lane-stacking + inspector glow Call, Bracket
+  Roster/Matches vs their Meet twins, Draw full-bleed, Config save.
+- **Noted, not done (structural, needs a product call):** the roster pair differs *structurally* (Meet =
+  school tabs + position-grid matrix + drawer; Bracket = flat list + bottom detail) — grammar is now unified,
+  layout convergence would be a redesign, not a re-skin.
+
 ---
 
 ## Token remap reference (prototype hex → intent; convert to HSL-triplet)
@@ -227,8 +258,12 @@ Theme (unchanged): `frontend/src/hooks/useAppliedTheme.ts`, `…/store/preferenc
 - **Prototype folder disposition** — gitignore-and-keep (reference during migration) vs delete after
   extraction into the skill. *Default: gitignore-and-keep; revisit at end of pass.*
 
-## Follow-up (explicitly NOT this pass)
-Remaining 9 screens (Meet/Bracket Roster + Config, Operations Plan, Bracket Matches, New Workspace,
-Settings tabs, Public Display) + the **uncovered live surfaces** the prototype never specced —
-`SchedulePage` (383), `MatchControlCenterPage` (704), `GanttChart` (386), extra Settings tabs. They
-inherit the Phase-1 foundation automatically but need their own polish pass. Log each here as it lands.
+## Follow-up
+**All previously-listed follow-up screens landed in Phase 6** (Meet/Bracket Roster + Config, Operations
+Plan, Bracket Matches, New Workspace, Settings tabs, Public Display, SchedulePage, MatchControlCenterPage;
+GanttChart was audited clean — already fully on tokens). Still open (small, log-only):
+- Prototype deltas deliberately not taken (feature-level): queue-row inline "↵ send" + LATE badge, Hub
+  filter chips (All/Active/Draft/Shared) + ⌘K search hint + amber attention-actions, playing-chip
+  elapsed-time stamp, hairline now-line through board lanes, school names beside players on Matches rows.
+- Structural roster-pair convergence (see Phase 6 note) — a product redesign decision, not a re-skin.
+- Backend match-state divergence (`docs/audits/debt-log.md`) blocks Run states surviving reload.
