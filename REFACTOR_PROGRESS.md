@@ -18,7 +18,8 @@ escalate it before making any further code change.
   Phase 6 (doc consolidation) + **Phase 7 (cover-before-modify, locked functions)**,
   2026-06-30/07-01
 - **Status:** bounded program COMPLETE; Phase 7 (a CODE_HEALTH Part-2 application)
-  **coverage done, decomposition awaiting a checkpoint decision**. Program summary:
+  **coverage done, decomposition HELD by Kyle's decision (decompose-when-touched)**.
+  Program summary:
   `docs/audits/04-refactor-program-summary.md`;
   **authoritative current snapshot: `docs/audits/06-state-of-codebase.md` — read that first.**
   depcruise 17→11, dead files 18→3 (kept), tests 1289→**1361**, all gates green.
@@ -186,8 +187,9 @@ escalate it before making any further code change.
   edges + F-ARCH-3 (design calls).
 
 ### Phase 7 — Cover-and-modify: engine locked functions
-- Status: **Steps 1–3 COMPLETE (2026-07-01); Steps 4–5 (seam/decompose) HELD at
-  the Step-3→4 checkpoint** pending a value decision (see Open questions).
+- Status: **COMPLETE-with-hold (2026-07-01).** Steps 1–3 done; Steps 4–5
+  (seam/decompose) **HELD by Kyle's decision at the Step-3→4 checkpoint** —
+  decompose-when-touched (see Open questions).
 - Scope: exactly `GreedyBackend.solve` (backends.py) + `SchedulingProblemBuilder.build`
   (bridge.py) — the two functions flagged locked (high complexity **and** 19% cov).
 - **Step 1–2 (measure + understand):** `docs/audits/07-locked-functions.md`. Complexity
@@ -225,14 +227,13 @@ resolved yet goes here, with a link to the relevant docs/audits/*.md
 file. A new session must read this before touching code — an unresolved
 stop here means pick up the conversation with Kyle, not the keyboard.>
 
-- **[OPEN] Phase-7 Step-3→4 checkpoint (decomposition of the two engine locked
-  functions)** — coverage is delivered and committed (`caf5275`); the functions are
-  no longer locked. Whether to proceed to Steps 4–5 (seam/decompose) is a **value
-  call**, not a safety one: decomposition is now low-risk (well-covered, pure
-  functions) but low-value (both have **zero in-repo production callers**), and
-  `build`'s is entangled with the config field-drop bug. **Recommendation: HOLD as
-  decompose-when-touched.** This deviates from the literal Phase-7 Done condition
-  (which wants the complexity score dropped) — hence a Kyle call. See
+- **[RESOLVED 2026-07-01 — Kyle chose HOLD] Phase-7 Step-3→4 checkpoint
+  (decomposition of the two engine locked functions)** — coverage is delivered and
+  committed (`caf5275`); the functions are no longer locked. Steps 4–5 (seam/decompose)
+  were a **value call**, not a safety one: low-risk (well-covered, pure functions) but
+  low-value (both have **zero in-repo production callers**), and `build`'s is entangled
+  with the config field-drop bug. **Kyle decided: HOLD as decompose-when-touched** —
+  revisit only when a future task brings you into these functions. See
   `docs/audits/07-locked-functions.md §5`.
 - **F-ARCH-3 (matchStateStore ownership)** — pre-flagged STOP for Phase 2. The
   prior "move it to Operations" would create new `no-cross-product` violations

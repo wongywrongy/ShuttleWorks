@@ -49,9 +49,9 @@ the ⏳ note below.
 ⏳ **Decomposition HELD (decompose-when-touched).** Cover-before-modify is done;
 the risk-reduction goal is met. Because both functions have **zero in-repo
 production callers**, decomposition (Steps 4–5) is low-risk *and* low-value, and
-`build`'s is entangled with the config-drop bug below. Recommendation carried to
-the Phase-7 Step-3→4 checkpoint (see `07-locked-functions.md §5`). Do it *when a
-future task brings you into these functions*, not speculatively.
+`build`'s is entangled with the config-drop bug below. **Kyle decided HOLD at the
+Phase-7 Step-3→4 checkpoint (2026-07-01)** (see `07-locked-functions.md §5`). Do it
+*when a future task brings you into these functions*, not speculatively.
 
 ## Latent bugs found while characterizing (Phase 7 — pinned, not fixed)
 

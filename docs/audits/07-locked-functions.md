@@ -209,6 +209,10 @@ default if the decision can't be reached: **coverage in, decomposition deferred 
 logged** — nothing is lost, since the tests are the prerequisite for any future
 decomposition.
 
+> **Checkpoint decision (Kyle, 2026-07-01): HOLD both.** Decompose-when-touched;
+> no Steps 4–5 now. The characterization safety net stays as the prerequisite for
+> whenever a future task brings work into these functions.
+
 ---
 
 ## 6. Re-measure — coverage delivered (Step 3 done, `caf5275`)
