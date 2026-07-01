@@ -13,8 +13,13 @@
  * URL is the shared source of truth.
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { CaretRight, Check, Warning } from '@phosphor-icons/react';
+import { Check, Warning } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
+import {
+  ColumnHeaderRow,
+  GroupBandHeader,
+  type BandedListColumn,
+} from '../../../components/control-plane';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { usePlayerMap } from '../../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
@@ -34,6 +39,19 @@ function capacityForRank(rank: string | null | undefined): number {
 /** Stable empty-array reference so MatchRow's useMemo deps don't churn
  *  when a match has no disruptions. */
 const EMPTY_ISSUES: MatchIssue[] = [];
+
+/** Column set for the match list — `padding: 6px 20px` rhythm shared
+ *  with the match rows below. Leading/trailing spacers align with the
+ *  warning-icon and delete-button cells. */
+const MATCH_COLUMNS: BandedListColumn[] = [
+  { label: '', className: 'w-4' },
+  { label: '#', className: 'w-8' },
+  { label: 'Event', className: 'w-20' },
+  { label: 'Side A', className: 'min-w-0 flex-[3]' },
+  { label: 'Side B', className: 'min-w-0 flex-[3]' },
+  { label: 'Slots', className: 'w-14' },
+  { label: '', className: 'w-8' },
+];
 
 function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
   const school = groups.find((g) => g.id === p.groupId)?.name ?? '?';
@@ -146,7 +164,7 @@ export function MatchesSpreadsheet({
   if (filteredMatches.length === 0) {
     return (
       <>
-        <ColumnHeaderRow />
+        <ColumnHeaderRow columns={MATCH_COLUMNS} />
         <div className="px-5 py-10 text-center text-sm text-muted-foreground">
           No matches match the current search.
         </div>
@@ -174,18 +192,19 @@ export function MatchesSpreadsheet({
 
   return (
     <>
-      <ColumnHeaderRow />
+      <ColumnHeaderRow columns={MATCH_COLUMNS} />
       {orderedKeys.map((key) => {
         const rows = groupsByPrefix.get(key)!;
         const isCollapsed = collapsed.has(key);
         const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
         return (
           <div key={key}>
-            <GroupHeader
+            <GroupBandHeader
               label={label}
               count={rows.length}
               collapsed={isCollapsed}
               onToggle={() => toggleGroup(key)}
+              data-testid={`match-group-${label}`}
             />
             {!isCollapsed
               ? rows.map((m) => (
@@ -208,62 +227,6 @@ export function MatchesSpreadsheet({
         );
       })}
     </>
-  );
-}
-
-/* =========================================================================
- * GroupHeader — collapsible per-event section header. Caret + event
- * label + match count, hairline-separated like the rows it groups.
- * ========================================================================= */
-function GroupHeader({
-  label,
-  count,
-  collapsed,
-  onToggle,
-}: {
-  label: string;
-  count: number;
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={!collapsed}
-      data-testid={`match-group-${label}`}
-      className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-5 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/60"
-    >
-      <CaretRight
-        aria-hidden
-        weight="bold"
-        className={[
-          'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-fast ease-brand',
-          collapsed ? '' : 'rotate-90',
-        ].join(' ')}
-      />
-      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-3">
-        {label}
-      </span>
-      <span className="text-2xs sw-num text-muted-foreground">{count}</span>
-    </button>
-  );
-}
-
-/* =========================================================================
- * ColumnHeaderRow — `padding: 6px 20px`, border-b only, no background.
- * ========================================================================= */
-function ColumnHeaderRow() {
-  return (
-    <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-5 py-1.5 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
-      <span className="w-4" aria-hidden />
-      <span className="w-8">#</span>
-      <span className="w-20">Event</span>
-      <span className="min-w-0 flex-[3]">Side A</span>
-      <span className="min-w-0 flex-[3]">Side B</span>
-      <span className="w-14">Slots</span>
-      <span className="w-8" aria-hidden />
-    </div>
   );
 }
 
@@ -611,7 +574,9 @@ function PlayerCellEditor({
             ＋ add player
           </button>
         ) : (
-          selectedPlayers.map((p, i) => (
+          selectedPlayers.map((p, i) => {
+            const groupName = groups.find((g) => g.id === p.groupId)?.name ?? '';
+            return (
             <span key={p.id} className="inline-flex items-baseline">
               <button
                 type="button"
@@ -620,6 +585,9 @@ function PlayerCellEditor({
                 title={`Click to edit ${side}`}
               >
                 {p.name || '—'}
+                {groupName ? (
+                  <span className="ml-1 text-2xs text-muted-foreground">{groupName}</span>
+                ) : null}
               </button>
               <button
                 type="button"
@@ -638,7 +606,8 @@ function PlayerCellEditor({
                 <span className="text-muted-foreground">,</span>
               ) : null}
             </span>
-          ))
+            );
+          })
         )}
         {selectedPlayers.length > 0 && !atCapacity ? (
           <button

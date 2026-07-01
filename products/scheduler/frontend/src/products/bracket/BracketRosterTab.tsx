@@ -7,11 +7,22 @@ import { useState, useMemo, useContext } from 'react';
 import { MagnifyingGlass } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-import { ActionsBar } from '../../components/control-plane';
+import {
+  ActionsBar,
+  ColumnHeaderRow,
+  type BandedListColumn,
+} from '../../components/control-plane';
 import { BracketApiContext } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { playerSlug } from '../../lib/playerSlug';
+
+/** Column set for the roster list — px-4 rhythm shared with the rows. */
+const ROSTER_COLUMNS: BandedListColumn[] = [
+  { label: 'Player', className: 'flex-1' },
+  { label: 'Events', className: 'flex-1' },
+  { label: 'Actions', className: 'w-16 text-right' },
+];
 
 export function BracketRosterTab() {
   // Use context presence check to determine if we're inside a provider.
@@ -136,12 +147,9 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
         </button>
       </ActionsBar>
 
-      {/* Column-label row — same vocabulary as the meet's flat tables. */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
-        <span className="flex-1">Player</span>
-        <span className="flex-1">Events</span>
-        <span className="w-16 text-right">Actions</span>
-      </div>
+      {/* Column-label row — same vocabulary as the meet's flat tables.
+          px-4 inset matches this list's rows (tighter than the meet's px-5). */}
+      <ColumnHeaderRow columns={ROSTER_COLUMNS} className="shrink-0" inset="px-4" />
 
       <ul className="min-h-0 flex-1 overflow-auto divide-y divide-border">
         {filtered.map((p) => (

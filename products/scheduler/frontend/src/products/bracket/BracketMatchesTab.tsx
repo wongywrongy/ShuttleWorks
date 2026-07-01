@@ -8,11 +8,16 @@
  * (Courts / Live) just like the meet's matches do.
  */
 import { useMemo, useState } from 'react';
-import { CaretRight, Download, MagnifyingGlass } from '@phosphor-icons/react';
+import { Download, MagnifyingGlass } from '@phosphor-icons/react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
-import { ActionsBar } from '../../components/control-plane';
-import { EmptyState } from '../../components/control-plane';
+import {
+  ActionsBar,
+  ColumnHeaderRow,
+  EmptyState,
+  GroupBandHeader,
+  type BandedListColumn,
+} from '../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineLabel } from './bracketLabels';
 
@@ -31,6 +36,15 @@ const STATUS_CLASS: Record<Status, string> = {
   ready: 'text-status-warning',
   pending: 'text-muted-foreground/70',
 };
+
+/** Column set for the bracket match list — same `px-5` rhythm as the
+ *  match rows below. */
+const MATCH_COLUMNS: BandedListColumn[] = [
+  { label: 'Match', className: 'w-20' },
+  { label: 'Side A', className: 'min-w-0 flex-1' },
+  { label: 'Side B', className: 'min-w-0 flex-1' },
+  { label: 'Status', className: 'w-16 text-right' },
+];
 
 export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
   const api = useBracketApi();
@@ -163,41 +177,19 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
           />
         ) : (
           <>
-            <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-5 py-1.5 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
-              <span className="w-20">Match</span>
-              <span className="min-w-0 flex-1">Side A</span>
-              <span className="min-w-0 flex-1">Side B</span>
-              <span className="w-16 text-right">Status</span>
-            </div>
+            <ColumnHeaderRow columns={MATCH_COLUMNS} />
             {groups.map(({ ev, units }) => {
               const isCollapsed = collapsed.has(ev.id);
               return (
                 <div key={ev.id}>
-                  <button
-                    type="button"
-                    onClick={() => toggle(ev.id)}
-                    aria-expanded={!isCollapsed}
+                  <GroupBandHeader
+                    code={ev.id}
+                    label={disciplineLabel(ev.discipline)}
+                    count={units.length}
+                    collapsed={isCollapsed}
+                    onToggle={() => toggle(ev.id)}
                     data-testid={`bracket-match-group-${ev.id}`}
-                    className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-5 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/60"
-                  >
-                    <CaretRight
-                      aria-hidden
-                      weight="bold"
-                      className={[
-                        'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-fast ease-brand',
-                        isCollapsed ? '' : 'rotate-90',
-                      ].join(' ')}
-                    />
-                    <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-3 sw-num">
-                      {ev.id}
-                    </span>
-                    <span className="text-2xs text-muted-foreground">
-                      {disciplineLabel(ev.discipline)}
-                    </span>
-                    <span className="text-2xs sw-num text-muted-foreground">
-                      {units.length}
-                    </span>
-                  </button>
+                  />
                   {!isCollapsed
                     ? units.map((pu) => {
                         const status = statusOf(pu.id);

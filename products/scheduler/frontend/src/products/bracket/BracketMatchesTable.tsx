@@ -14,6 +14,7 @@
  */
 import { useMemo, useState } from 'react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
+import { COLUMN_HEADER_ROW_CLASSES } from '../../components/control-plane';
 import { formatBracketSlot } from './formatBracketSlot';
 
 type View = 'time' | 'court';
@@ -112,10 +113,10 @@ export function BracketMatchesTable({ data, selectedId, onSelect }: Props) {
       <table className="w-full text-2xs">
         <thead className="text-muted-foreground">
           <tr className="border-b border-border">
-            <th className="px-4 py-1 text-left text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">Time</th>
-            <th className="px-4 py-1 text-left text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">Ct</th>
-            <th className="px-4 py-1 text-left text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">Match</th>
-            <th className="px-4 py-1 text-left text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">Players</th>
+            <th className={`px-4 py-1 text-left ${COLUMN_HEADER_ROW_CLASSES}`}>Time</th>
+            <th className={`px-4 py-1 text-left ${COLUMN_HEADER_ROW_CLASSES}`}>Ct</th>
+            <th className={`px-4 py-1 text-left ${COLUMN_HEADER_ROW_CLASSES}`}>Match</th>
+            <th className={`px-4 py-1 text-left ${COLUMN_HEADER_ROW_CLASSES}`}>Players</th>
           </tr>
         </thead>
         <tbody>
