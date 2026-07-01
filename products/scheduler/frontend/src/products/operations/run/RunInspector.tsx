@@ -27,11 +27,11 @@ const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card ` +
   `px-2 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`;
 const primaryBtn =
-  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-primary px-2 py-1 ` +
-  `text-2xs font-medium text-primary-foreground hover:opacity-90`;
+  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-accent px-2 py-1 ` +
+  `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
 
 // ── typography constants ──────────────────────────────────────────────────
-const EYEBROW = 'text-2xs uppercase tracking-[0.16em] text-muted-foreground';
+const EYEBROW = 'text-2xs uppercase tracking-[0.08em] text-muted-foreground';
 
 // ── status pill (RunStatus → token class) ────────────────────────────────
 const STATUS_PILL: Record<RunStatus, string> = {
@@ -154,7 +154,7 @@ function MatchIdentity({
           title={SOURCE_LABEL[match.source]}
         />
         <span className={EYEBROW}>{SOURCE_LABEL[match.source]}</span>
-        <span className="font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground">
+        <span className="sw-num text-2xs uppercase tracking-[0.08em] text-muted-foreground">
           {match.label}
         </span>
       </div>
@@ -166,7 +166,7 @@ function MatchIdentity({
 
       {/* Court + planned slot */}
       {(match.court != null || slotLabel != null) && (
-        <div className="font-mono text-sm text-foreground">
+        <div className="sw-num text-sm text-foreground">
           {match.court != null && `C${match.court}`}
           {match.court != null && slotLabel && ' · '}
           {slotLabel}
@@ -206,7 +206,7 @@ function NowActions({
     <div className="space-y-2">
       {/* Drift indicator — only when playing and running over */}
       {driftSlots > 0 && (
-        <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-status-warning">
+        <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-warning">
           Running over
         </p>
       )}

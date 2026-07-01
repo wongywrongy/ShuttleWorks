@@ -91,7 +91,7 @@ export function InProgressCard({
               onRequestScore(assignment.matchId);
             }}
             disabled={updating}
-            className={`${ACTION_BTN} bg-primary text-primary-foreground hover:brightness-110 !px-2 !py-0.5 !text-2xs`}
+            className={`${ACTION_BTN} bg-accent text-accent-ink shadow-glow hover:brightness-110 !px-2 !py-0.5 !text-2xs`}
             title="Enter score — opens score editor in the rail"
             aria-label="Enter score"
           >

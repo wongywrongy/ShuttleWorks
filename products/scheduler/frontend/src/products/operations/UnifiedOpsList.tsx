@@ -25,8 +25,8 @@ const actionBtn =
   `bg-card px-2 py-0.5 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground ` +
   `disabled:cursor-not-allowed disabled:opacity-50`;
 const primaryBtn =
-  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm bg-primary px-2 py-0.5 ` +
-  `text-2xs font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`;
+  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm bg-accent px-2 py-0.5 ` +
+  `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
 
 function RowActions({
   b,
@@ -36,7 +36,7 @@ function RowActions({
   onAction: (block: OpsBlock, action: OperationalAction) => void;
 }) {
   if (b.done) {
-    return <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-status-done">Done</span>;
+    return <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-done">Done</span>;
   }
   const assigned = b.court != null;
   if (b.source === 'meet') {
@@ -116,13 +116,13 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         onClick={() => onSelect?.(b.key)}
       >
         <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
-        <span className="w-20 flex-shrink-0 truncate font-mono text-2xs tracking-wider text-foreground">{b.label}</span>
-        <span className="w-24 flex-shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
+        <span className="w-20 flex-shrink-0 truncate sw-num text-2xs tracking-wider text-foreground">{b.label}</span>
+        <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
           {b.court != null ? `C${b.court} · S${b.slot}` : '—'}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm" title={`${b.sideA} vs ${b.sideB}`}>
           {b.sideA}
-          <span className="px-1.5 text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</span>
+          <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
           {b.sideB}
         </span>
         {onAction ? (
@@ -137,7 +137,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
   const section = (title: string, items: OpsBlock[]) =>
     items.length > 0 ? (
       <>
-        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {title} · {items.length}
         </li>
         {items.map(row)}

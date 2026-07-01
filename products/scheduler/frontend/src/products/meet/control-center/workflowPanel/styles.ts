@@ -34,7 +34,7 @@ export const LIGHT_STYLES = {
 //   the operator sees the soft warning before committing.
 // - red is the disabled treatment (--muted + opacity).
 export const CALL_BTN_BG = {
-  green:  'bg-primary text-primary-foreground hover:brightness-110',
+  green:  'bg-accent text-accent-ink shadow-glow hover:brightness-110',
   yellow: 'bg-status-warning text-bg-elev hover:opacity-90',
   red:    'bg-muted text-muted-foreground opacity-60',
 } as const;

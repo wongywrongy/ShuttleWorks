@@ -86,7 +86,7 @@ export function RunQueue({ queue, selectedKey, onSelect }: RunQueueProps) {
               <span
                 data-testid={`run-queue-late-${match.key}`}
                 aria-label="Late"
-                className="flex-shrink-0 text-2xs font-semibold uppercase tracking-[0.16em] text-status-warning"
+                className="flex-shrink-0 text-2xs font-semibold uppercase tracking-[0.08em] text-status-warning"
               >
                 Late
               </span>

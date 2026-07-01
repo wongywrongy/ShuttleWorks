@@ -350,7 +350,7 @@ export function ScheduleDiffView({
                 className="flex items-center justify-between"
               >
                 <span className="text-fg">{s.groupName ?? s.groupId}</span>
-                <span className="font-mono text-fg-muted">
+                <span className="sw-num text-fg-muted">
                   {pluralize(s.matchCount, 'match', 'matches')}
                 </span>
               </li>
@@ -416,7 +416,7 @@ function MoveRow({
       }
     >
       {/* Match # + event tag */}
-      <span className="font-mono text-fg-muted whitespace-nowrap">
+      <span className="sw-num text-fg-muted whitespace-nowrap">
         {move.matchNumber != null ? `#${move.matchNumber}` : move.matchId.slice(0, 4)}
         {move.eventRank && (
           <span className="ml-1 text-fg">{move.eventRank}</span>
@@ -425,7 +425,7 @@ function MoveRow({
       {/* Players (truncates if too long) */}
       <span className="truncate">{playerLine}</span>
       {/* From → To inline */}
-      <span className="font-mono text-fg-muted whitespace-nowrap">
+      <span className="sw-num text-fg-muted whitespace-nowrap">
         {formatSlot(move.fromSlotId)}
         {move.fromCourtId != null && `·c${move.fromCourtId}`}
         <span className="mx-1">→</span>

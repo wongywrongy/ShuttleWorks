@@ -308,7 +308,7 @@ function SidebarTab({
         INTERACTIVE_BASE,
         'whitespace-nowrap rounded-sm px-3 py-1 text-sm font-medium',
         active
-          ? 'bg-primary text-primary-foreground shadow-sm'
+          ? 'bg-accent text-accent-ink shadow-glow hover:brightness-110'
           : 'text-muted-foreground hover:bg-muted hover:text-foreground',
       ].join(' ')}
     >

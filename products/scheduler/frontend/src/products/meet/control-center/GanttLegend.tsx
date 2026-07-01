@@ -74,7 +74,7 @@ export function GanttLegend() {
       aria-label="Gantt colour key"
       className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground"
     >
-      <span className="font-semibold uppercase tracking-[0.18em]">Status</span>
+      <span className="font-semibold uppercase tracking-[0.08em]">Status</span>
       {FILLS.map((f) => (
         <span key={f.label} className="inline-flex items-center gap-1.5" title={f.title}>
           <span
@@ -88,7 +88,7 @@ export function GanttLegend() {
         aria-hidden="true"
         className="mx-1 hidden h-3 w-px bg-border/60 sm:inline-block"
       />
-      <span className="font-semibold uppercase tracking-[0.18em]">Outline</span>
+      <span className="font-semibold uppercase tracking-[0.08em]">Outline</span>
       {RINGS.map((r) => (
         <span key={r.label} className="inline-flex items-center gap-1.5" title={r.title}>
           <span

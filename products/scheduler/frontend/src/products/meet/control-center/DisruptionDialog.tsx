@@ -130,7 +130,7 @@ export function DisruptionDialog({
               type="button"
               onClick={handleCommit}
               disabled={loading}
-              className={`${INTERACTIVE_BASE} rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground`}
+              className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
             >
               {loading ? 'Committing…' : 'Commit repair'}
             </button>
@@ -155,7 +155,7 @@ export function DisruptionDialog({
               onClick={() => setType(t)}
               className={`${INTERACTIVE_BASE} rounded-full px-3 py-1 text-xs ${
                 type === t
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-accent text-accent-ink shadow-glow hover:brightness-110'
                   : 'bg-muted text-muted-foreground hover:bg-muted/40'
               }`}
             >
@@ -290,7 +290,7 @@ export function DisruptionDialog({
             type="button"
             onClick={handlePreview}
             disabled={loading}
-            className={`${INTERACTIVE_BASE} rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground`}
+            className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
           >
             {loading ? 'Solving…' : 'Preview impact'}
           </button>

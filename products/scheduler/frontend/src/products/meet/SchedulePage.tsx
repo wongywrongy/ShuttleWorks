@@ -294,7 +294,7 @@ export function SchedulePage() {
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
                 <div className="flex min-w-0 items-baseline gap-3">
-                  <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Matches
                   </span>
                   <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
@@ -344,7 +344,7 @@ export function SchedulePage() {
         </div>
       ) : isOptimizing && !hasLiveProgress ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2">
-          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-border border-t-primary" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-border border-t-accent" />
           <div className="text-sm text-muted-foreground">Starting optimization…</div>
         </div>
       ) : (

@@ -118,7 +118,7 @@ function SimpleScoreEditor({
   return (
     <form onSubmit={submit} className="mb-3 border-t border-border pt-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Score
         </span>
         <button
@@ -141,7 +141,7 @@ function SimpleScoreEditor({
             value={a}
             onChange={(e) => setA(e.target.value)}
             placeholder="0"
-            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base sw-num tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
         </div>
         <span className="text-muted-foreground">–</span>
@@ -154,7 +154,7 @@ function SimpleScoreEditor({
             value={b}
             onChange={(e) => setB(e.target.value)}
             placeholder="0"
-            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+            className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base sw-num tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
         </div>
       </div>
@@ -170,7 +170,7 @@ function SimpleScoreEditor({
         <button
           type="submit"
           disabled={!canSubmit || isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50`}
+          className={`${INTERACTIVE_BASE} rounded bg-accent px-2 py-1 text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:opacity-50`}
         >
           {isSubmitting ? 'Saving…' : 'Save'}
         </button>
@@ -277,12 +277,12 @@ function BadmintonInlineEditor({
   };
 
   const inputCls =
-    'w-full rounded border border-border bg-card px-1 py-1 text-center text-sm font-mono tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30';
+    'w-full rounded border border-border bg-card px-1 py-1 text-center text-sm sw-num tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30';
 
   return (
     <form onSubmit={submit} className="mb-3 border-t border-border pt-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Score · best of {maxSets}
         </span>
         <div className="flex items-center gap-1">
@@ -398,7 +398,7 @@ function BadmintonInlineEditor({
 
       <div className="mt-2 flex items-center justify-between rounded bg-card px-2 py-1 text-2xs">
         <span className="text-muted-foreground">Sets</span>
-        <span className="font-mono tabular-nums text-foreground">
+        <span className="sw-num tabular-nums text-foreground">
           <span className={matchWinner === 'A' ? 'font-semibold text-status-live' : ''}>{setsWonA}</span>
           <span className="mx-1 text-muted-foreground">–</span>
           <span className={matchWinner === 'B' ? 'font-semibold text-status-live' : ''}>{setsWonB}</span>
@@ -417,7 +417,7 @@ function BadmintonInlineEditor({
         <button
           type="submit"
           disabled={!matchWinner || isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50`}
+          className={`${INTERACTIVE_BASE} rounded bg-accent px-2 py-1 text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:opacity-50`}
         >
           {isSubmitting ? 'Saving…' : 'Save'}
         </button>

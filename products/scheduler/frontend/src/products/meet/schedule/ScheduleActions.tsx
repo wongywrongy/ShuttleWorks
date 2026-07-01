@@ -40,7 +40,7 @@ export function ScheduleActions({
         disabled={generating}
         data-testid="schedule-generate"
         aria-busy={generating}
-        className={confirming ? 'motion-safe:animate-pulse' : undefined}
+        className={confirming ? 'sw-pulse' : undefined}
       >
         {generating && <CircleNotch aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
         {generating

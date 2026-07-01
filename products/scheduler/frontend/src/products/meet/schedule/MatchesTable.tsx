@@ -166,7 +166,7 @@ export function MatchesTable({
             onClick={() => onViewChange('time')}
             className={`px-2 py-0.5 text-xs rounded ${
               view === 'time'
-                ? 'bg-primary text-primary-foreground'
+                ? 'bg-accent text-accent-ink shadow-glow hover:brightness-110'
                 : 'bg-muted text-muted-foreground hover:bg-muted/40 hover:text-foreground'
             }`}
           >
@@ -176,7 +176,7 @@ export function MatchesTable({
             onClick={() => onViewChange('court')}
             className={`px-2 py-0.5 text-xs rounded ${
               view === 'court'
-                ? 'bg-primary text-primary-foreground'
+                ? 'bg-accent text-accent-ink shadow-glow hover:brightness-110'
                 : 'bg-muted text-muted-foreground hover:bg-muted/40 hover:text-foreground'
             }`}
           >
@@ -223,10 +223,10 @@ export function MatchesTable({
                       key={a.matchId}
                       onClick={() => onSelectMatch?.(a.matchId)}
                       className={`${onSelectMatch ? 'cursor-pointer' : ''} ${
-                        isSelected ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-muted/50'
+                        isSelected ? 'bg-accent/10 hover:bg-accent/15' : 'hover:bg-muted/50'
                       } ${idx === 0 ? 'border-t-2 border-border' : 'border-t border-border/60'}`}
                     >
-                      <td className="px-2 py-1 text-muted-foreground font-mono whitespace-nowrap">
+                      <td className="px-2 py-1 text-muted-foreground sw-num whitespace-nowrap">
                         {idx === 0 ? time : ''}
                       </td>
                       <td className="px-2 py-1 text-muted-foreground">C{a.courtId}</td>
@@ -265,13 +265,13 @@ export function MatchesTable({
                       key={a.matchId}
                       onClick={() => onSelectMatch?.(a.matchId)}
                       className={`${onSelectMatch ? 'cursor-pointer' : ''} ${
-                        isSelected ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-muted/50'
+                        isSelected ? 'bg-accent/10 hover:bg-accent/15' : 'hover:bg-muted/50'
                       } ${idx === 0 ? 'border-t-2 border-border' : 'border-t border-border/60'}`}
                     >
                       <td className="px-2 py-1 text-foreground font-medium">
                         {idx === 0 ? `C${courtId}` : ''}
                       </td>
-                      <td className="px-2 py-1 text-muted-foreground font-mono">
+                      <td className="px-2 py-1 text-muted-foreground sw-num">
                         {formatSlotTime(a.slotId, config)}
                       </td>
                       <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>

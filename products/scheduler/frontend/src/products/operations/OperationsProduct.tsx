@@ -36,8 +36,8 @@ import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
 
 const schedBtn =
-  `${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs ` +
-  `font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`;
+  `${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs ` +
+  `font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
 
 export function OperationsProduct() {
   const tid = useTournamentId();
@@ -190,7 +190,7 @@ function OperationsBody() {
     <div className="relative flex h-full min-h-0 flex-col bg-card">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{title}</span>
+          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</span>
           <span className="text-xs text-muted-foreground/70">{subtitle}</span>
         </div>
         {/* Plan is the planning surface: build / adjust the plan. Run runs
@@ -232,7 +232,7 @@ function OperationsBody() {
             {planFinalized ? (
               <span
                 data-testid="run-plan-finalized"
-                className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:text-green-400"
+                className="inline-flex items-center rounded-full border border-status-done/30 bg-status-done/10 px-2.5 py-0.5 text-xs font-medium text-status-done"
               >
                 Plan finalized · ready to run
               </span>

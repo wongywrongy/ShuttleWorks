@@ -70,7 +70,7 @@ export function CandidatesPanel({ schedule, onSelect }: Props) {
             disabled={isActive}
             className={`${INTERACTIVE_BASE} text-left rounded border px-3 py-2 text-xs transition-colors ${
               isActive
-                ? 'border-primary bg-primary/5 text-foreground'
+                ? 'border-accent bg-primary/5 text-foreground'
                 : 'border-border bg-card hover:bg-muted/40'
             }`}
           >

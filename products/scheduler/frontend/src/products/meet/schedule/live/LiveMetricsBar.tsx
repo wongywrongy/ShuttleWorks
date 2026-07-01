@@ -87,12 +87,12 @@ export function LiveMetricsBar({
     <div className="flex items-center gap-3 text-sm">
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground">Time:</span>
-          <span className="font-mono font-medium text-foreground tabular-nums">{formatTime(elapsed)}</span>
+          <span className="sw-num font-medium text-foreground tabular-nums">{formatTime(elapsed)}</span>
         </div>
 
         <div className={`flex items-center gap-1 transition-transform duration-300 ease-brand ${showPulse ? 'scale-105' : ''}`}>
           <span className="text-muted-foreground">Solutions:</span>
-          <span className={`font-mono font-medium tabular-nums ${showPulse ? 'text-status-live' : 'text-foreground'}`}>
+          <span className={`sw-num font-medium tabular-nums ${showPulse ? 'text-status-live' : 'text-foreground'}`}>
             <AnimatedNumber value={solutionCount} formatFn={(n) => Math.round(n).toString()} />
           </span>
         </div>
@@ -102,7 +102,7 @@ export function LiveMetricsBar({
           title="Total penalty score — lower is better. Sums rest violations, late finishes, and movement away from any prior schedule."
         >
           <span className="underline decoration-dotted underline-offset-2 text-muted-foreground">Score:</span>
-          <span className="font-mono font-medium text-foreground tabular-nums">
+          <span className="sw-num font-medium text-foreground tabular-nums">
             <AnimatedNumber value={objectiveScore} formatFn={(n) => Math.round(n).toString()} />
           </span>
         </div>
@@ -113,7 +113,7 @@ export function LiveMetricsBar({
             title="Optimality gap — distance between the best score found and the solver's proven lower bound. 0% means provably optimal."
           >
             <span className="underline decoration-dotted underline-offset-2 text-muted-foreground">Gap:</span>
-            <span className="font-mono font-medium text-foreground tabular-nums">
+            <span className="sw-num font-medium text-foreground tabular-nums">
               <AnimatedNumber value={gap} formatFn={(n) => `${n.toFixed(1)}%`} />
             </span>
           </div>

@@ -240,8 +240,8 @@ export function MatchDetailsPanel({
     `disabled:cursor-not-allowed disabled:opacity-50`;
   const primaryActionBtn =
     `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded ` +
-    `bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground ` +
-    `hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50`;
+    `bg-accent px-2 py-1 text-2xs font-medium text-accent-ink shadow-glow ` +
+    `transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
 
   return (
     <div className="h-full overflow-auto p-2">
@@ -286,7 +286,7 @@ export function MatchDetailsPanel({
         return (
           <div className="mb-3 border-t border-border pt-2 text-xs text-foreground">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Done
               </span>
               {onUpdateStatus && mode === 'idle' && (
@@ -310,7 +310,7 @@ export function MatchDetailsPanel({
                   <span className="font-semibold text-status-started">{winnerNames}</span>
                 </span>
                 {score && (
-                  <span className="font-mono text-sm font-bold tabular-nums text-foreground">
+                  <span className="sw-num text-sm font-bold tabular-nums text-foreground">
                     {score.sideA}–{score.sideB}
                     <span className="ml-1 text-3xs font-medium text-muted-foreground">sets</span>
                   </span>
@@ -326,7 +326,7 @@ export function MatchDetailsPanel({
                   return (
                     <div
                       key={i}
-                      className="flex items-center justify-between rounded bg-card px-1.5 py-0.5 font-mono text-2xs"
+                      className="flex items-center justify-between rounded bg-card px-1.5 py-0.5 sw-num text-2xs"
                     >
                       <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
                         Set {i + 1}
@@ -608,7 +608,7 @@ export function MatchDetailsPanel({
                           }}
                           className={
                             armed
-                              ? 'rounded border border-destructive bg-destructive px-1 text-3xs font-semibold text-destructive-foreground motion-safe:animate-pulse'
+                              ? 'rounded border border-destructive bg-destructive px-1 text-3xs font-semibold text-destructive-foreground sw-pulse'
                               : 'rounded border border-destructive/40 bg-status-blocked-bg px-1 text-3xs text-status-blocked hover:bg-status-blocked-bg/70'
                           }
                           title={
@@ -656,12 +656,12 @@ export function MatchDetailsPanel({
             );
           };
           // Team-name header — matches the SectionHeader vocabulary used
-          // elsewhere (2xs uppercase tracking-[0.18em] muted). Acts as the
+          // elsewhere (2xs uppercase tracking-[0.08em] muted). Acts as the
           // implicit separator between teams, replacing the old "vs" line
           // and the colored SchoolDot indicators.
           const teamHeader = (label: string | undefined) =>
             label ? (
-              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 {label}
               </div>
             ) : null;
@@ -801,7 +801,7 @@ export function MatchDetailsPanel({
         <div className="px-3 py-2 border-t border-border/60 bg-muted/30 space-y-2">
           {onRequestMove && assignment && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Reschedule
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -818,7 +818,7 @@ export function MatchDetailsPanel({
           )}
           {onRequestDisruption && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Disruption
               </div>
               <div className="flex flex-wrap gap-1.5">

@@ -73,7 +73,7 @@ export function FinishedCard({
         {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
       </span>
       {score ? (
-        <span className="font-mono text-xs font-semibold tabular-nums text-status-started">
+        <span className="sw-num text-xs font-semibold tabular-nums text-status-started">
           {score.sideA}–{score.sideB}
         </span>
       ) : (
