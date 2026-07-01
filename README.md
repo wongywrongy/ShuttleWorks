@@ -70,6 +70,22 @@ Start here:
 | [Build a module (tutorial)](./docs/tutorials/build-a-module.md) | A guided, build-it-together walkthrough |
 | [Data flow](./docs/architecture/data-flow.md) | Seams, the match-state machine, the command pipeline, the outbox |
 
+### Code intelligence (codanna)
+
+Optional, per-developer local MCP server (semantic search / find-callers) that Claude
+Code uses to navigate the monorepo before grep. Keep the HTTP server up with the
+self-healing script — leave the terminal open:
+
+```powershell
+.\scripts\codanna-serve.ps1     # self-restarting `codanna serve --http --watch`
+codanna index                   # rebuild the index after a big pull / refactor
+```
+
+Auth is per-machine (`/mcp` → authorize once). codanna's OAuth keys are in-memory, so
+re-auth ~once per reboot is expected; if the on-click flow errors, run
+`claude mcp logout codanna` then re-auth. Full setup + reliability notes:
+[Code intelligence](./docs/getting-started/code-intelligence.md).
+
 ---
 
 ## Quick start
