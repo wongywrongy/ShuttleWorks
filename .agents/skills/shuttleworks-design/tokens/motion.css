@@ -1,0 +1,25 @@
+/* ============================================================
+   ShuttleWorks — Motion
+   Restrained. Glow-pulse on live signals; float-in on mount.
+   Everything ease-in-out; nothing bounces.
+   ============================================================ */
+
+:root {
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+  --pulse-dur: 1.6s;    /* live-dot breathing */
+}
+
+/* Live signal: slow opacity breathe (status dots, LIVE badges) */
+@keyframes sw-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.sw-pulse { animation: sw-pulse var(--pulse-dur) ease-in-out infinite; }
+
+/* Mount: gentle rise + fade (rows, cards) */
+@keyframes sw-float-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.sw-float-in { animation: sw-float-in var(--dur-slow) var(--ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sw-pulse, .sw-float-in { animation: none; }
+}

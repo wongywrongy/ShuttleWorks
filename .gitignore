@@ -63,9 +63,14 @@ coverage/
 !/CLAUDE.md
 !/REFACTOR_PROGRESS.md
 !/CODE_HEALTH.md
+!/FRONTEND_PROGRESS.md
 
 # Old app folders (legacy)
 apps/
+
+# Design-system prototype (source spec for the frontend revamp — extracted into
+# .agents/skills/shuttleworks-design/; kept on disk as visual reference, not tracked).
+/ShuttleWorks Prototype/
 
 # OS
 .DS_Store
