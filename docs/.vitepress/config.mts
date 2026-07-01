@@ -106,6 +106,7 @@ export default defineConfig({
           { text: 'User flow', link: '/getting-started/user-flow' },
           { text: 'Running locally', link: '/getting-started/running-locally' },
           { text: 'Repo layout', link: '/getting-started/repo-layout' },
+          { text: 'Code intelligence (codanna)', link: '/getting-started/code-intelligence' },
         ],
       },
       {
