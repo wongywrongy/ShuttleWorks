@@ -1,5 +1,18 @@
 # 03 — Cleanup Inventory (SP-REFACTOR Phase 3A)
 
+> **EXECUTED 2026-06-30 (Kyle approved "delete all" + "keep the 2 hooks"):**
+> - Phase 3B gitignore fix `3b4052b` (`.ruff_cache/`, `**/e2e/shots/`).
+> - Phase 3C `dc93992` — deleted the 15 §A1 files (2178 lines). Gate green:
+>   tsc clean, vitest **743**, eslint 0 err (90→89 warn), depcruise 0 err
+>   (no-cross-product **12→11**, 425→410 modules). knip unused-files **18→3**
+>   (= the 2 retained hooks + `fonts.d.ts`) — **no cascade**.
+> - Disposable artifacts removed from disk (29 untracked root `*.png` +
+>   `.playwright-mcp/`); the 76 tracked `docs/audits/*_screenshots/*.png` kept.
+> - Used targeted `rm` (NOT `git clean -fdx`, which would have nuked
+>   `node_modules`/`.venv`/`dist`). §A2 hooks kept per Kyle. §C export/type
+>   source-edits deferred to a follow-up.
+
+
 **Captured:** 2026-06-30 · **Baseline:** `pre-refactor-20260630` / Phase 2 head `e2cb413`
 **Method:** the `sp-refactor-phase3-inventory` workflow (`wf_769efbab-f79`) — 8
 read-only agents. knip re-run for the current list; each file verified against

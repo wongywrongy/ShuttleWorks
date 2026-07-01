@@ -49,14 +49,17 @@ escalate it before making any further code change.
 - Executed via `sp-refactor-phase2` + `sp-refactor-phase2-relocations` workflows (one-workflow-per-phase model, each slice: exec → gate → adversarial review → commit).
 
 ### Phase 3 — Directory cleanup
-- Status: **IN PROGRESS** — inventory done (`wf_769efbab-f79`), awaiting Kyle's deletion approval
-- Inventory: `docs/audits/03-cleanup-inventory.md` + `03-cleanup-unclear.md`
-- Proposed: delete 15 confirmed-dead source files (orphaned meet/schedule+setup+tournaments
-  subtree + services/api.ts + settings/OverviewTab.tsx + types/schedule.ts); delete disposable
-  artifacts (29 root *.png, .playwright-mcp/, already gitignored); add gitignore entries
-  (.ruff_cache/, **/e2e/shots/). OverviewTab deletion also clears an F-ARCH-2 edge.
-- Kyle-decides: retain-vs-delete useBulkOperations.ts + usePlayerSelection.ts (design doc says
-  keep for planned Phase-2 engines); the ~92 export/type source-edits (separate follow-up).
+- Status: **COMPLETE** (2026-06-30) — at the Phase 3→4 checkpoint
+- Inventory: `docs/audits/03-cleanup-inventory.md` + `03-cleanup-unclear.md` (`wf_769efbab-f79`)
+- Executed (Kyle approved): 3B gitignore fix (`3b4052b`); 3C deleted 15 confirmed-dead files
+  (`dc93992`, orphaned meet subtree + services/api.ts + settings/OverviewTab.tsx + types/schedule.ts;
+  OverviewTab cleared an F-ARCH-2 edge). Removed 29 untracked root *.png + .playwright-mcp/ via
+  targeted rm (NOT git clean -fdx — would have nuked node_modules/.venv).
+- Gate green: tsc clean, vitest 743, eslint 0 err (89 warn), depcruise 0 err (no-cross-product
+  12→11, 425→410 modules). knip 18→3 unused files (the 3 intentionally kept), no cascade.
+- Kept per Kyle: useBulkOperations.ts + usePlayerSelection.ts (design-doc Phase-2 engines).
+- Deferred follow-up: ~92 export/type source-edits (03-cleanup-inventory §C; needs source edits,
+  out of Phase-3 artifact scope) + `slotToTime`/`formatSlotTime` canonical-name decision.
 - codanna MCP token expired mid-run; agents used grep + dependency-graph BFS (two methods agreed).
 
 ### Phase 4 — Documentation
