@@ -35,20 +35,34 @@ snapshot is `docs/audits/06-state-of-codebase.md`; the ledger is
 
 ## Locked-function candidates (high complexity **AND** low coverage)
 
-Per `CODE_HEALTH.md` #10, this is the highest-risk category. Treat as
-load-bearing; **cover before modifying** (#11). Do **not** refactor these under
-routine feature work without the characterization safety net first.
+Per `CODE_HEALTH.md` #10, this is the highest-risk category. **Both were covered
+in Phase 7** (`docs/audits/07-locked-functions.md`, commit `caf5275`) → they are
+**no longer locked** (now high-complexity-but-*covered* = decompose-when-touched,
+not load-bearing-untouchable). Decomposition (Part-2 Steps 4–5) is **HELD** — see
+the ⏳ note below.
 
-| Function | Location | Complexity | Coverage | Note / open question |
+| Function | Location | Complexity | Coverage | Status |
 | --- | --- | --- | --- | --- |
-| `GreedyBackend.solve` | `scheduler_core/engine/backends.py:67` | **E (37)**, class E(38) | **19%** | Missing lines 68–187 = the whole method. **Open Q:** is `GreedyBackend` a live path or a rarely-exercised fallback behind the CP-SAT backend? 19% suggests fallback — confirm before investing; that changes the priority. |
-| `SchedulingProblemBuilder.build` | `scheduler_core/engine/bridge.py:99` | **C (19)**, class C(20) | **19%** | Missing 111–190. Bridge from DTO → engine problem; a safety net here guards every schedule build. |
+| `GreedyBackend.solve` | `scheduler_core/engine/backends.py:67` | **E (37)**, class E(38) | ~~19%~~ → **97%** | ✅ characterized (Phase 7). **Open Q resolved:** confirmed a *fallback / alt-backend with no in-repo production caller* (`analyze_impact` → isolated; live path uses `CPSATBackend`). Low blast radius → decomposition low-value. |
+| `SchedulingProblemBuilder.build` | `scheduler_core/engine/bridge.py:99` | **C (19)**, class C(20) | ~~19%~~ → **96%** | ✅ characterized (Phase 7). **Corrected claim:** it does **NOT** "guard every schedule build" — the Meet/Bracket production paths build `ScheduleRequest` directly (`api/schedule.py:111`, `services/bracket/adapter.py:89`); `build` is only reached via `live_ops.reschedule` (itself in-repo-unused). |
 
-**Rough size:** each is a bounded "worked example" of the Part-2 method
-(measure → characterize → seam → extract), ~0.5–1 day incl. tests. NOT started
-in Phase 5 (design-gated engine work; the reframe kept Phase 5 to installing the
-practice). These are the obvious first Part-2 targets when engine work is next on
-the table.
+⏳ **Decomposition HELD (decompose-when-touched).** Cover-before-modify is done;
+the risk-reduction goal is met. Because both functions have **zero in-repo
+production callers**, decomposition (Steps 4–5) is low-risk *and* low-value, and
+`build`'s is entangled with the config-drop bug below. Recommendation carried to
+the Phase-7 Step-3→4 checkpoint (see `07-locked-functions.md §5`). Do it *when a
+future task brings you into these functions*, not speculatively.
+
+## Latent bugs found while characterizing (Phase 7 — pinned, not fixed)
+
+Per the Part-2 STOP rule, these were **not** fixed inside the characterization
+pass (that would change behavior); they are pinned by a test asserting the
+*current* behavior and logged here for a deliberate decision.
+
+| Bug | Where | Why it matters | Handling |
+| --- | --- | --- | --- |
+| **`build` config field-drop** | `scheduler_core/engine/bridge.py:119–131` (freeze/current-slot) + `:136–148` (rolling-horizon) | Both rebuild `ScheduleConfig` from a **hand-listed** field set, silently resetting every newer field to default (`enable_court_utilization`, game-proximity, compact-schedule, `allow_player_overlap`, `break_slots`, `closed_court_windows`, `closed_court_ids`). Exactly the bug `live_ops.handle_court_outage` was fixed for via `dataclasses.replace`. Latent only because no in-repo caller exercises the override path with those fields set. | Pinned by `test_freeze_override_drops_newer_config_fields` (asserts the drop; fails loudly if fixed). **Fix = switch both rebuilds to `dataclasses.replace(config, **overrides)`**, then flip those asserts. S. |
+| **Stale example** | `examples/badminton_event_setup.py` | Imports `PoolGenerationPolicy` + `CompetitionGraph` from `scheduler_core` — **neither exists** (the competition/generation layer was cut; `__init__.py:44–49` documents it). The example cannot run as written. | Either restore a runnable example against the current API, or delete it. XS. |
 
 ## High complexity but well-covered (decompose *when touched*, not locked)
 
@@ -97,7 +111,7 @@ design-gated items above + engine coverage.
 | **Unused package deps** | Removed `@radix-ui/react-dialog` + `@radix-ui/react-tooltip` + `date-fns` (genuinely dead — verified zero imports anywhere; existed only as dead `vite.config.ts` `manualChunks` strings, which were pruned too) and `tailwindcss-animate` (design-system's tailwind preset provides it). knip-ignored `@radix-ui/react-select` + `clsx` + `tailwind-merge` (live via design-system, named in `manualChunks`) and `openapi-typescript` (the `generate-api` CLI). **knip unused-deps → 0** | ✅ done |
 | **Duplicate export** (`slotToTime`\|`formatSlotTime`) | **Accepted as intentional** — `formatSlotTime` is a live alias (`export const formatSlotTime = slotToTime`) with ~20 call sites each. Renaming is risky cosmetic churn with no behavior benefit; not debt | ✅ accept |
 | **Unused exports (display presets)** | `DISPLAY_PRESETS` / `getPreset` / `DisplayPreset` (`displayPresets.ts`) — a coherent, authored preset-picker unit (8 venue presets) in the live Display module. **Product decision (2026-07-01): KEEP for the future picker.** Intentionally retained; knip will keep flagging them as unused — expected, not overlooked. | ✅ keep (by decision) |
-| **Engine coverage** | `backends.py`/`bridge.py` 19%, `live_ops.py` 40%, `extraction.py` 68% | ⏳ cover-before-modify (see locked table) |
+| **Engine coverage** | ~~`backends.py`/`bridge.py` 19%~~ → **97%/96% (Phase 7 ✅)**; `live_ops.py` 40%, `extraction.py` 68% remain | ⏳ backends/bridge done; live_ops/extraction are light characterization wins when touched |
 
 > Note: knip still reports the 8 retained contract mirrors + the displayPresets
 > unit + the `slotToTime` alias as "unused." That is expected and intentional —
@@ -126,6 +140,14 @@ design-gated items above + engine coverage.
 
 ## Cleared
 
+- **2026-07-01 (Phase 7 — cover-before-modify)** — characterized both locked
+  engine functions: `GreedyBackend.solve` **19%→97%**, `SchedulingProblemBuilder.build`
+  **19%→96%** (28 golden-master tests, commit `caf5275`, test-only). Confirmed both
+  are library surface with **no in-repo production caller** (corrected the "build
+  guards every schedule build" claim). They are no longer *locked*. Decomposition
+  (Steps 4–5) **held** as decompose-when-touched (low blast radius). Found + logged
+  two latent bugs (config field-drop; stale example) above. See
+  `docs/audits/07-locked-functions.md`.
 - **2026-07-01 (Phase 5 — practice install)** — stale `no-cross-product` comment
   in `.dependency-cruiser.cjs` ("16 known" → 11); 5 truly-dead FE symbols removed +
   `DEFAULT_EVENT_COLOR` un-exported.

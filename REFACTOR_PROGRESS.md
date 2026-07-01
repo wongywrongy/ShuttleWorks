@@ -14,16 +14,22 @@ escalate it before making any further code change.
 
 - **Program started:** 2026-06-30
 - **Baseline tag:** `pre-refactor-20260630` (commit `6d8d6e8`)
-- **Current phase:** DONE — Phases 1–4 (bounded program) + Phase 5 (practice install) + Phase 6 (doc consolidation), 2026-06-30/07-01
-- **Status:** COMPLETE. Program summary: `docs/audits/04-refactor-program-summary.md`;
+- **Current phase:** Phases 1–4 (bounded program) + Phase 5 (practice install) +
+  Phase 6 (doc consolidation) + **Phase 7 (cover-before-modify, locked functions)**,
+  2026-06-30/07-01
+- **Status:** bounded program COMPLETE; Phase 7 (a CODE_HEALTH Part-2 application)
+  **coverage done, decomposition awaiting a checkpoint decision**. Program summary:
+  `docs/audits/04-refactor-program-summary.md`;
   **authoritative current snapshot: `docs/audits/06-state-of-codebase.md` — read that first.**
-  depcruise 17→11, dead files 18→3 (kept), tests 1289→1333, all gates green.
+  depcruise 17→11, dead files 18→3 (kept), tests 1289→**1361**, all gates green.
   **Phase 5** installed the code-health discipline (`CODE_HEALTH.md` + `docs/audits/debt-log.md`).
-  **Phase 6** consolidated the docs + swept staleness (9 canonical docs fixed, historical
-  trees banner-labeled) and produced the state record. The live backlog is the
-  **debt-log**; remaining items are design/coverage calls (F-ARCH-3, 3 operations→bracket
-  edges, engine 19%-coverage locked functions, broad ruff, frontend complexity). Resume
-  feature work from here, under `CODE_HEALTH.md`.
+  **Phase 6** consolidated the docs + swept staleness. **Phase 7** covered the two
+  engine locked functions (`GreedyBackend.solve` 19→97%, `bridge.build` 19→96%) →
+  no longer locked; decomposition **held** as decompose-when-touched (both have zero
+  in-repo callers). The live backlog is the **debt-log**; remaining items are
+  design/coverage calls (F-ARCH-3, 3 operations→bracket edges, the held engine
+  decomposition, broad ruff, frontend complexity). Resume feature work from here,
+  under `CODE_HEALTH.md`.
 
 ## Phase log
 
@@ -179,12 +185,55 @@ escalate it before making any further code change.
   first, per CODE_HEALTH Part 2) before any engine refactor. Then the 3 operations→bracket
   edges + F-ARCH-3 (design calls).
 
+### Phase 7 — Cover-and-modify: engine locked functions
+- Status: **Steps 1–3 COMPLETE (2026-07-01); Steps 4–5 (seam/decompose) HELD at
+  the Step-3→4 checkpoint** pending a value decision (see Open questions).
+- Scope: exactly `GreedyBackend.solve` (backends.py) + `SchedulingProblemBuilder.build`
+  (bridge.py) — the two functions flagged locked (high complexity **and** 19% cov).
+- **Step 1–2 (measure + understand):** `docs/audits/07-locked-functions.md`. Complexity
+  unchanged (E37 / C19); coverage 19%/19% (method bodies 0%). **Call-graph reframe
+  (codanna `analyze_impact` + grep):** both are **public library surface with no
+  in-repo production caller** — `GreedyBackend` is isolated (live path uses
+  `CPSATBackend`); `build` is reached only by `live_ops.reschedule`, itself
+  in-repo-unused. **Corrected the debt-log claim** that `build` "guards every schedule
+  build" (the Meet/Bracket paths build `ScheduleRequest` directly — `api/schedule.py:111`,
+  `services/bracket/adapter.py:89`). Both are library-internal-unused, **not** deletable
+  dead code (exported API) → characterize, don't delete.
+- **Step 3 (cover):** 28 characterization tests (commit `caf5275`, **test-only, zero
+  non-test files**): `test_backends_greedy_characterization.py` + `test_bridge_build_characterization.py`.
+  Coverage **19→97%** (backends) / **19→96%** (bridge); the 6 unhit lines are
+  defensive-unreachable branches. Full backend suite **618 passed** (+28), ruff-F clean.
+  Both functions are **no longer locked** (now high-complexity-but-*covered*).
+- **Two latent bugs found + logged (NOT fixed — Part-2 STOP rule):** (a) `build`'s
+  config rebuild hand-lists fields → silently drops newer `ScheduleConfig` fields on
+  any freeze/rolling override (same bug class `handle_court_outage` fixed via
+  `dataclasses.replace`); pinned by a test asserting the drop. (b) `examples/badminton_event_setup.py`
+  is stale (imports `PoolGenerationPolicy`/`CompetitionGraph`, which no longer exist).
+  Both in `debt-log.md`.
+- **Steps 4–5 HELD (recommendation, awaiting Kyle):** the seam finding is that neither
+  function is coupling-locked (both are pure functions of their args — no DB/shared
+  state), so seam == decomposition. With zero in-repo callers, decomposing is low-risk
+  **and** low-value, and `build`'s is entangled with the config-drop bug. Recommend
+  **decompose-when-touched**, not now. Reversible autonomous default already recorded in
+  the docs: coverage in, decomposition deferred + logged. Decision routed via the
+  Open-questions stop below.
+- Executed inline (single session) under `CODE_HEALTH.md` Part 2, not a workflow.
+
 ## Open questions / stops
 <Anything a prior session flagged as a STOP condition and hasn't been
 resolved yet goes here, with a link to the relevant docs/audits/*.md
 file. A new session must read this before touching code — an unresolved
 stop here means pick up the conversation with Kyle, not the keyboard.>
 
+- **[OPEN] Phase-7 Step-3→4 checkpoint (decomposition of the two engine locked
+  functions)** — coverage is delivered and committed (`caf5275`); the functions are
+  no longer locked. Whether to proceed to Steps 4–5 (seam/decompose) is a **value
+  call**, not a safety one: decomposition is now low-risk (well-covered, pure
+  functions) but low-value (both have **zero in-repo production callers**), and
+  `build`'s is entangled with the config field-drop bug. **Recommendation: HOLD as
+  decompose-when-touched.** This deviates from the literal Phase-7 Done condition
+  (which wants the complexity score dropped) — hence a Kyle call. See
+  `docs/audits/07-locked-functions.md §5`.
 - **F-ARCH-3 (matchStateStore ownership)** — pre-flagged STOP for Phase 2. The
   prior "move it to Operations" would create new `no-cross-product` violations
   from Meet (3 files) + Bracket (`LiveView`), since the store is cross-cutting,
