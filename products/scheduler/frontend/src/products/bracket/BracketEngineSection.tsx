@@ -34,7 +34,7 @@ const FALLBACK_CONFIG: TournamentConfig = {
 };
 
 const TEXT_INPUT_CLASSES =
-  'h-7 rounded-sm border border-border bg-bg-elev px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring';
+  'h-7 rounded-sm border border-border bg-bg-elev px-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30';
 
 export function BracketEngineSection() {
   const config = useTournamentStore((s) => s.config);

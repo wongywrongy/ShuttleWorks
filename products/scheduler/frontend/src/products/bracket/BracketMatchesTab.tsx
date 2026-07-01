@@ -163,7 +163,7 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
           />
         ) : (
           <>
-            <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-5 py-1.5 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
               <span className="w-20">Match</span>
               <span className="min-w-0 flex-1">Side A</span>
               <span className="min-w-0 flex-1">Side B</span>
@@ -178,7 +178,7 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
                     onClick={() => toggle(ev.id)}
                     aria-expanded={!isCollapsed}
                     data-testid={`bracket-match-group-${ev.id}`}
-                    className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-4 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/60"
+                    className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-5 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/60"
                   >
                     <CaretRight
                       aria-hidden
@@ -188,13 +188,13 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
                         isCollapsed ? '' : 'rotate-90',
                       ].join(' ')}
                     />
-                    <span className="font-mono text-2xs font-semibold uppercase tracking-[0.12em] text-foreground">
+                    <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-3 sw-num">
                       {ev.id}
                     </span>
                     <span className="text-2xs text-muted-foreground">
                       {disciplineLabel(ev.discipline)}
                     </span>
-                    <span className="text-2xs tabular-nums text-muted-foreground">
+                    <span className="text-2xs sw-num text-muted-foreground">
                       {units.length}
                     </span>
                   </button>
@@ -205,9 +205,9 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
                           <div
                             key={pu.id}
                             data-testid={`bracket-match-row-${pu.id}`}
-                            className="flex min-h-[40px] items-center gap-3 border-b border-border px-4 text-sm transition-colors duration-fast ease-brand hover:bg-muted/30"
+                            className="flex min-h-[40px] items-center gap-3 border-b border-border px-5 text-sm transition-colors duration-fast ease-brand hover:bg-muted/30"
                           >
-                            <span className="w-20 font-mono text-xs text-muted-foreground">
+                            <span className="w-20 text-xs text-muted-foreground sw-num">
                               R{pu.round_index}·M{pu.match_index}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-foreground">
@@ -217,7 +217,7 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
                               {resolveSide(pu.side_b)}
                             </span>
                             <span
-                              className={`w-16 text-right text-2xs font-semibold uppercase tracking-[0.12em] ${STATUS_CLASS[status]}`}
+                              className={`w-16 text-right text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
                             >
                               {STATUS_LABEL[status]}
                             </span>

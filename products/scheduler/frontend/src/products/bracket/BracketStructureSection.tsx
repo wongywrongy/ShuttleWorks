@@ -55,7 +55,7 @@ export function BracketStructureSection() {
         <div className="mt-3 overflow-hidden rounded-sm border border-border">
           <table className="w-full border-collapse text-sm">
             <thead className="bg-muted/40">
-              <tr className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <tr className="text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
                 <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Discipline</th>
                 <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Draw type</th>
                 <th className="px-3 py-1.5 text-left font-semibold border-b border-border">Draw size</th>

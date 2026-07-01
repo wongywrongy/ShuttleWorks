@@ -82,13 +82,13 @@ export function DetailDrawer({
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {eyebrow}
           </span>
           <span
             className={[
               'text-sm font-semibold text-foreground',
-              mono ? 'font-mono' : '',
+              mono ? 'sw-num' : '',
             ].join(' ')}
           >
             {title}
@@ -258,7 +258,7 @@ function PlayerDetailFields({
                             : r.value
                         }
                         className={[
-                          'rounded-md border px-2 py-0.5 text-2xs font-mono font-medium tabular-nums',
+                          'rounded-md border px-2 py-0.5 text-2xs font-medium sw-num',
                           'transition-colors duration-fast ease-brand disabled:cursor-not-allowed',
                           isActive
                             ? 'border-accent bg-accent/10 text-accent'

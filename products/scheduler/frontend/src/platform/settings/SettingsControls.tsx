@@ -45,7 +45,7 @@ export function Row({ label, control, last }: RowProps) {
  * ========================================================================= */
 export function SectionHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="pt-6 pb-2 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+    <div className="pt-6 pb-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
       {children}
     </div>
   );

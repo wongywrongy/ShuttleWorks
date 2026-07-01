@@ -112,10 +112,10 @@ export function BracketMatchesTable({ data, selectedId, onSelect }: Props) {
       <table className="w-full text-2xs">
         <thead className="text-muted-foreground">
           <tr className="border-b border-border">
-            <th className="px-4 py-1 text-left">Time</th>
-            <th className="px-4 py-1 text-left">Ct</th>
-            <th className="px-4 py-1 text-left">Match</th>
-            <th className="px-4 py-1 text-left">Players</th>
+            <th className="px-4 py-1 text-left text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">Time</th>
+            <th className="px-4 py-1 text-left text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">Ct</th>
+            <th className="px-4 py-1 text-left text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">Match</th>
+            <th className="px-4 py-1 text-left text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">Players</th>
           </tr>
         </thead>
         <tbody>
@@ -166,7 +166,7 @@ function ScopeGroupRows({
   return (
     <>
       <tr className="bg-muted/30">
-        <td colSpan={4} className="px-4 py-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <td colSpan={4} className="px-4 py-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {header}
         </td>
       </tr>
@@ -190,7 +190,7 @@ function ScopeGroupRows({
           >
             <td className="px-4 py-1 tabular-nums">{time}</td>
             <td className="px-4 py-1 tabular-nums">C{a.court_id}</td>
-            <td className="px-4 py-1 font-mono">{pu.id}</td>
+            <td className="px-4 py-1 sw-num">{pu.id}</td>
             <td className="px-4 py-1">
               {sideA} <span className="text-muted-foreground">vs</span> {sideB}
             </td>

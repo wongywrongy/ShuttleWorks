@@ -163,7 +163,7 @@ export function RegenerateMenu() {
           aria-label="Regenerate matches from roster"
           className="motion-enter absolute right-0 top-full z-overlay mt-1 w-72 rounded-sm border border-border bg-popover p-3 text-popover-foreground shadow-lg"
         >
-          <div className="mb-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="mb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Regenerate from roster
           </div>
           <p className="text-xs text-muted-foreground">{infoLine}</p>

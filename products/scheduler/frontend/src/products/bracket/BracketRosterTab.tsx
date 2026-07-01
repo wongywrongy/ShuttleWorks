@@ -130,14 +130,14 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
         >
           ＋ Add player
         </button>
       </ActionsBar>
 
       {/* Column-label row — same vocabulary as the meet's flat tables. */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
         <span className="flex-1">Player</span>
         <span className="flex-1">Events</span>
         <span className="w-16 text-right">Actions</span>
@@ -153,7 +153,7 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
             onClick={() => setSelectedId(p.id)}
           >
             <span className="flex-1 text-sm text-foreground">{p.name}</span>
-            <span className="flex-1 text-2xs font-mono uppercase tracking-[0.18em] text-muted-foreground">
+            <span className="flex-1 text-2xs uppercase tracking-[0.08em] text-muted-foreground sw-num">
               {(eventsByPlayerId.get(p.id) ?? []).join(' · ')}
             </span>
             <button
@@ -201,12 +201,12 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
 
       {selected && (
         <section className="border-t border-border bg-card px-4 py-3">
-          <h2 className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-3">
+          <h2 className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
             Player detail · {selected.name}
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Notes
               </span>
               <input
@@ -222,7 +222,7 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Rest constraint (slots)
               </span>
               <input
@@ -240,7 +240,7 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
               />
             </label>
           </div>
-          <p className="mt-3 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="mt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Events:{' '}
             {(eventsByPlayerId.get(selected.id) ?? []).join(', ') || '—'}
           </p>

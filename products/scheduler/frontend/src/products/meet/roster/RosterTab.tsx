@@ -469,7 +469,7 @@ function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void })
         aria-haspopup="dialog"
         aria-expanded={open}
         data-testid="school-add-button"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
       >
         ＋ Add school
       </button>
@@ -509,7 +509,7 @@ function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void })
               type="button"
               onClick={commit}
               disabled={!draft.trim()}
-              className="rounded-sm bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow hover:brightness-110 disabled:opacity-50"
             >
               Add
             </button>
@@ -617,7 +617,7 @@ function BulkImportMenu({
                 onClick={commit}
                 disabled={names.length === 0}
                 data-testid="bulk-import-commit"
-                className="rounded-sm bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow hover:brightness-110 disabled:opacity-50"
               >
                 Add {names.length || ''}
               </button>

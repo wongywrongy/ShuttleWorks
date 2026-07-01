@@ -92,7 +92,7 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
                 onClick={() => toggleVisible(p)}
                 aria-label={`Show ${p} column`}
                 title={`Show ${p}`}
-                className="rounded border border-dashed border-border px-1 font-mono text-3xs lowercase text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
+                className="rounded border border-dashed border-border px-1 text-3xs sw-num lowercase text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
               >
                 {p}
               </button>
