@@ -60,6 +60,7 @@ coverage/
 /*.md
 !/README.md
 !/CLAUDE.md
+!/REFACTOR_PROGRESS.md
 
 # Old app folders (legacy)
 apps/
