@@ -12,11 +12,13 @@ uses ``CPSATBackend``). ``solve`` is a pure, deterministic function of its
 local state, so these assertions are stable (no CP-SAT seed concern).
 """
 from scheduler_core.domain.models import (
+    LockedAssignment,
     Match,
     Player,
     PreviousAssignment,
     ScheduleConfig,
     ScheduleRequest,
+    SolverOptions,
     SolverStatus,
 )
 from scheduler_core.engine.backends import GreedyBackend, _player_ids
@@ -277,3 +279,28 @@ def test_unschedulable_match_reported_infeasible():
 def test_player_ids_unions_both_sides():
     m = Match(id="m", event_code="E", side_a=["a", "b"], side_b=["c"])
     assert _player_ids(m) == {"a", "b", "c"}
+
+
+# --------------------------------------------------------------------------- #
+# Ignored inputs (negative behaviors pinned as tripwires)
+# --------------------------------------------------------------------------- #
+
+def test_ignores_solver_options_and_locked_assignments():
+    """The greedy backend derives locks from ``previous_assignments`` only; it
+    IGNORES ``request.solver_options`` and ``request.locked_assignments`` (the
+    newer Step-B hard-pin mechanism). If either is ever wired in, this fails."""
+    players = [Player(id="p1", name="p1"), Player(id="p2", name="p2")]
+    matches = [Match(id="m1", event_code="MS", side_a=["p1"], side_b=["p2"])]
+    request = ScheduleRequest(
+        config=_config(),
+        players=players,
+        matches=matches,
+        solver_options=SolverOptions(time_limit_seconds=0.001, random_seed=7),
+        locked_assignments=[LockedAssignment(match_id="m1", court_id=2, time_slot=5)],
+    )
+
+    result = GreedyBackend().solve(request)
+
+    a = result.assignments[0]
+    assert (a.slot_id, a.court_id) == (0, 1)  # greedy front, NOT the locked (5,2)
+    assert result.locked_count == 0  # locked_assignments do not count as locks

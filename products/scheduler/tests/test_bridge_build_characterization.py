@@ -116,6 +116,18 @@ def test_max_units_truncates_after_expansion():
     assert req0.matches == [] and req0.players == [] and req0.previous_assignments == []
 
 
+def test_negative_max_units_is_ignored():
+    """Quirk pinned: the guard is ``max_units is not None and max_units >= 0``, so a
+    negative value means 'no limit', NOT 'truncate to zero'."""
+    units = [_unit(f"u{i}", a=[f"a{i}"], b=[f"b{i}"]) for i in range(3)]
+    state = _state(units)
+
+    req = _build(state, ["u0", "u1", "u2"],
+                 ScheduleConfig(total_slots=20, court_count=2),
+                 BridgeOptions(max_units=-1))
+    assert [m.id for m in req.matches] == ["u0", "u1", "u2"]
+
+
 # --------------------------------------------------------------------------- #
 # Config override — LATENT BUG pinned (field-drop on rebuild)
 # --------------------------------------------------------------------------- #
@@ -138,6 +150,7 @@ def test_freeze_override_drops_newer_config_fields():
         enable_court_utilization=False,  # dropped
         court_utilization_penalty=12.0,  # dropped
         break_slots=[(5, 7)],            # dropped
+        closed_court_windows=[(2, 0, 5)],  # dropped
         closed_court_ids=[2],            # dropped
         enable_game_proximity=True,      # dropped
         min_game_spacing_slots=3,        # dropped
@@ -162,6 +175,7 @@ def test_freeze_override_drops_newer_config_fields():
     assert uc.enable_court_utilization is True
     assert uc.court_utilization_penalty == 50.0
     assert uc.break_slots == []
+    assert uc.closed_court_windows == []
     assert uc.closed_court_ids == []
     assert uc.enable_game_proximity is False
     assert uc.min_game_spacing_slots is None
