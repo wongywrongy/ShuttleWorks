@@ -16,7 +16,7 @@ export interface Participant {
   members?: string[] | null;
 }
 
-export interface ParticipantInput {
+interface ParticipantInput {
   id: string;
   name: string;
   members?: string[];
@@ -35,7 +35,7 @@ export interface EventIn {
   randomize?: boolean;
 }
 
-export interface CreateTournamentIn {
+interface CreateTournamentIn {
   courts: number;
   total_slots: number;
   rest_between_rounds: number;
@@ -45,7 +45,7 @@ export interface CreateTournamentIn {
   events: EventIn[];
 }
 
-export interface BracketSlotDTO {
+interface BracketSlotDTO {
   participant_id: string | null;
   feeder_play_unit_id: string | null;
 }
@@ -100,7 +100,7 @@ export interface ResultDTO {
   score?: BracketScore | null;
 }
 
-export interface EventDTO {
+interface EventDTO {
   id: string;
   discipline: string;
   format: "se" | "rr";
@@ -126,7 +126,7 @@ export interface TournamentDTO {
 }
 
 /** One bracket assignment cell — solver-produced or operator-chosen. */
-export interface BracketAssignmentInput {
+interface BracketAssignmentInput {
   play_unit_id: string;
   slot_id: number;
   court_id: number;
@@ -192,7 +192,7 @@ export interface BracketPinIn {
   court_id: number;
 }
 
-export interface BracketValidationConflict {
+interface BracketValidationConflict {
   type: string;
   description: string;
   play_unit_id: string | null;
