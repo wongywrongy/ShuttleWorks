@@ -108,9 +108,10 @@ escalate it before making any further code change.
 - Gate green: tsc 0, eslint **0 err / 88 warn** (89→88), depcruise **0 err / 11 warn**,
   vitest **743**, ruff-F clean, pytest **590** (no Python source changed).
 - **Logged for later (in `debt-log.md`, deliberately NOT done):** F-ARCH-3, the 2
-  ops→bracket UI edges (design calls); ~32 remaining unused exports + 59 unused types
-  (careful: `dto.ts` codegen, `moduleContract` `*_SEGMENTS`/`DtoName`); 12+2 unused
-  package deps (risky — needs design-system cross-check); `slotToTime`/`formatSlotTime`
+  ops→bracket UI edges (design calls); 31 remaining unused exports + 60 unused types
+  (careful: `dto.ts` codegen, `moduleContract` `*_SEGMENTS`/`DtoName`); 14+2 unused
+  package deps (risky — incl. clsx/tailwind-merge orphaned by the cn deletion; needs
+  design-system cross-check); `slotToTime`/`formatSlotTime`
   dup; engine 19% coverage safety nets; broad ruff; frontend complexity unmeasured.
 
 ## Open questions / stops
