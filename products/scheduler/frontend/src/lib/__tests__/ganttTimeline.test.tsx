@@ -169,4 +169,24 @@ describe('<GanttTimeline /> block positioning', () => {
     );
     expect(screen.getAllByTestId(/^b-/)).toHaveLength(4);
   });
+
+  it('draws the now-line at the currentSlot column edge, and omits it out of range', () => {
+    const props = {
+      courts: [1, 2],
+      minSlot: 2,
+      slotCount: 4,
+      density: 'standard' as const,
+      placements: [] as PlacementType[],
+      renderBlock: () => null,
+    };
+    const { container, rerender } = render(<GanttTimeline {...props} currentSlot={4} />);
+    // In range: hairline at (currentSlot - minSlot) * slot = (4 - 2) * 80.
+    const line = container.querySelector('.bg-accent\\/50') as HTMLElement | null;
+    expect(line).not.toBeNull();
+    expect(line!.style.left).toBe('160px');
+
+    // Out of range (past the visible window): no line.
+    rerender(<GanttTimeline {...props} currentSlot={6} />);
+    expect(container.querySelector('.bg-accent\\/50')).toBeNull();
+  });
 });

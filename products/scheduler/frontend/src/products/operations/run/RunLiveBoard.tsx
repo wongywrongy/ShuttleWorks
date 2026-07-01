@@ -40,6 +40,9 @@ export interface RunLiveBoardProps {
   running?: boolean;
   /** Wall-clock label for a slot (operators think in time, not slot indices). */
   formatSlot?: (slotId: number) => string;
+  /** Minutes per slot (config.intervalMinutes) — when provided, playing chips
+   *  carry a quiet elapsed stamp (`span × slotMinutes`). */
+  slotMinutes?: number;
   selectedKey?: string | null;
   onSelect(key: string): void;
 }
@@ -50,6 +53,7 @@ export function RunLiveBoard({
   currentSlot = 0,
   running = false,
   formatSlot,
+  slotMinutes,
   selectedKey,
   onSelect,
 }: RunLiveBoardProps) {
@@ -179,10 +183,20 @@ export function RunLiveBoard({
               Late
             </span>
           )}
+          {c.state === 'playing' && slotMinutes != null && (
+            // Quiet elapsed stamp — bottom-right corner so it never collides
+            // with the vertically-centered overrun "+N" badge at the right.
+            <span
+              className="pointer-events-none absolute bottom-0.5 right-1.5 text-[9px] opacity-80 sw-num"
+              data-testid={`run-elapsed-${c.key}`}
+            >
+              {Math.max(0, Math.round(c.placement.span * slotMinutes))}m
+            </span>
+          )}
         </MatchChip>
       );
     },
-    [chipByKey, selectedKey, onSelect],
+    [chipByKey, selectedKey, onSelect, slotMinutes],
   );
 
   if (chips.length === 0) {

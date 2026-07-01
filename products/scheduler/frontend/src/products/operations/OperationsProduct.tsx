@@ -262,6 +262,7 @@ function OperationsBody() {
               currentSlot={currentSlot}
               planFinalized={planFinalized}
               formatSlot={formatSlot}
+              slotMinutes={config?.intervalMinutes}
             />
           ) : (
             // COURTS = planning surface. Drag board + the matches overview list

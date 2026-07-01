@@ -370,6 +370,19 @@ export function GanttTimeline({
               bottom: 0,
             }}
           >
+            {/* Now-line — a vertical hairline at the currentSlot column's
+                leading edge, in the same mesh-relative coordinate space the
+                block boxes use (this overlay already starts after the
+                court-label column). */}
+            {currentSlot != null &&
+              currentSlot >= minSlot &&
+              currentSlot < minSlot + slotCount && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 z-10 w-px bg-accent/50"
+                  style={{ left: (currentSlot - minSlot) * tier.slot }}
+                />
+              )}
             {placementsWithBoxes.map(({ placement, box }) => (
               <PositionedBlock
                 key={placement.key}

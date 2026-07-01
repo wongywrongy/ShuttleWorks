@@ -22,10 +22,16 @@ export interface RunQueueProps {
   queue: RunMatch[];
   selectedKey?: string | null;
   onSelect(key: string): void;
+  /** Keys of queue rows past their planned slot (floor running) — paints a
+   *  right-aligned LATE badge in the board's run-late voice. */
+  lateKeys?: ReadonlySet<string>;
+  /** Quick "↵ send" affordance on eligible scheduled rows — sends the row's
+   *  match to the first free court without opening the inspector. */
+  onSend?: (key: string) => void;
 }
 
 // ── component ─────────────────────────────────────────────────────────────
-export function RunQueue({ queue, selectedKey, onSelect }: RunQueueProps) {
+export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: RunQueueProps) {
   if (queue.length === 0) {
     return (
       <div className="flex items-center justify-center px-4 py-6 text-sm text-muted-foreground">
@@ -90,6 +96,32 @@ export function RunQueue({ queue, selectedKey, onSelect }: RunQueueProps) {
               >
                 Late
               </span>
+            )}
+
+            {/* Behind-plan badge — same voice as the board's run-late marker */}
+            {lateKeys?.has(match.key) && (
+              <span
+                data-testid={`queue-late-${match.key}`}
+                aria-label="Late"
+                className="flex-shrink-0 text-[9px] font-semibold uppercase tracking-wide text-status-warning"
+              >
+                LATE
+              </span>
+            )}
+
+            {/* Quick-send — eligible scheduled rows only */}
+            {onSend && match.eligible && match.status === 'scheduled' && (
+              <button
+                type="button"
+                data-testid={`queue-send-${match.key}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSend(match.key);
+                }}
+                className="flex-shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-2xs text-muted-foreground hover:border-accent hover:text-accent"
+              >
+                ↵ send
+              </button>
             )}
           </li>
         );

@@ -125,6 +125,9 @@ export function WorkspaceRow({
 
       <Button
         variant={receded ? 'ghost' : action.kind === 'open' ? 'outline' : 'ghost'}
+        // "Set date" is the attention-y next action — warm it up so an undated
+        // workspace reads as needing input; Open/View results stay quiet.
+        className={action.kind === 'set-date' ? 'text-status-warning' : undefined}
         onClick={(e) => {
           e.stopPropagation();
           if (action.kind === 'set-date') onSetDate();

@@ -7,16 +7,47 @@
  * right-side inspector for the selected workspace. "New workspace" routes to
  * the dedicated `/new` create surface.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState, Skeleton, Eyebrow } from '../../components/control-plane';
-import { groupWorkspaces } from './hubGrouping';
+import { groupWorkspaces, type HubGroupId } from './hubGrouping';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
+
+/** One group-filter chip (All / Upcoming / No date set / Past) with a count. */
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded border px-2 py-0.5 text-2xs font-medium ${
+        active
+          ? 'border-accent bg-accent/10 text-accent'
+          : 'border-border text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {label}{' '}
+      <span className={`sw-num ${active ? 'text-accent/70' : 'text-muted-foreground'}`}>
+        {count}
+      </span>
+    </button>
+  );
+}
 
 export function HubPage() {
   const navigate = useNavigate();
@@ -26,6 +57,21 @@ export function HubPage() {
 
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Chronological-group filter; 'all' = current (show everything) behavior. */
+  const [groupFilter, setGroupFilter] = useState<HubGroupId | 'all'>('all');
+
+  // ⌘K / Ctrl+K focuses the search field (the kbd hint inside it says so).
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const [deleteTarget, setDeleteTarget] = useState<TournamentSummaryDTO | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -67,6 +113,15 @@ export function HubPage() {
     return groupWorkspaces(filtered, todayKey).filter((g) => g.items.length > 0);
   }, [tournaments, query]);
   const matchCount = useMemo(() => groups.reduce((n, g) => n + g.items.length, 0), [groups]);
+  // Group-filter chips narrow the visible list; 'all' shows every group.
+  const visibleGroups = useMemo(
+    () => (groupFilter === 'all' ? groups : groups.filter((g) => g.id === groupFilter)),
+    [groups, groupFilter],
+  );
+  const visibleCount = useMemo(
+    () => visibleGroups.reduce((n, g) => n + g.items.length, 0),
+    [visibleGroups],
+  );
   const selected = useMemo(
     () => tournaments.find((t) => t.id === selectedId) ?? null,
     [tournaments, selectedId],
@@ -99,19 +154,46 @@ export function HubPage() {
       <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border bg-background px-4">
         <ShuttleWorksMark />
         <div className="min-w-0 flex-1">
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search workspaces…"
-            aria-label="Search workspaces"
-            className="w-full max-w-md rounded border border-border bg-card px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-          />
+          <div className="relative w-full max-w-md">
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search workspaces…"
+              aria-label="Search workspaces"
+              className="w-full rounded border border-border bg-card px-3 py-1.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-xs border border-border bg-surface-chip px-1 text-[10px] text-muted-foreground">
+              ⌘K
+            </kbd>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => navigate('/new')}>New workspace</Button>
         </div>
       </header>
+
+      {/* Group-filter chips — All plus one per non-empty chronological group */}
+      {!loading && tournaments.length > 0 ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border bg-background px-4 py-2">
+          <FilterChip
+            label="All"
+            count={matchCount}
+            active={groupFilter === 'all'}
+            onClick={() => setGroupFilter('all')}
+          />
+          {groups.map((g) => (
+            <FilterChip
+              key={g.id}
+              label={g.label}
+              count={g.items.length}
+              active={groupFilter === g.id}
+              onClick={() => setGroupFilter(g.id)}
+            />
+          ))}
+        </div>
+      ) : null}
 
       {/* Body: chronological groups + inspector */}
       <div className="flex min-h-0 flex-1">
@@ -133,13 +215,13 @@ export function HubPage() {
               body="A workspace is your event control plane — it runs modules like Meet, Bracket, and Display."
               action={<Button onClick={() => navigate('/new')}>Create workspace</Button>}
             />
-          ) : matchCount === 0 ? (
+          ) : visibleCount === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
               No workspaces match your search.
             </div>
           ) : (
             <div>
-              {groups.map((g) => (
+              {visibleGroups.map((g) => (
                 <section key={g.id} aria-label={g.label}>
                   <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur">
                     <Eyebrow framed>{g.label}</Eyebrow>

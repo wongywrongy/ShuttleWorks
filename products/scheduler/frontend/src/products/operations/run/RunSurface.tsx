@@ -49,6 +49,9 @@ export interface RunSurfaceProps {
   planFinalized?: boolean;
   /** Wall-clock label for a slot (operators think in time, not slot indices). */
   formatSlot?: (slotId: number) => string;
+  /** Minutes per slot (config.intervalMinutes) — enables the playing-chip
+   *  elapsed stamp on the live board. */
+  slotMinutes?: number;
 }
 
 // ── pure auto-pull helper (exported so tests can verify without hooks) ────
@@ -103,6 +106,7 @@ export function RunSurface({
   currentSlot,
   planFinalized,
   formatSlot,
+  slotMinutes,
 }: RunSurfaceProps) {
   // ── seam hooks: owns the seam hooks for the Run (live) surface ───────────
   const pushToast = useUiStore((s) => s.pushToast);
@@ -254,6 +258,29 @@ export function RunSurface({
     [seams],
   );
 
+  // ── queue affordances (LATE badge + quick-send) ───────────────────────────
+  /** Queue rows past their planned slot, once the floor is running. */
+  const lateKeys = useMemo((): ReadonlySet<string> => {
+    return new Set(
+      queue
+        .filter(
+          (m) => !!planFinalized && m.plannedSlot != null && (currentSlot ?? 0) > m.plannedSlot,
+        )
+        .map((m) => m.key),
+    );
+  }, [queue, planFinalized, currentSlot]);
+
+  /** "↵ send": assign the row's match to the first free court, no inspector. */
+  const sendFromQueue = useCallback(
+    (key: string) => {
+      const m = matches.find((x) => x.key === key);
+      const court = lanes.find((l) => l.now == null)?.court;
+      if (!m || court == null) return;
+      fireAssign(m, court, slotForAssign(court, matches, currentSlot ?? 0));
+    },
+    [matches, lanes, currentSlot, fireAssign],
+  );
+
   // ── selection + role resolution ───────────────────────────────────────────
   const selectedMatch = useMemo(
     () => matches.find((m) => m.key === selectedKey) ?? null,
@@ -361,6 +388,7 @@ export function RunSurface({
             currentSlot={currentSlot}
             running={!!planFinalized}
             formatSlot={formatSlot}
+            slotMinutes={slotMinutes}
             selectedKey={selectedKey}
             onSelect={setSelectedKey}
           />
@@ -370,7 +398,13 @@ export function RunSurface({
             <div className="px-4 pb-1 pt-3 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
               Queue
             </div>
-            <RunQueue queue={queue} selectedKey={selectedKey} onSelect={setSelectedKey} />
+            <RunQueue
+              queue={queue}
+              selectedKey={selectedKey}
+              onSelect={setSelectedKey}
+              lateKeys={lateKeys}
+              onSend={sendFromQueue}
+            />
           </div>
         </div>
 
