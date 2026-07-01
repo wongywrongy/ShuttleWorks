@@ -56,7 +56,12 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   (11 pre-existing warns; MatchChip still doesn't import `products/*`). Backend untouched.
   **Nav tip:** deep-link `page.goto` resets to Config — navigate client-side (click the sidebar); Operations
   sub-items are **Plan/Run** (segments `/courts`,`/live`), Bracket is **Draws**→Open→`/bracket-draw`.
-  **Next** (see Follow-up): the other 9 screens + uncovered live surfaces inherit the foundation; polish as needed.
+  **NEXT UP (requested, IN PROGRESS at compact):** light-theme spot-check of the keystones (Run / Meet Matches /
+  Bracket Draw — Hub light already ✓ in P1), THEN re-verify all keystones against the original design prototype
+  (`ShuttleWorks Prototype/ShuttleWorks - Final Direction[ Light].dc.html` on disk; also the token/guideline cards
+  in `.agents/skills/shuttleworks-design/`). App theme was just switched to light in the running dev browser.
+  To navigate: go to `/` (Hub), Open workspace, then client-side clicks (Operations→Run `/live`;
+  Meet→Matches; Bracket→Draws→Open→`/bracket-draw`). After that: other 9 screens + uncovered surfaces; optional push.
 
 ## Phase log
 
