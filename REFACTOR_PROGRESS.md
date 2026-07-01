@@ -35,12 +35,14 @@ escalate it before making any further code change.
   architectural work (F-ARCH-*). Zero code files changed by the audit.
 
 ### Phase 2 — Refactor
-- Status: **IN PROGRESS** (started 2026-06-30)
-- Findings resolved: <none yet>
-- Findings deferred: <none yet>
-- Last commit in this phase: <safety-net WIP>
-- Next action: characterization tests for `sync_service.py` + `matchStateStore.ts`
-  (commit `test: characterization tests before refactor`, no non-test files).
+- Status: **IN PROGRESS** (started 2026-06-30) — at the Phase 2→3 checkpoint, awaiting Kyle
+- Findings resolved:
+  - **F-SAFETY-1** — safety-net characterization tests (`bc8dd3e`): sync_service.py 72%→86%, matchStateStore.ts 36%→100%.
+  - **F-ARCH-1** — relocate workspaceNav to platform/product-shell (`fef1c3b`); 3 platform-no-app violations gone, rule ratcheted warn→error; 3 adversarial reviewers APPROVE, gate green (depcruise 17→14). See `docs/audits/02-review-1.md`.
+- Findings triaged (NOT executed): **F-ARCH-2** (14 cross-product edges) — 8 accept-as-legit, 1 dead-code (Phase 3), 3 relocate-shared-code, 2 needs-design-decision (operations rendering bracket UI). Full breakdown in `02-review-1.md`.
+- Deferred to Kyle's judgment: **F-ARCH-3** (matchStateStore ownership) + the 2 F-ARCH-2 needs-design-decision edges.
+- Last commit in this phase: `fef1c3b`
+- Executed via the `sp-refactor-phase2` workflow (one-workflow-per-phase model).
 
 ### Phase 3 — Directory cleanup
 - Status: NOT STARTED
