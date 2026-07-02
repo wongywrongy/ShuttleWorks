@@ -266,6 +266,28 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 - **Gate:** vitest **751**, eslint 0 err, build ✓, depcruise 0 err, docs:build ✓.
 - **Next (from the research):** implement R1 (one-sided layout default; re-pin `DrawView.centered.test`).
 
+### Phase 9 — One-sided default + typography sweep + matches parity (`b48759c`)
+- **Status: COMPLETE** (2026-07-01). R1 one-sided SE layout as default (+ Mirrored toggle,
+  centered-tests re-pinned); StatusBar's hardcoded font-mono fixed at source + 18 files of stray
+  mono/tracking; Meet↔Bracket matches: 10 divergences fixed (shared `BANDED_ROW_CLASSES`, stable `#`
+  under search, italic TBD, empty state) + 15 rich-fixture tests. Gate: vitest 768, eslint 0 err,
+  build ✓, depcruise 0 err.
+
+### Phase 10 — EXHAUSTIVE real-world Playwright pass (IN PROGRESS)
+- **Mission (Kyle, verbatim intent):** go through the WHOLE site in the browser — "down to exact
+  wording, column placement, everything" — because real-world function testing is separate from code
+  testing. Fix/implement anything found remaining.
+- **Method:** dev server :5173 + backend :8600 (start if down; CLAUDE.md recipe). POPULATE richly
+  first (several draws across disciplines via `/bracket/assign`+eventUpsert/eventGenerate APIs from
+  the browser session; meet matches exist). Then walk EVERY surface in BOTH themes: Hub (+chips/⌘K/
+  inspector), New Workspace, Meet Roster/Matches/Config, Bracket Roster/Draws(cards)/Draw(one-sided
+  + mirrored + RR)/Matches/Config(lock), Operations Plan/Run (call/start/record round-trips — now
+  persisted), Display (meet+bracket), Workspace settings tabs, Global settings. At each stop check:
+  exact copy, column alignment/placement, truncation, empty states, hover/selected, toasts, keyboard
+  (Ctrl+K), theme parity. Screenshot to `.playwright-mcp/p10-*`; log EVERY finding here; fix in
+  batches with gates (vitest/lint/build/depcruise); commit per batch.
+- **Nav gotcha reminder:** deep-links reset to Config — navigate client-side via the sidebar.
+
 ---
 
 ## Token remap reference (prototype hex → intent; convert to HSL-triplet)
