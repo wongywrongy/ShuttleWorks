@@ -188,7 +188,7 @@ module.exports = {
         xs: 'var(--radius-xs)',           // 4px  — micro tags / initial squares
         sm: 'var(--radius-sm)',           // 6px  — status pills / small controls
         DEFAULT: 'var(--radius)',         // 8px  — buttons / chips / inputs
-        md: 'var(--radius-md)',           // 10px — grouped surfaces
+        md: 'var(--radius-md)',           // 9px  — primary buttons / nav rows
         lg: 'var(--radius-lg)',           // 12px — cards / metric tiles / modals
         xl: 'var(--radius-xl)',           // 14px — screen frame
         // rounded-full (9999px) remains available from Tailwind core defaults
@@ -207,6 +207,9 @@ module.exports = {
         xl:   'var(--shadow-hard)',
         '2xl':'var(--shadow-hard)',
         inner: 'inset 0 1px 0 hsl(var(--rule) / 0.4)',
+        // Handoff elevation pair — the screen frame + a raised element.
+        frame: 'var(--shadow-frame)',
+        card:  'var(--shadow-card)',
         // Signature glow — primary actions (shadow-glow) + selected cards (shadow-glow-lg)
         glow:      'var(--glow-accent)',
         'glow-lg': 'var(--glow-accent-lg)',

@@ -239,21 +239,101 @@
 .animate-slide-up { animation: slide-up 0.3s ease-out; }
 
 /* ===========================================================================
- * Signature motion — live-signal breathe + mount rise.
- * sw-pulse: slow opacity breathe on status dots / LIVE badges.
- * sw-float-in: gentle 6px rise + fade for rows/cards on mount.
+ * Signature motion — the full handoff utility set (skill tokens/motion.css).
+ * Restrained, ease-in-out, nothing bounces. Timing tokens (--dur*, --ease,
+ * --pulse-dur, --nudge-dur, --stagger-step) live in tokens.css.
+ * Live gallery: .agents/skills/shuttleworks-design/guidelines/motion-gallery.html
  * ======================================================================== */
-@keyframes sw-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.35; }
-}
-.sw-pulse { animation: sw-pulse 1.6s ease-in-out infinite; }
 
+/* Live signal: slow opacity breathe (status dots, LIVE badges) */
+@keyframes sw-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.sw-pulse { animation: sw-pulse var(--pulse-dur) ease-in-out infinite; }
+
+/* Mount: gentle rise + fade (rows, cards) */
 @keyframes sw-float-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.sw-float-in { animation: sw-float-in var(--motion-slow) var(--ease-brand) both; }
+.sw-float-in { animation: sw-float-in var(--dur-slow) var(--ease) both; }
+
+/* Stagger: children float-in top-down. Set --i (0,1,2…) per child. */
+.sw-stagger > * {
+  animation: sw-float-in var(--dur-slow) var(--ease) both;
+  animation-delay: calc(var(--i, 0) * var(--stagger-step));
+}
+
+/* Call flash: one-shot amber attention pulse when a match flips to Called. */
+@keyframes sw-call-flash {
+  0%   { box-shadow: 0 0 0 0 hsl(var(--status-called) / 0); }
+  30%  { box-shadow: 0 0 18px 1px hsl(var(--status-called) / 0.75); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--status-called) / 0); }
+}
+.sw-call-flash { animation: sw-call-flash 900ms var(--ease) 1; }
+
+/* Go live: green fill wipes in from the left (apply to an overlay layer). */
+@keyframes sw-go-live {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+.sw-go-live { animation: sw-go-live var(--dur-xslow) var(--ease) both; }
+
+/* Late nudge: slow, gentle throb — subtler than the live pulse. */
+@keyframes sw-late-nudge { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.sw-late-nudge { animation: sw-late-nudge var(--nudge-dur) var(--ease) infinite; }
+
+/* Glow in: ramp the accent glow once — intent on primary actions. */
+@keyframes sw-glow-in {
+  from { box-shadow: 0 0 0 0 hsl(var(--accent) / 0); }
+  to   { box-shadow: var(--glow-accent); }
+}
+.sw-glow-in { animation: sw-glow-in var(--dur) var(--ease) both; }
+
+/* Ring focus: focus ring scales in for keyboard nav on dense grids. */
+@keyframes sw-ring-focus {
+  from { box-shadow: 0 0 0 0 hsl(var(--accent) / 0.14); }
+  to   { box-shadow: 0 0 0 3px hsl(var(--accent) / 0.14); }
+}
+.sw-ring-focus { animation: sw-ring-focus var(--dur) var(--ease) both; }
+
+/* Rail expand: module sub-pages open (height + fade). */
+@keyframes sw-rail-expand {
+  from { opacity: 0; transform: translateY(-4px); max-height: 0; }
+  to   { opacity: 1; transform: translateY(0); max-height: 240px; }
+}
+.sw-rail-expand { animation: sw-rail-expand var(--dur-slow) var(--ease) both; overflow: hidden; }
+
+/* Now sweep: the Run-board time cursor advances across the lanes. */
+@keyframes sw-now-sweep { from { left: 0; } to { left: 100%; } }
+.sw-now-sweep { animation: sw-now-sweep 4s linear infinite; }
+
+/* Panel in: the inspector slides in from the right on selection. */
+@keyframes sw-panel-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.sw-panel-in { animation: sw-panel-in var(--dur-slow) var(--ease) both; }
+
+/* Drawer in: a full side panel slides in from the right edge. */
+@keyframes sw-drawer-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.sw-drawer-in { animation: sw-drawer-in var(--dur-slow) var(--ease) both; }
+
+/* Overlay fade: the scrim behind drawers, sheets and dialogs. */
+@keyframes sw-overlay-fade { from { opacity: 0; } to { opacity: 1; } }
+.sw-overlay-fade { animation: sw-overlay-fade var(--dur) var(--ease) both; }
+
+/* Sheet up: a bottom sheet rises into view. */
+@keyframes sw-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.sw-sheet-up { animation: sw-sheet-up var(--dur-slow) var(--ease) both; }
+
+/* NOTE: the skill's sw-cell-drag / sw-reorder-shift are intentionally NOT
+ * ported — they are gallery demo choreography; real drag interactions in
+ * the app come from dnd-kit. */
 
 /* ===========================================================================
  * prefers-reduced-motion: kill infinite motion, keep short signals.
@@ -266,6 +346,18 @@
   .animate-cell-pulse,
   .sw-pulse,
   .sw-float-in,
+  .sw-stagger > *,
+  .sw-call-flash,
+  .sw-go-live,
+  .sw-late-nudge,
+  .sw-glow-in,
+  .sw-ring-focus,
+  .sw-rail-expand,
+  .sw-now-sweep,
+  .sw-panel-in,
+  .sw-drawer-in,
+  .sw-overlay-fade,
+  .sw-sheet-up,
   .pin-marquee,
   .scan-bar::after {
     animation: none !important;
