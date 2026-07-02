@@ -11,6 +11,7 @@
 import type ExcelJSNs from 'exceljs';
 import type { BracketPlayerDTO } from '../../../api/dto';
 import { formatWindowSummary } from '../../../components/control-plane';
+import type { BadgeEntry } from '../rosterEvents';
 
 type ExcelJSType = typeof ExcelJSNs;
 
@@ -58,8 +59,8 @@ function applyHeaderRow(sheet: ExcelJSNs.Worksheet, colCount: number): void {
 
 export async function exportBracketRosterXlsx(
   players: BracketPlayerDTO[],
-  /** player id → sorted badge codes (see rosterEvents.badgesByPlayerId). */
-  badgesById: Map<string, string[]>,
+  /** player id → sorted badge entries (see rosterEvents.badgesByPlayerId). */
+  badgesById: Map<string, BadgeEntry[]>,
 ): Promise<void> {
   if (players.length === 0) return;
 
@@ -87,7 +88,9 @@ export async function exportBracketRosterXlsx(
     const row = sheet.getRow(i + 2);
     row.height = 20;
     row.getCell(1).value = p.name || '(unnamed)';
-    row.getCell(2).value = (badgesById.get(p.id) ?? []).join(', ');
+    row.getCell(2).value = (badgesById.get(p.id) ?? [])
+      .map((b) => b.code)
+      .join(', ');
     row.getCell(3).value = p.restSlots ?? '—';
     row.getCell(4).value = formatWindowSummary(p.availability ?? []);
     row.getCell(5).value = p.notes ?? '';

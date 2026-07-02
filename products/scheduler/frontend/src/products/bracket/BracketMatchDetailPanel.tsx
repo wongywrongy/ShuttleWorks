@@ -22,7 +22,7 @@ import type {
 } from '../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../api/dto';
 import { disciplineLabel, sideLabel } from './bracketLabels';
-import { badgesByPlayerId } from './rosterEvents';
+import { badgesByPlayerId, type BadgeEntry } from './rosterEvents';
 import {
   BracketAvailabilityEventsFields,
   FIELD_LABEL_CLASSES,
@@ -124,7 +124,7 @@ function SideSection({
   participantById: ReadonlyMap<string, Participant>;
   labelById: ReadonlyMap<string, string>;
   roster: BracketPlayerDTO[];
-  badgesById: ReadonlyMap<string, string[]>;
+  badgesById: ReadonlyMap<string, BadgeEntry[]>;
   data: BracketTournamentDTO;
   onUpdate: (id: string, updates: Partial<BracketPlayerDTO>) => void;
   onCommitEvent: CommitEventFn | null;

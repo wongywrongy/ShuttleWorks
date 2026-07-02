@@ -54,6 +54,25 @@ describe('EventsControl', () => {
     expect(screen.queryByTestId('editor-XD')).toBeNull();
   });
 
+  it('categorizes typed entries by explicit type, not code prefix', () => {
+    // Bracket badges relabeled by event id ("MON", "MD2X") carry their
+    // event's discipline as `type` — the header summary must group by it
+    // (SP-D7 S5 live-verification fix: header undercounted vs row badges).
+    render(
+      <EventsControl
+        entries={[{ code: 'MON', type: 'MS' }, { code: 'MD2X', type: 'MD' }, 'WD1']}
+        renderTypeEditor={() => null}
+      />,
+    );
+    const singles = screen.getByTestId('events-category-singles');
+    const doubles = screen.getByTestId('events-category-doubles');
+    const mixed = screen.getByTestId('events-category-mixed');
+    expect(within(singles).getByText('MON')).toBeInTheDocument();
+    expect(within(doubles).getByText('MD2X')).toBeInTheDocument();
+    expect(within(doubles).getByText('WD1')).toBeInTheDocument();
+    expect(within(mixed).getByText('Not entered')).toBeInTheDocument();
+  });
+
   it('honors categoriesOpen as the initial expanded set', () => {
     render(
       <EventsControl

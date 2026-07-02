@@ -349,4 +349,24 @@ describe('BracketRosterTab — multi-event entry', () => {
     expect(within(panel).queryByTestId('event-toggle-WS')).not.toBeInTheDocument();
     expect(mockEventUpsert).not.toHaveBeenCalled();
   });
+
+  it('marks locked events the player is entered in (S5 fix)', () => {
+    // Dana IS in the generated WS draw — the locked row must still say so.
+    render(<BracketRosterTab />);
+    const panel = openPanelFor('p-dana-liu');
+    fireEvent.click(within(panel).getByTestId('events-category-singles'));
+    expect(within(panel).getByTestId('event-entered-WS')).toHaveTextContent(
+      'Entered',
+    );
+  });
+
+  it('shows no entered mark on locked events the player is not in', () => {
+    render(<BracketRosterTab />);
+    const panel = openPanelFor('p-alex-tan');
+    fireEvent.click(within(panel).getByTestId('events-category-singles'));
+    expect(within(panel).getByTestId('event-locked-WS')).toBeInTheDocument();
+    expect(
+      within(panel).queryByTestId('event-entered-WS'),
+    ).not.toBeInTheDocument();
+  });
 });

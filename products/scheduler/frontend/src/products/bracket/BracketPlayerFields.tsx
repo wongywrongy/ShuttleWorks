@@ -26,6 +26,7 @@ import {
   nextTeamId,
   sessionDayBounds,
   toUpsertParticipant,
+  type BadgeEntry,
 } from './rosterEvents';
 import { disciplineLabel } from './bracketLabels';
 
@@ -58,8 +59,10 @@ export function BracketAvailabilityEventsFields({
   player: BracketPlayerDTO;
   roster: BracketPlayerDTO[];
   bracketData: BracketTournamentDTO | null;
-  /** Entered event codes for the collapsed badge summary. */
-  badges: string[];
+  /** Entered event badges ({code, type}) for the collapsed summary —
+   *  explicit discipline attribution so event-id-relabeled codes still
+   *  land under the right category header. */
+  badges: BadgeEntry[];
   onUpdate: (id: string, updates: Partial<BracketPlayerDTO>) => void;
   onCommitEvent: CommitEventFn | null;
 }) {
@@ -234,12 +237,22 @@ function EventTypeEditor({
                   {entered ? 'Entered' : 'Enter'}
                 </button>
               ) : (
-                <span
-                  className="text-2xs italic text-muted-foreground/70"
-                  data-testid={`event-locked-${ev.id}`}
-                  title="Participants are locked once a draw is generated."
-                >
-                  locked — draw generated
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {entered ? (
+                    <span
+                      className="rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent"
+                      data-testid={`event-entered-${ev.id}`}
+                    >
+                      Entered
+                    </span>
+                  ) : null}
+                  <span
+                    className="text-2xs italic text-muted-foreground/70"
+                    data-testid={`event-locked-${ev.id}`}
+                    title="Participants are locked once a draw is generated."
+                  >
+                    locked — draw generated
+                  </span>
                 </span>
               )}
             </div>

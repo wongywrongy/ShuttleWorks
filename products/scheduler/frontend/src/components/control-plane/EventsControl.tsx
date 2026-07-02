@@ -32,6 +32,20 @@ export const EVENT_CATEGORIES: EventCategory[] = [
 /** Discipline prefix of an entry code: "MD2" → "MD". */
 const prefixOf = (code: string) => code.replace(/\d+$/, '');
 
+/** An entry with explicit discipline attribution, for consumers whose
+ *  display codes don't parse to a discipline (e.g. Bracket badges
+ *  relabeled by event id — "MD2X" is still a Doubles entry). Plain
+ *  string entries fall back to prefix inference. */
+export interface EventsEntry {
+  code: string;
+  type?: string;
+}
+
+const entryCode = (e: string | EventsEntry) =>
+  typeof e === 'string' ? e : e.code;
+const entryType = (e: string | EventsEntry) =>
+  typeof e === 'string' ? prefixOf(e) : (e.type ?? prefixOf(e.code));
+
 /**
  * EventBadge — compact accent chip for an entered event code ("MD1").
  * Also used standalone in roster/matches tables (S3/S4).
@@ -50,8 +64,9 @@ export function EventsControl({
   categoriesOpen,
 }: {
   /** Entered event codes ("MD1", "XD2") — drives the collapsed badge
-   *  summary per category. */
-  entries: string[];
+   *  summary per category. Pass `{code, type}` objects when a code's
+   *  discipline can't be inferred from its prefix. */
+  entries: Array<string | EventsEntry>;
   /** Expanded per-type editor row for a discipline code ("MS", "MD"…).
    *  Return null for types the consumer has nothing to edit. */
   renderTypeEditor: (typeCode: string) => ReactNode;
@@ -73,7 +88,9 @@ export function EventsControl({
   return (
     <div className="flex flex-col overflow-hidden rounded-sm border border-border">
       {EVENT_CATEGORIES.map((cat) => {
-        const catEntries = entries.filter((e) => cat.types.includes(prefixOf(e)));
+        const catEntries = entries.filter((e) =>
+          cat.types.includes(entryType(e)),
+        );
         const isOpen = open.has(cat.id);
         return (
           <div key={cat.id} className="border-b border-border/60 last:border-b-0">
@@ -97,7 +114,9 @@ export function EventsControl({
               </span>
               <span className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1">
                 {catEntries.length > 0 ? (
-                  catEntries.map((code) => <EventBadge key={code} code={code} />)
+                  catEntries.map((e) => (
+                    <EventBadge key={entryCode(e)} code={entryCode(e)} />
+                  ))
                 ) : (
                   <span className="text-2xs italic text-muted-foreground/70">
                     Not entered

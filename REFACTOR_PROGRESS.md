@@ -235,9 +235,18 @@ escalate it before making any further code change.
 - Executed inline (single session) under `CODE_HEALTH.md` Part 2, not a workflow.
 
 ### SP-D7 — Unify Meet/Bracket Roster & Matches — §2 AUDIT (2026-07-02)
-- Status: **AUDIT COMPLETE — STOPPED at spec §2.5 before any implementation.** Both
-  stop-conditions triggered; decisions needed from Kyle are listed in "Open
-  questions / stops" below. No implementation code written.
+- Status: **PROGRAM COMPLETE (2026-07-02).** Audit → Kyle's §2.5 decisions (see the
+  resolved stop below) → 6 commits: `e1d5c49` audit, `8bf39bc` S1 (shared
+  DetailPanel/AvailabilityControl/EventsControl/BandedTable + Meet port,
+  Ranks→Events), `dc02d45` S2 (bracket per-player availability+rest CP-SAT channel),
+  `996ff0a` S3 (bracket roster: full multi-event entry incl. doubles pairing,
+  overflow delete, XLSX export), `61607c1` S4 (clickable Matches rows → shared match
+  DetailPanel, canonical write-through, BandedTable ports), + S5 sweep (this commit:
+  `make check` green — 720 backend / 910 frontend, live Playwright pass A–G all
+  PASS with no blockers, 2 live findings fixed: EventsControl typed-entry category
+  attribution, entered-mark on locked draws; 2 polish items → debt-log). Plan file:
+  `~/.claude/plans/sp-d7-roster-matches-unification.md`. Zero Alembic migrations;
+  zero engine changes; `archive/` untouched.
 - **Stop-condition 1 (rest consumed by CP-SAT): YES, for Meet.**
   `PlayerDTO.minRestMinutes` (`backend/app/schemas.py:161`, default =
   `TournamentConfig.defaultRestMinutes`) → `adapters/badminton.py:253-263`
@@ -308,8 +317,13 @@ stop here means pick up the conversation with Kyle, not the keyboard.>
   **reversed** ("finish the last part"). Both were decomposed (solve E37→A5, build
   C19→A2), gate green, behavior-equivalence independently verified. Nothing left open.
   See `docs/audits/07-locked-functions.md §7`.
-- **[OPEN 2026-07-02] SP-D7 §2.5 STOP — needs Kyle's decisions before implementation**
-  (findings in the SP-D7 section above). Decisions: (1) **Availability semantics** —
+- **[RESOLVED 2026-07-02 — Kyle decided, program shipped] SP-D7 §2.5 STOP**
+  (findings in the SP-D7 section above). Kyle's calls: (1) availability = editor
+  over the existing solver-wired positive windows with unavailable-periods UX;
+  (2) Meet min-rest KEPT with config-default placeholder, bracket `restSlots`
+  WIRED instead of removed; (3) bracket Events = FULL multi-event entry;
+  (4) real bracket per-player solver channel; (5) net-new XLSX export.
+  Original options for the record: (1) **Availability semantics** —
   ship `AvailabilityControl` as an editor over the existing solver-wired
   `PlayerDTO.availability` positive windows (recommended; zero solver change), or
   introduce a new negative `unavailable_periods` field + constraint. (2) **Meet

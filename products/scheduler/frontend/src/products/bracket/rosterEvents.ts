@@ -31,6 +31,16 @@ export function sortBadges(codes: Iterable<string>): string[] {
   );
 }
 
+/** A player's entry badge with its discipline attribution. `code` is the
+ *  display label (discipline, or event id when a discipline has several
+ *  draws — see `badgeForEvent`); `type` is always the event's discipline,
+ *  so category grouping survives event-id relabeling ("MD2X" stays under
+ *  Doubles even though its code no longer parses to a discipline). */
+export interface BadgeEntry {
+  code: string;
+  type: string;
+}
+
 /**
  * Badge code for one event. Same labeling intent as the roster's
  * historical play_units derivation: the event's discipline code, falling
@@ -48,28 +58,40 @@ export function badgeForEvent(
 }
 
 /**
- * player id → sorted badge codes, derived from every event's own
- * participant list (works for draft draws pre-generate).
+ * player id → sorted badge entries ({code, type}), derived from every
+ * event's own participant list (works for draft draws pre-generate).
+ * Sorted by canonical discipline order (on `type`, so event-id-relabeled
+ * codes keep their discipline's position), then code.
  */
 export function badgesByPlayerId(
   data: BracketTournamentDTO | null,
-): Map<string, string[]> {
-  const out = new Map<string, Set<string>>();
+): Map<string, BadgeEntry[]> {
+  const out = new Map<string, Map<string, BadgeEntry>>();
   if (!data) return new Map();
   for (const ev of data.events) {
-    const badge = badgeForEvent(ev, data.events);
+    const code = badgeForEvent(ev, data.events);
+    const entry: BadgeEntry = { code, type: ev.discipline || prefixOf(code) };
     for (const part of ev.participants ?? []) {
       const ids =
         part.members && part.members.length > 0 ? part.members : [part.id];
       for (const id of ids) {
-        const set = out.get(id) ?? new Set<string>();
-        set.add(badge);
-        out.set(id, set);
+        const byCode = out.get(id) ?? new Map<string, BadgeEntry>();
+        byCode.set(code, entry);
+        out.set(id, byCode);
       }
     }
   }
+  const rank = (e: BadgeEntry) => {
+    const i = BADGE_ORDER.indexOf(e.type);
+    return i === -1 ? BADGE_ORDER.length : i;
+  };
   return new Map(
-    Array.from(out.entries(), ([id, set]) => [id, sortBadges(set)]),
+    Array.from(out.entries(), ([id, byCode]) => [
+      id,
+      Array.from(byCode.values()).sort(
+        (a, b) => rank(a) - rank(b) || a.code.localeCompare(b.code),
+      ),
+    ]),
   );
 }
 

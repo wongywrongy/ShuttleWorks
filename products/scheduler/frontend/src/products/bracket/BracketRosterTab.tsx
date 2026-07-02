@@ -29,7 +29,7 @@ import { useBracket } from '../../hooks/useBracket';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../api/dto';
 import { playerSlug } from '../../lib/playerSlug';
-import { badgesByPlayerId } from './rosterEvents';
+import { badgesByPlayerId, type BadgeEntry } from './rosterEvents';
 import {
   BracketAvailabilityEventsFields,
   FIELD_INPUT_CLASSES,
@@ -199,8 +199,8 @@ function BracketRosterTabCore({
                   {p.name}
                 </span>
                 <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-                  {(badgesById.get(p.id) ?? []).map((code) => (
-                    <EventBadge key={code} code={code} />
+                  {(badgesById.get(p.id) ?? []).map((b) => (
+                    <EventBadge key={b.code} code={b.code} />
                   ))}
                 </span>
                 <span className="w-16 text-right text-xs text-muted-foreground sw-num">
@@ -286,7 +286,7 @@ function PlayerDetailFields({
   player: BracketPlayerDTO;
   roster: BracketPlayerDTO[];
   bracketData: BracketTournamentDTO | null;
-  badges: string[];
+  badges: BadgeEntry[];
   onUpdate: (id: string, updates: Partial<BracketPlayerDTO>) => void;
   onCommitEvent: CommitEventFn | null;
 }) {
