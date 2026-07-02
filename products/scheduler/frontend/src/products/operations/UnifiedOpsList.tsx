@@ -146,7 +146,10 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
     ) : null;
 
   return (
-    <ul className="divide-y divide-border/60 border-t border-border">
+    // No border-t on the list shell: the first child is always a section band
+    // (`border-y`) whose top border IS the board→list seam — one hairline per
+    // seam (seamed, not gapped).
+    <ul className="divide-y divide-border/60">
       {section('Up next', upNext)}
       {section('Waiting', waiting)}
       {section('Finished', finished)}

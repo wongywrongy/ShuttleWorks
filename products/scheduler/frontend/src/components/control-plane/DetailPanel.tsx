@@ -2,8 +2,9 @@
  * DetailPanel — the shared right-docked detail drawer chrome.
  *
  * A floating overlay pinned to the right edge of its nearest `relative`
- * ancestor: absolute, full-height, hairline `border-l`, `animate-block-in`
- * entry. Dismissed by Esc, clicking outside, or the × button. The header
+ * ancestor: absolute, full-height, hairline `border-l`, `sw-drawer-in`
+ * entry (the signature side-drawer slide from the right edge). Dismissed
+ * by Esc, clicking outside, or the × button. The header
  * carries the `[EYEBROW] Value · sub` identity line; everything below is
  * consumer-supplied `children` — the panel has no opinion about content.
  *
@@ -66,7 +67,7 @@ export function DetailPanel({
       role="dialog"
       aria-label={`${label} ${value}`}
       tabIndex={-1}
-      className={`absolute inset-y-0 right-0 z-overlay flex ${width} max-w-[90%] flex-col border-l border-border bg-card text-foreground shadow-2xl outline-none animate-block-in`}
+      className={`absolute inset-y-0 right-0 z-overlay flex ${width} max-w-[90%] flex-col border-l border-border bg-card text-foreground shadow-2xl outline-none sw-drawer-in`}
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
         <div className="flex min-w-0 items-baseline gap-2">

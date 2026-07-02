@@ -342,7 +342,10 @@ export function UnifiedOpsBoard({
   );
 
   return (
-    <div data-testid="unified-ops-board" data-mode="courts" className="shrink-0 overflow-x-auto border-b border-border">
+    // No border-b: the list below opens with a section band that carries its
+    // own border-t — one hairline per seam (seamed, not gapped), never two
+    // adjacent 1px borders.
+    <div data-testid="unified-ops-board" data-mode="courts" className="shrink-0 overflow-x-auto">
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
         {grid}
         {zoomBar}

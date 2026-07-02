@@ -244,7 +244,10 @@ export function MatchDetailsPanel({
     `transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
 
   return (
-    <div className="h-full overflow-auto p-2">
+    // Keyed by the selected match id so switching selection re-mounts the
+    // rail body and re-triggers `sw-panel-in`; poll re-renders (fresh
+    // matchState/schedule objects) keep the same key so it never re-fires.
+    <div key={match.id} className="h-full overflow-auto p-2 sw-panel-in">
       {/* Header */}
       <div className="mb-3">
         <div className="text-sm font-bold text-foreground mb-0.5">

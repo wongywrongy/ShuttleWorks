@@ -393,8 +393,10 @@ export function RunSurface({
             onSelect={setSelectedKey}
           />
 
-          {/* Queue — below the board */}
-          <div className="border-t border-border">
+          {/* Queue — below the board. No border-t here: the board's own
+              border-b IS the board→queue seam (seamed, not gapped — one
+              hairline per seam, never two adjacent 1px borders). */}
+          <div>
             <div className="px-4 pb-1 pt-3 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
               Queue
             </div>

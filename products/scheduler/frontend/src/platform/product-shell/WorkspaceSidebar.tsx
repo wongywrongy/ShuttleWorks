@@ -131,7 +131,10 @@ export function WorkspaceSidebar({ tid, kind, modules, activeTab }: WorkspaceSid
               {open ? (
                 // Category guide-line: a single left border shows the items
                 // belong to this section (replaces per-item icons).
-                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-rule-soft">
+                // `sw-rail-expand`: sub-pages open with height + fade — the
+                // container mounts on toggle, so the animation fires exactly
+                // once per open and never on unrelated re-renders.
+                <div className="sw-rail-expand ml-3 mt-0.5 space-y-0.5 border-l border-rule-soft">
                   {s.items.map((it) => (
                     <NavItem key={it.segment} item={it} nested />
                   ))}

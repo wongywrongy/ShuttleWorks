@@ -7,6 +7,7 @@
  * Design language mirrors the Run board: a compact M/B source square, an
  * UPPERCASE tabular match code, then the sides. Selection matches the board.
  */
+import type { CSSProperties } from 'react';
 import type { RunMatch } from '../runtime/runModel';
 
 // ── source initial + square tint (M=meet azure, B=bracket violet) ─────────
@@ -41,7 +42,11 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
   }
 
   return (
-    <ul className="divide-y divide-border/60 border-t border-border">
+    // `sw-stagger`: rows assemble top-down on the list's initial mount
+    // (`--i` indexes each row's 40ms delay). Rows are keyed by the stable
+    // match key, so poll updates reconcile in place and never re-animate;
+    // only a genuinely new row (or a full list remount) floats in.
+    <ul className="sw-stagger divide-y divide-border/60 border-t border-border">
       {queue.map((match, i) => {
         const isSelected = selectedKey === match.key;
         const sidesLabel = `${match.sideA} vs ${match.sideB}`;
@@ -51,6 +56,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
             key={match.key}
             data-testid={`run-queue-row-${match.key}`}
             data-source={match.source}
+            style={{ '--i': i } as CSSProperties}
             className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${
               isSelected ? 'bg-muted/40' : ''
             }`}
@@ -92,7 +98,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               <span
                 data-testid={`run-queue-late-${match.key}`}
                 aria-label="Late"
-                className="flex-shrink-0 text-2xs font-semibold uppercase tracking-[0.08em] text-status-warning"
+                className="sw-late-nudge flex-shrink-0 text-2xs font-semibold uppercase tracking-[0.08em] text-status-warning"
               >
                 Late
               </span>
@@ -103,7 +109,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               <span
                 data-testid={`queue-late-${match.key}`}
                 aria-label="Late"
-                className="flex-shrink-0 text-[9px] font-semibold uppercase tracking-wide text-status-warning"
+                className="sw-late-nudge flex-shrink-0 text-[9px] font-semibold uppercase tracking-wide text-status-warning"
               >
                 LATE
               </span>

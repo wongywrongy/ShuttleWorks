@@ -66,7 +66,10 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: 
   }
 
   return (
-    <aside className={RAIL}>
+    // Keyed by the match key so switching selection re-mounts the rail and
+    // re-triggers `sw-panel-in`; a background poll re-render keeps the same
+    // key (block identity may change, its key doesn't) so it never re-fires.
+    <aside key={block.key} className={`${RAIL} sw-panel-in`}>
       <Identity block={block} />
       {block.done ? (
         <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-done">Done</div>

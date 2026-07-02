@@ -17,7 +17,7 @@
  * Purity: this reads no clock. `currentSlot` is injected by the caller; the
  * placement math lives in the pure `buildLiveChips` model.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   GanttTimeline,
   GANTT_GEOMETRY,
@@ -62,6 +62,46 @@ export function RunLiveBoard({
     [blocks, currentSlot, running],
   );
   const chipByKey = useMemo(() => new Map(chips.map((c) => [c.key, c])), [chips]);
+
+  // ── one-shot state-flip signals (sw-call-flash / sw-go-live) ─────────────
+  // usePrevious-style detection: remember every chip's last-seen state; when a
+  // chip OBSERVED in the previous render flips to 'called' (amber flash) or
+  // 'playing' (green wipe) record a one-shot class for it. Poll ticks re-run
+  // this effect but states are unchanged, so nothing fires; the class is held
+  // in state (survives mid-animation re-renders without restarting, since the
+  // chip element itself is stable) and cleared on `animationend`. Initial
+  // mount never flashes (no previous states to compare against).
+  const [flipFlash, setFlipFlash] = useState<ReadonlyMap<string, string>>(new Map());
+  const prevStatesRef = useRef<Map<string, BoardChip['state']> | null>(null);
+  useEffect(() => {
+    const prev = prevStatesRef.current;
+    const next = new Map(chips.map((c) => [c.key, c.state]));
+    if (prev) {
+      const fired = new Map<string, string>();
+      for (const c of chips) {
+        const p = prev.get(c.key);
+        if (p === undefined || p === c.state) continue;
+        if (c.state === 'called') fired.set(c.key, 'sw-call-flash');
+        else if (c.state === 'playing') fired.set(c.key, 'sw-go-live');
+      }
+      if (fired.size > 0) {
+        setFlipFlash((old) => {
+          const merged = new Map(old);
+          fired.forEach((cls, key) => merged.set(key, cls));
+          return merged;
+        });
+      }
+    }
+    prevStatesRef.current = next;
+  }, [chips]);
+  const clearFlipFlash = useCallback((key: string) => {
+    setFlipFlash((old) => {
+      if (!old.has(key)) return old;
+      const next = new Map(old);
+      next.delete(key);
+      return next;
+    });
+  }, []);
 
   const courts = useMemo(
     () => Array.from({ length: Math.max(1, courtCount) }, (_, i) => i + 1),
@@ -129,6 +169,7 @@ export function RunLiveBoard({
       // covers exactly [plannedEnd, currentSlot); its left border IS the
       // planned-end marker.
       const overFrac = c.placement.span > 0 ? Math.min(1, c.overrunSlots / c.placement.span) : 0;
+      const flashCls = flipFlash.get(c.key);
       return (
         <MatchChip
           label={c.label}
@@ -157,7 +198,15 @@ export function RunLiveBoard({
             width: box.width - 4,
             height: box.height - 4,
           }}
-          className="cursor-pointer px-2"
+          className={`cursor-pointer px-2${flashCls ? ` ${flashCls}` : ''}`}
+          onAnimationEnd={(e) => {
+            // Clear the one-shot flip class the moment its animation ends so a
+            // later unrelated re-render can never replay it. Guard on the
+            // animation name — the chip hosts other animated children.
+            if (e.animationName === 'sw-call-flash' || e.animationName === 'sw-go-live') {
+              clearFlipFlash(c.key);
+            }
+          }}
         >
           {c.overrunSlots > 0 && (
             // Over-portion: the left border IS the planned-end marker; the
@@ -169,7 +218,7 @@ export function RunLiveBoard({
               className="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end border-l border-status-warning/60 pr-1.5"
               style={{ width: `${overFrac * 100}%` }}
             >
-              <span className="rounded-xs bg-status-warning px-1 text-[9px] font-semibold leading-4 text-background sw-num">
+              <span className="sw-late-nudge rounded-xs bg-status-warning px-1 text-[9px] font-semibold leading-4 text-background sw-num">
                 +{c.overrunSlots}
               </span>
             </span>
@@ -178,7 +227,7 @@ export function RunLiveBoard({
             <span
               data-testid={`run-late-${c.key}`}
               aria-label="Late"
-              className="absolute right-1.5 top-1 text-[9px] font-semibold uppercase tracking-wide text-status-warning"
+              className="sw-late-nudge absolute right-1.5 top-1 text-[9px] font-semibold uppercase tracking-wide text-status-warning"
             >
               Late
             </span>
@@ -196,7 +245,7 @@ export function RunLiveBoard({
         </MatchChip>
       );
     },
-    [chipByKey, selectedKey, onSelect, slotMinutes],
+    [chipByKey, selectedKey, onSelect, slotMinutes, flipFlash, clearFlipFlash],
   );
 
   if (chips.length === 0) {

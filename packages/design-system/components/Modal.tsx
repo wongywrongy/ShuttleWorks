@@ -97,9 +97,15 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-modal flex items-center justify-center bg-foreground/40 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-modal flex items-center justify-center p-4"
       onClick={locked ? undefined : onClose}
     >
+      {/* Scrim — its own layer so only the backdrop fades in (sw-overlay-fade),
+          never the dialog body. Clicks bubble to the container's onClose. */}
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-foreground/40 backdrop-blur-sm sw-overlay-fade"
+      />
       <div
         ref={panelRef}
         role="dialog"
@@ -107,14 +113,16 @@ export function Modal({
         aria-labelledby={titleId}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className={
+        className={cn(
+          // `relative` keeps the panel painted above the absolute scrim.
+          'relative',
           panelClassName ??
-          cn(
-            'w-full bg-card focus:outline-none border border-border',
-            'shadow-[var(--shadow-hard)]',
-            widthClass
-          )
-        }
+            cn(
+              'w-full bg-card focus:outline-none border border-border',
+              'shadow-[var(--shadow-hard)]',
+              widthClass
+            )
+        )}
       >
         {children}
       </div>
