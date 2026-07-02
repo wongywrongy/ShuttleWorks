@@ -116,7 +116,8 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         onClick={() => onSelect?.(b.key)}
       >
         <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
-        <span className="w-20 flex-shrink-0 truncate sw-num text-2xs tracking-wider text-foreground">{b.label}</span>
+        {/* Same match-code grammar as the Run queue rows. */}
+        <span className="w-20 flex-shrink-0 truncate text-2xs font-semibold sw-num text-ink-3">{b.label}</span>
         <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
           {b.court != null ? `C${b.court} · S${b.slot}` : '—'}
         </span>
