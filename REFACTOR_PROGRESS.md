@@ -234,6 +234,68 @@ escalate it before making any further code change.
   swaps, `moved_count`, config-field preservation, None-side coercion — all confirmed, no divergence).
 - Executed inline (single session) under `CODE_HEALTH.md` Part 2, not a workflow.
 
+### SP-D7 — Unify Meet/Bracket Roster & Matches — §2 AUDIT (2026-07-02)
+- Status: **AUDIT COMPLETE — STOPPED at spec §2.5 before any implementation.** Both
+  stop-conditions triggered; decisions needed from Kyle are listed in "Open
+  questions / stops" below. No implementation code written.
+- **Stop-condition 1 (rest consumed by CP-SAT): YES, for Meet.**
+  `PlayerDTO.minRestMinutes` (`backend/app/schemas.py:161`, default =
+  `TournamentConfig.defaultRestMinutes`) → `adapters/badminton.py:253-263`
+  (`minutes // intervalMinutes` → `Player.rest_slots`, `rest_is_hard=True`) →
+  `scheduler_core/engine/constraints/rest.py` (`RestBetweenMatches`, hard pairwise
+  min-gap between a player's matches; always registered via
+  `EngineConfig.from_legacy`, `engine/config.py:70-77`). Also read by the
+  drag-validate path (`engine/validation.py:270` `find_conflicts`). Removing it is
+  a scheduling-semantics change, not a relabel.
+- **Bracket `restSlots` is a DEAD field.** `BracketPlayerDTO.restSlots`
+  (`schemas.py:174`) has zero backend consumers; `services/bracket/adapter.py
+  build_players` never sets `rest_slots` (falls to engine default 1) and passes
+  `availability` only as a uniform per-round window (the layered-scheduling
+  mechanism, `adapter.py:121-148`) — no per-participant channel exists on the
+  Bracket side. Removing `restSlots` loses nothing functionally.
+- **Stop-condition 2 (bracket roster 1:1 with events): YES at the SQL layer,
+  NO at the roster layer.** `bracket_participants` rows are structurally
+  single-event (`bracket_event_id` in the composite PK + FK,
+  `database/models.py:466-500`, migration `f7a3c9b2e8d4`); a multi-event human =
+  duplicate rows sharing member/player ids. But the frontend bracket *roster*
+  (`TournamentStateDTO.bracketPlayers`, JSON blob) has no event linkage, and its
+  Events column is already **derived** from `play_units`
+  (`BracketRosterTab.tsx:52-80`) — multi-event *display* exists today. Editable
+  multi-event entry from a roster panel would collide with the per-event
+  `ParticipantPicker` flow (doubles require pairing a partner — a per-player chip
+  can't express that) → bigger backend/UX change than the mockups implied.
+- **Key semantics finding: min-rest (relative gap) and unavailable-periods
+  (absolute blackout) are orthogonal, not substitutable.** No translation layer
+  can derive one from the other (spec §4.2(a) is impossible); replacing rest with
+  blackouts silently drops the pairwise-rest constraint — the exact regression
+  §4.2 forbids. However Meet already has per-player **positive availability
+  windows** wired to the solver (`PlayerDTO.availability` →
+  `engine/constraints/availability.py` `AddAllowedAssignments`) with **no editor
+  anywhere in the UI** — the mockups' `AvailabilityControl` can ship as an editor
+  over this existing field with zero solver change.
+- **Ranks finding:** Meet ranks are flat assignment codes (`ranks: ["MS1","MD2"]`),
+  exclusive across players (taken/blocked chip states via `useRankValidation`).
+  There is no primary/secondary concept in the data model → per spec §3.3's own
+  fallback, the none→primary→secondary cycle cannot be stored; keep existing
+  assignment semantics inside the new categorized/collapsible chrome.
+- **Spec-vs-current corrections** (spec written against a stale snapshot):
+  Meet's detail panel is already a right-side drawer (`PlayerDetailPanel.tsx
+  DetailDrawer`), not bottom; Meet min-rest is a number input (minutes), not a
+  dropdown; bracket roster rows have **no avatar** (nothing to remove) and **no
+  export** (CSV export lives on the bracket *Matches* tab, `/bracket/export.csv`);
+  Meet Matches tab is an inline-edit spreadsheet without clickable rows; bracket
+  Status column is a read-only computed label, not a control; both rest fields
+  persist inside `PUT /tournaments/{tid}/state` (no dedicated endpoints); the Meet
+  roster is a JSON blob (**no Alembic migration needed Meet-side** — spec §4.4
+  half-applies); a new `bracket_participants` column would also touch the sync
+  mirror payload (`sync_service.py:465-478`) unless it rides the already-synced
+  `meta` JSON; spec §8's gates ("526+ pass", psycopg2 baseline) are stale — the
+  live gates are `make check` (backend 692, frontend 814 as of 2026-07-02).
+- Shared-chrome baseline (what §3 builds on): banded-list vocabulary already
+  shared (`components/control-plane/BandedList.tsx`: `ColumnHeaderRow`,
+  `GroupBandHeader`, `BANDED_ROW_CLASSES`); `ActionsBar` already shared; **no**
+  shared DetailPanel exists (5 module-local panels enumerated in the audit).
+
 ## Open questions / stops
 <Anything a prior session flagged as a STOP condition and hasn't been
 resolved yet goes here, with a link to the relevant docs/audits/*.md
@@ -246,6 +308,24 @@ stop here means pick up the conversation with Kyle, not the keyboard.>
   **reversed** ("finish the last part"). Both were decomposed (solve E37→A5, build
   C19→A2), gate green, behavior-equivalence independently verified. Nothing left open.
   See `docs/audits/07-locked-functions.md §7`.
+- **[OPEN 2026-07-02] SP-D7 §2.5 STOP — needs Kyle's decisions before implementation**
+  (findings in the SP-D7 section above). Decisions: (1) **Availability semantics** —
+  ship `AvailabilityControl` as an editor over the existing solver-wired
+  `PlayerDTO.availability` positive windows (recommended; zero solver change), or
+  introduce a new negative `unavailable_periods` field + constraint. (2) **Meet
+  min-rest fate** — recommended KEEP (it's a live hard CP-SAT constraint,
+  orthogonal to blackout windows; only Bracket's dead `restSlots` is safely
+  removable). Spec §4.1 "replace min-rest with unavailable_periods" would be a
+  real scheduling regression as written. (3) **Bracket Events editing scope** —
+  categorized display badges only (cheap), vs. full multi-event entry from the
+  roster panel (requires redesigning the per-event participant + doubles-pairing
+  flow). (4) **Bracket per-player availability** — wire a real per-participant
+  channel to the solver (new plumbing that must *intersect* the round-window
+  mechanism in `adapter.build_players`), or Meet-only for now. (5) **Primary/
+  secondary rank cycle** — confirm cut to existing exclusive-assignment semantics
+  per spec §3.3's fallback. (6) **Bracket roster export** — spec assumes a CSV
+  export to standardize to XLSX; none exists on the roster (net-new feature, or
+  drop from scope).
 - **F-ARCH-3 (matchStateStore ownership)** — pre-flagged STOP for Phase 2. The
   prior "move it to Operations" would create new `no-cross-product` violations
   from Meet (3 files) + Bracket (`LiveView`), since the store is cross-cutting,
