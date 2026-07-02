@@ -34,6 +34,7 @@ from scheduler_core.domain.tournament import (
 
 from .advancement import auto_walkover_byes
 from .draw import Draw
+from .player_constraints import PlayerExtras
 
 
 @dataclass
@@ -92,6 +93,11 @@ class BracketSession:
     # sorted list in the JSON blob (sets are not JSON-serialisable); hydrated
     # back to a Python set so membership checks are O(1).
     applied_command_ids: Set[str] = field(default_factory=set)
+    # SP-D7 S2: per-roster-player availability + rest extras, computed at
+    # hydrate time from ``tournaments.data.bracketPlayers`` and threaded
+    # into every ``TournamentDriver`` solve. Empty = no roster extras
+    # (uniform round-window behaviour, exactly as before).
+    player_extras: Dict[str, PlayerExtras] = field(default_factory=dict)
 
 
 def register_draw(state: TournamentState, draw: Draw) -> None:

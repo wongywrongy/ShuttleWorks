@@ -167,11 +167,17 @@ class BracketPlayerDTO(BaseModel):
 
     ``id`` is the stable slug produced by the frontend ``playerSlug()``
     helper; matches ``bracket_participants.member_ids`` after migration.
+
+    ``availability`` holds POSITIVE (allowed) HH:mm windows — empty
+    means available all day. ``restSlots`` overrides the session's
+    ``defaultRestSlots`` for this player. Both feed the CP-SAT solve
+    path via ``services.bracket.player_constraints`` (SP-D7 S2).
     """
     id: str = Field(..., min_length=1)
     name: str = Field(..., min_length=1)
     notes: Optional[str] = None
     restSlots: Optional[int] = Field(default=None, ge=0)
+    availability: List[AvailabilityWindow] = Field(default_factory=list)
 
 
 class RosterImportDTO(BaseModel):

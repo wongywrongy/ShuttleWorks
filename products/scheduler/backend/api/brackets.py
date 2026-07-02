@@ -45,13 +45,13 @@ from typing import Annotated, AsyncGenerator, Dict, List, Literal, Optional, Seq
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 from app.dependencies import (
     require_tournament_access,
 )
 from app.exceptions import ConflictError
-from app.schemas import BracketCommandRequest
+from app.schemas import BracketCommandRequest, BracketPlayerDTO
 from repositories import LocalRepository, get_repository
 from scheduler_core.domain.models import (
     SolverOptions,
@@ -88,6 +88,10 @@ from services.bracket.io.export_schedule import to_csv, to_ics
 from services.bracket.io.import_matches import (
     parse_csv_payload,
     parse_json_payload,
+)
+from services.bracket.player_constraints import (
+    PlayerExtras,
+    build_player_extras,
 )
 from services.bracket.standings import compute_standings
 from services.bracket.state import (
@@ -538,6 +542,48 @@ def _pick(camel_cfg: dict, session_cfg: dict, camel_key: str, legacy_key: str, d
     return session_cfg.get(legacy_key, default)
 
 
+def _load_bracket_player_extras(
+    data_blob: dict,
+    *,
+    start_time: Optional[datetime],
+    interval_minutes: int,
+    total_slots: int,
+) -> Dict[str, PlayerExtras]:
+    """Per-roster-player availability + rest extras for the solve path.
+
+    Reads ``tournaments.data.bracketPlayers`` (the same JSON blob the
+    ``PUT /tournaments/{tid}/state`` roster writes land in) and converts
+    each entry's HH:mm windows / ``restSlots`` to slot-native
+    ``PlayerExtras`` via ``services.bracket.player_constraints``.
+    ``defaultRestSlots`` follows the standard config pick: camelCase
+    TournamentConfig key first, legacy ``bracket_session`` snake_case
+    second, default 1. Malformed roster entries are skipped with a
+    warning — a bad blob must never take the solve path down.
+    """
+    camel_cfg = data_blob.get("config") or {}
+    session_cfg = data_blob.get("bracket_session") or {}
+    default_rest_slots = int(
+        _pick(camel_cfg, session_cfg, "defaultRestSlots", "default_rest_slots", 1)
+    )
+
+    players: List[BracketPlayerDTO] = []
+    for entry in data_blob.get("bracketPlayers") or []:
+        try:
+            players.append(BracketPlayerDTO.model_validate(entry))
+        except ValidationError:
+            log.warning("skipping malformed bracketPlayers entry: %r", entry)
+    if not players:
+        return {}
+
+    return build_player_extras(
+        players,
+        start_time=start_time,
+        interval_minutes=interval_minutes,
+        total_slots=total_slots,
+        default_rest_slots=default_rest_slots,
+    )
+
+
 def _meet_occupied_windows(
     data_blob: dict, court_count: int
 ) -> List[Tuple[int, int, int]]:
@@ -667,6 +713,17 @@ def _hydrate_session(
         datetime.fromisoformat(start_time_iso)
         if isinstance(start_time_iso, str) and start_time_iso
         else None
+    )
+
+    # SP-D7 S2: roster availability windows + per-player rest, converted
+    # to slot-native extras here (the one place that knows the session's
+    # wall-clock base + slot geometry) and threaded into every solve via
+    # ``TournamentDriver(player_extras=...)``.
+    player_extras = _load_bracket_player_extras(
+        data_blob,
+        start_time=start_time,
+        interval_minutes=interval_minutes,
+        total_slots=total_slots,
     )
 
     state = TournamentState()
@@ -803,6 +860,7 @@ def _hydrate_session(
         events=events_meta,
         match_versions=match_versions,
         applied_command_ids=applied_command_ids,
+        player_extras=player_extras,
     )
 
 
@@ -1496,6 +1554,7 @@ def schedule_next_round(
             time_limit_seconds=time_limit_seconds,
         ),
         rest_between_rounds=session.rest_between_rounds,
+        player_extras=session.player_extras,
     )
     perf_start = time.perf_counter()
     result = driver.schedule_next_round()
@@ -1598,6 +1657,7 @@ async def schedule_next_round_stream(
         config=session.config,
         solver_options=solver_options,
         rest_between_rounds=session.rest_between_rounds,
+        player_extras=session.player_extras,
     )
     prepared = driver.prepare_next_round_problem()
 
@@ -2079,6 +2139,7 @@ def generate_event_route(
         state=session.state,
         config=session.config,
         rest_between_rounds=session.rest_between_rounds,
+        player_extras=session.player_extras,
     )
     try:
         result = driver.generate_event(event_id, wipe=False)
@@ -2784,6 +2845,7 @@ def pin_bracket_match(
             time_limit_seconds=time_limit_seconds,
         ),
         rest_between_rounds=session.rest_between_rounds,
+        player_extras=session.player_extras,
     )
     try:
         result = driver.repin_and_resolve(
