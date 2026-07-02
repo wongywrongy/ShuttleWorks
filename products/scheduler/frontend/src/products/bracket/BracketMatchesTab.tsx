@@ -43,13 +43,16 @@ const STATUS_CLASS: Record<Status, string> = {
  *  same leading anatomy as Meet Matches: a `w-4` gutter spacer (Meet's
  *  warning-icon slot — kept here so the `#` column starts at the same x
  *  on both surfaces), then `#`, the accent code, and two flex-[3] sides. */
+// Same column set as Meet Matches ('Event' code column; the trailing
+// column is w-[5.5rem] = Meet's Slots w-14 + delete w-8, so Side B's
+// right edge lines up across the two surfaces).
 const MATCH_COLUMNS: BandedListColumn[] = [
   { label: '', className: 'w-4' },
   { label: '#', className: 'w-8' },
-  { label: 'Match', className: 'w-20' },
+  { label: 'Event', className: 'w-20' },
   { label: 'Side A', className: 'min-w-0 flex-[3]' },
   { label: 'Side B', className: 'min-w-0 flex-[3]' },
-  { label: 'Status', className: 'w-16 text-right' },
+  { label: 'Status', className: 'w-[5.5rem] text-right' },
 ];
 
 export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
@@ -258,7 +261,7 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
                               {renderSide(pu.side_b)}
                             </span>
                             <span
-                              className={`w-16 text-right text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+                              className={`w-[5.5rem] text-right text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
                             >
                               {STATUS_LABEL[status]}
                             </span>
