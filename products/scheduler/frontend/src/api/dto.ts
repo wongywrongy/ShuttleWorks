@@ -277,7 +277,12 @@ export interface BracketPlayerDTO {
   id: string;
   name: string;
   notes?: string;
+  /** Per-player rest override in slots; unset = session `defaultRestSlots`. */
   restSlots?: number;
+  /** POSITIVE (allowed) HH:mm windows — empty/unset means available all
+   *  day. Mirrors the backend `BracketPlayerDTO.availability` (SP-D7 S2),
+   *  which threads it into the CP-SAT solve via player_constraints. */
+  availability?: AvailabilityWindow[];
 }
 
 // Match Type - used for UI selection mode and match categorization

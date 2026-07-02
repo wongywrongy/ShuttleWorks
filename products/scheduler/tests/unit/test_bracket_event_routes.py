@@ -142,6 +142,32 @@ def test_upsert_event_replaces_participants(client, tid):
     assert ms_event["participant_count"] == 2
 
 
+def test_upsert_event_serializes_per_event_participants(client, tid):
+    """Draft events carry their OWN participants on EventOut (SP-D7 S3).
+
+    The flat ``TournamentOut.participants`` list cannot attribute a draft
+    singles entry to its event (no play units yet, and the participant id
+    is just the player slug), so the roster surface reads
+    ``events[].participants``.
+    """
+    _minimal_bracket(tid, client)
+    r = client.post(
+        _event_url(tid, "MS"),
+        json=_upsert_body(
+            [
+                {"id": "p-alex", "name": "Alex"},
+                {"id": "MS-T1", "name": "Ben / Cam", "members": ["p-ben", "p-cam"]},
+            ]
+        ),
+    )
+    assert r.status_code == 200, r.text
+    ms_event = next(e for e in r.json()["events"] if e["id"] == "MS")
+    by_id = {p["id"]: p for p in ms_event["participants"]}
+    assert set(by_id) == {"p-alex", "MS-T1"}
+    assert by_id["p-alex"]["members"] is None
+    assert by_id["MS-T1"]["members"] == ["p-ben", "p-cam"]
+
+
 def test_upsert_event_404_on_missing_tournament(client):
     """Upsert 404s on an unknown tournament."""
     fake_tid = str(uuid.uuid4())

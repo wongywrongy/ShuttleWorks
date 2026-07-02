@@ -156,6 +156,12 @@ interface EventDTO {
   segments?: SegmentDTO[] | null;
   /** Standings for has-standings formats (rr/swiss); null/absent otherwise. */
   standings?: StandingRowDTO[] | null;
+  /** This event's own participant rows (SP-D7 S3, additive — optional for
+   *  older fixtures). Unlike the flat `TournamentDTO.participants`, this
+   *  attributes DRAFT entries to their event, so the roster can derive
+   *  Events badges pre-generate and echo an event's current participants
+   *  through `eventUpsert` safely. */
+  participants?: Participant[];
 }
 
 export interface TournamentDTO {

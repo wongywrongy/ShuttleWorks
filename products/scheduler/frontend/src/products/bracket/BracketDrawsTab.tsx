@@ -27,6 +27,10 @@ import { ActionsBar, EmptyState } from '../../components/control-plane';
 import { Modal } from '../../components/common/Modal';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
+import {
+  buildEventUpsertPayload,
+  type BracketEventDTO,
+} from './eventUpsertPayload';
 import { formatLabel, disciplineLabel } from './bracketLabels';
 import {
   DRAW_FORMATS,
@@ -34,9 +38,6 @@ import {
   type FormatConfigField,
   type FormatDescriptor,
 } from './formatRegistry';
-
-/** The tournament snapshot's per-event shape (EventDTO is module-private). */
-type BracketEventDTO = BracketTournamentDTO['events'][number];
 
 export function BracketDrawsTab() {
   const { data, setData, refresh } = useBracket();
@@ -241,18 +242,10 @@ export function BracketDrawsTab() {
                             // Echo the draw's current config knobs so a
                             // participants commit never resets what the
                             // operator configured (upsert replaces fields).
-                            const next = await api.eventUpsert(ev.id, {
-                              discipline: ev.discipline,
-                              format: ev.format,
-                              bracket_size: ev.bracket_size,
-                              ...(ev.seeded_count != null
-                                ? { seeded_count: ev.seeded_count }
-                                : {}),
-                              ...(ev.rr_rounds != null ? { rr_rounds: ev.rr_rounds } : {}),
-                              ...(ev.config ? { config: ev.config } : {}),
-                              duration_slots: 1,
-                              participants,
-                            });
+                            const next = await api.eventUpsert(
+                              ev.id,
+                              buildEventUpsertPayload(ev, participants),
+                            );
                             setData(next);
                           } finally {
                             setOpenPickerFor(null);

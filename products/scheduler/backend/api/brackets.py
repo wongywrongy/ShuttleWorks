@@ -336,6 +336,13 @@ class EventOut(BaseModel):
     seeded_count: Optional[int] = None
     rr_rounds: Optional[int] = None
     config: dict = Field(default_factory=dict)
+    # This event's own participant rows (SP-D7 S3, additive). The flat
+    # ``TournamentOut.participants`` list cannot attribute a DRAFT singles
+    # entry to its event (the participant id is just the player slug and
+    # drafts have no play units), so the roster surface needs the per-event
+    # list to derive Events badges pre-generate and to echo an event's
+    # current participants through ``upsert_event`` safely.
+    participants: List[ParticipantOut] = Field(default_factory=list)
 
 
 class TournamentOut(BaseModel):
@@ -1103,6 +1110,16 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                 seeded_count=meta.seeded_count if meta else None,
                 rr_rounds=meta.rr_rounds if meta else None,
                 config=dict(meta.config) if meta else {},
+                participants=[
+                    ParticipantOut(
+                        id=p.id,
+                        name=p.name,
+                        members=list(p.member_ids)
+                        if p.type == ParticipantType.TEAM and p.member_ids
+                        else None,
+                    )
+                    for p in draw.participants.values()
+                ],
             )
         )
 
