@@ -40,10 +40,11 @@ from .draw import Draw
 class EventMeta:
     """Per-event metadata held alongside the Draw.
 
-    ``format`` is ``"se"`` (single-elimination) or ``"rr"`` (round-robin).
-    ``bracket_size`` is set for SE only; round-robin events leave it
-    ``None``. Lifted here from the tournament product so both backends
-    talk about events with the same shape.
+    ``format`` is a registered format id (``FORMAT_REGISTRY`` in
+    ``services.bracket.formats`` — ``"se"``, ``"rr"``, …).
+    ``bracket_size`` is set for knockout-family formats; round-robin
+    events leave it ``None``. Lifted here from the tournament product so
+    both backends talk about events with the same shape.
     """
 
     id: str
@@ -55,6 +56,13 @@ class EventMeta:
     # Per-event lifecycle: 'draft' | 'generated' | 'started'. Carried here
     # so serializers can report it without a second DB read.
     status: str = "draft"
+    # Per-draw configuration echoes — surfaced on EventOut so the client
+    # can render/edit a draw's options without a second read.
+    seeded_count: Optional[int] = None
+    rr_rounds: Optional[int] = None
+    # Format-specific knobs (the ``BracketEvent.config`` JSON column):
+    # Monrad consolation depth, DE grand-final reset, Swiss rounds, …
+    config: dict = field(default_factory=dict)
 
 
 @dataclass

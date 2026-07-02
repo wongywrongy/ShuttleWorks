@@ -41,11 +41,11 @@ import time
 import uuid
 from collections import defaultdict
 from datetime import datetime
-from typing import AsyncGenerator, Dict, List, Literal, Optional, Set, Tuple
+from typing import Annotated, AsyncGenerator, Dict, List, Literal, Optional, Sequence, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 
 from app.dependencies import (
     require_tournament_access,
@@ -73,10 +73,9 @@ from services.bracket import (
     BracketSlot,
     Draw,
     TournamentDriver,
-    generate_round_robin,
-    generate_single_elimination,
     record_result,
 )
+from services.bracket.formats import FORMAT_REGISTRY, get_format
 from services.bracket.io.export_schedule import to_csv, to_ics
 from services.bracket.io.import_matches import (
     parse_csv_payload,
@@ -118,6 +117,59 @@ _DEFAULT_CANDIDATE_POOL_SIZE = 5
 # ---------------------------------------------------------------------------
 
 
+def _require_known_format(value: str) -> str:
+    """Validate a wire ``format`` id against the format registry.
+
+    Plain ``str`` + registry check (not a ``Literal``) so adding a format
+    is one ``FORMAT_REGISTRY`` entry with zero DTO churn. Unknown ids fail
+    Pydantic validation → HTTP 422.
+    """
+    if value not in FORMAT_REGISTRY:
+        known = ", ".join(FORMAT_REGISTRY)
+        raise ValueError(f"unknown draw format {value!r}; known formats: {known}")
+    return value
+
+
+FormatId = Annotated[str, AfterValidator(_require_known_format)]
+
+
+def _generate_draw(
+    format_id: str,
+    participants: Sequence,
+    *,
+    event_id: str,
+    seeded_count: Optional[int],
+    bracket_size: Optional[int],
+    rr_rounds: Optional[int],
+    duration_slots: int,
+    config: Optional[dict] = None,
+) -> Draw:
+    """Dispatch draw generation through the format registry.
+
+    The single seam both the create-tournament and generate-event routes
+    use; generator ``ValueError``/``NotImplementedError`` surfaces as 400.
+    """
+    spec = get_format(format_id)
+    if spec is None:
+        raise HTTPException(
+            status_code=400, detail=f"unknown draw format {format_id!r}"
+        )
+    try:
+        resolved = spec.normalize_config(dict(config or {}), len(participants))
+        return spec.generate(
+            participants,
+            event_id=event_id,
+            play_unit_id_prefix=event_id,
+            duration_slots=duration_slots,
+            seeded_count=seeded_count,
+            bracket_size=bracket_size,
+            rr_rounds=rr_rounds,
+            config=resolved,
+        )
+    except (ValueError, NotImplementedError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 class ParticipantIn(BaseModel):
     id: str
     name: str
@@ -140,13 +192,15 @@ class ParticipantIn(BaseModel):
 class EventIn(BaseModel):
     id: str
     discipline: str = Field("GEN", description="MS/WS/MD/WD/XD or short code.")
-    format: Literal["se", "rr"] = "se"
+    format: FormatId = "se"
     participants: List[ParticipantIn]
     seeded_count: Optional[int] = None
     bracket_size: Optional[int] = None
     rr_rounds: int = Field(1, ge=1)
     duration_slots: int = Field(1, ge=1)
     randomize: bool = False
+    # Format-specific knobs (validated by the format's normalize_config).
+    config: dict = Field(default_factory=dict)
 
 
 class CreateTournamentIn(BaseModel):
@@ -218,6 +272,11 @@ class EventOut(BaseModel):
     # Per-event lifecycle status: 'draft' | 'generated' | 'started'.
     # Drives the Draws-page status pill + Generate/Open affordances.
     status: Optional[str] = None
+    # Per-draw configuration echoes (all optional — additive, old clients
+    # and fixtures unaffected). ``config`` carries format-specific knobs.
+    seeded_count: Optional[int] = None
+    rr_rounds: Optional[int] = None
+    config: dict = Field(default_factory=dict)
 
 
 class TournamentOut(BaseModel):
@@ -324,12 +383,26 @@ class BracketUnassignIn(BaseModel):
 class EventUpsertIn(BaseModel):
     """Body of POST /bracket/events/{event_id} — upsert one event."""
     discipline: str
-    format: Literal["se", "rr"] = "se"
+    format: FormatId = "se"
     bracket_size: Optional[int] = None
     seeded_count: int = 0
     rr_rounds: int = Field(1, ge=1)
     duration_slots: int = Field(1, ge=1)
     participants: List[ParticipantIn] = Field(default_factory=list)
+    # Format-specific knobs (validated by the format's normalize_config).
+    config: dict = Field(default_factory=dict)
+
+
+class EventConfigPatchIn(BaseModel):
+    """Body of PATCH /bracket/events/{event_id} — edit a DRAFT draw's
+    configuration without touching its participants (the upsert route
+    wipes them; a config-only patch must not)."""
+    format: Optional[FormatId] = None
+    bracket_size: Optional[int] = None
+    seeded_count: Optional[int] = None
+    rr_rounds: Optional[int] = Field(None, ge=1)
+    duration_slots: Optional[int] = Field(None, ge=1)
+    config: Optional[dict] = None
 
 
 class GenerateEventIn(BaseModel):
@@ -368,7 +441,7 @@ class ImportPlayUnitIn(BaseModel):
 class ImportEventIn(BaseModel):
     id: str
     discipline: str = "GEN"
-    format: Literal["se", "rr"] = "se"
+    format: FormatId = "se"
     participants: List[ParticipantIn]
     rounds: List[List[ImportPlayUnitIn]]
 
@@ -569,6 +642,9 @@ def _hydrate_session(
             bracket_size=event_row.bracket_size,
             participant_count=len(participant_rows),
             status=event_row.status or "draft",
+            seeded_count=event_row.seeded_count,
+            rr_rounds=event_row.rr_rounds,
+            config=dict(event_row.config or {}),
         )
 
         # Results.
@@ -800,6 +876,9 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                 participant_count=meta.participant_count if meta else 0,
                 rounds=list(draw.rounds),
                 status=meta.status if meta else None,
+                seeded_count=meta.seeded_count if meta else None,
+                rr_rounds=meta.rr_rounds if meta else None,
+                config=dict(meta.config) if meta else {},
             )
         )
 
@@ -1090,45 +1169,40 @@ def create_bracket(
         # every event mints identical ids and the second event's
         # ``register_draw`` raises on the shared TournamentState — see
         # register_draw's "callers should namespace per event" contract.
-        if ev.format == "se":
-            try:
-                draw = generate_single_elimination(
-                    participants,
-                    event_id=ev.id,
-                    play_unit_id_prefix=ev.id,
-                    seeded_count=ev.seeded_count,
-                    bracket_size=ev.bracket_size,
-                    duration_slots=ev.duration_slots,
-                    randomize=ev.randomize,
-                )
-            except (ValueError, NotImplementedError) as exc:
-                raise HTTPException(status_code=400, detail=str(exc))
-        else:
-            try:
-                draw = generate_round_robin(
-                    participants,
-                    rounds=ev.rr_rounds,
-                    event_id=ev.id,
-                    play_unit_id_prefix=ev.id,
-                    duration_slots=ev.duration_slots,
-                )
-            except (ValueError, NotImplementedError) as exc:
-                raise HTTPException(status_code=400, detail=str(exc))
+        if ev.randomize and ev.format == "se":
+            # Preserved pre-registry behaviour: only SE ever consumed
+            # ``randomize`` (raising NotImplementedError → 400); other
+            # formats silently ignored it.
+            raise HTTPException(
+                status_code=400, detail="randomize=True is not implemented"
+            )
+        draw = _generate_draw(
+            ev.format,
+            participants,
+            event_id=ev.id,
+            seeded_count=ev.seeded_count,
+            bracket_size=ev.bracket_size,
+            rr_rounds=ev.rr_rounds,
+            duration_slots=ev.duration_slots,
+            config=ev.config,
+        )
 
         register_draw(state, draw)
         draws[ev.id] = draw
 
-        bracket_size = (
-            len(draw.rounds[0]) * 2 if draw.rounds else None
-        ) if ev.format == "se" else None
         events_meta[ev.id] = EventMeta(
             id=ev.id,
             discipline=ev.discipline,
             format=ev.format,
             duration_slots=ev.duration_slots,
-            bracket_size=bracket_size,
+            # Generators that size a bracket record it in parameters
+            # (SE pads to the next power of two; RR leaves it unset).
+            bracket_size=draw.event.parameters.get("bracket_size"),
             participant_count=len(ev.participants),
             status="draft",
+            seeded_count=ev.seeded_count,
+            rr_rounds=ev.rr_rounds,
+            config=dict(ev.config or {}),
         )
 
     session_obj = BracketSession(
@@ -1159,7 +1233,8 @@ def create_bracket(
             draw=draw,
             state=state,
             seeded_count=ev.seeded_count or 0,
-            rr_rounds=ev.rr_rounds if ev.format == "rr" else None,
+            rr_rounds=ev.rr_rounds,
+            config=dict(ev.config or {}),
         )
     # Persist auto-walkover results (R1 BYE byes recorded by register_draw).
     for pu_id, result in state.results.items():
@@ -1579,6 +1654,18 @@ def upsert_event(
                 session.state.assignments.pop(pu_id, None)
             _persist_session_metadata(repo, tournament_id, session=session)
 
+    # Validate + default the format-specific config before persisting so a
+    # bad blob fails loudly at upsert time, not at generate time.
+    spec = get_format(body.format)
+    if spec is None:  # unreachable — FormatId validated; defensive
+        raise HTTPException(status_code=400, detail=f"unknown format {body.format!r}")
+    try:
+        normalized_config = spec.normalize_config(
+            dict(body.config or {}), len(body.participants)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     repo.brackets.delete_event(tournament_id, event_id)
     repo.brackets.create_event(
         tournament_id,
@@ -1588,8 +1675,8 @@ def upsert_event(
         duration_slots=body.duration_slots,
         bracket_size=body.bracket_size,
         seeded_count=body.seeded_count,
-        rr_rounds=body.rr_rounds if body.format == "rr" else None,
-        config={},
+        rr_rounds=body.rr_rounds,
+        config=normalized_config,
         status="draft",
     )
     if body.participants:
@@ -1608,6 +1695,74 @@ def upsert_event(
                 for p in body.participants
             ],
         )
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket session for this tournament"
+        )
+    return _serialize_session(session)
+
+
+@router.patch(
+    "/events/{event_id}",
+    response_model=TournamentOut,
+    dependencies=[_OPERATOR],
+)
+def patch_event_config(
+    body: EventConfigPatchIn,
+    tournament_id: uuid.UUID = Path(...),
+    event_id: str = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Edit a DRAFT draw's configuration without touching participants.
+
+    The upsert route replaces the whole event (wiping participants); this
+    config-only PATCH is what the Draws card's "Configure" affordance
+    uses. 404 for an unknown event; 409 unless the event is still draft
+    (re-configure a generated draw by re-generating; a started draw is
+    locked).
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    existing = repo.brackets.get_event(tournament_id, event_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"unknown event {event_id!r}")
+    if (existing.status or "draft") != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=f"event {event_id!r} is {existing.status}; only draft draws can be reconfigured",
+        )
+
+    # Validate the (possibly new) format's config against the current
+    # participant count so a bad blob fails here, not at generate time.
+    target_format = body.format or existing.format
+    spec = get_format(target_format)
+    if spec is None:
+        raise HTTPException(
+            status_code=400, detail=f"unknown draw format {target_format!r}"
+        )
+    normalized_config: Optional[dict] = None
+    if body.config is not None or body.format is not None:
+        participant_count = len(
+            repo.brackets.list_participants(tournament_id, event_id)
+        )
+        try:
+            normalized_config = spec.normalize_config(
+                dict(body.config if body.config is not None else existing.config or {}),
+                participant_count,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    repo.brackets.update_event_config(
+        tournament_id,
+        event_id,
+        format=body.format,
+        bracket_size=body.bracket_size,
+        seeded_count=body.seeded_count,
+        rr_rounds=body.rr_rounds,
+        duration_slots=body.duration_slots,
+        config=normalized_config,
+    )
     session = _hydrate_session(repo, tournament_id)
     if session is None:
         raise HTTPException(
@@ -1687,30 +1842,19 @@ def generate_event_route(
         for p in participant_rows
     ]
 
-    # Build the draw in memory (no DB writes yet).
-    if existing.format == "se":
-        try:
-            draw = generate_single_elimination(
-                participants,
-                event_id=event_id,
-                play_unit_id_prefix=event_id,
-                seeded_count=existing.seeded_count or 0,
-                bracket_size=existing.bracket_size,
-                duration_slots=existing.duration_slots,
-            )
-        except (ValueError, NotImplementedError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
-    else:
-        try:
-            draw = generate_round_robin(
-                participants,
-                rounds=existing.rr_rounds or 1,
-                event_id=event_id,
-                play_unit_id_prefix=event_id,
-                duration_slots=existing.duration_slots,
-            )
-        except (ValueError, NotImplementedError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+    # Build the draw in memory (no DB writes yet). Registry-dispatched;
+    # the format's normalize_config resolves per-draw knobs (Monrad depth,
+    # Swiss rounds, …) against the actual participant count.
+    draw = _generate_draw(
+        existing.format,
+        participants,
+        event_id=event_id,
+        seeded_count=existing.seeded_count or 0,
+        bracket_size=existing.bracket_size,
+        rr_rounds=existing.rr_rounds or 1,
+        duration_slots=existing.duration_slots,
+        config=dict(existing.config or {}),
+    )
 
     # Build a fresh in-memory state for this generation run.
     # Remove old play_units and assignments for this event from the
@@ -1734,17 +1878,25 @@ def generate_event_route(
     # iterates the freshly-built draw (not the empty placeholder that
     # _hydrate_session loaded from the DB for a draft event).
     session.draws[event_id] = draw
-    bracket_size = (
-        len(draw.rounds[0]) * 2 if draw.rounds else None
-    ) if existing.format == "se" else None
+    # The RESOLVED config (normalize_config output) is what the draw was
+    # actually built with — persist/echo it so the client can render e.g.
+    # Swiss "Round k of K" from concrete values.
+    resolved_config = dict(
+        draw.event.parameters.get("resolved_config")
+        or existing.config
+        or {}
+    )
     session.events[event_id] = EventMeta(
         id=event_id,
         discipline=existing.discipline,
         format=existing.format,
         duration_slots=existing.duration_slots,
-        bracket_size=bracket_size,
+        bracket_size=draw.event.parameters.get("bracket_size"),
         participant_count=len(participant_rows),
         status="generated",
+        seeded_count=existing.seeded_count,
+        rr_rounds=existing.rr_rounds,
+        config=resolved_config,
     )
 
     # Run the solver (in memory only — no DB writes until success).
@@ -1786,7 +1938,9 @@ def generate_event_route(
         bracket_size=existing.bracket_size,
         seeded_count=existing.seeded_count or 0,
         rr_rounds=existing.rr_rounds,
-        config=dict(existing.config or {}),
+        # Persist the RESOLVED config the draw was generated with (e.g.
+        # Swiss rounds defaulted from the participant count).
+        config=resolved_config,
         status="generated",
     )
     # 3. Re-persist participants.

@@ -535,6 +535,47 @@ class _LocalBracketRepo:
         self.session.refresh(row)
         return row
 
+    def update_event_config(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        *,
+        format: Optional[str] = None,
+        bracket_size: Optional[int] = None,
+        seeded_count: Optional[int] = None,
+        rr_rounds: Optional[int] = None,
+        duration_slots: Optional[int] = None,
+        config: Optional[dict] = None,
+    ) -> Optional[BracketEvent]:
+        """Patch a DRAFT event's configuration in place.
+
+        Participants and matches are untouched — this is the config-only
+        sibling of the upsert route (which wipes participants). Only the
+        provided (non-None) fields change. Stages an outbox row; returns
+        None if the event does not exist. Callers gate on status.
+        """
+        row = self.get_event(tournament_id, event_id)
+        if row is None:
+            return None
+        if format is not None:
+            row.format = format
+        if bracket_size is not None:
+            row.bracket_size = bracket_size
+        if seeded_count is not None:
+            row.seeded_count = seeded_count
+        if rr_rounds is not None:
+            row.rr_rounds = rr_rounds
+        if duration_slots is not None:
+            row.duration_slots = duration_slots
+        if config is not None:
+            row.config = dict(config)
+        row.version = row.version + 1
+        self.session.flush()
+        SyncService.enqueue_bracket_event(self.session, row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
     def set_event_status(
         self,
         tournament_id: uuid.UUID,
