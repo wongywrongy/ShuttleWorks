@@ -287,6 +287,22 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   (Ctrl+K), theme parity. Screenshot to `.playwright-mcp/p10-*`; log EVERY finding here; fix in
   batches with gates (vitest/lint/build/depcruise); commit per batch.
 - **Nav gotcha reminder:** deep-links reset to Config — navigate client-side via the sidebar.
+- **Findings so far (fixed ✅ / open ▢), commits `7ebb445` + earlier:**
+  1. ✅ THE BIG ONE: the June-29 **Docker stack was still up** and Vite's default `/api` proxy (`:8000`)
+     hit the stale container image — every browser session (incl. all prior verification!) exercised OLD
+     backend code + the bind-mounted `data/local.db`. Stack stopped; host backend now runs with
+     `DATABASE_URL` → `products/scheduler/data/local.db` + Vite `VITE_API_PROXY_TARGET=:8600`.
+     Trap documented in CLAUDE.md Known hazards. **Re-verified live on the right topology:** the
+     match_states mirror works (call → `called`+`calledAt`; uncall clears), interceptor 409-classing
+     works (stuck attempts=13 row went terminal), F3 drain works.
+  2. ✅ Command queue never drained on load (Step F3 never built) → mount + `online` drain added.
+  3. ✅ Axios interceptor dropped `.response` → every 409 misread as networkError → eternal replay.
+  4. ✅ Meet/Bracket matches band order now shares `DISCIPLINE_ORDER`; doubles school shown once/side.
+  5. ▢ Draw-generate 409 surfaces raw "solver returned infeasible: no reason" — needs operator wording.
+  6. Verified exact so far: Hub (chips/⌘K/amber), Draws cards (Draft+Started), one-sided Draw + toggle,
+     Bracket Matches (populated, #/codes/TBD/status), Meet Matches (schools once, bands, commas).
+  7. **Remaining walk:** Rosters detail, Configs detail, Operations Plan, Display (meet), Settings pages,
+     New Workspace, RR draw view, full light-theme sweep, mirrored-toggle shot, wording audit per page.
 
 ---
 
