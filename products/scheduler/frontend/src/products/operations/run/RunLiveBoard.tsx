@@ -26,7 +26,7 @@ import {
 } from '@scheduler/design-system/components';
 import { MatchChip } from '../../../components/MatchChip';
 import type { OpsBlock } from '../opsBlock';
-import { packBlockLanes } from '../opsBlock';
+import { packBlockLanes, chipLanePx } from '../opsBlock';
 import { buildLiveChips, type BoardChip } from '../runtime/boardPlacements';
 
 export interface RunLiveBoardProps {
@@ -152,7 +152,9 @@ export function RunLiveBoard({
     const longest = chips.reduce((m, c) => Math.max(m, c.label.length), 0);
     // Width a span=1 cell needs to read the longest label at text-2xs plus the
     // chip's horizontal padding + inset + the M/B source square (~42px total).
-    const neededPx = Math.max(72, longest * 8 + 42);
+    // Shared basis with the Plan board (chipLanePx) — Run and Plan cells are
+    // the same size at Auto fit; the reserve includes the status stamp.
+    const neededPx = chipLanePx(longest);
     return Math.min(3, Math.max(1, neededPx / GANTT_GEOMETRY.standard.slot));
   }, [chips]);
   const timeZoom = auto ? autoZoom : manualZoom;
@@ -190,7 +192,7 @@ export function RunLiveBoard({
           data-testid={`run-card-${c.key}`}
           title={`${c.source === 'meet' ? 'Meet' : 'Bracket'} · ${c.label} [${c.late ? 'late' : c.state}]${
             c.pushedSlots > 0
-              ? ` — delayed ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'} by the previous match on this court`
+              ? ` — running ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'} behind plan (starts when its court is free)`
               : ''
           }`}
           style={{
@@ -214,53 +216,72 @@ export function RunLiveBoard({
           }}
         >
           {c.overrunSlots > 0 && (
-            // Over-portion: the left border IS the planned-end marker; the
-            // amber "+N" badge carries the signal (a translucent wash is
-            // invisible on the muted-solid playing fill).
+            // Over-portion wash: the left border IS the planned-end marker.
+            // Its number moved into the single right-aligned stamp below so
+            // a chip never shows two competing figures.
             <span
               aria-hidden
               data-testid={`run-overrun-${c.key}`}
-              className="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end border-l border-status-warning/60 pr-1.5"
+              className="pointer-events-none absolute inset-y-0 right-0 border-l border-status-warning/60"
               style={{ width: `${overFrac * 100}%` }}
-            >
-              <span className="sw-late-nudge rounded-xs bg-status-warning px-1 text-[9px] font-semibold leading-4 text-background sw-num">
-                +{c.overrunSlots}
-              </span>
-            </span>
+            />
           )}
-          {c.pushedSlots > 0 && (
-            // Pushback marker: this chip was shifted right because an earlier
-            // match still occupies its court — the ▸+N reads "delayed N slots"
-            // (the run-late amber voice). It replaces the LATE text badge on
-            // pushed chips: the shift already says the plan slipped, and two
-            // amber stamps on a 40px chip is noise (the title carries both).
-            <span
-              data-testid={`run-delayed-${c.key}`}
-              aria-label={`Delayed ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'}`}
-              className="sw-late-nudge absolute right-1.5 top-1 text-[9px] font-semibold uppercase tracking-wide text-status-warning sw-num"
-            >
-              ▸+{c.pushedSlots}
-            </span>
-          )}
-          {c.late && c.pushedSlots === 0 && (
-            <span
-              data-testid={`run-late-${c.key}`}
-              aria-label="Late"
-              className="sw-late-nudge absolute right-1.5 top-1 text-[9px] font-semibold uppercase tracking-wide text-status-warning"
-            >
-              Late
-            </span>
-          )}
-          {c.state === 'playing' && slotMinutes != null && (
-            // Quiet elapsed stamp — bottom-right corner so it never collides
-            // with the vertically-centered overrun "+N" badge at the right.
-            <span
-              className="pointer-events-none absolute bottom-0.5 right-1.5 text-[9px] opacity-80 sw-num"
-              data-testid={`run-elapsed-${c.key}`}
-            >
-              {Math.max(0, Math.round(c.placement.span * slotMinutes))}m
-            </span>
-          )}
+          {/* ONE stamp per chip — right-aligned, vertically centered so it
+              shares the label's line instead of overlaying it (numbers used
+              to stack in three corners and collide on narrow cells). Unit is
+              MINUTES when the slot length is known ("+30m", "▸+15m", "45m");
+              slots otherwise. Priority: running-over > elapsed > delayed >
+              late. Meanings are spelled out in the footer legend + title.
+              Zoom-aware: when the operator zooms TIME below the auto-fit
+              width the stamp is dropped before the label (the hover title
+              keeps the information), so nothing overlaps at any scale. */}
+          {(() => {
+            if (box.width < chipLanePx(c.label.length) - 8) return null;
+            const fmtSlots = (n: number) =>
+              slotMinutes != null ? `${Math.round(n * slotMinutes)}m` : String(n);
+            if (c.state === 'playing' && c.overrunSlots > 0) {
+              return (
+                <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center">
+                  <span className="sw-late-nudge rounded-xs bg-status-warning px-1 text-[9px] font-semibold leading-4 text-background sw-num">
+                    +{fmtSlots(c.overrunSlots)}
+                  </span>
+                </span>
+              );
+            }
+            if (c.state === 'playing' && slotMinutes != null) {
+              return (
+                <span
+                  className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[9px] opacity-80 sw-num"
+                  data-testid={`run-elapsed-${c.key}`}
+                >
+                  {Math.max(0, Math.round(c.placement.span * slotMinutes))}m
+                </span>
+              );
+            }
+            if (c.pushedSlots > 0) {
+              return (
+                <span
+                  data-testid={`run-delayed-${c.key}`}
+                  aria-label={`Delayed ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'}`}
+                  className="sw-late-nudge pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[9px] font-semibold uppercase tracking-wide text-status-warning sw-num"
+                >
+                  ▸+{fmtSlots(c.pushedSlots)}
+                </span>
+              );
+            }
+            if (c.late) {
+              return (
+                <span
+                  data-testid={`run-late-${c.key}`}
+                  aria-label="Late"
+                  className="sw-late-nudge pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[9px] font-semibold uppercase tracking-wide text-status-warning"
+                >
+                  Late
+                </span>
+              );
+            }
+            return null;
+          })()}
         </MatchChip>
       );
     },
@@ -328,6 +349,20 @@ export function RunLiveBoard({
         >
           +
         </button>
+        {/* Stamp legend — the chips carry at most ONE figure each; this line
+            says what each voice means so the numbers are never cryptic. */}
+        <span
+          data-testid="run-board-legend"
+          className="ml-auto hidden items-center gap-3 text-muted-foreground sm:flex"
+        >
+          <span>
+            <span className="font-semibold text-status-warning">+</span> running over
+          </span>
+          <span>
+            <span className="font-semibold text-status-warning">▸+</span> delayed start
+          </span>
+          {slotMinutes != null && <span>plain = time played</span>}
+        </span>
       </div>
     </div>
   );

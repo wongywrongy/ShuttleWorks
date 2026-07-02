@@ -85,12 +85,13 @@ describe('boardPlacements — buildLiveChips', () => {
     expect(buildLiveChips(blocks, 1, true)[0].late).toBe(false);
   });
 
-  it('called chip is span=1 at the planned slot and can be late (when running)', () => {
+  it('an overdue called chip projects to the now-line (it cannot start in the past)', () => {
     const [c] = buildLiveChips([blk({ id: 'c', court: 1, slot: 2, status: 'called' })], 4, true);
     expect(c.state).toBe('called');
     expect(c.placement.span).toBe(1);
-    expect(c.placement.startSlot).toBe(2);
-    expect(c.late).toBe(true);
+    expect(c.placement.startSlot).toBe(4); // max(planned 2, now 4)
+    expect(c.pushedSlots).toBe(2);         // the visible delay
+    expect(c.late).toBe(true);             // the data flag is untouched
   });
 
   it('missing actual timing falls back to the planned slot/span (never throws)', () => {
@@ -181,7 +182,7 @@ describe('boardPlacements — court pushback (visible delay)', () => {
     expect(chips.every((c) => c.pushedSlots === 0)).toBe(true);
   });
 
-  it('other courts are untouched; non-overlapping chips are not pushed', () => {
+  it('the now-floor applies on every court; future chips are not pushed', () => {
     const chips = buildLiveChips(
       [
         blk({ id: 'p', court: 1, slot: 0, span: 1, status: 'started', started: true, actualStartSlot: 0 }),
@@ -191,9 +192,15 @@ describe('boardPlacements — court pushback (visible delay)', () => {
       3,
       true,
     );
-    expect(chips.find((c) => c.key === 'meet:otherCourt')!.placement.startSlot).toBe(1);
-    expect(chips.find((c) => c.key === 'meet:after')!.placement.startSlot).toBe(5);
-    expect(chips.every((c) => c.pushedSlots === 0)).toBe(true);
+    // Overdue on a FREE court still projects to now (it can't start at 1
+    // anymore) — the delay is visible on every court, not just busy ones.
+    const other = chips.find((c) => c.key === 'meet:otherCourt')!;
+    expect(other.placement.startSlot).toBe(3);
+    expect(other.pushedSlots).toBe(2);
+    // A chip planned in the FUTURE stays exactly where the plan puts it.
+    const after = chips.find((c) => c.key === 'meet:after')!;
+    expect(after.placement.startSlot).toBe(5);
+    expect(after.pushedSlots).toBe(0);
   });
 
   it('the plan board never pushes (it shows the PLAN)', () => {

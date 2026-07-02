@@ -42,7 +42,7 @@ import { buildPlanChips, type BoardChip } from './runtime/boardPlacements';
 import type { MatchDTO, ScheduleDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { OpsBlock } from './opsBlock';
-import { parseOpsKey, packBlockLanes } from './opsBlock';
+import { parseOpsKey, packBlockLanes, chipLanePx } from './opsBlock';
 
 interface Conflict { description: string }
 interface Validation { feasible: boolean; conflicts: Conflict[] }
@@ -140,11 +140,9 @@ export function UnifiedOpsBoard({
     if (placed.length === 0) return 1;
     const maxLanes = Math.max(1, ...[...lanes.values()].map((l) => l.laneCount));
     const longest = placed.reduce((m, b) => Math.max(m, b.label.length), 0);
-    // Width one lane needs to read the longest label at text-2xs, plus the
-    // chip's horizontal padding + inset + the M/B source square (~42px —
-    // same allowance as RunLiveBoard; the old +24 predated the square and
-    // let bracket codes truncate to "MS Q…" at Auto fit).
-    const neededLanePx = Math.max(72, longest * 8 + 42);
+    // Shared basis with the Run board (chipLanePx) so Plan and Run cells are
+    // the SAME size at Auto fit; lane splits multiply the per-lane need.
+    const neededLanePx = chipLanePx(longest);
     return Math.min(3, Math.max(1, (neededLanePx * maxLanes) / GANTT_GEOMETRY.standard.slot));
   }, [placed, lanes]);
   const timeZoom = auto ? autoZoom : manualZoom;

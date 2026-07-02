@@ -82,22 +82,33 @@ export function buildPlanChips(blocks: OpsBlock[]): BoardChip[] {
 }
 
 /**
- * Court pushback — a court plays ONE match at a time, so a match that runs
- * long must visibly DELAY what's behind it, not grow underneath it.
+ * Court pushback — a court plays ONE match at a time and a not-yet-played
+ * match cannot occupy the PAST, so the live board projects every planned
+ * chip to where it can actually happen instead of letting a long-running
+ * match grow underneath it.
  *
- * Walks each court's chips in start order keeping a rolling `cursor` (the
- * earliest slot the court is next free). A scheduled/called chip that would
- * start before the cursor is pushed right to it and carries the shift in
- * `pushedSlots` (>0 ⇒ the board renders a `▸+N` delay marker). Playing and
- * done chips are FACTS (actual timing) — they are never moved; they only
- * advance the cursor. Pushes cascade naturally down the court. A genuine
- * factual overlap (e.g. two playing chips on one court) stays overlapping —
- * the board's vertical lane split remains the honest fallback for that.
+ * Two rules, applied per court:
+ *   1. **Now-floor** — a scheduled/called chip never renders before
+ *      `nowSlot`: an overdue planned match will start no earlier than now,
+ *      so it rides the time cursor (sliding right as the clock ticks — the
+ *      "visible delay").
+ *   2. **Occupancy cursor** — chips walk in projected-start order keeping a
+ *      rolling `cursor` (the earliest slot the court is next free). A
+ *      planned chip that would start before the cursor is pushed right to
+ *      it. A playing chip's live end IS the cursor, so what's behind an
+ *      overrunning match lands exactly after it and cascades down the court.
+ *
+ * The total shift from the planned slot rides in `pushedSlots` (>0 ⇒ the
+ * board renders a `▸+N` delay marker). Playing and done chips are FACTS
+ * (actual timing) — they are never moved; they only advance the cursor. A
+ * genuine factual overlap (e.g. two matches actually started on one court)
+ * stays overlapping — the board's vertical lane split remains the honest
+ * fallback for that.
  *
  * Pure and stable: input order of the returned array is preserved; only
  * `placement.startSlot` / `pushedSlots` of pushed chips change.
  */
-export function applyCourtPushback(chips: BoardChip[]): BoardChip[] {
+export function applyCourtPushback(chips: BoardChip[], nowSlot = 0): BoardChip[] {
   const byCourt = new Map<number, BoardChip[]>();
   for (const c of chips) {
     const list = byCourt.get(c.placement.courtIndex) ?? [];
@@ -105,26 +116,35 @@ export function applyCourtPushback(chips: BoardChip[]): BoardChip[] {
     byCourt.set(c.placement.courtIndex, list);
   }
 
+  // Rule 1: the now-floor. Applied before the cursor walk so ordering uses
+  // PROJECTED starts (an overdue chip belongs after the facts happening now,
+  // not at its stale planned slot).
+  const projStart = (c: BoardChip) =>
+    isPlanned(c) ? Math.max(c.placement.startSlot, nowSlot) : c.placement.startSlot;
+
   const pushed = new Map<string, BoardChip>();
   for (const list of byCourt.values()) {
     // Facts before plans on ties so an in-progress match claims the cell it
-    // actually occupies before a same-slot planned chip is considered.
+    // actually occupies before a same-slot planned chip is considered; tied
+    // planned chips keep their PLAN order (earlier planned slot first).
     const ordered = [...list].sort(
       (a, b) =>
-        a.placement.startSlot - b.placement.startSlot ||
-        Number(isPlanned(b)) - Number(isPlanned(a)),
+        projStart(a) - projStart(b) ||
+        Number(isPlanned(a)) - Number(isPlanned(b)) ||
+        a.placement.startSlot - b.placement.startSlot,
     );
     let cursor = Number.NEGATIVE_INFINITY;
     for (const c of ordered) {
-      let start = c.placement.startSlot;
-      if (isPlanned(c) && start < cursor) {
-        const shift = cursor - start;
-        start = cursor;
-        pushed.set(c.key, {
-          ...c,
-          pushedSlots: shift,
-          placement: { ...c.placement, startSlot: start },
-        });
+      let start = projStart(c);
+      if (isPlanned(c)) {
+        start = Math.max(start, cursor); // rule 2: court occupancy
+        if (start !== c.placement.startSlot) {
+          pushed.set(c.key, {
+            ...c,
+            pushedSlots: start - c.placement.startSlot,
+            placement: { ...c.placement, startSlot: start },
+          });
+        }
       }
       cursor = Math.max(cursor, start + c.placement.span);
     }
@@ -200,5 +220,5 @@ export function buildLiveChips(blocks: OpsBlock[], currentSlot: number, running 
   });
   // A long-running match must visibly DELAY what's behind it on its court,
   // never grow underneath it (feature fix, 2026-07-02).
-  return applyCourtPushback(chips);
+  return applyCourtPushback(chips, currentSlot);
 }

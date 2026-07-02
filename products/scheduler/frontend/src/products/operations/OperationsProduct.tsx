@@ -23,6 +23,7 @@ import { useCommandQueue } from '../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
+import { useMatchStateSync } from '../../hooks/useMatchStateSync';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { slotToTime } from '../../lib/time';
 import { bracketOccupiedWindows } from '../../lib/bracketOccupancy';
@@ -50,9 +51,17 @@ export function OperationsProduct() {
 }
 
 function OperationsBody() {
+  const tid = useTournamentId();
   const activeTab = useUiStore((s) => s.activeTab);
   const pushToast = useUiStore((s) => s.pushToast);
   const isLive = isLiveSegment(activeTab);
+
+  // Keep meet match-states converged with the backend while ANY Operations
+  // surface is open. Without this the store went stale here (nothing on this
+  // surface loaded it), so the board painted 'scheduled' over playing matches
+  // and the inspector offered state-machine-illegal actions → user-visible
+  // "Cannot transition …" 409s.
+  useMatchStateSync(tid);
 
   // ---- Meet blocks (global stores) ----
   const config = useTournamentStore((s) => s.config);
@@ -116,7 +125,6 @@ function OperationsBody() {
   }, [config?.courtCount, data?.courts, blocks]);
 
   // ---- planFinalized — Plan-side "ready to run" toggle (Task 17) ----
-  const tid = useTournamentId();
   const planFinalized = useTournamentStore((s) => s.planFinalized);
   const setPlanFinalized = useTournamentStore((s) => s.setPlanFinalized);
 

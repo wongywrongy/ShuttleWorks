@@ -125,6 +125,18 @@ export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
   });
 }
 
+/**
+ * Auto-fit width one chip lane needs to read a label of `longestLabel`
+ * characters at text-2xs: chip padding + inset + the M/B source square
+ * (+42px) plus the Run board's right-aligned status stamp reserve (+34px —
+ * "+30m" / "▸+15m"). ONE constant shared by BOTH operations boards so Plan
+ * and Run cells are the same size at Auto fit and never drift apart
+ * (2026-07-02: "match the cell size in plan").
+ */
+export function chipLanePx(longestLabel: number): number {
+  return Math.max(72, longestLabel * 8 + 42 + 34);
+}
+
 /** Lane assignment for one block: which sub-lane it occupies in its court,
  *  and how many lanes its overlap cluster needs. */
 export interface BlockLane {

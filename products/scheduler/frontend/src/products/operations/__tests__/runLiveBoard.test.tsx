@@ -51,17 +51,21 @@ describe('RunLiveBoard', () => {
     expect(screen.getByTestId('run-card-bracket:pu')).toHaveAttribute('data-source', 'bracket');
   });
 
-  it('an overdue scheduled chip shows the run-late marker only when running', () => {
+  it('an overdue scheduled chip rides the now-line with a ▸+N delay marker', () => {
     const blocks = [blk({ id: 'late', court: 1, slot: 0, status: 'scheduled' })];
     const { rerender } = render(
       <RunLiveBoard blocks={blocks} courtCount={1} currentSlot={3} running onSelect={vi.fn()} />,
     );
     expect(screen.getByTestId('run-card-meet:late')).toBeInTheDocument();
-    expect(screen.getByTestId('run-late-meet:late')).toBeInTheDocument();
+    // The chip is PROJECTED to now (it cannot start in the past) — the delay
+    // marker carries the signal and replaces the LATE text badge.
+    expect(screen.getByTestId('run-delayed-meet:late')).toHaveTextContent('▸+3');
+    expect(screen.queryByTestId('run-late-meet:late')).toBeNull();
 
-    // NOT running (plan not finalized) → no late marker even though overdue —
-    // the fix for the wall of LATE badges on an un-started plan.
+    // The projection is physical truth, so it applies un-finalized too (the
+    // `running` flag still gates only the late DATA flag / summary count).
     rerender(<RunLiveBoard blocks={blocks} courtCount={1} currentSlot={3} onSelect={vi.fn()} />);
+    expect(screen.getByTestId('run-delayed-meet:late')).toHaveTextContent('▸+3');
     expect(screen.queryByTestId('run-late-meet:late')).toBeNull();
   });
 

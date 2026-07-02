@@ -110,6 +110,8 @@ vi.mock('../opsBlock', () => ({
   // RunLiveBoard lane-packs live spans; a single-lane no-op keeps this
   // branching-focused test away from real packing geometry.
   packBlockLanes: () => new Map(),
+  // Shared Run/Plan auto-fit basis — a fixed width keeps zoom math inert.
+  chipLanePx: () => 72,
 }));
 
 // Mock inner components so the test focuses on branching, not internals.
