@@ -18,7 +18,9 @@ import { groupWorkspaces, type HubGroupId } from './hubGrouping';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
 
-/** One group-filter chip (All / Upcoming / No date set / Past) with a count. */
+/** One group-filter chip (All / Upcoming / No date set / Past) with a count.
+ *  Prototype grammar: quiet text; the ACTIVE filter is a raised pill (no
+ *  border chrome — surface does the work). */
 function FilterChip({
   label,
   count,
@@ -35,16 +37,14 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded border px-2 py-0.5 text-2xs font-medium ${
+      className={`rounded-md px-2.5 py-1 text-xs transition-colors duration-fast ease-brand ${
         active
-          ? 'border-accent bg-accent/10 text-accent'
-          : 'border-border text-muted-foreground hover:text-foreground'
+          ? 'bg-surface-active font-medium text-foreground'
+          : 'text-muted-foreground hover:text-foreground'
       }`}
     >
       {label}{' '}
-      <span className={`sw-num ${active ? 'text-accent/70' : 'text-muted-foreground'}`}>
-        {count}
-      </span>
+      <span className="sw-num text-ink-faint">{count}</span>
     </button>
   );
 }
@@ -149,20 +149,25 @@ export function HubPage() {
   }, [deleteTarget]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
-      {/* Top command bar */}
-      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border bg-background px-4">
+    // The handoff Hub prototype: the dashboard is a rounded SCREEN FRAME
+    // floating on the page's ambient glow — not a full-bleed sheet. The
+    // frame is the only rounded container; everything inside is one seamed
+    // plane divided by hairlines.
+    <div className="flex h-full min-h-0 flex-col bg-background p-4 text-foreground md:p-6">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1280px] flex-col overflow-hidden rounded-xl border border-border bg-surface-screen shadow-frame">
+      {/* Top command bar — boxed wordmark · centered search · glowing primary */}
+      <header className="flex h-[52px] shrink-0 items-center gap-3.5 border-b border-border px-4">
         <ShuttleWorksMark />
-        <div className="min-w-0 flex-1">
-          <div className="relative w-full max-w-md">
+        <div className="flex min-w-0 flex-1 justify-center">
+          <div className="relative w-full max-w-[420px]">
             <input
               ref={searchRef}
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search workspaces…"
+              placeholder="Search or jump to…"
               aria-label="Search workspaces"
-              className="w-full rounded border border-border bg-card px-3 py-1.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+              className="h-8 w-full rounded-md border border-border bg-bg-elev px-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
             />
             <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-xs border border-border bg-surface-chip px-1 text-[10px] text-muted-foreground">
               ⌘K
@@ -170,13 +175,15 @@ export function HubPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => navigate('/new')}>New workspace</Button>
+          <Button size="sm" onClick={() => navigate('/new')}>
+            <span aria-hidden>＋</span> New workspace
+          </Button>
         </div>
       </header>
 
-      {/* Group-filter chips — All plus one per non-empty chronological group */}
+      {/* Group-filter strip — quiet text chips, raised active pill */}
       {!loading && tournaments.length > 0 ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border bg-background px-4 py-2">
+        <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-border px-3.5">
           <FilterChip
             label="All"
             count={matchCount}
@@ -221,6 +228,17 @@ export function HubPage() {
             </div>
           ) : (
             <div>
+              {/* Column header — the dense-table grammar from the handoff
+                  Hub prototype (widths mirror WorkspaceRow's cells). */}
+              <div
+                aria-hidden
+                className="flex items-center gap-3 border-b border-border px-4 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint"
+              >
+                <span className="w-14 shrink-0">Date</span>
+                <span className="min-w-0 flex-1">Workspace</span>
+                <span className="w-40 shrink-0">Next action</span>
+                <span className="w-6 shrink-0" />
+              </div>
               {visibleGroups.map((g) => (
                 <section key={g.id} aria-label={g.label}>
                   <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur">
@@ -297,6 +315,7 @@ export function HubPage() {
           </div>
         </Modal>
       )}
+      </div>
     </div>
   );
 }

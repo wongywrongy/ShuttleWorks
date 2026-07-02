@@ -118,13 +118,13 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByText('MODULES')).toBeInTheDocument();
   });
 
-  it('module chips show only enabled modules (one per row, kind-derived)', async () => {
+  it('rows carry NO module chips — modules moved to the inspector (2026-07-02 redesign)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    // Enabled-only: a meet workspace shows just Meet; a bracket workspace just
-    // Bracket. Available/disabled modules are not shown in the row.
-    expect(screen.getAllByTestId('chip-meet')).toHaveLength(1);
-    expect(screen.getAllByTestId('chip-bracket')).toHaveLength(1);
+    // The dense-table row is date · name · next action only; the old per-row
+    // module chips were extraneous chrome (handoff Hub prototype grammar).
+    expect(screen.queryAllByTestId('chip-meet')).toHaveLength(0);
+    expect(screen.queryAllByTestId('chip-bracket')).toHaveLength(0);
     expect(screen.queryAllByTestId('chip-display')).toHaveLength(0);
   });
 
@@ -136,7 +136,7 @@ describe('HubPage time-oriented control plane', () => {
     expect(loc.current).toBe('/new');
   });
 
-  it('module chips read the real modules[] DTO when present (not only kind)', async () => {
+  it('the inspector module map reads the real modules[] DTO when present (not only kind)', async () => {
     vi.mocked(apiClient.listTournaments).mockResolvedValue([
       {
         id: 'x1', name: 'X Workspace', kind: 'meet' as const, role: 'owner' as const,
@@ -149,10 +149,13 @@ describe('HubPage time-oriented control plane', () => {
     ] as never);
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('X Workspace')).toBeInTheDocument());
-    // Display enabled in the DTO (a kind=meet default would NOT enable it) → its
-    // chip shows; bracket is not enabled → no chip.
-    expect(screen.getByTestId('chip-meet')).toBeInTheDocument();
-    expect(screen.getByTestId('chip-display')).toBeInTheDocument();
-    expect(screen.queryAllByTestId('chip-bracket')).toHaveLength(0);
+    // Select the row → the inspector's module map reflects the DTO: Display
+    // enabled (a kind=meet default would NOT enable it) alongside Meet.
+    fireEvent.click(screen.getByText('X Workspace'));
+    expect(screen.getByText('MODULES')).toBeInTheDocument();
+    const displayRow = screen.getByText('Display').closest('li')!;
+    expect(displayRow.textContent).toMatch(/enabled/i);
+    const meetRow = screen.getByText('Meet').closest('li')!;
+    expect(meetRow.textContent).toMatch(/enabled/i);
   });
 });

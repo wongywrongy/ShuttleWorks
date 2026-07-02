@@ -438,6 +438,28 @@ remain roadmap cards (`implemented:false`).
   untouched). The pushed chip's LATE text badge is replaced by the delay marker (one amber
   stamp per 40px chip; the hover title carries both). Gates after: vitest 917, lint 0 err,
   build ✓.
+- **2026-07-02 (later, same session) — Run live-board follow-ups + Hub prototype adoption:**
+  (1) **State-sync root cause**: Operations read `matchStateStore` with nothing on the surface
+  loading it → stale statuses → illegal-action 409s ("Cannot transition … 'playing' to
+  'called'") and started matches painting scheduled. New `hooks/useMatchStateSync.ts`
+  (load + 5s merge-poll, same semantics as useLiveTracking's loader) mounted in
+  OperationsProduct. (2) **Now-floor projection** in `applyCourtPushback(chips, nowSlot)`:
+  planned chips never render before max(plannedSlot, now, court cursor) — overdue chips ride
+  the now-line ("visible delay"); LATE text badge is effectively superseded by ▸+N on the
+  board (late DATA flag + summary count unchanged). (3) **One stamp per chip**: overrun >
+  elapsed > delayed > late, right-aligned + vertically centered (no more three-corner number
+  collisions), MINUTES unit when slotMinutes known, footer legend, stamp auto-hides below
+  auto-fit width on manual zoom-out (title keeps the info). (4) **Run/Plan cell parity**:
+  shared `chipLanePx` auto-fit basis in opsBlock.ts consumed by BOTH boards. (5) **Hub
+  dashboard adopted from the handoff prototype**: rounded screen FRAME (shadow-frame) on the
+  ambient-glow page, boxed wordmark + centered "Search or jump to…" + glowing ＋ New
+  workspace, quiet filter chips with raised active pill, dense DATE/WORKSPACE/NEXT-ACTION
+  table (stacked calendar blocks, per-row module chips and boxed row buttons REMOVED —
+  next action is quiet text, amber when attention), selected row = raised + accent stripe,
+  inspector rebuilt as the prototype rail (322px, metric-tile triplet via grid-lines,
+  amber › TO DO list, MODULES micro-tags, bottom-anchored glowing "Open workspace →").
+  Live-verified (hub-framed-prototype-light.png, fx-*). Gates: vitest 917, lint 0 err,
+  build ✓.
 - **VERIFICATION TRAP (record for future passes):** the SP-D7 S5 live pass unknowingly hit a
   STALE Vite instance already squatting on :5173 from an earlier session — the fresh `npm run
   dev` silently took :5174. Two "findings" (bracket Events header-badge undercount, missing
