@@ -360,11 +360,24 @@ remain roadmap cards (`implemented:false`).
 ---
 
 ### Phase 12 — 2026-07-02 design-system handoff true-up ("Seamed, not gapped")
-- **Status: IN PROGRESS** — token/seamed/pill work below landed (commits `1f6ee42` skill
-  sync, `39dad98` tokens/motion pipeline, T3 commit for the surface work); remaining:
-  motion application across the other mapped surfaces (drawer/panel entrances,
-  call-flash/go-live on state flips, late-nudge, stagger, rail-expand, overlay-fade)
-  and the live both-themes verification pass.
+- **Status: COMPLETE** (2026-07-02). Commits: `1f6ee42` (skill sync from the
+  claude.ai/design source of truth — read via DesignSync, MAIN session only),
+  `39dad98` (tokens/motion pipeline), `2601f93` (seamed Run band bars + StatusPill
+  glow + skill mirror completion), `ddaf75c` (motion application: DetailPanel
+  sw-drawer-in, modal scrims sw-overlay-fade, three rails sw-panel-in keyed by
+  selection, RunLiveBoard one-shot sw-call-flash/sw-go-live with poll-safe
+  transition detection, sw-late-nudge ×4, queue sw-stagger, sidebar
+  sw-rail-expand; ring-focus/glow-in/now-sweep/sheet-up skipped by design +
+  seamed fixes: Run board→queue doubled hairline, Plan board→list tripled).
+- **T5 live verification (both themes): ALL PASS** — contrast ramps resolve to
+  spec (muted → #A8ADB7 dark; light bg #E5E9EF); every primitive fires once at
+  flip time, cleans up on animationend, and never re-fires on poll ticks (11s
+  quiet windows); seams single-hairline; Display stays dark under light theme;
+  console clean. Findings: Plan grid→zoom-bar doubled hairline (pre-existing,
+  → debt-log); double animationstart on flip (no visible defect); StatusPill
+  `pulse` glow currently dormant (no caller passes pulse — utilities verified
+  synthetically); late-tile colored accent not exercised live (code path
+  symmetric to the verified playing tile).
 - **Source of truth:** the Claude Design handoff bundle at repo root
   (`ShuttleWorks Design System-handoff/shuttleworks-design-system/project/`) — an enhanced
   export of the same system. Diff vs the in-repo skill showed the token/component layer
@@ -417,7 +430,14 @@ remain roadmap cards (`implemented:false`).
   closed** (every meet solve path now passes bracket-occupied windows — `lib/bracketOccupancy`
   + `useSchedule`/`useLiveOperations`; verified live: 0 conflicting cells after re-solve);
   matches-row **dead zone** fixed (side-cell empty space now opens the panel); **toast dedupe**
-  (same level+message refreshes instead of stacking).
+  (same level+message refreshes instead of stacking); **Run court pushback** — a long-running
+  match now PUSHES the scheduled/called chips behind it on its court to after its live end,
+  each carrying a `▸+N` amber delay marker (`applyCourtPushback` in
+  `runtime/boardPlacements.ts`, pure + unit-tested; playing/done chips are facts and never
+  move — a factual overlap still falls back to the vertical lane split; the plan board is
+  untouched). The pushed chip's LATE text badge is replaced by the delay marker (one amber
+  stamp per 40px chip; the hover title carries both). Gates after: vitest 917, lint 0 err,
+  build ✓.
 - **VERIFICATION TRAP (record for future passes):** the SP-D7 S5 live pass unknowingly hit a
   STALE Vite instance already squatting on :5173 from an earlier session — the fresh `npm run
   dev` silently took :5174. Two "findings" (bracket Events header-badge undercount, missing
