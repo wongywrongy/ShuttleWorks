@@ -308,10 +308,15 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
      to "MS Q…"); Up Next codes adopt the Run queue's code grammar.
   9. Wording observation (log-only): doubles-pair joiners differ by register — Display "&", Bracket " / "
      (BWF), Meet ", " (editable cells). Each defensible; unify only on a product call.
-  10. **Remaining walk:** Bracket Roster/Config light shots, New Workspace, Settings pages (workspace +
-      global), RR draw view (WS draw is Draft — generate is infeasible on the full QA day; needs a
-      widened day window or fewer courts to populate), mirrored-toggle screenshot, dark sweep of the
-      surfaces above, finding #5 wording fix ("solver returned infeasible: no reason").
+  10. ✅ New Workspace (light) — selected template card now accent-selected (`ae6f275`); Global Settings
+      (light) verified (accent nav, 0.08em group eyebrows, azure Save).
+  11. ✅ Finding #5 fixed (`ae6f275`): bracket generate 409 now reads "The draw's matches don't fit the
+      current day plan. Free up court time — widen the day window, add courts, or reduce other events —
+      then generate again." (verified live).
+  12. **Remaining walk (small tail):** Bracket Roster/Config light shots (grammar shared with verified
+      dark), workspace-settings tabs (Members/Sharing/Sync), RR draw view (needs a QA workspace with a
+      generatable RR draw — the full day blocks it), mirrored-toggle screenshot, dark re-shots of the
+      Phase-10-verified light surfaces.
 
 ---
 
