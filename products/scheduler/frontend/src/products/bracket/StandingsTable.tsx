@@ -14,12 +14,14 @@ import {
   type BandedListColumn,
 } from "../../components/control-plane";
 
+// Numeric columns stay tight (two 2-digit numbers + en-dash at text-xs)
+// so the flex-1 Player cell keeps real width even in the xl side rail.
 const COLUMNS: BandedListColumn[] = [
-  { label: "Pos", className: "w-8 shrink-0" },
+  { label: "Pos", className: "w-7 shrink-0" },
   { label: "Player", className: "min-w-0 flex-1" },
-  { label: "W–L", className: "w-12 shrink-0 text-right" },
-  { label: "Games", className: "w-14 shrink-0 text-right" },
-  { label: "Points", className: "w-16 shrink-0 text-right" },
+  { label: "W–L", className: "w-9 shrink-0 text-right" },
+  { label: "Games", className: "w-11 shrink-0 text-right" },
+  { label: "Points", className: "w-12 shrink-0 text-right" },
 ];
 
 export function StandingsTable({
@@ -52,7 +54,7 @@ export function StandingsTable({
           >
             <span
               data-testid={leader ? "standings-pos-1" : undefined}
-              className={`w-8 shrink-0 text-xs sw-num ${
+              className={`w-7 shrink-0 text-xs sw-num ${
                 leader ? "font-semibold text-accent" : "text-muted-foreground"
               }`}
             >
@@ -61,13 +63,13 @@ export function StandingsTable({
             <span className="min-w-0 flex-1 truncate text-sm text-card-foreground">
               {nameById[row.participant_id] ?? row.participant_id}
             </span>
-            <span className="w-12 shrink-0 text-right text-xs font-medium text-card-foreground sw-num">
+            <span className="w-9 shrink-0 text-right text-xs font-medium text-card-foreground sw-num">
               {row.wins}–{row.losses}
             </span>
-            <span className="w-14 shrink-0 text-right text-xs text-muted-foreground sw-num">
+            <span className="w-11 shrink-0 text-right text-xs text-muted-foreground sw-num">
               {row.games_won}–{row.games_lost}
             </span>
-            <span className="w-16 shrink-0 text-right text-xs text-muted-foreground sw-num">
+            <span className="w-12 shrink-0 text-right text-xs text-muted-foreground sw-num">
               {row.points_won}–{row.points_lost}
             </span>
           </div>

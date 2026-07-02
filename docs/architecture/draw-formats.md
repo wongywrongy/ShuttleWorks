@@ -1,10 +1,12 @@
 # Tournament draw formats
 
-The Bracket module supports two draw formats today — single elimination (`se`) and
-round robin (`rr`). This page catalogs the formats a badminton scheduling product is
-eventually expected to speak (the vocabulary of BWF events and of Tournament
-Planner–class software), assesses each against the existing data model, and lays out
-a staged roadmap.
+The Bracket module speaks six draw formats — single elimination (`se`), round robin
+(`rr`), double elimination (`de`), Monrad (`monrad`), compass (`compass`), and Swiss
+(`swiss`) — dispatched through a format registry on both sides of the wire
+(`FORMAT_REGISTRY` in `backend/services/bracket/formats/`, `DRAW_FORMATS` in
+`frontend/src/products/bracket/formatRegistry.tsx`). This page catalogs the format
+vocabulary, records how each maps onto the data model, and tracks the remaining
+roadmap (group stage, qualifying, ladder).
 
 The headline: **a draw format is a play-unit DAG generator plus a renderer, not an
 engine change.** Advancement is not a CP-SAT constraint — the bracket module
@@ -38,17 +40,17 @@ and Operations/Display consumption.
 
 ## Format catalog
 
-| Format | Fits the play-unit DAG today? | What's missing |
+| Format | Status | Notes |
 | --- | --- | --- |
-| Single elimination | **Yes** (shipped) | One-sided layout option (most real brackets are one-sided) |
-| Round robin | **Yes** (shipped) | Standings table + tie-breaks |
-| Group stage (groups → knockout) | Structurally yes | Phase boundary: "winner of Group A" is a *standings* reference, not a single-feeder reference |
-| Double elimination | No | **Loser routing** in the slot model + advancement |
-| Monrad / plate (classification) | No | Loser routing + classification labels (positions 1..N) |
-| Compass draw | No | Loser routing + multi-segment canvas |
-| Qualifying → main draw | Almost | Cross-draw *winner* feeds + "Qualifier" labeling (no loser routing needed) |
-| Swiss system | Structurally different | **Progressive generation** — pairings computed between rounds |
-| Ladder | Weak fit | Not a draw; challenge-driven match creation |
+| Single elimination | **Shipped** | One-sided layout is the default; mirrored stays a wall-display option |
+| Round robin | **Shipped** | Standings table (BWF tie-break chain) embedded in `EventOut.standings` |
+| Double elimination | **Shipped** | Loser routing (`feeder_take`) + W/L/GF segments; optional grand-final reset (config) |
+| Monrad / plate (classification) | **Shipped** | Full recursive classification (every position 1..N decided) or plate-only (config `consolation`) |
+| Compass draw | **Shipped** | E/W/N/S/NE/NW/SE/SW spawn table; segments generated only when entries ≥ 2 |
+| Swiss system | **Shipped** | R1 seed-fold + progressive `rounds/next` route (standings-driven pairing, bye rotation, no rematches) |
+| Group stage (groups → knockout) | Roadmap | Phase-boundary resolution (generate the knockout from concrete pool standings) |
+| Qualifying → main draw | Roadmap | Cross-draw *winner* feeds + "Qualifier" labeling (no loser routing needed) |
+| Ladder | Roadmap | Not a draw; challenge-driven match creation — a different product surface |
 
 ### Single elimination (one-sided vs mirrored)
 
@@ -136,31 +138,37 @@ no draw to generate and no natural event end; matches are created ad hoc. It sha
 the progressive-generation machinery with Swiss but is really a different product
 surface (a persistent ranking board), not a Bracket draw type. Deliberately last.
 
-## Gap analysis
+## How the gaps were closed (2026-07-02)
 
-1. **Loser routing** — the load-bearing gap for double elimination, Monrad, and
-   compass. `BracketSlot` (backend) and `BracketSlotDTO` (frontend, in
-   `api/bracketDto.ts`) express "winner of feeder" only; `_record_and_propagate`
-   moves winners only; `labelFor` in `DrawView.tsx` prints only "Winner of X".
-   The fix is one new field with a default — e.g. `feeder_take: "winner" | "loser"`
-   — threaded through slot construction, advancement, serialization, and labels.
-   The walkover sweep needs care: a bye's "loser" must not advance into a plate.
-2. **Format registry** — `"se" | "rr"` is hardwired in the `EventIn` DTO, the DB
-   column, the generate-route branch, and the `DrawView` branch. `Event` already
-   carries `format_plugin_name`; new formats should extend that into a real
-   generator/renderer registry rather than growing if-chains.
-3. **Multi-phase composition** — no phase concept: no group-standings slot
-   references, no cross-draw feeders. Phase-boundary resolution (generate the next
-   phase from concrete standings) avoids most of this.
-4. **Progressive generation** — Swiss/ladder need "append a round to a live draw";
-   today regeneration wipes. The scheduling side already works round-by-round.
-5. **Standings + tie-breaks** — no ranking computation for RR pools, groups, or
-   Swiss (BWF tie-break chain: matches won → games ratio → points ratio → head-to-head).
-6. **Segment labeling** — round labels assume one bracket (Final/SF/QF). Monrad and
-   compass need named segments ("Plate", "5–8", "West") and classification outcomes.
-7. **Renderer variants** — one-sided SE layout; stacked multi-bracket canvases;
-   pools-plus-knockout composite view; real connector lines (already a known
-   follow-up on the [draw canvas](/architecture/bracket-draw-canvas)).
+1. **Loser routing** — `BracketSlot.feeder_take: "winner" | "loser"` (default
+   winner), threaded through generators, advancement, slot JSON (emitted only for
+   loser feeds — persisted winner-only draws stay byte-identical), and labels
+   ("Loser of X"). **Walkover policy:** a walkover has no real loser — byes and
+   withdrawals feed `BYE` into consolation slots and the existing walkover sweep
+   hollows the plate match (pinned by `test_advancement_loser_routing.py`).
+2. **Format registry** — `FormatSpec {generate, progressive, has_standings,
+   uses_bracket_size, normalize_config}`; DTO `format` fields are plain strings
+   validated against the registry (adding a format = one entry, zero DTO churn).
+   The frontend mirror (`FormatDescriptor`) carries the picker card copy, per-format
+   config fields, and the renderer key (`bracket | grid | segments | swiss`).
+3. **Segments** — `DrawSegment` + per-play-unit `segment` metadata (JSON `meta`
+   column, no migration); `Draw.rounds` stays the global scheduling axis via
+   dependency-wave layering (`formats/_waves.py`), so `round_index` / `match_index`
+   keep their DB meaning and hydration round-trips.
+4. **Progressive generation** — `POST /bracket/events/{id}/rounds/next` appends a
+   standings-paired Swiss round with no wipe and no solver call; the new units are
+   dependency-free and light up the existing *schedule next round* flow.
+5. **Standings** — `services/bracket/standings.py` (BWF chain: match wins → games
+   ratio → points ratio → head-to-head → id; walkovers win with zero games/points),
+   embedded in `EventOut.standings` for `has_standings` formats.
+6. **Per-draw configuration** — the `BracketEvent.config` JSON column carries
+   format knobs (DE `grand_final_reset`, Monrad `consolation`, Swiss
+   `swiss_rounds`), validated by `normalize_config`; draft draws are edited via
+   `PATCH /bracket/events/{id}` (config-only — never wipes participants).
+
+Remaining (roadmap): group-stage phase composition, qualifying cross-draw feeds,
+ladder, and real connector lines on the
+[draw canvas](/architecture/bracket-draw-canvas).
 
 ## Recommended roadmap
 

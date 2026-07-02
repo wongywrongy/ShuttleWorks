@@ -413,14 +413,16 @@ export function computeOneSidedBracketLayout(rounds: string[][]): BracketLayout 
   const pitchY = BRACKET_CARD_HEIGHT + BRACKET_ROW_GAP;
 
   const base = rounds[0]?.length ?? 0;
+  // Tall enough for the WIDEST round — a plain knockout peaks at round 0,
+  // but a DE losers bracket alternates equal-size drop-in rounds.
+  const maxCount = Math.max(base, ...rounds.map((r) => r.length), 1);
   const fullHeight =
-    base > 0
-      ? base * BRACKET_CARD_HEIGHT + (base - 1) * BRACKET_ROW_GAP
-      : BRACKET_CARD_HEIGHT;
+    maxCount * BRACKET_CARD_HEIGHT + (maxCount - 1) * BRACKET_ROW_GAP;
 
   // Vertical center of each match, by [roundIndex][matchIndex].
   const centers: number[][] = [];
   for (let r = 0; r < n; r++) {
+    const count = rounds[r].length;
     if (r === 0) {
       centers[0] = Array.from(
         { length: base },
@@ -428,10 +430,21 @@ export function computeOneSidedBracketLayout(rounds: string[][]): BracketLayout 
       );
     } else {
       const prev = centers[r - 1];
-      centers[r] = Array.from(
-        { length: prev.length / 2 },
-        (_, j) => (prev[2 * j] + prev[2 * j + 1]) / 2,
-      );
+      if (count * 2 === prev.length) {
+        // Halving cascade — classic feeder-midpoint recursion.
+        centers[r] = Array.from(
+          { length: count },
+          (_, j) => (prev[2 * j] + prev[2 * j + 1]) / 2,
+        );
+      } else {
+        // Non-halving round (DE losers brackets alternate merge rounds
+        // with equal-size drop-in rounds) — midpoints are undefined, so
+        // space uniformly like round 0 instead of collapsing to NaN.
+        centers[r] = Array.from(
+          { length: count },
+          (_, j) => j * pitchY + BRACKET_CARD_HEIGHT / 2,
+        );
+      }
     }
   }
 
@@ -577,7 +590,10 @@ export function computeMirroredBracketLayout(rounds: string[][]): BracketLayout 
 // round-jump chips can address `data-round="i"` globally.
 
 export const SEGMENT_HEADER_HEIGHT = 40; // header band above each block.
-export const SEGMENT_GAP = 48; // vertical gap between segment blocks.
+// Vertical gap between segment blocks. Generous because BracketCell can
+// exceed the nominal card height (the "Enter score" strip on recordable
+// matches) — the next segment's header must clear it.
+export const SEGMENT_GAP = 88;
 
 export interface SegmentedBracketBlock {
   segment: SegmentDTO;
@@ -1139,7 +1155,7 @@ function StandingsAside({
   nameById: Record<string, string>;
 }) {
   return (
-    <aside className="max-h-[45%] shrink-0 overflow-auto border-t border-border p-4 xl:max-h-none xl:w-80 xl:border-l xl:border-t-0">
+    <aside className="max-h-[45%] shrink-0 overflow-auto border-t border-border p-4 xl:max-h-none xl:w-96 xl:border-l xl:border-t-0">
       <StandingsTable rows={rows} nameById={nameById} />
     </aside>
   );

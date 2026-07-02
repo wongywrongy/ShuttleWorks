@@ -321,6 +321,42 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
       Bracket Roster/Config light + workspace-settings tabs: grammar is shared code with their verified
       twins (BandedList/ConfigSurface/SettingsControls) — visually spot-check when next in the area.
 
+### Phase 11 — Draw formats program (COMPLETE 2026-07-02)
+The full draw-formats build (plan: `~/.claude/plans/we-are-doing-work-serialized-thunder.md`;
+strategy doc `docs/architecture/draw-formats.md` now updated to "shipped" statuses). Nine stages,
+one commit each: `3e3f0a7` S1 format registry + per-draw config plumbing (registry-validated
+`format` strings, `config` JSON knobs, draft-only PATCH), `761e892` S2 loser routing
+(`feeder_take` + walkover→BYE policy), `bd02c17` S3+S4 segments/waves + double elimination +
+Monrad + compass generators, `7678603` S5+S6 BWF standings + Swiss progressive `rounds/next`,
+`324ccd9` S7 format-picker card grid + config UI + segment-aware labels, `ca6f81f` S8 renderers
+(SegmentedBracketView / SwissView / StandingsTable), + the S9 verification commit (docs, layout
+fixes). Gates at close: backend **692** pytest green, frontend **814** vitest green, build/tsc,
+ruff, eslint, docs:build all clean; zero existing-test edits across the program.
+**Live Playwright walk (fresh "Formats QA" workspace, all via real UI/API on :8600):** picker
+card grid (8 cards, PLANNED roadmap cards disabled) → DE create with grand-final-reset toggle →
+8 players entered → generate (solver, READY 4 / PEND 11 = W7+L6+GF+reset) → segmented canvas
+(Main draw / Losers bracket / Grand final with "Loser of GF-R0-0" reset) → real result recorded:
+loser dropped into L-R0-0 live. Swiss 5-player K=3: seed-fold R1 (bye→last seed) → R1 results →
+`rounds/next`: winners paired (no rematch), bye rotated to never-byed, standings ranked by the
+BWF chain (points ratio separated two zero-games 1-win players correctly) → SwissView "Round k
+of 3" cards + gated glow next-round button. Monrad full N=8: M / 3–4 / 5–8 / 7–8 segments with
+places suffixes. Compass N=8: E/W/N/S. RR: embedded standings rail.
+**S9 findings fixed in the verification commit:**
+  1. `computeOneSidedBracketLayout` collapsed non-halving rounds to NaN tops (DE losers brackets
+     alternate equal-size drop-in rounds) → uniform-spacing fallback; halving cascades unchanged.
+  2. `SEGMENT_GAP` 48→88 (BracketCell exceeds nominal height when the Enter-score strip shows).
+  3. StandingsTable Player column starved to ~0px in the xl rail (fixed columns + gaps ≈ w-80)
+     → tighter numeric columns + `w-96` rail.
+  4. Compass "W" (West) collided with DE "W" (winners main) in `segmentShort` → per-format
+     `MAIN_SEGMENT` map ({de:W, monrad:M, compass:E} render plain; consolations keep tags);
+     live labels now `MD QF1` / `MD 5–8 F` / `XD W SF3` / `XD N F`.
+  5. bracketLabels.ts carried a literal NUL byte as a map-key separator (tools saw the file as
+     binary) → replaced with `'::'`.
+**Leftovers for a future session:** DE grand-final reset stays a static "if needed" match — the
+operator walkovers it when the W-champion wins GF1 (progressive machinery could auto-cancel it);
+"Next round" rounds-exhausted click still leans on the backend 409 toast; group stage + ladder
+remain roadmap cards (`implemented:false`).
+
 ---
 
 ## Token remap reference (prototype hex → intent; convert to HSL-triplet)
