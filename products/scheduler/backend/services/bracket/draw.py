@@ -35,10 +35,17 @@ class BracketSlot:
 
     Exactly one of `participant_id` and `feeder_play_unit_id` is set.
     `participant_id == BYE` means a bye placeholder.
+
+    ``feeder_take`` says WHICH participant of the feeder fills this slot:
+    ``"winner"`` (the historical default — main-draw advancement) or
+    ``"loser"`` (consolation routing: double elimination losers brackets,
+    Monrad plates, compass segments). Meaningful only while
+    ``feeder_play_unit_id`` is set; resolved slots normalize to "winner".
     """
 
     participant_id: Optional[ParticipantId] = None
     feeder_play_unit_id: Optional[PlayUnitId] = None
+    feeder_take: str = "winner"
 
     def __post_init__(self) -> None:
         has_pid = self.participant_id is not None
@@ -48,14 +55,24 @@ class BracketSlot:
                 "BracketSlot must have exactly one of participant_id or "
                 "feeder_play_unit_id"
             )
+        if self.feeder_take not in ("winner", "loser"):
+            raise ValueError(
+                f"feeder_take must be 'winner' or 'loser', got {self.feeder_take!r}"
+            )
+        if has_pid:
+            # A concrete participant has no feeder semantics — normalize
+            # so equality/serialization never depend on a stale take.
+            self.feeder_take = "winner"
 
     @classmethod
     def of_participant(cls, participant_id: ParticipantId) -> "BracketSlot":
         return cls(participant_id=participant_id)
 
     @classmethod
-    def of_feeder(cls, play_unit_id: PlayUnitId) -> "BracketSlot":
-        return cls(feeder_play_unit_id=play_unit_id)
+    def of_feeder(
+        cls, play_unit_id: PlayUnitId, take: str = "winner"
+    ) -> "BracketSlot":
+        return cls(feeder_play_unit_id=play_unit_id, feeder_take=take)
 
     @property
     def is_resolved(self) -> bool:

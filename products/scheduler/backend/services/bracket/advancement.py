@@ -153,6 +153,9 @@ def _record_and_propagate(
     )
 
     winner = _winner_participant_id(draw, play_unit_id, winner_side)
+    loser = _loser_participant_id(
+        draw, play_unit_id, winner_side, walkover=walkover
+    )
     resolved: List[PlayUnitId] = []
     for downstream_id, downstream in draw.play_units.items():
         if play_unit_id not in downstream.dependencies:
@@ -160,12 +163,14 @@ def _record_and_propagate(
         slot_a, slot_b = draw.slots[downstream_id]
         changed = False
         if slot_a.feeder_play_unit_id == play_unit_id:
-            new_slot = BracketSlot.of_participant(winner or BYE)
+            fed = winner if slot_a.feeder_take == "winner" else loser
+            new_slot = BracketSlot.of_participant(fed or BYE)
             draw.slots[downstream_id] = (new_slot, slot_b)
             slot_a = new_slot
             changed = True
         if slot_b.feeder_play_unit_id == play_unit_id:
-            new_slot = BracketSlot.of_participant(winner or BYE)
+            fed = winner if slot_b.feeder_take == "winner" else loser
+            new_slot = BracketSlot.of_participant(fed or BYE)
             draw.slots[downstream_id] = (slot_a, new_slot)
             slot_b = new_slot
             changed = True
@@ -242,6 +247,32 @@ def _winner_participant_id(
     if winner_side == WinnerSide.B:
         return pu.side_b[0] if pu.side_b else None
     return None  # WinnerSide.NONE — double-bye / dead branch
+
+
+def _loser_participant_id(
+    draw: Draw,
+    play_unit_id: PlayUnitId,
+    winner_side: WinnerSide,
+    *,
+    walkover: bool,
+) -> Optional[str]:
+    """The participant a ``feeder_take='loser'`` slot receives.
+
+    POLICY: a walkover has no real loser. A bye "loses" its R1 match and
+    a withdrawn player "loses" theirs, but neither may advance into a
+    consolation bracket — the loser feed is ``None`` (→ BYE), and the
+    normal ``_sweep_walkovers`` cascade hollows the plate match. This is
+    the documented bye-hazard rule for double elimination / Monrad /
+    compass (docs/architecture/draw-formats.md).
+    """
+    if walkover:
+        return None
+    pu = draw.play_units[play_unit_id]
+    if winner_side == WinnerSide.A:
+        return pu.side_b[0] if pu.side_b else None
+    if winner_side == WinnerSide.B:
+        return pu.side_a[0] if pu.side_a else None
+    return None  # WinnerSide.NONE — no winner, no loser
 
 
 def _refresh_play_unit_sides(draw: Draw, play_unit_id: PlayUnitId) -> None:

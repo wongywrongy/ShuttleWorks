@@ -222,6 +222,10 @@ class ParticipantOut(BaseModel):
 class BracketSlotOut(BaseModel):
     participant_id: Optional[str] = None
     feeder_play_unit_id: Optional[str] = None
+    # "loser" when this slot takes the FEEDER'S LOSER (consolation
+    # routing — DE losers bracket, Monrad plates, compass). None/absent
+    # means the historical winner-take semantics.
+    feeder_take: Optional[str] = None
 
 
 class PlayUnitOut(BaseModel):
@@ -859,10 +863,22 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                         slot_a=BracketSlotOut(
                             participant_id=slot_a.participant_id,
                             feeder_play_unit_id=slot_a.feeder_play_unit_id,
+                            feeder_take=(
+                                "loser"
+                                if slot_a.feeder_play_unit_id is not None
+                                and slot_a.feeder_take == "loser"
+                                else None
+                            ),
                         ),
                         slot_b=BracketSlotOut(
                             participant_id=slot_b.participant_id,
                             feeder_play_unit_id=slot_b.feeder_play_unit_id,
+                            feeder_take=(
+                                "loser"
+                                if slot_b.feeder_play_unit_id is not None
+                                and slot_b.feeder_take == "loser"
+                                else None
+                            ),
                         ),
                         version=session.match_versions.get(pu_id, 1),
                     )
@@ -966,11 +982,19 @@ def _bracket_locked_play_unit_ids(
 
 
 def _slot_to_dict(slot: BracketSlot) -> dict:
-    """Encode a BracketSlot for JSON storage."""
-    return {
+    """Encode a BracketSlot for JSON storage.
+
+    ``feeder_take`` is emitted ONLY for loser feeds — winner-take slots
+    keep the exact historical dict shape, so every persisted draw (and
+    its Supabase mirror) stays byte-identical.
+    """
+    out = {
         "participant_id": slot.participant_id,
         "feeder_play_unit_id": slot.feeder_play_unit_id,
     }
+    if slot.feeder_play_unit_id is not None and slot.feeder_take == "loser":
+        out["feeder_take"] = "loser"
+    return out
 
 
 def _dict_to_slot(raw) -> BracketSlot:
@@ -980,6 +1004,7 @@ def _dict_to_slot(raw) -> BracketSlot:
     return BracketSlot(
         participant_id=raw.get("participant_id"),
         feeder_play_unit_id=raw.get("feeder_play_unit_id"),
+        feeder_take=raw.get("feeder_take") or "winner",
     )
 
 
