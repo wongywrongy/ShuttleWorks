@@ -10,5 +10,6 @@ export {
   ColumnHeaderRow,
   GroupBandHeader,
   COLUMN_HEADER_ROW_CLASSES,
+  BANDED_ROW_CLASSES,
   type BandedListColumn,
 } from './BandedList';

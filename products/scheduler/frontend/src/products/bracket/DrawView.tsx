@@ -19,14 +19,21 @@ import { BracketInlineNotice } from "./BracketInlineNotice";
 import { applyOptimisticResult } from "./optimisticResult";
 import { bwfPositions } from "./bwf";
 
+/** How the SE canvas lays out its rounds. One-sided is the classic
+ *  printed-bracket cascade (R1 left, Final right) and the default;
+ *  mirrored is the two-wing "wall display" variant. */
+export type BracketLayoutMode = "one-sided" | "mirrored";
+
 interface Props {
   data: TournamentDTO;
   eventId: string;
   onChange: (t: TournamentDTO) => void;
   refresh: () => Promise<void>;
+  /** SE canvas layout — toggled from the Draw header. */
+  layoutMode?: BracketLayoutMode;
 }
 
-export function DrawView({ data, eventId, onChange }: Props) {
+export function DrawView({ data, eventId, onChange, layoutMode = "one-sided" }: Props) {
   const tid = useTournamentId();
   const navigate = useNavigate();
   const goToDraws = () =>
@@ -55,7 +62,12 @@ export function DrawView({ data, eventId, onChange }: Props) {
     );
   }
   return event.format === "se" ? (
-    <BracketView data={data} eventId={eventId} onChange={onChange} />
+    <BracketView
+      data={data}
+      eventId={eventId}
+      onChange={onChange}
+      layoutMode={layoutMode}
+    />
   ) : (
     <RoundRobinView data={data} eventId={eventId} onChange={onChange} />
   );
@@ -65,10 +77,12 @@ function BracketView({
   data,
   eventId,
   onChange,
+  layoutMode = "one-sided",
 }: {
   data: TournamentDTO;
   eventId: string;
   onChange: (t: TournamentDTO) => void;
+  layoutMode?: BracketLayoutMode;
 }) {
   const api = useBracketApi();
   const config = useTournamentStore((s) => s.config);
@@ -184,8 +198,11 @@ function BracketView({
   );
 
   const layout = useMemo(
-    () => computeBracketLayout(event.rounds),
-    [event.rounds],
+    () =>
+      layoutMode === "mirrored"
+        ? computeMirroredBracketLayout(event.rounds)
+        : computeOneSidedBracketLayout(event.rounds),
+    [event.rounds, layoutMode],
   );
 
   const recordResultFor = (
@@ -247,11 +264,12 @@ function BracketView({
       ) : null}
       <div className="min-h-0 flex-1">
         <PanZoomCanvas roundLabels={roundLabels}>
-          {/* Mirrored bracket: the Final is centered and earlier rounds fan
-              outward to the left and right wings. Each match is positioned
-              absolutely at the vertical midpoint of its two feeders, so the
-              connecting lines are implied by alignment. Positions are inline
-              styles (not flex) so the layout is deterministic and testable. */}
+          {/* Bracket canvas: one-sided (default) reads left-to-right with the
+              Final as the rightmost column; mirrored fans two wings out from
+              a centered Final. Either way each match is positioned absolutely
+              at the vertical midpoint of its two feeders, so the connecting
+              lines are implied by alignment. Positions are inline styles
+              (not flex) so the layout is deterministic and testable. */}
           <div
             data-testid="bracket-canvas"
             className="relative"
@@ -317,13 +335,17 @@ function BracketView({
   );
 }
 
-// ── Mirrored bracket geometry ───────────────────────────────────────────
+// ── Bracket geometry ────────────────────────────────────────────────────
 // The canvas is laid out with absolute positions rather than flex so it can
 // be panned/zoomed as one transformed surface (PanZoomCanvas) and unit-tested
-// under jsdom, which does no real layout. A single-elimination draw is drawn
-// as two wings that converge on a centered Final: the first half of each
-// round's matches feeds the left wing, the second half feeds the right wing
-// (binary-heap children are contiguous, so each half is a complete subtree).
+// under jsdom, which does no real layout. Two layout variants share the
+// constants and midpoint math:
+//   - one-sided (default): the classic printed bracket — one column per
+//     round, round 0 leftmost, Final rightmost.
+//   - mirrored: two wings converge on a centered Final — the first half of
+//     each round's matches feeds the left wing, the second half the right
+//     (binary-heap children are contiguous, so each half is a complete
+//     subtree).
 
 const BRACKET_CARD_WIDTH = 256; // matches the old w-64 card.
 const BRACKET_CARD_HEIGHT = 88; // fixed so feeder midpoints are deterministic.
@@ -353,7 +375,75 @@ interface BracketLayout {
 }
 
 /**
- * Compute the mirrored/centered layout for a round-major SE draw.
+ * Compute the classic one-sided layout for a round-major SE draw.
+ *
+ *   - Horizontal: `N` uniform-pitch columns in reading order — round 0
+ *     leftmost, the Final rightmost (how printed brackets read).
+ *   - Vertical: whole-round midpoint recursion (no wing split). Round-0
+ *     cards are evenly spaced; each later match centers on the vertical
+ *     midpoint of its two feeders.
+ *
+ * Exported (with the mirrored variant) so the geometry can be unit-tested
+ * directly.
+ */
+export function computeOneSidedBracketLayout(rounds: string[][]): BracketLayout {
+  const n = rounds.length;
+  const pitchX = BRACKET_CARD_WIDTH + BRACKET_COL_GAP;
+  const pitchY = BRACKET_CARD_HEIGHT + BRACKET_ROW_GAP;
+
+  const base = rounds[0]?.length ?? 0;
+  const fullHeight =
+    base > 0
+      ? base * BRACKET_CARD_HEIGHT + (base - 1) * BRACKET_ROW_GAP
+      : BRACKET_CARD_HEIGHT;
+
+  // Vertical center of each match, by [roundIndex][matchIndex].
+  const centers: number[][] = [];
+  for (let r = 0; r < n; r++) {
+    if (r === 0) {
+      centers[0] = Array.from(
+        { length: base },
+        (_, j) => j * pitchY + BRACKET_CARD_HEIGHT / 2,
+      );
+    } else {
+      const prev = centers[r - 1];
+      centers[r] = Array.from(
+        { length: prev.length / 2 },
+        (_, j) => (prev[2 * j] + prev[2 * j + 1]) / 2,
+      );
+    }
+  }
+
+  const columns: BracketColumn[] = rounds.map((round, r) => ({
+    key: `r${r}`,
+    roundIndex: r,
+    left: r * pitchX,
+    matches: round.flatMap((puId, mi) =>
+      puId
+        ? [
+            {
+              puId,
+              matchIndex: mi,
+              top:
+                BRACKET_LABEL_HEIGHT +
+                centers[r][mi] -
+                BRACKET_CARD_HEIGHT / 2,
+            },
+          ]
+        : [],
+    ),
+  }));
+
+  const contentWidth =
+    Math.max(n, 1) * BRACKET_CARD_WIDTH + Math.max(n - 1, 0) * BRACKET_COL_GAP;
+  const contentHeight = BRACKET_LABEL_HEIGHT + fullHeight;
+
+  return { contentWidth, contentHeight, columns };
+}
+
+/**
+ * Compute the mirrored/centered layout for a round-major SE draw (the
+ * "wall display" option).
  *
  *   - Horizontal: `2N - 1` uniform-pitch columns (left wing, Final, right
  *     wing). The Final lives at column `N - 1`, so its horizontal center
@@ -363,7 +453,7 @@ interface BracketLayout {
  *     same vertical centers, so the Final sits at the content's vertical
  *     center between its two wing roots.
  */
-function computeBracketLayout(rounds: string[][]): BracketLayout {
+export function computeMirroredBracketLayout(rounds: string[][]): BracketLayout {
   const n = rounds.length;
   const pitchX = BRACKET_CARD_WIDTH + BRACKET_COL_GAP;
   const pitchY = BRACKET_CARD_HEIGHT + BRACKET_ROW_GAP;
@@ -510,7 +600,7 @@ function BracketCell({
       variant="frame"
       className={`p-3 space-y-2${final ? " border-accent/40 ring-1 ring-accent/30 shadow-glow" : ""}`}
     >
-      <div className="flex justify-between text-3xs text-muted-foreground font-mono">
+      <div className="flex justify-between text-3xs text-muted-foreground sw-num">
         <span>{pu.id}</span>
         <span>
           {assignment
@@ -703,7 +793,7 @@ function RoundRobinView({
       )}
       {event.rounds.map((round, ri) => (
         <Card key={ri} variant="frame" className="p-4">
-          <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.18em] mb-3">
+          <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.08em] mb-3">
             Round {ri + 1}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

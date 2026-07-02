@@ -22,7 +22,7 @@ import { eventDate, type HubGroupId } from './hubGrouping';
 function DateAnchor({ iso, receded }: { iso: string | null; receded: boolean }) {
   if (!iso) {
     return (
-      <div className="w-14 shrink-0 text-center font-mono text-2xs uppercase text-muted-foreground/50">
+      <div className="w-14 shrink-0 text-center sw-num text-2xs uppercase text-muted-foreground/50">
         No date
       </div>
     );
@@ -34,9 +34,9 @@ function DateAnchor({ iso, receded }: { iso: string | null; receded: boolean }) 
   const year = valid ? d.toLocaleDateString(undefined, { year: 'numeric' }) : '';
   return (
     <div className={`w-14 shrink-0 text-center ${receded ? 'text-muted-foreground' : ''}`}>
-      <div className="font-mono text-2xs uppercase tracking-[0.06em] text-muted-foreground">{mon}</div>
+      <div className="sw-num text-2xs uppercase tracking-[0.06em] text-muted-foreground">{mon}</div>
       <div className="text-xl font-semibold leading-none tabular-nums">{day}</div>
-      <div className="font-mono text-2xs tabular-nums text-muted-foreground/70">{year}</div>
+      <div className="sw-num text-2xs text-muted-foreground/70">{year}</div>
     </div>
   );
 }

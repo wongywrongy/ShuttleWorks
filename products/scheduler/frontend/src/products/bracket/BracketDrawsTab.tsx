@@ -164,16 +164,14 @@ export function BracketDrawsTab() {
 
                   {/* Same voice as the Draw header's DONE/LIVE/READY/PEND strip. */}
                   {counts && (
-                    <span className="font-mono">
-                      <StatusBar
-                        items={[
-                          { tone: 'done', label: 'DONE', count: counts.done },
-                          { tone: 'green', label: 'LIVE', count: counts.live },
-                          { tone: 'amber', label: 'READY', count: counts.ready },
-                          { tone: 'idle', label: 'PEND', count: counts.pending },
-                        ]}
-                      />
-                    </span>
+                    <StatusBar
+                      items={[
+                        { tone: 'done', label: 'DONE', count: counts.done },
+                        { tone: 'green', label: 'LIVE', count: counts.live },
+                        { tone: 'amber', label: 'READY', count: counts.ready },
+                        { tone: 'idle', label: 'PEND', count: counts.pending },
+                      ]}
+                    />
                   )}
 
                   {pickerOpen && (
@@ -306,7 +304,7 @@ function drawCountsByEvent(data: BracketTournamentDTO): Map<string, DrawCounts> 
 function StatusPillFor({ status }: { status: BracketEventStatus }) {
   if (status === 'draft') {
     return (
-      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         ○ Draft
       </span>
     );
@@ -352,7 +350,7 @@ function ActionCell({
   }
   return (
     <span
-      className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+      className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground"
       title="Event is in progress; reset bracket to re-generate."
     >
       — (locked)
@@ -385,7 +383,7 @@ function NewDrawModal({
   return (
     <Modal onClose={onClose} titleId={titleId} widthClass="max-w-sm">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 id={titleId} className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <h2 id={titleId} className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           New draw
         </h2>
         <button
@@ -400,7 +398,7 @@ function NewDrawModal({
 
       <div className="space-y-3 px-4 py-4">
         <label className="block">
-          <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Event ID
           </span>
           <input
@@ -414,7 +412,7 @@ function NewDrawModal({
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Discipline
           </span>
           <input
@@ -425,7 +423,7 @@ function NewDrawModal({
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Format
           </span>
           <select

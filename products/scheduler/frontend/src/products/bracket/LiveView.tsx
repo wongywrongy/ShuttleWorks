@@ -162,7 +162,7 @@ export function LiveView({ data, onChange }: Props) {
             }
           }}
         >
-          <div className="text-2xs font-mono truncate tracking-[0.18em]">{pu?.id}</div>
+          <div className="text-2xs sw-num truncate">{pu?.id}</div>
         </div>
       );
     },
@@ -232,7 +232,7 @@ function ChipStateLegend() {
   ];
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-1.5">
-      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         Status
       </span>
       {items.map((item) => (

@@ -86,8 +86,8 @@ const EIGHT_PLAYER: TournamentDTO = {
   results: [],
 };
 
-/** Vertical center of a positioned cell, from the inline style the
- *  mirrored layout sets (jsdom does no real layout — see ganttTimeline.test). */
+/** Vertical center of a positioned cell, from the inline style the layout
+ *  sets (jsdom does no real layout — see ganttTimeline.test). */
 function cellCenterY(cell: HTMLElement): number {
   const top = parseFloat(cell.style.top);
   const height = parseFloat(cell.style.height);
@@ -100,22 +100,37 @@ function getCell(container: HTMLElement, key: string): HTMLElement {
   return el;
 }
 
-describe('DrawView — centered mirrored bracket layout', () => {
-  it('horizontally centers the Final column on the canvas content', () => {
+describe('DrawView — one-sided bracket layout (default)', () => {
+  it('lays rounds out left-to-right with the Final as the rightmost column', () => {
     const { container } = renderDrawView(
       <DrawView data={EIGHT_PLAYER} eventId="MS" onChange={vi.fn()} refresh={async () => {}} />,
     );
 
     const canvas = screen.getByTestId('bracket-canvas');
-    const contentCenterX = parseFloat(canvas.style.width) / 2;
+    const contentWidth = parseFloat(canvas.style.width);
 
-    // The Final is the only round-2 column.
-    const finalCol = container.querySelector<HTMLElement>('[data-round="2"]');
-    expect(finalCol).not.toBeNull();
-    const finalCenterX =
-      parseFloat(finalCol!.style.left) + parseFloat(finalCol!.style.width) / 2;
+    // One column per round — no mirrored wings.
+    const columns = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-round]'),
+    );
+    expect(columns).toHaveLength(3);
 
-    expect(Math.abs(finalCenterX - contentCenterX)).toBeLessThan(1);
+    const leftOf = (ri: number) => {
+      const col = container.querySelector<HTMLElement>(`[data-round="${ri}"]`);
+      expect(col).not.toBeNull();
+      return parseFloat(col!.style.left);
+    };
+
+    // Reading order: round 0 leftmost, each round strictly to the right.
+    expect(leftOf(0)).toBe(0);
+    expect(leftOf(1)).toBeGreaterThan(leftOf(0));
+    expect(leftOf(2)).toBeGreaterThan(leftOf(1));
+
+    // The Final column's right edge is the content's right edge.
+    const finalCol = container.querySelector<HTMLElement>('[data-round="2"]')!;
+    const finalRight =
+      parseFloat(finalCol.style.left) + parseFloat(finalCol.style.width);
+    expect(Math.abs(finalRight - contentWidth)).toBeLessThan(1);
   });
 
   it('places each match at the vertical midpoint of its two feeders', () => {
@@ -136,7 +151,7 @@ describe('DrawView — centered mirrored bracket layout', () => {
     const r1m1 = cellCenterY(getCell(container, 'r1m1'));
     expect(r1m1).toBeCloseTo((r0m2 + r0m3) / 2, 1);
 
-    // Plan criterion (b): the Final is the midpoint of its two round-1 feeders.
+    // The Final is the midpoint of its two round-1 feeders.
     const r2m0 = cellCenterY(getCell(container, 'r2m0'));
     expect(r2m0).toBeCloseTo((r1m0 + r1m1) / 2, 1);
   });
@@ -148,5 +163,53 @@ describe('DrawView — centered mirrored bracket layout', () => {
     for (const ri of [0, 1, 2]) {
       expect(container.querySelector(`[data-round="${ri}"]`)).not.toBeNull();
     }
+  });
+});
+
+describe('DrawView — mirrored bracket layout (opt-in)', () => {
+  it('horizontally centers the Final column on the canvas content', () => {
+    const { container } = renderDrawView(
+      <DrawView
+        data={EIGHT_PLAYER}
+        eventId="MS"
+        onChange={vi.fn()}
+        refresh={async () => {}}
+        layoutMode="mirrored"
+      />,
+    );
+
+    const canvas = screen.getByTestId('bracket-canvas');
+    const contentCenterX = parseFloat(canvas.style.width) / 2;
+
+    // The Final is the only round-2 column.
+    const finalCol = container.querySelector<HTMLElement>('[data-round="2"]');
+    expect(finalCol).not.toBeNull();
+    const finalCenterX =
+      parseFloat(finalCol!.style.left) + parseFloat(finalCol!.style.width) / 2;
+
+    expect(Math.abs(finalCenterX - contentCenterX)).toBeLessThan(1);
+  });
+
+  it('splits early rounds into two wings around the Final', () => {
+    const { container } = renderDrawView(
+      <DrawView
+        data={EIGHT_PLAYER}
+        eventId="MS"
+        onChange={vi.fn()}
+        refresh={async () => {}}
+        layoutMode="mirrored"
+      />,
+    );
+
+    // Each pre-Final round appears twice (left + right wing): 2 + 2 + 1.
+    expect(container.querySelectorAll('[data-round="0"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-round="1"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-round="2"]')).toHaveLength(1);
+
+    // Midpoint math holds per wing: the Final centers on its two feeders.
+    const r1m0 = cellCenterY(getCell(container, 'r1m0'));
+    const r1m1 = cellCenterY(getCell(container, 'r1m1'));
+    const r2m0 = cellCenterY(getCell(container, 'r2m0'));
+    expect(r2m0).toBeCloseTo((r1m0 + r1m1) / 2, 1);
   });
 });

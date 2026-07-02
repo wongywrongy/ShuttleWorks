@@ -40,7 +40,7 @@ export function SourceChip({
     <span
       data-testid={`source-chip-${source}`}
       title={`Operational data from the ${LABEL[source]} engine`}
-      className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.18em] ${TONE[source]} ${className}`}
+      className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] ${TONE[source]} ${className}`}
     >
       {LABEL[source]}
     </span>

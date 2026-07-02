@@ -34,7 +34,7 @@ import { BracketRosterTab } from './BracketRosterTab';
 import { BracketDrawsTab } from './BracketDrawsTab';
 import { BracketMatchesTab } from './BracketMatchesTab';
 import { BracketViewHeader } from './BracketViewHeader';
-import { DrawView } from './DrawView';
+import { DrawView, type BracketLayoutMode } from './DrawView';
 import { ScheduleView } from './ScheduleView';
 import { LiveView } from './LiveView';
 import { BracketScheduleHeader } from './BracketScheduleHeader';
@@ -73,6 +73,10 @@ function BracketTabBody() {
   const goToDraws = () =>
     navigate(`/tournaments/${params.id}/bracket-draws`, { replace: true });
   const [eventId, setEventId] = useState<string>('');
+  // SE draw-canvas layout. Session-only (plain state, no persistence);
+  // lives here — beside ``eventId`` — because the toggle renders in
+  // ``BracketViewHeader`` while ``DrawView`` consumes it.
+  const [drawLayout, setDrawLayout] = useState<BracketLayoutMode>('one-sided');
   const activeTab = useUiStore((s) => s.activeTab);
   const setBracketDataReady = useUiStore((s) => s.setBracketDataReady);
 
@@ -220,6 +224,8 @@ function BracketTabBody() {
           eventId={eventId}
           onEventId={setEventId}
           onRefresh={refresh}
+          drawLayout={drawLayout}
+          onDrawLayout={setDrawLayout}
         />
       )}
       {error && (
@@ -279,6 +285,7 @@ function BracketTabBody() {
               eventId={eventId}
               onChange={setData}
               refresh={refresh}
+              layoutMode={drawLayout}
             />
           </div>
         )}

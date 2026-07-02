@@ -76,7 +76,7 @@ function SinglesPicker({
     });
   return (
     <div className="border border-border bg-bg-elev p-3 space-y-2">
-      <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         Pick participants ({picked.size})
       </div>
       <ul className="grid grid-cols-2 gap-1">
@@ -132,7 +132,7 @@ function DoublesPicker({
 
   return (
     <div className="border border-border bg-bg-elev p-3 space-y-2">
-      <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {step === 'A'
           ? `Pick player A (pair ${pairs.length + 1})`
           : `Pick partner for ${pickedA?.name}`}
@@ -179,7 +179,7 @@ function DoublesPicker({
         })}
       </ul>
       {pairs.length > 0 && (
-        <ul className="text-2xs font-mono space-y-0.5">
+        <ul className="text-2xs text-muted-foreground space-y-0.5">
           {pairs.map((pair) => (
             <li key={pair.id}>{pair.name}</li>
           ))}

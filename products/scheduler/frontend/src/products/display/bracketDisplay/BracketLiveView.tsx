@@ -29,7 +29,7 @@ export function BracketLiveView({ data }: { data: BracketTournamentDTO }) {
           className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5"
         >
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <span className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Court {m.court}
             </span>
             <span

@@ -16,6 +16,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Warning } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
 import {
+  BANDED_ROW_CLASSES,
   ColumnHeaderRow,
   GroupBandHeader,
   type BandedListColumn,
@@ -231,7 +232,9 @@ export function MatchesSpreadsheet({
 }
 
 /* =========================================================================
- * MatchRow — `padding: 0 20px`, `min-height: 44px`, border-b only.
+ * MatchRow — the shared `BANDED_ROW_CLASSES` shell (`padding: 0 20px`,
+ * `min-height: 40px`, border-b only) plus Meet's `group` hover reveals
+ * and the disruption accent stripe.
  * ========================================================================= */
 // Memoized: with many rows, a search keystroke (or any store write) re-renders
 // the parent; without memo every row re-rendered in full. Props are stable
@@ -322,11 +325,9 @@ const MatchRow = memo(function MatchRow({
     <div
       data-testid={`match-row-${match.id}`}
       data-severity={severity ?? 'none'}
-      className={[
-        'group flex min-h-[40px] items-center gap-3 border-b border-border px-5',
-        'transition-colors duration-fast ease-brand hover:bg-muted/30',
-        accentStripe,
-      ].join(' ')}
+      className={['group', BANDED_ROW_CLASSES, accentStripe]
+        .filter(Boolean)
+        .join(' ')}
     >
       <span
         className="flex w-4 shrink-0 items-center justify-center"

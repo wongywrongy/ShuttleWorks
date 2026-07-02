@@ -122,17 +122,17 @@ export function LiveMatchList({ data, onChange }: Props) {
         onClick={() => setSelectedId(pu.id)}
       >
         <span aria-hidden="true" className={`h-2 w-2 flex-shrink-0 rounded-full ${dotClass}`} />
-        <span className="w-20 flex-shrink-0 font-mono text-2xs tracking-wider text-foreground">
+        <span className="w-20 flex-shrink-0 sw-num text-2xs text-foreground">
           {pu.id}
         </span>
-        <span className="w-24 flex-shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
+        <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground">
           {assignment
             ? `C${assignment.court_id} · ${formatBracketSlot(assignment.slot_id, slotCtx)}`
             : '—'}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm">
           <span className={result?.winner_side === 'A' ? 'font-semibold' : ''}>{labelA}</span>
-          <span className="px-1.5 text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</span>
+          <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
           <span className={result?.winner_side === 'B' ? 'font-semibold' : ''}>{labelB}</span>
         </span>
         <span
@@ -140,7 +140,7 @@ export function LiveMatchList({ data, onChange }: Props) {
           onClick={(e) => e.stopPropagation()}
         >
           {result ? (
-            <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-status-done">
+            <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-done">
               {result.winner_side === 'A' ? labelA : labelB} won
             </span>
           ) : assignment && !started ? (
@@ -185,7 +185,7 @@ export function LiveMatchList({ data, onChange }: Props) {
   const section = (title: string, ids: string[]) =>
     ids.length > 0 ? (
       <>
-        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {title} · {ids.length}
         </li>
         {ids.map(renderRow)}

@@ -13,6 +13,7 @@ import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import {
   ActionsBar,
+  BANDED_ROW_CLASSES,
   ColumnHeaderRow,
   EmptyState,
   GroupBandHeader,
@@ -37,13 +38,16 @@ const STATUS_CLASS: Record<Status, string> = {
   pending: 'text-muted-foreground/70',
 };
 
-/** Column set for the bracket match list — same `px-5` rhythm as the
- *  match rows below, same leading `#` index column as Meet Matches. */
+/** Column set for the bracket match list — same `px-5` rhythm and the
+ *  same leading anatomy as Meet Matches: a `w-4` gutter spacer (Meet's
+ *  warning-icon slot — kept here so the `#` column starts at the same x
+ *  on both surfaces), then `#`, the accent code, and two flex-[3] sides. */
 const MATCH_COLUMNS: BandedListColumn[] = [
+  { label: '', className: 'w-4' },
   { label: '#', className: 'w-8' },
   { label: 'Match', className: 'w-20' },
-  { label: 'Side A', className: 'min-w-0 flex-1' },
-  { label: 'Side B', className: 'min-w-0 flex-1' },
+  { label: 'Side A', className: 'min-w-0 flex-[3]' },
+  { label: 'Side B', className: 'min-w-0 flex-[3]' },
   { label: 'Status', className: 'w-16 text-right' },
 ];
 
@@ -81,6 +85,16 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
     return ids.map((id) => participantById.get(id)?.name ?? id).join(' / ');
   };
 
+  // Render form of a side: unresolved slots get the same muted-italic
+  // placeholder treatment as Meet's empty side ("＋ add player") so the
+  // two match lists read identically — TBD is a placeholder, not a name.
+  const renderSide = (ids: string[] | null) =>
+    !ids || ids.length === 0 ? (
+      <span className="text-xs italic text-muted-foreground">TBD</span>
+    ) : (
+      resolveSide(ids)
+    );
+
   const statusOf = (puId: string): Status => {
     if (resultSet.has(puId)) return 'done';
     const a = assignmentByPu.get(puId);
@@ -91,7 +105,9 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
 
   const q = query.toLowerCase().trim();
   // Group every play unit by its event, ordered by the events list, then
-  // by round / match index within the event.
+  // by round / match index within the event. Each unit is numbered
+  // BEFORE the search filter runs so a row's `#` is a stable per-event
+  // identifier (mirrors Meet, where filtering never renumbers rows).
   const groups = useMemo(() => {
     const byEvent = new Map<string, BracketTournamentDTO['play_units']>();
     for (const pu of data.play_units) {
@@ -107,7 +123,8 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
             (a, b) =>
               a.round_index - b.round_index || a.match_index - b.match_index,
           )
-          .filter((pu) => {
+          .map((pu, idx) => ({ pu, n: idx + 1 }))
+          .filter(({ pu }) => {
             if (!q) return true;
             const hay = [
               pu.id,
@@ -130,7 +147,7 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
   const shown = groups.reduce((n, g) => n + g.units.length, 0);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-card">
+    <div className="flex h-full min-h-0 flex-col">
       <ActionsBar
         title="Matches"
         status={
@@ -183,6 +200,11 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
         ) : (
           <>
             <ColumnHeaderRow columns={MATCH_COLUMNS} />
+            {shown === 0 ? (
+              <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                No matches match the current search.
+              </div>
+            ) : null}
             {groups.map(({ ev, units }) => {
               const isCollapsed = collapsed.has(ev.id);
               return (
@@ -196,30 +218,36 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
                     data-testid={`bracket-match-group-${ev.id}`}
                   />
                   {!isCollapsed
-                    ? units.map((pu, i) => {
+                    ? units.map(({ pu, n }) => {
                         const status = statusOf(pu.id);
                         return (
                           <div
                             key={pu.id}
                             data-testid={`bracket-match-row-${pu.id}`}
-                            className="flex min-h-[40px] items-center gap-3 border-b border-border px-5 text-sm transition-colors duration-fast ease-brand hover:bg-muted/30"
+                            className={BANDED_ROW_CLASSES}
                           >
-                            <span className="w-8 text-2xs text-muted-foreground sw-num">
-                              {i + 1}
+                            {/* Gutter spacer — Meet's warning-icon slot;
+                                empty here but kept so the columns start
+                                at the same x on both surfaces. */}
+                            <span className="w-4 shrink-0" aria-hidden />
+                            <span className="w-8 text-xs text-muted-foreground tabular-nums">
+                              {n}
                             </span>
                             {/* Friendly label; raw id kept on title for
-                                traceability (it's also the row testid). */}
+                                traceability (it's also the row testid).
+                                px-1.5 mirrors the inner inset of Meet's
+                                editable event field. */}
                             <span
-                              className="w-20 text-xs font-semibold text-accent sw-num"
+                              className="w-20 truncate px-1.5 text-sm font-semibold text-accent sw-num"
                               title={pu.id}
                             >
                               {labelById.get(pu.id) ?? pu.id}
                             </span>
-                            <span className="min-w-0 flex-1 truncate text-foreground">
-                              {resolveSide(pu.side_a)}
+                            <span className="min-w-0 flex-[3] text-sm leading-relaxed text-foreground">
+                              {renderSide(pu.side_a)}
                             </span>
-                            <span className="min-w-0 flex-1 truncate text-foreground">
-                              {resolveSide(pu.side_b)}
+                            <span className="min-w-0 flex-[3] text-sm leading-relaxed text-foreground">
+                              {renderSide(pu.side_b)}
                             </span>
                             <span
                               className={`w-16 text-right text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}

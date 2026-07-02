@@ -80,7 +80,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
   return (
     <aside className="w-72 flex-shrink-0 border-l border-border p-4 space-y-3 overflow-auto">
       {/* Match id eyebrow */}
-      <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {pu.id}
       </div>
 
@@ -94,7 +94,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
       )}
 
       {/* Court + slot */}
-      <div className="text-sm font-mono">
+      <div className="text-sm sw-num">
         {assignment
           ? `Court C${assignment.court_id} · slot ${assignment.slot_id}`
           : '—'}
@@ -103,13 +103,13 @@ export function MatchDetailPanel({ data, onChange }: Props) {
       {/* Participants */}
       <div className="space-y-1">
         <div className="text-sm">{labelA}</div>
-        <div className="text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</div>
+        <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
         <div className="text-sm">{labelB}</div>
       </div>
 
       {/* Result summary (when finished) */}
       {result && (
-        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Done — {result.winner_side === 'A' ? labelA : labelB} wins
         </div>
       )}
