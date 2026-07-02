@@ -16,7 +16,7 @@ dataclasses at the boundary and translates assignments back.
 """
 from __future__ import annotations
 
-from .draw import BYE, BracketSlot, Draw
+from .draw import BYE, BracketSlot, Draw, DrawSegment
 from .formats import (
     generate_round_robin,
     generate_single_elimination,
@@ -28,6 +28,7 @@ __all__ = [
     "BYE",
     "BracketSlot",
     "Draw",
+    "DrawSegment",
     "RoundResult",
     "TournamentDriver",
     "generate_round_robin",

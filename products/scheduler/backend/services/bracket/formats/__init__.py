@@ -25,6 +25,10 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence
 
 from ..draw import Draw
+from ._segments import segment_label, segment_positions
+from .compass import generate_compass
+from .double_elimination import generate_double_elimination
+from .monrad import generate_monrad
 from .round_robin import generate_round_robin
 from .single_elimination import generate_single_elimination
 
@@ -32,9 +36,14 @@ __all__ = [
     "FORMAT_REGISTRY",
     "FormatSpec",
     "format_ids",
+    "generate_compass",
+    "generate_double_elimination",
+    "generate_monrad",
     "generate_round_robin",
     "generate_single_elimination",
     "get_format",
+    "segment_label",
+    "segment_positions",
 ]
 
 
@@ -108,6 +117,96 @@ def _generate_rr(
     )
 
 
+# ── segment-format adapters + config validators ────────────────────────────
+
+
+def _generate_de(
+    participants: Sequence,
+    *,
+    event_id: str,
+    play_unit_id_prefix: str,
+    duration_slots: int,
+    seeded_count: Optional[int],
+    bracket_size: Optional[int],
+    rr_rounds: Optional[int],
+    config: dict,
+) -> Draw:
+    return generate_double_elimination(
+        participants,
+        event_id=event_id,
+        play_unit_id_prefix=play_unit_id_prefix,
+        duration_slots=duration_slots,
+        seeded_count=seeded_count,
+        bracket_size=bracket_size,
+        grand_final_reset=bool(config.get("grand_final_reset", False)),
+    )
+
+
+def _normalize_de_config(config: dict, participant_count: int) -> dict:
+    """DE knobs: ``grand_final_reset`` (bool, default False). Unknown
+    keys are dropped; a non-bool value is a hard error (400/422)."""
+    reset = config.get("grand_final_reset", False)
+    if not isinstance(reset, bool):
+        raise ValueError(
+            f"grand_final_reset must be a boolean, got {reset!r}"
+        )
+    return {"grand_final_reset": reset}
+
+
+def _generate_monrad(
+    participants: Sequence,
+    *,
+    event_id: str,
+    play_unit_id_prefix: str,
+    duration_slots: int,
+    seeded_count: Optional[int],
+    bracket_size: Optional[int],
+    rr_rounds: Optional[int],
+    config: dict,
+) -> Draw:
+    return generate_monrad(
+        participants,
+        event_id=event_id,
+        play_unit_id_prefix=play_unit_id_prefix,
+        duration_slots=duration_slots,
+        seeded_count=seeded_count,
+        bracket_size=bracket_size,
+        consolation=config.get("consolation", "full"),
+    )
+
+
+def _normalize_monrad_config(config: dict, participant_count: int) -> dict:
+    """Monrad knobs: ``consolation`` in ``('full', 'plate')`` (default
+    ``'full'``). Unknown keys are dropped; bad values are hard errors."""
+    consolation = config.get("consolation", "full")
+    if consolation not in ("full", "plate"):
+        raise ValueError(
+            f"consolation must be 'full' or 'plate', got {consolation!r}"
+        )
+    return {"consolation": consolation}
+
+
+def _generate_compass(
+    participants: Sequence,
+    *,
+    event_id: str,
+    play_unit_id_prefix: str,
+    duration_slots: int,
+    seeded_count: Optional[int],
+    bracket_size: Optional[int],
+    rr_rounds: Optional[int],
+    config: dict,
+) -> Draw:
+    return generate_compass(
+        participants,
+        event_id=event_id,
+        play_unit_id_prefix=play_unit_id_prefix,
+        duration_slots=duration_slots,
+        seeded_count=seeded_count,
+        bracket_size=bracket_size,
+    )
+
+
 FORMAT_REGISTRY: Dict[str, FormatSpec] = {
     "se": FormatSpec(
         id="se",
@@ -120,6 +219,26 @@ FORMAT_REGISTRY: Dict[str, FormatSpec] = {
         label="Round robin",
         generate=_generate_rr,
         has_standings=True,
+    ),
+    "de": FormatSpec(
+        id="de",
+        label="Double elimination",
+        generate=_generate_de,
+        uses_bracket_size=True,
+        normalize_config=_normalize_de_config,
+    ),
+    "monrad": FormatSpec(
+        id="monrad",
+        label="Monrad",
+        generate=_generate_monrad,
+        uses_bracket_size=True,
+        normalize_config=_normalize_monrad_config,
+    ),
+    "compass": FormatSpec(
+        id="compass",
+        label="Compass",
+        generate=_generate_compass,
+        uses_bracket_size=True,
     ),
 }
 

@@ -72,10 +72,16 @@ from scheduler_core.domain.tournament import (
 from services.bracket import (
     BracketSlot,
     Draw,
+    DrawSegment,
     TournamentDriver,
     record_result,
 )
-from services.bracket.formats import FORMAT_REGISTRY, get_format
+from services.bracket.formats import (
+    FORMAT_REGISTRY,
+    get_format,
+    segment_label,
+    segment_positions,
+)
 from services.bracket.io.export_schedule import to_csv, to_ics
 from services.bracket.io.import_matches import (
     parse_csv_payload,
@@ -239,6 +245,9 @@ class PlayUnitOut(BaseModel):
     dependencies: List[str] = []
     slot_a: BracketSlotOut
     slot_b: BracketSlotOut
+    # Segment id for multi-segment formats ('W', 'L', 'GF', 'P5_8', …) —
+    # from the unit's metadata; None for single-bracket formats (se/rr).
+    segment: Optional[str] = None
     # Optimistic-concurrency token (SP-F3): the client echoes this back as
     # ``seen_version`` when recording a result so concurrent writes from a
     # second operator are rejected with a stale-version conflict. Defaults to
@@ -266,6 +275,22 @@ class ResultOut(BaseModel):
     score: Optional[dict] = None
 
 
+class SegmentOut(BaseModel):
+    """One named sub-bracket of a multi-segment draw (DE/Monrad/compass).
+
+    ``rounds`` is SEGMENT-LOCAL round-major play-unit ids (the event's
+    top-level ``rounds`` stays the global dependency-wave axis).
+    ``positions`` is the classification range a Monrad bracket decides
+    (``[5, 8]`` for the "5–8" bracket); None elsewhere.
+    """
+
+    id: str
+    label: str
+    order: int
+    rounds: List[List[str]]
+    positions: Optional[List[int]] = None
+
+
 class EventOut(BaseModel):
     id: str
     discipline: str
@@ -273,6 +298,9 @@ class EventOut(BaseModel):
     bracket_size: Optional[int] = None
     participant_count: int
     rounds: List[List[str]]
+    # Present only for multi-segment formats; se/rr stay None (additive —
+    # old clients and fixtures unaffected).
+    segments: Optional[List[SegmentOut]] = None
     # Per-event lifecycle status: 'draft' | 'generated' | 'started'.
     # Drives the Draws-page status pill + Generate/Open affordances.
     status: Optional[str] = None
@@ -516,6 +544,64 @@ def _meet_occupied_windows(
     return out
 
 
+def _segments_from_match_meta(
+    format_id: str, match_rows
+) -> Optional[List[DrawSegment]]:
+    """Rebuild ``Draw.segments`` from persisted per-match meta.
+
+    Segment formats stamp ``segment`` / ``segment_order`` / ``round`` /
+    ``match_index`` (and, for Monrad classification brackets,
+    ``positions``) into every unit's metadata, which persistence stores
+    in the match ``meta`` JSON column. Grouping those keys back is the
+    exact inverse of generation; labels come from the shared
+    ``segment_label`` vocabulary. Returns ``None`` when no match carries
+    segment meta (se/rr draws — their DTO shape is unchanged).
+    """
+    buckets: Dict[str, dict] = {}
+    for m in match_rows:
+        meta = m.meta or {}
+        seg_id = meta.get("segment")
+        if seg_id is None:
+            continue
+        bucket = buckets.setdefault(
+            seg_id,
+            {
+                "order": int(meta.get("segment_order", 0)),
+                "rounds": defaultdict(list),
+                "positions": None,
+            },
+        )
+        bucket["rounds"][int(meta.get("round", 0))].append(
+            (int(meta.get("match_index", 0)), m.id)
+        )
+        if bucket["positions"] is None:
+            bucket["positions"] = segment_positions(seg_id, meta)
+    if not buckets:
+        return None
+
+    segments: List[DrawSegment] = []
+    for seg_id, bucket in sorted(
+        buckets.items(), key=lambda kv: (kv[1]["order"], kv[0])
+    ):
+        seg_rounds = [
+            [pu_id for _, pu_id in sorted(bucket["rounds"][r])]
+            for r in sorted(bucket["rounds"].keys())
+        ]
+        metadata = (
+            {"positions": bucket["positions"]} if bucket["positions"] else {}
+        )
+        segments.append(
+            DrawSegment(
+                id=seg_id,
+                label=segment_label(format_id, seg_id, metadata),
+                order=bucket["order"],
+                rounds=seg_rounds,
+                metadata=metadata,
+            )
+        )
+    return segments
+
+
 def _hydrate_session(
     repo: LocalRepository, tournament_id: uuid.UUID
 ) -> Optional[BracketSession]:
@@ -636,6 +722,7 @@ def _hydrate_session(
             play_units=event_play_units,
             slots=slots,
             rounds=rounds,
+            segments=_segments_from_match_meta(event_row.format, match_rows),
         )
 
         events_meta[event_row.id] = EventMeta(
@@ -881,6 +968,9 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                             ),
                         ),
                         version=session.match_versions.get(pu_id, 1),
+                        segment=(
+                            pu.metadata.get("segment") if pu.metadata else None
+                        ),
                     )
                 )
         events_out.append(
@@ -891,6 +981,20 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                 bracket_size=meta.bracket_size if meta else None,
                 participant_count=meta.participant_count if meta else 0,
                 rounds=list(draw.rounds),
+                segments=(
+                    [
+                        SegmentOut(
+                            id=seg.id,
+                            label=seg.label,
+                            order=seg.order,
+                            rounds=[list(r) for r in seg.rounds],
+                            positions=segment_positions(seg.id, seg.metadata),
+                        )
+                        for seg in draw.segments
+                    ]
+                    if draw.segments
+                    else None
+                ),
                 status=meta.status if meta else None,
                 seeded_count=meta.seeded_count if meta else None,
                 rr_rounds=meta.rr_rounds if meta else None,

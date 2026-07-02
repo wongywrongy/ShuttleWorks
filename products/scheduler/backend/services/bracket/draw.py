@@ -84,12 +84,40 @@ class BracketSlot:
 
 
 @dataclass
+class DrawSegment:
+    """One named sub-bracket of a multi-segment draw.
+
+    Segment formats (double elimination, Monrad, compass) structure a
+    draw as several small brackets: ``id`` is the wire id (``'W'``,
+    ``'L'``, ``'GF'``, ``'M'``, ``'PLATE'``, ``'P5_8'``, ``'E'``, …),
+    ``label`` the display name ("Main draw", "Losers bracket", "5–8"),
+    ``order`` the display/stacking order, and ``rounds`` the
+    SEGMENT-LOCAL round-major play-unit ids. ``metadata`` carries
+    format extras — e.g. ``{'positions': [5, 8]}`` for a Monrad
+    classification bracket.
+
+    ``Draw.rounds`` stays the GLOBAL scheduling axis (dependency
+    waves); segments are purely structural/presentational.
+    """
+
+    id: str
+    label: str
+    order: int
+    rounds: List[List[PlayUnitId]]
+    metadata: dict = field(default_factory=dict)
+
+
+@dataclass
 class Draw:
     """Generated draw structure for one event.
 
     Holds the PlayUnits, the participant pool, and the slot map. The
     PlayUnits' `dependencies` field already encodes the bracket DAG;
     `slots` records which side each dependency feeds.
+
+    ``segments`` is populated only by multi-segment formats (DE /
+    Monrad / compass); single-bracket formats (se / rr) leave it
+    ``None``.
     """
 
     event: Event
@@ -97,6 +125,7 @@ class Draw:
     play_units: Dict[PlayUnitId, PlayUnit]
     slots: Dict[PlayUnitId, Tuple[BracketSlot, BracketSlot]]
     rounds: List[List[PlayUnitId]] = field(default_factory=list)
+    segments: Optional[List[DrawSegment]] = None
 
     def play_units_in_round(self, round_index: int) -> List[PlayUnit]:
         return [self.play_units[pu_id] for pu_id in self.rounds[round_index]]
