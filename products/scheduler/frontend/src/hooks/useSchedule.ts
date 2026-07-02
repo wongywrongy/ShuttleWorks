@@ -22,6 +22,8 @@ import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore } from '../store/uiStore';
 import { apiClient } from '../api/client';
 import type { ScheduleView } from '../api/dto';
+import { useTournamentIdOrNull } from './useTournamentId';
+import { bracketOccupiedWindows } from '../lib/bracketOccupancy';
 
 export function useSchedule() {
   const config = useTournamentStore((state) => state.config);
@@ -46,6 +48,29 @@ export function useSchedule() {
   // Track abort controller for cancellation
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const tournamentId = useTournamentIdOrNull();
+
+  /**
+   * Cross-engine coordination — EVERY meet solve must avoid the courts the
+   * bracket already occupies (the bracket side coordinates server-side; see
+   * `lib/bracketOccupancy.ts`). Callers that already hold a fresh bracket
+   * snapshot pass their own windows; otherwise this fetches the snapshot at
+   * solve time. Resolves `[]` on meet-only workspaces (404 → null) or any
+   * fetch failure — a broken bracket poll must never block a meet solve.
+   */
+  const resolveClosedWindows = useCallback(
+    async (provided?: number[][]): Promise<number[][]> => {
+      if (provided) return provided;
+      if (!tournamentId) return [];
+      try {
+        return bracketOccupiedWindows(await apiClient.getBracket(tournamentId));
+      } catch {
+        return [];
+      }
+    },
+    [tournamentId],
+  );
+
   const generateSchedule = useCallback(async (closedCourtWindows?: number[][]) => {
     if (!config) {
       throw new Error('No configuration set');
@@ -66,15 +91,15 @@ export function useSchedule() {
       setGenerationProgress(null);
       resetSolverHud();
 
+      const windows = await resolveClosedWindows(closedCourtWindows);
+
       // Call stateless API with progress tracking
       const result = await apiClient.generateScheduleWithProgress(
         {
           config,
           players,
           matches,
-          ...(closedCourtWindows && closedCourtWindows.length > 0
-            ? { closedCourtWindows }
-            : {}),
+          ...(windows.length > 0 ? { closedCourtWindows: windows } : {}),
         },
         {
           onProgress: (progress) => {
@@ -126,7 +151,7 @@ export function useSchedule() {
       setIsGenerating(false);
       abortControllerRef.current = null;
     }
-  }, [config, players, matches, setSchedule, setScheduleStats, setIsGenerating, setGenerationProgress, setGenerationError, setSolverHud, resetSolverHud]);
+  }, [config, players, matches, setSchedule, setScheduleStats, setIsGenerating, setGenerationProgress, setGenerationError, setSolverHud, resetSolverHud, resolveClosedWindows]);
 
   const cancelGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -144,12 +169,15 @@ export function useSchedule() {
       setIsGenerating(true);
       setGenerationError(null);
 
+      const windows = await resolveClosedWindows();
+
       // Call stateless API with previous assignments
       const result = await apiClient.generateSchedule({
         config,
         players,
         matches,
         previousAssignments: schedule.assignments,
+        ...(windows.length > 0 ? { closedCourtWindows: windows } : {}),
       });
 
       setSchedule(result);
@@ -160,7 +188,7 @@ export function useSchedule() {
     } finally {
       setIsGenerating(false);
     }
-  }, [config, players, matches, schedule, setSchedule, setIsGenerating, setGenerationError]);
+  }, [config, players, matches, schedule, setSchedule, setIsGenerating, setGenerationError, resolveClosedWindows]);
 
   /**
    * Drag-drop pin-and-resolve.
@@ -207,12 +235,15 @@ export function useSchedule() {
         setGenerationError(null);
         resetSolverHud();
 
+        const windows = await resolveClosedWindows();
+
         const result = await apiClient.generateScheduleWithProgress(
           {
             config,
             players,
             matches,
             previousAssignments,
+            ...(windows.length > 0 ? { closedCourtWindows: windows } : {}),
           },
           {
             onProgress: (progress) => {
@@ -251,7 +282,7 @@ export function useSchedule() {
         abortControllerRef.current = null;
       }
     },
-    [config, schedule, players, matches, setSchedule, setIsGenerating, setGenerationError, setGenerationProgress, setSolverHud, resetSolverHud],
+    [config, schedule, players, matches, setSchedule, setIsGenerating, setGenerationError, setGenerationProgress, setSolverHud, resetSolverHud, resolveClosedWindows],
   );
 
   return {

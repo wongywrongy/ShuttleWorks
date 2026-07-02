@@ -265,12 +265,18 @@ def players_from_dto(players: List[PlayerDTO], config: TournamentConfig) -> List
 
 
 def matches_from_dto(matches: List[MatchDTO]) -> List[Match]:
-    """Convert MatchDTOs to scheduler_core Match objects."""
+    """Convert MatchDTOs to scheduler_core Match objects.
+
+    A match takes exactly ONE slot — duration is not a per-match knob
+    (product rule, 2026-07-02). The DTO field survives for wire/blob
+    compatibility, but any legacy value is clamped to 1 here so a stale
+    ``durationSlots: 3`` in an old state blob can never stretch the plan.
+    """
     return [
         Match(
             id=m.id,
             event_code=m.eventRank if m.eventRank else f"MATCH-{m.id[:8]}",
-            duration_slots=m.durationSlots,
+            duration_slots=1,
             side_a=m.sideA if m.sideA else [],
             side_b=m.sideB if m.sideB else [],
         )

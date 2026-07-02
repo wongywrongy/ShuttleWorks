@@ -25,6 +25,7 @@ import { useSchedule } from '../../hooks/useSchedule';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { slotToTime } from '../../lib/time';
+import { bracketOccupiedWindows } from '../../lib/bracketOccupancy';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { BracketScheduleModal } from '../bracket/BracketScheduleModal';
 import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from './opsBlock';
@@ -77,13 +78,11 @@ function OperationsBody() {
   // Cross-engine coordination: the courts the bracket already occupies, as
   // [court, fromSlot, toSlot] windows, so a meet re-solve schedules around
   // them (no double-booking). The bracket side coordinates server-side.
+  // Passing the polled snapshot's windows here (rather than letting
+  // useSchedule fetch its own) keeps the solve in lockstep with what this
+  // surface is rendering.
   const bracketWindows = useMemo<number[][]>(
-    () =>
-      (data?.assignments ?? []).map((a) => [
-        a.court_id,
-        a.slot_id,
-        a.slot_id + a.duration_slots,
-      ]),
+    () => bracketOccupiedWindows(data),
     [data],
   );
   // Bracket play-units ready to schedule: both sides known, no court yet, no

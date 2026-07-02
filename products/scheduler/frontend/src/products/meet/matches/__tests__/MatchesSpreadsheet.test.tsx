@@ -101,9 +101,15 @@ describe('<MatchesSpreadsheet />', () => {
   it('renders every match as a row under the column-label header', () => {
     renderSheet();
     expect(screen.getAllByTestId(/^match-row-/)).toHaveLength(10);
-    for (const label of ['Event', 'Side A', 'Side B', 'Slots']) {
+    for (const label of ['Event', 'Side A', 'Side B']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+    // A match takes exactly ONE slot — duration is not a per-match knob
+    // (product rule, 2026-07-02): no Slots column, no per-row number input.
+    expect(screen.queryByText('Slots')).not.toBeInTheDocument();
+    expect(
+      document.querySelector('input[type="number"]'),
+    ).not.toBeInTheDocument();
   });
 
   it('renders doubles sides as comma-separated names, school shown once per side', () => {
@@ -160,8 +166,6 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
   it('does NOT open the panel from clicks inside the inline editors', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m1');
-    // Slots number input.
-    fireEvent.click(row.querySelector('input[type="number"]')!);
     // Event select trigger.
     fireEvent.click(within(row).getByLabelText('Event'));
     // A player-name button inside the side cell.
@@ -169,22 +173,23 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
     expect(screen.queryByTestId('match-detail-panel')).not.toBeInTheDocument();
   });
 
-  it('mirrors Slots edits between the panel input and the row input (same store value)', () => {
+  it('opens the panel from a click on a side cell\'s EMPTY space (no dead zone)', () => {
+    renderSheet();
+    const row = screen.getByTestId('match-row-m1');
+    // The cell wrapper is wider than its content; a click that lands on the
+    // wrapper itself (not a button/input/picker) is a row-background click
+    // and must open the panel (SP-D7 live finding: cell-wide swallow made
+    // most of the row read as click-dead).
+    fireEvent.click(within(row).getByTestId('player-cell-side-a'));
+    expect(screen.getByTestId('match-detail-panel')).toBeInTheDocument();
+  });
+
+  it('has NO per-match Slots editor anywhere (a match takes exactly one slot)', () => {
     renderSheet();
     fireEvent.click(screen.getByTestId('match-row-m1'));
     const panel = screen.getByTestId('match-detail-panel');
-    const panelInput = within(panel).getByLabelText('Slots');
-    fireEvent.change(panelInput, { target: { value: '3' } });
-    fireEvent.blur(panelInput);
-    expect(
-      useTournamentStore.getState().matches.find((m) => m.id === 'm1')
-        ?.durationSlots,
-    ).toBe(3);
-    // The row's inline Slots editor reflects the same store value.
-    const row = screen.getByTestId('match-row-m1');
-    expect(
-      (row.querySelector('input[type="number"]') as HTMLInputElement).value,
-    ).toBe('3');
+    expect(within(panel).queryByLabelText('Slots')).not.toBeInTheDocument();
+    expect(within(panel).queryByText('Slots')).not.toBeInTheDocument();
   });
 
   it('dismisses the panel when the selected match is deleted', () => {

@@ -282,7 +282,7 @@ const INITIAL: Pick<
   bracketScheduleEventFilter: {},
 };
 
-export const useUiStore = create<UiState>((set) => ({
+export const useUiStore = create<UiState>((set, get) => ({
   ...INITIAL,
 
   setActiveTab: (activeTab) => set({ activeTab }),
@@ -303,6 +303,22 @@ export const useUiStore = create<UiState>((set) => ({
   setLastSaveError: (lastSaveError) => set({ lastSaveError }),
 
   pushToast: (toast) => {
+    // Dedupe: a toast with the same level + message refreshes the existing
+    // entry (latest detail wins) instead of stacking a duplicate — repeated
+    // failures of one action (e.g. clicking Generate against a full day
+    // plan) produce ONE toast, not a pile (docs/audits/debt-log.md:
+    // "Error toasts stack without auto-dismiss").
+    const existing = get().toasts.find(
+      (t) => t.level === toast.level && t.message === toast.message,
+    );
+    if (existing) {
+      set((state) => ({
+        toasts: state.toasts.map((t) =>
+          t.id === existing.id ? { ...existing, ...toast, id: existing.id } : t,
+        ),
+      }));
+      return existing.id;
+    }
     const id =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()

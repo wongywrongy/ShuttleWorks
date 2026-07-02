@@ -489,9 +489,8 @@ export async function exportMatchesXlsx(
     { header: 'Side A',        key: 'aPlayers', width: 30 },
     { header: 'Side B School', key: 'bSchool',  width: 22 },
     { header: 'Side B',        key: 'bPlayers', width: 30 },
-    { header: 'Duration',      key: 'dur',      width: 10 },
   ];
-  const colCount = 7;
+  const colCount = 6;
   applyHeaderRow(sheet, colCount);
 
   const playerById = indexById(players);
@@ -544,7 +543,6 @@ export async function exportMatchesXlsx(
       row.getCell(4).value = sideNamesAmp(m.sideA, playerById);
       row.getCell(5).value = sideSchool(m.sideB, playerById, schoolById);
       row.getCell(6).value = sideNamesAmp(m.sideB, playerById);
-      row.getCell(7).value = m.durationSlots;
       rowIdx++;
     });
 
@@ -563,7 +561,6 @@ export async function exportMatchesXlsx(
   sheet.getColumn(4).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
   sheet.getColumn(5).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
   sheet.getColumn(6).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-  sheet.getColumn(7).alignment = { vertical: 'middle', horizontal: 'center' };
   sheet.getColumn(4).font = { size: 11 };
   sheet.getColumn(6).font = { size: 11 };
 

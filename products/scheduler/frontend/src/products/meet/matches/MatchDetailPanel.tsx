@@ -5,11 +5,12 @@
  * Availability / Events field blocks the roster panel renders
  * (`PlayerAvailabilityField` / `PlayerEventsField` — one implementation,
  * writing through the CANONICAL roster record via `updatePlayer`, never a
- * match-scoped copy). Below the sides sits the module-specific field:
- * the match's Slots (durationSlots) input, mirroring the row's inline
- * editor — both edit the same store value.
+ * match-scoped copy).
+ *
+ * No Slots field: a match takes exactly ONE slot — duration is not a
+ * per-match knob (product rule, 2026-07-02).
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import { DetailPanel } from '../../../components/control-plane';
 import { useTournamentStore } from '../../../store/tournamentStore';
@@ -32,7 +33,6 @@ export function MatchDetailPanel({
 }) {
   const players = useTournamentStore((s) => s.players);
   const groups = useTournamentStore((s) => s.groups);
-  const updateMatch = useTournamentStore((s) => s.updateMatch);
 
   const code = match.eventRank?.trim() ?? '';
   const prefix = code.match(/^[A-Z]+/)?.[0] ?? '';
@@ -59,7 +59,6 @@ export function MatchDetailPanel({
           players={players}
           groups={groups}
         />
-        <SlotsField match={match} onUpdate={updateMatch} />
       </div>
     </DetailPanel>
   );
@@ -161,42 +160,3 @@ function SideSection({
   );
 }
 
-/* =========================================================================
- * SlotsField — the module-specific field below the sides. Draft + commit-
- * on-blur, exactly like the row's inline Slots editor; both bind to the
- * same `MatchDTO.durationSlots`, so an edit in either reflects in the
- * other.
- * ========================================================================= */
-function SlotsField({
-  match,
-  onUpdate,
-}: {
-  match: MatchDTO;
-  onUpdate: (id: string, patch: Partial<MatchDTO>) => void;
-}) {
-  const [draft, setDraft] = useState(String(match.durationSlots ?? 1));
-  useEffect(
-    () => setDraft(String(match.durationSlots ?? 1)),
-    [match.id, match.durationSlots],
-  );
-
-  const commit = () => {
-    const d = Math.max(1, Number(draft) || 1);
-    if (d !== match.durationSlots) onUpdate(match.id, { durationSlots: d });
-  };
-
-  return (
-    <label className="flex flex-col gap-1">
-      <span className={FIELD_LABEL_CLASSES}>Slots</span>
-      <input
-        type="number"
-        min={1}
-        value={draft}
-        aria-label="Slots"
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        className="h-7 w-28 rounded-sm border border-border bg-bg-elev px-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
-      />
-    </label>
-  );
-}

@@ -51,7 +51,6 @@ const MATCH_COLUMNS: BandedListColumn[] = [
   { label: 'Event', className: 'w-20' },
   { label: 'Side A', className: 'min-w-0 flex-[3]' },
   { label: 'Side B', className: 'min-w-0 flex-[3]' },
-  { label: 'Slots', className: 'w-14' },
   { label: '', className: 'w-8' },
 ];
 
@@ -289,18 +288,10 @@ const MatchRow = memo(function MatchRow({
   onUpdate: (id: string, patch: Partial<MatchDTO>) => void;
   onDelete: (id: string) => void;
 }) {
-  const [durationDraft, setDurationDraft] = useState(
-    String(match.durationSlots ?? 1),
-  );
   // Ref typed loosely — the event field may render as a Radix Select
   // trigger (button, configured ranks present) or an input (free-text
   // fallback). Both inherit `focus()` from HTMLElement.
   const eventFieldRef = useRef<HTMLButtonElement | HTMLInputElement | null>(null);
-
-  useEffect(
-    () => setDurationDraft(String(match.durationSlots ?? 1)),
-    [match.durationSlots],
-  );
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -311,11 +302,6 @@ const MatchRow = memo(function MatchRow({
     // changes its callback identity).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocus]);
-
-  const commitDuration = () => {
-    const d = Math.max(1, Number(durationDraft) || 1);
-    if (d !== match.durationSlots) onUpdate(match.id, { durationSlots: d });
-  };
 
   // The current rank may be (a) blank, (b) one of `configuredRanks`,
   // or (c) a legacy free-text value no longer in the configured list.
@@ -417,15 +403,6 @@ const MatchRow = memo(function MatchRow({
         groups={groups}
         capacity={sideCapacity}
         eligibleForRank={match.eventRank}
-      />
-      <input
-        type="number"
-        min={1}
-        value={durationDraft}
-        onChange={(e) => setDurationDraft(e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-        onBlur={commitDuration}
-        className="w-14 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-sm tabular-nums outline-none transition-colors duration-fast ease-brand hover:border-border/60 focus:border-accent focus:bg-card"
       />
       <button
         type="button"
@@ -581,13 +558,23 @@ function PlayerCellEditor({
   }, [players, eligible]);
 
   return (
-    // stopPropagation: the whole cell is an editor (name buttons, ＋ add
-    // link, picker dropdown) — clicks here must never bubble to the row's
-    // open-detail-panel handler.
+    // Clicks on the cell's INTERACTIVE content (name buttons, ×, ＋ add,
+    // the picker dropdown) must never bubble to the row's open-detail-panel
+    // handler — but the cell wrapper is much wider than its content, and a
+    // click on its EMPTY space is a row-background click and SHOULD open
+    // the panel (SP-D7 live finding: a 536px-wide swallow-all made most of
+    // the row read as click-dead). While the picker is open, every click in
+    // the cell is editor interaction.
     <div
       ref={ref}
+      data-testid={`player-cell-${side.replace(/\s+/g, '-').toLowerCase()}`}
       className="relative min-w-0 flex-[3]"
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (open || target.closest('button, input, [data-player-picker]')) {
+          e.stopPropagation();
+        }
+      }}
     >
       <div className="flex flex-wrap items-baseline gap-x-1 text-sm leading-relaxed">
         {selectedPlayers.length === 0 ? (
@@ -654,7 +641,10 @@ function PlayerCellEditor({
         ) : null}
       </div>
       {open ? (
-        <div className="motion-enter absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+        <div
+          data-player-picker
+          className="motion-enter absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg"
+        >
           {/* Eligible-for-rank section — these are the players the
               Roster page has configured for this match's event. Top
               of the picker so the natural candidate is one click

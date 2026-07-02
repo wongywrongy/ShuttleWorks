@@ -153,7 +153,7 @@ export function RunLiveBoard({
     // Width a span=1 cell needs to read the longest label at text-2xs plus the
     // chip's horizontal padding + inset + the M/B source square (~42px total).
     const neededPx = Math.max(72, longest * 8 + 42);
-    return Math.min(3, Math.max(1, neededPx / GANTT_GEOMETRY.roomy.slot));
+    return Math.min(3, Math.max(1, neededPx / GANTT_GEOMETRY.standard.slot));
   }, [chips]);
   const timeZoom = auto ? autoZoom : manualZoom;
   const zoomBy = (f: number) => {
@@ -180,10 +180,11 @@ export function RunLiveBoard({
           tone="state"
           sideA={c.sideA}
           sideB={c.sideB}
-          // Playing chips grow with the clock, so they have the width to show
-          // teams — the floor reads who's on court at a glance (quiet span=1
-          // chips stay label-only; there's no room). Skip the second line when
-          // a vertical lane split leaves too little height for it.
+          // Sides render only when the cell is tall enough for a second
+          // line. At the Plan-parity `standard` density (40px rows) that is
+          // never — chips stay label-height (the inspector + hover title
+          // carry the players); the guard keeps sides working if a denser
+          // tier ever changes.
           showSides={c.state === 'playing' && box.height >= 48}
           onSelect={() => onSelect(c.key)}
           data-testid={`run-card-${c.key}`}
@@ -267,7 +268,11 @@ export function RunLiveBoard({
         courts={courts}
         minSlot={minSlot}
         slotCount={slotCount}
-        density="roomy"
+        // Same cell geometry as the Plan board (UnifiedOpsBoard) — the two
+        // boards are ONE court plan and should read identically; the old
+        // `roomy` tier's 64px rows wasted vertical space on chips that are
+        // label-height anyway (feature fix, 2026-07-02).
+        density="standard"
         laneOrientation="vertical"
         slotScale={timeZoom}
         placements={placements}

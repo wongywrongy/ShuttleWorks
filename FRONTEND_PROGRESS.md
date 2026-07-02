@@ -405,9 +405,27 @@ remain roadmap cards (`implemented:false`).
   full-bleed by design; the frame idiom is for prototypes/mocks); handoff `--text-sm=12px`-style
   type-scale names NOT adopted (Tailwind semantic ladder stays; values already cover the spec's
   uses); HealthDot kept as the domain-specific workspace-health variant (same grammar).
-- **Gates:** vitest **910/910** ✓, eslint 0 err / 102 warns (**baseline-identical** count),
-  `tsc -b` + vite build ✓. Live Playwright verification of both themes pending (backend was
-  shut down after the SP-D7 pass this session).
+- **Gates:** vitest **911/911** ✓, eslint 0 err (warn count baseline-identical), `tsc -b` +
+  vite build ✓, pytest 720/720 ✓, ruff ✓. **Live-verified in BOTH themes** (Run surface dark +
+  light screenshots in `.playwright-mcp/p12-*`, `fx-*`): raised text ramps, seamed band, 2px
+  top status bars resolve (rgba(54,211,153,.55) live / warning .6 — DOM-verified).
+- **Also in this session (feature fixes, same gates):** Run board density `roomy`→`standard`
+  (Plan-parity 40px rows — user call: the 64px rows wasted vertical space; playing-chip
+  second line now never renders, inspector + hover title carry the players); per-match
+  **Slots spec removed** (a match = exactly ONE slot: no row input, no panel field, no XLSX
+  Duration column, backend adapter clamps legacy values to 1); **cross-engine double-booking
+  closed** (every meet solve path now passes bracket-occupied windows — `lib/bracketOccupancy`
+  + `useSchedule`/`useLiveOperations`; verified live: 0 conflicting cells after re-solve);
+  matches-row **dead zone** fixed (side-cell empty space now opens the panel); **toast dedupe**
+  (same level+message refreshes instead of stacking).
+- **VERIFICATION TRAP (record for future passes):** the SP-D7 S5 live pass unknowingly hit a
+  STALE Vite instance already squatting on :5173 from an earlier session — the fresh `npm run
+  dev` silently took :5174. Two "findings" (bracket Events header-badge undercount, missing
+  Entered pill on locked rows) were artifacts of that older build and are RETRACTED — the
+  current build renders both correctly (re-verified live). Before browsing, check what's
+  actually serving :5173 (`Get-NetTCPConnection -LocalPort 5173`) or watch Vite's startup
+  output for a port bump. TaskStop also does NOT kill uvicorn/Vite child processes on
+  Windows — kill by port.
 
 ## Token remap reference (prototype hex → intent; convert to HSL-triplet)
 | Token | Dark | Light |

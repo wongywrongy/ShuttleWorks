@@ -3,8 +3,8 @@
  * match row opens. Pins the load-bearing contract: the side sections
  * render the CANONICAL roster players as expandable cards whose
  * Availability / Events edits write through `updatePlayer` to the
- * player record (never a match-scoped copy), and the panel's Slots
- * input edits the same `durationSlots` the row's inline editor binds.
+ * player record (never a match-scoped copy). There is NO Slots field —
+ * a match takes exactly one slot (product rule, 2026-07-02).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -139,14 +139,9 @@ describe('<MatchDetailPanel /> (meet)', () => {
     expect(playerById('a1')?.ranks).toEqual(['MS1', 'MS2']);
   });
 
-  it('edits durationSlots via the panel Slots input (same store value as the row)', () => {
+  it('renders no Slots field — a match takes exactly one slot', () => {
     renderPanel();
-    const input = screen.getByLabelText('Slots');
-    fireEvent.change(input, { target: { value: '4' } });
-    fireEvent.blur(input);
-    expect(
-      useTournamentStore.getState().matches.find((m) => m.id === 'm1')
-        ?.durationSlots,
-    ).toBe(4);
+    expect(screen.queryByLabelText('Slots')).not.toBeInTheDocument();
+    expect(screen.queryByText('Slots')).not.toBeInTheDocument();
   });
 });
