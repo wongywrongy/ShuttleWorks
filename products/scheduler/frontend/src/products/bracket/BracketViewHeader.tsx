@@ -11,6 +11,7 @@ import { Seg, type SegOption } from "../../platform/settings/SettingsControls";
 import { EventsFilterStrip } from "./EventsFilterStrip";
 import { SourceChip } from "../../components/SourceChip";
 import { formatLabel, disciplineLabel } from "./bracketLabels";
+import { descriptorFor } from "./formatRegistry";
 import { BracketScheduleModal } from "./BracketScheduleModal";
 import type { BracketLayoutMode } from "./DrawView";
 
@@ -138,10 +139,13 @@ export function BracketViewHeader({
                   {eventFormatLabel}
                 </span>
               )}
-              {/* Layout toggle — SE draws only (RR has no bracket canvas).
-                  One-sided is the classic printed cascade and the default;
-                  mirrored stays as the wall-display option. */}
-              {selectedEvent?.format === "se" && drawLayout && onDrawLayout && (
+              {/* Layout toggle — bracket-renderer draws only (grid/segments/
+                  swiss own their layouts). One-sided is the classic printed
+                  cascade and the default; mirrored stays as the wall-display
+                  option. */}
+              {descriptorFor(selectedEvent?.format)?.renderer === "bracket" &&
+                drawLayout &&
+                onDrawLayout && (
                 <Seg
                   options={LAYOUT_OPTIONS}
                   value={drawLayout}
