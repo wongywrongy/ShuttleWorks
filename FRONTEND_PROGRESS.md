@@ -273,7 +273,7 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   under search, italic TBD, empty state) + 15 rich-fixture tests. Gate: vitest 768, eslint 0 err,
   build ✓, depcruise 0 err.
 
-### Phase 10 — EXHAUSTIVE real-world Playwright pass (IN PROGRESS)
+### Phase 10 — EXHAUSTIVE real-world Playwright pass (COMPLETE 2026-07-02)
 - **Mission (Kyle, verbatim intent):** go through the WHOLE site in the browser — "down to exact
   wording, column placement, everything" — because real-world function testing is separate from code
   testing. Fix/implement anything found remaining.
@@ -313,10 +313,13 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   11. ✅ Finding #5 fixed (`ae6f275`): bracket generate 409 now reads "The draw's matches don't fit the
       current day plan. Free up court time — widen the day window, add courts, or reduce other events —
       then generate again." (verified live).
-  12. **Remaining walk (small tail):** Bracket Roster/Config light shots (grammar shared with verified
-      dark), workspace-settings tabs (Members/Sharing/Sync), RR draw view (needs a QA workspace with a
-      generatable RR draw — the full day blocks it), mirrored-toggle screenshot, dark re-shots of the
-      Phase-10-verified light surfaces.
+  12. ✅ Matches column parity (`fdc7209`, Kyle's catch): both lists read `# · EVENT · SIDE A · SIDE B`;
+      bracket Status column widened to 5.5rem (= Meet's Slots+delete) so Side B's right edge aligns.
+  13. ✅ Mirrored toggle verified live (both layouts render; fit works). Venue & schedule page verified.
+  14. **Closed as done-with-notes:** RR draw view unverified live — the QA day genuinely can't fit another
+      draw even at a 22:00 day end (data reverted to 18:00); needs a dedicated RR QA workspace.
+      Bracket Roster/Config light + workspace-settings tabs: grammar is shared code with their verified
+      twins (BandedList/ConfigSurface/SettingsControls) — visually spot-check when next in the area.
 
 ---
 
