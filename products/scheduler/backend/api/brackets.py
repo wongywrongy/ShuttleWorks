@@ -78,7 +78,9 @@ from services.bracket import (
 )
 from services.bracket.formats import (
     FORMAT_REGISTRY,
+    build_swiss_round,
     get_format,
+    pair_swiss_round,
     segment_label,
     segment_positions,
 )
@@ -87,6 +89,7 @@ from services.bracket.io.import_matches import (
     parse_csv_payload,
     parse_json_payload,
 )
+from services.bracket.standings import compute_standings
 from services.bracket.state import (
     BracketSession,
     EventMeta,
@@ -291,6 +294,22 @@ class SegmentOut(BaseModel):
     positions: Optional[List[int]] = None
 
 
+class StandingRowOut(BaseModel):
+    """One participant's line in a computed standings table (mirrors
+    ``services.bracket.standings.StandingRow`` — the BWF chain: wins →
+    games ratio → points ratio → head-to-head → id)."""
+
+    participant_id: str
+    played: int
+    wins: int
+    losses: int
+    games_won: int
+    games_lost: int
+    points_won: int
+    points_lost: int
+    position: int
+
+
 class EventOut(BaseModel):
     id: str
     discipline: str
@@ -301,6 +320,10 @@ class EventOut(BaseModel):
     # Present only for multi-segment formats; se/rr stay None (additive —
     # old clients and fixtures unaffected).
     segments: Optional[List[SegmentOut]] = None
+    # Computed standings, embedded only for ``has_standings`` formats
+    # (round robin, Swiss) — rides the existing poll so Display gets it
+    # free and Swiss pairing consumes the same numbers the client sees.
+    standings: Optional[List[StandingRowOut]] = None
     # Per-event lifecycle status: 'draft' | 'generated' | 'started'.
     # Drives the Draws-page status pill + Generate/Open affordances.
     status: Optional[str] = None
@@ -973,6 +996,28 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                         ),
                     )
                 )
+        # Standings ride the poll for has_standings formats (rr, swiss).
+        # compute_standings is one pass over the results + a sort, so the
+        # per-request cost stays negligible.
+        spec = get_format(meta.format) if meta else None
+        standings_out: Optional[List[StandingRowOut]] = None
+        if spec is not None and spec.has_standings:
+            standings_out = [
+                StandingRowOut(
+                    participant_id=row.participant_id,
+                    played=row.played,
+                    wins=row.wins,
+                    losses=row.losses,
+                    games_won=row.games_won,
+                    games_lost=row.games_lost,
+                    points_won=row.points_won,
+                    points_lost=row.points_lost,
+                    position=row.position,
+                )
+                for row in compute_standings(
+                    draw.play_units, state.results, list(draw.participants)
+                )
+            ]
         events_out.append(
             EventOut(
                 id=event_id,
@@ -995,6 +1040,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                     if draw.segments
                     else None
                 ),
+                standings=standings_out,
                 status=meta.status if meta else None,
                 seeded_count=meta.seeded_count if meta else None,
                 rr_rounds=meta.rr_rounds if meta else None,
@@ -2137,6 +2183,181 @@ def generate_event_route(
             walkover=result.walkover,
         )
     # 6. Persist assignments (session.state.assignments updated by solver).
+    _persist_session_metadata(repo, tournament_id, session=session)
+    return _serialize_session(session)
+
+
+@router.post(
+    "/events/{event_id}/rounds/next",
+    response_model=TournamentOut,
+    dependencies=[_OPERATOR],
+)
+def generate_next_round_route(
+    tournament_id: uuid.UUID = Path(...),
+    event_id: str = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Append the next round of a progressive (Swiss) draw.
+
+    Pairs the new round from live standings (``compute_standings`` →
+    ``pair_swiss_round``: score groups, no rematches, bye rotates to the
+    lowest-standing never-byed) and persists it APPEND-ONLY — existing
+    match rows, results, and versions are untouched; there is no wipe
+    and NO solver call. The new units are dependency-free, so
+    ``find_ready_play_units`` picks them up for the existing
+    schedule-next flow.
+
+    Gates: 404 unknown event; 409 non-progressive format / draft status
+    / current round incomplete / all K rounds already generated.
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    existing = repo.brackets.get_event(tournament_id, event_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="event not found")
+    spec = get_format(existing.format)
+    if spec is None or not spec.progressive:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"format {existing.format!r} is not progressive; "
+                "its rounds are generated upfront"
+            ),
+        )
+    if (existing.status or "draft") == "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=f"event {event_id!r} is draft; generate the draw first",
+        )
+
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(status_code=500, detail="hydration failed")
+    draw = session.draws.get(event_id)
+    meta = session.events.get(event_id)
+    if draw is None or meta is None:
+        raise HTTPException(status_code=404, detail="event not found")
+
+    pending = [
+        pu_id
+        for pu_id in draw.play_units
+        if pu_id not in session.state.results
+    ]
+    if pending:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"current round incomplete: {len(pending)} match(es) still "
+                "need results before the next round can be paired"
+            ),
+        )
+
+    # Total round count K from the RESOLVED per-draw config persisted at
+    # generate time (normalize re-derives the default if the key is
+    # somehow absent — same clamp, same participant count).
+    try:
+        resolved_cfg = spec.normalize_config(
+            dict(meta.config or {}), meta.participant_count
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    total_rounds = int(resolved_cfg.get("swiss_rounds", 0))
+    if len(draw.rounds) >= total_rounds:
+        raise HTTPException(
+            status_code=409,
+            detail=f"all {total_rounds} rounds generated",
+        )
+
+    # ── Pair the new round from live standings + pairing history. ─────
+    standings = compute_standings(
+        draw.play_units, session.state.results, list(draw.participants)
+    )
+    prior_pairings: Set[frozenset] = set()
+    bye_history: Set[str] = set()
+    for pu_id, pu in draw.play_units.items():
+        result = session.state.results.get(pu_id)
+        if result is None or result.winner_side == WinnerSide.NONE:
+            continue
+        side_a = pu.side_a[0] if pu.side_a else None
+        side_b = pu.side_b[0] if pu.side_b else None
+        if side_a is not None and side_b is not None:
+            prior_pairings.add(frozenset((side_a, side_b)))
+        elif result.walkover:
+            # Walkover win over an empty side = a bye taken.
+            winner = side_a if side_a is not None else side_b
+            if winner is not None:
+                bye_history.add(winner)
+
+    pairs, bye_pid = pair_swiss_round(standings, prior_pairings, bye_history)
+
+    round_index = len(draw.rounds)
+    new_units, new_slots, new_round_ids = build_swiss_round(
+        pairs,
+        bye_pid,
+        event_id=event_id,
+        # Same prefix contract as the generate routes: ids are
+        # ``{event_id}-R{k}-{m}``.
+        play_unit_id_prefix=event_id,
+        round_index=round_index,
+        duration_slots=meta.duration_slots,
+    )
+
+    # Append in memory: draw + engine state. NOT register_draw — the
+    # draw is already registered; only the new units join, and the only
+    # new result is the bye walkover, recorded directly.
+    draw.play_units.update(new_units)
+    draw.slots.update(new_slots)
+    draw.rounds.append(list(new_round_ids))
+    for pu_id, pu in new_units.items():
+        session.state.play_units[pu_id] = pu
+
+    bye_unit_id: Optional[str] = None
+    if bye_pid is not None:
+        bye_unit_id = new_round_ids[-1]  # build appends the bye last
+        record_result(
+            session.state,
+            session.draws,
+            bye_unit_id,
+            WinnerSide.A,
+            finished_at_slot=None,
+            walkover=True,
+        )
+
+    # ── Persist APPEND-ONLY: new match rows (+ the bye walkover). ─────
+    match_dicts: List[dict] = []
+    for match_index, pu_id in enumerate(new_round_ids):
+        pu = new_units[pu_id]
+        slot_a, slot_b = new_slots[pu_id]
+        match_dicts.append(
+            {
+                "id": pu.id,
+                "round_index": round_index,
+                "match_index": match_index,
+                "kind": pu.kind.value.upper(),
+                "slot_a": _slot_to_dict(slot_a),
+                "slot_b": _slot_to_dict(slot_b),
+                "side_a": list(pu.side_a) if pu.side_a else [],
+                "side_b": list(pu.side_b) if pu.side_b else [],
+                "dependencies": list(pu.dependencies),
+                "expected_duration_slots": pu.expected_duration_slots,
+                "duration_variance_slots": pu.duration_variance_slots,
+                "child_unit_ids": list(pu.child_unit_ids or []),
+                "meta": dict(pu.metadata or {}),
+            }
+        )
+    repo.brackets.bulk_create_matches(tournament_id, event_id, match_dicts)
+    if bye_unit_id is not None:
+        recorded = session.state.results[bye_unit_id]
+        repo.brackets.record_result(
+            tournament_id,
+            event_id,
+            bye_unit_id,
+            winner_side=recorded.winner_side.value,
+            score=recorded.score,
+            finished_at_slot=recorded.finished_at_slot,
+            walkover=recorded.walkover,
+        )
+    # Session blob (assignments etc.) is unchanged in content but kept in
+    # the same write rhythm as the other mutating routes.
     _persist_session_metadata(repo, tournament_id, session=session)
     return _serialize_session(session)
 

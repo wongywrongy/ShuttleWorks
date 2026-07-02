@@ -31,17 +31,26 @@ from .double_elimination import generate_double_elimination
 from .monrad import generate_monrad
 from .round_robin import generate_round_robin
 from .single_elimination import generate_single_elimination
+from .swiss import (
+    build_swiss_round,
+    generate_swiss,
+    normalize_swiss_config,
+    pair_swiss_round,
+)
 
 __all__ = [
     "FORMAT_REGISTRY",
     "FormatSpec",
+    "build_swiss_round",
     "format_ids",
     "generate_compass",
     "generate_double_elimination",
     "generate_monrad",
     "generate_round_robin",
     "generate_single_elimination",
+    "generate_swiss",
     "get_format",
+    "pair_swiss_round",
     "segment_label",
     "segment_positions",
 ]
@@ -207,6 +216,28 @@ def _generate_compass(
     )
 
 
+def _generate_swiss(
+    participants: Sequence,
+    *,
+    event_id: str,
+    play_unit_id_prefix: str,
+    duration_slots: int,
+    seeded_count: Optional[int],
+    bracket_size: Optional[int],
+    rr_rounds: Optional[int],
+    config: dict,
+) -> Draw:
+    return generate_swiss(
+        participants,
+        event_id=event_id,
+        play_unit_id_prefix=play_unit_id_prefix,
+        duration_slots=duration_slots,
+        seeded_count=seeded_count,
+        bracket_size=bracket_size,
+        config=config,
+    )
+
+
 FORMAT_REGISTRY: Dict[str, FormatSpec] = {
     "se": FormatSpec(
         id="se",
@@ -239,6 +270,14 @@ FORMAT_REGISTRY: Dict[str, FormatSpec] = {
         label="Compass",
         generate=_generate_compass,
         uses_bracket_size=True,
+    ),
+    "swiss": FormatSpec(
+        id="swiss",
+        label="Swiss",
+        generate=_generate_swiss,
+        progressive=True,
+        has_standings=True,
+        normalize_config=normalize_swiss_config,
     ),
 }
 
