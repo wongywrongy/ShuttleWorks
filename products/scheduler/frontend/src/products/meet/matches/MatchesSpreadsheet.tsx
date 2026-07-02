@@ -577,6 +577,14 @@ function PlayerCellEditor({
         ) : (
           selectedPlayers.map((p, i) => {
             const groupName = groups.find((g) => g.id === p.groupId)?.name ?? '';
+            // Doubles partners are (almost) always same-school — repeating
+            // the school per name is noise. When every selected player
+            // shares one school, show it once, after the last name.
+            const uniformSchool =
+              selectedPlayers.length > 1 &&
+              selectedPlayers.every((sp) => sp.groupId === selectedPlayers[0].groupId);
+            const showSchool =
+              groupName !== '' && (!uniformSchool || i === selectedPlayers.length - 1);
             return (
             <span key={p.id} className="inline-flex items-baseline">
               <button
@@ -586,7 +594,7 @@ function PlayerCellEditor({
                 title={`Click to edit ${side}`}
               >
                 {p.name || '—'}
-                {groupName ? (
+                {showSchool ? (
                   <span className="ml-1 text-2xs text-muted-foreground">{groupName}</span>
                 ) : null}
               </button>

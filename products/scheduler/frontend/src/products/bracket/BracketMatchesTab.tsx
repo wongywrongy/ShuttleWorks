@@ -20,6 +20,7 @@ import {
   type BandedListColumn,
 } from '../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { disciplineOrderIndex } from '../../lib/eventColors';
 import { buildPlayUnitLabels, disciplineLabel } from './bracketLabels';
 
 type Status = 'done' | 'live' | 'ready' | 'pending';
@@ -116,6 +117,13 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
       byEvent.set(pu.event_id, arr);
     }
     return data.events
+      .slice()
+      // Same discipline banding order as Meet Matches (doubles-first
+      // dual-meet convention); ties keep the events-list order.
+      .sort(
+        (a, b) =>
+          disciplineOrderIndex(a.discipline) - disciplineOrderIndex(b.discipline),
+      )
       .map((ev) => {
         const units = (byEvent.get(ev.id) ?? [])
           .slice()

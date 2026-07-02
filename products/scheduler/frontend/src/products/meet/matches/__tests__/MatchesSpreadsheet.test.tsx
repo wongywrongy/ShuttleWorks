@@ -106,16 +106,17 @@ describe('<MatchesSpreadsheet />', () => {
     }
   });
 
-  it('renders doubles sides as comma-separated names with school suffixes', () => {
+  it('renders doubles sides as comma-separated names, school shown once per side', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m5');
     expect(row.textContent).toContain('Aiko');
     expect(row.textContent).toContain('Ben');
     expect(row.textContent).toContain('Eva');
     expect(row.textContent).toContain('Finn');
-    // Per-name school suffix — two names per side, so two per school.
-    expect(within(row).getAllByText('Alpha High')).toHaveLength(2);
-    expect(within(row).getAllByText('Beta Prep')).toHaveLength(2);
+    // Same-school partners share ONE school suffix (after the last name)
+    // instead of repeating it per player.
+    expect(within(row).getAllByText('Alpha High')).toHaveLength(1);
+    expect(within(row).getAllByText('Beta Prep')).toHaveLength(1);
     // Comma separator between pair members, one per doubles side.
     expect(within(row).getAllByText(',')).toHaveLength(2);
   });

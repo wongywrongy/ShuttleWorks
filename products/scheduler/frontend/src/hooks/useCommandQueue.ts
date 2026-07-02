@@ -21,7 +21,7 @@
  * prompt). That'll attach via a separate `useReachability` hook in
  * a future iteration.
  */
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { apiClient } from '../api/client';
 import {
@@ -132,6 +132,37 @@ export function useCommandQueue() {
   );
   const setMatchVersion = useMatchStateStore((s) => s.setMatchVersion);
 
+  const submitFn: SubmitFn = useCallback(
+    (cmd) =>
+      apiClient.submitCommand(tid, {
+        id: cmd.id,
+        match_id: cmd.matchId,
+        action: cmd.action,
+        payload: cmd.payload,
+        seen_version: cmd.seenVersion,
+      }),
+    [tid],
+  );
+
+  // Step F3 — startup + reconnect drain. Without this, a command
+  // enqueued just before a crash/reload sits in IndexedDB until the
+  // operator's NEXT action triggers a flush (found in the Phase-10
+  // real-world pass: call+start, reload → server never saw them).
+  // Outcomes are intentionally not surfaced here — authoritative
+  // state converges via the match-states poll; per-command UX
+  // (toasts, rollbacks) belongs to the interactive `submit` path.
+  useEffect(() => {
+    const drain = () => {
+      void flush(submitFn).catch(() => {
+        // Network error — pending commands stay queued; the next
+        // drain ('online' event or submit) retries.
+      });
+    };
+    drain();
+    window.addEventListener('online', drain);
+    return () => window.removeEventListener('online', drain);
+  }, [submitFn]);
+
   const submit = useCallback(
     async (
       action: MatchAction,
@@ -182,15 +213,6 @@ export function useCommandQueue() {
       // command — we only care about this one (others get their own
       // outcomes via the same `flush` calls). Pull the result for
       // our id.
-      const submitFn: SubmitFn = (cmd) =>
-        apiClient.submitCommand(tid, {
-          id: cmd.id,
-          match_id: cmd.matchId,
-          action: cmd.action,
-          payload: cmd.payload,
-          seen_version: cmd.seenVersion,
-        });
-
       const outcomes = await flush(submitFn);
       const own = outcomes.find((o) => o.id === commandId);
       const result = own?.result ?? {
@@ -281,6 +303,7 @@ export function useCommandQueue() {
     },
     [
       tid,
+      submitFn,
       matchStates,
       setMatchState,
       applyOptimisticStatus,

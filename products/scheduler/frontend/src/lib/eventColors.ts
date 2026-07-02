@@ -16,6 +16,17 @@ export interface EventColor {
   label: string;
 }
 
+/** Canonical discipline display order — doubles first (dual-meet lineup
+ *  convention). Shared so the Meet and Bracket matches lists band their
+ *  events identically. Unknown disciplines sort after these. */
+export const DISCIPLINE_ORDER = ['MD', 'WD', 'XD', 'WS', 'MS'] as const;
+
+/** Sort index for a discipline per DISCIPLINE_ORDER (unknowns last). */
+export function disciplineOrderIndex(discipline: string): number {
+  const i = (DISCIPLINE_ORDER as readonly string[]).indexOf(discipline);
+  return i === -1 ? DISCIPLINE_ORDER.length : i;
+}
+
 export const EVENT_COLORS: Record<string, EventColor> = {
   MS: {
     bg: 'bg-blue-100 dark:bg-blue-500/15',

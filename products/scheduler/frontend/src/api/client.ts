@@ -293,6 +293,7 @@ class ApiClient {
           requestId?: string;
           code?: string;
           status?: number;
+          response?: unknown;
           /** Set by this interceptor so the global
            *  ``window.onunhandledrejection`` handler in ``AppShell``
            *  doesn't surface a second toast for the same error. */
@@ -300,6 +301,13 @@ class ApiClient {
         };
         if (requestId) err.requestId = requestId;
         if (code) err.code = code;
+        // Preserve the ORIGINAL axios response on the rebuilt error.
+        // submitCommand classifies 409s by reading response.data.error
+        // (conflict vs stale_version); without this passthrough every
+        // rejection degraded to 'networkError', so the command queue
+        // kept a permanently-rejected command 'pending' and replayed
+        // it on every drain, forever (Phase-10 finding).
+        if (error.response) err.response = error.response;
         // Promote the HTTP status so callers can branch on it without
         // pattern-matching the rebuilt ``message`` string. The
         // backend-merge arc's ``useBracket`` hook needs this to tell
