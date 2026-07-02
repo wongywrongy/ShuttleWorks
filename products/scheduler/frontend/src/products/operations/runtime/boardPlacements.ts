@@ -31,6 +31,11 @@ export interface BoardChip {
   late: boolean;
   /** Slots a playing chip has run past its planned end (>0 ⇒ overrun). */
   overrunSlots: number;
+  /** Slots this chip was pushed PAST its planned slot by earlier matches
+   *  still occupying its court (>0 ⇒ visibly delayed — the board renders a
+   *  `▸+N` marker). Only scheduled/called chips are ever pushed; playing and
+   *  done chips are facts and anchor where they actually happened. */
+  pushedSlots: number;
   label: string;
   colorKey?: string;
   /** The planned duration — drives the planned-end marker on the live board. */
@@ -68,11 +73,70 @@ export function buildPlanChips(blocks: OpsBlock[]): BoardChip[] {
       state,
       late: false,
       overrunSlots: 0,
+      pushedSlots: 0, // the plan board shows the PLAN — nothing is pushed
       label: b.label,
       colorKey: b.colorKey,
       plannedSpan,
     };
   });
+}
+
+/**
+ * Court pushback — a court plays ONE match at a time, so a match that runs
+ * long must visibly DELAY what's behind it, not grow underneath it.
+ *
+ * Walks each court's chips in start order keeping a rolling `cursor` (the
+ * earliest slot the court is next free). A scheduled/called chip that would
+ * start before the cursor is pushed right to it and carries the shift in
+ * `pushedSlots` (>0 ⇒ the board renders a `▸+N` delay marker). Playing and
+ * done chips are FACTS (actual timing) — they are never moved; they only
+ * advance the cursor. Pushes cascade naturally down the court. A genuine
+ * factual overlap (e.g. two playing chips on one court) stays overlapping —
+ * the board's vertical lane split remains the honest fallback for that.
+ *
+ * Pure and stable: input order of the returned array is preserved; only
+ * `placement.startSlot` / `pushedSlots` of pushed chips change.
+ */
+export function applyCourtPushback(chips: BoardChip[]): BoardChip[] {
+  const byCourt = new Map<number, BoardChip[]>();
+  for (const c of chips) {
+    const list = byCourt.get(c.placement.courtIndex) ?? [];
+    list.push(c);
+    byCourt.set(c.placement.courtIndex, list);
+  }
+
+  const pushed = new Map<string, BoardChip>();
+  for (const list of byCourt.values()) {
+    // Facts before plans on ties so an in-progress match claims the cell it
+    // actually occupies before a same-slot planned chip is considered.
+    const ordered = [...list].sort(
+      (a, b) =>
+        a.placement.startSlot - b.placement.startSlot ||
+        Number(isPlanned(b)) - Number(isPlanned(a)),
+    );
+    let cursor = Number.NEGATIVE_INFINITY;
+    for (const c of ordered) {
+      let start = c.placement.startSlot;
+      if (isPlanned(c) && start < cursor) {
+        const shift = cursor - start;
+        start = cursor;
+        pushed.set(c.key, {
+          ...c,
+          pushedSlots: shift,
+          placement: { ...c.placement, startSlot: start },
+        });
+      }
+      cursor = Math.max(cursor, start + c.placement.span);
+    }
+  }
+
+  if (pushed.size === 0) return chips;
+  return chips.map((c) => pushed.get(c.key) ?? c);
+}
+
+/** Plans move; facts don't. */
+function isPlanned(c: BoardChip): boolean {
+  return c.state === 'scheduled' || c.state === 'called';
 }
 
 /**
@@ -85,7 +149,7 @@ export function buildPlanChips(blocks: OpsBlock[]): BoardChip[] {
  * axis shows the position and the flag confirms it.
  */
 export function buildLiveChips(blocks: OpsBlock[], currentSlot: number, running = false): BoardChip[] {
-  return courtAssigned(blocks).map((b) => {
+  const chips = courtAssigned(blocks).map((b) => {
     const state = fromEngineStatus(b.status);
     const plannedSlot = b.slot as number;
     const plannedSpan = Math.max(1, b.span ?? 1);
@@ -126,6 +190,7 @@ export function buildLiveChips(blocks: OpsBlock[], currentSlot: number, running 
       late: running && deriveLate({ status: state, plannedSlot, currentSlot }),
       // Overrun measures past the PLANNED end (plannedSlot + plannedSpan).
       overrunSlots: deriveDriftSlots({ status: state, plannedSlot, span: plannedSpan, currentSlot }),
+      pushedSlots: 0, // assigned by the pushback pass below
       label: b.label,
       colorKey: b.colorKey,
       plannedSpan,
@@ -133,4 +198,7 @@ export function buildLiveChips(blocks: OpsBlock[], currentSlot: number, running 
       sideB: b.sideB,
     };
   });
+  // A long-running match must visibly DELAY what's behind it on its court,
+  // never grow underneath it (feature fix, 2026-07-02).
+  return applyCourtPushback(chips);
 }

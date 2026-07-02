@@ -188,7 +188,11 @@ export function RunLiveBoard({
           showSides={c.state === 'playing' && box.height >= 48}
           onSelect={() => onSelect(c.key)}
           data-testid={`run-card-${c.key}`}
-          title={`${c.source === 'meet' ? 'Meet' : 'Bracket'} · ${c.label} [${c.late ? 'late' : c.state}]`}
+          title={`${c.source === 'meet' ? 'Meet' : 'Bracket'} · ${c.label} [${c.late ? 'late' : c.state}]${
+            c.pushedSlots > 0
+              ? ` — delayed ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'} by the previous match on this court`
+              : ''
+          }`}
           style={{
             // Inset a 2px gutter on each side (like the Plan board) so a
             // selection ring / shadow has breathing room and never bleeds into
@@ -224,7 +228,21 @@ export function RunLiveBoard({
               </span>
             </span>
           )}
-          {c.late && (
+          {c.pushedSlots > 0 && (
+            // Pushback marker: this chip was shifted right because an earlier
+            // match still occupies its court — the ▸+N reads "delayed N slots"
+            // (the run-late amber voice). It replaces the LATE text badge on
+            // pushed chips: the shift already says the plan slipped, and two
+            // amber stamps on a 40px chip is noise (the title carries both).
+            <span
+              data-testid={`run-delayed-${c.key}`}
+              aria-label={`Delayed ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'}`}
+              className="sw-late-nudge absolute right-1.5 top-1 text-[9px] font-semibold uppercase tracking-wide text-status-warning sw-num"
+            >
+              ▸+{c.pushedSlots}
+            </span>
+          )}
+          {c.late && c.pushedSlots === 0 && (
             <span
               data-testid={`run-late-${c.key}`}
               aria-label="Late"
