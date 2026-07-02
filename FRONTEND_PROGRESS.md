@@ -359,6 +359,56 @@ remain roadmap cards (`implemented:false`).
 
 ---
 
+### Phase 12 — 2026-07-02 design-system handoff true-up ("Seamed, not gapped")
+- **Status: IN PROGRESS** — token/seamed/pill work below landed (commits `1f6ee42` skill
+  sync, `39dad98` tokens/motion pipeline, T3 commit for the surface work); remaining:
+  motion application across the other mapped surfaces (drawer/panel entrances,
+  call-flash/go-live on state flips, late-nudge, stagger, rail-expand, overlay-fade)
+  and the live both-themes verification pass.
+- **Source of truth:** the Claude Design handoff bundle at repo root
+  (`ShuttleWorks Design System-handoff/shuttleworks-design-system/project/`) — an enhanced
+  export of the same system. Diff vs the in-repo skill showed the token/component layer
+  UNCHANGED except: seamed `ui_kits/scheduler/index.html`, new full prototypes
+  (`ShuttleWorks - Final Direction[ Light].dc.html` + `support.js`), new
+  `guidelines/motion-gallery.html`, new `templates/run-board/`, and `@kind` annotations in
+  `tokens/typography.css`. Production, however, had **drifted from the skill's token spec** —
+  this phase trues it up.
+- [x] **tokens.css true-up** (packages/design-system): dark text ramp raised to spec
+      (#F7F8FA/#EAECF0/#D8DCE2/#A8ADB7/#767B87); light theme raised-contrast ramp
+      (ink #080D18…#6B7789), darker light hairlines (#DCE2EA/#E9ECF1/#CBD1DB/#C2CCDA),
+      page #E5E9EF, raised card #F5F7FA (was white), rail #F8F9FB, active #E5EDFB;
+      `--glow-live` alpha .5→.6; `--radius-md` 10→9px (handoff radius-lg: primary
+      buttons/nav rows; kills the non-spec 10px step).
+- [x] **Elevation pair added:** `--shadow-frame` + `--shadow-card` (both themes; dark gets
+      REAL card/frame shadows per spec — `--shadow-md/lg` now alias them instead of `none`).
+      Tailwind: `shadow-frame` / `shadow-card`.
+- [x] **Full sw-motion vocabulary** in globals.css (was only pulse+float-in): stagger,
+      call-flash, go-live, late-nudge, glow-in, ring-focus, rail-expand, now-sweep, panel-in,
+      drawer-in, overlay-fade, sheet-up — spec-exact timings via new
+      tokens (`--ease`, `--dur[-fast|-slow|-xslow]`, `--pulse-dur`, `--nudge-dur`,
+      `--stagger-step`); all guarded by prefers-reduced-motion. Colors converted to
+      hsl(var(--token)/α) so light theme stays correct. `cell-drag`/`reorder-shift`
+      deliberately EXCLUDED (gallery demo choreography — real drag is dnd-kit).
+- [x] **Seamed, not gapped** on Run: `RunSummaryBand` stat tiles now carry the 2px TOP status
+      accent bar (live/55 on playing, warning/60 on late; transparent reserve otherwise) —
+      flush-cell status is a top bar, never a full colored border. Board/queue were already
+      flush from earlier phases.
+- [x] **StatusPill live treatment:** pulsing dots use `sw-pulse` (1.6s breathe, was Tailwind
+      `animate-pulse`) + an own-hue `0 0 8px` glow (per-tone arbitrary shadow classes).
+- [x] **Skill sync:** copied the handoff's new/changed files into
+      `.agents/skills/shuttleworks-design/` (prototypes+support.js, motion-gallery,
+      templates/run-board, seamed ui-kit, typography annotations). `.agents/` is in
+      .gitignore but the skill is a tracked exception — the new files were force-added
+      (commit `1f6ee42` + the T3 commit), so the full mirror lives in git, not just
+      on disk. The untracked repo-root handoff export awaits Kyle's keep/ignore call.
+- **Not done (deliberate):** no literal 1280px rounded screen-frame retrofit (the app shell is
+  full-bleed by design; the frame idiom is for prototypes/mocks); handoff `--text-sm=12px`-style
+  type-scale names NOT adopted (Tailwind semantic ladder stays; values already cover the spec's
+  uses); HealthDot kept as the domain-specific workspace-health variant (same grammar).
+- **Gates:** vitest **910/910** ✓, eslint 0 err / 102 warns (**baseline-identical** count),
+  `tsc -b` + vite build ✓. Live Playwright verification of both themes pending (backend was
+  shut down after the SP-D7 pass this session).
+
 ## Token remap reference (prototype hex → intent; convert to HSL-triplet)
 | Token | Dark | Light |
 |---|---|---|

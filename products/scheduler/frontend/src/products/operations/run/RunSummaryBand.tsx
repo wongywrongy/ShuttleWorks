@@ -18,18 +18,29 @@ interface StatItemProps {
   value: string;
   testId: string;
   tone?: string;
+  /** Seamed-surface status signal: a 2px TOP accent bar (never a full colored
+   *  border on a flush cell — handoff "Seamed, not gapped" rule). Pass a
+   *  border-top color class; defaults to transparent (bar reserved, invisible). */
+  topBar?: string;
   /** data attribute placed on the value span for targeted CSS / test assertions */
   valueMeta?: Record<string, string>;
 }
 
-function StatItem({ label, value, testId, tone = 'text-foreground', valueMeta = {} }: StatItemProps) {
+function StatItem({
+  label,
+  value,
+  testId,
+  tone = 'text-foreground',
+  topBar = 'border-t-transparent',
+  valueMeta = {},
+}: StatItemProps) {
   const metaAttrs = Object.fromEntries(
     Object.entries(valueMeta).map(([k, v]) => [`data-${k}`, v]),
   );
   return (
     <div
       data-testid={testId}
-      className="flex flex-1 flex-col gap-0.5 border-r border-border px-4 py-2 last:border-r-0"
+      className={`flex flex-1 flex-col gap-0.5 border-r border-t-2 border-border px-4 py-2 last:border-r-0 ${topBar}`}
     >
       <span className={`text-lg font-bold leading-none sw-num ${tone}`} {...metaAttrs}>
         {value}
@@ -61,6 +72,7 @@ export function RunSummaryBand({ summary }: Props) {
         label="playing"
         value={String(playing)}
         tone={playing > 0 ? 'text-status-live' : 'text-muted-foreground'}
+        topBar={playing > 0 ? 'border-t-status-live/55' : 'border-t-transparent'}
       />
       <StatItem
         testId="run-band-courts-free"
@@ -73,6 +85,7 @@ export function RunSummaryBand({ summary }: Props) {
         label="late"
         value={String(late)}
         tone={late > 0 ? 'text-status-warning' : 'text-muted-foreground'}
+        topBar={late > 0 ? 'border-t-status-warning/60' : 'border-t-transparent'}
         valueMeta={late > 0 ? { 'late-value': 'true' } : {}}
       />
     </div>

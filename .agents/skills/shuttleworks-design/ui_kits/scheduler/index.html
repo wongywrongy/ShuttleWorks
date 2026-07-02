@@ -20,12 +20,13 @@
   .subrow.on{background:var(--surface-active);color:var(--text-1);font-weight:500}
   .subrow.on:before{content:"";position:absolute;left:-9px;top:6px;bottom:6px;width:2px;border-radius:2px;background:var(--accent)}
   .content{flex:1;min-width:0;display:flex}
-  .main{flex:1;min-width:0;display:flex;flex-direction:column;padding:14px 16px;gap:12px}
-  .tiles{display:flex;gap:10px}
-  .tile{flex:1;border:1px solid var(--border-1);border-radius:var(--radius-xl);background:var(--surface-card);padding:11px 14px}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .tiles{display:flex;border-bottom:1px solid var(--border-1)}
+  .tile{flex:1;border-right:1px solid var(--border-1);border-top:2px solid transparent;padding:11px 16px}
+  .tile:last-child{border-right:none}
   .tile .v{font-size:18px;font-weight:700;color:var(--text-1)}
   .tile .l{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
-  .board{border:1px solid var(--border-1);border-radius:var(--radius-xl);background:var(--surface-card);overflow:hidden}
+  .board{border-bottom:1px solid var(--border-1);overflow:hidden}
   .thead{display:flex;border-bottom:1px solid var(--border-1)}
   .thead .gut{width:44px;flex-shrink:0;border-right:1px solid var(--border-1)}
   .lane{flex:1;position:relative;height:22px}
@@ -47,7 +48,7 @@
   .done{background:var(--surface-band);border:1px solid var(--border-1);opacity:.62}.done .code{color:var(--text-muted);text-decoration:line-through}.done .init{background:var(--sw-chip-tag);color:var(--text-muted)}
   .lateb{position:absolute;inset:0 0 0 auto;width:16%;background:rgba(224,178,74,.2);border-left:1px solid var(--sw-called)}
   .meta{margin-left:auto;font-size:9px}
-  .queue{flex:1;border:1px solid var(--border-1);border-radius:var(--radius-xl);background:var(--surface-card);overflow:hidden}
+  .queue{flex:1;overflow:hidden}
   .qh{padding:10px 16px 6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
   .qrow{display:flex;align-items:center;gap:10px;padding:7px 16px;border-top:1px solid var(--border-row)}
   .qrow .init{width:13px;height:13px;font-size:8px;background:var(--sw-chip-tag);color:var(--text-muted)}
@@ -78,9 +79,9 @@
       <div class="main">
         <div class="tiles">
           <div class="tile"><div class="v sw-num">3<span style="color:var(--text-muted)">/12</span></div><div class="l">done</div></div>
-          <div class="tile" style="border-color:color-mix(in srgb,var(--status-live) 25%,transparent)"><div class="v sw-num" style="color:var(--status-live)">3</div><div class="l">playing</div></div>
+          <div class="tile" style="border-top-color:color-mix(in srgb,var(--status-live) 55%,transparent)"><div class="v sw-num" style="color:var(--status-live)">3</div><div class="l">playing</div></div>
           <div class="tile"><div class="v sw-num">1</div><div class="l">courts free</div></div>
-          <div class="tile" style="border-color:color-mix(in srgb,var(--status-called) 30%,transparent)"><div class="v sw-num" style="color:var(--status-called)">1</div><div class="l">late</div></div>
+          <div class="tile" style="border-top-color:color-mix(in srgb,var(--status-called) 60%,transparent)"><div class="v sw-num" style="color:var(--status-called)">1</div><div class="l">late</div></div>
         </div>
         <div class="board">
           <div class="thead"><div class="gut"></div><div class="lane"><b style="left:6px">09:00</b><b style="left:50%">10:00</b><span class="now" style="bottom:-208px"></span></div></div>

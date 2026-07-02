@@ -34,6 +34,16 @@ const TONE_DOT: Record<PillTone, string> = {
   amber:  'bg-status-called',
 };
 
+/* Pulsing dots glow in their own hue — the handoff pill's live-signal
+ * treatment (`0 0 8px <dot color>`; glow marks live signals, not chrome). */
+const TONE_GLOW: Record<PillTone, string> = {
+  green:  'shadow-[0_0_8px_hsl(var(--status-live)/0.6)]',
+  yellow: 'shadow-[0_0_8px_hsl(var(--status-warning)/0.6)]',
+  red:    'shadow-[0_0_8px_hsl(var(--status-blocked)/0.6)]',
+  blue:   'shadow-[0_0_8px_hsl(var(--status-started)/0.6)]',
+  amber:  'shadow-[0_0_8px_hsl(var(--status-called)/0.6)]',
+};
+
 interface Props {
   tone: PillTone;
   dot?: boolean;
@@ -49,7 +59,11 @@ export function StatusPill({ tone, dot, pulse, className = '', title, children }
       className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium ${TONE_BG[tone]} ${className}`}
       title={title}
     >
-      {dot && <span className={`h-1 w-1 rounded-full ${TONE_DOT[tone]} ${pulse ? 'animate-pulse' : ''}`} />}
+      {dot && (
+        <span
+          className={`h-1 w-1 rounded-full ${TONE_DOT[tone]} ${pulse ? `sw-pulse ${TONE_GLOW[tone]}` : ''}`}
+        />
+      )}
       {children}
     </span>
   );

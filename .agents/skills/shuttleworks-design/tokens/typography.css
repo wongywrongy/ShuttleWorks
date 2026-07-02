@@ -25,10 +25,10 @@
   --text-3xs: 9px;        /* micro tags on chips */
 
   /* Weights */
-  --fw-regular: 400;
-  --fw-medium: 500;
-  --fw-semibold: 600;
-  --fw-bold: 700;
+  --fw-regular: 400;  /* @kind font */
+  --fw-medium: 500;   /* @kind font */
+  --fw-semibold: 600; /* @kind font */
+  --fw-bold: 700;     /* @kind font */
 
   /* Tracking */
   --track-tight: -0.03em;   /* display */
