@@ -1763,13 +1763,15 @@ def generate_event_route(
             result.schedule_result.infeasible_reasons
             if result.schedule_result else []
         )
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"solver returned {result.status.value}: "
-                f"{'; '.join(reasons) or 'no reason'}"
-            ),
+        # Operator-facing wording: "solver returned infeasible: no reason"
+        # reads as a malfunction. Say what happened and what to try.
+        detail = (
+            "The draw's matches don't fit the current day plan"
+            + (f" ({'; '.join(reasons)})" if reasons else "")
+            + ". Free up court time — widen the day window, add courts, or "
+            "reduce other events — then generate again."
         )
+        raise HTTPException(status_code=409, detail=detail)
 
     # Solve succeeded — now persist to DB.
     # 1. Delete the old event row (cascades participants + matches).

@@ -22,7 +22,9 @@ export function TemplateCard({
       onClick={onSelect}
       className={[
         'flex flex-col gap-2 rounded-md border p-4 text-left transition-colors',
-        selected ? 'border-foreground bg-muted/30' : 'border-border hover:bg-muted/40',
+        // Accent-selected — the same selected grammar as every other
+        // selectable card/row in the app.
+        selected ? 'border-accent bg-accent/10' : 'border-border hover:bg-muted/40',
       ].join(' ')}
     >
       <div className="text-sm font-semibold text-foreground">{template.title}</div>
