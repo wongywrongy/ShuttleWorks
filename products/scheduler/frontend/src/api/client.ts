@@ -47,6 +47,7 @@ import type {
   BracketValidationOut,
   BracketEventUpsertIn,
   BracketEventGenerateIn,
+  BracketEventPatchIn,
   BracketScore,
   BracketCommitRoundIn,
 } from './bracketDto';
@@ -1235,6 +1236,39 @@ class ApiClient {
     const { data } = await this.client.post(
       `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}/generate`,
       body,
+    );
+    return data;
+  }
+
+  /**
+   * Draw-formats program: draft-only per-draw configuration edit
+   * (seeding / bracket size / rr rounds / format config blob) that does
+   * NOT touch participants — avoids the upsert-wipes-participants trap.
+   */
+  async bracketEventPatch(
+    tid: string,
+    eventId: string,
+    body: BracketEventPatchIn,
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.patch(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}`,
+      body,
+    );
+    return data;
+  }
+
+  /**
+   * Draw-formats program: generate the next Swiss round from current
+   * standings (append-only; 409 while the current round is incomplete,
+   * for non-progressive formats, drafts, or exhausted rounds).
+   */
+  async bracketEventNextRound(
+    tid: string,
+    eventId: string,
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}/rounds/next`,
+      {},
     );
     return data;
   }

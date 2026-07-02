@@ -18,12 +18,25 @@ import { useBracket } from '../../hooks/useBracket';
 import { useBracketApi } from '../../api/bracketClient';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import { useTournamentStore } from '../../store/tournamentStore';
-import type { BracketEventStatus, BracketTournamentDTO } from '../../api/bracketDto';
+import type {
+  BracketEventPatchIn,
+  BracketEventStatus,
+  BracketTournamentDTO,
+} from '../../api/bracketDto';
 import { ActionsBar, EmptyState } from '../../components/control-plane';
 import { Modal } from '../../components/common/Modal';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
 import { formatLabel, disciplineLabel } from './bracketLabels';
+import {
+  DRAW_FORMATS,
+  descriptorFor,
+  type FormatConfigField,
+  type FormatDescriptor,
+} from './formatRegistry';
+
+/** The tournament snapshot's per-event shape (EventDTO is module-private). */
+type BracketEventDTO = BracketTournamentDTO['events'][number];
 
 export function BracketDrawsTab() {
   const { data, setData, refresh } = useBracket();
@@ -34,6 +47,7 @@ export function BracketDrawsTab() {
 
   const [openPickerFor, setOpenPickerFor] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [configFor, setConfigFor] = useState<string | null>(null);
 
   // Legacy deep links (and the old "New draw" route) arrived with ?new=1
   // to auto-open the create flow. Honor it by opening the layer, then
@@ -49,6 +63,7 @@ export function BracketDrawsTab() {
   }, [searchParams, setSearchParams]);
 
   const events = data?.events ?? [];
+  const configEvent = configFor ? events.find((e) => e.id === configFor) : undefined;
 
   // Per-draw match-progress tallies (same bucketing as the Draw header's
   // DONE/LIVE/READY/PEND strip). Draft draws have no play-units and so no
@@ -62,6 +77,21 @@ export function BracketDrawsTab() {
     async (eventId: string, wipe: boolean) => {
       try {
         const next = await api.eventGenerate(eventId, { wipe });
+        setData(next);
+      } catch {
+        // Interceptor surfaces toast; nothing more here.
+        await refresh();
+      }
+    },
+    [api, setData, refresh],
+  );
+
+  // Swiss progressive generation: append the next round's pairings from
+  // standings. The backend gates with 409 (incomplete round / exhausted).
+  const handleNextRound = useCallback(
+    async (eventId: string) => {
+      try {
+        const next = await api.eventNextRound(eventId);
         setData(next);
       } catch {
         // Interceptor surfaces toast; nothing more here.
@@ -122,6 +152,13 @@ export function BracketDrawsTab() {
               const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
               const generated = status !== 'draft';
               const counts = countsByEvent.get(ev.id);
+              const isSwiss = ev.format === 'swiss';
+              const rawSwissRounds = isSwiss ? ev.config?.swiss_rounds : undefined;
+              const swissRounds =
+                typeof rawSwissRounds === 'number' ? rawSwissRounds : undefined;
+              // "Next round" only once every existing play unit has a result.
+              const roundComplete =
+                !!counts && counts.live === 0 && counts.ready === 0 && counts.pending === 0;
               return (
                 <Card
                   key={ev.id}
@@ -162,6 +199,14 @@ export function BracketDrawsTab() {
                     </button>
                   </div>
 
+                  {/* Swiss progressive meta — "Round k of K" once generated. */}
+                  {isSwiss && swissRounds !== undefined && generated && (
+                    <div className="text-xs text-muted-foreground">
+                      Round <span className="sw-num">{ev.rounds.length}</span> of{' '}
+                      <span className="sw-num">{swissRounds}</span>
+                    </div>
+                  )}
+
                   {/* Same voice as the Draw header's DONE/LIVE/READY/PEND strip. */}
                   {counts && (
                     <StatusBar
@@ -193,10 +238,18 @@ export function BracketDrawsTab() {
                                 id: p.id, name: p.name,
                               }));
                           try {
+                            // Echo the draw's current config knobs so a
+                            // participants commit never resets what the
+                            // operator configured (upsert replaces fields).
                             const next = await api.eventUpsert(ev.id, {
                               discipline: ev.discipline,
                               format: ev.format,
                               bracket_size: ev.bracket_size,
+                              ...(ev.seeded_count != null
+                                ? { seeded_count: ev.seeded_count }
+                                : {}),
+                              ...(ev.rr_rounds != null ? { rr_rounds: ev.rr_rounds } : {}),
+                              ...(ev.config ? { config: ev.config } : {}),
                               duration_slots: 1,
                               participants,
                             });
@@ -220,16 +273,50 @@ export function BracketDrawsTab() {
                       onGenerate={() => handleGenerate(ev.id, false)}
                       onRegenerate={() => handleGenerate(ev.id, true)}
                     />
-                    <button
-                      type="button"
-                      onClick={() => openDraw(ev.id)}
-                      disabled={!generated}
-                      data-testid={`bracket-open-draw-${ev.id}`}
-                      title={generated ? `Open the ${ev.id} draw` : 'Generate the draw first'}
-                      className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Open draw →
-                    </button>
+                    <div className="flex items-center gap-3">
+                      {status === 'draft' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfigFor(ev.id);
+                          }}
+                          data-testid={`bracket-configure-${ev.id}`}
+                          className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                        >
+                          Configure
+                        </button>
+                      )}
+                      {isSwiss && generated && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNextRound(ev.id);
+                          }}
+                          disabled={!roundComplete}
+                          data-testid={`bracket-next-round-${ev.id}`}
+                          title={
+                            roundComplete
+                              ? 'Pair the next Swiss round from standings'
+                              : 'Record every result in the current round first'
+                          }
+                          className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Next round
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openDraw(ev.id)}
+                        disabled={!generated}
+                        data-testid={`bracket-open-draw-${ev.id}`}
+                        title={generated ? `Open the ${ev.id} draw` : 'Generate the draw first'}
+                        className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Open draw →
+                      </button>
+                    </div>
                   </div>
                 </Card>
               );
@@ -241,17 +328,31 @@ export function BracketDrawsTab() {
       {creating && (
         <NewDrawModal
           onClose={() => setCreating(false)}
-          onCreate={async (body) => {
+          onCreate={async ({ id, ...body }) => {
             try {
-              const next = await api.eventUpsert(body.id, {
-                discipline: body.discipline,
-                format: body.format,
+              const next = await api.eventUpsert(id, {
+                ...body,
                 duration_slots: 1,
                 participants: [],
               });
               setData(next);
             } finally {
               setCreating(false);
+            }
+          }}
+        />
+      )}
+
+      {configEvent && (
+        <DrawConfigModal
+          event={configEvent}
+          onClose={() => setConfigFor(null)}
+          onSave={async (patch) => {
+            try {
+              const next = await api.eventPatch(configEvent.id, patch);
+              setData(next);
+            } finally {
+              setConfigFor(null);
             }
           }}
         />
@@ -358,30 +459,251 @@ function ActionCell({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Per-format configuration fields (shared by the New-draw + Configure layers)
+// ---------------------------------------------------------------------------
+
+type FieldValues = Record<string, unknown>;
+
+/** Column-target picker fields land as these top-level DTO keys. */
+type ColumnFieldValues = Partial<
+  Pick<BracketEventPatchIn, 'seeded_count' | 'bracket_size' | 'rr_rounds' | 'duration_slots'>
+>;
+
+function defaultFieldValues(fields: FormatConfigField[]): FieldValues {
+  const out: FieldValues = {};
+  for (const f of fields) {
+    if (f.default !== undefined) out[f.key] = f.default;
+  }
+  return out;
+}
+
+/** Current values for the Configure layer — the event's persisted column
+ *  echoes (seeded_count/bracket_size/rr_rounds) and config blob, falling
+ *  back to the descriptor's defaults. */
+function eventFieldValues(fields: FormatConfigField[], ev: BracketEventDTO): FieldValues {
+  const out: FieldValues = {};
+  for (const f of fields) {
+    const persisted =
+      f.target === 'config'
+        ? ev.config?.[f.key]
+        : (ev as unknown as Record<string, unknown>)[f.key];
+    const v = persisted ?? f.default;
+    if (v !== undefined && v !== null) out[f.key] = v;
+  }
+  return out;
+}
+
+/** Split entered values into top-level DTO keys (`target:'column'`) and the
+ *  format-specific `config` blob (`target:'config'`). Blank/unset fields are
+ *  omitted so the backend applies its own defaults; `config` is undefined
+ *  when no config-target field is set. */
+function splitFieldPayload(
+  fields: FormatConfigField[],
+  values: FieldValues,
+): { column: ColumnFieldValues; config?: Record<string, unknown> } {
+  const column: Record<string, unknown> = {};
+  const config: Record<string, unknown> = {};
+  for (const f of fields) {
+    const v = values[f.key];
+    if (v === undefined || v === null || v === '') continue;
+    if (f.kind === 'toggle' && v === false) continue;
+    if (f.target === 'config') config[f.key] = v;
+    else column[f.key] = v;
+  }
+  return {
+    column: column as ColumnFieldValues,
+    ...(Object.keys(config).length > 0 ? { config } : {}),
+  };
+}
+
+const FIELD_LABEL_CLASS =
+  'mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground';
+const FIELD_INPUT_CLASS = 'w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm';
+
+/** One dynamic config input — number / select / toggle per the descriptor. */
+function FieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: FormatConfigField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}) {
+  if (field.kind === 'toggle') {
+    return (
+      <label className="flex items-start gap-2 pt-1">
+        <input
+          type="checkbox"
+          checked={value === true}
+          onChange={(e) => onChange(e.target.checked)}
+          className="mt-0.5 h-3.5 w-3.5 accent-accent"
+        />
+        <span className="min-w-0">
+          <span className="block text-sm">{field.label}</span>
+          {field.help && (
+            <span className="block text-2xs text-muted-foreground">{field.help}</span>
+          )}
+        </span>
+      </label>
+    );
+  }
+  if (field.kind === 'select') {
+    return (
+      <label className="block">
+        <span className={FIELD_LABEL_CLASS}>{field.label}</span>
+        <select
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value)}
+          className={FIELD_INPUT_CLASS}
+        >
+          {(field.options ?? []).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        {field.help && <span className="mt-1 block text-2xs text-muted-foreground">{field.help}</span>}
+      </label>
+    );
+  }
+  return (
+    <label className="block">
+      <span className={FIELD_LABEL_CLASS}>{field.label}</span>
+      <input
+        type="number"
+        value={typeof value === 'number' ? value : ''}
+        min={field.min}
+        max={field.max}
+        onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+        className={`${FIELD_INPUT_CLASS} sw-num`}
+      />
+      {field.help && <span className="mt-1 block text-2xs text-muted-foreground">{field.help}</span>}
+    </label>
+  );
+}
+
+function FormatConfigFields({
+  fields,
+  values,
+  onChange,
+}: {
+  fields: FormatConfigField[];
+  values: FieldValues;
+  onChange: (key: string, value: unknown) => void;
+}) {
+  if (fields.length === 0) return null;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {fields.map((f) => (
+        <FieldInput
+          key={f.key}
+          field={f}
+          value={values[f.key]}
+          onChange={(v) => onChange(f.key, v)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** One selectable card in the New-draw format grid. Unimplemented formats
+ *  render dimmed + disabled with a "Planned" tag — the roadmap affordance. */
+function FormatCard({
+  descriptor,
+  selected,
+  onPick,
+}: {
+  descriptor: FormatDescriptor;
+  selected: boolean;
+  onPick: () => void;
+}) {
+  const Glyph = descriptor.glyph;
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      disabled={!descriptor.implemented}
+      aria-disabled={!descriptor.implemented}
+      aria-pressed={selected}
+      data-testid={`format-card-${descriptor.id}`}
+      className={`${INTERACTIVE_BASE} rounded-sm border p-2.5 text-left transition-[border-color,background-color] duration-fast ease-brand ${
+        selected
+          ? 'border-accent bg-accent/10'
+          : 'border-border bg-bg-elev hover:border-accent/40'
+      } ${descriptor.implemented ? '' : 'cursor-not-allowed opacity-40'}`}
+    >
+      <span className="flex items-center gap-2">
+        <Glyph className={`h-5 w-5 shrink-0 ${selected ? 'text-accent' : 'text-muted-foreground'}`} />
+        <span className="truncate text-sm font-semibold">{descriptor.label}</span>
+        {!descriptor.implemented && (
+          <span className="ml-auto shrink-0 text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Planned
+          </span>
+        )}
+      </span>
+      <span className="mt-1 block text-xs text-muted-foreground">{descriptor.blurb}</span>
+      <span className="mt-1.5 block text-2xs font-semibold uppercase tracking-[0.08em] text-accent">
+        {descriptor.matchesHint}
+      </span>
+    </button>
+  );
+}
+
+/** What the New-draw layer hands back on Create: identity + format plus the
+ *  format's column-target knobs and (when set) the config blob. */
+interface NewDrawSubmitBody extends ColumnFieldValues {
+  id: string;
+  discipline: string;
+  format: string;
+  config?: Record<string, unknown>;
+}
+
 /**
  * Create-a-draw layer. Opens over the Draws surface so creation never
  * sends the operator to a separate page. Names the event (ID +
- * discipline) and picks the draw format; participants are entered
- * in-grid afterward, then the draw is generated.
+ * discipline) and picks the draw format from the registry card grid —
+ * glyph, blurb, and the guaranteed-matches hint directors choose by —
+ * then tunes the format's knobs; participants are entered in-grid
+ * afterward, then the draw is generated.
  */
 function NewDrawModal({
   onClose,
   onCreate,
 }: {
   onClose: () => void;
-  onCreate: (body: { id: string; discipline: string; format: 'se' | 'rr' }) => void;
+  onCreate: (body: NewDrawSubmitBody) => void;
 }) {
   const [id, setId] = useState('');
   const [discipline, setDiscipline] = useState('MS');
-  const [format, setFormat] = useState<'se' | 'rr'>('se');
+  const [format, setFormat] = useState<string>('se');
+  const [values, setValues] = useState<FieldValues>(() =>
+    defaultFieldValues(descriptorFor('se')?.fields ?? []),
+  );
+  const descriptor = descriptorFor(format) ?? DRAW_FORMATS[0];
   const titleId = 'new-draw-title';
 
+  const pickFormat = (d: FormatDescriptor) => {
+    if (!d.implemented) return;
+    setFormat(d.id);
+    setValues(defaultFieldValues(d.fields));
+  };
+
   const submit = () => {
-    if (id.trim()) onCreate({ id: id.trim(), discipline, format });
+    if (!id.trim()) return;
+    const { column, config } = splitFieldPayload(descriptor.fields, values);
+    onCreate({
+      id: id.trim(),
+      discipline,
+      format: descriptor.id,
+      ...column,
+      ...(config ? { config } : {}),
+    });
   };
 
   return (
-    <Modal onClose={onClose} titleId={titleId} widthClass="max-w-sm">
+    <Modal onClose={onClose} titleId={titleId} widthClass="max-w-2xl">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 id={titleId} className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           New draw
@@ -396,45 +718,55 @@ function NewDrawModal({
         </button>
       </div>
 
-      <div className="space-y-3 px-4 py-4">
-        <label className="block">
-          <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Event ID
-          </span>
-          <input
-            type="text"
-            value={id}
-            autoFocus
-            onChange={(e) => setId(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submit()}
-            placeholder="MS"
-            className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Discipline
-          </span>
-          <input
-            type="text"
-            value={discipline}
-            onChange={(e) => setDiscipline(e.target.value)}
-            className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Format
-          </span>
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value as 'se' | 'rr')}
-            className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm"
-          >
-            <option value="se">Single elimination</option>
-            <option value="rr">Round robin</option>
-          </select>
-        </label>
+      <div className="max-h-[70vh] space-y-4 overflow-y-auto px-4 py-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className={FIELD_LABEL_CLASS}>Event ID</span>
+            <input
+              type="text"
+              value={id}
+              autoFocus
+              onChange={(e) => setId(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+              placeholder="MS"
+              className={FIELD_INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className={FIELD_LABEL_CLASS}>Discipline</span>
+            <input
+              type="text"
+              value={discipline}
+              onChange={(e) => setDiscipline(e.target.value)}
+              className={FIELD_INPUT_CLASS}
+            />
+          </label>
+        </div>
+
+        <div>
+          <span className={FIELD_LABEL_CLASS}>Format</span>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {DRAW_FORMATS.map((d) => (
+              <FormatCard
+                key={d.id}
+                descriptor={d}
+                selected={d.id === descriptor.id}
+                onPick={() => pickFormat(d)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {descriptor.fields.length > 0 && (
+          <div>
+            <span className={FIELD_LABEL_CLASS}>Options</span>
+            <FormatConfigFields
+              fields={descriptor.fields}
+              values={values}
+              onChange={(key, v) => setValues((prev) => ({ ...prev, [key]: v }))}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
@@ -443,6 +775,79 @@ function NewDrawModal({
         </Button>
         <Button variant="brand" size="sm" disabled={!id.trim()} onClick={submit}>
           Create draw
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Configure layer for a DRAFT draw — the same dynamic per-format fields as
+ * the New-draw layer, prefilled from the event's persisted knobs, saved via
+ * the draft-only PATCH (never the participants-wiping upsert).
+ */
+function DrawConfigModal({
+  event: ev,
+  onClose,
+  onSave,
+}: {
+  event: BracketEventDTO;
+  onClose: () => void;
+  onSave: (patch: BracketEventPatchIn) => void;
+}) {
+  const descriptor = descriptorFor(ev.format);
+  const fields = descriptor?.fields ?? [];
+  const [values, setValues] = useState<FieldValues>(() => eventFieldValues(fields, ev));
+  const titleId = 'draw-config-title';
+
+  const submit = () => {
+    const { column, config } = splitFieldPayload(fields, values);
+    onSave({ ...column, ...(config ? { config } : {}) });
+  };
+
+  return (
+    <Modal onClose={onClose} titleId={titleId} widthClass="max-w-md">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h2 id={titleId} className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Configure draw
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="text-muted-foreground hover:text-foreground"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="space-y-4 px-4 py-4">
+        <div className="text-xs text-muted-foreground">
+          <span className="font-semibold text-accent sw-num">{ev.id}</span>
+          {' · '}
+          <span>{disciplineLabel(ev.discipline)}</span>
+          {' · '}
+          <span>{formatLabel(ev.format)}</span>
+        </div>
+        {fields.length > 0 ? (
+          <FormatConfigFields
+            fields={fields}
+            values={values}
+            onChange={(key, v) => setValues((prev) => ({ ...prev, [key]: v }))}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            This format has no configurable options.
+          </p>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant="brand" size="sm" disabled={fields.length === 0} onClick={submit}>
+          Save
         </Button>
       </div>
     </Modal>

@@ -23,6 +23,7 @@ import type {
   BracketValidationOut,
   BracketEventUpsertIn,
   BracketEventGenerateIn,
+  BracketEventPatchIn,
   BracketScore,
   BracketCommitRoundIn,
   WinnerSide,
@@ -76,6 +77,10 @@ export interface BracketApi {
   exportIcsUrl: () => string;
   eventUpsert: (eventId: string, body: BracketEventUpsertIn) => Promise<BracketTournamentDTO>;
   eventGenerate: (eventId: string, body: BracketEventGenerateIn) => Promise<BracketTournamentDTO>;
+  /** Draft-only per-draw config edit — never touches participants. */
+  eventPatch: (eventId: string, body: BracketEventPatchIn) => Promise<BracketTournamentDTO>;
+  /** Swiss: append the next round's pairings from current standings. */
+  eventNextRound: (eventId: string) => Promise<BracketTournamentDTO>;
   eventDelete: (eventId: string) => Promise<void>;
   /** SP-G1 Task 9b: directly place a play unit on a court+slot without
    *  re-running the solver.  Creates for unscheduled units (no 409); overwrites
@@ -126,6 +131,8 @@ export function BracketApiProvider({
       exportIcsUrl: () => apiClient.bracketExportIcsUrl(tournamentId),
       eventUpsert: (eventId, body) => apiClient.bracketEventUpsert(tournamentId, eventId, body),
       eventGenerate: (eventId, body) => apiClient.bracketEventGenerate(tournamentId, eventId, body),
+      eventPatch: (eventId, body) => apiClient.bracketEventPatch(tournamentId, eventId, body),
+      eventNextRound: (eventId) => apiClient.bracketEventNextRound(tournamentId, eventId),
       eventDelete: (eventId) => apiClient.bracketEventDelete(tournamentId, eventId),
       assignCourt: (body) => apiClient.assignBracketCourt(tournamentId, body),
       unassign: (body) => apiClient.unassignBracketCourt(tournamentId, body),

@@ -716,7 +716,11 @@ function Side({
 
 function labelFor(
   side: string[] | null,
-  slot: { participant_id: string | null; feeder_play_unit_id: string | null },
+  slot: {
+    participant_id: string | null;
+    feeder_play_unit_id: string | null;
+    feeder_take?: "loser" | null;
+  },
   nameById: Record<string, string>
 ): string {
   if (side && side.length > 0) {
@@ -724,7 +728,8 @@ function labelFor(
   }
   if (slot.participant_id === "__BYE__" || slot.participant_id === null) {
     if (slot.feeder_play_unit_id) {
-      return `Winner of ${slot.feeder_play_unit_id}`;
+      const take = slot.feeder_take === "loser" ? "Loser" : "Winner";
+      return `${take} of ${slot.feeder_play_unit_id}`;
     }
     return "Bye";
   }

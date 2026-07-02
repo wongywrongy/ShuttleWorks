@@ -12,6 +12,8 @@ import type { PlayUnitDTO, AssignmentDTO, ResultDTO } from '../../../api/bracket
 
 const mockEventUpsert = vi.fn();
 const mockEventGenerate = vi.fn();
+const mockEventPatch = vi.fn();
+const mockEventNextRound = vi.fn();
 const mockSetData = vi.fn();
 const mockRefresh = vi.fn();
 
@@ -29,6 +31,8 @@ vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({
     eventUpsert: mockEventUpsert,
     eventGenerate: mockEventGenerate,
+    eventPatch: mockEventPatch,
+    eventNextRound: mockEventNextRound,
     get: vi.fn().mockResolvedValue(null),
   }),
   BracketApiContext: { Provider: ({ children }: { children: React.ReactNode }) => children },
@@ -50,6 +54,9 @@ function makeBracketData(overrides?: {
   status?: 'draft' | 'generated' | 'started';
   participantCount?: number;
   bracketSize?: number;
+  format?: string;
+  config?: Record<string, unknown>;
+  rounds?: string[][];
   playUnits?: PlayUnitDTO[];
   assignments?: AssignmentDTO[];
   results?: ResultDTO[];
@@ -64,11 +71,12 @@ function makeBracketData(overrides?: {
       {
         id: 'MS',
         discipline: 'MS',
-        format: 'se' as const,
+        format: overrides?.format ?? 'se',
         bracket_size: overrides?.bracketSize ?? 4,
         participant_count: overrides?.participantCount ?? 0,
-        rounds: [],
+        rounds: overrides?.rounds ?? [],
         status: overrides?.status ?? 'draft',
+        ...(overrides?.config ? { config: overrides.config } : {}),
       },
     ],
     participants: [],
@@ -106,6 +114,8 @@ beforeEach(() => {
   mockBracketData = makeBracketData();
   mockEventUpsert.mockReset();
   mockEventGenerate.mockReset();
+  mockEventPatch.mockReset();
+  mockEventNextRound.mockReset();
   mockSetData.mockReset();
   mockRefresh.mockReset();
   mockNavigate.mockReset();
@@ -284,6 +294,188 @@ describe('BracketDrawsTab — create in a layer', () => {
     fireEvent.click(screen.getByTestId('bracket-new-draw'));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('button', { name: /Create draw/i })).toBeDisabled();
+  });
+});
+
+describe('BracketDrawsTab — format picker card grid', () => {
+  function openNewDraw(id: string) {
+    renderDraws();
+    fireEvent.click(screen.getByTestId('bracket-new-draw'));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByPlaceholderText('MS'), { target: { value: id } });
+    return dialog;
+  }
+
+  it('defaults to the single-elimination card selected', () => {
+    renderDraws();
+    fireEvent.click(screen.getByTestId('bracket-new-draw'));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByTestId('format-card-se')).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dialog).getByTestId('format-card-rr')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('renders unimplemented formats as disabled Planned roadmap cards', () => {
+    renderDraws();
+    fireEvent.click(screen.getByTestId('bracket-new-draw'));
+    const dialog = screen.getByRole('dialog');
+    for (const id of ['groups', 'ladder']) {
+      const card = within(dialog).getByTestId(`format-card-${id}`);
+      expect(card).toBeDisabled();
+      expect(card).toHaveAttribute('aria-disabled', 'true');
+    }
+    expect(within(dialog).getAllByText('Planned')).toHaveLength(2);
+  });
+
+  it('picking de + toggling grand-final reset sends config.grand_final_reset', async () => {
+    mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
+    const dialog = openNewDraw('MD');
+    fireEvent.click(within(dialog).getByTestId('format-card-de'));
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Grand final reset/i }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    await vi.waitFor(() =>
+      expect(mockEventUpsert).toHaveBeenCalledWith('MD', {
+        discipline: 'MS',
+        format: 'de',
+        config: { grand_final_reset: true },
+        duration_slots: 1,
+        participants: [],
+      }),
+    );
+  });
+
+  it('picking monrad sends the consolation choice into config', async () => {
+    mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
+    const dialog = openNewDraw('WS');
+    fireEvent.click(within(dialog).getByTestId('format-card-monrad'));
+    fireEvent.change(within(dialog).getByLabelText(/Consolation/i), {
+      target: { value: 'plate' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    await vi.waitFor(() =>
+      expect(mockEventUpsert).toHaveBeenCalledWith('WS', {
+        discipline: 'MS',
+        format: 'monrad',
+        config: { consolation: 'plate' },
+        duration_slots: 1,
+        participants: [],
+      }),
+    );
+  });
+
+  it('picking swiss sends the round count into config', async () => {
+    mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
+    const dialog = openNewDraw('XD');
+    fireEvent.click(within(dialog).getByTestId('format-card-swiss'));
+    fireEvent.change(within(dialog).getByLabelText(/Swiss rounds/i), {
+      target: { value: '5' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    await vi.waitFor(() =>
+      expect(mockEventUpsert).toHaveBeenCalledWith('XD', {
+        discipline: 'MS',
+        format: 'swiss',
+        config: { swiss_rounds: 5 },
+        duration_slots: 1,
+        participants: [],
+      }),
+    );
+  });
+
+  it('column-target fields land as top-level body keys, not in config', async () => {
+    mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
+    const dialog = openNewDraw('MX');
+    fireEvent.change(within(dialog).getByLabelText(/Seeded players/i), {
+      target: { value: '4' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Bracket size/i), {
+      target: { value: '16' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    await vi.waitFor(() =>
+      expect(mockEventUpsert).toHaveBeenCalledWith('MX', {
+        discipline: 'MS',
+        format: 'se',
+        seeded_count: 4,
+        bracket_size: 16,
+        duration_slots: 1,
+        participants: [],
+      }),
+    );
+  });
+});
+
+describe('BracketDrawsTab — configure a draft draw', () => {
+  it('opens the Configure layer prefilled and PATCHes via eventPatch', async () => {
+    mockBracketData = makeBracketData({ status: 'draft', bracketSize: 4 });
+    const next = { ...mockBracketData };
+    mockEventPatch.mockResolvedValue(next);
+    renderDraws();
+    fireEvent.click(screen.getByTestId('bracket-configure-MS'));
+    const dialog = screen.getByRole('dialog');
+    // Prefilled from the event's persisted column echo.
+    expect(within(dialog).getByLabelText(/Bracket size/i)).toHaveValue(4);
+    fireEvent.change(within(dialog).getByLabelText(/Seeded players/i), {
+      target: { value: '2' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
+    await vi.waitFor(() =>
+      expect(mockEventPatch).toHaveBeenCalledWith(
+        'MS',
+        expect.objectContaining({ seeded_count: 2, bracket_size: 4 }),
+      ),
+    );
+    expect(mockSetData).toHaveBeenCalledWith(next);
+  });
+
+  it('offers Configure only while the draw is draft', () => {
+    mockBracketData = makeBracketData({ status: 'generated' });
+    renderDraws();
+    expect(screen.queryByTestId('bracket-configure-MS')).not.toBeInTheDocument();
+  });
+});
+
+describe('BracketDrawsTab — swiss progressive cards', () => {
+  const swissData = (results: ResultDTO[]) =>
+    makeBracketData({
+      status: 'generated',
+      format: 'swiss',
+      config: { swiss_rounds: 3 },
+      rounds: [['pu-1', 'pu-2']],
+      playUnits: [makePlayUnit('pu-1'), makePlayUnit('pu-2', { match_index: 1 })],
+      results,
+    });
+
+  it('shows Round k of K and generates the next round once results are in', async () => {
+    mockBracketData = swissData([
+      { play_unit_id: 'pu-1', winner_side: 'A', walkover: false, finished_at_slot: null },
+      { play_unit_id: 'pu-2', winner_side: 'B', walkover: false, finished_at_slot: null },
+    ]);
+    const next = { ...mockBracketData };
+    mockEventNextRound.mockResolvedValue(next);
+    renderDraws();
+    const card = screen.getByTestId('bracket-draw-card-MS');
+    expect(card).toHaveTextContent(/Round\s*1\s*of\s*3/);
+    const btn = within(card).getByTestId('bracket-next-round-MS');
+    expect(btn).not.toBeDisabled();
+    fireEvent.click(btn);
+    await vi.waitFor(() => expect(mockEventNextRound).toHaveBeenCalledWith('MS'));
+    expect(mockSetData).toHaveBeenCalledWith(next);
+    // The quiet action must not bubble into the whole-card open-draw click.
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('disables Next round while any match of the draw lacks a result', () => {
+    mockBracketData = swissData([
+      { play_unit_id: 'pu-1', winner_side: 'A', walkover: false, finished_at_slot: null },
+    ]);
+    renderDraws();
+    expect(screen.getByTestId('bracket-next-round-MS')).toBeDisabled();
+  });
+
+  it('offers no Next round on non-swiss draws', () => {
+    mockBracketData = makeBracketData({ status: 'generated' });
+    renderDraws();
+    expect(screen.queryByTestId('bracket-next-round-MS')).not.toBeInTheDocument();
   });
 });
 

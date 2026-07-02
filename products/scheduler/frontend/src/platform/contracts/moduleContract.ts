@@ -189,6 +189,8 @@ export const bracketContract: ModuleContract = {
     apiClient.importBracketCsv,
     apiClient.bracketEventUpsert,
     apiClient.bracketEventGenerate,
+    apiClient.bracketEventPatch,
+    apiClient.bracketEventNextRound,
     apiClient.bracketEventDelete,
   ],
   consumedEndpoints: [],
