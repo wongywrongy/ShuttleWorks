@@ -26,12 +26,12 @@
   --sw-border-2:    #2E323B;        /* control borders */
   --sw-border-3:    #3A3F49;        /* wordmark frame, emphasis */
 
-  /* ---- Text ramp ---- */
-  --sw-text:       #F4F5F7;         /* headings, primary values */
-  --sw-text-2:     #E6E8EC;         /* body */
-  --sw-text-3:     #C7CBD1;         /* secondary label */
-  --sw-text-muted: #8A8F98;         /* meta, inactive nav */
-  --sw-text-faint: #565B66;         /* captions, table headers, disabled */
+  /* ---- Text ramp (dark) — raised contrast on the lower steps ---- */
+  --sw-text:       #F7F8FA;         /* headings, primary values */
+  --sw-text-2:     #EAECF0;         /* body */
+  --sw-text-3:     #D8DCE2;         /* secondary label */
+  --sw-text-muted: #A8ADB7;         /* meta, inactive nav */
+  --sw-text-faint: #767B87;         /* captions, table headers, disabled */
 
   /* ---- Status ramp (muted-solid "3b" chip system) ---- */
   --sw-live:        #34D399;        /* live dot / accent */
@@ -70,6 +70,7 @@
   --text-3: var(--sw-text-3);
   --text-muted: var(--sw-text-faint);
   --text-meta: var(--sw-text-muted);
+  --text-faint: var(--sw-text-faint);   /* faintest step: disabled / inactive labels */
 
   --accent: var(--sw-blue-500);
   --accent-ink: var(--sw-blue-ink);
@@ -81,31 +82,31 @@
   --status-called: var(--sw-called);
 
   /* Ambient page glow used behind app surfaces */
-  --page-glow: radial-gradient(1100px 480px at 72% -6%, rgba(91,157,255,.13), transparent 62%);
+  --page-glow: radial-gradient(1100px 480px at 72% -6%, rgba(91,157,255,.13), transparent 62%); /* @kind other */
 }
 
 /* ============================================================
    LIGHT THEME — daylight gyms. Public Display stays dark by design.
    ============================================================ */
 [data-theme="light"] {
-  --sw-bg:        #E9ECF1;
-  --sw-sidebar:   #F7F8FA;
+  --sw-bg:        #E5E9EF;
+  --sw-sidebar:   #F8F9FB;
   --sw-panel:     #FFFFFF;
-  --sw-raised:    #F4F6F9;
+  --sw-raised:    #F5F7FA;
   --sw-raised-2:  #F0F2F6;
-  --sw-active:    #E8EEFB;
+  --sw-active:    #E5EDFB;
   --sw-chip-tag:  #E7EAEF;
 
-  --sw-border:      #E2E8F0;
-  --sw-border-soft: #EDEFF3;
-  --sw-border-2:    #D3D8E0;
-  --sw-border-3:    #CBD5E1;
+  --sw-border:      #DCE2EA;
+  --sw-border-soft: #E9ECF1;
+  --sw-border-2:    #CBD1DB;
+  --sw-border-3:    #C2CCDA;
 
-  --sw-text:       #0F172A;
-  --sw-text-2:     #1A1D23;
-  --sw-text-3:     #334155;
-  --sw-text-muted: #64748B;
-  --sw-text-faint: #94A3B8;
+  --sw-text:       #080D18;
+  --sw-text-2:     #12151B;
+  --sw-text-3:     #222C3C;
+  --sw-text-muted: #495264;
+  --sw-text-faint: #6B7789;
 
   --accent: var(--sw-blue-600);
   --accent-ink: #FFFFFF;
@@ -117,5 +118,5 @@
   --sw-called-solid:#B45309; --sw-called-border:#9A6208; --sw-called-ink:#FFF7ED;
   --sw-scheduled:#0284C7; --sw-bracket:#7C3AED;
 
-  --page-glow: radial-gradient(1100px 480px at 72% -6%, rgba(37,99,235,.08), transparent 62%);
+  --page-glow: radial-gradient(1100px 480px at 72% -6%, rgba(37,99,235,.08), transparent 62%); /* @kind other */
 }

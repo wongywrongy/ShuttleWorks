@@ -1,0 +1,311 @@
+<!-- @dsCard group="Motion" viewport="700x460" name="Motion gallery" subtitle="Every ShuttleWorks animation, with replay" -->
+<!DOCTYPE html><html data-theme="dark"><head><meta charset="utf-8">
+<title>ShuttleWorks · Motion</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-glow),var(--surface-page);font-family:var(--font-sans);color:var(--text-2);-webkit-font-smoothing:antialiased;padding:28px 32px 48px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;max-width:1180px;margin:0 auto}
+  h1{margin:0;font-size:30px;font-weight:700;letter-spacing:-0.03em;color:var(--text-1)}
+  .sub{margin:6px 0 0;font-size:13px;color:var(--text-meta);max-width:520px;line-height:1.5}
+  .actions{display:flex;align-items:center;gap:12px}
+  .rm{font-size:11px;color:var(--text-faint)}
+  .replay-all{height:38px;border:none;border-radius:var(--radius-lg);background:var(--accent);color:var(--accent-ink);box-shadow:var(--glow-accent);font-family:inherit;font-size:13px;font-weight:600;padding:0 16px;cursor:pointer}
+  .replay-all:hover{filter:brightness(1.08)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;max-width:1180px;margin:24px auto 0}
+  .tile{border:1px solid var(--border-1);border-radius:var(--radius-xl);background:var(--surface-card);overflow:hidden;display:flex;flex-direction:column}
+  .stage{height:154px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;border-bottom:1px solid var(--border-1);background:var(--surface-screen)}
+  .foot{padding:12px 14px;display:flex;flex-direction:column;gap:7px}
+  .nm{font-size:12px;font-weight:600;color:var(--text-1);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+  .ds{font-size:11px;color:var(--text-meta);line-height:1.45}
+  .row2{display:flex;align-items:center;justify-content:space-between;margin-top:1px}
+  .tag{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);border:1px solid var(--border-1);border-radius:var(--radius-xs);padding:2px 6px;font-variant-numeric:tabular-nums}
+  .replay{font-family:inherit;font-size:11px;color:var(--text-3);background:var(--surface-card);border:1px solid var(--border-control);border-radius:var(--radius-md);padding:4px 11px;cursor:pointer}
+  .replay:hover{filter:brightness(1.18)}
+  /* chip atoms */
+  .init{width:14px;height:14px;border-radius:var(--radius-xs);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-variant-numeric:tabular-nums;background:var(--sw-chip-tag);color:var(--text-muted)}
+  .code{font-size:11px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums}
+  .glowbtn{transition:box-shadow var(--dur) var(--ease)}
+  .glowbtn:hover{box-shadow:var(--glow-accent)}
+</style></head>
+<body>
+  <div class="head">
+    <div>
+      <h1>Motion</h1>
+      <p class="sub">Restrained, ease-in-out, nothing bounces. Motion signals <b style="color:var(--text-3)">state and intent</b> — never decoration. Every utility lives in <code style="color:var(--text-3)">tokens/motion.css</code>. Honors <code style="color:var(--text-3)">prefers-reduced-motion</code>.</p>
+    </div>
+    <div class="actions">
+      <span class="rm">One-shots need a replay · loops run continuously</span>
+      <button class="replay-all" onclick="play(document)">Replay all ↻</button>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- 1 · sw-pulse -->
+    <div class="tile">
+      <div class="stage">
+        <span style="display:inline-flex;align-items:center;gap:7px;border:1px solid var(--accent-border);background:var(--accent-tint);border-radius:var(--radius-sm);padding:5px 11px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--status-live)">
+          <span data-cls="sw-pulse" class="sw-pulse" style="width:6px;height:6px;border-radius:9999px;background:var(--status-live);box-shadow:var(--glow-live)"></span>Live
+        </span>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-pulse</div>
+        <div class="ds">Live signals breathe — status dots and LIVE badges.</div>
+        <div class="row2"><span class="tag">loops · 1.6s</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 2 · sw-float-in -->
+    <div class="tile">
+      <div class="stage">
+        <div data-cls="sw-float-in" class="sw-float-in" style="border:1px solid var(--border-1);border-radius:var(--radius-xl);background:var(--surface-card);padding:12px 18px;min-width:118px">
+          <div style="font-size:20px;font-weight:700;color:var(--text-1);font-variant-numeric:tabular-nums">3<span style="color:var(--text-muted)">/12</span></div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">done</div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-float-in</div>
+        <div class="ds">Cards and rows rise 6px + fade on mount.</div>
+        <div class="row2"><span class="tag">320ms</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 3 · sw-stagger -->
+    <div class="tile">
+      <div class="stage">
+        <div data-cls="sw-stagger" class="sw-stagger" style="display:flex;flex-direction:column;gap:6px;width:82%">
+          <div style="--i:0;display:flex;align-items:center;gap:8px;border:1px solid var(--border-1);border-radius:var(--radius-md);background:var(--surface-card);padding:5px 10px"><span class="init">M</span><span class="code" style="width:34px">MS2</span><span style="flex:1;font-size:12px;color:var(--text-2)">Park v Ortiz</span></div>
+          <div style="--i:1;display:flex;align-items:center;gap:8px;border:1px solid var(--border-1);border-radius:var(--radius-md);background:var(--surface-card);padding:5px 10px"><span class="init">B</span><span class="code" style="width:34px">R2-3</span><span style="flex:1;font-size:12px;color:var(--text-2)">Diaz v Cruz</span></div>
+          <div style="--i:2;display:flex;align-items:center;gap:8px;border:1px solid var(--border-1);border-radius:var(--radius-md);background:var(--surface-card);padding:5px 10px"><span class="init">M</span><span class="code" style="width:34px">XD2</span><span style="flex:1;font-size:12px;color:var(--text-2)">Cruz v Fox</span></div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-stagger</div>
+        <div class="ds">Lists assemble top-down, 40ms per row (set <code>--i</code>).</div>
+        <div class="row2"><span class="tag">40ms/row</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 4 · sw-call-flash -->
+    <div class="tile">
+      <div class="stage">
+        <div data-cls="sw-call-flash" class="sw-call-flash" style="border-radius:var(--radius-md);padding:8px 12px;display:inline-flex;flex-direction:column;gap:3px;background:var(--sw-called-solid);border:1px solid var(--sw-called-border);min-width:96px">
+          <div style="display:flex;align-items:center;gap:6px"><span class="init" style="background:rgba(0,0,0,.2);color:var(--sw-called-ink)">B</span><span class="code" style="color:var(--sw-called-ink)">XD1</span></div>
+          <span style="font-size:9px;font-weight:600;text-transform:uppercase;color:var(--sw-called-ink)">Called</span>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-call-flash</div>
+        <div class="ds">One-shot amber flash when a match is Called.</div>
+        <div class="row2"><span class="tag">900ms</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 5 · sw-go-live -->
+    <div class="tile">
+      <div class="stage">
+        <div style="position:relative;min-width:132px;height:46px">
+          <div style="position:absolute;inset:0;background:var(--surface-card);border:1px solid var(--border-1);border-radius:var(--radius-md);padding:0 12px;display:flex;flex-direction:column;justify-content:center;gap:2px">
+            <div style="display:flex;align-items:center;gap:6px"><span class="init">M</span><span class="code">WD1</span></div>
+            <span style="font-size:9px;text-transform:uppercase;color:var(--text-muted)">Scheduled</span>
+          </div>
+          <div data-cls="sw-go-live" class="sw-go-live" style="position:absolute;inset:0;background:var(--sw-live-solid);border:1px solid var(--sw-live-border);border-radius:var(--radius-md);padding:0 12px;display:flex;flex-direction:column;justify-content:center;gap:2px">
+            <div style="display:flex;align-items:center;gap:6px"><span class="init" style="background:rgba(0,0,0,.2);color:var(--sw-live-ink)">M</span><span class="code" style="color:var(--sw-live-ink)">WD1</span></div>
+            <span style="font-size:9px;text-transform:uppercase;color:var(--sw-live-ink)">Playing</span>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-go-live</div>
+        <div class="ds">Green fill wipes in from the left as a match goes live.</div>
+        <div class="row2"><span class="tag">480ms</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 6 · sw-late-nudge -->
+    <div class="tile">
+      <div class="stage">
+        <span data-cls="sw-late-nudge" class="sw-late-nudge" style="font-size:12px;font-weight:600;color:var(--accent-ink);background:var(--sw-called);border-radius:var(--radius-xs);padding:4px 9px;font-variant-numeric:tabular-nums">LATE +2</span>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-late-nudge</div>
+        <div class="ds">Over-time markers throb slowly — noticed, not alarming.</div>
+        <div class="row2"><span class="tag">loops · 2s</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 7 · sw-glow-in -->
+    <div class="tile">
+      <div class="stage">
+        <button data-cls="sw-glow-in" class="sw-glow-in glowbtn" style="height:38px;border:none;border-radius:var(--radius-lg);background:var(--accent);color:var(--accent-ink);font-size:13px;font-weight:600;font-family:inherit;padding:0 16px;cursor:pointer">Record result</button>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-glow-in</div>
+        <div class="ds">Primary actions ramp their glow — intent. Hover it too.</div>
+        <div class="row2"><span class="tag">200ms</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 8 · sw-ring-focus -->
+    <div class="tile">
+      <div class="stage">
+        <input data-cls="sw-ring-focus" class="sw-ring-focus" value="Alex Chen" style="height:36px;border:1px solid var(--border-control);border-radius:var(--radius-md);background:var(--surface-card);color:var(--text-1);font-family:inherit;font-size:13px;padding:0 12px;outline:none;width:66%">
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-ring-focus</div>
+        <div class="ds">Focus ring scales in for keyboard nav on dense grids.</div>
+        <div class="row2"><span class="tag">200ms</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 9 · sw-rail-expand -->
+    <div class="tile">
+      <div class="stage">
+        <div style="width:80%;border:1px solid var(--border-1);border-radius:var(--radius-lg);background:var(--surface-rail);padding:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px"><span style="font-weight:600;text-transform:uppercase;color:var(--text-3);font-size:10px">Operations</span><span style="transform:rotate(90deg);color:var(--text-meta);font-size:11px">›</span></div>
+          <div data-cls="sw-rail-expand" class="sw-rail-expand" style="margin-left:10px;border-left:1px solid var(--border-1);padding-left:8px;display:flex;flex-direction:column;gap:2px">
+            <div style="padding:5px 10px;font-size:12px;color:var(--text-meta)">Plan</div>
+            <div style="padding:5px 10px;font-size:12px;color:var(--text-1);background:var(--surface-active);border-radius:var(--radius-md)">Run</div>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-rail-expand</div>
+        <div class="ds">Module sub-pages open with height + fade.</div>
+        <div class="row2"><span class="tag">320ms</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 10 · sw-now-sweep -->
+    <div class="tile">
+      <div class="stage">
+        <div style="width:86%;border:1px solid var(--border-1);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface-card)">
+          <div style="position:relative">
+            <div style="display:flex;height:30px;border-bottom:1px solid var(--border-row)">
+              <div style="width:34px;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border-1);background:var(--surface-band);font-size:10px;font-weight:600;color:var(--text-meta);font-variant-numeric:tabular-nums">C1</div>
+              <div style="flex:1;position:relative"><div style="position:absolute;top:5px;left:14%;width:44%;height:20px;border-radius:var(--radius-sm);background:var(--sw-live-solid);border:1px solid var(--sw-live-border)"></div></div>
+            </div>
+            <div style="display:flex;height:30px">
+              <div style="width:34px;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border-1);background:var(--surface-band);font-size:10px;font-weight:600;color:var(--text-meta);font-variant-numeric:tabular-nums">C2</div>
+              <div style="flex:1;position:relative"><div style="position:absolute;top:5px;left:40%;width:22%;height:20px;border-radius:var(--radius-sm);background:var(--surface-band);border:1px solid var(--border-1)"></div></div>
+            </div>
+            <div data-cls="sw-now-sweep" class="sw-now-sweep" style="position:absolute;top:0;bottom:0;left:0;width:1px;background:var(--accent);box-shadow:0 0 6px var(--accent-glow);z-index:4;margin-left:34px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-now-sweep</div>
+        <div class="ds">The Run-board time cursor advances across the lanes.</div>
+        <div class="row2"><span class="tag">loops · 4s</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 11 · sw-panel-in -->
+    <div class="tile">
+      <div class="stage">
+        <div data-cls="sw-panel-in" class="sw-panel-in" style="width:78%;border:1px solid var(--border-1);border-radius:var(--radius-lg);background:var(--surface-rail);padding:12px;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;gap:8px;align-items:center"><span class="init">M</span><span class="code" style="color:var(--text-muted)">MS1</span><span style="margin-left:auto;font-size:9px;font-weight:600;text-transform:uppercase;color:var(--status-live);background:var(--accent-tint);border-radius:5px;padding:2px 7px">Playing</span></div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Alex Chen</div>
+          <button class="glowbtn" style="height:32px;border:none;border-radius:var(--radius-md);background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer">Record result</button>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-panel-in</div>
+        <div class="ds">Inspector slides in from the right on selection.</div>
+        <div class="row2"><span class="tag">320ms</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 12 · sw-drawer-in -->
+    <div class="tile">
+      <div class="stage">
+        <div style="position:relative;width:86%;height:118px;border:1px solid var(--border-1);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface-card)">
+          <div style="padding:10px;display:flex;flex-direction:column;gap:6px"><div style="height:8px;width:50%;background:var(--surface-band);border-radius:3px"></div><div style="height:8px;width:70%;background:var(--surface-band);border-radius:3px"></div><div style="height:8px;width:40%;background:var(--surface-band);border-radius:3px"></div></div>
+          <div data-cls="sw-overlay-fade" class="sw-overlay-fade" style="position:absolute;inset:0;background:rgba(0,0,0,.45)"></div>
+          <div data-cls="sw-drawer-in" class="sw-drawer-in" style="position:absolute;top:0;right:0;bottom:0;width:60%;background:var(--surface-rail);border-left:1px solid var(--border-1);padding:12px;display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:11px;font-weight:600;color:var(--text-1)">Match details</div>
+            <div style="height:7px;width:80%;background:var(--surface-band);border-radius:3px"></div>
+            <div style="height:7px;width:60%;background:var(--surface-band);border-radius:3px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-drawer-in</div>
+        <div class="ds">A full side panel slides in from the right, scrim fades behind.</div>
+        <div class="row2"><span class="tag">320ms</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 13 · sw-sheet-up -->
+    <div class="tile">
+      <div class="stage">
+        <div style="position:relative;width:70%;height:118px;border:1px solid var(--border-1);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface-card)">
+          <div style="padding:10px;display:flex;flex-direction:column;gap:6px"><div style="height:8px;width:60%;background:var(--surface-band);border-radius:3px"></div><div style="height:8px;width:45%;background:var(--surface-band);border-radius:3px"></div></div>
+          <div data-cls="sw-overlay-fade" class="sw-overlay-fade" style="position:absolute;inset:0;background:rgba(0,0,0,.45)"></div>
+          <div data-cls="sw-sheet-up" class="sw-sheet-up" style="position:absolute;left:0;right:0;bottom:0;height:64px;background:var(--surface-rail);border-top:1px solid var(--border-1);border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding:12px;display:flex;flex-direction:column;gap:8px">
+            <div style="width:34px;height:3px;border-radius:3px;background:var(--border-2, var(--border-control));align-self:center"></div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-1)">Record result</div>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-sheet-up</div>
+        <div class="ds">A bottom sheet rises into view for a quick action.</div>
+        <div class="row2"><span class="tag">320ms</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 14 · sw-cell-drag -->
+    <div class="tile">
+      <div class="stage">
+        <div style="position:relative;width:88%;height:112px">
+          <!-- destination ghost slot -->
+          <div style="position:absolute;left:118px;top:36px;width:96px;height:38px;border:1px dashed var(--border-2, var(--border-control));border-radius:var(--radius-md);background:transparent"></div>
+          <!-- dragged match cell -->
+          <div data-cls="sw-cell-drag" class="sw-cell-drag" style="position:absolute;left:0;top:0;width:96px;height:38px;border-radius:var(--radius-md);background:var(--sw-live-solid);border:1px solid var(--sw-live-border);padding:0 10px;display:flex;flex-direction:column;justify-content:center;gap:2px">
+            <div style="display:flex;align-items:center;gap:5px"><span class="init" style="background:rgba(0,0,0,.2);color:var(--sw-live-ink)">M</span><span class="code" style="color:var(--sw-live-ink)">MS1</span></div>
+            <span style="font-size:9px;color:var(--sw-live-ink)">Chen v Webb</span>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-cell-drag</div>
+        <div class="ds">A match cell lifts, is carried, and settles into a new court slot.</div>
+        <div class="row2"><span class="tag">loops · 2.6s</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+    <!-- 15 · sw-reorder-shift -->
+    <div class="tile">
+      <div class="stage">
+        <div style="position:relative;width:80%;display:flex;flex-direction:column;gap:6px">
+          <!-- grabbed/floating row -->
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid var(--accent-border);border-radius:var(--radius-md);background:var(--surface-card);padding:6px 10px;box-shadow:0 8px 20px rgba(0,0,0,.45)"><span style="color:var(--text-faint);font-size:12px">⋮⋮</span><span class="code" style="width:34px">MS2</span><span style="flex:1;font-size:12px;color:var(--text-2)">Park v Ortiz</span></div>
+          <!-- rows that slide down to open a gap -->
+          <div data-cls="sw-reorder-shift" class="sw-reorder-shift" style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px;border:1px solid var(--border-1);border-radius:var(--radius-md);background:var(--surface-card);padding:6px 10px"><span style="color:var(--text-faint);font-size:12px">⋮⋮</span><span class="code" style="width:34px">R2-3</span><span style="flex:1;font-size:12px;color:var(--text-2)">Diaz v Cruz</span></div>
+            <div style="display:flex;align-items:center;gap:8px;border:1px solid var(--border-1);border-radius:var(--radius-md);background:var(--surface-card);padding:6px 10px"><span style="color:var(--text-faint);font-size:12px">⋮⋮</span><span class="code" style="width:34px">XD2</span><span style="flex:1;font-size:12px;color:var(--text-2)">Cruz v Fox</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="nm">.sw-reorder-shift</div>
+        <div class="ds">Neighbouring rows slide to open a gap for a dragged row.</div>
+        <div class="row2"><span class="tag">loops · 2.6s</span><button class="replay" onclick="play(this.closest('.tile'))">Replay ↻</button></div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+  function play(scope){
+    scope.querySelectorAll('[data-cls]').forEach(function(el){
+      var cls = el.getAttribute('data-cls').split(' ');
+      el.classList.remove.apply(el.classList, cls);
+      void el.offsetWidth;            // force reflow so the animation restarts
+      el.classList.add.apply(el.classList, cls);
+    });
+  }
+</script>
+</body></html>

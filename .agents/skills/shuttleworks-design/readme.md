@@ -8,6 +8,7 @@ The design language for **ShuttleWorks** — a modular control-plane for running
 
 ## Design principles
 1. **Dense for ops, roomy for setup.** Live surfaces (Run, Matches) maximize signal per pixel; setup surfaces (Hub, Settings, New Workspace) breathe.
+2. **Seamed, not gapped.** Dense surfaces are one continuous plane divided by hairlines — no gutters or per-panel border+radius between the summary strip, board, and queue. The screen frame is the only rounded container.
 2. **Modular means archetypal.** A Roster is a Roster, a Matches table is a Matches table, whether under Meet or Bracket. Reuse the archetype; only the data changes.
 3. **Glow marks intent, not decoration.** The blue glow belongs to primary actions and live signals only.
 4. **One typeface, tabular figures.** Geist everywhere; numbers/codes use tabular-nums so columns align — never a separate "robotic" mono for data.
@@ -34,10 +35,11 @@ The design language for **ShuttleWorks** — a modular control-plane for running
 - **Elevation:** low-contrast. Screen frame `0 24px 60px rgba(0,0,0,.5)`; raised cards `0 2px 8px`. Light theme softens both.
 - **Borders:** hairlines do the structural work — `#23262D` for card edges/dividers, `#1F2229` for in-table row dividers. Rarely more than 1px.
 - **Backgrounds:** flat fills + the single ambient glow. No photography, no illustration, no texture. Court boards use a faint dotted lane grid on Plan.
-- **Animation:** restrained, `ease-in-out`, nothing bounces. Live dots/badges breathe (`sw-pulse`, 1.6s opacity 1↔.35 + glow); rows/cards can `sw-float-in` (6px rise + fade, 320ms). Honors `prefers-reduced-motion`.
+- **Animation:** restrained, `ease-in-out`, nothing bounces. Utilities in `tokens/motion.css`: `sw-pulse` (live breathe), `sw-float-in` / `sw-stagger` (mount), `sw-call-flash` (called), `sw-go-live` (green wipe), `sw-late-nudge` (over-time throb), `sw-glow-in` (intent), `sw-ring-focus`, `sw-rail-expand`, `sw-now-sweep`, `sw-panel-in`. See the live gallery at `guidelines/motion-gallery.html`. All honor `prefers-reduced-motion`.
 - **Hover/press:** hover lifts brightness slightly (filter), never restyles; press has no shrink. Selection is a left 2px accent bar + `--surface-active` fill on nav rows, or a full accent border + `--glow-accent-lg` on choice cards.
 - **Transparency/blur:** used only for status tints (`color-mix` 10% fill / 30% border from one hue). No frosted glass.
 - **Layout:** fixed identity bar (48px) + optional module rail (216px) + content, optional right inspector (280px). Screen frame maxes at 1280px and is **fluid below** so nothing clips. Setup forms cap at 640px.
+- **Seamed, not gapped.** Inside a dense ops surface (Run, Matches), sub-regions — summary strip, court board, queue — sit **flush** and are divided by **1px hairlines**, never separated by gutters or given their own border+radius. The screen frame is the only rounded container; everything inside is one continuous plane. Status on a flush cell is a **2px top accent bar**, not a full colored border. Reserve gutter-separated cards for roomy *setup* surfaces (Hub, Settings, New Workspace).
 - **The Public Display** is intentionally always dark (gym projection), even inside the light theme.
 
 ---
@@ -72,8 +74,11 @@ Reusable primitives (`components/<group>/`):
 - **feedback/HealthDot** — small status dot, optional pulse+glow.
 - **navigation/WorkspaceSidebar** — the module-grouped nav rail (the shell spine).
 
+## Templates
+- **templates/run-board/** — the keystone **Operations · Run** court board as a copyable `.dc.html` starting point (`RunBoard.dc.html`). Composes the real `WorkspaceSidebar` component over the token layer; `theme` prop toggles dark/light. This is what consuming projects seed a new design from.
+
 ## UI kit
-- **ui_kits/scheduler/** — keystone **Operations · Run** screen (`index.html`, a starting point) + README pointing to the full 13-screen prototypes at root.
+- **ui_kits/scheduler/** — keystone **Operations · Run** screen (`index.html`) + README pointing to the full 13-screen prototypes at root.
 
 ## Index / manifest
 ```
@@ -81,6 +86,8 @@ styles.css                      → global entry (import this)
 tokens/                         → colors, typography, spacing, effects, motion
 components/core|data|feedback|navigation/  → primitives (.jsx/.d.ts/.prompt.md + card)
 guidelines/                     → foundation + archetype specimen cards
+guidelines/motion-gallery.html  → live gallery of every motion utility (Replay all)
+templates/run-board/            → Run board template (consumer starting point)
 ui_kits/scheduler/              → Run screen + kit README
 SKILL.md                        → downloadable-skill entry
 (root) ShuttleWorks - Final Direction[ Light].dc.html → full click-through prototypes
