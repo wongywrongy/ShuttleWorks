@@ -134,7 +134,7 @@ export function RegenerateMenu() {
 
   const infoLine = !canGenerate
     ? ranks.length === 0
-      ? 'No event ranks configured — set them in Configuration.'
+      ? 'No events configured — set them in Configuration.'
       : groups.length < 2
         ? 'Need at least 2 schools to generate matches.'
         : 'No feasible pairings with the current roster.'

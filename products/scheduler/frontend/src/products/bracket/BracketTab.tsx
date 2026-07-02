@@ -277,7 +277,9 @@ function BracketTabBody() {
           <Navigate to={`/tournaments/${params.id}/bracket-draws`} replace />
         )}
         {view === 'draws' && <BracketDrawsTab />}
-        {view === 'matches' && data && <BracketMatchesTab data={data} />}
+        {view === 'matches' && data && (
+          <BracketMatchesTab data={data} onData={setData} />
+        )}
         {view === 'draw' && data && (
           <div className="h-full overflow-hidden">
             <DrawView

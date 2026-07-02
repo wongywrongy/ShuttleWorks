@@ -221,3 +221,38 @@ describe('<BracketMatchesTab />', () => {
     expect(screen.queryAllByTestId(/^bracket-match-row-/)).toHaveLength(0);
   });
 });
+
+/* SP-D7 S4 — rows are clickable anywhere (the surface is read-only) and
+ * open the right-docked match DetailPanel. */
+describe('<BracketMatchesTab /> — match detail panel', () => {
+  it('opens the DetailPanel on row click and marks the row selected', () => {
+    render(<BracketMatchesTab data={makeRichData()} />);
+    fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
+    const panel = screen.getByTestId('bracket-match-detail');
+    expect(within(panel).getByText('Match')).toBeInTheDocument();
+    expect(within(panel).getByText('MS SF1')).toBeInTheDocument();
+    expect(within(panel).getByText("Men's Singles")).toBeInTheDocument();
+    expect(screen.getByTestId('bracket-match-row-pu-ms-1')).toHaveAttribute(
+      'data-selected',
+      'true',
+    );
+  });
+
+  it('shows the selected match\'s read-only status pill in the panel', () => {
+    render(<BracketMatchesTab data={makeRichData()} />);
+    // pu-ms-1 has a recorded result → Done.
+    fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
+    const pill = screen.getByTestId('bracket-match-status-pill');
+    expect(pill).toHaveTextContent('Done');
+    expect(pill.tagName).toBe('SPAN');
+  });
+
+  it('closes the panel via the × button', () => {
+    render(<BracketMatchesTab data={makeRichData()} />);
+    fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
+    fireEvent.click(screen.getByLabelText('Close detail'));
+    expect(
+      screen.queryByTestId('bracket-match-detail'),
+    ).not.toBeInTheDocument();
+  });
+});

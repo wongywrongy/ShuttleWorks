@@ -140,3 +140,60 @@ describe('<MatchesSpreadsheet />', () => {
     expect(screen.queryByTestId('match-row-m1')).not.toBeInTheDocument();
   });
 });
+
+/* SP-D7 S4 — row click opens the match DetailPanel; the row's inline
+ * editors keep working and never open it. */
+describe('<MatchesSpreadsheet /> — match detail panel', () => {
+  it('opens the DetailPanel on a row-background click and marks the row selected', () => {
+    renderSheet();
+    fireEvent.click(screen.getByTestId('match-row-m1'));
+    const panel = screen.getByTestId('match-detail-panel');
+    expect(within(panel).getByText('Match')).toBeInTheDocument();
+    expect(within(panel).getByText('MS1')).toBeInTheDocument();
+    expect(within(panel).getByText("Men's Singles")).toBeInTheDocument();
+    expect(screen.getByTestId('match-row-m1')).toHaveAttribute(
+      'data-selected',
+      'true',
+    );
+  });
+
+  it('does NOT open the panel from clicks inside the inline editors', () => {
+    renderSheet();
+    const row = screen.getByTestId('match-row-m1');
+    // Slots number input.
+    fireEvent.click(row.querySelector('input[type="number"]')!);
+    // Event select trigger.
+    fireEvent.click(within(row).getByLabelText('Event'));
+    // A player-name button inside the side cell.
+    fireEvent.click(within(row).getByText('Aiko'));
+    expect(screen.queryByTestId('match-detail-panel')).not.toBeInTheDocument();
+  });
+
+  it('mirrors Slots edits between the panel input and the row input (same store value)', () => {
+    renderSheet();
+    fireEvent.click(screen.getByTestId('match-row-m1'));
+    const panel = screen.getByTestId('match-detail-panel');
+    const panelInput = within(panel).getByLabelText('Slots');
+    fireEvent.change(panelInput, { target: { value: '3' } });
+    fireEvent.blur(panelInput);
+    expect(
+      useTournamentStore.getState().matches.find((m) => m.id === 'm1')
+        ?.durationSlots,
+    ).toBe(3);
+    // The row's inline Slots editor reflects the same store value.
+    const row = screen.getByTestId('match-row-m1');
+    expect(
+      (row.querySelector('input[type="number"]') as HTMLInputElement).value,
+    ).toBe('3');
+  });
+
+  it('dismisses the panel when the selected match is deleted', () => {
+    renderSheet();
+    fireEvent.click(screen.getByTestId('match-row-m1'));
+    expect(screen.getByTestId('match-detail-panel')).toBeInTheDocument();
+    const row = screen.getByTestId('match-row-m1');
+    fireEvent.click(within(row).getByLabelText('Delete match'));
+    expect(screen.queryByTestId('match-row-m1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('match-detail-panel')).not.toBeInTheDocument();
+  });
+});

@@ -124,24 +124,29 @@ export function MatchesTab() {
         <RegenerateMenu />
       </MeetActionsBar>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      {/* `relative` + overflow-hidden so the match DetailPanel (rendered
+          by MatchesSpreadsheet) docks over the list's right edge as a
+          layer on top; the rows keep their own scroll area inside. */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {matches.length === 0 ? (
-          <EmptyState
-            title="No matches yet"
-            body="Matches are generated from the position grid. Use Regenerate from roster in the bar above to build them, then schedule in Operations → Courts. You can also add a custom match by hand."
-            action={
-              <button
-                type="button"
-                onClick={addEmptyRow}
-                disabled={!canAddRow}
-                data-testid="empty-add-match"
-                title={canAddRow ? 'Add match row' : 'Need at least 2 players'}
-                className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-3 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
-              >
-                ＋ Add match by hand
-              </button>
-            }
-          />
+          <div className="min-h-0 flex-1 overflow-auto">
+            <EmptyState
+              title="No matches yet"
+              body="Matches are generated from the position grid. Use Regenerate from roster in the bar above to build them, then schedule in Operations → Courts. You can also add a custom match by hand."
+              action={
+                <button
+                  type="button"
+                  onClick={addEmptyRow}
+                  disabled={!canAddRow}
+                  data-testid="empty-add-match"
+                  title={canAddRow ? 'Add match row' : 'Need at least 2 players'}
+                  className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-3 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  ＋ Add match by hand
+                </button>
+              }
+            />
+          </div>
         ) : (
           <MatchesSpreadsheet
             pendingFocusId={pendingFocusId}

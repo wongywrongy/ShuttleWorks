@@ -16,10 +16,10 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Warning } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
 import {
-  BANDED_ROW_CLASSES,
+  BandedTable,
   ColumnHeaderRow,
-  GroupBandHeader,
   type BandedListColumn,
+  type BandedTableGroup,
 } from '../../../components/control-plane';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { usePlayerMap } from '../../../store/selectors';
@@ -27,6 +27,7 @@ import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../../hooks/useSearchParamState';
 import { useDisruptions } from './useDisruptions';
 import { EVENT_LABEL, EVENT_ORDER, isDoublesRank } from '../roster/positionGrid/helpers';
+import { MatchDetailPanel } from './MatchDetailPanel';
 import { maxSeverity, type MatchIssue } from './validateMatch';
 
 /** Side capacity derived from the event rank. Singles = 1, doubles =
@@ -130,16 +131,11 @@ export function MatchesSpreadsheet({
   const config = useTournamentStore((s) => s.config);
   const disruptions = useDisruptions();
 
-  // Per-event collapse state. Keyed by event prefix (MS, WS, …) or the
-  // '—' sentinel for the unassigned group; default all-expanded.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const toggleGroup = (key: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  // Selected match — a click on a row's background/# cell (not its inline
+  // editors) opens the right-docked match DetailPanel. Derived find so a
+  // deleted match auto-dismisses the panel.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedMatch = matches.find((m) => m.id === selectedId) ?? null;
 
   // Configured event ranks — derived from `config.rankCounts`. Memoized so every
   // row gets a STABLE `configuredRanks` reference (the React Compiler is not
@@ -162,21 +158,12 @@ export function MatchesSpreadsheet({
       </div>
     );
   }
-  if (filteredMatches.length === 0) {
-    return (
-      <>
-        <ColumnHeaderRow columns={MATCH_COLUMNS} />
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-          No matches match the current search.
-        </div>
-      </>
-    );
-  }
 
   // Group the filtered matches by event prefix so each discipline gets
   // its own collapsible section. Section order follows EVENT_ORDER; any
   // match with no/unknown rank collects into a trailing "Unassigned"
-  // group keyed by the '—' sentinel.
+  // group keyed by the '—' sentinel. Collapse state lives inside the
+  // shared BandedTable shell (default all-expanded, as before).
   const groupsByPrefix = new Map<string, MatchDTO[]>();
   for (const m of filteredMatches) {
     const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
@@ -190,51 +177,83 @@ export function MatchesSpreadsheet({
       (k) => !(EVENT_ORDER as readonly string[]).includes(k),
     ),
   ];
+  const tableGroups: BandedTableGroup<MatchDTO>[] = orderedKeys.map((key) => {
+    const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
+    return {
+      key,
+      label,
+      items: groupsByPrefix.get(key)!,
+      testId: `match-group-${label}`,
+    };
+  });
+
+  const issuesFor = (m: MatchDTO) =>
+    disruptions.byMatch.get(m.id) ?? EMPTY_ISSUES;
+  const stripeFor = (m: MatchDTO) => {
+    const severity = maxSeverity(issuesFor(m));
+    return severity === 'error'
+      ? 'shadow-[inset_3px_0_0_hsl(var(--destructive))]'
+      : severity === 'warning'
+        ? 'shadow-[inset_3px_0_0_hsl(var(--status-warning))]'
+        : '';
+  };
 
   return (
     <>
-      <ColumnHeaderRow columns={MATCH_COLUMNS} />
-      {orderedKeys.map((key) => {
-        const rows = groupsByPrefix.get(key)!;
-        const isCollapsed = collapsed.has(key);
-        const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
-        return (
-          <div key={key}>
-            <GroupBandHeader
-              label={label}
-              count={rows.length}
-              collapsed={isCollapsed}
-              onToggle={() => toggleGroup(key)}
-              data-testid={`match-group-${label}`}
-            />
-            {!isCollapsed
-              ? rows.map((m) => (
-                  <MatchRow
-                    key={m.id}
-                    match={m}
-                    index={matches.indexOf(m)}
-                    players={players}
-                    groups={groups}
-                    configuredRanks={configuredRanks}
-                    issues={disruptions.byMatch.get(m.id) ?? EMPTY_ISSUES}
-                    autoFocus={m.id === pendingFocusId}
-                    onFocusConsumed={onFocusConsumed}
-                    onUpdate={updateMatch}
-                    onDelete={deleteMatch}
-                  />
-                ))
-              : null}
-          </div>
-        );
-      })}
+      <div className="min-h-0 flex-1 overflow-auto">
+        {filteredMatches.length === 0 ? (
+          <>
+            <ColumnHeaderRow columns={MATCH_COLUMNS} />
+            <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+              No matches match the current search.
+            </div>
+          </>
+        ) : (
+          <BandedTable
+            columns={MATCH_COLUMNS}
+            groups={tableGroups}
+            rowId={(m) => m.id}
+            onRowClick={(m) => setSelectedId(m.id)}
+            selectedId={selectedId}
+            rowClassName={(m) => ['group', stripeFor(m)].filter(Boolean).join(' ')}
+            rowTestId={(m) => `match-row-${m.id}`}
+            rowAttrs={(m) => ({
+              'data-severity': maxSeverity(issuesFor(m)) ?? 'none',
+            })}
+            renderRow={(m) => (
+              <MatchRow
+                match={m}
+                index={matches.indexOf(m)}
+                players={players}
+                groups={groups}
+                configuredRanks={configuredRanks}
+                issues={issuesFor(m)}
+                autoFocus={m.id === pendingFocusId}
+                onFocusConsumed={onFocusConsumed}
+                onUpdate={updateMatch}
+                onDelete={deleteMatch}
+              />
+            )}
+          />
+        )}
+      </div>
+      {selectedMatch ? (
+        <MatchDetailPanel
+          key={selectedMatch.id}
+          match={selectedMatch}
+          onClose={() => setSelectedId(null)}
+        />
+      ) : null}
     </>
   );
 }
 
 /* =========================================================================
- * MatchRow — the shared `BANDED_ROW_CLASSES` shell (`padding: 0 20px`,
- * `min-height: 40px`, border-b only) plus Meet's `group` hover reveals
- * and the disruption accent stripe.
+ * MatchRow — the CELLS of one match row. The row shell (the canonical
+ * banded row classes, `group` hover reveals, the disruption accent
+ * stripe, click-to-select) is owned by the BandedTable shell in the
+ * parent; every inline editor here stops click propagation so editing
+ * never opens the match detail panel.
  * ========================================================================= */
 // Memoized: with many rows, a search keystroke (or any store write) re-renders
 // the parent; without memo every row re-rendered in full. Props are stable
@@ -314,21 +333,8 @@ const MatchRow = memo(function MatchRow({
   const severity = maxSeverity(issues);
   const sideCapacity = capacityForRank(match.eventRank);
 
-  const accentStripe =
-    severity === 'error'
-      ? 'shadow-[inset_3px_0_0_hsl(var(--destructive))]'
-      : severity === 'warning'
-        ? 'shadow-[inset_3px_0_0_hsl(var(--status-warning))]'
-        : '';
-
   return (
-    <div
-      data-testid={`match-row-${match.id}`}
-      data-severity={severity ?? 'none'}
-      className={['group', BANDED_ROW_CLASSES, accentStripe]
-        .filter(Boolean)
-        .join(' ')}
-    >
+    <>
       <span
         className="flex w-4 shrink-0 items-center justify-center"
         aria-hidden={issues.length === 0}
@@ -353,24 +359,30 @@ const MatchRow = memo(function MatchRow({
         {match.matchNumber ?? index + 1}
       </span>
       {configuredRanks.length > 0 ? (
-        <Select
-          triggerRef={eventFieldRef as React.RefObject<HTMLButtonElement>}
-          value={currentRank}
-          onValueChange={(v) =>
-            onUpdate(match.id, { eventRank: v || undefined })
-          }
-          options={[
-            ...configuredRanks.map((r) => ({ value: r, label: r })),
-            // Surface legacy/unknown current value so it doesn't vanish.
-            ...(!rankInConfigured && currentRank
-              ? [{ value: currentRank, label: `${currentRank} (legacy)` }]
-              : []),
-          ]}
-          clearable
-          size="sm"
-          ariaLabel="Event rank"
-          triggerClassName="w-20 border-transparent px-1.5 py-0.5 text-accent font-semibold sw-num hover:border-border/60 focus:bg-card"
-        />
+        // `display: contents` wrapper — layout-transparent, but catches
+        // clicks from the Select trigger AND its portaled options (React
+        // events bubble through the component tree) so picking an event
+        // never opens the row's detail panel.
+        <span className="contents" onClick={(e) => e.stopPropagation()}>
+          <Select
+            triggerRef={eventFieldRef as React.RefObject<HTMLButtonElement>}
+            value={currentRank}
+            onValueChange={(v) =>
+              onUpdate(match.id, { eventRank: v || undefined })
+            }
+            options={[
+              ...configuredRanks.map((r) => ({ value: r, label: r })),
+              // Surface legacy/unknown current value so it doesn't vanish.
+              ...(!rankInConfigured && currentRank
+                ? [{ value: currentRank, label: `${currentRank} (legacy)` }]
+                : []),
+            ]}
+            clearable
+            size="sm"
+            ariaLabel="Event"
+            triggerClassName="w-20 border-transparent px-1.5 py-0.5 text-accent font-semibold sw-num hover:border-border/60 focus:bg-card"
+          />
+        </span>
       ) : (
         <input
           ref={eventFieldRef as React.RefObject<HTMLInputElement>}
@@ -378,8 +390,9 @@ const MatchRow = memo(function MatchRow({
           onChange={(e) =>
             onUpdate(match.id, { eventRank: e.target.value || undefined })
           }
+          onClick={(e) => e.stopPropagation()}
           placeholder="MS1, WD2…"
-          aria-label="Event rank"
+          aria-label="Event"
           className={[
             'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-semibold text-accent sw-num outline-none',
             'transition-colors duration-fast ease-brand',
@@ -410,19 +423,23 @@ const MatchRow = memo(function MatchRow({
         min={1}
         value={durationDraft}
         onChange={(e) => setDurationDraft(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
         onBlur={commitDuration}
         className="w-14 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-sm tabular-nums outline-none transition-colors duration-fast ease-brand hover:border-border/60 focus:border-accent focus:bg-card"
       />
       <button
         type="button"
-        onClick={() => onDelete(match.id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(match.id);
+        }}
         className="w-8 rounded-sm p-1 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
         title="Delete match"
         aria-label="Delete match"
       >
         ×
       </button>
-    </div>
+    </>
   );
 });
 
@@ -564,7 +581,14 @@ function PlayerCellEditor({
   }, [players, eligible]);
 
   return (
-    <div ref={ref} className="relative min-w-0 flex-[3]">
+    // stopPropagation: the whole cell is an editor (name buttons, ＋ add
+    // link, picker dropdown) — clicks here must never bubble to the row's
+    // open-detail-panel handler.
+    <div
+      ref={ref}
+      className="relative min-w-0 flex-[3]"
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="flex flex-wrap items-baseline gap-x-1 text-sm leading-relaxed">
         {selectedPlayers.length === 0 ? (
           <button

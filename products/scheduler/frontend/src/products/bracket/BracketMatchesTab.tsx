@@ -2,41 +2,40 @@
  * Bracket Matches — the bracket's output surface, the parallel of the
  * meet's Matches tab. Where the meet derives matches from the roster
  * grid, the bracket derives them from the draws: every PlayUnit across
- * every event. This is a read-only projection (edit the draw in Draw /
- * Events to change matches) grouped by event with collapsible headers,
- * mirroring the meet's grouped match list. The list feeds Operations
- * (Courts / Live) just like the meet's matches do.
+ * every event. The list is a read-only projection (edit the draw in
+ * Draw / Events to change matches) grouped by event on the shared
+ * BandedTable shell, mirroring the meet's grouped match list; clicking
+ * a row (anywhere — the rows hold no editors) opens the right-docked
+ * match DetailPanel with the sides' player cards and the read-only
+ * status pill. The list feeds Operations (Courts / Live) just like the
+ * meet's matches do.
  */
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Download, MagnifyingGlass } from '@phosphor-icons/react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import {
   ActionsBar,
-  BANDED_ROW_CLASSES,
-  ColumnHeaderRow,
+  BandedTable,
   EmptyState,
-  GroupBandHeader,
   type BandedListColumn,
+  type BandedTableGroup,
 } from '../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { buildPlayUnitLabels, disciplineLabel } from './bracketLabels';
+import { BracketMatchDetailPanel } from './BracketMatchDetailPanel';
+import { type CommitEventFn } from './BracketPlayerFields';
+import {
+  STATUS_CLASS,
+  STATUS_LABEL,
+  type BracketMatchStatus,
+} from './matchStatus';
 
-type Status = 'done' | 'live' | 'ready' | 'pending';
-
-const STATUS_LABEL: Record<Status, string> = {
-  done: 'Done',
-  live: 'Live',
-  ready: 'Ready',
-  pending: 'Pending',
-};
-
-const STATUS_CLASS: Record<Status, string> = {
-  done: 'text-status-done',
-  live: 'text-status-live',
-  ready: 'text-status-warning',
-  pending: 'text-muted-foreground/70',
+/** One numbered row: the play unit plus its stable per-event `#`. */
+type NumberedUnit = {
+  pu: BracketTournamentDTO['play_units'][number];
+  n: number;
 };
 
 /** Column set for the bracket match list — same `px-5` rhythm and the
@@ -55,17 +54,29 @@ const MATCH_COLUMNS: BandedListColumn[] = [
   { label: 'Status', className: 'w-[5.5rem] text-right' },
 ];
 
-export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
+export function BracketMatchesTab({
+  data,
+  onData,
+}: {
+  data: BracketTournamentDTO;
+  /** Receives the fresh snapshot after a panel-side event upsert (the
+   *  host's `setData` from useBracket). Optional — without it edits
+   *  still commit; the poll picks the snapshot up. */
+  onData?: (next: BracketTournamentDTO) => void;
+}) {
   const api = useBracketApi();
   const [query, setQuery] = useState('');
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const toggle = (key: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Panel-side event entry writes ride the same upsert path as the
+  // roster panel (config echoed by BracketPlayerFields).
+  const commitEvent = useCallback<CommitEventFn>(
+    async (eventId, body) => {
+      const next = await api.eventUpsert(eventId, body);
+      onData?.(next);
+    },
+    [api, onData],
+  );
 
   const participantById = useMemo(
     () => new Map(data.participants.map((p) => [p.id, p])),
@@ -99,7 +110,7 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
       resolveSide(ids)
     );
 
-  const statusOf = (puId: string): Status => {
+  const statusOf = (puId: string): BracketMatchStatus => {
     if (resultSet.has(puId)) return 'done';
     const a = assignmentByPu.get(puId);
     if (a?.started && !a.finished) return 'live';
@@ -157,6 +168,21 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
   const total = data.play_units.length;
   const shown = groups.reduce((n, g) => n + g.units.length, 0);
 
+  // Grouped-table view of the same data for the shared BandedTable shell.
+  const tableGroups: BandedTableGroup<NumberedUnit>[] = groups.map(
+    ({ ev, units }) => ({
+      key: ev.id,
+      code: ev.id,
+      label: disciplineLabel(ev.discipline),
+      items: units,
+      testId: `bracket-match-group-${ev.id}`,
+    }),
+  );
+
+  const selected = selectedId
+    ? data.play_units.find((pu) => pu.id === selectedId) ?? null
+    : null;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ActionsBar
@@ -202,78 +228,81 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
         </a>
       </ActionsBar>
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        {total === 0 ? (
-          <EmptyState
-            title="No matches yet"
-            body="Matches come from the draws. Add events and generate draws in the Events and Draw tabs; they’ll appear here and feed Operations."
-          />
-        ) : (
-          <>
-            <ColumnHeaderRow columns={MATCH_COLUMNS} />
-            {shown === 0 ? (
-              <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-                No matches match the current search.
-              </div>
-            ) : null}
-            {groups.map(({ ev, units }) => {
-              const isCollapsed = collapsed.has(ev.id);
-              return (
-                <div key={ev.id}>
-                  <GroupBandHeader
-                    code={ev.id}
-                    label={disciplineLabel(ev.discipline)}
-                    count={units.length}
-                    collapsed={isCollapsed}
-                    onToggle={() => toggle(ev.id)}
-                    data-testid={`bracket-match-group-${ev.id}`}
-                  />
-                  {!isCollapsed
-                    ? units.map(({ pu, n }) => {
-                        const status = statusOf(pu.id);
-                        return (
-                          <div
-                            key={pu.id}
-                            data-testid={`bracket-match-row-${pu.id}`}
-                            className={BANDED_ROW_CLASSES}
-                          >
-                            {/* Gutter spacer — Meet's warning-icon slot;
-                                empty here but kept so the columns start
-                                at the same x on both surfaces. */}
-                            <span className="w-4 shrink-0" aria-hidden />
-                            <span className="w-8 text-xs text-muted-foreground tabular-nums">
-                              {n}
-                            </span>
-                            {/* Friendly label; raw id kept on title for
-                                traceability (it's also the row testid).
-                                px-1.5 mirrors the inner inset of Meet's
-                                editable event field. */}
-                            <span
-                              className="w-20 truncate px-1.5 text-sm font-semibold text-accent sw-num"
-                              title={pu.id}
-                            >
-                              {labelById.get(pu.id) ?? pu.id}
-                            </span>
-                            <span className="min-w-0 flex-[3] text-sm leading-relaxed text-foreground">
-                              {renderSide(pu.side_a)}
-                            </span>
-                            <span className="min-w-0 flex-[3] text-sm leading-relaxed text-foreground">
-                              {renderSide(pu.side_b)}
-                            </span>
-                            <span
-                              className={`w-[5.5rem] text-right text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
-                            >
-                              {STATUS_LABEL[status]}
-                            </span>
-                          </div>
-                        );
-                      })
-                    : null}
+      {/* `relative` so the detail panel docks over the list's right edge
+          as a layer on top (the list keeps full width). */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-auto">
+          {total === 0 ? (
+            <EmptyState
+              title="No matches yet"
+              body="Matches come from the draws. Add events and generate draws in the Events and Draw tabs; they’ll appear here and feed Operations."
+            />
+          ) : (
+            <>
+              <BandedTable
+                columns={MATCH_COLUMNS}
+                groups={tableGroups}
+                rowId={({ pu }) => pu.id}
+                onRowClick={({ pu }) => setSelectedId(pu.id)}
+                selectedId={selectedId}
+                rowTestId={({ pu }) => `bracket-match-row-${pu.id}`}
+                renderRow={({ pu, n }) => {
+                  const status = statusOf(pu.id);
+                  return (
+                    <>
+                      {/* Gutter spacer — Meet's warning-icon slot;
+                          empty here but kept so the columns start
+                          at the same x on both surfaces. */}
+                      <span className="w-4 shrink-0" aria-hidden />
+                      <span className="w-8 text-xs text-muted-foreground tabular-nums">
+                        {n}
+                      </span>
+                      {/* Friendly label; raw id kept on title for
+                          traceability (it's also the row testid).
+                          px-1.5 mirrors the inner inset of Meet's
+                          editable event field. */}
+                      <span
+                        className="w-20 truncate px-1.5 text-sm font-semibold text-accent sw-num"
+                        title={pu.id}
+                      >
+                        {labelById.get(pu.id) ?? pu.id}
+                      </span>
+                      <span className="min-w-0 flex-[3] text-sm leading-relaxed text-foreground">
+                        {renderSide(pu.side_a)}
+                      </span>
+                      <span className="min-w-0 flex-[3] text-sm leading-relaxed text-foreground">
+                        {renderSide(pu.side_b)}
+                      </span>
+                      <span
+                        className={`w-[5.5rem] text-right text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+                      >
+                        {STATUS_LABEL[status]}
+                      </span>
+                    </>
+                  );
+                }}
+              />
+              {shown === 0 ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  No matches match the current search.
                 </div>
-              );
-            })}
-          </>
-        )}
+              ) : null}
+            </>
+          )}
+        </div>
+
+        {selected ? (
+          <BracketMatchDetailPanel
+            key={selected.id}
+            pu={selected}
+            data={data}
+            label={labelById.get(selected.id) ?? selected.id}
+            status={statusOf(selected.id)}
+            labelById={labelById}
+            onClose={() => setSelectedId(null)}
+            onCommitEvent={commitEvent}
+          />
+        ) : null}
       </div>
     </div>
   );

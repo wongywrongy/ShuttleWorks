@@ -94,20 +94,6 @@ function PlayerDetailFields({
 }) {
   const updatePlayer = useTournamentStore((s) => s.updatePlayer);
   const config = useTournamentStore((s) => s.config);
-  const { assignRank, unassignRank } = useRankAssignment();
-  const { availableRanks, isRankFull } = useRankValidation(
-    player.groupId ?? null,
-    player.id,
-  );
-
-  const handleToggleRank = (rank: string) => {
-    if ((player.ranks ?? []).includes(rank)) {
-      unassignRank(player.id, rank);
-      return;
-    }
-    if (isDoublesRank(rank) && isRankFull(rank)) return;
-    assignRank(player.groupId, player.id, rank);
-  };
 
   return (
     <div className="border-b border-border/60 px-3 py-3 last:border-b-0">
@@ -127,15 +113,7 @@ function PlayerDetailFields({
           />
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">Availability</label>
-          <AvailabilityControl
-            value={player.availability ?? []}
-            dayStart={config?.dayStart ?? '09:00'}
-            dayEnd={config?.dayEnd ?? '17:00'}
-            onChange={(availability) => updatePlayer(player.id, { availability })}
-          />
-        </div>
+        <PlayerAvailabilityField player={player} />
 
         <div className="flex flex-col gap-1">
           <label
@@ -185,71 +163,114 @@ function PlayerDetailFields({
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Events</label>
-          {Object.keys(availableRanks).length === 0 ? (
-            <span className="text-xs text-muted-foreground">
-              Configure positions in Configuration to assign events.
-            </span>
-          ) : (
-            <EventsControl
-              entries={player.ranks ?? []}
-              renderTypeEditor={(type) => {
-                const cat = availableRanks[type];
-                if (!cat) return null;
-                return (
-                  <div className="flex items-center gap-2">
-                    <span className="w-7 shrink-0 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {type}
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {cat.ranks.map((r) => {
-                        const isActive = (player.ranks ?? []).includes(r.value);
-                        const doubles = isDoublesRank(r.value);
-                        const takenByOther = !isActive && r.disabled;
-                        const blocked = takenByOther && doubles;
-                        return (
-                          <button
-                            key={r.value}
-                            type="button"
-                            disabled={blocked}
-                            onClick={() => handleToggleRank(r.value)}
-                            aria-pressed={isActive}
-                            title={
-                              r.assignedTo
-                                ? `${r.value} — ${r.assignedTo}${
-                                    blocked
-                                      ? ' (full)'
-                                      : doubles
-                                        ? ''
-                                        : ' · assigning moves them out'
-                                  }`
-                                : r.value
-                            }
-                            className={[
-                              'rounded-md border px-2 py-0.5 text-2xs font-medium sw-num',
-                              'transition-colors duration-fast ease-brand disabled:cursor-not-allowed',
-                              isActive
-                                ? 'border-accent bg-accent/10 text-accent'
-                                : blocked
-                                  ? 'border-border/60 bg-muted/40 text-muted-foreground/50'
-                                  : takenByOther
-                                    ? 'border-status-warning/40 bg-status-warning-bg/40 text-status-warning'
-                                    : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
-                            ].join(' ')}
-                          >
-                            {r.value}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              }}
-            />
-          )}
-        </div>
+        <PlayerEventsField player={player} />
       </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+ * PlayerAvailabilityField / PlayerEventsField — the two roster field
+ * blocks that also expand inside the Matches detail panel's player cards
+ * (SP-D7 S4). Extracted so both surfaces render ONE implementation; all
+ * edits write through the canonical roster record via `updatePlayer`.
+ * ========================================================================= */
+export function PlayerAvailabilityField({ player }: { player: PlayerDTO }) {
+  const updatePlayer = useTournamentStore((s) => s.updatePlayer);
+  const config = useTournamentStore((s) => s.config);
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-muted-foreground">Availability</label>
+      <AvailabilityControl
+        value={player.availability ?? []}
+        dayStart={config?.dayStart ?? '09:00'}
+        dayEnd={config?.dayEnd ?? '17:00'}
+        onChange={(availability) => updatePlayer(player.id, { availability })}
+      />
+    </div>
+  );
+}
+
+export function PlayerEventsField({ player }: { player: PlayerDTO }) {
+  const { assignRank, unassignRank } = useRankAssignment();
+  const { availableRanks, isRankFull } = useRankValidation(
+    player.groupId ?? null,
+    player.id,
+  );
+
+  const handleToggleRank = (rank: string) => {
+    if ((player.ranks ?? []).includes(rank)) {
+      unassignRank(player.id, rank);
+      return;
+    }
+    if (isDoublesRank(rank) && isRankFull(rank)) return;
+    assignRank(player.groupId, player.id, rank);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-medium text-muted-foreground">Events</label>
+      {Object.keys(availableRanks).length === 0 ? (
+        <span className="text-xs text-muted-foreground">
+          Configure positions in Configuration to assign events.
+        </span>
+      ) : (
+        <EventsControl
+          entries={player.ranks ?? []}
+          renderTypeEditor={(type) => {
+            const cat = availableRanks[type];
+            if (!cat) return null;
+            return (
+              <div className="flex items-center gap-2">
+                <span className="w-7 shrink-0 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {type}
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {cat.ranks.map((r) => {
+                    const isActive = (player.ranks ?? []).includes(r.value);
+                    const doubles = isDoublesRank(r.value);
+                    const takenByOther = !isActive && r.disabled;
+                    const blocked = takenByOther && doubles;
+                    return (
+                      <button
+                        key={r.value}
+                        type="button"
+                        disabled={blocked}
+                        onClick={() => handleToggleRank(r.value)}
+                        aria-pressed={isActive}
+                        title={
+                          r.assignedTo
+                            ? `${r.value} — ${r.assignedTo}${
+                                blocked
+                                  ? ' (full)'
+                                  : doubles
+                                    ? ''
+                                    : ' · assigning moves them out'
+                              }`
+                            : r.value
+                        }
+                        className={[
+                          'rounded-md border px-2 py-0.5 text-2xs font-medium sw-num',
+                          'transition-colors duration-fast ease-brand disabled:cursor-not-allowed',
+                          isActive
+                            ? 'border-accent bg-accent/10 text-accent'
+                            : blocked
+                              ? 'border-border/60 bg-muted/40 text-muted-foreground/50'
+                              : takenByOther
+                                ? 'border-status-warning/40 bg-status-warning-bg/40 text-status-warning'
+                                : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
+                        ].join(' ')}
+                      >
+                        {r.value}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

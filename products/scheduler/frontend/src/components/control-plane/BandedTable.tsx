@@ -51,6 +51,7 @@ export function BandedTable<T>({
   selectedId,
   rowClassName,
   rowTestId,
+  rowAttrs,
   headerInset,
 }: {
   columns: BandedTableColumn[];
@@ -71,6 +72,10 @@ export function BandedTable<T>({
    *  accent stripes). */
   rowClassName?: (item: T) => string | undefined;
   rowTestId?: (item: T) => string | undefined;
+  /** Extra attributes spread onto the row element (e.g. `data-severity`
+   *  for Meet's disruption-accented rows). `data-testid`/`data-selected`
+   *  stay owned by the shell and win on collision. */
+  rowAttrs?: (item: T) => Record<string, string | undefined>;
   /** Horizontal padding utility for the header row — see
    *  `ColumnHeaderRow`'s `inset`. Defaults to the canonical `px-5`. */
   headerInset?: string;
@@ -91,6 +96,7 @@ export function BandedTable<T>({
       return (
         <div
           key={id}
+          {...(rowAttrs?.(item) ?? {})}
           data-testid={rowTestId?.(item)}
           data-selected={selected ? 'true' : undefined}
           onClick={onRowClick ? () => onRowClick(item) : undefined}
