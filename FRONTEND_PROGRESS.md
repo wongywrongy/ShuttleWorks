@@ -301,8 +301,17 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
   5. ▢ Draw-generate 409 surfaces raw "solver returned infeasible: no reason" — needs operator wording.
   6. Verified exact so far: Hub (chips/⌘K/amber), Draws cards (Draft+Started), one-sided Draw + toggle,
      Bracket Matches (populated, #/codes/TBD/status), Meet Matches (schools once, bands, commas).
-  7. **Remaining walk:** Rosters detail, Configs detail, Operations Plan, Display (meet), Settings pages,
-     New Workspace, RR draw view, full light-theme sweep, mirrored-toggle shot, wording audit per page.
+  7. ✅ Walked + verified (light): Meet Roster (grid codes + DISCIPLINE_ORDER columns), Operations Plan,
+     Display Preview (always-dark inside light shell ✓; RECONNECTING pill = the documented dev-only Vite
+     SSE buffering, not a defect), Meet Config Events (shared shell + lock ribbon), one-sided Draw.
+  8. ✅ Plan board fixes (`6f2b2a0`): Auto-fit now accounts for the M/B square (codes no longer truncate
+     to "MS Q…"); Up Next codes adopt the Run queue's code grammar.
+  9. Wording observation (log-only): doubles-pair joiners differ by register — Display "&", Bracket " / "
+     (BWF), Meet ", " (editable cells). Each defensible; unify only on a product call.
+  10. **Remaining walk:** Bracket Roster/Config light shots, New Workspace, Settings pages (workspace +
+      global), RR draw view (WS draw is Draft — generate is infeasible on the full QA day; needs a
+      widened day window or fewer courts to populate), mirrored-toggle screenshot, dark sweep of the
+      surfaces above, finding #5 wording fix ("solver returned infeasible: no reason").
 
 ---
 
