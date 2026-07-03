@@ -123,12 +123,14 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       // Fields that are pure UI/metadata and never feed the solver —
       // changing them must NOT mark the schedule stale or trip the
       // lock guard. Scoring format is operator-side display logic;
-      // every `tv*` knob lives only in the TV render path.
+      // every `tv*` knob + display settings like `standingsMode` live
+      // only in the render path, never in constraint generation.
       const NON_SCHEDULING_KEYS: Array<keyof TournamentConfig> = [
         'scoringFormat',
         'setsToWin',
         'pointsPerSet',
         'deuceEnabled',
+        'standingsMode',
         'tvDisplayMode',
         'tvAccent',
         'tvPreset',
