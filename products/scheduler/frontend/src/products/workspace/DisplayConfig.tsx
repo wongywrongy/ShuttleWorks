@@ -102,7 +102,7 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
             <p className="text-xs text-muted-foreground">
               How the public board lays out courts. Changes apply immediately — no save step.
             </p>
-            <DisplayLayoutEditor />
+            <DisplayLayoutEditor tid={tid} />
           </section>
 
           <section className="space-y-2">

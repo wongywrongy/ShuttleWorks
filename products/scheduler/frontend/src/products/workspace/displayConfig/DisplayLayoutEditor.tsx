@@ -43,6 +43,18 @@
  * `courtsWithActiveMatch` (schedule assignments + match states, both read
  * straight off the stores) — it never auto-restores visibility (Q9); the
  * director must click "Show".
+ *
+ * `matchStates` hydration: this editor renders outside `useLiveTracking`'s
+ * scope (no Meet/Operations/Display page necessarily visited yet this
+ * session), so without its own loader `matchStateStore` could still be
+ * empty on a fresh navigation straight to Workspace → Display config —
+ * silently starving the live-match nudge above. Mounts
+ * `useMatchStateSync(tid)` — the existing lightweight hook built for
+ * exactly this ("any surface that RENDERS live state but doesn't mount
+ * the full useLiveTracking machinery", already used by
+ * `OperationsProduct.tsx` for the same reason) — instead of the heavier
+ * `useLiveTracking()`. `tid` is optional and the hook no-ops on a falsy
+ * one, so tests that don't pass it are unaffected.
  */
 import { useMemo } from 'react';
 import {
@@ -57,6 +69,7 @@ import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } 
 import { CSS } from '@dnd-kit/utilities';
 import { Eye, EyeSlash, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { TournamentConfig } from '../../../api/dto';
 import { Row, Seg, Toggle } from '../../../platform/settings/SettingsControls';
@@ -189,13 +202,16 @@ function CourtOrderRow({
   );
 }
 
-export function DisplayLayoutEditor() {
+export function DisplayLayoutEditor({ tid }: { tid?: string }) {
   const config = useTournamentStore((s) => s.config);
   const setConfig = useTournamentStore((s) => s.setConfig);
   // Read-only — powers the "hidden court has a live match" nudge. Never
   // written to from this editor; hide/order patches only ever touch
-  // `config.hiddenCourts` / `config.courtOrder` below.
+  // `config.hiddenCourts` / `config.courtOrder` below. Keeps matchStates
+  // hydrated on this route (see file doc comment); no-ops when `tid` is
+  // falsy, so tests that don't pass one are unaffected.
   const schedule = useTournamentStore((s) => s.schedule);
+  useMatchStateSync(tid);
   const matchStates = useMatchStateStore((s) => s.matchStates);
 
   const update = (patch: Partial<TournamentConfig>) => {
