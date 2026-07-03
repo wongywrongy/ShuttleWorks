@@ -26,6 +26,7 @@ import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { ScheduleAssignment } from '../../api/dto';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
+import { STALE_CAPTION } from './publicDisplay/freshness';
 import { useFullscreen } from './publicDisplay/useFullscreen';
 import { formatTournamentDate } from './publicDisplay/helpers';
 import { FullscreenButton } from './publicDisplay/FullscreenButton';
@@ -373,7 +374,7 @@ export function MeetDisplayPage() {
           <>
             {freshness === 'stale' && (
               <div className="mb-4 text-center text-base text-muted-foreground">
-                Results may be out of date — reconnecting
+                {STALE_CAPTION}
               </div>
             )}
             <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>

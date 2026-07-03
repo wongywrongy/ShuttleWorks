@@ -46,3 +46,12 @@ export function deriveFreshness(ageMs: number, pollMs: number): FreshnessState {
   if (ageMs >= pollMs * DELAYED_MULTIPLIER) return 'delayed';
   return 'live';
 }
+
+/**
+ * Spectator-facing caption shown under the `stale` freshness state on
+ * both public boards (meet + bracket). Deliberately mechanism-free —
+ * no connection/network framing, no operator vocabulary
+ * (reconnect/offline/server/backend). See `freshness.test.ts` for the
+ * guard that pins this.
+ */
+export const STALE_CAPTION = 'Results may be a few minutes behind.';

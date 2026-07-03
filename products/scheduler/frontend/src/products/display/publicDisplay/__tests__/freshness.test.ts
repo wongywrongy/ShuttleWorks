@@ -5,7 +5,7 @@
  * future edit can't silently widen/narrow them.
  */
 import { describe, expect, it } from 'vitest';
-import { deriveFreshness, DELAYED_MULTIPLIER, STALE_MS } from '../freshness';
+import { deriveFreshness, DELAYED_MULTIPLIER, STALE_MS, STALE_CAPTION } from '../freshness';
 
 describe('deriveFreshness', () => {
   it('is live right after a successful sync', () => {
@@ -33,5 +33,17 @@ describe('deriveFreshness', () => {
   it('exposes the thresholds as named constants', () => {
     expect(DELAYED_MULTIPLIER).toBe(2.5);
     expect(STALE_MS).toBe(240_000);
+  });
+});
+
+describe('STALE_CAPTION', () => {
+  it('never surfaces operator/technical connection language to spectators', () => {
+    // The public boards must never render this vocabulary — a past
+    // regression used "Results may be out of date — reconnecting".
+    expect(STALE_CAPTION).not.toMatch(/reconnect|offline|server|backend/i);
+  });
+
+  it('is the exact calm, mechanism-free copy shared by both boards', () => {
+    expect(STALE_CAPTION).toBe('Results may be a few minutes behind.');
   });
 });

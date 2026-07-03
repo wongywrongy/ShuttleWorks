@@ -15,6 +15,7 @@ import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { useFullscreen } from '../publicDisplay/useFullscreen';
 import { FullscreenButton } from '../publicDisplay/FullscreenButton';
 import { LiveStatusPill } from '../publicDisplay/LiveStatusPill';
+import { STALE_CAPTION } from '../publicDisplay/freshness';
 import { useBracketDisplaySync } from './useBracketDisplaySync';
 import { BracketLiveView } from './BracketLiveView';
 import { BracketDrawView } from './BracketDrawView';
@@ -115,7 +116,7 @@ export function BracketDisplayPage() {
           caption, no red/alarm styling. */}
       {freshness === 'stale' && data && (
         <div className="border-b border-border bg-muted/30 px-4 py-1.5 text-center text-sm text-muted-foreground">
-          Results may be out of date — reconnecting
+          {STALE_CAPTION}
         </div>
       )}
 
