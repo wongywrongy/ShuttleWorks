@@ -194,6 +194,32 @@ def test_summary_includes_modules(client, tid):
     assert modules["bracket"]["status"] == "available"
 
 
+def test_summary_includes_match_metrics_and_next_up(client, tid):
+    """The summary carries the redesign's match metrics + next-up, computed in
+    ``build_signals`` from the already-loaded ``data`` blob. The list path adds
+    NO per-row query — ``build_signals`` takes no DB session and this change
+    added no grouped count — so the N+1 guardrail is preserved by construction.
+    """
+    _seed_match(client, tid, "m1")
+    sig = client.get(f"/tournaments/{tid}").json()["signals"]
+    assert sig["matches"]["total"] == 1
+    assert sig["matches"]["scheduled"] == 1
+    assert sig["matches"]["toDo"] == len(sig["attention"])
+    assert len(sig["nextUp"]) == 1
+    nxt = sig["nextUp"][0]
+    assert nxt["timeLabel"] == "09:00"   # config dayStart + slot0*interval
+    assert nxt["courtLabel"] == "Court 1"
+    assert nxt["status"] == "scheduled"
+
+
+def test_list_summary_carries_match_metrics_for_every_workspace(client, tid):
+    """The list endpoint (not just the single GET) serializes the new fields."""
+    _seed_match(client, tid, "m1")
+    rows = client.get("/tournaments").json()
+    assert rows, "expected at least the seeded workspace"
+    assert all("matches" in row["signals"] and "nextUp" in row["signals"] for row in rows)
+
+
 # ---- 4. GET module list -----------------------------------------------
 
 
