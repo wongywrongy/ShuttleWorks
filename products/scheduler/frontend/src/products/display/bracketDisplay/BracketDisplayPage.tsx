@@ -35,10 +35,10 @@ export function BracketDisplayPage() {
   const [now, setNow] = useState<Date>(() => new Date());
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  const { data, liveStatus, syncError } = useBracketDisplaySync(now);
+  const { data, freshness, syncError } = useBracketDisplaySync(now);
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
 
-  // 1 Hz clock drives the live-status freshness derivation.
+  // 1 Hz clock drives the freshness derivation.
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(t);
@@ -105,16 +105,27 @@ export function BracketDisplayPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="tabular-nums text-base text-muted-foreground">{currentTime}</span>
-          <LiveStatusPill status={liveStatus} error={syncError} />
+          <LiveStatusPill status={freshness} />
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-auto">
+      {/* Nice-to-have parity with the meet board's stale treatment (not
+          required by this task's scope — see task-4-report.md): a calm
+          caption, no red/alarm styling. */}
+      {freshness === 'stale' && data && (
+        <div className="border-b border-border bg-muted/30 px-4 py-1.5 text-center text-sm text-muted-foreground">
+          Results may be out of date — reconnecting
+        </div>
+      )}
+
+      <main
+        className={`min-h-0 flex-1 overflow-auto ${freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}`}
+      >
         {!data ? (
           <div className="flex h-full items-center justify-center p-12 text-center">
             <p className="text-2xl text-muted-foreground">
-              {syncError ? 'Waiting for connection to the server…' : 'Loading bracket…'}
+              {syncError ? 'Waiting to connect…' : 'Loading bracket…'}
             </p>
           </div>
         ) : view === 'draw' ? (

@@ -61,8 +61,8 @@ export function MeetDisplayPage() {
     return () => window.clearInterval(t);
   }, []);
 
-  // Read-only polling + liveness derivation. See ./publicDisplay/useDisplaySync.ts.
-  const { liveStatus, syncError } = useDisplaySync(now);
+  // Read-only polling + freshness derivation. See ./publicDisplay/useDisplaySync.ts.
+  const { freshness } = useDisplaySync(now);
 
   // Fullscreen toggle + F-key shortcut. See ./publicDisplay/useFullscreen.ts.
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
@@ -226,15 +226,13 @@ export function MeetDisplayPage() {
         className="min-h-[100dvh] bg-background text-foreground flex items-center justify-center"
       >
         <div className="absolute right-4 top-4 flex items-center gap-3">
-          <LiveStatusPill status={liveStatus} error={syncError} />
+          <LiveStatusPill status={freshness} />
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </div>
         <div className="text-center">
           <div className="text-6xl font-bold tracking-tight">Tournament Display</div>
           <div className="mt-3 text-2xl text-muted-foreground">
-            {liveStatus === 'live'
-              ? 'No schedule generated yet'
-              : 'Waiting for connection to the server…'}
+            {freshness === 'live' ? 'No schedule generated yet' : 'Waiting to connect…'}
           </div>
         </div>
       </div>
@@ -339,7 +337,7 @@ export function MeetDisplayPage() {
                 {formatTournamentDate(config.tournamentDate)}
               </div>
             )}
-            <LiveStatusPill status={liveStatus} error={syncError} />
+            <LiveStatusPill status={freshness} />
           </div>
           <div className="flex items-center gap-3">
             <div className="flex gap-2">
@@ -372,22 +370,31 @@ export function MeetDisplayPage() {
           snapping in — visible from across a gym. */}
       <div key={view} className="motion-enter px-6 pb-28 pt-6">
         {view === 'courts' && (
-          <CourtsView
-            courts={courtMatches}
-            config={config}
-            now={now}
-            displayMode={tvDisplayMode}
-            gridColsClass={gridColsClass}
-            cardHeightPx={cardHeightPx}
-            cardPadX={cardPadX}
-            courtNumSize={courtNumSize}
-            eventCodeSize={eventCodeSize}
-            playerSize={playerSize}
-            tvAccent={tvAccent}
-            tvShowScores={tvShowScores}
-            isFullscreen={isFullscreen}
-            playerNames={playerNames}
-          />
+          <>
+            {freshness === 'stale' && (
+              <div className="mb-4 text-center text-base text-muted-foreground">
+                Results may be out of date — reconnecting
+              </div>
+            )}
+            <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>
+              <CourtsView
+                courts={courtMatches}
+                config={config}
+                now={now}
+                displayMode={tvDisplayMode}
+                gridColsClass={gridColsClass}
+                cardHeightPx={cardHeightPx}
+                cardPadX={cardPadX}
+                courtNumSize={courtNumSize}
+                eventCodeSize={eventCodeSize}
+                playerSize={playerSize}
+                tvAccent={tvAccent}
+                tvShowScores={tvShowScores}
+                isFullscreen={isFullscreen}
+                playerNames={playerNames}
+              />
+            </div>
+          </>
         )}
 
         {view === 'schedule' && (

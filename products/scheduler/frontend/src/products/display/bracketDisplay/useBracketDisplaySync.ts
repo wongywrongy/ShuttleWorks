@@ -5,20 +5,23 @@
  * directly (the bracket display has no Zustand store to hydrate).
  *
  * Writes are NEVER issued — the TV is a read-only mirror.
+ *
+ * Freshness derivation is shared with the meet board via
+ * `../publicDisplay/freshness` (`deriveFreshness`) so both public boards
+ * speak the same spectator-calm Live / Delayed / Out-of-date vocabulary
+ * instead of drifting into separate Reconnecting/Offline language.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../../api/client';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
-import type { LiveStatus } from '../publicDisplay/useDisplaySync';
+import { deriveFreshness, type FreshnessState } from '../publicDisplay/freshness';
 
 const POLL_MS = 10_000;
-const RECONNECTING_AFTER_MS = 25_000;
-const OFFLINE_AFTER_MS = 60_000;
 
 export interface UseBracketDisplaySyncResult {
   data: BracketTournamentDTO | null;
-  liveStatus: LiveStatus;
+  freshness: FreshnessState;
   syncError: string | null;
 }
 
@@ -55,13 +58,11 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
     };
   }, [tid]);
 
-  const liveStatus: LiveStatus = useMemo(() => {
-    if (lastSyncMs === null) return syncError ? 'reconnecting' : 'live';
+  const freshness: FreshnessState = useMemo(() => {
+    if (lastSyncMs === null) return syncError ? 'delayed' : 'live';
     const age = now.getTime() - lastSyncMs;
-    if (age >= OFFLINE_AFTER_MS) return 'offline';
-    if (age >= RECONNECTING_AFTER_MS) return 'reconnecting';
-    return 'live';
+    return deriveFreshness(age, POLL_MS);
   }, [lastSyncMs, now, syncError]);
 
-  return { data, liveStatus, syncError };
+  return { data, freshness, syncError };
 }
