@@ -149,14 +149,17 @@ export function HubPage() {
   }, [deleteTarget]);
 
   return (
-    // The handoff Hub prototype: the dashboard is a rounded SCREEN FRAME
-    // floating on the page's ambient glow — not a full-bleed sheet. The
-    // frame is the only rounded container; everything inside is one seamed
-    // plane divided by hairlines.
-    <div className="flex h-full min-h-0 flex-col bg-background p-4 text-foreground md:p-6">
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1280px] flex-col overflow-hidden rounded-xl border border-border bg-surface-screen shadow-frame">
-      {/* Top command bar — boxed wordmark · centered search · glowing primary */}
-      <header className="flex h-[52px] shrink-0 items-center gap-3.5 border-b border-border px-4">
+    // The Hub is the app's landing SURFACE, not a mock artboard: full-bleed
+    // like every other screen (the prototype's rounded "screen frame" is its
+    // canvas device — in the running app the viewport IS the frame). What we
+    // adopt from the handoff Hub is its DESIGN: one seamed plane divided by
+    // hairlines, a dense date/workspace/next-action table, quiet filters, and
+    // the rail inspector — all on the app's ambient-glow substrate.
+    <div className="flex h-full min-h-0 flex-col text-foreground">
+      {/* Command bar — same chrome grammar as the workspace identity bar
+          (h-12 · bg-card · hairline): wordmark · centered search · glowing
+          primary. The Hub reads as a sibling of the in-workspace shell. */}
+      <header className="flex h-12 shrink-0 items-center gap-3.5 border-b border-border bg-card px-4">
         <ShuttleWorksMark />
         <div className="flex min-w-0 flex-1 justify-center">
           <div className="relative w-full max-w-[420px]">
@@ -315,7 +318,6 @@ export function HubPage() {
           </div>
         </Modal>
       )}
-      </div>
     </div>
   );
 }
