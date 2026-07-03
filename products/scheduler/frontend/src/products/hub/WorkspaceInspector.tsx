@@ -14,7 +14,7 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
 import { attentionReasons, moduleCountsOf, readinessOf, setupLabel } from './hubSignals';
 import { rowActionFor } from './nextAction';
-import { dayKey, eventDate, type HubGroupId } from './hubGrouping';
+import { eventDate, temporalGroupOf } from './hubGrouping';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return 'No date set';
@@ -22,13 +22,6 @@ function fmtDate(iso: string | null): string {
   return Number.isNaN(d.getTime())
     ? iso
     : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-/** Same time-group logic the Hub list uses, for a single workspace, so the
- *  inspector's primary action matches its row. */
-function groupOf(t: TournamentSummaryDTO, todayKey: string): HubGroupId {
-  if (!t.tournamentDate) return 'undated';
-  return dayKey(t.tournamentDate) >= todayKey ? 'upcoming' : 'past';
 }
 
 /** 10px uppercase micro-label — the rail's section voice. */
@@ -68,7 +61,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const enabledCount = modules.filter((m) => m.status === 'enabled').length;
 
   const todayKey = new Date().toISOString().slice(0, 10);
-  const action = rowActionFor(tournament, groupOf(tournament, todayKey));
+  const action = rowActionFor(tournament, temporalGroupOf(tournament, todayKey));
 
   return (
     <aside className="hidden w-[322px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-border bg-surface-rail p-[18px] lg:flex">

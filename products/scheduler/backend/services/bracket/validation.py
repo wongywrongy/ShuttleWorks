@@ -19,7 +19,7 @@ locked subset, so ``feasible: true`` reliably means ``/pin`` succeeds.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Mapping, Optional
 
 from scheduler_core.domain.models import (
     Assignment as CoreAssignment,
@@ -30,6 +30,7 @@ from scheduler_core.domain.tournament import TournamentState
 from scheduler_core.engine.validation import Conflict, find_conflicts
 
 from .adapter import build_players, expand_side
+from .player_constraints import PlayerExtras
 
 
 @dataclass
@@ -56,12 +57,20 @@ def validate_bracket_move(
     play_unit_id: str,
     slot_id: int,
     court_id: int,
+    player_extras: Optional[Mapping[str, PlayerExtras]] = None,
 ) -> List[BracketConflict]:
     """Return the hard-constraint conflicts for moving ``play_unit_id``
     to ``(slot_id, court_id)`` against the current assignment set.
 
     An empty list means the move is feasible. Raises ``KeyError`` if
     ``play_unit_id`` has no PlayUnit in ``state``.
+
+    ``player_extras`` (SP-D7) carries per-roster-player availability
+    windows + rest_slots. When passed, ``find_conflicts`` will flag a
+    drag into a player's blocked window (``type="availability"``) or a
+    rest violation (``type="rest"``) — the same channel the pin re-solve
+    honors. ``None`` preserves the pre-extras behaviour exactly (every
+    player is available across the whole round window).
     """
     pu = state.play_units.get(play_unit_id)
     if pu is None:
@@ -110,6 +119,7 @@ def validate_bracket_move(
         referenced_player_ids,
         state.participants,
         availability_window=(config.current_slot, config.total_slots),
+        extras=player_extras,
     )
     players = {p.id: p for p in players_list}
 

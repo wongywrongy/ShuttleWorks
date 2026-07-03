@@ -230,6 +230,10 @@ class ParticipantOut(BaseModel):
     id: str
     name: str
     members: Optional[List[str]] = None
+    # Seed number (1 = top seed) from participant metadata; None = unseeded.
+    # Serialized so a flow that echoes participants back through the
+    # create-or-replace upsert doesn't silently drop imported seeds.
+    seed: Optional[int] = None
 
 
 class BracketSlotOut(BaseModel):
@@ -1117,6 +1121,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                         members=list(p.member_ids)
                         if p.type == ParticipantType.TEAM and p.member_ids
                         else None,
+                        seed=p.metadata.get("seed"),
                     )
                     for p in draw.participants.values()
                 ],
@@ -1155,6 +1160,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
             members=list(p.member_ids)
             if p.type == ParticipantType.TEAM and p.member_ids
             else None,
+            seed=p.metadata.get("seed"),
         )
         for p in state.participants.values()
     ]
@@ -2779,6 +2785,7 @@ def validate_bracket_move_route(
         play_unit_id=body.play_unit_id,
         slot_id=body.slot_id,
         court_id=body.court_id,
+        player_extras=session.player_extras,
     )
     return BracketValidationOut(
         feasible=not conflicts,

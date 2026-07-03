@@ -136,16 +136,20 @@ export function nextTeamId(eventId: string, participants: Participant[]): string
   return `${eventId}-T${maxN + 1}`;
 }
 
-/** Wire participant → upsert-input participant (drops `members: null`). */
+/** Wire participant → upsert-input participant (drops `members: null`;
+ *  echoes `seed` so an existing draw's seeds survive a create-or-replace
+ *  upsert instead of being silently reset to unseeded). */
 export function toUpsertParticipant(p: Participant): {
   id: string;
   name: string;
   members?: string[];
+  seed?: number;
 } {
   return {
     id: p.id,
     name: p.name,
     ...(p.members && p.members.length > 0 ? { members: [...p.members] } : {}),
+    ...(p.seed != null ? { seed: p.seed } : {}),
   };
 }
 

@@ -226,6 +226,41 @@ def test_validate_move_dependency_ordering():
     assert not any(c.type == "dependency_order" for c in ok)
 
 
+def test_validate_move_respects_roster_availability():
+    """Dragging a match onto a slot inside a player's blocked-out window
+    is flagged (``type="availability"``) once roster ``player_extras`` are
+    threaded — the same channel the pin re-solve honors (SP-D7 debt)."""
+    from scheduler_core.domain.models import ScheduleConfig
+    from services.bracket.player_constraints import PlayerExtras
+    from services.bracket.validation import validate_bracket_move
+
+    state = _two_player_state()
+    config = ScheduleConfig(total_slots=64, court_count=2)
+    # P3 (in M2) is only available in slots [0, 3); rest_slots=0 isolates
+    # the assertion to availability.
+    extras = {"P3": PlayerExtras(availability_slots=[(0, 3)], rest_slots=0)}
+
+    # Move M2 (P3 vs P4) to slot=5 — a clear cell, but past P3's window.
+    # Without extras the drag reads feasible (the pre-fix behaviour)…
+    assert validate_bracket_move(
+        state, config, play_unit_id="M2", slot_id=5, court_id=1
+    ) == []
+    # …and with extras the same move surfaces an availability conflict for P3.
+    conflicts = validate_bracket_move(
+        state, config, play_unit_id="M2", slot_id=5, court_id=1,
+        player_extras=extras,
+    )
+    assert any(c.type == "availability" and c.player_id == "P3" for c in conflicts)
+    # A move that stays inside P3's window (slot=2) stays feasible even with extras.
+    assert not any(
+        c.type == "availability"
+        for c in validate_bracket_move(
+            state, config, play_unit_id="M2", slot_id=2, court_id=1,
+            player_extras=extras,
+        )
+    )
+
+
 # ---- TournamentDriver.repin_and_resolve -----------------------------------
 
 

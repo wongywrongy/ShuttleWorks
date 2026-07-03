@@ -231,13 +231,23 @@ export function BracketDrawsTab() {
                         players={players}
                         initialIds={[]}
                         onCommit={async (picks) => {
+                          // Preserve any seed already assigned to a
+                          // carried-over participant (e.g. CSV/JSON import) —
+                          // the picker replaces the set but must not reset
+                          // seeds on participants that survive the commit.
+                          const seedOf = (id: string): number | undefined => {
+                            const s = (ev.participants ?? []).find((x) => x.id === id)?.seed;
+                            return s == null ? undefined : s;
+                          };
                           const participants = isDoubles
-                            ? (picks as PickedPair[]).map((p) => ({
-                                id: p.id, name: p.name, members: p.members,
-                              }))
-                            : (picks as PickedSingle[]).map((p) => ({
-                                id: p.id, name: p.name,
-                              }));
+                            ? (picks as PickedPair[]).map((p) => {
+                                const seed = seedOf(p.id);
+                                return { id: p.id, name: p.name, members: p.members, ...(seed != null ? { seed } : {}) };
+                              })
+                            : (picks as PickedSingle[]).map((p) => {
+                                const seed = seedOf(p.id);
+                                return { id: p.id, name: p.name, ...(seed != null ? { seed } : {}) };
+                              });
                           try {
                             // Echo the draw's current config knobs so a
                             // participants commit never resets what the
@@ -404,9 +414,11 @@ function StatusPillFor({ status }: { status: BracketEventStatus }) {
     );
   }
   if (status === 'generated') {
-    return <StatusPill tone="amber">● Generated</StatusPill>;
+    return <StatusPill tone="amber" dot>Generated</StatusPill>;
   }
-  return <StatusPill tone="green">● Started</StatusPill>;
+  // Started = live (matches are being played) — the pulsing dot + own-hue
+  // glow is the handoff pill's live-signal treatment (sw-pulse).
+  return <StatusPill tone="green" dot pulse>Started</StatusPill>;
 }
 
 function ActionCell({

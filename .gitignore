@@ -71,6 +71,10 @@ apps/
 # Design-system prototype (source spec for the frontend revamp — extracted into
 # .agents/skills/shuttleworks-design/; kept on disk as visual reference, not tracked).
 /ShuttleWorks Prototype/
+# claude.ai/design source-of-truth export — mirrors the tracked skill
+# (.agents/skills/shuttleworks-design/); a local reference for offline agents,
+# not a second copy to version.
+/ShuttleWorks Design System-handoff/
 
 # OS
 .DS_Store

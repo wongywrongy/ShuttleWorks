@@ -44,6 +44,14 @@ function isValidTransition(
   return validNextStates.includes(newStatus);
 }
 
+/** Operator-facing label for a match id — the display code ("Match M12")
+ *  when we know its `matchNumber`, else a short UUID prefix. Reads the store
+ *  live so conflict toasts never surface a raw UUID (see debt-log). */
+function matchLabelOf(matchId: string): string {
+  const m = useTournamentStore.getState().matches.find((mm) => mm.id === matchId);
+  return m?.matchNumber != null ? `Match M${m.matchNumber}` : `Match ${matchId.slice(0, 8)}…`;
+}
+
 export function useLiveTracking() {
   // Resolve the tournament id from the route when mounted under
   // /tournaments/:id, or from the ?id= query param on the public
@@ -246,7 +254,7 @@ export function useLiveTracking() {
           try {
             useUiStore.getState().pushToast({
               level: 'error',
-              message: `Match ${matchId.slice(0, 8)}… version mismatch`,
+              message: `${matchLabelOf(matchId)} — version mismatch`,
               detail: apiError.message,
               actionLabel: 'Retry',
               onAction: () => {
@@ -262,7 +270,7 @@ export function useLiveTracking() {
         try {
           useUiStore.getState().pushToast({
             level: 'error',
-            message: `Match ${matchId.slice(0, 8)}… did not save`,
+            message: `${matchLabelOf(matchId)} did not save`,
             detail,
             actionLabel: 'Retry',
             onAction: () => {

@@ -2,10 +2,11 @@
  * Workspace Hub — the control-plane landing page at `/`.
  *
  * A full-width operational control plane: a top command bar (wordmark, search,
- * theme, New workspace), filter tabs (All / Active / Draft / Shared / Needs
- * attention) with counts, a dense workspace list (see WorkspaceRow), and a
- * right-side inspector for the selected workspace. "New workspace" routes to
- * the dedicated `/new` create surface.
+ * New workspace, account chip), a status-facet filter strip (All / Active /
+ * Draft / Shared / Needs attention) with overlapping counts, a dense workspace
+ * list (see WorkspaceRow) sorted by operational time order, and a right-side
+ * inspector for the selected workspace. "New workspace" routes to the
+ * dedicated `/new` create surface.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -14,22 +15,26 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState, Skeleton, Eyebrow } from '../../components/control-plane';
-import { groupWorkspaces, type HubGroupId } from './hubGrouping';
+import { sortWorkspaces, temporalGroupOf } from './hubGrouping';
+import { HUB_FACETS, facetCounts, matchesFacet, type HubFacetId } from './hubFacets';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
 
-/** One group-filter chip (All / Upcoming / No date set / Past) with a count.
- *  Prototype grammar: quiet text; the ACTIVE filter is a raised pill (no
- *  border chrome — surface does the work). */
+/** One status-facet chip (All / Active / Draft / Shared / Needs attention)
+ *  with an overlapping count. Prototype grammar: quiet text; the ACTIVE facet
+ *  is a raised pill (no border chrome — surface does the work). `emphasize`
+ *  warms a non-zero count to amber (the "Needs attention" facet). */
 function FilterChip({
   label,
   count,
   active,
+  emphasize = false,
   onClick,
 }: {
   label: string;
   count: number;
   active: boolean;
+  emphasize?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -44,7 +49,9 @@ function FilterChip({
       }`}
     >
       {label}{' '}
-      <span className="sw-num text-ink-faint">{count}</span>
+      <span className={`sw-num ${emphasize && count > 0 ? 'text-status-warning' : 'text-ink-faint'}`}>
+        {count}
+      </span>
     </button>
   );
 }
@@ -57,8 +64,8 @@ export function HubPage() {
 
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** Chronological-group filter; 'all' = current (show everything) behavior. */
-  const [groupFilter, setGroupFilter] = useState<HubGroupId | 'all'>('all');
+  /** Status facet; 'all' shows everything (facets overlap — see hubFacets). */
+  const [facet, setFacet] = useState<HubFacetId>('all');
 
   // ⌘K / Ctrl+K focuses the search field (the kbd hint inside it says so).
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -102,26 +109,26 @@ export function HubPage() {
     void refresh();
   }, [refresh]);
 
-  // Filter by name, then group chronologically (Upcoming / No date / Past).
-  // `today` is read once per render; the grouping itself is pure + tested.
-  const groups = useMemo(() => {
+  const todayKey = new Date().toISOString().slice(0, 10);
+
+  // Filter by name (the search box), then derive facet counts over that set so
+  // the strip's badges reflect what a search has narrowed to.
+  const nameFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = q
+    return q
       ? tournaments.filter((t) => (t.name || '').toLowerCase().includes(q))
       : tournaments;
-    const todayKey = new Date().toISOString().slice(0, 10);
-    return groupWorkspaces(filtered, todayKey).filter((g) => g.items.length > 0);
   }, [tournaments, query]);
-  const matchCount = useMemo(() => groups.reduce((n, g) => n + g.items.length, 0), [groups]);
-  // Group-filter chips narrow the visible list; 'all' shows every group.
-  const visibleGroups = useMemo(
-    () => (groupFilter === 'all' ? groups : groups.filter((g) => g.id === groupFilter)),
-    [groups, groupFilter],
+  const counts = useMemo(() => facetCounts(nameFiltered), [nameFiltered]);
+
+  // The visible rows: name-filtered ∩ active facet, then flat-sorted by
+  // operational time order (upcoming → undated → past).
+  const visible = useMemo(
+    () => sortWorkspaces(nameFiltered.filter((t) => matchesFacet(t, facet)), todayKey),
+    [nameFiltered, facet, todayKey],
   );
-  const visibleCount = useMemo(
-    () => visibleGroups.reduce((n, g) => n + g.items.length, 0),
-    [visibleGroups],
-  );
+  const facetLabel = HUB_FACETS.find((f) => f.id === facet)!.label;
+
   const selected = useMemo(
     () => tournaments.find((t) => t.id === selectedId) ?? null,
     [tournaments, selectedId],
@@ -153,12 +160,14 @@ export function HubPage() {
     // like every other screen (the prototype's rounded "screen frame" is its
     // canvas device — in the running app the viewport IS the frame). What we
     // adopt from the handoff Hub is its DESIGN: one seamed plane divided by
-    // hairlines, a dense date/workspace/next-action table, quiet filters, and
+    // hairlines, a dense date/workspace/next-action table, status facets, and
     // the rail inspector — all on the app's ambient-glow substrate.
     <div className="flex h-full min-h-0 flex-col text-foreground">
       {/* Command bar — same chrome grammar as the workspace identity bar
           (h-12 · bg-card · hairline): wordmark · centered search · glowing
-          primary. The Hub reads as a sibling of the in-workspace shell. */}
+          primary. Reads as a sibling of the in-workspace shell. The account
+          avatar the prototype drew here already lives in the app's global
+          left rail (its artboard had no rail) — not duplicated. */}
       <header className="flex h-12 shrink-0 items-center gap-3.5 border-b border-border bg-card px-4">
         <ShuttleWorksMark />
         <div className="flex min-w-0 flex-1 justify-center">
@@ -177,35 +186,29 @@ export function HubPage() {
             </kbd>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => navigate('/new')}>
-            <span aria-hidden>＋</span> New workspace
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => navigate('/new')}>
+          <span aria-hidden>＋</span> New workspace
+        </Button>
       </header>
 
-      {/* Group-filter strip — quiet text chips, raised active pill */}
+      {/* Status-facet strip — quiet text chips, raised active pill; the
+          "Needs attention" count warms to amber. Facets overlap by design. */}
       {!loading && tournaments.length > 0 ? (
         <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-border px-3.5">
-          <FilterChip
-            label="All"
-            count={matchCount}
-            active={groupFilter === 'all'}
-            onClick={() => setGroupFilter('all')}
-          />
-          {groups.map((g) => (
+          {HUB_FACETS.map((f) => (
             <FilterChip
-              key={g.id}
-              label={g.label}
-              count={g.items.length}
-              active={groupFilter === g.id}
-              onClick={() => setGroupFilter(g.id)}
+              key={f.id}
+              label={f.label}
+              count={counts[f.id]}
+              active={facet === f.id}
+              emphasize={f.id === 'attention'}
+              onClick={() => setFacet(f.id)}
             />
           ))}
         </div>
       ) : null}
 
-      {/* Body: chronological groups + inspector */}
+      {/* Body: one flat, sorted, facet-filtered list + inspector */}
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto">
           {error && (
@@ -225,14 +228,16 @@ export function HubPage() {
               body="A workspace is your event control plane — it runs modules like Meet, Bracket, and Display."
               action={<Button onClick={() => navigate('/new')}>Create workspace</Button>}
             />
-          ) : visibleCount === 0 ? (
+          ) : visible.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
-              No workspaces match your search.
+              {query.trim()
+                ? 'No workspaces match your search.'
+                : `Nothing in “${facetLabel}” right now.`}
             </div>
           ) : (
             <div>
-              {/* Column header — the dense-table grammar from the handoff
-                  Hub prototype (widths mirror WorkspaceRow's cells). */}
+              {/* Column header — the dense-table grammar from the handoff Hub
+                  prototype (widths mirror WorkspaceRow's cells). */}
               <div
                 aria-hidden
                 className="flex items-center gap-3 border-b border-border px-4 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint"
@@ -242,31 +247,21 @@ export function HubPage() {
                 <span className="w-40 shrink-0">Next action</span>
                 <span className="w-6 shrink-0" />
               </div>
-              {visibleGroups.map((g) => (
-                <section key={g.id} aria-label={g.label}>
-                  <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur">
-                    <Eyebrow framed>{g.label}</Eyebrow>
-                    <span className="text-2xs tabular-nums text-muted-foreground/70">
-                      {g.items.length}
-                    </span>
-                  </div>
-                  <div className="divide-y divide-border">
-                    {g.items.map((t) => (
-                      <WorkspaceRow
-                        key={t.id}
-                        tournament={t}
-                        group={g.id}
-                        selected={t.id === selectedId}
-                        onSelect={() => setSelectedId(t.id)}
-                        onOpen={() => openTournament(t.id)}
-                        onSetDate={() => navigate(`/tournaments/${t.id}/settings?tab=general`)}
-                        onSettings={() => navigate(`/tournaments/${t.id}/settings`)}
-                        onDelete={t.role === 'owner' ? () => setDeleteTarget(t) : undefined}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+              <div className="divide-y divide-border">
+                {visible.map((t) => (
+                  <WorkspaceRow
+                    key={t.id}
+                    tournament={t}
+                    group={temporalGroupOf(t, todayKey)}
+                    selected={t.id === selectedId}
+                    onSelect={() => setSelectedId(t.id)}
+                    onOpen={() => openTournament(t.id)}
+                    onSetDate={() => navigate(`/tournaments/${t.id}/settings?tab=general`)}
+                    onSettings={() => navigate(`/tournaments/${t.id}/settings`)}
+                    onDelete={t.role === 'owner' ? () => setDeleteTarget(t) : undefined}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>

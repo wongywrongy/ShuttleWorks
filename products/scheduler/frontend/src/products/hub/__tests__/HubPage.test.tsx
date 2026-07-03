@@ -1,7 +1,8 @@
 /**
- * Hub navigation + the time-oriented control plane. Open and the post-Create
- * handler must target /bracket-setup for bracket tournaments (was /bracket
- * pre-Bundle-3). The Hub groups workspaces by event date, not status.
+ * Hub navigation + the control plane. Open and the post-Create handler must
+ * target /bracket-setup for bracket tournaments (was /bracket pre-Bundle-3).
+ * The Hub filters workspaces by status facet (All / Active / Draft / Shared /
+ * Needs attention) and shows them as one time-sorted flat list.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -95,10 +96,23 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.queryByRole('button', { name: /new event/i })).not.toBeInTheDocument();
   });
 
-  it('groups workspaces chronologically (Upcoming section present)', async () => {
+  it('offers the status-facet strip (All / Active / Draft / Shared / Needs attention)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    expect(screen.getByText('UPCOMING')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^All\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Active\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Draft\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Shared\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Needs attention/ })).toBeInTheDocument();
+  });
+
+  it('a status facet filters the flat list (Active hides both drafts)', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
+    // Both seeded workspaces are status:'draft', so the Active facet empties the list.
+    fireEvent.click(screen.getByRole('button', { name: /^Active\b/ }));
+    expect(screen.queryByText('Bracket A')).not.toBeInTheDocument();
+    expect(screen.queryByText('Meet A')).not.toBeInTheDocument();
   });
 
   it('search filters the workspace list by name', async () => {

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { groupWorkspaces, dayKey, eventDate } from '../hubGrouping';
+import {
+  groupWorkspaces,
+  dayKey,
+  eventDate,
+  temporalGroupOf,
+  sortWorkspaces,
+} from '../hubGrouping';
 import type { TournamentSummaryDTO } from '../../../api/dto';
 
 function ws(id: string, date: string | null, updatedAt = ''): TournamentSummaryDTO {
@@ -74,5 +80,27 @@ describe('hubGrouping', () => {
   it('always returns the three groups in time order', () => {
     const groups = groupWorkspaces([], TODAY);
     expect(groups.map((g) => g.id)).toEqual(['upcoming', 'undated', 'past']);
+  });
+
+  it('temporalGroupOf buckets a single workspace (today = upcoming)', () => {
+    expect(temporalGroupOf(ws('a', '2026-07-01'), TODAY)).toBe('upcoming');
+    expect(temporalGroupOf(ws('b', TODAY), TODAY)).toBe('upcoming');
+    expect(temporalGroupOf(ws('c', '2026-06-01'), TODAY)).toBe('past');
+    expect(temporalGroupOf(ws('d', null), TODAY)).toBe('undated');
+  });
+
+  it('sortWorkspaces flattens to one list: upcoming → undated → past', () => {
+    const flat = sortWorkspaces(
+      [
+        ws('p2', '2026-05-01'),
+        ws('none', null),
+        ws('u2', '2026-08-01'),
+        ws('u1', '2026-07-01'),
+        ws('p1', '2026-06-10'),
+      ],
+      TODAY,
+    );
+    // upcoming soonest-first, then undated, then past most-recent-first.
+    expect(flat.map((t) => t.id)).toEqual(['u1', 'u2', 'none', 'p1', 'p2']);
   });
 });

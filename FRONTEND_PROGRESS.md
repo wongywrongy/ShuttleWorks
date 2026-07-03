@@ -473,6 +473,41 @@ remain roadmap cards (`implemented:false`).
   output for a port bump. TaskStop also does NOT kill uvicorn/Vite child processes on
   Windows — kill by port.
 
+### Phase 13 — Loose-ends pass: Hub dashboard true-up + debt-log sweep (COMPLETE 2026-07-02)
+- **Hub dashboard — finished the integration properly.** Phase 12 adopted the rail +
+  seamed table but kept the app's *chronological* grouping (Upcoming / No date / Past);
+  the prototype (both `Final Direction.dc.html` and `01-final.png`) filters by **status
+  facet**. Replaced the chronological section-grouping with the prototype's facet strip —
+  **All / Active / Draft / Shared / Needs attention** — over one flat, time-sorted list
+  (upcoming → undated → past). Facets are *overlapping* (a row tallies under each it
+  matches, only "All" is exhaustive); derived entirely from the summary DTO (`status`,
+  `role`, `signals`) — no new backend field. New `hubFacets.ts` (+ test); `hubGrouping`
+  gained `temporalGroupOf` + `sortWorkspaces` (built on the still-green `groupWorkspaces`);
+  `HubPage` rewritten; `WorkspaceInspector` DRY'd onto `temporalGroupOf`. The "Needs
+  attention" count warms amber. **Live-verified** (`hub-dark-final.png` — system=light):
+  facet strip renders, clicking "Needs attention 4" filters the flat list to exactly 4 rows.
+- **Integration correction (the artboard lesson, again):** I first added the prototype's
+  command-bar account avatar — then the live view showed the app's **global left rail
+  already carries the account avatar**. The prototype drew it in the command bar only
+  because its artboard had no left rail; duplicating it in-app is *insertion*. Removed it —
+  the command bar's account affordance is served by the rail. Same principle as the
+  full-bleed correction.
+- **Debt-log sweep — all five open UX/polish items cleared** (each pinned by a test; see
+  `docs/audits/debt-log.md`): (1) **409 toast raw UUID** → `useLiveTracking` shows the meet
+  match code (`Match M12`) at both toast call-sites; (2) **Plan zoom-bar doubled hairline**
+  → dropped the zoom bar's `border-t` (grid's last-row `border-b` is the single seam; Run is
+  scrollbar-separated, untouched); (3) **dormant StatusPill `pulse`** → wired `dot pulse` on
+  the live "Started" bracket draw pill; (4) **bracket drag-validate ignored availability** →
+  threaded `session.player_extras` into `validate_bracket_move` (surfaces `availability`/`rest`
+  conflicts on drag, same channel the pin re-solve honors); (5) **participant seeds dropped on
+  upsert echo** → `ParticipantOut.seed` + frontend `Participant.seed` + `toUpsertParticipant`/
+  picker echo.
+- **Housekeeping:** the untracked repo-root handoff export is now **gitignored** (mirrors the
+  tracked skill — a local reference, not a second copy to version).
+- **Gates:** frontend **928/928** vitest, `tsc -b` 0-err, eslint 0-err; backend **721 passed**
+  (+ the known `test_backup_*_newest_first` timestamp-tie flake — passes in isolation), ruff-F
+  clean.
+
 ## Token remap reference (prototype hex → intent; convert to HSL-triplet)
 | Token | Dark | Light |
 |---|---|---|
@@ -509,6 +544,7 @@ Theme (unchanged): `frontend/src/hooks/useAppliedTheme.ts`, `…/store/preferenc
 bracket lock and the backend match-state fix in Phase 7). Still open (small):
 - Structural roster-pair convergence (Meet school-tabs/position-grid vs Bracket flat list) — a product
   redesign decision, not a re-skin; the grammar + archetypes are already shared.
-- 409 conflict toast shows the raw match UUID + request id — map id→label at the toast call-site
-  (`docs/audits/debt-log.md`).
+- ~~409 conflict toast shows the raw match UUID~~ — **fixed in Phase 13** (`useLiveTracking`
+  shows the meet match code). The whole debt-log UX/polish backlog is now clear.
+- Handoff export disposition — **resolved: gitignored** (mirrors the tracked skill).
 - Optional: `git push` (nothing pushed yet).

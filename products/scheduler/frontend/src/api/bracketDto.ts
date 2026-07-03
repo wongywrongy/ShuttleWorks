@@ -14,6 +14,9 @@ export interface Participant {
   id: string;
   name: string;
   members?: string[] | null;
+  /** Seed number (1 = top seed); null/absent = unseeded. Mirrors backend
+   *  `ParticipantOut.seed` so an echo through the upsert preserves seeds. */
+  seed?: number | null;
 }
 
 interface ParticipantInput {

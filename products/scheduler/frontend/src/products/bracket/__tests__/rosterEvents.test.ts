@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { badgesByPlayerId } from '../rosterEvents';
+import { badgesByPlayerId, toUpsertParticipant } from '../rosterEvents';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 /** Minimal snapshot: only the fields badgesByPlayerId reads. */
@@ -59,5 +59,32 @@ describe('badgesByPlayerId', () => {
       'B-MS',
       'XD',
     ]);
+  });
+});
+
+describe('toUpsertParticipant', () => {
+  it('echoes an assigned seed so a create-or-replace upsert preserves it', () => {
+    expect(toUpsertParticipant({ id: 'P1', name: 'Alpha', seed: 2 })).toEqual({
+      id: 'P1',
+      name: 'Alpha',
+      seed: 2,
+    });
+  });
+
+  it('omits seed when unseeded (null/absent) — no `seed` key on the wire', () => {
+    expect(toUpsertParticipant({ id: 'P2', name: 'Beta', seed: null })).toEqual({
+      id: 'P2',
+      name: 'Beta',
+    });
+    expect(toUpsertParticipant({ id: 'P3', name: 'Gamma' })).toEqual({
+      id: 'P3',
+      name: 'Gamma',
+    });
+  });
+
+  it('carries members and seed together for a doubles team', () => {
+    expect(
+      toUpsertParticipant({ id: 'MS-T1', name: 'A / B', members: ['a', 'b'], seed: 1 }),
+    ).toEqual({ id: 'MS-T1', name: 'A / B', members: ['a', 'b'], seed: 1 });
   });
 });
