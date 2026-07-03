@@ -90,3 +90,25 @@ export function courtsWithActiveMatch(
   }
   return result;
 }
+
+/**
+ * Drag-reorder helper: moves `activeId` to the position of `overId` in the
+ * array. If `activeId === overId`, or if either id is not present in `ids`,
+ * returns a shallow copy unchanged. Pure function with no dnd-kit dependency.
+ *
+ * Examples:
+ * - reorderIds([1,2,3,4], 1, 3) → [2,3,1,4] (moves 1 to 3's position)
+ * - reorderIds([1,2,3], 2, 2) → [1,2,3] (no-op, same id)
+ * - reorderIds([1,2,3], 5, 2) → [1,2,3] (5 not in array, unchanged)
+ */
+export function reorderIds(ids: number[], activeId: number, overId: number): number[] {
+  if (activeId === overId) return [...ids];
+  const fromIdx = ids.indexOf(activeId);
+  const toIdx = ids.indexOf(overId);
+  if (fromIdx < 0 || toIdx < 0) return [...ids];
+
+  const result = [...ids];
+  result.splice(fromIdx, 1);
+  result.splice(toIdx, 0, activeId);
+  return result;
+}

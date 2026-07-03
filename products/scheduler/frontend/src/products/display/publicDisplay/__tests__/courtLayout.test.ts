@@ -13,6 +13,7 @@ import {
   visibleCourts,
   defaultColumns,
   courtsWithActiveMatch,
+  reorderIds,
 } from '../courtLayout';
 
 describe('orderCourts', () => {
@@ -143,5 +144,41 @@ describe('courtsWithActiveMatch', () => {
 
   it('returns an empty set for no assignments', () => {
     expect(courtsWithActiveMatch([], {}).size).toBe(0);
+  });
+});
+
+describe('reorderIds', () => {
+  it('moves activeId to overId position (forward)', () => {
+    expect(reorderIds([1, 2, 3, 4], 1, 3)).toEqual([2, 3, 1, 4]);
+  });
+
+  it('moves activeId to overId position (backward)', () => {
+    expect(reorderIds([1, 2, 3, 4], 4, 2)).toEqual([1, 4, 2, 3]);
+  });
+
+  it('no-op when activeId === overId', () => {
+    expect(reorderIds([1, 2, 3], 2, 2)).toEqual([1, 2, 3]);
+  });
+
+  it('no-op when activeId not in array', () => {
+    expect(reorderIds([1, 2, 3], 5, 2)).toEqual([1, 2, 3]);
+  });
+
+  it('no-op when overId not in array', () => {
+    expect(reorderIds([1, 2, 3], 2, 5)).toEqual([1, 2, 3]);
+  });
+
+  it('returns a shallow copy, not the same reference', () => {
+    const arr = [1, 2, 3];
+    const result = reorderIds(arr, 2, 2);
+    expect(result).not.toBe(arr);
+  });
+
+  it('handles moving to the beginning', () => {
+    expect(reorderIds([1, 2, 3, 4], 4, 1)).toEqual([4, 1, 2, 3]);
+  });
+
+  it('handles moving to the end', () => {
+    expect(reorderIds([1, 2, 3, 4], 1, 4)).toEqual([2, 3, 4, 1]);
   });
 });

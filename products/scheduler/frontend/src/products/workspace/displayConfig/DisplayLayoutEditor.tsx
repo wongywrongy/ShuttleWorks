@@ -65,7 +65,7 @@ import {
   closestCenter,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Eye, EyeSlash, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../../store/tournamentStore';
@@ -73,7 +73,7 @@ import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { TournamentConfig } from '../../../api/dto';
 import { Row, Seg, Toggle } from '../../../platform/settings/SettingsControls';
-import { orderCourts, courtsWithActiveMatch } from '../../display/publicDisplay/courtLayout';
+import { orderCourts, courtsWithActiveMatch, reorderIds } from '../../display/publicDisplay/courtLayout';
 
 // Same required-field shape as BracketEngineSection's FALLBACK_CONFIG — the
 // TournamentConfig fields with no `?` in the DTO.
@@ -257,11 +257,10 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
 
   const onCourtDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const from = orderedCourtIds.indexOf(Number(active.id));
-    const to = orderedCourtIds.indexOf(Number(over.id));
-    if (from < 0 || to < 0) return;
-    update({ courtOrder: arrayMove(orderedCourtIds, from, to) });
+    if (!over) return;
+    const reordered = reorderIds(orderedCourtIds, Number(active.id), Number(over.id));
+    if (reordered === orderedCourtIds) return;
+    update({ courtOrder: reordered });
   };
 
   const toggleCourtHidden = (courtId: number) => {
