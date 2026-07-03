@@ -86,10 +86,12 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const todayKey = new Date().toISOString().slice(0, 10);
   const action = rowActionFor(tournament, temporalGroupOf(tournament, todayKey));
 
-  // Header status pill (only meaningful with signals): Ready when the readiness
-  // checklist is complete AND health is good; else Needs setup.
+  // Header status pill (only meaningful with signals): "Ready" when the setup
+  // checklist is complete, else "Needs setup". Keyed off readiness — NOT the
+  // lifecycle `health` (a fully-set-up workspace can still be status:'draft',
+  // which would otherwise mislabel a ready event as "Needs setup").
   const ready = !!readiness && readiness.ready === readiness.total;
-  const pillReady = ready && tournament.signals?.health === 'good';
+  const pillReady = ready;
   const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
 
   return (
