@@ -108,6 +108,7 @@ they are decisions to make, then execute.
 | --- | --- | --- | --- |
 | **F-ARCH-3** | `matchStateStore` ownership: stays in shared `store/` vs. move to Operations | Moving it *creates* new `no-cross-product` violations (Meet + Bracket also consume it). Two reasonable options, no code-driven winner. See `docs/audits/01-findings.md §F-ARCH-3` + ADR 0011. | Design call, then S |
 | **ops→bracket UI edges** | `OpsDetailRail→MatchDetailPanel`, `OperationsProduct→BracketScheduleModal` | The **last 2** `no-cross-product` violations. Clearing them (or accepting them as legit) is the blocker to ratcheting that rule warn→**error**. | Design call, then M |
+| **workspace→display UI edges** (added 2026-07-03, Display-redesign Task 6) | `displayConfig/DisplayPreview.tsx → display/publicDisplay/{CourtsView,displayPresets}` — the new Display Configuration board-layout preview reuses the public board's actual card renderer + preset table for visual fidelity (2 new `no-cross-product` **warns**, confirmed via `npm run depcruise`: 0 errors). Same shape as the ops→bracket edges above: accept as a legit consumer edge, or relocate `CourtsView`/`displayPresets` to a neutral shared location (`components/` or a `products/display/shared/`) per the `SourceChip` precedent. | Design call, then S |
 
 ---
 
