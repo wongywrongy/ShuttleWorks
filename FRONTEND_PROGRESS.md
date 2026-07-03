@@ -508,6 +508,35 @@ remain roadmap cards (`implemented:false`).
   (+ the known `test_backup_*_newest_first` timestamp-tie flake — passes in isolation), ruff-F
   clean.
 
+### Phase 14 — Dashboard Redesign (COMPLETE 2026-07-03)
+- **Target:** `ShuttleWorks - Dashboard Redesign.dc.html` (Kyle-added mockup, gitignored like
+  the other prototypes). Full brainstorm → spec → plan → TDD build, via superpowers skills.
+  Spec `docs/superpowers/specs/2026-07-03-hub-dashboard-redesign-design.md`; plan
+  `docs/superpowers/plans/2026-07-03-hub-dashboard-redesign.md`.
+- **Decisions (Kyle):** match data rides the **backend summary** (not per-select fetch); row dots =
+  **workspace health** (not live status); command-bar avatar **rail-only** (no duplicate); sort +
+  footer **both functional**; per-row **Modules column returns** (reverses the Phase-13 removal).
+- **Backend** (`api/workspace_signals.py`): `WorkspaceSignalsDTO` gains `matches {total,scheduled,toDo}`
+  + `nextUp[≤3] {code,timeLabel,courtLabel,status}` — computed **entirely from the already-loaded
+  `row.data` blob** for BOTH kinds (meet: matches/schedule/config; bracket:
+  `data["bracket_session"].assignments` + start_time + interval_minutes; total from the grouped
+  `bracket_matches` count). **Zero new per-row queries** — `build_signals` takes no DB session; the
+  N+1 guardrail holds by construction (pinned). camelCase Pydantic fields → 1:1 frontend mirror.
+- **Frontend:** `hubSort.ts` + `SortControl` (Recent/Event date/Name); `moduleGlyphs.ts` +
+  `WorkspaceRow` Modules column (enabled→solid tinted M/D/B, none-enabled→one dashed kind-default);
+  HealthDot good→**green** (was azure) + 7px; footer summary bar (workspaces/attention/archived +
+  relative "Updated"); inspector reworked — header status pill (**Ready keys off readiness, not
+  lifecycle** — live-pass fix), `matches/scheduled/to-do` metric triplet, readiness **progress bar**
+  + 2-col checklist, and a **Next up** list (`NextUpList`).
+- **Commits:** `404e72e, b095f00, 776fa4f` (backend B1–B3), `e2499ae` (F1), `f2…`→`d34a782`
+  (F2 sort, F3 modules/dot, F4 footer, F5 inspector, F6 next-up, pill fix).
+- **Live-verified vs the mockup** (host backend :8600 + Vite proxy — real data): row Modules glyphs,
+  sort, footer "6 workspaces · 4 need attention"; inspector for a meet workspace = 13 matches / 12
+  scheduled, 4/4 readiness bar, Next up M10·09:00·Court 6 …; bracket next-up = play-unit codes with
+  null time on an unanchored session. Screenshot `.playwright-mcp/hub-redesign-inspector.png`.
+- **Gates:** frontend **950/950** vitest, `tsc -b` 0-err, eslint 0-err; backend **729 passed**
+  (+ the same backup timestamp-tie flake), ruff clean.
+
 ## Token remap reference (prototype hex → intent; convert to HSL-triplet)
 | Token | Dark | Light |
 |---|---|---|
