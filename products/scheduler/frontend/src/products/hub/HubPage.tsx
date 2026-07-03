@@ -15,8 +15,10 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState, Skeleton, Eyebrow } from '../../components/control-plane';
-import { sortWorkspaces, temporalGroupOf } from './hubGrouping';
+import { temporalGroupOf } from './hubGrouping';
 import { HUB_FACETS, facetCounts, matchesFacet, type HubFacetId } from './hubFacets';
+import { sortBy, type HubSortId } from './hubSort';
+import { SortControl } from './SortControl';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
 
@@ -66,6 +68,8 @@ export function HubPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** Status facet; 'all' shows everything (facets overlap — see hubFacets). */
   const [facet, setFacet] = useState<HubFacetId>('all');
+  /** List sort order (redesign); 'recent' = most-recently-updated first. */
+  const [sort, setSort] = useState<HubSortId>('recent');
 
   // ⌘K / Ctrl+K focuses the search field (the kbd hint inside it says so).
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -121,11 +125,11 @@ export function HubPage() {
   }, [tournaments, query]);
   const counts = useMemo(() => facetCounts(nameFiltered), [nameFiltered]);
 
-  // The visible rows: name-filtered ∩ active facet, then flat-sorted by
-  // operational time order (upcoming → undated → past).
+  // The visible rows: name-filtered ∩ active facet, then ordered by the chosen
+  // sort (Recent / Event date / Name).
   const visible = useMemo(
-    () => sortWorkspaces(nameFiltered.filter((t) => matchesFacet(t, facet)), todayKey),
-    [nameFiltered, facet, todayKey],
+    () => sortBy(nameFiltered.filter((t) => matchesFacet(t, facet)), sort, todayKey),
+    [nameFiltered, facet, sort, todayKey],
   );
   const facetLabel = HUB_FACETS.find((f) => f.id === facet)!.label;
 
@@ -192,19 +196,23 @@ export function HubPage() {
       </header>
 
       {/* Status-facet strip — quiet text chips, raised active pill; the
-          "Needs attention" count warms to amber. Facets overlap by design. */}
+          "Needs attention" count warms to amber. Facets overlap by design.
+          The sort control sits at the right edge (redesign). */}
       {!loading && tournaments.length > 0 ? (
-        <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-border px-3.5">
-          {HUB_FACETS.map((f) => (
-            <FilterChip
-              key={f.id}
-              label={f.label}
-              count={counts[f.id]}
-              active={facet === f.id}
-              emphasize={f.id === 'attention'}
-              onClick={() => setFacet(f.id)}
-            />
-          ))}
+        <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3.5">
+          <div className="flex items-center gap-0.5">
+            {HUB_FACETS.map((f) => (
+              <FilterChip
+                key={f.id}
+                label={f.label}
+                count={counts[f.id]}
+                active={facet === f.id}
+                emphasize={f.id === 'attention'}
+                onClick={() => setFacet(f.id)}
+              />
+            ))}
+          </div>
+          <SortControl value={sort} onChange={setSort} />
         </div>
       ) : null}
 
