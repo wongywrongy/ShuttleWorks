@@ -16,6 +16,7 @@ import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/modul
 import { attentionReasons, moduleCountsOf, readinessOf, setupLabel } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, temporalGroupOf } from './hubGrouping';
+import { NextUpList } from './NextUpList';
 
 /** One metric tile in the "This event" triplet. */
 function MetricTile({
@@ -226,6 +227,13 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
           ))}
         </ul>
       </div>
+
+      {(tournament.signals?.nextUp?.length ?? 0) > 0 ? (
+        <div data-testid="inspector-next-up">
+          <RailLabel>NEXT UP</RailLabel>
+          <NextUpList items={tournament.signals?.nextUp ?? []} />
+        </div>
+      ) : null}
 
       </div>
     </aside>
