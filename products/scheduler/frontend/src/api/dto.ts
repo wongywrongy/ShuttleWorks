@@ -88,6 +88,10 @@ export interface TournamentConfig {
   // Whether to show the live score on the public display. Off when
   // the venue prefers to keep scores private until the match ends.
   tvShowScores?: boolean;
+  // Display layout configuration (UI-only; all optional).
+  courtOrder?: number[] | null;
+  hiddenCourts?: number[] | null;
+  standingsMode?: 'off' | 'side' | 'rotate' | null;
   // Optional event-column ordering and visibility for the Roster
   // position grid. Defaults to the canonical MD / WD / XD / WS / MS
   // sequence. Hidden columns are stored as ``false`` per rank.

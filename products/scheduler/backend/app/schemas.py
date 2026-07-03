@@ -103,6 +103,10 @@ class TournamentConfig(BaseModel):
     tvGridColumns: Optional[int] = Field(None, ge=1, le=4)
     tvCardSize: Optional[Literal["auto", "compact", "comfortable", "large"]] = None
     tvShowScores: Optional[bool] = None
+    # Display layout configuration (UI-only; all optional).
+    courtOrder: Optional[list[int]] = None
+    hiddenCourts: Optional[list[int]] = None
+    standingsMode: Optional[Literal["off", "side", "rotate"]] = None
     # Roster position-grid event-column order + visibility (UI-only).
     eventOrder: Optional[List[str]] = None
     eventVisible: Optional[Dict[str, bool]] = None
