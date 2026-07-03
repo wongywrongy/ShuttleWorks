@@ -8,6 +8,19 @@ interface WorkspaceIdentityBarProps {
   onBackToHub: () => void;
 }
 
+/** Format the workspace's ISO date (`2026-10-01`) as `Oct 1, 2026`, matching
+ *  the Hub/Overview presentation instead of leaking raw ISO into the shell.
+ *  Parsed from date parts so a date-only string never drifts a day across
+ *  timezones. Falls back to the raw string if it isn't a plain ISO date. */
+function formatWorkspaceDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 /** Maps a workspace status to a StatusPill tone (the pill text still shows the
  *  literal status). active → green; archived → idle (muted); draft / null →
  *  `done`, the design-system's neutral grey tone (NOT "finished") — matching the
@@ -40,7 +53,9 @@ export function WorkspaceIdentityBar({ identity, onBackToHub }: WorkspaceIdentit
           {identity.name || 'Untitled'}
         </span>
         {identity.date ? (
-          <span className="text-xs text-muted-foreground tabular-nums">{identity.date}</span>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {formatWorkspaceDate(identity.date)}
+          </span>
         ) : null}
         {identity.status ? (
           <StatusPill tone={statusTone(identity.status)}>{identity.status}</StatusPill>
