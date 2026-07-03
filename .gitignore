@@ -75,6 +75,10 @@ apps/
 # (.agents/skills/shuttleworks-design/); a local reference for offline agents,
 # not a second copy to version.
 /ShuttleWorks Design System-handoff/
+# claude.ai/design mockup exports at repo root (design references pointed to by
+# specs; they need bound _ds/ assets to render, so keep them as local reference,
+# not tracked — same treatment as the prototype folders above).
+/ShuttleWorks - *.dc.html
 
 # OS
 .DS_Store
