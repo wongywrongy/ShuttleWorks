@@ -230,8 +230,15 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
         v = a.get("slot_id") if isinstance(a, dict) else None
         return v if isinstance(v, int) else 0
 
+    # Next-up = upcoming only: drop finished units (they carry an
+    # ``actual_end_slot``). ``scheduled`` above still counts every assignment.
     ordered = sorted(
-        (a for a in assignments if isinstance(a, dict)), key=slot_of
+        (
+            a
+            for a in assignments
+            if isinstance(a, dict) and a.get("actual_end_slot") is None
+        ),
+        key=slot_of,
     )
     next_up: List[NextMatchDTO] = []
     for a in ordered[:3]:

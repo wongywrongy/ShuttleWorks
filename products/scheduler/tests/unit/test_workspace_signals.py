@@ -175,6 +175,23 @@ def test_bracket_match_metrics_and_next_up_from_session_blob():
     assert sig.nextUp[1].timeLabel == "09:30"   # slot1 → +30m
 
 
+def test_bracket_next_up_excludes_finished_units():
+    # Bracket assignments carry actual_end_slot in the session blob, so a
+    # finished unit is cheaply dropped from Next-up (meet can't — its blob has
+    # no per-match finished state). `scheduled` still counts every assignment.
+    data = {"bracket_session": {
+        "start_time": "2026-07-12T09:00:00", "interval_minutes": 30,
+        "assignments": [
+            {"play_unit_id": "MS-R1-1", "slot_id": 0, "court_id": 1, "actual_end_slot": 1},
+            {"play_unit_id": "MS-R1-2", "slot_id": 1, "court_id": 1, "actual_end_slot": None},
+        ],
+    }}
+    sig = build_signals(_row(kind="bracket", data=data), _bracket_mods(),
+                        RowCounts(bracket_matches=8))
+    assert sig.matches.scheduled == 2                    # both have a slot
+    assert [n.code for n in sig.nextUp] == ["MS-R1-2"]   # finished MS-R1-1 dropped
+
+
 def test_bracket_next_up_none_time_when_no_start_time():
     data = {"bracket_session": {
         "interval_minutes": 30,
