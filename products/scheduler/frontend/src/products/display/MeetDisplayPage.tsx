@@ -24,7 +24,6 @@ import { useLiveTracking } from '../../hooks/useLiveTracking';
 import { useAdvisories } from '../../hooks/useAdvisories';
 import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-import type { ScheduleAssignment } from '../../api/dto';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
 import { STALE_CAPTION } from './publicDisplay/freshness';
 import { useFullscreen } from './publicDisplay/useFullscreen';
@@ -34,6 +33,7 @@ import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
 import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
 import { CourtsView } from './publicDisplay/CourtsView';
+import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
 import { orderCourts, visibleCourts, defaultColumns } from './publicDisplay/courtLayout';
 import {
@@ -102,7 +102,55 @@ export function MeetDisplayPage() {
     return { active, called };
   }, [matchesByStatus.started, matchesByStatus.called, matchStates]);
 
-  // Get current match on each court (active > called > empty).
+  // ---- Relative Now/Next/Later lanes (task 8) --------------------------
+  // Retires the drifting wall-clock preview: the board's PRIMARY label per
+  // court is now a relative lane, not an absolute time that silently goes
+  // stale during delays. `now` is strictly LIVE-gated (only matches that
+  // have actually started/been called go in `nowIds`) — an idle court
+  // never gets a manufactured "now". Everything else on a court is ordered
+  // by its planned slot into `next`/`later`. This is deliberately a
+  // board-local helper (publicDisplay/courtLanes.ts), NOT shared with
+  // Operations' positional `deriveCourtLanes` — see that file's doc
+  // comment and task-8-report.md for why forcing a shared extraction
+  // would risk the shipped Run surface for a divergent `now` rule.
+  const laneItems = useMemo((): LaneItem[] => {
+    if (!schedule) return [];
+    return schedule.assignments
+      .filter((a) => matchStates[a.matchId]?.status !== 'finished')
+      .map((a) => ({
+        id: a.matchId,
+        court: matchStates[a.matchId]?.actualCourtId ?? a.courtId,
+        plannedSlot: a.slotId,
+      }));
+  }, [schedule, matchStates]);
+
+  const nowIds = useMemo(
+    () => new Set<string>([...matchesByCourt.active.values(), ...matchesByCourt.called.values()]),
+    [matchesByCourt],
+  );
+
+  const lanes = useMemo(() => assignLanes(laneItems, nowIds), [laneItems, nowIds]);
+
+  const assignmentByMatchId = useMemo(
+    () => new Map((schedule?.assignments ?? []).map((a) => [a.matchId, a])),
+    [schedule],
+  );
+
+  // Per-court preview ids — `assignLanes` guarantees at most one `next` and
+  // one `later` per court.
+  const previewByCourt = useMemo(() => {
+    const next = new Map<number, string>();
+    const later = new Map<number, string>();
+    for (const item of laneItems) {
+      const lane = lanes.get(item.id);
+      if (lane === 'next') next.set(item.court, item.id);
+      else if (lane === 'later') later.set(item.court, item.id);
+    }
+    return { next, later };
+  }, [laneItems, lanes]);
+
+  // Get current match on each court (active > called > empty), plus a
+  // Next/Later preview for idle courts.
   const courtMatches = useMemo(() => {
     if (!schedule || !config) return [];
     type Row = {
@@ -110,28 +158,16 @@ export function MeetDisplayPage() {
       match: (typeof matches)[number] | null;
       state: (typeof matchStates)[string] | null;
       status: 'active' | 'called' | 'empty';
-      // When ``status === 'empty'``, the next scheduled assignment for
-      // this court (if any). Used by the public TV to render a
-      // "Next: <event> at <time>" preview instead of an inert
-      // "Available" placeholder.
+      // When ``status === 'empty'``, the Next/Later lane preview for this
+      // court (if any). Used by the public TV to render relative
+      // "Next"/"Later" labels (de-emphasized planned clock) instead of an
+      // inert "Available" placeholder.
       nextMatch?: (typeof matches)[number] | null;
       nextStartTime?: string;
+      laterMatch?: (typeof matches)[number] | null;
+      laterStartTime?: string;
     };
     const courts: Row[] = [];
-
-    // Build a per-court list of *future* scheduled assignments, sorted
-    // by slot ascending. ``schedule.assignments`` is the source of
-    // truth for upcoming play; ``matchStates`` is consulted to skip
-    // anything already finished or in progress.
-    const futureByCourt = new Map<number, ScheduleAssignment[]>();
-    for (let c = 1; c <= config.courtCount; c++) futureByCourt.set(c, []);
-    for (const a of schedule.assignments) {
-      const s = matchStates[a.matchId]?.status;
-      if (s === 'finished' || s === 'started' || s === 'called') continue;
-      const list = futureByCourt.get(a.courtId);
-      if (list) list.push(a);
-    }
-    futureByCourt.forEach((list) => list.sort((x, y) => x.slotId - y.slotId));
 
     for (let courtId = 1; courtId <= config.courtCount; courtId++) {
       const activeId = matchesByCourt.active.get(courtId);
@@ -154,18 +190,23 @@ export function MeetDisplayPage() {
         });
         continue;
       }
-      const next = futureByCourt.get(courtId)?.[0] ?? null;
+      const nextId = previewByCourt.next.get(courtId) ?? null;
+      const nextAssignment = nextId ? assignmentByMatchId.get(nextId) : undefined;
+      const laterId = previewByCourt.later.get(courtId) ?? null;
+      const laterAssignment = laterId ? assignmentByMatchId.get(laterId) : undefined;
       courts.push({
         courtId,
         match: null,
         state: null,
         status: 'empty',
-        nextMatch: next ? matchMap.get(next.matchId) || null : null,
-        nextStartTime: next ? formatSlotTime(next.slotId, config) : undefined,
+        nextMatch: nextId ? matchMap.get(nextId) || null : null,
+        nextStartTime: nextAssignment ? formatSlotTime(nextAssignment.slotId, config) : undefined,
+        laterMatch: laterId ? matchMap.get(laterId) || null : null,
+        laterStartTime: laterAssignment ? formatSlotTime(laterAssignment.slotId, config) : undefined,
       });
     }
     return courts;
-  }, [schedule, config, matchesByCourt, matchMap, matchStates]);
+  }, [schedule, config, matchesByCourt, matchMap, matchStates, previewByCourt, assignmentByMatchId]);
 
   // Director-controlled arrangement: manual order first, then hide
   // (presentation-only — see courtLayout.ts's doc comment). This is the

@@ -27,9 +27,15 @@ interface CourtRow {
   match: MatchDTO | null;
   state: MatchStateDTO | null;
   status: CourtStatus;
-  /** When status === 'empty': the next future assignment on this court (if any). */
+  /** When status === 'empty': the Next-lane assignment on this court (if
+   *  any). `nextStartTime` is a de-emphasized PLANNED clock — never the
+   *  primary label (that's the relative "Next" lane itself). */
   nextMatch?: MatchDTO | null;
   nextStartTime?: string;
+  /** When status === 'empty': the Later-lane assignment (the one after
+   *  Next), same de-emphasized-clock treatment. */
+  laterMatch?: MatchDTO | null;
+  laterStartTime?: string;
 }
 
 interface CourtsViewProps {
@@ -70,7 +76,7 @@ export function CourtsView(props: CourtsViewProps) {
 function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: CourtsViewProps) {
   return (
     <div className="flex w-full flex-col divide-y divide-border rounded-sm border border-border bg-card/40">
-      {courts.map(({ courtId, match, state, status, nextMatch, nextStartTime }) => {
+      {courts.map(({ courtId, match, state, status, nextMatch, nextStartTime, laterMatch, laterStartTime }) => {
         const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
         const aggregate = state?.score ? `${state.score.sideA}–${state.score.sideB}` : null;
         const sideA = match ? formatPlayers(match.sideA, playerNames) : '';
@@ -109,9 +115,24 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
                 </>
               ) : nextMatch ? (
                 <span className="text-muted-foreground">
-                  Next{nextStartTime ? ` · ${nextStartTime}` : ''} ·{' '}
+                  <span className="font-semibold uppercase tracking-wide text-foreground/80">
+                    Next
+                  </span>{' '}
                   {formatPlayers(nextMatch.sideA, playerNames)} vs{' '}
                   {formatPlayers(nextMatch.sideB, playerNames)}
+                  {/* De-emphasized PLANNED clock — never the primary label,
+                      and never shown at all on the live "Now" court above. */}
+                  {nextStartTime && (
+                    <span className="text-2xs text-muted-foreground/70"> ~{nextStartTime}</span>
+                  )}
+                  {laterMatch && (
+                    <span className="text-2xs text-muted-foreground/60">
+                      {'  ·  Later '}
+                      {formatPlayers(laterMatch.sideA, playerNames)} vs{' '}
+                      {formatPlayers(laterMatch.sideB, playerNames)}
+                      {laterStartTime ? ` ~${laterStartTime}` : ''}
+                    </span>
+                  )}
                 </span>
               ) : (
                 <span className="text-muted-foreground">Available</span>
@@ -199,7 +220,7 @@ function CourtCard({
   isFullscreen,
   playerNames,
 }: CourtCardProps) {
-  const { courtId, match, state, status, nextMatch, nextStartTime } = row;
+  const { courtId, match, state, status, nextMatch, nextStartTime, laterMatch, laterStartTime } = row;
   const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
   // Active / called cards get a tinted background carrying state. Full-card
   // tint + inset highlight ring replaces the banned left-stripe accent.
@@ -252,6 +273,9 @@ function CourtCard({
               nextStartTime={nextStartTime}
               nextSideA={formatPlayers(nextMatch.sideA, playerNames)}
               nextSideB={formatPlayers(nextMatch.sideB, playerNames)}
+              laterStartTime={laterStartTime}
+              laterSideA={laterMatch ? formatPlayers(laterMatch.sideA, playerNames) : undefined}
+              laterSideB={laterMatch ? formatPlayers(laterMatch.sideB, playerNames) : undefined}
               isFullscreen={isFullscreen}
             />
           ) : (
@@ -338,29 +362,66 @@ function PlayerStack({
   );
 }
 
+/**
+ * Idle-court preview — the Next/Later lanes (task 8). The relative label
+ * ("Next" / "Later") is the PRIMARY text; the planned clock is a small,
+ * de-emphasized "~time" suffix, never the headline (that was the drifting
+ * wall-clock bug this replaces). Later renders only when a second upcoming
+ * match exists on this court, and is visually quieter than Next.
+ */
 function NextUp({
   nextStartTime,
   nextSideA,
   nextSideB,
+  laterStartTime,
+  laterSideA,
+  laterSideB,
   isFullscreen,
 }: {
   nextStartTime?: string;
   nextSideA: string;
   nextSideB: string;
+  laterStartTime?: string;
+  laterSideA?: string;
+  laterSideB?: string;
   isFullscreen: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 text-muted-foreground">
-      <span
-        className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.08em]`}
-      >
-        Next up{nextStartTime ? ` · ${nextStartTime}` : ''}
-      </span>
-      <span
-        className={`${isFullscreen ? 'text-2xl' : 'text-base'} font-medium text-foreground`}
-      >
-        {nextSideA} <span className="text-muted-foreground">vs</span> {nextSideB}
-      </span>
+    <div className="flex flex-col gap-1.5 text-muted-foreground">
+      <div className="flex flex-col gap-0.5">
+        <span
+          className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.08em]`}
+        >
+          Next
+          {nextStartTime && (
+            <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground/70">
+              ~{nextStartTime}
+            </span>
+          )}
+        </span>
+        <span
+          className={`${isFullscreen ? 'text-2xl' : 'text-base'} font-medium text-foreground`}
+        >
+          {nextSideA} <span className="text-muted-foreground">vs</span> {nextSideB}
+        </span>
+      </div>
+      {laterSideA && laterSideB && (
+        <div className="flex flex-col gap-0.5 opacity-70">
+          <span
+            className={`${isFullscreen ? 'text-2xs' : 'text-3xs'} font-semibold uppercase tracking-[0.08em]`}
+          >
+            Later
+            {laterStartTime && (
+              <span className="ml-1 font-normal normal-case tracking-normal">
+                ~{laterStartTime}
+              </span>
+            )}
+          </span>
+          <span className={`${isFullscreen ? 'text-lg' : 'text-sm'} font-medium`}>
+            {laterSideA} <span>vs</span> {laterSideB}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
