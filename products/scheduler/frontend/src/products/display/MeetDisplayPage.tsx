@@ -22,7 +22,6 @@ import { useSearchParams } from 'react-router-dom';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useLiveTracking } from '../../hooks/useLiveTracking';
 import { useAdvisories } from '../../hooks/useAdvisories';
-import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
 import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import type { ScheduleAssignment } from '../../api/dto';
@@ -49,11 +48,11 @@ export function MeetDisplayPage() {
   const players = useTournamentStore((state) => state.players);
   const groups = useTournamentStore((state) => state.groups);
 
-  // Standalone display surfaces critical advisories so spectators
-  // (and any operator watching the TV) know a replan is imminent.
-  // The hook is idempotent — when the page is embedded under
-  // AppShell as the TV preview tab, the AppShell-level mount
-  // already covers it; mounting again here is harmless.
+  // Display projects, never operates (see CLAUDE.md's module model) —
+  // the public board must not surface an operator-facing advisory, so
+  // no banner is rendered below. This call is left in place unchanged
+  // (out of scope for this removal); it is effectively inert here —
+  // see docs/audits/debt-log.md for why it's dead weight either way.
   useAdvisories();
 
   // 1 Hz tick drives both the wall clock and the elapsed timer on active matches.
@@ -325,10 +324,6 @@ export function MeetDisplayPage() {
             "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
         }}
       />
-      {/* Critical-only advisory banner (read-only on TV) */}
-      <div className="px-6 pt-4 empty:hidden">
-        <AdvisoryBanner readOnly />
-      </div>
       {/* ---------- Header ------------------------------------------------ */}
       <div className="sticky top-0 z-hud border-b border-border bg-background/90 px-6 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
