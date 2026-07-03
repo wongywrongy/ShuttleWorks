@@ -508,6 +508,24 @@ class ScheduleHistoryEntry(BaseModel):
     schedule: Optional[ScheduleDTO] = None          # full snapshot so the entry can be restored
 
 
+class MeetStandingRowDTO(BaseModel):
+    """One group's school-vs-school pool record.
+
+    Computed fresh on every ``GET /tournaments/{id}/state`` by
+    ``services.meet.standings.compute_meet_standings`` from the
+    already-loaded ``matches``/``groups``/``players`` plus a
+    ``match_states`` read — never persisted, so this is NOT written back
+    on PUT (see ``api/tournaments.py`` — the route excludes it from the
+    blob it commits). Empty when the Meet module isn't enabled for the
+    workspace or there's no finished, scored pool play yet.
+    """
+    groupId: str
+    groupName: str
+    matchesPlayed: int
+    wins: int
+    losses: int
+
+
 class TournamentStateDTO(BaseModel):
     """Authoritative persisted state for one tournament.
 
@@ -535,6 +553,10 @@ class TournamentStateDTO(BaseModel):
     # SP-G1 Plan→Run handoff: operator marks plan as ready before running.
     # Stored in the tournament.data JSON blob; no Alembic migration needed.
     planFinalized: bool = False
+    # Authoritative Meet pool standings (Display redesign, Task 2). Derived,
+    # never persisted — GET computes it fresh from live match_states each
+    # time; PUT strips it before committing (see api/tournaments.py).
+    standings: List[MeetStandingRowDTO] = Field(default_factory=list)
 
 
 class SolverOptionsDTO(BaseModel):

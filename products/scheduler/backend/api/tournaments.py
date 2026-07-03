@@ -21,9 +21,10 @@ from app.dependencies import (
     require_tournament_access,
 )
 from app.error_codes import ErrorCode, http_error
-from app.schemas import TournamentStateDTO, WorkspaceModuleDTO
+from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO
 from database.models import Tournament, normalize_module_seed, display_dependency_satisfied
 from repositories import LocalRepository, get_repository
+from services.meet.standings import compute_meet_standings
 from api.invites import (
     InviteCreateDTO,
     InviteCreatedDTO,
@@ -134,6 +135,60 @@ def _modules_for(row: Tournament, repo: LocalRepository) -> List[WorkspaceModule
     """Derive-and-persist the workspace's modules, as DTOs for the summary."""
     return [
         WorkspaceModuleDTO.from_row(m) for m in repo.modules.ensure_modules(row)
+    ]
+
+
+def _meet_standings_for(
+    row: Tournament, repo: LocalRepository
+) -> List[MeetStandingRowDTO]:
+    """Authoritative Meet pool standings for the ``/state`` GET payload.
+
+    ``[]`` when the Meet module isn't enabled for this workspace, or the
+    persisted blob has no matches/groups yet (e.g. a just-created
+    tournament). Otherwise pulls ``matches``/``groups``/``players``
+    straight out of the already-loaded ``row.data`` blob (no query — it's
+    the same dict this route already returns) but reads ``match_states``
+    fresh from the DB, because live finished/score data is never part of
+    that blob (it lives in the separate ``match_states`` table owned by
+    ``api/match_state.py`` — see ``services.meet.standings`` and the
+    Task 2 report for why this one extra read is an intentional, flagged
+    deviation from a "no new query" ask that assumed a payload shape this
+    route doesn't actually have).
+    """
+    modules = _modules_for(row, repo)
+    meet_enabled = any(m.moduleId == "meet" and m.status == "enabled" for m in modules)
+    if not meet_enabled:
+        return []
+    data = row.data or {}
+    matches = data.get("matches") or []
+    groups = data.get("groups") or []
+    players = data.get("players") or []
+    if not matches or not groups:
+        return []
+    state_rows = repo.match_states.list_for_tournament(row.id)
+    match_states = {
+        s.match_id: {
+            "status": s.status,
+            "scoreSideA": s.score_side_a,
+            "scoreSideB": s.score_side_b,
+        }
+        for s in state_rows
+    }
+    standing_rows = compute_meet_standings(
+        matches=matches,
+        match_states=match_states,
+        groups=groups,
+        players=players,
+    )
+    return [
+        MeetStandingRowDTO(
+            groupId=r.groupId,
+            groupName=r.groupName,
+            matchesPlayed=r.matchesPlayed,
+            wins=r.wins,
+            losses=r.losses,
+        )
+        for r in standing_rows
     ]
 
 
@@ -428,11 +483,20 @@ def get_tournament_state(
     ``204 No Content`` when the tournament exists but its data is still
     empty (newly created, never PUT). 404 when the tournament itself
     doesn't exist.
+
+    ``standings`` is computed fresh on every call (Task 2) rather than
+    read from the blob — see ``_meet_standings_for``. It's deliberately
+    NOT part of the persisted payload; ``put_tournament_state`` strips it
+    before committing so a stale value never gets written back.
     """
     row = _resolve_tournament(tournament_id, repo)
     if not row.data:
         return Response(status_code=204)
-    return row.data
+    payload = dict(row.data)
+    payload["standings"] = [
+        s.model_dump() for s in _meet_standings_for(row, repo)
+    ]
+    return payload
 
 
 @router.put(
@@ -450,10 +514,17 @@ def put_tournament_state(
     Snapshots the prior content to ``tournament_backups`` first (unless
     the row was freshly created with empty data) and rotates the backup
     pool to the configured retention (``LocalRepository.BACKUP_KEEP``).
+
+    ``standings`` is excluded from what gets persisted — it's a derived
+    field the GET route recomputes on every read (see
+    ``_meet_standings_for``); persisting a client-sent snapshot of it
+    would let a stale value linger in the blob.
     """
     _resolve_tournament(tournament_id, repo)  # 404 if missing
     try:
-        row = repo.commit_tournament_state(tournament_id, state.model_dump())
+        row = repo.commit_tournament_state(
+            tournament_id, state.model_dump(exclude={"standings"})
+        )
     except KeyError:
         raise http_error(
             404,

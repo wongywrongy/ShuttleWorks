@@ -364,6 +364,21 @@ export interface ValidationResponseDTO {
   conflicts: ValidationConflictDTO[];
 }
 
+/** One group's school-vs-school pool record. Computed fresh server-side on
+ *  every `GET /tournaments/{id}/state` (see `services.meet.standings` on the
+ *  backend) — never sent back on PUT, and any client-sent value is ignored
+ *  (the backend strips it before persisting). Empty when the Meet module
+ *  isn't enabled for the workspace or there's no finished, scored pool play
+ *  yet. Replaces the client-side `groupScores` computation that used to
+ *  live in MeetDisplayPage.tsx. */
+export interface MeetStandingRowDTO {
+  groupId: string;
+  groupName: string;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+}
+
 // Whole-tournament persistence DTO (server-side JSON file at data/tournament.json).
 export interface TournamentStateDTO {
   version: number;
@@ -387,6 +402,9 @@ export interface TournamentStateDTO {
   bracketRosterMigrated?: boolean;
   /** SP-G1: set true once the operations plan has been finalised by the director. */
   planFinalized?: boolean;
+  /** Authoritative Meet pool standings (Display redesign, Task 2) — derived,
+   *  read-only. Absent/empty for bracket-kind or Meet-disabled workspaces. */
+  standings?: MeetStandingRowDTO[];
 }
 
 // ---- Proposal pipeline (two-phase commit) -------------------------------

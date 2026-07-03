@@ -267,6 +267,93 @@ def test_state_put_rejects_zero_interval(client):
     assert r.status_code == 422
 
 
+# ---- Meet standings (Task 2) --------------------------------------------
+#
+# Authoritative pool (school-vs-school) standings, computed fresh on every
+# GET /state from services.meet.standings.compute_meet_standings — see
+# .superpowers/sdd/display/task-2-brief.md. matches/groups/players come
+# from the persisted state blob (PUT below); finished/score data lives in
+# the separate match_states table, seeded here directly through the repo
+# since match_state.py's router isn't mounted on this test app's client.
+
+
+def _seed_match_state(tid: str, match_id: str, *, status: str, score_a=None, score_b=None) -> None:
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        repo.match_states.upsert(
+            uuid.UUID(tid),
+            match_id,
+            {"status": status, "score_side_a": score_a, "score_side_b": score_b},
+        )
+    finally:
+        session.close()
+
+
+def _meet_state_with_pool_play(name: str) -> dict:
+    state = _basic_state(name)
+    state["groups"] = [
+        {"id": "g1", "name": "Riverside"},
+        {"id": "g2", "name": "Lakeside"},
+    ]
+    state["players"] = [
+        {"id": "p1", "name": "Alice", "groupId": "g1", "availability": []},
+        {"id": "p2", "name": "Bob", "groupId": "g2", "availability": []},
+    ]
+    state["matches"] = [
+        {"id": "m1", "sideA": ["p1"], "sideB": ["p2"], "durationSlots": 1},
+    ]
+    return state
+
+
+def test_state_returns_standings_for_meet_workspace_with_finished_matches(client):
+    """A meet (default kind) workspace with a finished, scored pool match
+    surfaces non-empty, computed standings on GET /state."""
+    created = client.post("/tournaments", json={"name": "Meet"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_meet_state_with_pool_play("Meet"))
+    _seed_match_state(tid, "m1", status="finished", score_a=21, score_b=15)
+
+    got = client.get(f"/tournaments/{tid}/state").json()
+    assert got["standings"] == [
+        {"groupId": "g1", "groupName": "Riverside", "matchesPlayed": 1, "wins": 1, "losses": 0},
+        {"groupId": "g2", "groupName": "Lakeside", "matchesPlayed": 1, "wins": 0, "losses": 1},
+    ]
+
+
+def test_state_standings_empty_for_bracket_only_workspace(client):
+    """Same matches/groups/players/match_states shape, but the workspace is
+    bracket-kind (meet module only 'available', not 'enabled') — standings
+    must be []."""
+    created = client.post("/tournaments", json={"name": "Bracket", "kind": "bracket"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_meet_state_with_pool_play("Bracket"))
+    _seed_match_state(tid, "m1", status="finished", score_a=21, score_b=15)
+
+    got = client.get(f"/tournaments/{tid}/state").json()
+    assert got["standings"] == []
+
+
+def test_state_standings_not_persisted_by_put(client):
+    """standings is derived, not part of the stored blob: PUT-ing a state
+    payload that includes a (client-stale) standings value must not make
+    it survive into what GET recomputes — the recompute always wins."""
+    created = client.post("/tournaments", json={"name": "Meet"}).json()
+    tid = created["id"]
+    payload = _meet_state_with_pool_play("Meet")
+    payload["standings"] = [
+        {"groupId": "bogus", "groupName": "Bogus", "matchesPlayed": 99, "wins": 99, "losses": 0}
+    ]
+    client.put(f"/tournaments/{tid}/state", json=payload)
+    # No match_states seeded — real standings should be empty, not the
+    # bogus client-sent value.
+    got = client.get(f"/tournaments/{tid}/state").json()
+    assert got["standings"] == []
+
+
 # ---- Scoped backups ----------------------------------------------------
 
 
