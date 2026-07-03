@@ -148,3 +148,47 @@ def test_meet_next_up_falls_back_to_match_number_when_no_event_code():
     assert sig.nextUp[0].code == "M7"
     assert sig.nextUp[0].timeLabel == "09:00"   # 08:00 + 3*20m
     assert sig.nextUp[0].courtLabel == "Court 2"
+
+
+def _bracket_mods():
+    return [_mod("bracket", "enabled"), _mod("meet", "coming_soon"), _mod("display", "coming_soon")]
+
+
+def test_bracket_match_metrics_and_next_up_from_session_blob():
+    # Bracket assignments live in data["bracket_session"]["assignments"]
+    # (snake_case: play_unit_id/slot_id/court_id) with start_time (ISO) +
+    # interval_minutes. Total is the already-grouped bracket_matches count.
+    data = {"bracket_session": {
+        "start_time": "2026-07-12T09:00:00", "interval_minutes": 30,
+        "assignments": [
+            {"play_unit_id": "MS-R1-2", "slot_id": 1, "court_id": 1},
+            {"play_unit_id": "MS-R1-1", "slot_id": 0, "court_id": 1},
+        ],
+    }}
+    counts = RowCounts(bracket_matches=8)
+    sig = build_signals(_row(kind="bracket", data=data), _bracket_mods(), counts)
+    assert sig.matches.total == 8               # from RowCounts, not the blob
+    assert sig.matches.scheduled == 2           # from session assignments
+    assert [n.code for n in sig.nextUp] == ["MS-R1-1", "MS-R1-2"]  # slot asc
+    assert sig.nextUp[0].courtLabel == "Court 1"
+    assert sig.nextUp[0].timeLabel == "09:00"   # start_time time-of-day + slot0
+    assert sig.nextUp[1].timeLabel == "09:30"   # slot1 → +30m
+
+
+def test_bracket_next_up_none_time_when_no_start_time():
+    data = {"bracket_session": {
+        "interval_minutes": 30,
+        "assignments": [{"play_unit_id": "WS-R1-1", "slot_id": 0, "court_id": 2}],
+    }}
+    sig = build_signals(_row(kind="bracket", data=data), _bracket_mods(),
+                        RowCounts(bracket_matches=4))
+    assert sig.matches.scheduled == 1
+    assert sig.nextUp[0].timeLabel is None      # unanchored session → no time
+    assert sig.nextUp[0].courtLabel == "Court 2"
+
+
+def test_undated_workspace_has_empty_next_up():
+    sig = build_signals(_row(kind="meet", status="draft", data={"matches": []}),
+                        [_mod("meet", "enabled")], RowCounts())
+    assert sig.matches.total == 0
+    assert sig.nextUp == []

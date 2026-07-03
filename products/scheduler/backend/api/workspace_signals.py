@@ -11,6 +11,7 @@ endpoint free of per-row queries (see the SP-A spec's N+1 guardrail).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -202,6 +203,47 @@ def _meet_match_signals(data: dict, to_do: int):
     return metrics, next_up
 
 
+def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
+    """``(MatchMetricsDTO, [NextMatchDTO])`` from the loaded bracket session
+    blob (``data["bracket_session"]``: assignments play_unit_id/slot_id/court_id,
+    start_time ISO, interval_minutes). ``total`` is the already-grouped
+    ``bracket_matches`` count; the rest is blob-derived. No DB access."""
+    session = data.get("bracket_session") or {}
+    assignments = session.get("assignments") or []
+    interval = session.get("interval_minutes") or 30
+
+    day_start = None
+    start_time = session.get("start_time")
+    if start_time:
+        try:
+            day_start = datetime.fromisoformat(start_time).strftime("%H:%M")
+        except (ValueError, TypeError):
+            day_start = None
+
+    metrics = MatchMetricsDTO(
+        total=counts.bracket_matches,
+        scheduled=len(assignments),
+        toDo=to_do,
+    )
+
+    def slot_of(a):
+        v = a.get("slot_id") if isinstance(a, dict) else None
+        return v if isinstance(v, int) else 0
+
+    ordered = sorted(
+        (a for a in assignments if isinstance(a, dict)), key=slot_of
+    )
+    next_up: List[NextMatchDTO] = []
+    for a in ordered[:3]:
+        next_up.append(NextMatchDTO(
+            code=str(a.get("play_unit_id") or ""),
+            timeLabel=_slot_time_label(day_start, interval, slot_of(a)),
+            courtLabel=_court_label(a.get("court_id")),
+            status="scheduled",
+        ))
+    return metrics, next_up
+
+
 def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
     """Compute the control-plane signals for one workspace. Pure — no DB."""
     statuses = {m.moduleId: m.status for m in modules}
@@ -244,14 +286,11 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
     )
 
     to_do = len(attention)
+    data_blob = getattr(row, "data", None) or {}
     if kind == "bracket":
-        # Filled in by _bracket_match_signals (task B2).
-        matches_metrics = MatchMetricsDTO(toDo=to_do)
-        next_up: List[NextMatchDTO] = []
+        matches_metrics, next_up = _bracket_match_signals(data_blob, counts, to_do)
     else:
-        matches_metrics, next_up = _meet_match_signals(
-            getattr(row, "data", None) or {}, to_do
-        )
+        matches_metrics, next_up = _meet_match_signals(data_blob, to_do)
 
     return WorkspaceSignalsDTO(
         health=health,
