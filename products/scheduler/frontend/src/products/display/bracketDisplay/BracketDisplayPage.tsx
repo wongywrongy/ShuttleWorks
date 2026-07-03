@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Select } from '@scheduler/design-system/components';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { useFullscreen } from '../publicDisplay/useFullscreen';
 import { FullscreenButton } from '../publicDisplay/FullscreenButton';
@@ -91,18 +92,15 @@ export function BracketDisplayPage() {
             </button>
           ))}
           {view === 'draw' && events.length > 1 ? (
-            <select
-              aria-label="Event"
-              value={activeEventId}
-              onChange={(e) => setParam('event', e.target.value)}
-              className="ml-2 rounded border border-border bg-card px-3 py-2 text-base text-foreground"
-            >
-              {events.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.discipline}
-                </option>
-              ))}
-            </select>
+            <span className="ml-2 inline-flex">
+              <Select
+                value={activeEventId}
+                onValueChange={(v) => setParam('event', v)}
+                options={events.map((ev) => ({ value: ev.id, label: ev.discipline }))}
+                ariaLabel="Event"
+                size="md"
+              />
+            </span>
           ) : null}
         </div>
         <div className="flex items-center gap-3">

@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@scheduler/design-system';
+import { Select } from '@scheduler/design-system/components';
 import { SectionCard } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import type { InviteRole, InviteSummaryDTO } from '../../api/dto';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
+
+const ROLE_OPTIONS = [
+  { value: 'operator', label: 'Operator' },
+  { value: 'viewer', label: 'Viewer' },
+] as const;
 
 const STATUS_LABEL: Record<InviteStatus, string> = {
   active: 'Active',
@@ -130,15 +136,13 @@ export function SharingTab({ tid }: { tid: string }) {
           Invited people can sign in and operate this workspace. Revoke a link any time.
         </p>
         <div className="flex items-center gap-2">
-          <select
+          <Select
             value={role}
-            onChange={(e) => setRole(e.target.value as InviteRole)}
-            aria-label="Invite role"
-            className="rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
-          >
-            <option value="operator">Operator</option>
-            <option value="viewer">Viewer</option>
-          </select>
+            onValueChange={(v) => setRole(v as InviteRole)}
+            options={ROLE_OPTIONS}
+            ariaLabel="Invite role"
+            size="sm"
+          />
           <Button onClick={create} disabled={busy}>
             {busy ? 'Creating…' : 'Create invite'}
           </Button>
