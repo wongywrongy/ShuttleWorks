@@ -143,6 +143,25 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByTestId('row-module-bracket')).toBeInTheDocument();
   });
 
+  it('shows a footer summary bar with workspace + attention counts', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
+    const footer = screen.getByTestId('hub-footer');
+    // Both seeded workspaces are owner-drafts → both need attention.
+    expect(footer).toHaveTextContent('2 workspaces');
+    expect(footer).toHaveTextContent('2 need attention');
+  });
+
+  it('counts archived workspaces in the footer', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      { id: 'a', name: 'Done Cup', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: null, status: 'archived' as const },
+    ] as never);
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Done Cup')).toBeInTheDocument());
+    expect(screen.getByTestId('hub-footer')).toHaveTextContent('1 archived');
+  });
+
   it('"New workspace" navigates to the dedicated /new surface', async () => {
     const loc = { current: '' };
     mount(loc);

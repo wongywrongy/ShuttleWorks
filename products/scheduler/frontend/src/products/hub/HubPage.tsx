@@ -19,8 +19,18 @@ import { temporalGroupOf } from './hubGrouping';
 import { HUB_FACETS, facetCounts, matchesFacet, type HubFacetId } from './hubFacets';
 import { sortBy, type HubSortId } from './hubSort';
 import { SortControl } from './SortControl';
+import { needsAttention } from './hubSignals';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
+
+/** Relative "updated" label for the footer (from a refresh timestamp vs now). */
+function sinceLabel(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 45) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.round(m / 60)}h ago`;
+}
 
 /** One status-facet chip (All / Active / Draft / Shared / Needs attention)
  *  with an overlapping count. Prototype grammar: quiet text; the ACTIVE facet
@@ -66,6 +76,10 @@ export function HubPage() {
 
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Footer "Updated Nm ago": refresh stamp + a ticking `now` (both set only in
+  // effects/callbacks — never the render body — to stay purity-clean).
+  const [refreshedAt, setRefreshedAt] = useState<number | null>(null);
+  const [now, setNow] = useState<number | null>(null);
   /** Status facet; 'all' shows everything (facets overlap — see hubFacets). */
   const [facet, setFacet] = useState<HubFacetId>('all');
   /** List sort order (redesign); 'recent' = most-recently-updated first. */
@@ -102,6 +116,7 @@ export function HubPage() {
     try {
       const list = await apiClient.listTournaments();
       setTournaments(list);
+      setRefreshedAt(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load workspaces');
     } finally {
@@ -112,6 +127,13 @@ export function HubPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Tick `now` so the footer's relative time stays fresh (30s is plenty).
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const todayKey = new Date().toISOString().slice(0, 10);
 
@@ -132,6 +154,18 @@ export function HubPage() {
     [nameFiltered, facet, sort, todayKey],
   );
   const facetLabel = HUB_FACETS.find((f) => f.id === facet)!.label;
+
+  // Footer summary counts over the full (unfiltered) list.
+  const footerCounts = useMemo(
+    () => ({
+      total: tournaments.length,
+      attention: tournaments.filter(needsAttention).length,
+      archived: tournaments.filter((t) => t.status === 'archived').length,
+    }),
+    [tournaments],
+  );
+  const updatedLabel =
+    refreshedAt != null && now != null ? sinceLabel(now - refreshedAt) : null;
 
   const selected = useMemo(
     () => tournaments.find((t) => t.id === selectedId) ?? null,
@@ -216,9 +250,10 @@ export function HubPage() {
         </div>
       ) : null}
 
-      {/* Body: one flat, sorted, facet-filtered list + inspector */}
+      {/* Body: one flat, sorted, facet-filtered list (+ footer) + inspector */}
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto">
           {error && (
             <div
               role="alert"
@@ -273,6 +308,30 @@ export function HubPage() {
               </div>
             </div>
           )}
+          </div>
+
+          {/* Footer summary bar (redesign) — counts over the full list + a
+              relative "updated" stamp; pinned to the bottom of the list column. */}
+          {!loading && tournaments.length > 0 ? (
+            <div
+              data-testid="hub-footer"
+              className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2.5 text-2xs text-muted-foreground"
+            >
+              <span className="sw-num">
+                {footerCounts.total} workspace{footerCounts.total === 1 ? '' : 's'}
+                {footerCounts.attention > 0 ? (
+                  <>
+                    {' · '}
+                    <span className="text-status-warning">
+                      {footerCounts.attention} need attention
+                    </span>
+                  </>
+                ) : null}
+                {footerCounts.archived > 0 ? `  ·  ${footerCounts.archived} archived` : null}
+              </span>
+              {updatedLabel ? <span>Updated {updatedLabel}</span> : null}
+            </div>
+          ) : null}
         </div>
 
         <WorkspaceInspector
