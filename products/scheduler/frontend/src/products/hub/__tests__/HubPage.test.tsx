@@ -132,14 +132,15 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByText('MODULES')).toBeInTheDocument();
   });
 
-  it('rows carry NO module chips — modules moved to the inspector (2026-07-02 redesign)', async () => {
+  it('rows carry a Modules column (dashboard redesign)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    // The dense-table row is date · name · next action only; the old per-row
-    // module chips were extraneous chrome (handoff Hub prototype grammar).
-    expect(screen.queryAllByTestId('chip-meet')).toHaveLength(0);
-    expect(screen.queryAllByTestId('chip-bracket')).toHaveLength(0);
-    expect(screen.queryAllByTestId('chip-display')).toHaveLength(0);
+    // The redesign re-adds a Modules column: one cell per row. The seeded
+    // workspaces have no enabled modules → a dashed kind-default glyph (M for
+    // the meet, B for the bracket).
+    expect(screen.getAllByTestId('row-modules')).toHaveLength(2);
+    expect(screen.getByTestId('row-module-meet')).toBeInTheDocument();
+    expect(screen.getByTestId('row-module-bracket')).toBeInTheDocument();
   });
 
   it('"New workspace" navigates to the dedicated /new surface', async () => {

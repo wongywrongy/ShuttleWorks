@@ -10,7 +10,8 @@ describe('control-plane primitives', () => {
     expect(screen.getByTestId('m-active')).toHaveTextContent('3');
   });
   it('healthColorClass maps health to a token class', () => {
-    expect(healthColorClass('good')).toContain('accent');
+    // good → live-green (dashboard redesign; was accent-azure), attention → amber.
+    expect(healthColorClass('good')).toContain('live');
     expect(healthColorClass('attention')).toContain('warning');
     expect(healthColorClass('draft')).toContain('muted');
   });

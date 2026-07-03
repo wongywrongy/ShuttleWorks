@@ -252,6 +252,7 @@ export function HubPage() {
               >
                 <span className="w-14 shrink-0">Date</span>
                 <span className="min-w-0 flex-1">Workspace</span>
+                <span className="w-[108px] shrink-0">Modules</span>
                 <span className="w-40 shrink-0">Next action</span>
                 <span className="w-6 shrink-0" />
               </div>

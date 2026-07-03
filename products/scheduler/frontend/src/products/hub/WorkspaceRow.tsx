@@ -13,6 +13,40 @@ import { HealthDot, OverflowMenu, type OverflowItem } from '../../components/con
 import { workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, type HubGroupId } from './hubGrouping';
+import { moduleGlyphs, type ModuleGlyphId } from './moduleGlyphs';
+
+/** Static per-module glyph classes (Tailwind can't scan dynamic names — these
+ *  arbitrary-value strings carry the 16%-tint fill + the module hue). */
+const GLYPH_CLASS: Record<ModuleGlyphId, string> = {
+  meet: 'bg-[hsl(var(--module-meet)/0.16)] text-module-meet',
+  display: 'bg-[hsl(var(--module-display)/0.16)] text-module-display',
+  bracket: 'bg-[hsl(var(--module-bracket)/0.16)] text-module-bracket',
+};
+
+/** The row's Modules column — enabled modules as solid tinted glyphs, or a
+ *  single dashed kind-default when nothing is enabled (see moduleGlyphs). */
+function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
+  const glyphs = moduleGlyphs(tournament.modules ?? [], tournament.kind);
+  return (
+    <span data-testid="row-modules" className="flex w-[108px] shrink-0 items-center gap-1">
+      {glyphs.map((g) => (
+        <span
+          key={g.id}
+          data-testid={`row-module-${g.id}`}
+          title={`${g.letter === 'M' ? 'Meet' : g.letter === 'D' ? 'Display' : 'Bracket'} — ${g.enabled ? 'enabled' : 'available'}`}
+          className={[
+            'inline-flex h-[18px] w-[18px] items-center justify-center rounded text-[10px] font-semibold',
+            g.enabled
+              ? GLYPH_CLASS[g.id]
+              : 'border border-dashed border-border text-muted-foreground',
+          ].join(' ')}
+        >
+          {g.letter}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /** Tabular date cell — "Jul 12" (year only when it isn't this year); undated
  *  reads as a muted em-dash so the column still aligns. */
@@ -93,12 +127,14 @@ export function WorkspaceRow({
     >
       <DateCell iso={tournament.tournamentDate} receded={receded} />
 
-      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+      <span className="flex min-w-0 flex-1 items-center gap-2.5">
+        <HealthDot health={health} />
         <span className="truncate font-medium text-foreground">
           {tournament.name || 'Untitled'}
         </span>
-        <HealthDot health={health} />
       </span>
+
+      <ModulesCell tournament={tournament} />
 
       {/* NEXT ACTION — quiet text, not a boxed button. Still a real button
           (same accessible name + click behavior as before the redesign). */}

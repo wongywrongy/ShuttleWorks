@@ -39,6 +39,28 @@ describe('WorkspaceRow', () => {
     expect(screen.getByRole('button', { name: 'View results' })).toBeInTheDocument();
   });
 
+  it('renders a Modules column with a solid glyph per enabled module', () => {
+    render(
+      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
+    );
+    // fixture `t` has meet enabled → a solid "M" glyph.
+    const glyph = screen.getByTestId('row-module-meet');
+    expect(glyph).toHaveTextContent('M');
+    expect(glyph.className).not.toMatch(/border-dashed/);
+  });
+
+  it('shows a dashed kind-default glyph when nothing is enabled', () => {
+    const draft: TournamentSummaryDTO = {
+      ...t,
+      tournamentDate: null,
+      modules: [{ moduleId: 'meet', status: 'available', config: null }],
+    };
+    render(
+      <WorkspaceRow tournament={draft} group="undated" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
+    );
+    expect(screen.getByTestId('row-module-meet').className).toMatch(/border-dashed/);
+  });
+
   it('Delete lives in the overflow menu, not inline', () => {
     const onDelete = vi.fn();
     render(
