@@ -125,6 +125,10 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       // lock guard. Scoring format is operator-side display logic;
       // every `tv*` knob + display settings like `standingsMode` live
       // only in the render path, never in constraint generation.
+      // `courtOrder`/`hiddenCourts` (task 7) are the same class of
+      // field — board arrangement is presentation-only (an absolute
+      // rule: hiding a court must never touch scheduling), so toggling
+      // them must not trip a false "schedule is out of date" banner.
       const NON_SCHEDULING_KEYS: Array<keyof TournamentConfig> = [
         'scoringFormat',
         'setsToWin',
@@ -137,6 +141,8 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         'tvGridColumns',
         'tvCardSize',
         'tvShowScores',
+        'courtOrder',
+        'hiddenCourts',
       ];
       const changedKeys = (Object.keys(config) as Array<keyof TournamentConfig>).filter(
         (k) => JSON.stringify(config[k]) !== JSON.stringify(prev[k]),

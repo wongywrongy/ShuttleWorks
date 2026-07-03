@@ -90,4 +90,24 @@ describe('tournamentStore — NON_SCHEDULING_KEYS (display-only fields)', () => 
     // stale if ONLY display fields changed.
     expect(get().scheduleIsStale).toBe(true);
   });
+
+  // Task 7: courtOrder/hiddenCourts are presentation-only (board arrangement),
+  // same class of field as standingsMode/tv* above — never solver input.
+  it('changing courtOrder does NOT mark schedule stale', () => {
+    const config = makeConfig({ courtOrder: [2, 1] });
+    get().setConfig(config);
+    expect(get().scheduleIsStale).toBe(false);
+
+    get().setConfig(makeConfig({ courtOrder: [1, 2] }));
+    expect(get().scheduleIsStale).toBe(false);
+  });
+
+  it('changing hiddenCourts does NOT mark schedule stale', () => {
+    const config = makeConfig({ hiddenCourts: [2] });
+    get().setConfig(config);
+    expect(get().scheduleIsStale).toBe(false);
+
+    get().setConfig(makeConfig({ hiddenCourts: [] }));
+    expect(get().scheduleIsStale).toBe(false);
+  });
 });

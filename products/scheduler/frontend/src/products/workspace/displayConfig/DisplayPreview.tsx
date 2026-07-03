@@ -19,14 +19,31 @@
  * visible effect here — no board reads it yet (see DisplayLayoutEditor's
  * doc comment; Task 9 wires panel-vs-rotate rendering).
  *
- * The sizing derivation below (cardHeightPx/SIZES/GRID_COLS/tvAccent) is
- * mirrored from `MeetDisplayPage.tsx` (~lines 264-305), deliberately NOT
- * extracted into a shared helper — that extraction belongs to the Task 7/8
- * board-layout work, not this one.
+ * The sizing derivation (cardHeightPx/SIZES/GRID_COLS/tvAccent) used to be
+ * mirrored verbatim from `MeetDisplayPage.tsx`; both now consume the shared
+ * `publicDisplay/tvSizing.ts` helpers (task 7) so the two boards can't drift.
+ *
+ * Deliberately does NOT apply `courtOrder`/`hiddenCourts` to the sample
+ * fixture below — those are real-court-identity concepts and this fixture
+ * is a FIXED 4-court sample decoupled from the workspace's actual
+ * `courtCount` (see buildSampleCourts). Applying them here could hide the
+ * entire preview (e.g. hiddenCourts covering 1-4 while the real board has
+ * 10 courts) or silently no-op (an order referencing courts 5+), neither of
+ * which previews anything useful. The director already gets accurate
+ * order/hide feedback from the editor's own reorderable court list. Column
+ * count IS a plain layout property, not a court-identity one, so
+ * `defaultColumns` applies here same as the real board.
  */
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
 import { CourtsView } from '../../display/publicDisplay/CourtsView';
 import { DEFAULT_PRESET_ID } from '../../display/publicDisplay/displayPresets';
+import { defaultColumns } from '../../display/publicDisplay/courtLayout';
+import {
+  resolveTvAccent,
+  resolveCardHeightPx,
+  resolveCardSizeClasses,
+  resolveGridColsClass,
+} from '../../display/publicDisplay/tvSizing';
 
 // Natural (unscaled) render box for the sample board, then shrunk into a
 // bordered "TV bezel" frame via CSS transform — the wrapper's actual
@@ -122,41 +139,18 @@ export function DisplayPreview({ config }: { config: TournamentConfig | null }) 
   const now = new Date();
   const tvPreset = config.tvPreset ?? DEFAULT_PRESET_ID;
   const tvDisplayMode: 'strip' | 'grid' | 'list' = config.tvDisplayMode ?? 'strip';
-  const tvAccent =
-    config.tvAccent && /^#?[0-9a-fA-F]{6}$/.test(config.tvAccent.replace(/^#/, ''))
-      ? config.tvAccent.startsWith('#')
-        ? config.tvAccent
-        : `#${config.tvAccent}`
-      : '#10b981';
-  const tvGridColumns = config.tvGridColumns ?? null;
+  const tvAccent = resolveTvAccent(config.tvAccent);
   const tvCardSize = config.tvCardSize ?? 'auto';
   const tvShowScores = config.tvShowScores !== false;
 
-  const cardHeightPx =
-    tvCardSize === 'compact'
-      ? 72
-      : tvCardSize === 'comfortable'
-        ? 128
-        : tvCardSize === 'large'
-          ? 176
-          : 96;
-  const sizeTier =
-    cardHeightPx >= 160 ? 'xl' : cardHeightPx >= 120 ? 'lg' : cardHeightPx >= 96 ? 'md' : 'sm';
-  const SIZES = {
-    sm: { courtNum: 'text-3xl tracking-tight', eventCode: 'text-base', player: 'text-base', padX: 'px-4' },
-    md: { courtNum: 'text-5xl tracking-tighter', eventCode: 'text-2xl', player: 'text-2xl', padX: 'px-4' },
-    lg: { courtNum: 'text-6xl tracking-tighter', eventCode: 'text-3xl', player: 'text-3xl', padX: 'px-6' },
-    xl: { courtNum: 'text-7xl tracking-tighter', eventCode: 'text-4xl', player: 'text-4xl', padX: 'px-6' },
-  } as const;
-  const { courtNum: courtNumSize, eventCode: eventCodeSize, player: playerSize, padX: cardPadX } =
-    SIZES[sizeTier];
-  const GRID_COLS: Record<number, string> = {
-    1: 'grid-cols-1',
-    2: 'grid-cols-1 md:grid-cols-2',
-    3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
-    4: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
-  };
-  const gridColsClass = (tvGridColumns && GRID_COLS[tvGridColumns]) || GRID_COLS[2];
+  const cardHeightPx = resolveCardHeightPx(tvCardSize);
+  const { courtNumSize, eventCodeSize, playerSize, cardPadX } = resolveCardSizeClasses(cardHeightPx);
+  // Column count is a plain layout property (unlike hide/order, which are
+  // court-identity concepts this fixed sample fixture doesn't carry — see
+  // the file doc comment above), so the same responsive default applies.
+  const sampleCourts = buildSampleCourts(now);
+  const resolvedColumns = defaultColumns(sampleCourts.length, config.tvGridColumns ?? null);
+  const gridColsClass = resolveGridColsClass(resolvedColumns);
 
   return (
     <div
@@ -178,7 +172,7 @@ export function DisplayPreview({ config }: { config: TournamentConfig | null }) 
         }}
       >
         <CourtsView
-          courts={buildSampleCourts(now)}
+          courts={sampleCourts}
           config={config}
           now={now}
           displayMode={tvDisplayMode}

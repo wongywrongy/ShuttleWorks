@@ -35,6 +35,13 @@ import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
 import { CourtsView } from './publicDisplay/CourtsView';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
+import { orderCourts, visibleCourts, defaultColumns } from './publicDisplay/courtLayout';
+import {
+  resolveTvAccent,
+  resolveCardHeightPx,
+  resolveCardSizeClasses,
+  resolveGridColsClass,
+} from './publicDisplay/tvSizing';
 
 type ViewMode = 'courts' | 'schedule' | 'standings';
 
@@ -160,6 +167,22 @@ export function MeetDisplayPage() {
     return courts;
   }, [schedule, config, matchesByCourt, matchMap, matchStates]);
 
+  // Director-controlled arrangement: manual order first, then hide
+  // (presentation-only — see courtLayout.ts's doc comment). This is the
+  // ONLY place hide/order apply; `courtMatches` above still computes
+  // every court's real state regardless of visibility, so a hidden
+  // court's live match keeps tracking normally in Operations — it's
+  // just never handed to CourtsView. A hidden court with a live match
+  // does NOT auto-reappear here (Q9); it stays hidden until the
+  // director restores it from the editor.
+  const displayedCourtRows = useMemo(() => {
+    if (courtMatches.length === 0) return courtMatches;
+    const byId = new Map(courtMatches.map((row) => [row.courtId, row]));
+    const ordered = orderCourts(courtMatches.map((row) => row.courtId), config?.courtOrder);
+    const visible = visibleCourts(ordered, config?.hiddenCourts);
+    return visible.map((id) => byId.get(id)).filter((row): row is (typeof courtMatches)[number] => row != null);
+  }, [courtMatches, config?.courtOrder, config?.hiddenCourts]);
+
   // Next 10 scheduled matches.
   const upcomingMatches = useMemo(() => {
     if (!schedule) return [];
@@ -263,46 +286,22 @@ export function MeetDisplayPage() {
   // standalone /display window.
   const tvDisplayMode: 'strip' | 'grid' | 'list' = config.tvDisplayMode ?? 'strip';
 
-  // ---- TV sizing + accent knobs (per-tournament) ----------------------
-  // Accent — hex string driving the LIVE border, LIVE pill, and the
-  // bottom progress bar. Independent of the preset; always overlays.
-  // Defaults to emerald (#10b981).
-  const tvAccent = (config.tvAccent && /^#?[0-9a-fA-F]{6}$/.test(config.tvAccent.replace(/^#/, '')))
-    ? (config.tvAccent.startsWith('#') ? config.tvAccent : `#${config.tvAccent}`)
-    : '#10b981';
-  // Grid columns / card size / score visibility.
-  const tvGridColumns = config.tvGridColumns ?? null;
+  // ---- TV sizing + accent knobs (per-tournament) -----------------------
+  // Shared with DisplayPreview — see publicDisplay/tvSizing.ts for the
+  // single source of truth (previously duplicated verbatim in both
+  // files; extracted as part of task 7 to remove that drift risk).
+  const tvAccent = resolveTvAccent(config.tvAccent);
   const tvCardSize = config.tvCardSize ?? 'auto';
   const tvShowScores = config.tvShowScores !== false;
-  // Card size → height + matching type scale. Big cards get big text
-  // so the audience can read every name from across a gym.
-  const cardHeightPx =
-    tvCardSize === 'compact' ? 72 :
-    tvCardSize === 'comfortable' ? 128 :
-    tvCardSize === 'large' ? 176 :
-    isFullscreen ? 128 : 96;
-  const sizeTier = cardHeightPx >= 160 ? 'xl' : cardHeightPx >= 120 ? 'lg' : cardHeightPx >= 96 ? 'md' : 'sm';
-  // tracking-tighter on the giant court-number display — at 5xl-7xl the
-  // default tracking reads as gappy across a gym; tightening pulls the
-  // glyphs back into a single visual mass.
-  const SIZES = {
-    sm: { courtNum: 'text-3xl tracking-tight', eventCode: 'text-base', player: 'text-base', padX: 'px-4' },
-    md: { courtNum: 'text-5xl tracking-tighter', eventCode: 'text-2xl', player: 'text-2xl', padX: 'px-4' },
-    lg: { courtNum: 'text-6xl tracking-tighter', eventCode: 'text-3xl', player: 'text-3xl', padX: 'px-6' },
-    xl: { courtNum: 'text-7xl tracking-tighter', eventCode: 'text-4xl', player: 'text-4xl', padX: 'px-6' },
-  } as const;
-  const { courtNum: courtNumSize, eventCode: eventCodeSize, player: playerSize, padX: cardPadX } = SIZES[sizeTier];
+  const cardHeightPx = resolveCardHeightPx(tvCardSize, isFullscreen);
+  const { courtNumSize, eventCodeSize, playerSize, cardPadX } = resolveCardSizeClasses(cardHeightPx);
 
-  // Grid columns. Tailwind safelist won't pick up dynamic class
-  // names so we keep the literal strings; lookup beats a 4-deep
-  // ternary at the callsite.
-  const GRID_COLS: Record<number, string> = {
-    1: 'grid-cols-1',
-    2: 'grid-cols-1 md:grid-cols-2',
-    3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
-    4: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
-  };
-  const gridColsClass = (tvGridColumns && GRID_COLS[tvGridColumns]) || GRID_COLS[2];
+  // Grid columns — director override wins; otherwise a responsive
+  // default derived from how many courts are actually visible (see
+  // courtLayout.ts#defaultColumns). Hidden courts never count toward
+  // the column math since they're never on screen.
+  const resolvedColumns = defaultColumns(displayedCourtRows.length, config.tvGridColumns ?? null);
+  const gridColsClass = resolveGridColsClass(resolvedColumns);
 
   return (
     <div
@@ -379,7 +378,7 @@ export function MeetDisplayPage() {
             )}
             <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>
               <CourtsView
-                courts={courtMatches}
+                courts={displayedCourtRows}
                 config={config}
                 now={now}
                 displayMode={tvDisplayMode}
