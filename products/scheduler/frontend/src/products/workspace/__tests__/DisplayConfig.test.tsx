@@ -6,7 +6,7 @@
  * Meet-enabled workspaces.
  */
 import { describe, expect, it, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { DisplayConfig } from '../DisplayConfig';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import type { WorkspaceModule } from '../../../platform/product-shell/types';
@@ -51,5 +51,21 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
     expect(screen.getByRole('heading', { name: 'Feeds' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Public link' })).toBeInTheDocument();
     expect(screen.getByLabelText('Public display URL')).toBeInTheDocument();
+  });
+
+  // Locks the headline feature end-to-end: editor -> store -> preview, with
+  // no Save step. Proves the "live" in "live preview" isn't just correct by
+  // construction (new config object -> selector re-render -> new prop) but
+  // actually observable: toggling "Show scores" makes the sample match's
+  // score disappear from the preview frame in the SAME render pass, with no
+  // debounced PUT needed (setConfig writes to the store synchronously).
+  it('reflects an unsaved editor edit in the preview immediately (live-draft preview)', () => {
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    const preview = screen.getByTestId('display-preview-frame');
+    expect(preview).toHaveTextContent('11–7');
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Show scores' }));
+
+    expect(preview).not.toHaveTextContent('11–7');
   });
 });
