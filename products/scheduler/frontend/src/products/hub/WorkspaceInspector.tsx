@@ -87,11 +87,14 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const action = rowActionFor(tournament, temporalGroupOf(tournament, todayKey));
 
   // Header status pill (only meaningful with signals): "Ready" when the setup
-  // checklist is complete, else "Needs setup". Keyed off readiness — NOT the
-  // lifecycle `health` (a fully-set-up workspace can still be status:'draft',
-  // which would otherwise mislabel a ready event as "Needs setup").
+  // checklist is complete AND nothing needs attention, else "Needs setup".
+  // Keyed off readiness + attention — NOT the lifecycle `health` (a fully
+  // set-up workspace can still be status:'draft', which `health` reports as
+  // 'draft' and would mislabel a ready event as "Needs setup"). Requiring zero
+  // open to-dos also keeps the pill from reading "Ready" while the TO DO list
+  // right below it shows an outstanding item.
   const ready = !!readiness && readiness.ready === readiness.total;
-  const pillReady = ready;
+  const pillReady = ready && todos.length === 0;
   const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
 
   return (

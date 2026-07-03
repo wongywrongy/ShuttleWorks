@@ -68,6 +68,22 @@ describe('WorkspaceInspector', () => {
     expect(screen.getByText(/needs setup/i)).toBeInTheDocument();
   });
 
+  it('is NOT Ready when readiness is complete but an attention reason is open', () => {
+    // Setup checklist complete, yet a module-level attention reason stands — the
+    // pill must not read "Ready" while the TO DO list shows the problem.
+    const readyButAttention: TournamentSummaryDTO = {
+      ...readyWs,
+      signals: {
+        ...readyWs.signals!,
+        health: 'attention',
+        attention: [{ code: 'NO_MODULES_ENABLED', label: 'No modules enabled' }],
+      },
+    };
+    render(<WorkspaceInspector tournament={readyButAttention} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    expect(screen.queryByText('Ready')).toBeNull();
+    expect(screen.getByText(/needs setup/i)).toBeInTheDocument();
+  });
+
   it('renders a readiness progress bar reflecting setup completion', () => {
     render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} />);
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
