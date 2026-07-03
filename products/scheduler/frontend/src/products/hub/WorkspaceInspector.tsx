@@ -11,10 +11,31 @@
 import type { ReactNode } from 'react';
 import { Button } from '@scheduler/design-system';
 import type { TournamentSummaryDTO } from '../../api/dto';
+import { StatusPill } from '../../components/StatusPill';
 import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
 import { attentionReasons, moduleCountsOf, readinessOf, setupLabel } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, temporalGroupOf } from './hubGrouping';
+
+/** One metric tile in the "This event" triplet. */
+function MetricTile({
+  value,
+  label,
+  tone,
+}: {
+  value: number | string;
+  label: string;
+  tone?: 'live' | 'warning';
+}) {
+  const color =
+    tone === 'live' ? 'text-status-live' : tone === 'warning' ? 'text-status-warning' : 'text-foreground';
+  return (
+    <div className="bg-surface-screen p-2.5">
+      <div className={`text-lg font-bold leading-tight sw-num ${color}`}>{value}</div>
+      <div className="text-2xs uppercase tracking-[0.06em] text-ink-faint">{label}</div>
+    </div>
+  );
+}
 
 function fmtDate(iso: string | null): string {
   if (!iso) return 'No date set';
@@ -43,7 +64,7 @@ interface InspectorProps {
 export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }: InspectorProps) {
   if (!tournament) {
     return (
-      <aside className="hidden w-[322px] shrink-0 flex-col border-l border-border bg-surface-rail lg:flex">
+      <aside className="hidden w-[344px] shrink-0 flex-col border-l border-border bg-surface-rail lg:flex">
         <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground/70">
           Select a workspace to see what&rsquo;s next.
         </div>
@@ -58,47 +79,67 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const moduleCounts = moduleCountsOf(tournament);
   const readiness = readinessOf(tournament);
   const setupEntries = Object.entries(tournament.signals?.setup ?? {});
-  const enabledCount = modules.filter((m) => m.status === 'enabled').length;
+  const metrics = tournament.signals?.matches;
+  const toDo = metrics ? metrics.toDo : todos.length;
 
   const todayKey = new Date().toISOString().slice(0, 10);
   const action = rowActionFor(tournament, temporalGroupOf(tournament, todayKey));
 
+  // Header status pill (only meaningful with signals): Ready when the readiness
+  // checklist is complete AND health is good; else Needs setup.
+  const ready = !!readiness && readiness.ready === readiness.total;
+  const pillReady = ready && tournament.signals?.health === 'good';
+  const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
+
   return (
-    <aside className="hidden w-[322px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-border bg-surface-rail p-[18px] lg:flex">
-      <div>
-        <h2 className="truncate text-[15px] font-semibold text-foreground">
-          {tournament.name || 'Untitled'}
-        </h2>
-        <p className="mt-1.5 text-2xs uppercase tracking-[0.02em] sw-num text-muted-foreground">
-          {fmtDate(tournament.tournamentDate)} · {tournament.kind === 'bracket' ? 'Bracket' : 'Meet'}
-        </p>
+    <aside className="hidden w-[344px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-rail lg:flex">
+      {/* Header block — identity + status pill, then the primary action + gear
+          (redesign moves the actions to the top). */}
+      <div className="flex flex-col gap-3 border-b border-border p-[18px]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-[15px] font-semibold text-foreground">
+              {tournament.name || 'Untitled'}
+            </h2>
+            <p className="mt-1.5 text-2xs uppercase tracking-[0.02em] sw-num text-muted-foreground">
+              {fmtDate(tournament.tournamentDate)} · {tournament.kind === 'bracket' ? 'Bracket' : 'Meet'}
+            </p>
+          </div>
+          {tournament.signals ? (
+            <StatusPill tone={pillReady ? 'green' : 'amber'} dot className="shrink-0">
+              {pillReady ? 'Ready' : 'Needs setup'}
+            </StatusPill>
+          ) : null}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            className="flex-1"
+            onClick={() => (action.kind === 'set-date' ? onSetDate(tournament.id) : onOpen(tournament.id))}
+          >
+            {action.label === 'Open workspace' ? 'Open workspace →' : action.label}
+          </Button>
+          <Button
+            variant="outline"
+            aria-label="Workspace settings"
+            onClick={() => onSettings(tournament.id)}
+          >
+            ⚙
+          </Button>
+        </div>
       </div>
 
-      {/* Metric tiles — the prototype's grid-lines triplet: 1px gaps let the
-          hairline color show through; each cell is a quiet stat. */}
-      <div
-        data-testid="inspector-metrics"
-        className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border"
-      >
-        <div className="bg-surface-screen p-2.5">
-          <div className="text-lg font-bold leading-tight sw-num text-foreground">
-            {readiness ? `${readiness.ready}/${readiness.total}` : '—'}
-          </div>
-          <div className="text-2xs uppercase tracking-[0.06em] text-ink-faint">ready</div>
-        </div>
-        <div className="bg-surface-screen p-2.5">
-          <div
-            className={`text-lg font-bold leading-tight sw-num ${
-              todos.length > 0 ? 'text-status-warning' : 'text-foreground'
-            }`}
-          >
-            {todos.length}
-          </div>
-          <div className="text-2xs uppercase tracking-[0.06em] text-ink-faint">to do</div>
-        </div>
-        <div className="bg-surface-screen p-2.5">
-          <div className="text-lg font-bold leading-tight sw-num text-foreground">{enabledCount}</div>
-          <div className="text-2xs uppercase tracking-[0.06em] text-ink-faint">modules on</div>
+      <div className="flex flex-1 flex-col gap-[17px] overflow-y-auto p-[18px]">
+      <div>
+        <RailLabel>THIS EVENT</RailLabel>
+        {/* Metric tiles — grid-lines triplet: matches / scheduled / to do.
+            Falls back to — when a payload predates the match signals. */}
+        <div
+          data-testid="inspector-metrics"
+          className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border"
+        >
+          <MetricTile value={metrics ? metrics.total : '—'} label="matches" />
+          <MetricTile value={metrics ? metrics.scheduled : '—'} label="scheduled" tone="live" />
+          <MetricTile value={toDo} label="to do" tone={toDo > 0 ? 'warning' : undefined} />
         </div>
       </div>
 
@@ -118,11 +159,30 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
 
       {setupEntries.length > 0 ? (
         <div>
-          <RailLabel>READINESS</RailLabel>
-          <ul data-testid="inspector-checklist" className="space-y-1">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
+              Readiness
+            </span>
+            {readiness ? (
+              <span className="text-2xs sw-num text-muted-foreground">
+                {readiness.ready} / {readiness.total}
+              </span>
+            ) : null}
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Readiness"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="mb-3 h-1.5 overflow-hidden rounded-full bg-surface-card"
+          >
+            <div className="h-full rounded-full bg-status-live" style={{ width: `${pct}%` }} />
+          </div>
+          <ul data-testid="inspector-checklist" className="grid grid-cols-2 gap-x-3 gap-y-1.5">
             {setupEntries.map(([key, done]) => (
               <li key={key} className="flex items-center gap-1.5 text-xs capitalize text-muted-foreground">
-                <span aria-hidden className={done ? 'text-accent' : 'text-muted-foreground/40'}>
+                <span aria-hidden className={done ? 'text-status-live' : 'text-muted-foreground/40'}>
                   {done ? '✓' : '○'}
                 </span>
                 {setupLabel(key)}
@@ -167,17 +227,6 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
         </ul>
       </div>
 
-      {/* Primary action anchored to the rail's bottom — the glow marks it. */}
-      <div className="mt-auto flex flex-col gap-2 pt-2">
-        <Button
-          className="w-full"
-          onClick={() => (action.kind === 'set-date' ? onSetDate(tournament.id) : onOpen(tournament.id))}
-        >
-          {action.label === 'Open workspace' ? 'Open workspace →' : action.label}
-        </Button>
-        <Button variant="outline" className="w-full" onClick={() => onSettings(tournament.id)}>
-          Workspace settings
-        </Button>
       </div>
     </aside>
   );

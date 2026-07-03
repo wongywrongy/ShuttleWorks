@@ -27,9 +27,51 @@ const withSignals: TournamentSummaryDTO = {
   },
 };
 
+const readyWs: TournamentSummaryDTO = {
+  ...withSignals,
+  name: 'Ready Cup',
+  signals: {
+    health: 'good',
+    attention: [],
+    modules: { enabled: 2, available: 1, disabled: 0, comingSoon: 0 },
+    setup: { configured: true, roster: true, scheduled: true, results: true },
+    collaboration: { memberCount: 1, activeInviteCount: 0 },
+    matches: { total: 48, scheduled: 36, toDo: 0 },
+    nextUp: [],
+  },
+};
+
 const noop = () => {};
 
 describe('WorkspaceInspector', () => {
+  it('shows the matches/scheduled/to-do metric triplet from signals.matches', () => {
+    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    const metrics = screen.getByTestId('inspector-metrics');
+    expect(metrics).toHaveTextContent('48');
+    expect(metrics).toHaveTextContent('36');
+    expect(metrics).toHaveTextContent(/matches/i);
+    expect(metrics).toHaveTextContent(/scheduled/i);
+  });
+
+  it('metric tiles fall back to — when match signals are absent (older payload)', () => {
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    expect(screen.getByTestId('inspector-metrics')).toHaveTextContent('—');
+  });
+
+  it('shows a Ready status pill when readiness is complete and health is good', () => {
+    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    expect(screen.getByText('Ready')).toBeInTheDocument();
+  });
+
+  it('shows a "Needs setup" pill when readiness is incomplete', () => {
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    expect(screen.getByText(/needs setup/i)).toBeInTheDocument();
+  });
+
+  it('renders a readiness progress bar reflecting setup completion', () => {
+    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
+  });
   it('renders plain-language to-dos, a readiness checklist, and module counts', () => {
     render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
     expect(screen.getByTestId('inspector-todos')).toHaveTextContent('No players added yet');
