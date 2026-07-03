@@ -174,6 +174,10 @@ def _meet_standings_for(
         }
         for s in state_rows
     }
+    # Standings intentionally count every finished, scored match regardless
+    # of current schedule membership. The client's original UI only saw
+    # matches within schedule.assignments (incidental filtering), but the
+    # authoritative backend standings reflect all recorded results.
     standing_rows = compute_meet_standings(
         matches=matches,
         match_states=match_states,

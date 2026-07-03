@@ -348,10 +348,17 @@ def test_state_standings_not_persisted_by_put(client):
         {"groupId": "bogus", "groupName": "Bogus", "matchesPlayed": 99, "wins": 99, "losses": 0}
     ]
     client.put(f"/tournaments/{tid}/state", json=payload)
-    # No match_states seeded — real standings should be empty, not the
-    # bogus client-sent value.
-    got = client.get(f"/tournaments/{tid}/state").json()
-    assert got["standings"] == []
+    # Assert that standings were excluded from the persisted blob itself.
+    # This guards the real exclusion point (the PUT handler's
+    # model_dump(exclude={"standings"})), not just a recomputed GET.
+    from database.session import SessionLocal
+    from database.models import Tournament
+    session = SessionLocal()
+    try:
+        row = session.query(Tournament).filter(Tournament.id == uuid.UUID(tid)).one()
+        assert "standings" not in row.data, "standings should not be persisted in data blob"
+    finally:
+        session.close()
 
 
 # ---- Scoped backups ----------------------------------------------------
