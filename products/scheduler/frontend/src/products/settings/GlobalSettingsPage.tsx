@@ -112,7 +112,7 @@ function ProfilePage() {
       <div className="flex items-center gap-3">
         <Button disabled={LOCAL_DEV}>Save changes</Button>
         {LOCAL_DEV ? (
-          <Note>Profile editing unlocks in cloud mode (Supabase Auth).</Note>
+          <Note>Profile editing unlocks once you sign in to the cloud.</Note>
         ) : null}
       </div>
     </div>
@@ -169,7 +169,7 @@ function SessionsPage() {
         </div>
 
         <Note>
-          Session management is handled by your local-dev environment. In cloud mode,
+          This install keeps a single local session. Once you sign in to the cloud, your
           other active sessions appear here and can be revoked individually.
         </Note>
       </div>

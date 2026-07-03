@@ -72,7 +72,7 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
   const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
 
   return (
-    <div data-testid="workspace-overview" className="mx-auto max-w-4xl p-6 sm:p-8">
+    <div data-testid="workspace-overview" className="sw-float-in mx-auto max-w-4xl p-6 sm:p-8">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-foreground">{summary.name || 'Untitled'}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
