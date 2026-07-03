@@ -559,6 +559,23 @@ interface CollaborationDTO {
   activeInviteCount: number;
 }
 
+/** The inspector's metric triplet (`to do` = attention-reason count). */
+interface MatchMetricsDTO {
+  total: number;
+  scheduled: number;
+  toDo: number;
+}
+
+/** One upcoming match for the inspector's "Next up" list. `status` is
+ *  schedule-derivable only ("scheduled") — live called/started state is not
+ *  surfaced on the Hub (it lives in match_states; Operations Run is live). */
+export interface NextMatchDTO {
+  code: string;
+  timeLabel: string | null;
+  courtLabel: string | null;
+  status: string;
+}
+
 export interface WorkspaceSignalsDTO {
   health: 'good' | 'attention' | 'draft' | 'archived';
   attention: AttentionReasonDTO[];
@@ -566,6 +583,10 @@ export interface WorkspaceSignalsDTO {
   /** Per-kind readiness checklist (keys vary by kind), e.g. `{ roster: true }`. */
   setup: Record<string, boolean>;
   collaboration: CollaborationDTO;
+  /** Per-workspace match metrics (redesign). Optional for older payloads. */
+  matches?: MatchMetricsDTO;
+  /** Next ≤3 scheduled matches (redesign). Optional / empty when none. */
+  nextUp?: NextMatchDTO[];
 }
 
 export interface TournamentSummaryDTO {
