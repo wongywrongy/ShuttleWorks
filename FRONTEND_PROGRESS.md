@@ -576,4 +576,5 @@ bracket lock and the backend match-state fix in Phase 7). Still open (small):
 - ~~409 conflict toast shows the raw match UUID~~ — **fixed in Phase 13** (`useLiveTracking`
   shows the meet match code). The whole debt-log UX/polish backlog is now clear.
 - Handoff export disposition — **resolved: gitignored** (mirrors the tracked skill).
+- Display module redesign shipped 2026-07-04: board freshness recast (Live/Delayed/Out-of-date), relative lanes (Now/Next/Later), Configuration editor + court drag-reorder/hide, authoritative Meet standings computed on backend.
 - Optional: `git push` (nothing pushed yet).
