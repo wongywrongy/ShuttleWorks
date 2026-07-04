@@ -221,3 +221,8 @@ design-gated items above + engine coverage.
   2026-06-25 handoff). Code sweep was a **diff** vs this log: no new dead code, no new
   complexity crossings → nothing removed. Outputs: `06-doc-inventory.md`,
   `06-stale-doc-findings.md`, `06-state-of-codebase.md`.
+
+## Display redesign follow-ups (found in the 2026-07-04 final whole-feature review — non-blocking)
+- **Standings vs columns use different court-count bases.** `MeetDisplayPage.tsx` drives `defaultColumns()` from the *visible* court count (`displayedCourtRows.length`) but `standingsPlacement()` from the *raw* count (`config.courtCount`). Hiding courts down to ≤6 shrinks the column grid but does NOT flip a large venue's standings from `rotate` back to `side`. Both are sensible operator-overridable defaults; pick one base if unified behavior is wanted. Size S.
+- **Grid-mode column default is now responsive on the real board (behavior note, not a bug).** Task 7's `defaultColumns` replaced the old hard `GRID_COLS[2]` fallback — the public board in grid mode now auto-picks 2/3/4 columns by court count instead of always 2. Intended, within the Display blast radius (not scheduling). Recorded so it isn't a surprise.
+- Minor cosmetics deferred: `Optional[list[int]]` vs `typing.List` style (schemas.py); standings rotation dwell 15s + side-panel `w-96` magic numbers; `previewByCourt` computes lanes for busy courts that don't consume them; `actualCourtId ?? courtId` inlined 3× in MeetDisplayPage.
