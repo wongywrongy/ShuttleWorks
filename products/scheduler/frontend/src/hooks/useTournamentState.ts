@@ -144,6 +144,11 @@ function hydrate(s: TournamentStateDTO): void {
     players: s.players ?? [],
     matches: s.matches ?? [],
     schedule: s.schedule ?? null,
+    // Task 9: server-computed Meet pool standings (Task 2). Read-only —
+    // deliberately NOT part of `snapshot()` below or the subscribe
+    // change-comparator: it's server-derived, never client-writable, so
+    // including it there would round-trip a phantom PUT on every hydrate.
+    standings: s.standings ?? [],
     scheduleIsStale: s.scheduleIsStale ?? false,
     // Schema v2 fields — server is the authority, default to clean
     // values when the file pre-dates the v2 migration.
@@ -169,6 +174,7 @@ function resetToDefaults(): void {
     players: [],
     matches: [],
     schedule: null,
+    standings: [],
     scheduleIsStale: false,
     scheduleVersion: 0,
     scheduleHistory: [],

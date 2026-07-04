@@ -1,9 +1,9 @@
 /**
  * DisplayLayoutEditor — the "Board layout" controls of Display Configuration.
  *
- * Drives the `tv*` family + `standingsMode` that `MeetDisplayPage` already
- * reads off the tournament config (see MeetDisplayPage.tsx:264-276) but that,
- * until now, had no UI. Same persist path as BracketEngineSection/
+ * Drives the `tv*` family + `standingsMode` that `MeetDisplayPage` reads off
+ * the tournament config (see MeetDisplayPage.tsx's standings-placement
+ * section). Same persist path as BracketEngineSection/
  * ScoringFields: reads `config` off `useTournamentStore` and writes patches
  * through `setConfig` immediately — `useTournamentState`'s subscribe+debounce
  * coalesces the PUT. No Save button; no new endpoint.
@@ -21,9 +21,13 @@
  * design-system primitives, without taking on unproven test infra as part
  * of this task. See task-6-report.md.
  *
- * `standingsMode` is written here but not yet CONSUMED by any board —
- * `MeetDisplayPage` doesn't read it and `BracketDisplayPage` never will
- * (courts view is meet-only). Task 9 wires the panel-vs-rotate rendering.
+ * `standingsMode` is written here AND consumed by `MeetDisplayPage` (Task 9
+ * wired the panel-vs-rotate rendering there — see its standings-placement
+ * section + `publicDisplay/standingsLayout.ts`). `BracketDisplayPage` never
+ * reads it (courts/standings rendering is meet-only). Note this editor's own
+ * `DisplayPreview` swatch still does NOT render standings (fixed
+ * courts-only sample fixture — see that file's doc comment) — an
+ * intentional preview-fidelity gap, not a bug.
  *
  * ---- Court order + hide (task 7) ------------------------------------
  * Below the tv* rows, a "Court order & visibility" list drives

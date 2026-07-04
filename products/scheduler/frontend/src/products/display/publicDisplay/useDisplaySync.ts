@@ -57,6 +57,10 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
             matches: remote.matches ?? [],
             schedule: remote.schedule ?? null,
             scheduleIsStale: remote.scheduleIsStale ?? false,
+            // Task 9: server-computed Meet pool standings. Empty for
+            // bracket-kind/Meet-disabled workspaces — see MeetStandingRowDTO's
+            // doc comment in api/dto.ts.
+            standings: remote.standings ?? [],
           });
         }
         setLastSyncMs(Date.now());

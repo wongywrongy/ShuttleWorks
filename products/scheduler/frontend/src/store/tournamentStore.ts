@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import type {
   BracketPlayerDTO,
   MatchDTO,
+  MeetStandingRowDTO,
   PlayerDTO,
   RosterGroupDTO,
   ScheduleDTO,
@@ -59,6 +60,14 @@ interface TournamentState {
   setSchedule: (schedule: ScheduleDTO | null) => void;
   setActiveCandidateIndex: (index: number) => void;
 
+  // Meet pool standings (Display redesign, Task 2 + Task 9) — authoritative,
+  // server-computed, read-only. Hydrated directly via `setState` by both
+  // `useDisplaySync` (standalone /display board) and `useTournamentState`'s
+  // `hydrate()` (in-shell). Never sent back on PUT (see `MeetStandingRowDTO`'s
+  // doc comment in api/dto.ts) — no action setter on purpose, so nothing in
+  // this store can accidentally treat it as client-writable.
+  standings: MeetStandingRowDTO[];
+
   // Staleness flag
   scheduleIsStale: boolean;
   setScheduleStale: (stale: boolean) => void;
@@ -106,6 +115,7 @@ const INITIAL = {
   bracketRosterMigrated: false,
   matches: [] as MatchDTO[],
   schedule: null as ScheduleDTO | null,
+  standings: [] as MeetStandingRowDTO[],
   scheduleIsStale: false,
   isScheduleLocked: false,
   scheduleVersion: 0,

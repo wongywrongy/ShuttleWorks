@@ -1,20 +1,17 @@
 /**
  * Public Display — team standings (school-vs-school dual-meet leaderboard).
  *
- * Pure presentation; all aggregation happens in the page shell's
- * `standings` memo. Top-1 team gets a gold-tinted card to draw the eye.
+ * Pure presentation; ZERO aggregation happens here (Task 9) — every row
+ * is computed authoritatively by the backend (`services.meet.standings`)
+ * and served on `TournamentStateDTO.standings`. This replaces the old
+ * client-side `groupScores` computation that used to live in
+ * `MeetDisplayPage.tsx` (deleted). Server-sorted order is rendered
+ * as-is; the top row gets a gold-tinted card to draw the eye.
  */
-
-interface StandingRow {
-  groupId: string;
-  groupName: string;
-  wins: number;
-  losses: number;
-  matchesPlayed: number;
-}
+import type { MeetStandingRowDTO } from '../../../api/dto';
 
 interface StandingsViewProps {
-  standings: StandingRow[];
+  standings: MeetStandingRowDTO[];
 }
 
 export function StandingsView({ standings }: StandingsViewProps) {

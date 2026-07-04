@@ -5,11 +5,18 @@
  *
  *   ?view=courts (default) — current/called match on each court
  *   ?view=schedule        — upcoming matches
- *   ?view=standings       — school-vs-school leaderboard
  *
  * Designed to be readable from across a gym: oversized type, high
  * contrast, and a built-in fullscreen toggle so the operator can hit
  * F or a button to take over the display without F11 ceremony.
+ *
+ * Standings (school-vs-school leaderboard, server-computed — Task 9) are
+ * NOT a manually-selectable tab: `config.standingsMode` (director-set, or
+ * "Auto" derived from court count — see ./publicDisplay/standingsLayout.ts)
+ * decides whether they render as a persistent side panel next to the
+ * courts grid, or periodically take over the whole content area on a
+ * timer ("rotate"). Hidden entirely whenever there's nothing to show
+ * (Meet disabled / no scored pool play yet).
  *
  * The /display route mounts this page *outside* AppShell, so the
  * tournament-state hydrator (``useTournamentState``) is not in scope
@@ -36,6 +43,7 @@ import { CourtsView } from './publicDisplay/CourtsView';
 import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
 import { orderCourts, visibleCourts, defaultColumns } from './publicDisplay/courtLayout';
+import { standingsPlacement } from './publicDisplay/standingsLayout';
 import {
   resolveTvAccent,
   resolveCardHeightPx,
@@ -43,18 +51,41 @@ import {
   resolveGridColsClass,
 } from './publicDisplay/tvSizing';
 
-type ViewMode = 'courts' | 'schedule' | 'standings';
+// How often the ROTATE placement (Task 9) swaps the main content area
+// between the current view (courts/schedule) and a full-bleed standings
+// screen. Symmetric — same dwell time on each side — since the brief
+// doesn't call for asymmetric timing and a single interval is simplest
+// to reason about (and to fake-timer test) than a ping-pong of two
+// different durations.
+const ROTATION_INTERVAL_MS = 15_000;
+
+type ViewMode = 'courts' | 'schedule';
 
 export function MeetDisplayPage() {
   const [searchParams] = useSearchParams();
-  const viewParam = searchParams.get('view') as ViewMode | null;
-  const [view, setView] = useState<ViewMode>(viewParam || 'courts');
+  // Whitelist, not a blind cast: a stale bookmarked/QR'd URL from before
+  // task 9 (`?view=standings` was a real, documented param) must still
+  // resolve to a real view — falling through to 'courts' rather than a
+  // dead `view` value that matches neither render branch and would leave
+  // the content area blank on an unattended venue TV.
+  // Whitelist, not a blind cast: a stale bookmarked/QR'd URL from before
+  // task 9 (`?view=standings` was a real, documented param) must still
+  // resolve to a real view — falling through to 'courts' rather than a
+  // dead `view` value that matches neither render branch and would leave
+  // the content area blank on an unattended venue TV.
+  const viewParam = searchParams.get('view');
+  const [view, setView] = useState<ViewMode>(viewParam === 'schedule' ? 'schedule' : 'courts');
   const [now, setNow] = useState<Date>(() => new Date());
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const { schedule, config, matches, matchStates, matchesByStatus } = useLiveTracking();
   const players = useTournamentStore((state) => state.players);
-  const groups = useTournamentStore((state) => state.groups);
+  // Server-computed Meet pool standings (Task 2 + 9) — see
+  // ./publicDisplay/standingsLayout.ts for the panel-vs-rotation decision
+  // and useDisplaySync.ts / hooks/useTournamentState.ts for how this field
+  // is hydrated onto the store for the standalone board vs. the in-shell
+  // embed respectively. Empty for bracket-kind/Meet-disabled workspaces.
+  const standings = useTournamentStore((state) => state.standings);
 
   // Display projects, never operates (see CLAUDE.md's module model) —
   // the public board must not surface an operator-facing advisory, so
@@ -82,8 +113,40 @@ export function MeetDisplayPage() {
   });
 
   const playerNames = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
-  const groupNames = useMemo(() => new Map(groups.map((g) => [g.id, g.name])), [groups]);
   const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
+
+  // ---- Standings placement (task 9) -------------------------------------
+  // `config?.courtCount` defaults to 0 (-> 'side' tier) before the first
+  // hydrate lands; harmless since `hasStandings` is false until real data
+  // arrives, so nothing renders either way. Hide entirely — never an empty
+  // panel — whenever Meet isn't enabled or there's no scored pool play yet:
+  // the server returns `[]` for both cases (see MeetStandingRowDTO's doc
+  // comment), so a single length check covers both.
+  const hasStandings = standings.length > 0;
+  const resolvedStandingsPlacement = standingsPlacement(
+    config?.courtCount ?? 0,
+    config?.standingsMode,
+  );
+  const showStandingsSidePanel = hasStandings && resolvedStandingsPlacement === 'side';
+  const rotateStandings = hasStandings && resolvedStandingsPlacement === 'rotate';
+
+  // Timed rotation: alternate the main content area between the current
+  // view (courts/schedule) and a full-bleed standings screen. Only ticks
+  // while rotation is actually active; flips back to "showing the normal
+  // view" the instant rotation stops (mode change, standings disappear,
+  // Meet gets disabled), so switching away never leaves the board stuck
+  // mid-rotation on a screen that's no longer supposed to exist.
+  const [rotationShowingStandings, setRotationShowingStandings] = useState(false);
+  useEffect(() => {
+    if (!rotateStandings) {
+      setRotationShowingStandings(false);
+      return;
+    }
+    const t = window.setInterval(() => {
+      setRotationShowingStandings((prev) => !prev);
+    }, ROTATION_INTERVAL_MS);
+    return () => window.clearInterval(t);
+  }, [rotateStandings]);
 
   // Indexing helpers we'll reuse below. O(1) by-matchId lookups so the
   // courts / standings derivations don't re-scan the full matchesByStatus
@@ -233,43 +296,6 @@ export function MeetDisplayPage() {
     }));
   }, [matchesByStatus.scheduled, matchMap, schedule]);
 
-  // School-vs-school standings (dual-meet friendly).
-  const standings = useMemo(() => {
-    const groupScores: Record<string, { wins: number; losses: number; matchesPlayed: number }> = {};
-    groups.forEach((g) => (groupScores[g.id] = { wins: 0, losses: 0, matchesPlayed: 0 }));
-    // Index players by id so the inner loop is O(1) instead of O(N) scans.
-    const playerById = new Map(players.map((p) => [p.id, p]));
-    matchesByStatus.finished.forEach((assignment) => {
-      const match = matchMap.get(assignment.matchId);
-      const state = matchStates[assignment.matchId];
-      if (!match || !state?.score) return;
-      const sideAGroupId = match.sideA?.map((id) => playerById.get(id)?.groupId).find(Boolean);
-      const sideBGroupId = match.sideB?.map((id) => playerById.get(id)?.groupId).find(Boolean);
-      if (!sideAGroupId || !sideBGroupId || sideAGroupId === sideBGroupId) return;
-      const aWon = state.score.sideA > state.score.sideB;
-      const bWon = state.score.sideB > state.score.sideA;
-      if (groupScores[sideAGroupId]) {
-        groupScores[sideAGroupId].matchesPlayed++;
-        if (aWon) groupScores[sideAGroupId].wins++;
-        if (bWon) groupScores[sideAGroupId].losses++;
-      }
-      if (groupScores[sideBGroupId]) {
-        groupScores[sideBGroupId].matchesPlayed++;
-        if (bWon) groupScores[sideBGroupId].wins++;
-        if (aWon) groupScores[sideBGroupId].losses++;
-      }
-    });
-    return Object.entries(groupScores)
-      .map(([groupId, scores]) => ({
-        groupId,
-        groupName: groupNames.get(groupId) || groupId,
-        ...scores,
-      }))
-      .filter((s) => s.matchesPlayed > 0)
-      .sort((a, b) => b.wins - a.wins || a.losses - b.losses);
-  }, [matchesByStatus.finished, matchMap, matchStates, groups, groupNames, players]);
-
-
   // ===== Rendering =====================================================
 
   // ── Preset resolution ─────────────────────────────────────────
@@ -344,6 +370,28 @@ export function MeetDisplayPage() {
   const resolvedColumns = defaultColumns(displayedCourtRows.length, config.tvGridColumns ?? null);
   const gridColsClass = resolveGridColsClass(resolvedColumns);
 
+  // Built once and reused verbatim whether or not the SIDE standings panel
+  // is present (task 9) — the panel only wraps this in a flex row, it
+  // never changes the props CourtsView itself receives.
+  const courtsViewNode = (
+    <CourtsView
+      courts={displayedCourtRows}
+      config={config}
+      now={now}
+      displayMode={tvDisplayMode}
+      gridColsClass={gridColsClass}
+      cardHeightPx={cardHeightPx}
+      cardPadX={cardPadX}
+      courtNumSize={courtNumSize}
+      eventCodeSize={eventCodeSize}
+      playerSize={playerSize}
+      tvAccent={tvAccent}
+      tvShowScores={tvShowScores}
+      isFullscreen={isFullscreen}
+      playerNames={playerNames}
+    />
+  );
+
   return (
     <div
       ref={rootRef}
@@ -392,13 +440,6 @@ export function MeetDisplayPage() {
               >
                 Schedule
               </button>
-              <button
-                type="button"
-                onClick={() => setView('standings')}
-                className={tabClass('standings')}
-              >
-                Standings
-              </button>
             </div>
             <div className="tabular-nums text-2xl text-muted-foreground">{currentTime}</div>
             <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
@@ -406,47 +447,63 @@ export function MeetDisplayPage() {
         </div>
       </div>
 
-      {/* View swap area. `key={view}` + `motion-enter` so changing tabs
-          materializes the new view via the brand recipe rather than
-          snapping in — visible from across a gym. */}
-      <div key={view} className="motion-enter px-6 pb-28 pt-6">
-        {view === 'courts' && (
+      {/* View swap area. `key` + `motion-enter` so changing tabs (or the
+          ROTATE placement taking over the screen) materializes the new
+          content via the brand recipe rather than snapping in — visible
+          from across a gym. */}
+      <div
+        key={rotateStandings && rotationShowingStandings ? 'standings-rotation' : view}
+        className="motion-enter px-6 pb-28 pt-6"
+      >
+        {rotateStandings && rotationShowingStandings ? (
+          // ROTATE placement (task 9): periodically takes over the whole
+          // content area instead of a permanent side panel — for larger
+          // venues where a persistent panel would crowd an already-busy
+          // court grid. See ./publicDisplay/standingsLayout.ts.
+          <div data-testid="standings-rotation-screen">
+            <StandingsView standings={standings} />
+          </div>
+        ) : (
           <>
-            {freshness === 'stale' && (
-              <div className="mb-4 text-center text-base text-muted-foreground">
-                {STALE_CAPTION}
-              </div>
+            {view === 'courts' && (
+              <>
+                {freshness === 'stale' && (
+                  <div className="mb-4 text-center text-base text-muted-foreground">
+                    {STALE_CAPTION}
+                  </div>
+                )}
+                <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>
+                  {showStandingsSidePanel ? (
+                    // SIDE placement (task 9): a persistent panel next to
+                    // the court grid — shrinks the space available to it,
+                    // it never resizes the grid's own column math (that
+                    // stays viewport-keyed via defaultColumns/CourtsView's
+                    // responsive classes, unrelated to this panel's width).
+                    <div className="flex flex-col gap-6 xl:flex-row">
+                      <div className="min-w-0 flex-1">{courtsViewNode}</div>
+                      <div
+                        className="w-full flex-none xl:w-96"
+                        data-testid="standings-side-panel"
+                      >
+                        <StandingsView standings={standings} />
+                      </div>
+                    </div>
+                  ) : (
+                    courtsViewNode
+                  )}
+                </div>
+              </>
             )}
-            <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>
-              <CourtsView
-                courts={displayedCourtRows}
+
+            {view === 'schedule' && (
+              <ScheduleView
+                upcomingMatches={upcomingMatches}
                 config={config}
-                now={now}
-                displayMode={tvDisplayMode}
-                gridColsClass={gridColsClass}
-                cardHeightPx={cardHeightPx}
-                cardPadX={cardPadX}
-                courtNumSize={courtNumSize}
-                eventCodeSize={eventCodeSize}
-                playerSize={playerSize}
-                tvAccent={tvAccent}
-                tvShowScores={tvShowScores}
-                isFullscreen={isFullscreen}
                 playerNames={playerNames}
               />
-            </div>
+            )}
           </>
         )}
-
-        {view === 'schedule' && (
-          <ScheduleView
-            upcomingMatches={upcomingMatches}
-            config={config}
-            playerNames={playerNames}
-          />
-        )}
-
-        {view === 'standings' && <StandingsView standings={standings} />}
       </div>
 
       {/* ---------- Progress footer ------------------------------------- */}

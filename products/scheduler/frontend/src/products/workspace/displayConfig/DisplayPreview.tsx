@@ -15,9 +15,13 @@
  * a small FIXED sample-courts fixture rather than real schedule/match data:
  * a fresh or schedule-less workspace would otherwise preview nothing (just
  * the board's "no schedule" placeholder), and the point here is to preview
- * LAYOUT (mode/columns/size/scores), not live results. `standingsMode` has no
- * visible effect here — no board reads it yet (see DisplayLayoutEditor's
- * doc comment; Task 9 wires panel-vs-rotate rendering).
+ * LAYOUT (mode/columns/size/scores), not live results. `standingsMode` still
+ * has no visible effect here — `MeetDisplayPage` renders it now (Task 9's
+ * panel-vs-rotate wiring; see DisplayLayoutEditor's doc comment), but this
+ * swatch's fixed sample fixture carries no roster groups to derive
+ * standings from, and courts-only layout preview remains this component's
+ * whole job (see the file doc comment above) — not a gap introduced by
+ * Task 9, a pre-existing scope boundary.
  *
  * The sizing derivation (cardHeightPx/SIZES/GRID_COLS/tvAccent) used to be
  * mirrored verbatim from `MeetDisplayPage.tsx`; both now consume the shared
