@@ -24,8 +24,8 @@
  *
  * That's a different essential input (live status) and a different `now`
  * rule, not merely a coarser vocabulary the way Operations' collapsed
- * `next-later` bucket is — so this stays its own tested pure helper. See
- * .superpowers/sdd/display/task-8-report.md for the full write-up.
+ * `next-later` bucket is — so this stays its own tested pure helper. The
+ * live-gating constraint on the board necessitates this separate logic.
  */
 
 export type CourtLane = 'now' | 'next' | 'later';

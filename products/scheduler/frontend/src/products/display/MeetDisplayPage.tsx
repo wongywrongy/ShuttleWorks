@@ -68,11 +68,6 @@ export function MeetDisplayPage() {
   // resolve to a real view — falling through to 'courts' rather than a
   // dead `view` value that matches neither render branch and would leave
   // the content area blank on an unattended venue TV.
-  // Whitelist, not a blind cast: a stale bookmarked/QR'd URL from before
-  // task 9 (`?view=standings` was a real, documented param) must still
-  // resolve to a real view — falling through to 'courts' rather than a
-  // dead `view` value that matches neither render branch and would leave
-  // the content area blank on an unattended venue TV.
   const viewParam = searchParams.get('view');
   const [view, setView] = useState<ViewMode>(viewParam === 'schedule' ? 'schedule' : 'courts');
   const [now, setNow] = useState<Date>(() => new Date());

@@ -13,8 +13,8 @@
  * here is strictly LIVE-gated (only ids the caller names in `nowState`),
  * never positional. That divergence (a different essential input — live
  * status — and a different `now` rule, not just a coarser vocabulary) is
- * why this is its own tested helper rather than a shared extraction; see
- * task-8-report.md for the full write-up.
+ * why this is its own tested helper rather than a shared extraction — the
+ * live-gating constraint on the board is the decisive difference.
  */
 import { describe, expect, it } from 'vitest';
 import { assignLanes, type LaneItem } from '../courtLanes';
