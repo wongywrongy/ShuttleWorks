@@ -31,6 +31,20 @@ function statusTone(status: WorkspaceIdentity['status']) {
   return 'done' as const;
 }
 
+/** The badge the shell actually shows. The derived lifecycle phase (real play
+ *  state) beats the operator-managed status once the day is under way — a
+ *  43%-played or finished tournament must never read "draft". Archived stays
+ *  archived (an explicit operator decision outranks derivation). */
+function shellBadge(
+  identity: WorkspaceIdentity,
+): { text: string; tone: 'green' | 'idle' | 'done' | 'amber' } | null {
+  if (identity.status === 'archived') return { text: 'archived', tone: 'idle' };
+  if (identity.phase === 'live') return { text: 'Live', tone: 'green' };
+  if (identity.phase === 'complete') return { text: 'Complete', tone: 'done' };
+  if (identity.status) return { text: identity.status, tone: statusTone(identity.status) };
+  return null;
+}
+
 /** Back-to-Hub control + workspace name · date · status badge. */
 export function WorkspaceIdentityBar({ identity, onBackToHub }: WorkspaceIdentityBarProps) {
   return (
@@ -57,9 +71,10 @@ export function WorkspaceIdentityBar({ identity, onBackToHub }: WorkspaceIdentit
             {formatWorkspaceDate(identity.date)}
           </span>
         ) : null}
-        {identity.status ? (
-          <StatusPill tone={statusTone(identity.status)}>{identity.status}</StatusPill>
-        ) : null}
+        {(() => {
+          const badge = shellBadge(identity);
+          return badge ? <StatusPill tone={badge.tone}>{badge.text}</StatusPill> : null;
+        })()}
       </div>
     </div>
   );

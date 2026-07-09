@@ -210,6 +210,9 @@ def _counts_for(
     bmatches = repo.brackets.count_matches_by_tournament(ids)
     bresults = repo.brackets.count_results_by_tournament(ids)
     mstates = repo.match_states.count_by_tournament(ids)
+    # {tid: {match_id: status}} for matches that left ``scheduled`` — the
+    # lifecycle-phase + live-aware-nextUp input (7th grouped query).
+    mstatuses = repo.matches.statuses_by_tournament(ids)
     return {
         tid: RowCounts(
             members=members.get(tid, 0),
@@ -218,6 +221,7 @@ def _counts_for(
             bracket_matches=bmatches.get(tid, 0),
             bracket_results=bresults.get(tid, 0),
             match_states=mstates.get(tid, 0),
+            match_status_by_id=mstatuses.get(tid, {}),
         )
         for tid in ids
     }

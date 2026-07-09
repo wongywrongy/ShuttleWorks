@@ -8,6 +8,7 @@ describe('useWorkspaceIdentity', () => {
   beforeEach(() => {
     useUiStore.getState().setActiveTournamentKind(null);
     useUiStore.getState().setActiveTournamentStatus(null);
+    useUiStore.getState().setActiveTournamentPhase(null);
     useTournamentStore.setState({ config: null } as never);
   });
 
@@ -17,12 +18,14 @@ describe('useWorkspaceIdentity', () => {
     } as never);
     useUiStore.getState().setActiveTournamentKind('meet');
     useUiStore.getState().setActiveTournamentStatus('active');
+    useUiStore.getState().setActiveTournamentPhase('live');
 
     const { result } = renderHook(() => useWorkspaceIdentity());
     expect(result.current).toEqual({
       name: 'Spring Finals',
       date: '2026-04-01',
       status: 'active',
+      phase: 'live',
       kind: 'meet',
     });
   });
@@ -33,6 +36,7 @@ describe('useWorkspaceIdentity', () => {
       name: null,
       date: null,
       status: null,
+      phase: null,
       kind: null,
     });
   });

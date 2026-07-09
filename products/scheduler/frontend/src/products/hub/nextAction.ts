@@ -32,6 +32,12 @@ export interface RowAction {
 }
 
 export function rowActionFor(t: TournamentSummaryDTO, group: HubGroupId): RowAction {
+  // The derived lifecycle phase beats the date heuristics: a tournament that
+  // is mid-play or fully resolved must never be told to "Set date" — the
+  // useful action is watching/reviewing it, dated or not.
+  const phase = t.signals?.phase;
+  if (phase === 'live') return { label: 'Open live day', kind: 'open' };
+  if (phase === 'complete') return { label: 'View results', kind: 'results' };
   if (group === 'undated') return { label: 'Set date', kind: 'set-date' };
   if (group === 'past') return { label: 'View results', kind: 'results' };
   const next = nextActionFor(t);

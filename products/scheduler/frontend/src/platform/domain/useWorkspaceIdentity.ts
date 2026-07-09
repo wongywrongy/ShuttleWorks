@@ -9,6 +9,7 @@ export function useWorkspaceIdentity(): WorkspaceIdentity {
   const name = useTournamentStore((s) => s.config?.tournamentName ?? null);
   const date = useTournamentStore((s) => s.config?.tournamentDate ?? null);
   const status = useUiStore((s) => s.activeTournamentStatus);
+  const phase = useUiStore((s) => s.activeTournamentPhase);
   const kind = useUiStore((s) => s.activeTournamentKind);
-  return { name, date, status, kind };
+  return { name, date, status, phase, kind };
 }

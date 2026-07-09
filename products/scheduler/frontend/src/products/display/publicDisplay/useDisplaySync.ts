@@ -17,7 +17,7 @@
  *                board itself never renders it (see LiveStatusPill).
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../../api/client';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { deriveFreshness, type FreshnessState } from './freshness';
@@ -34,7 +34,11 @@ export interface UseDisplaySyncResult {
 
 export function useDisplaySync(now: Date): UseDisplaySyncResult {
   const [searchParams] = useSearchParams();
-  const tid = searchParams.get('id');
+  const params = useParams<{ id: string }>();
+  // Standalone /display route: ?id=<tid>. In-workspace Preview: the route
+  // param. Without the fallback the preview had no tid, never synced, and
+  // sat on a permanent "Delayed" pill inside a perfectly healthy workspace.
+  const tid = searchParams.get('id') ?? params.id ?? null;
   const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 

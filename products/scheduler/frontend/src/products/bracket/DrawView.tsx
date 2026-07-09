@@ -890,14 +890,26 @@ function BracketCell({
   const setsMode = scoringFormat === "badminton";
   const [scoring, setScoring] = useState(false);
   // Winner-perspective set score ("21-18 21-15"); "w/o" for a walkover.
+  // The score blob is opaque server-side (RecordResultIn.score: dict), so a
+  // non-frontend writer (import, sync restore, API client) can hand us any
+  // shape — guard every level and fall back to winner-only rather than
+  // rendering "undefined-undefined" or throwing on `.map` of a non-array.
+  const validSets = Array.isArray(result?.score?.sets)
+    ? result.score.sets.filter(
+        (s): s is BracketSetScore =>
+          !!s && typeof s.sideA === "number" && typeof s.sideB === "number",
+      )
+    : [];
   const score = result
     ? result.walkover
       ? "w/o"
-      : result.score?.sets
-          .map((s) =>
-            winner === "A" ? `${s.sideA}-${s.sideB}` : `${s.sideB}-${s.sideA}`,
-          )
-          .join(" ")
+      : validSets.length > 0
+        ? validSets
+            .map((s) =>
+              winner === "A" ? `${s.sideA}-${s.sideB}` : `${s.sideB}-${s.sideA}`,
+            )
+            .join(" ")
+        : undefined
     : undefined;
 
   return (

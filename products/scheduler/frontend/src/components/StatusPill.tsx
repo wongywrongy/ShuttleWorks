@@ -16,7 +16,7 @@
  */
 import type { ReactNode } from 'react';
 
-type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber';
+type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber' | 'idle' | 'done';
 
 const TONE_BG: Record<PillTone, string> = {
   green:  'bg-status-live-bg text-status-live border border-status-live/40',
@@ -24,6 +24,10 @@ const TONE_BG: Record<PillTone, string> = {
   red:    'bg-status-blocked-bg text-status-blocked border border-status-blocked/40',
   blue:   'bg-status-started-bg text-status-started border border-status-started/40',
   amber:  'bg-status-called-bg text-status-called border border-status-called/40',
+  // Muted pair (parity with the design-system StatusPill): idle = parked,
+  // done = neutral grey terminal state ("Complete").
+  idle:   'bg-status-idle-bg text-status-idle border border-status-idle/40',
+  done:   'bg-status-done-bg text-muted-foreground border border-status-done/30',
 };
 
 const TONE_DOT: Record<PillTone, string> = {
@@ -32,6 +36,8 @@ const TONE_DOT: Record<PillTone, string> = {
   red:    'bg-status-blocked',
   blue:   'bg-status-started',
   amber:  'bg-status-called',
+  idle:   'bg-status-idle',
+  done:   'bg-status-done',
 };
 
 /* Pulsing dots glow in their own hue — the handoff pill's live-signal
@@ -42,6 +48,8 @@ const TONE_GLOW: Record<PillTone, string> = {
   red:    'shadow-[0_0_8px_hsl(var(--status-blocked)/0.6)]',
   blue:   'shadow-[0_0_8px_hsl(var(--status-started)/0.6)]',
   amber:  'shadow-[0_0_8px_hsl(var(--status-called)/0.6)]',
+  idle:   'shadow-[0_0_8px_hsl(var(--status-idle)/0.6)]',
+  done:   'shadow-[0_0_8px_hsl(var(--status-done)/0.6)]',
 };
 
 interface Props {

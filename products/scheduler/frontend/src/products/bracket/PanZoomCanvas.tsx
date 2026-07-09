@@ -62,8 +62,13 @@ export function PanZoomCanvas({
     viewportRef.current?.setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!drag.current) return;
-    setT((prev) => ({ ...prev, x: e.clientX - drag.current!.ox, y: e.clientY - drag.current!.oy }));
+    // Snapshot the drag origin NOW — the setT updater runs later (React may
+    // defer it), and a fast release can null `drag.current` in between; the
+    // old `drag.current!.ox` inside the updater then crashed on null.
+    const d = drag.current;
+    if (!d) return;
+    const { clientX, clientY } = e;
+    setT((prev) => ({ ...prev, x: clientX - d.ox, y: clientY - d.oy }));
   };
   const endDrag = () => {
     drag.current = null;

@@ -179,7 +179,18 @@ export function BracketDrawsTab() {
                       {disciplineLabel(ev.discipline)}
                     </span>
                     <span className="ml-auto flex-shrink-0">
-                      <StatusPillFor status={status} />
+                      <StatusPillFor
+                        status={status}
+                        completed={
+                          !!counts &&
+                          counts.done > 0 &&
+                          roundComplete &&
+                          // Swiss: complete only once all K rounds exist —
+                          // an inter-round lull is not "Completed".
+                          (!isSwiss ||
+                            (swissRounds !== undefined && ev.rounds.length >= swissRounds))
+                        }
+                      />
                     </span>
                   </div>
 
@@ -405,7 +416,13 @@ function drawCountsByEvent(data: BracketTournamentDTO): Map<string, DrawCounts> 
   return byEvent;
 }
 
-function StatusPillFor({ status }: { status: BracketEventStatus }) {
+function StatusPillFor({
+  status,
+  completed = false,
+}: {
+  status: BracketEventStatus;
+  completed?: boolean;
+}) {
   if (status === 'draft') {
     return (
       <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -415,6 +432,13 @@ function StatusPillFor({ status }: { status: BracketEventStatus }) {
   }
   if (status === 'generated') {
     return <StatusPill tone="amber" dot>Generated</StatusPill>;
+  }
+  // A fully-resolved draw is DONE — the backend event status stays 'started'
+  // (it has no terminal value), so completion is derived from the counters:
+  // every unit resolved, nothing live/ready/pending. Without this the card
+  // pulsed "Started" forever on a finished bracket.
+  if (completed) {
+    return <StatusPill tone="done">Completed</StatusPill>;
   }
   // Started = live (matches are being played) — the pulsing dot + own-hue
   // glow is the handoff pill's live-signal treatment (sw-pulse).

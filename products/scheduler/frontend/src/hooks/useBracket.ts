@@ -133,11 +133,22 @@ async function runFetch(e: PollEntry): Promise<void> {
       ensureInterval(e);
     }
   } catch (err) {
-    // Real network / auth failure (the shared axios interceptor already
-    // toasted, deduped). Keep the loop running so it self-heals once the
-    // backend recovers — a transient error must not strand live updates.
-    e.error = err instanceof Error ? err.message : String(err);
-    ensureInterval(e);
+    const status = (err as { status?: number }).status;
+    if (status === 403 || status === 404 || status === 410) {
+      // Terminal: the tournament was deleted or our access was revoked —
+      // retrying every 2.5s can never succeed and just storms the console
+      // with 403s. Pause the loop and surface a human answer; a manual
+      // `refresh` re-checks if the operator believes otherwise.
+      e.error =
+        'This workspace is no longer available — it may have been deleted or your access removed.';
+      pause(e);
+    } else {
+      // Real network / server failure (the shared axios interceptor already
+      // toasted, deduped). Keep the loop running so it self-heals once the
+      // backend recovers — a transient error must not strand live updates.
+      e.error = err instanceof Error ? err.message : String(err);
+      ensureInterval(e);
+    }
   } finally {
     e.loading = false;
     e.inFlight = false;

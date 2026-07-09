@@ -22,6 +22,7 @@ import { useUiStore } from '../../store/uiStore';
 import { useSmoothedAssignments } from '../../hooks/useSmoothedAssignments';
 import { useTrafficLights } from '../../hooks/useTrafficLights';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
+import { useMatchStateSync } from '../../hooks/useMatchStateSync';
 import { ScheduleActions } from './schedule/ScheduleActions';
 import { DragGantt } from './schedule/DragGantt';
 import { LiveTimelineGrid } from './schedule/live/LiveTimelineGrid';
@@ -43,6 +44,10 @@ export function SchedulePage() {
   const matches = useTournamentStore((state) => state.matches);
   const groups = useTournamentStore((state) => state.groups);
   const matchStates = useMatchStateStore((state) => state.matchStates);
+  // Keep live match state converged on the PLAN surface too — the live-day
+  // Generate guard below reads it, and without a loader the store is empty
+  // after a reload (same root cause the Run surface hit on 2026-07-02).
+  useMatchStateSync(tid);
   const scheduleStats = useUiStore((state) => state.scheduleStats);
   const addSolverLog = useUiStore((state) => state.addSolverLog);
   const {
@@ -77,6 +82,13 @@ export function SchedulePage() {
 
   const currentSlot = useCurrentSlot();
   const isOptimizing = loading;
+
+  // The day is LIVE once any match has left `scheduled` (called / started /
+  // finished). Re-solving then is a destructive act — the guard below makes
+  // the Generate confirm say so instead of inviting a casual re-plan.
+  const liveDay = Object.values(matchStates).some(
+    (ms) => ms.status && ms.status !== 'scheduled',
+  );
 
   // Two-click inline guard replaces the old window.confirm(): first
   // click flips the button into "Confirm replace" state for 4s, second
@@ -264,6 +276,7 @@ export function SchedulePage() {
                 generating={isOptimizing}
                 hasSchedule={!!schedule}
                 confirmingReplace={confirmingReplace}
+                liveDay={liveDay}
               />
             </ActionsBar>
 
@@ -362,6 +375,7 @@ export function SchedulePage() {
             generating={isOptimizing}
             hasSchedule={!!schedule}
             confirmingReplace={confirmingReplace}
+            liveDay={liveDay}
           />
           {!needsConfig && matches.length === 0 ? (
             <p className="text-xs text-muted-foreground">

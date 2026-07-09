@@ -607,8 +607,12 @@ export interface WorkspaceSignalsDTO {
   collaboration: CollaborationDTO;
   /** Per-workspace match metrics (redesign). Optional for older payloads. */
   matches?: MatchMetricsDTO;
-  /** Next ≤3 scheduled matches (redesign). Optional / empty when none. */
+  /** Next ≤3 upcoming matches (finished/on-court ones are filtered
+   *  server-side since the 2026-07-09 audit). Optional / empty when none. */
   nextUp?: NextMatchDTO[];
+  /** Lifecycle phase derived from real play state (2026-07-09 audit):
+   *  setup → ready → live → complete. Optional for older payloads. */
+  phase?: 'setup' | 'ready' | 'live' | 'complete';
 }
 
 export interface TournamentSummaryDTO {

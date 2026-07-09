@@ -106,8 +106,11 @@ export function MatchesTable({
   const getMatchLabel = (matchId: string): string => {
     const match = matchMap.get(matchId);
     if (!match) return matchId.slice(0, 6);
-    if (match.matchNumber) return `M${match.matchNumber}`;
+    // eventRank first — it is THE match name everywhere else (board chips,
+    // Run queue, advisories). Showing "M2" here while the chip above says
+    // "MS2" forced operators to join two naming dialects for one match.
     if (match.eventRank) return match.eventRank;
+    if (match.matchNumber) return `M${match.matchNumber}`;
     return matchId.slice(0, 6);
   };
 

@@ -53,9 +53,11 @@ export function InProgressCard({
     }
   };
 
+  // != null (not !== undefined): the DTO serializes these as explicit
+  // ``null`` on every row, so the undefined-check branded EVERY in-progress
+  // match "(moved)" once its match-state row existed.
   const wasMoved =
-    matchState?.originalSlotId !== undefined ||
-    matchState?.originalCourtId !== undefined;
+    matchState?.originalSlotId != null || matchState?.originalCourtId != null;
 
   return (
     <div

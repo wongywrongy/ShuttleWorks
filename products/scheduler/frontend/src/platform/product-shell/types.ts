@@ -27,5 +27,9 @@ export interface WorkspaceIdentity {
   name: string | null;
   date: string | null; // ISO date string
   status: 'draft' | 'active' | 'archived' | null;
+  /** Derived lifecycle phase (signals.phase) — real play state. When it says
+   *  live/complete the shell badge prefers it over the operator-managed
+   *  `status`, so a mid-day tournament never reads "draft". */
+  phase?: 'setup' | 'ready' | 'live' | 'complete' | null;
   kind: 'meet' | 'bracket' | null;
 }

@@ -457,7 +457,10 @@ export function MatchControlCenterPage() {
           {/* Operator header strip — eyebrow + stats + actions, single
               baseline. Same vocabulary as Matches/Roster/Setup. */}
           <ActionsBar
-            title="Live"
+            // The sidebar nav calls this surface "Run" — the page eyebrow
+            // must say the same word or operators wonder if they landed on
+            // a different page (nav "Run" → header "Live" read as a miss).
+            title="Run"
             status={
               <>
                 {/* Engine-provenance chip — single-engine source is a

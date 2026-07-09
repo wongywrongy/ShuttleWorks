@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUiStore, type SolverPhase } from '../store/uiStore';
+import { useTournamentStore } from '../store/tournamentStore';
 import { useSchedule } from '../hooks/useSchedule';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 
@@ -44,6 +45,10 @@ export function SolverHud() {
   const hud = useUiStore((s) => s.solverHud);
   const isGenerating = useUiStore((s) => s.isGenerating);
   const activeTab = useUiStore((s) => s.activeTab);
+  // Persisted schedule, not scheduleStats — stats live only for the solver
+  // session, so after a reload they're null while a schedule very much
+  // exists (and may be mid-play).
+  const hasSchedule = useTournamentStore((s) => s.schedule != null);
 
   // Track whether a final "complete" sheen should play this render.
   const [celebrate, setCelebrate] = useState(false);
@@ -86,7 +91,11 @@ export function SolverHud() {
       <footer className="sticky bottom-0 z-hud flex items-center justify-between border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-border" aria-hidden />
-          Solver idle — click Generate to begin.
+          {/* With a schedule in place, "click Generate to begin" read as an
+              invitation to re-solve a possibly-live day — name the stakes. */}
+          {hasSchedule
+            ? 'Solver idle — schedule in place. Generate replaces it.'
+            : 'Solver idle — click Generate to begin.'}
         </span>
       </footer>
     );

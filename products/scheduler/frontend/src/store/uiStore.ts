@@ -149,6 +149,15 @@ interface UiState {
     status: 'draft' | 'active' | 'archived' | null,
   ) => void;
 
+  // Active tournament's derived lifecycle phase (setup → ready → live →
+  // complete) from ``signals.phase`` — real play state, unlike the
+  // operator-managed ``status`` above. The Workspace Shell prefers this
+  // for its badge so a mid-day/finished tournament never reads "draft".
+  activeTournamentPhase: 'setup' | 'ready' | 'live' | 'complete' | null;
+  setActiveTournamentPhase: (
+    phase: 'setup' | 'ready' | 'live' | 'complete' | null,
+  ) => void;
+
   // Whether the active bracket-kind tournament has a generated draw.
   // Written by ``BracketTab`` from ``useBracket().data``; ``null`` when
   // no bracket surface is mounted (meet kind / dashboard). ``TabBar``
@@ -235,6 +244,7 @@ const INITIAL: Pick<
   | 'activeTournamentId'
   | 'activeTournamentKind'
   | 'activeTournamentStatus'
+  | 'activeTournamentPhase'
   | 'bracketDataReady'
   | 'solverHud'
   | 'pendingPin'
@@ -260,6 +270,7 @@ const INITIAL: Pick<
   activeTournamentId: null,
   activeTournamentKind: null,
   activeTournamentStatus: null,
+  activeTournamentPhase: null,
   bracketDataReady: null,
   solverHud: DEFAULT_SOLVER_HUD,
   pendingPin: null,
@@ -289,6 +300,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
   setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
   setActiveTournamentStatus: (activeTournamentStatus) => set({ activeTournamentStatus }),
+  setActiveTournamentPhase: (activeTournamentPhase) => set({ activeTournamentPhase }),
   setBracketDataReady: (bracketDataReady) => set({ bracketDataReady }),
 
   setSolverHud: (patch) =>

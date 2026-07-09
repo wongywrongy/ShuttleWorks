@@ -21,6 +21,10 @@ interface ScheduleActionsProps {
   hasSchedule: boolean;
   /** When true, the Generate button enters a "are-you-sure?" inline state. */
   confirmingReplace?: boolean;
+  /** The day is under way (matches called/started/finished). The confirm
+   *  copy names the stakes and a caution chip sits beside the button —
+   *  re-solving a live day moves the remaining matches. */
+  liveDay?: boolean;
 }
 
 export function ScheduleActions({
@@ -28,10 +32,20 @@ export function ScheduleActions({
   generating,
   hasSchedule,
   confirmingReplace = false,
+  liveDay = false,
 }: ScheduleActionsProps) {
   const confirming = hasSchedule && confirmingReplace && !generating;
   return (
     <div className="flex items-center gap-2">
+      {liveDay && hasSchedule && !generating && (
+        <span
+          data-testid="schedule-live-guard"
+          className="hidden items-center gap-1 text-2xs font-medium text-status-warning sm:flex"
+          title="Matches have already been played or are on court. Re-solving replaces the plan for everything not yet finished."
+        >
+          Day is live
+        </span>
+      )}
       <Button
         type="button"
         size="xs"
@@ -46,7 +60,9 @@ export function ScheduleActions({
         {generating
           ? 'Generating…'
           : confirming
-            ? 'Click again to replace'
+            ? liveDay
+              ? 'Replace LIVE schedule?'
+              : 'Click again to replace'
             : 'Generate'}
       </Button>
     </div>

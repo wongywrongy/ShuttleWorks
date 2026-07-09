@@ -87,17 +87,6 @@ export function GanttChart({
   const [animatedIds, setAnimatedIds] = useState<Set<string>>(new Set());
   const prevStatesRef = useRef<Record<string, string>>({});
 
-  const { minSlot, maxSlot } = useMemo(() => {
-    if (schedule.assignments.length === 0) return { minSlot: 0, maxSlot: Math.min(12, totalSlots) };
-    const slots = schedule.assignments.map((a) => a.slotId);
-    const endSlots = schedule.assignments.map((a) => a.slotId + a.durationSlots);
-    return {
-      minSlot: Math.max(0, Math.min(...slots) - 1),
-      maxSlot: Math.min(totalSlots, Math.max(...endSlots) + 1),
-    };
-  }, [schedule.assignments, totalSlots]);
-  const slotCount = maxSlot - minSlot;
-
   const courts = useMemo(
     () => Array.from({ length: config.courtCount }, (_, i) => i + 1),
     [config.courtCount],
@@ -133,6 +122,33 @@ export function GanttChart({
     );
     return byCourt;
   }, [schedule.assignments, config, matchStates]);
+
+  // Axis extent covers BOTH the planned slots and the live render slots.
+  // Render slots come from wall-clock actual start/end times (getRenderSlot),
+  // so a match played later than planned used to land PAST maxSlot and paint
+  // in unlabeled space right of the grid; the axis must follow reality.
+  const { minSlot, maxSlot } = useMemo(() => {
+    if (schedule.assignments.length === 0) return { minSlot: 0, maxSlot: Math.min(12, totalSlots) };
+    const starts: number[] = [];
+    const ends: number[] = [];
+    for (const a of schedule.assignments) {
+      starts.push(a.slotId);
+      ends.push(a.slotId + a.durationSlots);
+    }
+    courtRows.forEach((rows) => {
+      for (const { renderSlotId, renderSpan } of rows) {
+        starts.push(renderSlotId);
+        ends.push(renderSlotId + renderSpan);
+      }
+    });
+    return {
+      minSlot: Math.max(0, Math.min(...starts) - 1),
+      // Planned range stays clamped to the configured day; the live range may
+      // legitimately run past it (a day that started late) and wins the max.
+      maxSlot: Math.max(Math.min(totalSlots, Math.max(...ends) + 1), Math.max(...ends)),
+    };
+  }, [schedule.assignments, courtRows, totalSlots]);
+  const slotCount = maxSlot - minSlot;
 
   // Horizontal sub-lane packing. Each block's laneCount = max
   // concurrent blocks on its court during its lifetime; lane = lowest

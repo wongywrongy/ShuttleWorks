@@ -110,15 +110,26 @@ export function useSmoothedAssignments(
     }
   }, [isGenerating, enabled]);
 
-  // If not generating and queue is empty, sync with raw (handles reloads)
+  // Hydration sync: when the schedule arrives AFTER mount (direct URL load —
+  // the store hydrates asynchronously), the queue effect above fills the
+  // queue but the release effect's deps haven't changed, so no interval ever
+  // starts and the board deadlocks empty. Nothing displayed + not generating
+  // → show everything at once (there is no animation to preserve on a page
+  // load). Clearing the queue here also stops the post-generation flush from
+  // re-appending duplicates of what we just synced.
   useEffect(() => {
+    if (!isGenerating && smoothedAssignments.length === 0 && rawAssignments.length > 0) {
+      queueRef.current = [];
+      rawAssignments.forEach(a => displayedIdsRef.current.add(a.matchId));
+      setSmoothedAssignments(rawAssignments);
+      return;
+    }
+    // Steady-state drift repair (the original reload heal): queue drained but
+    // the displayed list is missing entries the raw list has.
     if (!isGenerating && queueRef.current.length === 0 && rawAssignments.length > 0) {
-      // Check if we're out of sync
       if (smoothedAssignments.length !== rawAssignments.length) {
-        // Sync directly
         const smoothedIds = new Set(smoothedAssignments.map(a => a.matchId));
         const missing = rawAssignments.filter(a => !smoothedIds.has(a.matchId));
-
         if (missing.length > 0) {
           missing.forEach(a => displayedIdsRef.current.add(a.matchId));
           setSmoothedAssignments(rawAssignments);

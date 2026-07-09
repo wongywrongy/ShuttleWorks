@@ -86,15 +86,24 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const todayKey = new Date().toISOString().slice(0, 10);
   const action = rowActionFor(tournament, temporalGroupOf(tournament, todayKey));
 
-  // Header status pill (only meaningful with signals): "Ready" when the setup
-  // checklist is complete AND nothing needs attention, else "Needs setup".
-  // Keyed off readiness + attention — NOT the lifecycle `health` (a fully
-  // set-up workspace can still be status:'draft', which `health` reports as
-  // 'draft' and would mislabel a ready event as "Needs setup"). Requiring zero
-  // open to-dos also keeps the pill from reading "Ready" while the TO DO list
-  // right below it shows an outstanding item.
+  // Header status pill (only meaningful with signals): the derived lifecycle
+  // phase wins once the day is under way — "Live" while matches run,
+  // "Complete" when every match is resolved. Before that: "Ready" when the
+  // setup checklist is complete AND nothing needs attention, else "Needs
+  // setup". Keyed off readiness + attention — NOT the lifecycle `health` (a
+  // fully set-up workspace can still be status:'draft', which `health`
+  // reports as 'draft' and would mislabel a ready event as "Needs setup").
   const ready = !!readiness && readiness.ready === readiness.total;
   const pillReady = ready && todos.length === 0;
+  const phase = tournament.signals?.phase;
+  const pill =
+    phase === 'live'
+      ? { text: 'Live', tone: 'green' as const }
+      : phase === 'complete'
+        ? { text: 'Complete', tone: 'done' as const }
+        : pillReady
+          ? { text: 'Ready', tone: 'green' as const }
+          : { text: 'Needs setup', tone: 'amber' as const };
   const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
 
   return (
@@ -112,8 +121,8 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
             </p>
           </div>
           {tournament.signals ? (
-            <StatusPill tone={pillReady ? 'green' : 'amber'} dot className="shrink-0">
-              {pillReady ? 'Ready' : 'Needs setup'}
+            <StatusPill tone={pill.tone} dot className="shrink-0">
+              {pill.text}
             </StatusPill>
           ) : null}
         </div>

@@ -22,12 +22,16 @@ export function useTournamentKind(tournamentId: string | null): void {
   const setActiveTournamentStatus = useUiStore(
     (s) => s.setActiveTournamentStatus,
   );
+  const setActiveTournamentPhase = useUiStore(
+    (s) => s.setActiveTournamentPhase,
+  );
 
   useEffect(() => {
     let cancelled = false;
     if (!tournamentId) {
       setActiveTournamentKind(null);
       setActiveTournamentStatus(null);
+      setActiveTournamentPhase(null);
       return () => {
         cancelled = true;
       };
@@ -38,14 +42,21 @@ export function useTournamentKind(tournamentId: string | null): void {
         if (cancelled) return;
         setActiveTournamentKind(row.kind);
         setActiveTournamentStatus(row.status ?? null);
+        setActiveTournamentPhase(row.signals?.phase ?? null);
       })
       .catch(() => {
         if (cancelled) return;
         setActiveTournamentKind(null);
         setActiveTournamentStatus(null);
+        setActiveTournamentPhase(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [tournamentId, setActiveTournamentKind, setActiveTournamentStatus]);
+  }, [
+    tournamentId,
+    setActiveTournamentKind,
+    setActiveTournamentStatus,
+    setActiveTournamentPhase,
+  ]);
 }

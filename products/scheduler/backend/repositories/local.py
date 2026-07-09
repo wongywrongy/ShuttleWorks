@@ -255,6 +255,26 @@ class _LocalMatchRepo:
             )
         )
 
+    def statuses_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, str]]:
+        """``{tournament_id: {match_id: status}}`` for every match row NOT in
+        the default ``scheduled`` state — one grouped query. Feeds the
+        workspace-signal lifecycle derivation (live / complete) without a
+        per-row lookup (same batching contract as ``count_by_tournament``)."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(Match.tournament_id, Match.id, Match.status).where(
+                Match.tournament_id.in_(tournament_ids),
+                Match.status != MatchStatus.SCHEDULED.value,
+            )
+        ).all()
+        out: dict[uuid.UUID, dict[str, str]] = {}
+        for tid, mid, status in rows:
+            out.setdefault(tid, {})[mid] = status
+        return out
+
     def get_by_statuses(
         self,
         tournament_id: uuid.UUID,
