@@ -176,11 +176,11 @@ def play_out_bracket(ctx: RunContext, phase_cb, events: list[dict]) -> None:
             # Nothing playable or schedulable: try appending the next Swiss
             # round. A 409 is the route's documented "cannot advance" answer
             # (all K rounds generated / round incomplete / non-progressive).
-            progressed = any(
-                client.swiss_next_round(ctx.tid, eid).status_code == 200
-                for eid in swiss_ids
-            )
-            if not progressed:
+            # List comprehension, NOT a bare any() generator — any() would
+            # short-circuit and starve later Swiss events of their call.
+            outcomes = [client.swiss_next_round(ctx.tid, eid).status_code == 200
+                        for eid in swiss_ids]
+            if not any(outcomes):
                 break
         else:
             from ..invariants import Violation

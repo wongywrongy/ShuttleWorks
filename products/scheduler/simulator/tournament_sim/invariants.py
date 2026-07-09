@@ -12,8 +12,14 @@ from dataclasses import dataclass
 from .client import SimClient
 from .context import RunContext
 
-#: formats whose end state is "exactly one champion decided by a final"
-KNOCKOUT_FORMATS = {"se", "de", "monrad", "compass"}
+#: formats whose end state is "exactly one champion decided by a final".
+#: ONLY se/de: se units carry segment=None and de carries W/L/GF. monrad
+#: (M/PLATE/P{lo}_{hi}) and compass (E/W/N/S/NE/NW/SE/SW) decide EVERY
+#: position via their own segment finals — structurally "all units must
+#: resolve", same as rr/swiss, so they take that branch instead. (Review
+#: finding: with them in this set the champion check was vacuous for
+#: monrad and validated compass's West consolation instead of East.)
+KNOCKOUT_FORMATS = {"se", "de"}
 
 
 @dataclass
@@ -154,8 +160,14 @@ def check_meet_final(client: SimClient, ctx: RunContext) -> list[Violation]:
 
 
 def check_bracket_wave(dto: dict, scheduled_ids: list[str]) -> list[Violation]:
-    """After a schedule-next wave: assignments exist and don't overlap."""
+    """After a schedule-next wave: assignments exist and don't overlap.
+
+    Overlap counts only when at least one side of the pair belongs to the
+    CURRENT wave — finished assignments from earlier waves are history and
+    two of them sharing a slot window is not this wave's defect.
+    """
     v: list[Violation] = []
+    current = set(scheduled_ids)
     assigned = {a["play_unit_id"]: a for a in dto.get("assignments") or []}
     for pu in scheduled_ids:
         if pu not in assigned:
@@ -168,8 +180,7 @@ def check_bracket_wave(dto: dict, scheduled_ids: list[str]) -> list[Violation]:
     for court, windows in court_windows.items():
         windows.sort()
         for (s1, e1, m1), (s2, e2, m2) in zip(windows, windows[1:]):
-            if s2 < e1:
-                # done matches can share history slots; only flag unfinished pairs
+            if s2 < e1 and (m1 in current or m2 in current):
                 v.append(Violation("bracket-wave", "court-overlap",
                                    f"court {court}: {m1} [{s1},{e1}) vs {m2} [{s2},{e2})"))
     return v
@@ -207,7 +218,7 @@ def check_bracket_final(client: SimClient, ctx: RunContext, fmt: str, event_id: 
             if final_unit["id"] not in results:
                 v.append(Violation("bracket-final", "no-champion",
                                    f"{event_id}: final unit {final_unit['id']} unresolved"))
-    else:  # rr / swiss: every generated unit must be resolved
+    else:  # rr / swiss / monrad / compass: every generated unit must resolve
         if unresolved:
             v.append(Violation("bracket-final", "unresolved-units",
                                f"{event_id}: {len(unresolved)} unresolved: {unresolved[:5]}"))

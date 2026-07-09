@@ -74,9 +74,15 @@ class ScenarioRunner:
         try:
             client.health()
             self.scenario.run(ctx, phase_cb=lambda name, secs: report.phases.append(PhaseTiming(name, secs)))
-        except Exception as exc:  # a crash is itself a finding, not a stack dump
+        except Exception as exc:  # a crash is itself a finding — but keep the
+            # innermost frame so a sim bug is distinguishable from a backend one
+            import os
+            import traceback
             from .invariants import Violation
-            ctx.violations.append(Violation("run", "exception", f"{type(exc).__name__}: {exc}"))
+            frame = traceback.extract_tb(exc.__traceback__)[-1] if exc.__traceback__ else None
+            where = f" at {os.path.basename(frame.filename)}:{frame.lineno}" if frame else ""
+            ctx.violations.append(Violation("run", "exception",
+                                            f"{type(exc).__name__}: {exc}{where}"))
         finally:
             report.wall_seconds = time.perf_counter() - start
             report.tid = ctx.tid

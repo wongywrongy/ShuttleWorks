@@ -63,5 +63,14 @@ class WinnerModel:
         return {"sideA": a, "sideB": b}
 
     def bracket_score(self, match_id: str, winner: Side) -> dict:
-        """Opaque set-by-set score blob for bracket ``record_result``."""
-        return {"sets": self.sets(match_id, winner)}
+        """Set-by-set score blob for bracket ``record_result``.
+
+        The backend stores this opaquely, but the FRONTEND's contract is
+        ``{sets: [{sideA, sideB}, ...]}`` (BracketSetScore — see
+        DrawView.tsx / BracketScoreEntry.tsx). Any other shape renders as
+        "undefined-undefined" on the draw board, so the sim must speak the
+        app's real dialect.
+        """
+        return {
+            "sets": [{"sideA": a, "sideB": b} for a, b in self.sets(match_id, winner)]
+        }
