@@ -2,6 +2,7 @@
         scheduler scheduler-dev scheduler-rebuild \
         stop logs ps clean \
         test test-e2e check \
+        sim sim-ephemeral sim-all sim-test \
         engine-readme
 
 # Default target — list everything.
@@ -21,6 +22,12 @@ help:
 	@echo "  make test               Run scheduler pytest suite"
 	@echo "  make test-e2e           Run scheduler Playwright e2e (boots stack)"
 	@echo "  make check              Run all local checks (lint, vitest, depcruise, ruff, pytest)"
+	@echo ""
+	@echo "Tournament simulator (internal dev tool, not in CI):"
+	@echo "  make sim                Run a scenario vs a running backend (SCENARIO=, SEED=, SIM_URL=)"
+	@echo "  make sim-ephemeral      Same, against an isolated throwaway backend"
+	@echo "  make sim-all            Every scenario + all bracket formats (ephemeral)"
+	@echo "  make sim-test           Simulator's own pytest (boundary guard + smoke)"
 	@echo ""
 	@echo "Misc:"
 	@echo "  make clean              Down + remove images / volumes"
@@ -57,6 +64,20 @@ test:
 
 test-e2e:
 	$(MAKE) -C products/scheduler test-e2e
+
+# === Tournament simulator (internal dev tool) ===
+
+sim:
+	$(MAKE) -C products/scheduler sim
+
+sim-ephemeral:
+	$(MAKE) -C products/scheduler sim-ephemeral
+
+sim-all:
+	$(MAKE) -C products/scheduler sim-all
+
+sim-test:
+	$(MAKE) -C products/scheduler sim-test
 
 # === Cleanup ===
 
