@@ -349,7 +349,7 @@ function GanttChartImpl({
             slotClosed
               ? 'bg-muted/50'
               : slotId === currentSlot
-                ? 'bg-status-live/10'
+                ? 'bg-accent/10'
                 : ''
           }`}
           title={slotClosed ? `Court ${courtId} closed` : undefined}

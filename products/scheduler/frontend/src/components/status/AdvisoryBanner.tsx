@@ -11,7 +11,7 @@
  * At most one decision shows; additional queued decisions collapse to a
  * "+N more" count. Built on the shared `Notice` grammar.
  */
-import { Notice } from '@scheduler/design-system/components';
+import { Button, Notice } from '@scheduler/design-system/components';
 import { useUiStore } from '../../store/uiStore';
 import { classifyAdvisory } from '../../platform/domain/alertModel';
 import type { Advisory } from '../../api/dto';
@@ -50,13 +50,9 @@ export function AdvisoryBanner({ readOnly = false, onReview, className = '' }: A
             </span>
           )}
           {!readOnly && top.suggestedAction && onReview && (
-            <button
-              type="button"
-              onClick={() => onReview(top)}
-              className="rounded border border-accent/50 px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent"
-            >
+            <Button type="button" size="xs" variant="outline" onClick={() => onReview(top)}>
               Review
-            </button>
+            </Button>
           )}
         </div>
       }

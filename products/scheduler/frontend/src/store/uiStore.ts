@@ -216,8 +216,6 @@ interface UiState {
   setAdvisories: (advisories: Advisory[]) => void;
   suggestions: Suggestion[];
   setSuggestions: (suggestions: Suggestion[]) => void;
-  pendingAdvisoryReview: Advisory | null;
-  setPendingAdvisoryReview: (advisory: Advisory | null) => void;
 
   // Unlock-confirm modal handshake.
   unlockModalState: UnlockModalState | null;
@@ -261,7 +259,6 @@ const INITIAL: Pick<
   | 'activeProposal'
   | 'advisories'
   | 'suggestions'
-  | 'pendingAdvisoryReview'
   | 'unlockModalState'
   | 'bracketSelectedMatchId'
   | 'bracketScheduleEventFilter'
@@ -287,7 +284,6 @@ const INITIAL: Pick<
   activeProposal: null,
   advisories: [],
   suggestions: [],
-  pendingAdvisoryReview: null,
   unlockModalState: null,
   bracketSelectedMatchId: null,
   bracketScheduleEventFilter: {},
@@ -366,8 +362,6 @@ export const useUiStore = create<UiState>((set, get) => ({
   setActiveProposal: (activeProposal) => set({ activeProposal }),
   setAdvisories: (advisories) => set({ advisories }),
   setSuggestions: (suggestions) => set({ suggestions }),
-  setPendingAdvisoryReview: (pendingAdvisoryReview) =>
-    set({ pendingAdvisoryReview }),
   setUnlockModalState: (unlockModalState) => set({ unlockModalState }),
 
   setBracketSelectedMatchId: (bracketSelectedMatchId) => set({ bracketSelectedMatchId }),

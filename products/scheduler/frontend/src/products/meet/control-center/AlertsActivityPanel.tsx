@@ -10,6 +10,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Warning, Info, CaretDown, CaretRight } from '@phosphor-icons/react';
+import { Button, StatusPill } from '@scheduler/design-system/components';
 import { useAlertStore } from '../../../store/alertStore';
 import { sortPanel, type AlertEntry } from '../../../platform/domain/alertModel';
 import type { Advisory } from '../../../api/dto';
@@ -71,13 +72,15 @@ function EntryRow({
           <div className="mt-0.5 text-2xs text-muted-foreground">{entry.message}</div>
         )}
         {canReview && (
-          <button
+          <Button
             type="button"
+            size="xs"
+            variant="outline"
+            className="mt-1"
             onClick={() => onReview!(entry.advisory!)}
-            className="mt-1 rounded border border-status-warning-fg/40 px-1.5 py-0.5 text-2xs font-medium text-status-warning-fg hover:bg-status-warning-bg focus:outline-none focus:ring-2 focus:ring-status-warning-fg"
           >
             Review
-          </button>
+          </Button>
         )}
       </div>
     </li>
@@ -116,9 +119,9 @@ export function AlertsActivityPanel({ onReview, className = '' }: AlertsActivity
           Alerts &amp; Activity
         </span>
         {warningCount > 0 && (
-          <span className="rounded-sm border border-status-warning-fg/40 bg-status-warning-bg px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-status-warning-fg">
+          <StatusPill tone="yellow" className="tabular-nums">
             {warningCount}
-          </span>
+          </StatusPill>
         )}
       </button>
       {!collapsed && (
