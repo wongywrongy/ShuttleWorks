@@ -209,3 +209,55 @@ def test_undated_workspace_has_empty_next_up():
                         [_mod("meet", "enabled")], RowCounts())
     assert sig.matches.total == 0
     assert sig.nextUp == []
+
+
+# ---- lifecycle phase (2026-07-10 review fixes) ---------------------------
+
+
+def _played_meet_data():
+    """Two matches, both scheduled; helper for phase tests."""
+    return {
+        "config": {"courtCount": 2, "dayStart": "09:00", "dayEnd": "17:00"},
+        "players": [{"id": "p1"}],
+        "matches": [{"id": "m1"}, {"id": "m2"}],
+        "schedule": {
+            "assignments": [
+                {"matchId": "m1", "slotId": 0, "courtId": 1},
+                {"matchId": "m2", "slotId": 1, "courtId": 2},
+            ]
+        },
+    }
+
+
+def test_phase_meet_ready_live_complete():
+    data = _played_meet_data()
+    # nothing played -> ready
+    sig = build_signals(_row(data=data), _meet_mods(), RowCounts())
+    assert sig.phase == "ready"
+    # one match called -> live
+    counts = RowCounts(match_status_by_id={"m1": "called"})
+    assert build_signals(_row(data=data), _meet_mods(), counts).phase == "live"
+    # everything terminal -> complete
+    counts = RowCounts(match_status_by_id={"m1": "finished", "m2": "retired"})
+    assert build_signals(_row(data=data), _meet_mods(), counts).phase == "complete"
+
+
+def test_phase_meet_unscheduled_matches_block_complete():
+    """Review finding: matches in the blob but NOT in assignments (solver
+    unscheduledMatches / added after the solve) must block 'complete'."""
+    data = _played_meet_data()
+    data["matches"].append({"id": "m3"})  # never scheduled, never played
+    counts = RowCounts(match_status_by_id={"m1": "finished", "m2": "finished"})
+    sig = build_signals(_row(data=data), _meet_mods(), counts)
+    assert sig.phase == "live"  # not complete — m3 unplayed
+
+
+def test_phase_bracket_swiss_pending_blocks_complete():
+    """Review finding: in a Swiss inter-round lull every EXISTING match has a
+    result (counts equal) — swiss_pending must keep the phase 'live'."""
+    mods = [_mod("bracket", "enabled")]
+    row = _row(kind="bracket", status="active")
+    lull = RowCounts(bracket_matches=8, bracket_results=8, swiss_pending=True)
+    assert build_signals(row, mods, lull).phase == "live"
+    done = RowCounts(bracket_matches=24, bracket_results=24, swiss_pending=False)
+    assert build_signals(row, mods, done).phase == "complete"

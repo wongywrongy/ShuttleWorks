@@ -35,6 +35,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useBracketApi } from '../api/bracketClient';
+import { isTerminalPollError } from '../lib/pollPolicy';
 import { useTournamentId } from './useTournamentId';
 import type { BracketTournamentDTO } from '../api/bracketDto';
 
@@ -118,7 +119,10 @@ async function runFetch(e: PollEntry): Promise<void> {
   if (e.inFlight) return;
   e.inFlight = true;
   e.loading = true;
-  e.error = null;
+  // Deliberately NOT clearing e.error here: wiping it at fetch start made
+  // a terminal "workspace no longer available" notice flicker away on
+  // every resumed tick. The success path below sets it to null; a failure
+  // overwrites it — either way the outcome, not the attempt, decides.
   notify(e);
   try {
     const d = await e.get();
@@ -133,8 +137,7 @@ async function runFetch(e: PollEntry): Promise<void> {
       ensureInterval(e);
     }
   } catch (err) {
-    const status = (err as { status?: number }).status;
-    if (status === 403 || status === 404 || status === 410) {
+    if (isTerminalPollError(err)) {
       // Terminal: the tournament was deleted or our access was revoked —
       // retrying every 2.5s can never succeed and just storms the console
       // with 403s. Pause the loop and surface a human answer; a manual
@@ -202,9 +205,14 @@ export function useBracket() {
     // Sync this consumer to the current shared snapshot immediately.
     cb();
     // Drive the shared loop: first-ever load fetches once; an already
-    // populated entry just (re)starts the interval; a paused "no draw"
-    // entry stays quiet until a wake (setData / refresh).
-    if (e.lastTouched === 0) {
+    // populated entry just (re)starts the interval; a PAUSED entry stays
+    // quiet until an explicit wake (setData / refresh). The paused check
+    // matters for the terminal pause (deleted workspace): that entry
+    // retains its last good DTO, so gating on data alone restarted the
+    // doomed poll on every resubscribe.
+    if (e.paused) {
+      // stay quiet
+    } else if (e.lastTouched === 0) {
       void runFetch(e);
     } else if (e.data != null) {
       ensureInterval(e);

@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../../api/client';
+import { isTerminalPollError } from '../../../lib/pollPolicy';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { deriveFreshness, type FreshnessState } from './freshness';
 
@@ -71,6 +72,13 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
         setSyncError(null);
       } catch (err) {
         if (cancelled) return;
+        if (isTerminalPollError(err)) {
+          // Workspace deleted / access revoked — stop polling; the
+          // freshness derivation ages the board to Delayed/Out of date
+          // naturally, which is the right spectator-calm answer.
+          cancelled = true;
+          window.clearInterval(t);
+        }
         // Leave the last-known-good state on screen and let the
         // freshness derivation flip Delayed / Out of date based on
         // time since the last success. A single failed poll is not a

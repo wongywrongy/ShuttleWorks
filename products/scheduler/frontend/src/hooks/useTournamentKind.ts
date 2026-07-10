@@ -36,22 +36,32 @@ export function useTournamentKind(tournamentId: string | null): void {
         cancelled = true;
       };
     }
-    apiClient
-      .getTournament(tournamentId)
-      .then((row) => {
-        if (cancelled) return;
-        setActiveTournamentKind(row.kind);
-        setActiveTournamentStatus(row.status ?? null);
-        setActiveTournamentPhase(row.signals?.phase ?? null);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setActiveTournamentKind(null);
-        setActiveTournamentStatus(null);
-        setActiveTournamentPhase(null);
-      });
+    const load = (isRefresh: boolean) => {
+      apiClient
+        .getTournament(tournamentId)
+        .then((row) => {
+          if (cancelled) return;
+          setActiveTournamentKind(row.kind);
+          setActiveTournamentStatus(row.status ?? null);
+          setActiveTournamentPhase(row.signals?.phase ?? null);
+        })
+        .catch(() => {
+          if (cancelled || isRefresh) return; // keep last-known values on a failed refresh
+          setActiveTournamentKind(null);
+          setActiveTournamentStatus(null);
+          setActiveTournamentPhase(null);
+        });
+    };
+    load(false);
+    // The lifecycle phase (signals.phase) changes DURING a session — the
+    // day goes live with the first call, complete with the last result.
+    // A one-shot fetch left the shell badge frozen at open-time state
+    // (review finding); a modest re-poll keeps it honest. `kind` and
+    // `status` ride along for free (same summary row).
+    const interval = window.setInterval(() => load(true), 30_000);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, [
     tournamentId,

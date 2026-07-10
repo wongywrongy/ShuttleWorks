@@ -1,6 +1,7 @@
 import { ArrowLeft } from '@phosphor-icons/react';
 import { StatusPill } from '@scheduler/design-system';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { lifecycleBadge } from '../domain/lifecycle';
 import type { WorkspaceIdentity } from './types';
 
 interface WorkspaceIdentityBarProps {
@@ -31,16 +32,14 @@ function statusTone(status: WorkspaceIdentity['status']) {
   return 'done' as const;
 }
 
-/** The badge the shell actually shows. The derived lifecycle phase (real play
- *  state) beats the operator-managed status once the day is under way — a
- *  43%-played or finished tournament must never read "draft". Archived stays
- *  archived (an explicit operator decision outranks derivation). */
+/** The badge the shell actually shows: the shared lifecycle precedence
+ *  (archived > live > complete — see platform/domain/lifecycle.ts), falling
+ *  back to the raw operator status pill when neither applies. */
 function shellBadge(
   identity: WorkspaceIdentity,
-): { text: string; tone: 'green' | 'idle' | 'done' | 'amber' } | null {
-  if (identity.status === 'archived') return { text: 'archived', tone: 'idle' };
-  if (identity.phase === 'live') return { text: 'Live', tone: 'green' };
-  if (identity.phase === 'complete') return { text: 'Complete', tone: 'done' };
+): { text: string; tone: 'green' | 'idle' | 'done' } | null {
+  const badge = lifecycleBadge(identity.phase, identity.status);
+  if (badge) return badge;
   if (identity.status) return { text: identity.status, tone: statusTone(identity.status) };
   return null;
 }

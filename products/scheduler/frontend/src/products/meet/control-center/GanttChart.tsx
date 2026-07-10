@@ -127,26 +127,31 @@ export function GanttChart({
   // Render slots come from wall-clock actual start/end times (getRenderSlot),
   // so a match played later than planned used to land PAST maxSlot and paint
   // in unlabeled space right of the grid; the axis must follow reality.
+  //
+  // Bounded, though: getRenderSlot's duration is uncapped (a Finish pressed
+  // hours late, or a restored row with a next-day actualEndTime, yields a
+  // 50–100-slot span), and an unbounded axis would shrink every real chip to
+  // a sliver. The live extension is capped a few hours past the configured
+  // day; anything beyond is dirty data, and placements are clamped into the
+  // capped extent below so a chip can never render off-grid either way.
+  const EXTENT_OVERRUN_SLOTS = 8;
   const { minSlot, maxSlot } = useMemo(() => {
     if (schedule.assignments.length === 0) return { minSlot: 0, maxSlot: Math.min(12, totalSlots) };
-    const starts: number[] = [];
-    const ends: number[] = [];
+    const cap = totalSlots + EXTENT_OVERRUN_SLOTS;
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = 0;
     for (const a of schedule.assignments) {
-      starts.push(a.slotId);
-      ends.push(a.slotId + a.durationSlots);
+      lo = Math.min(lo, a.slotId);
+      hi = Math.max(hi, a.slotId + a.durationSlots);
     }
+    hi = Math.min(totalSlots, hi + 1); // planned range: clamp to the day, +1 pad
     courtRows.forEach((rows) => {
       for (const { renderSlotId, renderSpan } of rows) {
-        starts.push(renderSlotId);
-        ends.push(renderSlotId + renderSpan);
+        lo = Math.min(lo, renderSlotId);
+        hi = Math.max(hi, Math.min(cap, renderSlotId + renderSpan));
       }
     });
-    return {
-      minSlot: Math.max(0, Math.min(...starts) - 1),
-      // Planned range stays clamped to the configured day; the live range may
-      // legitimately run past it (a day that started late) and wins the max.
-      maxSlot: Math.max(Math.min(totalSlots, Math.max(...ends) + 1), Math.max(...ends)),
-    };
+    return { minSlot: Math.max(0, lo - 1), maxSlot: hi };
   }, [schedule.assignments, courtRows, totalSlots]);
   const slotCount = maxSlot - minSlot;
 
@@ -177,15 +182,19 @@ export function GanttChart({
     return { laneByMatchId, laneCountByMatchId };
   }, [courtRows]);
 
-  // DTO → placements (render slot + packing applied).
+  // DTO → placements (render slot + packing applied). Clamped into the
+  // capped axis extent — a dirty multi-hour render span shows as a chip
+  // pinned at the grid's right edge instead of blowing past it.
   const placements = useMemo<Placement[]>(() => {
     const out: Placement[] = [];
     courtRows.forEach((rows, courtId) => {
       for (const { assignment, renderSlotId, renderSpan } of rows) {
+        const startSlot = Math.min(renderSlotId, Math.max(minSlot, maxSlot - 1));
+        const span = Math.max(1, Math.min(renderSpan, maxSlot - startSlot));
         out.push({
           courtIndex: courtId - 1,
-          startSlot: renderSlotId,
-          span: renderSpan,
+          startSlot,
+          span,
           laneIndex: packing.laneByMatchId.get(assignment.matchId) ?? 0,
           laneCount: packing.laneCountByMatchId.get(assignment.matchId) ?? 1,
           key: assignment.matchId,
@@ -193,7 +202,7 @@ export function GanttChart({
       }
     });
     return out;
-  }, [courtRows, packing]);
+  }, [courtRows, packing, minSlot, maxSlot]);
 
   // State-change pulse: a block whose status flips scales up briefly.
   useEffect(() => {

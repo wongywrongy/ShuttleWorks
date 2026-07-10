@@ -15,6 +15,7 @@ import { useEffect, useRef } from 'react';
 
 import type { Advisory } from '../api/dto';
 import { apiClient } from '../api/client';
+import { isTerminalPollError } from '../lib/pollPolicy';
 import { useUiStore } from '../store/uiStore';
 import { useTournamentIdOrNull } from './useTournamentId';
 
@@ -63,6 +64,12 @@ export function useAdvisories(): null {
         seenIdsRef.current = new Set(advisories.map((a) => a.id));
         setAdvisories(advisories);
       } catch (err) {
+        if (isTerminalPollError(err)) {
+          // Workspace deleted / access revoked — retrying can never
+          // succeed; stop the loop instead of storming 403s forever.
+          cancelled = true;
+          return;
+        }
         // Swallow — advisor is non-critical; a failed fetch shouldn't
         // disrupt the UI. The next tick will retry.
         if (import.meta.env.DEV) {

@@ -10,7 +10,7 @@ endpoint free of per-row queries (see the SP-A spec's N+1 guardrail).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
 
@@ -32,11 +32,16 @@ class RowCounts:
     # ``scheduled`` (called/playing/finished/retired). One grouped query
     # (``matches.statuses_by_tournament``) — feeds the lifecycle phase +
     # live-aware nextUp without breaking the no-per-row-query guarantee.
-    match_status_by_id: dict = None  # type: ignore[assignment]
-
-    def __post_init__(self) -> None:
-        if self.match_status_by_id is None:
-            self.match_status_by_id = {}
+    match_status_by_id: dict = field(default_factory=dict)
+    # Play-unit ids with a recorded bracket result (grouped query on
+    # bracket_results) — the bracket-side "this unit is done" truth for the
+    # nextUp filter; results recorded from the draw board never touch the
+    # assignment's match-action clock fields.
+    bracket_resolved_ids: set = field(default_factory=set)
+    # True when a generated Swiss event still has rounds to append — blocks
+    # the raw result/match count comparison from reading an inter-round lull
+    # as "complete" (see ``swiss_pending_by_tournament``).
+    swiss_pending: bool = False
 
 
 class AttentionReasonDTO(BaseModel):
@@ -258,13 +263,19 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
         v = a.get("slot_id") if isinstance(a, dict) else None
         return v if isinstance(v, int) else 0
 
-    # Next-up = upcoming only: drop finished units (they carry an
-    # ``actual_end_slot``). ``scheduled`` above still counts every assignment.
+    # Next-up = upcoming only. A unit is done when it has a RECORDED RESULT
+    # (``resolved_ids`` — the draw-board record-winner/walkover flow) or a
+    # finished match-action clock (``actual_end_slot``). Filtering on the
+    # clock alone kept board-recorded winners listed as upcoming (review
+    # finding). ``scheduled`` above still counts every assignment.
+    resolved_ids = counts.bracket_resolved_ids
     ordered = sorted(
         (
             a
             for a in assignments
-            if isinstance(a, dict) and a.get("actual_end_slot") is None
+            if isinstance(a, dict)
+            and a.get("actual_end_slot") is None
+            and a.get("play_unit_id") not in resolved_ids
         ),
         key=slot_of,
     )
@@ -294,23 +305,40 @@ def _derive_phase(data: dict, counts: RowCounts) -> str:
     assignments = (
         (schedule.get("assignments") or []) if isinstance(schedule, dict) else []
     )
-    meet_ids = [
+    meet_ids = {
         _first(a, "matchId", "match_id")
         for a in assignments
         if isinstance(a, dict)
-    ]
+    }
+    # Completion must cover EVERY meet match, not just the assigned ones —
+    # a solver run can legitimately leave matches unscheduled
+    # (schedule.unscheduledMatches), and matches added after the last solve
+    # have no assignment at all; neither may read as "complete".
+    all_meet_ids = meet_ids | {
+        m.get("id")
+        for m in (data.get("matches") or [])
+        if isinstance(m, dict) and m.get("id")
+    }
     meet_present = len(meet_ids) > 0
     status_by_id = counts.match_status_by_id
     meet_touched = len(status_by_id) > 0
     meet_complete = meet_present and all(
-        status_by_id.get(mid) in _TERMINAL for mid in meet_ids
+        status_by_id.get(mid) in _TERMINAL for mid in all_meet_ids
     )
 
     bracket_present = counts.bracket_matches > 0
     bracket_touched = counts.bracket_results > 0
     # Approximation: every generated unit carries a result when done
     # (walkovers/byes record results too, so the counts line up in practice).
-    bracket_complete = bracket_present and counts.bracket_results >= counts.bracket_matches
+    # Swiss needs the extra guard: rounds generate progressively, so in the
+    # inter-round lull every EXISTING match has a result and the raw counts
+    # would read "complete" mid-tournament (review finding — the frontend
+    # draw card guards the same case via ev.rounds.length >= swissRounds).
+    bracket_complete = (
+        bracket_present
+        and counts.bracket_results >= counts.bracket_matches
+        and not counts.swiss_pending
+    )
 
     if not meet_present and not bracket_present:
         return "setup"

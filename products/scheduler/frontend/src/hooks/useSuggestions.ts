@@ -12,6 +12,7 @@
 import { useEffect, useRef } from 'react';
 
 import { apiClient } from '../api/client';
+import { isTerminalPollError } from '../lib/pollPolicy';
 import { useUiStore } from '../store/uiStore';
 import { useTournamentIdOrNull } from './useTournamentId';
 
@@ -34,6 +35,11 @@ export function useSuggestions(): null {
         const list = await apiClient.getSuggestions(tid);
         if (!cancelledRef.current) setSuggestions(list);
       } catch (err) {
+        if (isTerminalPollError(err)) {
+          // Workspace deleted / access revoked — stop the loop for good.
+          cancelledRef.current = true;
+          return;
+        }
         // Non-critical — failed fetch shouldn't disrupt the UI.
         if (import.meta.env.DEV) {
           console.warn('useSuggestions: poll failed', err);

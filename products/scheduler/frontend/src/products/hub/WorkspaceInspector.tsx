@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@scheduler/design-system';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { StatusPill } from '../../components/StatusPill';
+import { lifecycleBadge } from '../../platform/domain/lifecycle';
 import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
 import { attentionReasons, moduleCountsOf, readinessOf, setupLabel } from './hubSignals';
 import { rowActionFor } from './nextAction';
@@ -86,24 +87,21 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const todayKey = new Date().toISOString().slice(0, 10);
   const action = rowActionFor(tournament, temporalGroupOf(tournament, todayKey));
 
-  // Header status pill (only meaningful with signals): the derived lifecycle
-  // phase wins once the day is under way — "Live" while matches run,
-  // "Complete" when every match is resolved. Before that: "Ready" when the
-  // setup checklist is complete AND nothing needs attention, else "Needs
-  // setup". Keyed off readiness + attention — NOT the lifecycle `health` (a
-  // fully set-up workspace can still be status:'draft', which `health`
-  // reports as 'draft' and would mislabel a ready event as "Needs setup").
+  // Header status pill (only meaningful with signals): the shared lifecycle
+  // precedence first (Archived > Live > Complete — platform/domain/lifecycle),
+  // so an archived workspace never flaunts a pulsing "Live" and the pill
+  // matches the shell header. Otherwise: "Ready" when the setup checklist is
+  // complete AND nothing needs attention, else "Needs setup". Keyed off
+  // readiness + attention — NOT the lifecycle `health` (a fully set-up
+  // workspace can still be status:'draft', which `health` reports as 'draft'
+  // and would mislabel a ready event as "Needs setup").
   const ready = !!readiness && readiness.ready === readiness.total;
   const pillReady = ready && todos.length === 0;
-  const phase = tournament.signals?.phase;
-  const pill =
-    phase === 'live'
-      ? { text: 'Live', tone: 'green' as const }
-      : phase === 'complete'
-        ? { text: 'Complete', tone: 'done' as const }
-        : pillReady
-          ? { text: 'Ready', tone: 'green' as const }
-          : { text: 'Needs setup', tone: 'amber' as const };
+  const pill: { text: string; tone: 'green' | 'amber' | 'idle' | 'done' } =
+    lifecycleBadge(tournament.signals?.phase, tournament.status) ??
+    (pillReady
+      ? { text: 'Ready', tone: 'green' }
+      : { text: 'Needs setup', tone: 'amber' });
   const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
 
   return (

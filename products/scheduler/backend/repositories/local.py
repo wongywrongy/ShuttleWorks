@@ -882,6 +882,73 @@ class _LocalBracketRepo:
         ).all()
         return {tid: int(c) for tid, c in rows}
 
+    def resolved_unit_ids_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, set[str]]:
+        """``{tournament_id: {play_unit_id with a recorded result}}`` — one
+        grouped query. Feeds the workspace-signal "next up" filter: results
+        recorded straight from the draw board (record-winner / walkover)
+        never touch the assignment's ``actual_end_slot``, so result
+        membership — not the match-action clock — is what says a unit is
+        no longer upcoming."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketResult.tournament_id, BracketResult.bracket_match_id)
+            .where(BracketResult.tournament_id.in_(tournament_ids))
+        ).all()
+        out: dict[uuid.UUID, set[str]] = {}
+        for tid, unit_id in rows:
+            out.setdefault(tid, set()).add(unit_id)
+        return out
+
+    def swiss_pending_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, bool]:
+        """``{tournament_id: True}`` when any generated Swiss event still has
+        rounds left to append. Two grouped queries.
+
+        Swiss is progressive: rounds are generated one at a time via
+        ``rounds/next``, so in the inter-round lull every existing match has
+        a result and raw result/match counts read "complete". The persisted
+        event ``config`` carries the resolved ``swiss_rounds`` (the generate
+        path stores the normalized config); generated rounds are counted as
+        distinct ``round_index`` values on the event's match rows. A Swiss
+        event whose config is missing ``swiss_rounds`` (shouldn't happen for
+        generated draws) is treated as pending — conservatively never
+        "complete" rather than falsely complete.
+        """
+        if not tournament_ids:
+            return {}
+        swiss_events = self.session.execute(
+            select(BracketEvent.tournament_id, BracketEvent.id, BracketEvent.config)
+            .where(
+                BracketEvent.tournament_id.in_(tournament_ids),
+                BracketEvent.format == "swiss",
+                BracketEvent.status != "draft",
+            )
+        ).all()
+        if not swiss_events:
+            return {}
+        rounds_generated = self.session.execute(
+            select(
+                BracketMatch.tournament_id,
+                BracketMatch.bracket_event_id,
+                func.count(func.distinct(BracketMatch.round_index)),
+            )
+            .where(BracketMatch.tournament_id.in_({tid for tid, _, _ in swiss_events}))
+            .group_by(BracketMatch.tournament_id, BracketMatch.bracket_event_id)
+        ).all()
+        generated = {(tid, eid): int(c) for tid, eid, c in rounds_generated}
+        out: dict[uuid.UUID, bool] = {}
+        for tid, eid, config in swiss_events:
+            total = (config or {}).get("swiss_rounds")
+            have = generated.get((tid, eid), 0)
+            pending = not isinstance(total, int) or have < total
+            if pending:
+                out[tid] = True
+        return out
+
     def record_result(
         self,
         tournament_id: uuid.UUID,
