@@ -86,6 +86,8 @@ export function MatchControlCenterPage() {
     setDetailsOpen(true);
     setPanelMode('score');
   }, []);
+  // Stable so it doesn't defeat GanttChart's memo (FIX C).
+  const openDirector = useCallback(() => setDirectorOpen(true), []);
   // Reset to idle whenever the user picks a different match — the
   // editor that was open belonged to the previous match.
   useEffect(() => {
@@ -131,9 +133,16 @@ export function MatchControlCenterPage() {
   const selectedAssignment = selectedMatchId && liveOps.schedule
     ? liveOps.schedule.assignments.find((a) => a.matchId === selectedMatchId)
     : undefined;
-  const selectedAnalysis = selectedMatchId
-    ? liveOps.analyzeImpact(selectedMatchId)
-    : null;
+  // Memoized: analyzeImpact walks all assignments and returns a fresh
+  // `directlyImpacted` array. Called unconditionally each render before,
+  // it re-ran on every 5s sync and handed GanttChart a new array reference
+  // (rebuilding its internal Set). Keyed on the selection + the live inputs
+  // analyzeImpact reads. PERF_FINDINGS.md FIX C.
+  const selectedAnalysis = useMemo(
+    () => (selectedMatchId ? liveOps.analyzeImpact(selectedMatchId) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedMatchId, liveOps.schedule, liveOps.matches, liveOps.matchStates],
+  );
   const selectedTrafficLight = selectedMatchId
     ? trafficLights.get(selectedMatchId)
     : undefined;
@@ -553,7 +562,7 @@ export function MatchControlCenterPage() {
               onMatchSelect={setSelectedMatchId}
               impactedMatchIds={selectedAnalysis?.directlyImpacted}
               trafficLights={trafficLights}
-              onRequestReopenCourt={() => setDirectorOpen(true)}
+              onRequestReopenCourt={openDirector}
             />
           </div>
           {/* Legend strip */}

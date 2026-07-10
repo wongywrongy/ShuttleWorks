@@ -10,7 +10,7 @@
  *  - click-select, animatedIds state-change pulse
  *  - closed-court row/cell shading
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DoorOpen } from '@phosphor-icons/react';
 import {
   GanttTimeline,
@@ -68,7 +68,7 @@ function getMatchLabel(match: MatchDTO): string {
   return match.id.slice(0, 6);
 }
 
-export function GanttChart({
+function GanttChartImpl({
   schedule,
   matches,
   matchStates,
@@ -81,6 +81,14 @@ export function GanttChart({
   onRequestReopenCourt,
 }: GanttChartProps) {
   const matchMap = useMemo(() => indexById(matches), [matches]);
+  // Planned slot per match, indexed once — renderBlock previously did a
+  // linear `.find` over all assignments per block (O(N²) across the grid,
+  // re-run on every 5s sync). PERF_FINDINGS.md §2 FIX B.
+  const assignmentSlotById = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of schedule.assignments) m.set(a.matchId, a.slotId);
+    return m;
+  }, [schedule.assignments]);
   const impactedSet = useMemo(() => new Set(impactedMatchIds), [impactedMatchIds]);
   const totalSlots = calculateTotalSlots(config);
 
@@ -320,7 +328,7 @@ export function GanttChart({
       const styles = STATUS_STYLES[status];
       const isSelected = selectedMatchId === matchId;
       const isAnimated = animatedIds.has(matchId);
-      const assignmentSlot = schedule.assignments.find((a) => a.matchId === matchId)?.slotId ?? 0;
+      const assignmentSlot = assignmentSlotById.get(matchId) ?? 0;
       const isLate =
         currentSlot > assignmentSlot && (status === 'scheduled' || status === 'called');
       const isPostponed = state?.postponed === true;
@@ -386,7 +394,7 @@ export function GanttChart({
       currentSlot,
       impactedSet,
       trafficLights,
-      schedule.assignments,
+      assignmentSlotById,
       onMatchSelect,
     ],
   );
@@ -409,3 +417,9 @@ export function GanttChart({
     </div>
   );
 }
+
+// Memoized: with props stabilized upstream (impactedMatchIds/onRequestReopenCourt
+// hoisted in MatchControlCenterPage, matchStates now referentially stable when
+// unchanged — PERF_FINDINGS.md FIX C/F), the Gantt skips re-render on the 5s
+// no-op sync and on unrelated parent state (details toggle, dialogs).
+export const GanttChart = memo(GanttChartImpl);
