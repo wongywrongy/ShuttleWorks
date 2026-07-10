@@ -286,7 +286,7 @@ function CourtCard({
         {/* Status pill */}
         <div>
           {status === 'active' && (
-            <StatusPill
+            <CourtStatusPill
               label="Live"
               bgAlpha={`${tvAccent}33`}
               color={tvAccent}
@@ -426,7 +426,7 @@ function NextUp({
   );
 }
 
-function StatusPill({
+function CourtStatusPill({
   label,
   bgAlpha,
   color,
