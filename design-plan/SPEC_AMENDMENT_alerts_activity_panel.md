@@ -46,10 +46,19 @@ second render path.
 
 ## 3. Toasts
 
-**Removed** from the Run view (the sign-off default; no explicit decision arrived). `pushToast`
-remains for genuinely transient, non-advisory feedback elsewhere (e.g. the version-mismatch retry
-toast in `useLiveTracking`, which is a distinct error-recovery affordance, not an advisory).
-Nothing on the control center may toast an event the Alerts & Activity model displays.
+**Removed** — `useAdvisories` no longer pushes toasts. `pushToast` remains for genuinely
+transient, non-advisory feedback elsewhere (e.g. the version-mismatch retry toast in
+`useLiveTracking`, which is a distinct error-recovery affordance, not an advisory). Nothing may
+toast an event the Alerts & Activity model displays.
+
+**Advisories are a Run-view concern (scoping decision).** The advisory *action* dispatcher
+(`handleAdvisoryReview` → repair/warm-restart/director dialogs) only ever existed on the Run tab;
+on other pages the old toast's "Review" set `pendingAdvisoryReview`, which nothing off-Run
+consumed — so advisories were **visible-but-non-actionable** there. Because a few advisory kinds
+(`infeasibility_risk`, `approaching_blackout`) can fire during scheduling, the **Schedule page
+keeps a read-only `AdvisoryBanner`** (heads-up for critical advisories, no Review — it points the
+operator to Run to act). Warn-level advisories surface only in the Run rail; this is intentional
+(warn advisories are live-play conditions the operator reads on Run).
 
 ## 4. Rail contention
 
@@ -78,6 +87,21 @@ not approve new backend scope). The info/activity trail is sourced **client-side
 match-state transitions (`useActivityLog` diffs the match-state map and emits entries), kept in a
 local ring buffer. No backend changes. If a durable cross-session/cross-device audit log is wanted
 later, add the table and have the same pipeline write it — the panel already renders the model.
+
+**Known limitation:** `useActivityLog` is mounted on the Run surface, so it records transitions
+only while that tab is mounted. Transitions that happen while the operator is on another tab are
+not captured (the existing entries persist; only the intervening changes are missed). A durable
+backend event log would remove this gap; until then it is an accepted limitation, not a bug.
+
+## 6a. Residual — SuggestionsRail double-surface (deferred)
+
+An advisory can carry a `suggestionId` ("Apply available"), and the matching `Suggestion` renders
+in the parallel `SuggestionsRail` (fed by `useSuggestions`, a separate poll). A critical advisory
+that also has a suggestion could therefore appear as a **banner decision** and a **suggestion row**
+— two representations of one underlying proposal. This is a pre-existing parallel surface, not
+introduced by P2. Folding SuggestionsRail into this pipeline (so a proposal renders once) is
+deferred to the Meet full migration (MIGRATION_PLAN step 5); noted here so "one pipeline" is
+honest about its current boundary.
 
 ## 7. Performance discipline (must not undo P1)
 

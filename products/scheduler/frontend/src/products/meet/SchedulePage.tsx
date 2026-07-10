@@ -29,6 +29,7 @@ import { LiveTimelineGrid } from './schedule/live/LiveTimelineGrid';
 import { LiveMetricsBar } from './schedule/live/LiveMetricsBar';
 import { StaleBanner } from './schedule/StaleBanner';
 import { SuggestionsRail } from './suggestions/SuggestionsRail';
+import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
 import { exportScheduleXlsx } from './exports/xlsxExports';
 import { computeConstraintViolations } from '../../utils/constraintChecker';
 import { formatSlotTime } from '../../lib/time';
@@ -191,6 +192,12 @@ export function SchedulePage() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
       <StaleBanner />
+      {/* Read-only heads-up for critical advisories that can fire during
+          scheduling (infeasibility_risk / approaching_blackout). The action
+          dispatcher lives on the Run tab, so this surfaces the alert and
+          points the operator there — advisories no longer toast globally
+          (SPEC_AMENDMENT_alerts_activity_panel §3). */}
+      <AdvisoryBanner readOnly />
       <SuggestionsRail />
 
       {needsConfig ? (
