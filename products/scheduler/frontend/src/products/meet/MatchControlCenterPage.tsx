@@ -34,7 +34,6 @@ import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
 import { SuggestionsRail } from './suggestions/SuggestionsRail';
 import { AlertsActivityPanel } from './control-center/AlertsActivityPanel';
 import { useActivityLog } from '../../hooks/useActivityLog';
-import { GanttLegend } from './control-center/GanttLegend';
 import { exportScheduleXlsx } from './exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { SourceChip } from '../../components/SourceChip';
@@ -165,6 +164,22 @@ export function MatchControlCenterPage() {
       return isExplicitlyDelayed || isTimeDelayed;
     }).length;
   }, [liveOps.schedule, liveOps.matchStates, currentSlot]);
+
+  // Timeline "impacted" overlay = the matches a PENDING repair proposal
+  // would move (bound to the banner's proposal, cleared on apply/dismiss),
+  // NOT the selected match's shared-player set
+  // (SPEC_AMENDMENT_timeline_encoding §3).
+  const activeProposal = useUiStore((s) => s.activeProposal);
+  const impactedByProposal = useMemo(() => {
+    if (!activeProposal || !liveOps.schedule) return undefined;
+    const cur = new Map(liveOps.schedule.assignments.map((a) => [a.matchId, a]));
+    const moved: string[] = [];
+    for (const a of activeProposal.proposedSchedule.assignments) {
+      const c = cur.get(a.matchId);
+      if (!c || c.slotId !== a.slotId || c.courtId !== a.courtId) moved.push(a.matchId);
+    }
+    return moved;
+  }, [activeProposal, liveOps.schedule]);
 
   // Get updateMatch from store
   const updateMatch = useTournamentStore((state) => state.updateMatch);
@@ -554,7 +569,10 @@ export function MatchControlCenterPage() {
               {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
             </Button>
           </ActionsBar>
-          {/* Gantt grid */}
+          {/* Gantt grid — the block encoding is self-describing (lifecycle
+              intensity + exception glyphs); the corner "?" key + rich chip
+              tooltips replaced the old legend strip
+              (SPEC_AMENDMENT_timeline_encoding §4). */}
           <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-3">
             <GanttChart
               schedule={liveOps.schedule}
@@ -564,14 +582,10 @@ export function MatchControlCenterPage() {
               currentSlot={currentSlot}
               selectedMatchId={selectedMatchId}
               onMatchSelect={setSelectedMatchId}
-              impactedMatchIds={selectedAnalysis?.directlyImpacted}
+              impactedMatchIds={impactedByProposal}
               trafficLights={trafficLights}
               onRequestReopenCourt={openDirector}
             />
-          </div>
-          {/* Legend strip */}
-          <div className="shrink-0 border-b border-border px-4 py-1">
-            <GanttLegend />
           </div>
           {/* Match queue (WorkflowPanel) */}
           <div className="min-h-0 flex-1 overflow-hidden">

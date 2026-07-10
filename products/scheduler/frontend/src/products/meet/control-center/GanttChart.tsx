@@ -11,7 +11,7 @@
  *  - closed-court row/cell shading
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DoorOpen } from '@phosphor-icons/react';
+import { DoorOpen, Warning, WarningOctagon, Question } from '@phosphor-icons/react';
 import {
   GanttTimeline,
   type Placement,
@@ -47,25 +47,113 @@ interface GanttChartProps {
   onRequestReopenCourt?: (courtId: number) => void;
 }
 
-// Status → block fill. Wired to the semantic status-* tokens.
+// Lifecycle by INTENSITY — the single appearance channel (no fill×outline
+// combinatorics). scheduled = quiet neutral · called = subtle warm hint ·
+// in progress = the one accent, filled · finished = dimmed neutral. No
+// green on the timeline (SPEC_AMENDMENT_timeline_encoding §1). Exceptions
+// (late/blocked/postponed) are the only hues, layered as border+glyph.
 const STATUS_STYLES: Record<
   'scheduled' | 'called' | 'started' | 'finished',
   { bg: string; border: string; text: string }
 > = {
-  scheduled: { bg: 'bg-status-idle-bg', border: 'border-status-idle/40', text: 'text-foreground' },
-  called: { bg: 'bg-status-called-bg', border: 'border-status-called/60', text: 'text-status-called' },
+  scheduled: { bg: 'bg-muted/30', border: 'border-border', text: 'text-foreground' },
+  called: { bg: 'bg-status-called-bg/60', border: 'border-status-called/40', text: 'text-foreground' },
   started: {
-    bg: 'bg-status-live-bg shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.5)]',
-    border: 'border-status-live/60',
-    text: 'text-status-live',
+    bg: 'bg-accent/15 shadow-[inset_0_0_0_1px_hsl(var(--accent)/0.5)]',
+    border: 'border-accent/70',
+    text: 'text-accent',
   },
-  finished: { bg: 'bg-status-done-bg', border: 'border-status-done/30', text: 'text-muted-foreground' },
+  finished: { bg: 'bg-muted/20', border: 'border-border/50', text: 'text-muted-foreground' },
 };
 
 function getMatchLabel(match: MatchDTO): string {
   if (match.eventRank) return match.eventRank;
   if (match.matchNumber) return `M${match.matchNumber}`;
   return match.id.slice(0, 6);
+}
+
+/** Corner "?" key — the legend strip's replacement. A lightweight local
+ *  disclosure (not a general Popover primitive), showing the intensity
+ *  lifecycle + the exception hues. Closes on outside click / Escape. */
+function GanttKey() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="absolute right-1 top-1 z-10">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label="Timeline key"
+        title="Timeline key"
+        className="flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Question aria-hidden="true" className="h-3 w-3" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-6 w-56 rounded border border-border bg-card p-3 text-2xs shadow-md">
+          <p className="mb-1.5 font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Lifecycle
+          </p>
+          <ul className="space-y-1">
+            <li className="flex items-center gap-2">
+              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-border bg-muted/30" />
+              Scheduled
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-status-called/40 bg-status-called-bg/60" />
+              Called
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-accent/70 bg-accent/15" />
+              In progress
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-border/50 bg-muted/20" />
+              Finished
+            </li>
+          </ul>
+          <p className="mb-1.5 mt-2.5 font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Exceptions
+          </p>
+          <ul className="space-y-1">
+            <li className="flex items-center gap-2 text-status-warning">
+              <Warning aria-hidden="true" weight="fill" className="h-3 w-3 flex-shrink-0" />
+              <span className="text-foreground">Late / overrun</span>
+            </li>
+            <li className="flex items-center gap-2 text-status-blocked">
+              <WarningOctagon aria-hidden="true" weight="fill" className="h-3 w-3 flex-shrink-0" />
+              <span className="text-foreground">Blocked</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-dashed border-status-idle opacity-70" />
+              Postponed
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="h-3 w-4 flex-shrink-0 rounded-sm border-2 border-dashed border-accent" />
+              Impacted by a pending fix
+            </li>
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function GanttChartImpl({
@@ -333,45 +421,74 @@ function GanttChartImpl({
         currentSlot > assignmentSlot && (status === 'scheduled' || status === 'called');
       const isPostponed = state?.postponed === true;
       const isInProgress = status === 'started';
+      // impacted = a match the PENDING repair proposal would move (bound to
+      // the P2 banner, cleared on apply/dismiss) — NOT the selected match's
+      // shared-player set anymore (§3).
       const isImpacted = impactedSet.has(matchId);
       const traffic = trafficLights?.get(matchId);
       const conflictActionable =
         traffic && (status === 'scheduled' || status === 'called');
-      const isBlocked = conflictActionable && traffic.status === 'red';
-      const isResting = conflictActionable && traffic.status === 'yellow';
+      const isBlocked = !!conflictActionable && traffic!.status === 'red';
+      const isResting = !!conflictActionable && traffic!.status === 'yellow';
 
-      // Ring priority: selected > blocked > impacted > postponed > resting > late.
-      let ringClass = '';
-      // Ring hues are drawn from the semantic token palette (6 distinct
-      // hues). impacted → accent ("related, attention"); postponed →
-      // status-idle ("parked"); resting + late both → status-warning
-      // (both are amber time-cautions and never share a block — ring
-      // priority shows only one).
-      if (isSelected) ringClass = 'ring-2 ring-inset ring-status-started';
-      else if (isBlocked) ringClass = 'ring-2 ring-inset ring-status-blocked';
-      else if (isImpacted) ringClass = 'ring-2 ring-inset ring-accent';
-      else if (isPostponed) ringClass = 'ring-2 ring-inset ring-status-idle';
-      else if (isResting) ringClass = 'ring-2 ring-inset ring-status-warning';
-      else if (isLate) ringClass = 'ring-2 ring-inset ring-status-warning';
+      // ONE exception hue, paired with a glyph (never colour alone).
+      // Priority: blocked (danger) > postponed (ghost) > late (warning).
+      // resting is evicted from the block — it lives in the tooltip only.
+      let exceptionBorder = styles.border;
+      let exceptionExtra = '';
+      let ExceptionGlyph: typeof Warning | null = null;
+      let glyphTone = '';
+      if (isBlocked) {
+        exceptionBorder = 'border-status-blocked';
+        ExceptionGlyph = WarningOctagon;
+        glyphTone = 'text-status-blocked';
+      } else if (isPostponed) {
+        exceptionBorder = 'border-dashed border-status-idle';
+        exceptionExtra = 'opacity-70';
+      } else if (isLate) {
+        exceptionBorder = 'border-status-warning';
+        ExceptionGlyph = Warning;
+        glyphTone = 'text-status-warning';
+      }
+
+      // Selection is INTERACTION, not data → the neutral canon focus ring,
+      // separate from the exception hues.
+      const selectionRing = isSelected ? 'ring-2 ring-inset ring-ring' : '';
 
       const multiLane = (placement.laneCount ?? 1) > 1;
+
+      const lateMin = isLate
+        ? Math.max(0, currentSlot - assignmentSlot) * (config.intervalMinutes ?? 0)
+        : 0;
+      const title = [
+        match ? getMatchLabel(match) : '?',
+        `C${placement.courtIndex + 1}`,
+        status,
+        isLate && lateMin > 0 ? `${lateMin}m late` : null,
+        isPostponed ? 'postponed' : null,
+        isBlocked && traffic?.reason ? `blocked: ${traffic.reason}` : null,
+        isResting && traffic?.reason ? `resting: ${traffic.reason}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
 
       return (
         <div
           onClick={() => onMatchSelect(matchId)}
           className={`absolute inset-x-0 top-0.5 rounded border cursor-pointer
-            ${styles.bg} ${styles.border}
+            ${styles.bg} ${exceptionBorder} ${exceptionExtra}
             transition-[transform,box-shadow,filter] duration-fast ease-brand
             ${isAnimated ? 'scale-105' : ''}
-            ${ringClass}
+            ${selectionRing}
             ${isInProgress ? 'shadow-sm' : ''}
             hover:brightness-95`}
           style={{ height: box.height - 4 }}
-          title={
-            (match ? getMatchLabel(match) : '?') +
-            (traffic?.reason && conflictActionable ? ` — ${traffic.reason}` : '')
-          }
+          title={title}
         >
+          {/* impacted: dashed accent overlay, only while a proposal is pending. */}
+          {isImpacted && (
+            <div className="pointer-events-none absolute inset-0 rounded border-2 border-dashed border-accent" />
+          )}
           <div
             className={`h-full flex flex-col justify-center overflow-hidden leading-tight ${
               multiLane ? 'px-0 items-center' : 'px-2 items-start'
@@ -383,6 +500,13 @@ function GanttChartImpl({
               {match ? getMatchLabel(match) : '?'}
             </span>
           </div>
+          {ExceptionGlyph && (
+            <ExceptionGlyph
+              aria-hidden="true"
+              weight="fill"
+              className={`pointer-events-none absolute right-0.5 top-0.5 h-3 w-3 ${glyphTone}`}
+            />
+          )}
         </div>
       );
     },
@@ -396,11 +520,13 @@ function GanttChartImpl({
       trafficLights,
       assignmentSlotById,
       onMatchSelect,
+      config,
     ],
   );
 
   return (
-    <div className="overflow-hidden">
+    <div className="relative overflow-hidden">
+      <GanttKey />
       <GanttTimeline
         courts={courts}
         minSlot={minSlot}

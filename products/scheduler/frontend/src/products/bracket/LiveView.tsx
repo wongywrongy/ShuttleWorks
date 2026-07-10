@@ -218,9 +218,10 @@ export function LiveView({ data, onChange }: Props) {
 }
 
 /**
- * Compact ring-state legend — mirrors the meet Live tab's GanttLegend
- * strip (same eyebrow + swatch vocabulary) for the bracket's chip
- * lifecycle rings. Fills are event colors here, so only the ring
+ * Compact ring-state legend for the bracket's chip lifecycle rings.
+ * (The meet Live tab dropped its legend strip in favour of a "?" key +
+ * rich tooltips; the bracket board keeps this until its own migration.)
+ * Fills are event colors here, so only the ring
  * states need explaining.
  */
 function ChipStateLegend() {
