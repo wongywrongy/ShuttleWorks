@@ -451,27 +451,29 @@ export function DragGantt({
       <Hint id="schedule.drag-instructions" className="m-2">
         Drag a match to any cell — infeasible targets glow red. Drop pins the match and re-solves the rest.
       </Hint>
-      {/* The EVENTS hue legend is gone — the chip label prefix (MS1/WD2…)
-          already encodes the event, and blocks now paint the shared
-          lifecycle/exception language. The "?" key is the decode reference
-          (SPEC_AMENDMENT_timeline_encoding §4, Phase 4.2). */}
-      <TimelineKey variant="plan" />
-
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
-        <GanttTimeline
-          data-testid="drag-gantt-grid"
-          courts={courts}
-          minSlot={minSlot}
-          slotCount={slotCount}
-          density="standard"
-          placements={placements}
-          renderBlock={renderBlock}
-          renderCell={renderCell}
-          renderRow={renderRow}
-          renderCourtLabel={renderCourtLabel}
-          renderSlotLabel={renderSlotLabel}
-          currentSlot={currentSlot}
-        />
+        {/* The EVENTS hue legend is gone — the chip label prefix (MS1/WD2…)
+            already encodes the event, and blocks now paint the shared
+            lifecycle/exception language. The "?" key (anchored to the grid,
+            clear of the dismissable hint above) is the decode reference
+            (SPEC_AMENDMENT_timeline_encoding §4, Phase 4.2). */}
+        <div className="relative">
+          <TimelineKey variant="plan" />
+          <GanttTimeline
+            data-testid="drag-gantt-grid"
+            courts={courts}
+            minSlot={minSlot}
+            slotCount={slotCount}
+            density="standard"
+            placements={placements}
+            renderBlock={renderBlock}
+            renderCell={renderCell}
+            renderRow={renderRow}
+            renderCourtLabel={renderCourtLabel}
+            renderSlotLabel={renderSlotLabel}
+            currentSlot={currentSlot}
+          />
+        </div>
 
         <div
           className="flex items-center justify-between border-t border-border/60 bg-muted/40 px-3 py-1.5 text-2xs"
