@@ -2,8 +2,8 @@
  * Live timeline grid — the solver-optimization view. Read-only:
  * matches stream in as the solver improves the schedule. A thin
  * adapter over the shared GanttTimeline scaffold; the only thing it
- * owns is the event-colored chip + its entry animation and the
- * header legend/status strip.
+ * owns is the quiet neutral chip + its entry animation and the
+ * solver status strip.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -19,7 +19,6 @@ import type {
   PlayerDTO,
   TournamentConfig,
 } from '../../../../api/dto';
-import { EVENT_COLORS, getEventColor } from '../../../../lib/eventColors';
 
 interface LiveTimelineGridProps {
   assignments: ScheduleAssignment[];
@@ -105,7 +104,6 @@ export function LiveTimelineGrid({
   const renderBlock = useCallback(
     (placement: Placement, box: GanttBlockBox) => {
       const match = matchMap.get(placement.key);
-      const colors = getEventColor(match?.eventRank);
       const isAnimated = animatedIds.has(placement.key);
       const sideANames = match?.sideA
         ?.map((id) => playerMap.get(id)?.name || 'Unknown')
@@ -125,8 +123,11 @@ export function LiveTimelineGrid({
       return (
         <div
           // top-0.5 inset within the scaffold's row box (4px shorter).
+          // Quiet neutral (the shared "scheduled" intensity) — these are all
+          // pre-day assignments materializing; the chip label already names
+          // the event, so no event hues (one color language with Run).
           className={`absolute inset-x-0 top-0.5 rounded border cursor-default hover:brightness-95
-            ${colors.bg} ${colors.border}
+            bg-muted/30 border-border
             transition-[opacity,transform] duration-fast ease-brand
             ${isAnimated ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
           style={{ height: box.height - 4 }}
@@ -164,14 +165,9 @@ export function LiveTimelineGrid({
 
   return (
     <div>
-      {/* Legend + solver status strip */}
+      {/* Solver status strip (the EVENTS hue legend is gone — chips carry
+          their event in the label; one color language with Run). */}
       <div className="px-2 py-1 border-b border-border/60 bg-muted/40 flex items-center gap-3 text-xs">
-        {Object.entries(EVENT_COLORS).map(([key, { bg, border, label }]) => (
-          <span key={key} className="flex items-center gap-1 text-muted-foreground" title={label}>
-            <span className={`w-2.5 h-2.5 rounded ${bg} border ${border}`} />
-            {key}
-          </span>
-        ))}
         <div className="flex-1" />
         {status === 'solving' && (
           <span className="flex items-center gap-1 text-status-started">

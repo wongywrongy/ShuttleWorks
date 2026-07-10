@@ -79,6 +79,24 @@ the amber family under all CVD types; `postponed` uses a dash, no hue. A live de
 screenshot pass on a seeded board is recommended as a manual QA step before release; the render
 smoke test (`GanttChart.test.tsx`) asserts the glyph/tooltip channel exists independent of color.
 
+## 5a. Phase-4 Plan parity (shipped)
+
+The encoding is now a **shared module** — `src/products/meet/timelineEncoding.ts`
+(`LIFECYCLE_STYLES`, `lifecycleOf`, `exceptionFor`, `SELECTION_RING`) + `TimelineKey.tsx` (the
+"?" key, `variant="run" | "plan"`) — consumed by BOTH timelines, so Plan adopted rather than
+re-implemented (build-for-both):
+
+- **DragGantt** (Plan): blocks paint lifecycle-by-intensity from live match states; late/blocked/
+  postponed use the identical exception vocabulary; **event-type hues removed entirely** (the chip
+  label prefix — MS1/WD2… — already encodes the event) and the EVENTS legend row deleted;
+  `selected` → the neutral canon ring (was an accent fill that would collide with the in-progress
+  accent); **pinned → PushPin glyph** (+ dashed border as a shape cue), no longer a warning-colored
+  ring; infeasible drop targets keep the danger treatment (consistent with blocked). Rich tooltips
+  (`label · status · late/postponed/blocked/pinned`).
+- **LiveTimelineGrid** (the transient solve preview): chips → the quiet scheduled neutral; its
+  EVENTS legend removed. One color language across every meet timeline.
+- If event-level visual grouping is ever wanted again, that is a spec amendment — not a hue.
+
 ## 6. Components changed / removed
 
 - **CHANGED** `GanttChart.tsx` — `STATUS_STYLES` → intensity; `renderBlock` ring ladder → lifecycle

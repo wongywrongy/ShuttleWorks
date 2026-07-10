@@ -11,7 +11,14 @@
  *  - closed-court row/cell shading
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DoorOpen, Warning, WarningOctagon, Question } from '@phosphor-icons/react';
+import { DoorOpen } from '@phosphor-icons/react';
+import {
+  LIFECYCLE_STYLES,
+  SELECTION_RING,
+  exceptionFor,
+  lifecycleOf,
+} from '../timelineEncoding';
+import { TimelineKey } from '../TimelineKey';
 import {
   GanttTimeline,
   type Placement,
@@ -47,24 +54,9 @@ interface GanttChartProps {
   onRequestReopenCourt?: (courtId: number) => void;
 }
 
-// Lifecycle by INTENSITY — the single appearance channel (no fill×outline
-// combinatorics). scheduled = quiet neutral · called = subtle warm hint ·
-// in progress = the one accent, filled · finished = dimmed neutral. No
-// green on the timeline (SPEC_AMENDMENT_timeline_encoding §1). Exceptions
-// (late/blocked/postponed) are the only hues, layered as border+glyph.
-const STATUS_STYLES: Record<
-  'scheduled' | 'called' | 'started' | 'finished',
-  { bg: string; border: string; text: string }
-> = {
-  scheduled: { bg: 'bg-muted/30', border: 'border-border', text: 'text-foreground' },
-  called: { bg: 'bg-status-called-bg/60', border: 'border-status-called/40', text: 'text-foreground' },
-  started: {
-    bg: 'bg-accent/15 shadow-[inset_0_0_0_1px_hsl(var(--accent)/0.5)]',
-    border: 'border-accent/70',
-    text: 'text-accent',
-  },
-  finished: { bg: 'bg-muted/20', border: 'border-border/50', text: 'text-muted-foreground' },
-};
+// Lifecycle-by-intensity styles + the exception vocabulary live in the
+// shared ../timelineEncoding module so Plan's DragGantt paints the same
+// language (SPEC_AMENDMENT_timeline_encoding; Phase-4 build-for-both).
 
 function getMatchLabel(match: MatchDTO): string {
   if (match.eventRank) return match.eventRank;
@@ -72,89 +64,6 @@ function getMatchLabel(match: MatchDTO): string {
   return match.id.slice(0, 6);
 }
 
-/** Corner "?" key — the legend strip's replacement. A lightweight local
- *  disclosure (not a general Popover primitive), showing the intensity
- *  lifecycle + the exception hues. Closes on outside click / Escape. */
-function GanttKey() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  return (
-    <div ref={ref} className="absolute right-1 top-1 z-10">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-label="Timeline key"
-        title="Timeline key"
-        className="flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Question aria-hidden="true" className="h-3 w-3" />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-6 w-56 rounded border border-border bg-card p-3 text-2xs shadow-md">
-          <p className="mb-1.5 font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Lifecycle
-          </p>
-          <ul className="space-y-1">
-            <li className="flex items-center gap-2">
-              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-border bg-muted/30" />
-              Scheduled
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-status-called/40 bg-status-called-bg/60" />
-              Called
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-accent/70 bg-accent/15" />
-              In progress
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-border/50 bg-muted/20" />
-              Finished
-            </li>
-          </ul>
-          <p className="mb-1.5 mt-2.5 font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Exceptions
-          </p>
-          <ul className="space-y-1">
-            <li className="flex items-center gap-2 text-status-warning">
-              <Warning aria-hidden="true" weight="fill" className="h-3 w-3 flex-shrink-0" />
-              <span className="text-foreground">Late / overrun</span>
-            </li>
-            <li className="flex items-center gap-2 text-status-blocked">
-              <WarningOctagon aria-hidden="true" weight="fill" className="h-3 w-3 flex-shrink-0" />
-              <span className="text-foreground">Blocked</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="h-3 w-4 flex-shrink-0 rounded-sm border border-dashed border-status-idle opacity-70" />
-              Postponed
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="h-3 w-4 flex-shrink-0 rounded-sm border-2 border-dashed border-accent" />
-              Impacted by a pending fix
-            </li>
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function GanttChartImpl({
   schedule,
@@ -412,8 +321,8 @@ function GanttChartImpl({
       const matchId = placement.key;
       const match = matchMap.get(matchId);
       const state = matchStates[matchId];
-      const status = state?.status || 'scheduled';
-      const styles = STATUS_STYLES[status];
+      const status = lifecycleOf(state);
+      const styles = LIFECYCLE_STYLES[status];
       const isSelected = selectedMatchId === matchId;
       const isAnimated = animatedIds.has(matchId);
       const assignmentSlot = assignmentSlotById.get(matchId) ?? 0;
@@ -431,29 +340,18 @@ function GanttChartImpl({
       const isBlocked = !!conflictActionable && traffic!.status === 'red';
       const isResting = !!conflictActionable && traffic!.status === 'yellow';
 
-      // ONE exception hue, paired with a glyph (never colour alone).
-      // Priority: blocked (danger) > postponed (ghost) > late (warning).
-      // resting is evicted from the block — it lives in the tooltip only.
-      let exceptionBorder = styles.border;
-      let exceptionExtra = '';
-      let ExceptionGlyph: typeof Warning | null = null;
-      let glyphTone = '';
-      if (isBlocked) {
-        exceptionBorder = 'border-status-blocked';
-        ExceptionGlyph = WarningOctagon;
-        glyphTone = 'text-status-blocked';
-      } else if (isPostponed) {
-        exceptionBorder = 'border-dashed border-status-idle';
-        exceptionExtra = 'opacity-70';
-      } else if (isLate) {
-        exceptionBorder = 'border-status-warning';
-        ExceptionGlyph = Warning;
-        glyphTone = 'text-status-warning';
-      }
+      // ONE exception hue, paired with a glyph (never colour alone) —
+      // shared vocabulary. resting is evicted from the block (tooltip only).
+      const {
+        border: exceptionBorder,
+        extra: exceptionExtra,
+        Glyph: ExceptionGlyph,
+        glyphTone,
+      } = exceptionFor({ isBlocked, isPostponed, isLate, baseBorder: styles.border });
 
       // Selection is INTERACTION, not data → the neutral canon focus ring,
       // separate from the exception hues.
-      const selectionRing = isSelected ? 'ring-2 ring-inset ring-ring' : '';
+      const selectionRing = isSelected ? SELECTION_RING : '';
 
       const multiLane = (placement.laneCount ?? 1) > 1;
 
@@ -526,7 +424,7 @@ function GanttChartImpl({
 
   return (
     <div className="relative overflow-hidden">
-      <GanttKey />
+      <TimelineKey />
       <GanttTimeline
         courts={courts}
         minSlot={minSlot}
