@@ -65,7 +65,7 @@ export function SuggestionsRail() {
             <button
               type="button"
               onClick={() => setShowAll(true)}
-              className="block w-full px-3 py-1.5 text-2xs font-semibold uppercase tracking-wider text-fg-muted hover:text-fg hover:bg-bg-subtle"
+              className="block w-full px-3 py-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               + {overflow} more
             </button>

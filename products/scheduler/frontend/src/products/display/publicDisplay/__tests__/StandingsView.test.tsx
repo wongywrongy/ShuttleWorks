@@ -32,10 +32,12 @@ describe('StandingsView', () => {
     expect(screen.getByText(/no matches completed yet/i)).toBeInTheDocument();
   });
 
-  it('ranks the first row (server-sorted order) with the gold highlight, in given order', () => {
+  it('ranks the first row (server-sorted order) with the ink-emphasis highlight, in given order', () => {
     const { container } = render(<StandingsView standings={ROWS} />);
-    const rows = container.querySelectorAll('[class*="border-yellow-500"]');
+    const rows = container.querySelectorAll('[class*="border-l-2"]');
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent('Northside');
+    expect(rows[0].className).toContain('border-[hsl(var(--ink)/0.7)]');
+    expect(rows[0].className).toContain('bg-[hsl(var(--ink)/0.06)]');
   });
 });

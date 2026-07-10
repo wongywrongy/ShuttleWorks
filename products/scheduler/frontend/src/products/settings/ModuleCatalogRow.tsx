@@ -31,7 +31,7 @@ export function ModuleCatalogRow({
                 ? 'bg-accent/10 text-accent'
                 : module.status === 'available'
                   ? 'border border-border text-muted-foreground'
-                  : 'border border-dashed border-border text-muted-foreground/60',
+                  : 'border border-dashed border-border text-muted-foreground',
             ].join(' ')}
           >
             {module.status.replaceAll('-', ' ')}
@@ -39,7 +39,7 @@ export function ModuleCatalogRow({
         </div>
         <p className="text-xs text-muted-foreground">{meta?.capability ?? module.note}</p>
         {meta?.dependency ? (
-          <p className="text-2xs text-muted-foreground/70">{meta.dependency}</p>
+          <p className="text-2xs text-muted-foreground">{meta.dependency}</p>
         ) : null}
       </div>
       <div className="shrink-0">

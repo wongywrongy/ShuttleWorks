@@ -109,7 +109,7 @@ function SideSection({
                 className="rounded-sm border border-dashed border-border px-3 py-2 text-xs text-muted-foreground"
               >
                 <span className="italic">{id}</span>
-                <span className="ml-1.5 text-2xs text-muted-foreground/70">
+                <span className="ml-1.5 text-2xs text-muted-foreground">
                   Not on roster
                 </span>
               </div>

@@ -176,7 +176,7 @@ function CourtOrderRow({
           onClick={() => onToggleHidden(courtId)}
           aria-label={hidden ? `Show court ${courtId}` : `Hide court ${courtId}`}
           title={hidden ? `Show court ${courtId}` : `Hide court ${courtId}`}
-          className="rounded p-1 text-muted-foreground/70 transition-colors duration-fast ease-brand hover:text-foreground"
+          className="rounded p-1 text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground"
         >
           {hidden ? (
             <EyeSlash aria-hidden className="h-4 w-4" />
@@ -349,7 +349,7 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
             onClick={resetCourtLayout}
             aria-label="Reset court order &amp; visibility"
             title="Reset court order &amp; visibility"
-            className="inline-flex items-center gap-1 rounded p-1 text-2xs text-muted-foreground/70 transition-colors duration-fast ease-brand hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded p-1 text-2xs text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground"
           >
             <ArrowCounterClockwise aria-hidden className="h-3.5 w-3.5" />
             Reset

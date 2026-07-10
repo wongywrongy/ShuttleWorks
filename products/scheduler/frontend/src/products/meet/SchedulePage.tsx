@@ -213,7 +213,7 @@ export function SchedulePage() {
           <div className="mb-1 font-semibold text-destructive">
             Couldn't generate a feasible schedule
           </div>
-          <div className="text-destructive/90">
+          <div className="text-status-danger-fg">
             Try adding courts, reducing default rest time, extending the day,
             or relaxing player availability windows in Setup.
           </div>
@@ -222,7 +222,7 @@ export function SchedulePage() {
               <summary className="cursor-pointer text-destructive hover:underline">
                 Details ({schedule.infeasibleReasons.length})
               </summary>
-              <ul className="mt-1 max-h-24 list-disc overflow-y-auto pl-4 text-destructive/90">
+              <ul className="mt-1 max-h-24 list-disc overflow-y-auto pl-4 text-status-danger-fg">
                 {schedule.infeasibleReasons.slice(0, 10).map((reason, i) => (
                   <li key={i}>{reason}</li>
                 ))}

@@ -166,7 +166,7 @@ function SideSection({
             <span className="text-xs italic text-muted-foreground">
               Not yet determined
             </span>
-            <div className="mt-0.5 text-2xs text-muted-foreground/70 sw-num">
+            <div className="mt-0.5 text-2xs text-muted-foreground sw-num">
               {sideLabel(side, slot, {}, labelById)}
             </div>
           </div>
@@ -188,7 +188,7 @@ function SideSection({
                 className="rounded-sm border border-border px-3 py-2 text-xs text-muted-foreground"
               >
                 <span>{name}</span>
-                <span className="ml-1.5 text-2xs text-muted-foreground/70">
+                <span className="ml-1.5 text-2xs text-muted-foreground">
                   Not on roster
                 </span>
               </div>

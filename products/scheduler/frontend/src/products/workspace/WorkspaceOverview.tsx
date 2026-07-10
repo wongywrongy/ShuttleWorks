@@ -123,7 +123,7 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
                       aria-hidden
                       className={[
                         'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs',
-                        done ? 'bg-status-live/12 text-status-live' : 'border border-border text-muted-foreground/50',
+                        done ? 'bg-status-live/12 text-status-live' : 'border border-border text-muted-foreground',
                       ].join(' ')}
                     >
                       {done ? '✓' : '○'}
@@ -144,7 +144,7 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
                         >
                           {icon}
                           {label}
-                          <span aria-hidden className="ml-auto text-muted-foreground/60">&rsaquo;</span>
+                          <span aria-hidden className="ml-auto text-muted-foreground">&rsaquo;</span>
                         </button>
                       </li>
                     );

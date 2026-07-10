@@ -118,7 +118,7 @@ export function EventsControl({
                     <EventBadge key={entryCode(e)} code={entryCode(e)} />
                   ))
                 ) : (
-                  <span className="text-2xs italic text-muted-foreground/70">
+                  <span className="text-2xs italic text-muted-foreground">
                     Not entered
                   </span>
                 )}

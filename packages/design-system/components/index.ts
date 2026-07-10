@@ -21,11 +21,8 @@ export {
   CardContent,
   type CardProps,
 } from './Card';
-export { Input } from './Input';
 export { Select, type SelectProps, type SelectOption } from './Select';
-export { Label } from './Label';
 export { Separator } from './Separator';
-export { PageHeader } from './PageHeader';
 export { StatusPill, type PillTone } from './StatusPill';
 export {
   StatusBar,

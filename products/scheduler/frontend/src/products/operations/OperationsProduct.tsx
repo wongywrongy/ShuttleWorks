@@ -198,7 +198,7 @@ function OperationsBody() {
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</span>
-          <span className="text-xs text-muted-foreground/70">{subtitle}</span>
+          <span className="text-xs text-muted-foreground">{subtitle}</span>
         </div>
         {/* Plan is the planning surface: build / adjust the plan. Run runs
             what Plan produced — no scheduling actions there. */}

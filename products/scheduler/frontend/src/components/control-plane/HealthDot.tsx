@@ -5,7 +5,7 @@ import type { WorkspaceHealth } from '../../products/hub/hubSignals';
 export function healthColorClass(h: WorkspaceHealth): string {
   if (h === 'good') return 'bg-status-live';
   if (h === 'attention') return 'bg-status-warning';
-  return 'bg-muted-foreground/40';
+  return 'bg-muted-foreground';
 }
 
 export function HealthDot({ health, title }: { health: WorkspaceHealth; title?: string }) {

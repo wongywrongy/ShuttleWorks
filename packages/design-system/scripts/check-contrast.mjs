@@ -128,6 +128,11 @@ for (const [theme, vars] of [['light', varsOf(lightBlock)], ['dark', varsOf(dark
   for (const fam of ['live', 'called'])
     check(theme, `status-${fam}-ink on status-${fam}-solid`, v(`--status-${fam}-ink`), v(`--status-${fam}-solid`), 4.5);
 
+  // Interaction washes must keep text legible on them (Phase 0a).
+  for (const t of ['--text-primary', '--text-muted'])
+    for (const w of ['--surface-hover', '--surface-selected-wash'])
+      check(theme, `${t.slice(2)} on ${w.slice(2)}`, v(t), v(w), 4.5);
+
   // Non-text UI ≥ 3:1
   check(theme, 'border-strong (inputs) on surface-raised', v('--border-strong'), v('--surface-raised'), 3.0);
   check(theme, 'border-focus on surface-base', v('--border-focus'), v('--surface-base'), 3.0);

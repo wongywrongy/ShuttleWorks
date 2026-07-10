@@ -116,16 +116,16 @@ export function WorkspaceSidebar({ tid, kind, modules, activeTab }: WorkspaceSid
                 className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-muted/40"
               >
                 <span className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     {s.label}
                   </span>
-                  <span className="rounded-sm border border-border px-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/60">
+                  <span className="rounded-sm border border-border px-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
                     {roleBadge(s.role)}
                   </span>
                 </span>
                 <CaretRight
                   aria-hidden
-                  className={`h-3 w-3 shrink-0 text-muted-foreground/50 transition-transform ${open ? 'rotate-90' : ''}`}
+                  className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
                 />
               </button>
               {open ? (
@@ -147,7 +147,7 @@ export function WorkspaceSidebar({ tid, kind, modules, activeTab }: WorkspaceSid
 
       {/* Tier 3 — Workspace admin (always, bottom) */}
       <div className="my-2 border-t border-border" />
-      <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+      <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {nav.admin.label}
       </div>
       <div className="space-y-0.5">

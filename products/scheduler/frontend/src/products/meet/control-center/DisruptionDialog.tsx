@@ -202,7 +202,7 @@ export function DisruptionDialog({
             </label>
 
             {/* Closure mode — indefinite (default) or time-bounded. */}
-            <div className="rounded border border-border bg-bg-subtle p-2">
+            <div className="rounded border border-border bg-muted p-2">
               <label className="flex cursor-pointer items-center gap-2 text-xs">
                 <input
                   type="checkbox"
@@ -210,7 +210,7 @@ export function DisruptionDialog({
                   onChange={(e) => setClosureTemporary(e.target.checked)}
                   className="h-3.5 w-3.5 rounded border-border"
                 />
-                <span className="text-fg">
+                <span className="text-foreground">
                   Temporary closure (specify start/end time)
                 </span>
               </label>

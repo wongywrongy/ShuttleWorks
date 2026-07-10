@@ -100,7 +100,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
         )}
         <div>{toast.message}</div>
         {toast.detail && (
-          <div className="mt-0.5 text-[10px] opacity-60 truncate">
+          <div className="mt-0.5 text-[10px] truncate">
             {toast.detail}
           </div>
         )}
@@ -126,7 +126,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
         aria-label="Dismiss"
         className={cn(
           INTERACTIVE_BASE_QUIET,
-          'flex h-6 w-6 items-center justify-center rounded-sm opacity-60 hover:opacity-100 hover:bg-foreground/10'
+          'flex h-6 w-6 items-center justify-center rounded-sm hover:bg-foreground/10'
         )}
       >
         <X aria-hidden="true" className="h-4 w-4" />

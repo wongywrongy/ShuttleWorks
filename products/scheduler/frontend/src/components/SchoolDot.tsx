@@ -8,14 +8,15 @@ import type { SchoolAccent } from '../lib/schoolAccent';
 
 interface SchoolDotProps {
   accent: SchoolAccent;
-  /** ``sm`` = 6px (default, inline next to text). ``md`` = 8px (chips,
-   *  card headers). ``lg`` = 10px (TV, headline contexts). */
+  /** ``sm`` = 8px (default, inline next to text — 8px is the contrast
+   *  floor for the dot to read). ``md`` = 8px (chips, card headers).
+   *  ``lg`` = 10px (TV, headline contexts). */
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 
 const SIZE_PX: Record<NonNullable<SchoolDotProps['size']>, number> = {
-  sm: 6,
+  sm: 8,
   md: 8,
   lg: 10,
 };

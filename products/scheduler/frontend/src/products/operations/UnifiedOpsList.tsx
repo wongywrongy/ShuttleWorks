@@ -105,7 +105,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         ? 'bg-status-live'
         : b.court != null
           ? 'bg-status-called'
-          : 'bg-muted-foreground/40';
+          : 'bg-muted-foreground';
     return (
       <li
         key={b.key}

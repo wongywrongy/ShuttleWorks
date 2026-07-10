@@ -132,6 +132,9 @@ module.exports = {
           active: 'hsl(var(--surface-active))',
           chip:   'hsl(var(--chip-tag))',
           card:   'hsl(var(--bg-elev))',
+          // Phase 0a interaction washes — visible on every step, both themes.
+          hover:           'hsl(var(--surface-hover))',
+          'selected-wash': 'hsl(var(--surface-selected-wash))',
         },
         text: {
           primary:     'hsl(var(--text-primary))',

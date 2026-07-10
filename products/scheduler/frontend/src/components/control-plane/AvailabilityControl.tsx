@@ -111,7 +111,7 @@ export function AvailabilityControl({
                 onClick={() => removeAt(i)}
                 aria-label={`Remove unavailable period ${i + 1}`}
                 data-testid={`availability-period-remove-${i}`}
-                className="shrink-0 rounded-sm p-0.5 text-muted-foreground/60 transition-colors duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+                className="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
               >
                 ×
               </button>

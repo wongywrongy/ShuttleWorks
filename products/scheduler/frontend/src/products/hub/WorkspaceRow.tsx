@@ -53,10 +53,10 @@ function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
 
 /** Tabular date cell — "Jul 12" (year only when it isn't this year); undated
  *  reads as a muted em-dash so the column still aligns. */
-function DateCell({ iso, receded }: { iso: string | null; receded: boolean }) {
+function DateCell({ iso }: { iso: string | null }) {
   if (!iso) {
     return (
-      <span className="w-14 shrink-0 text-2xs sw-num text-muted-foreground/50">—</span>
+      <span className="w-14 shrink-0 text-2xs sw-num text-muted-foreground">—</span>
     );
   }
   const d = eventDate(iso);
@@ -71,7 +71,7 @@ function DateCell({ iso, receded }: { iso: string | null; receded: boolean }) {
     : iso.slice(0, 10);
   return (
     <span
-      className={`w-14 shrink-0 text-2xs sw-num ${receded ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}
+      className="w-14 shrink-0 text-2xs sw-num text-muted-foreground"
     >
       {label}
     </span>
@@ -126,13 +126,13 @@ export function WorkspaceRow({
       className={[
         'group flex min-h-[40px] cursor-pointer items-center gap-3 px-4 py-2 text-sm',
         'transition-colors duration-fast ease-brand',
-        receded ? 'opacity-60 hover:opacity-100' : '',
+        receded ? 'opacity-80 hover:opacity-100' : '',
         selected
           ? 'bg-bg-elev shadow-[inset_2px_0_0_hsl(var(--accent))]'
           : 'hover:bg-muted/40',
       ].join(' ')}
     >
-      {showDate ? <DateCell iso={tournament.tournamentDate} receded={receded} /> : null}
+      {showDate ? <DateCell iso={tournament.tournamentDate} /> : null}
 
       <span className="flex min-w-0 flex-1 items-center gap-2.5">
         <HealthDot health={health} />

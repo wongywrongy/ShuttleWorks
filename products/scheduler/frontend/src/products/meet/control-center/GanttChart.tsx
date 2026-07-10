@@ -269,7 +269,7 @@ export function GanttChart({
       const fullyClosed = isCourtFullyClosed(closedWindows, courtId, minSlot, maxSlot);
       if (!fullyClosed) return null;
       return (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-2xs uppercase tracking-wider text-muted-foreground/80">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-2xs uppercase tracking-wider text-muted-foreground">
           closed
         </div>
       );

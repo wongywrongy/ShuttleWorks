@@ -6,7 +6,8 @@
  * and served on `TournamentStateDTO.standings`. This replaces the old
  * client-side `groupScores` computation that used to live in
  * `MeetDisplayPage.tsx` (deleted). Server-sorted order is rendered
- * as-is; the top row gets a gold-tinted card to draw the eye.
+ * as-is; the top row gets a preset-relative ink-emphasis card (works on
+ * every TV preset) to draw the eye.
  */
 import type { MeetStandingRowDTO } from '../../../api/dto';
 
@@ -31,7 +32,7 @@ export function StandingsView({ standings }: StandingsViewProps) {
               key={team.groupId}
               className={`flex items-center gap-5 rounded-sm border px-5 py-4 ${
                 index === 0
-                  ? 'border-yellow-500/60 bg-yellow-500/10'
+                  ? 'border-l-2 border-[hsl(var(--ink)/0.7)] bg-[hsl(var(--ink)/0.06)]'
                   : 'border-border bg-card/60'
               }`}
             >

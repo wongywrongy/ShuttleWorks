@@ -17,5 +17,5 @@ export const STATUS_CLASS: Record<BracketMatchStatus, string> = {
   done: 'text-status-done',
   live: 'text-status-live',
   ready: 'text-status-warning',
-  pending: 'text-muted-foreground/70',
+  pending: 'text-muted-foreground',
 };

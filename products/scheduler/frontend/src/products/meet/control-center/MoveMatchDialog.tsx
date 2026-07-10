@@ -218,14 +218,14 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
         </div>
 
         {/* Mode segmented control */}
-        <div className="flex rounded border border-border bg-bg-subtle p-0.5">
+        <div className="flex rounded border border-border bg-muted p-0.5">
           <button
             type="button"
             onClick={() => setMode('postpone')}
             className={`${INTERACTIVE_BASE} flex-1 rounded px-2 py-1 text-xs font-medium ${
               mode === 'postpone'
-                ? 'bg-card text-fg shadow-sm'
-                : 'text-fg-muted hover:text-fg'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Clock aria-hidden="true" className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
@@ -236,8 +236,8 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
             onClick={() => setMode('move-to')}
             className={`${INTERACTIVE_BASE} flex-1 rounded px-2 py-1 text-xs font-medium ${
               mode === 'move-to'
-                ? 'bg-card text-fg shadow-sm'
-                : 'text-fg-muted hover:text-fg'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <ArrowRight aria-hidden="true" className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
@@ -292,9 +292,9 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
         )}
 
         {/* Pinned target preview */}
-        <div className="rounded border border-border bg-bg-subtle px-2 py-1.5 text-xs">
+        <div className="rounded border border-border bg-muted px-2 py-1.5 text-xs">
           <span className="text-muted-foreground">Pinned target: </span>
-          <span className="sw-num text-fg">{previewLabel}</span>
+          <span className="sw-num text-foreground">{previewLabel}</span>
         </div>
 
         <div className="flex justify-end gap-2 pt-1">

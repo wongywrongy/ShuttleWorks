@@ -340,7 +340,7 @@ export function MatchDetailsPanel({
                         >
                           {s.sideA}
                         </span>
-                        <span className="mx-0.5 text-muted-foreground/70">–</span>
+                        <span className="mx-0.5 text-muted-foreground">–</span>
                         <span
                           className={setWinner === 'B' ? 'font-bold text-foreground' : 'text-muted-foreground'}
                         >

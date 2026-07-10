@@ -83,7 +83,7 @@ export function Select<T extends string = string>({
         aria-label={ariaLabel}
         style={triggerStyle}
         className={cn(
-          'inline-flex items-center justify-between gap-2 rounded-sm border border-input bg-bg-elev',
+          'inline-flex items-center justify-between gap-2 rounded-sm border border-rule-control bg-bg-elev',
           'text-foreground transition-colors duration-fast ease-brand',
           'hover:border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           'data-[state=open]:border-accent data-[placeholder]:text-muted-foreground',

@@ -123,10 +123,10 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
                   {/* De-emphasized PLANNED clock — never the primary label,
                       and never shown at all on the live "Now" court above. */}
                   {nextStartTime && (
-                    <span className="text-2xs text-muted-foreground/70"> ~{nextStartTime}</span>
+                    <span className="text-2xs text-muted-foreground"> ~{nextStartTime}</span>
                   )}
                   {laterMatch && (
-                    <span className="text-2xs text-muted-foreground/60">
+                    <span className="text-2xs text-muted-foreground">
                       {'  ·  Later '}
                       {formatPlayers(laterMatch.sideA, playerNames)} vs{' '}
                       {formatPlayers(laterMatch.sideB, playerNames)}
@@ -394,7 +394,7 @@ function NextUp({
         >
           Next
           {nextStartTime && (
-            <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground/70">
+            <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground">
               ~{nextStartTime}
             </span>
           )}

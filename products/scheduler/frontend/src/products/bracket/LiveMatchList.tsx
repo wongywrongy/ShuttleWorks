@@ -111,7 +111,7 @@ export function LiveMatchList({ data, onChange }: Props) {
         ? 'bg-status-live'
         : assignment
           ? 'bg-status-called'
-          : 'bg-muted-foreground/40';
+          : 'bg-muted-foreground';
 
     return (
       <li

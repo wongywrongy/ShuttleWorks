@@ -410,7 +410,7 @@ const MatchRow = memo(function MatchRow({
           e.stopPropagation();
           onDelete(match.id);
         }}
-        className="w-8 rounded-sm p-1 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+        className="w-8 rounded-sm p-1 text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
         title="Delete match"
         aria-label="Delete match"
       >
@@ -618,7 +618,7 @@ function PlayerCellEditor({
                 aria-label={`Remove ${p.name}`}
                 // Zero width at rest so the trailing comma hugs the name
                 // ("Kim, Novak" not "Kim , Novak"); expands on row hover.
-                className="w-0 overflow-hidden text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:text-destructive group-hover:ml-0.5 group-hover:w-auto group-hover:opacity-100"
+                className="w-0 overflow-hidden text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:text-destructive group-hover:ml-0.5 group-hover:w-auto group-hover:opacity-100"
               >
                 ×
               </button>
@@ -634,7 +634,7 @@ function PlayerCellEditor({
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-label={`Add player to ${side}`}
-            className="text-xs italic text-muted-foreground/70 transition-colors duration-fast ease-brand hover:text-accent"
+            className="text-xs italic text-muted-foreground transition-colors duration-fast ease-brand hover:text-accent"
           >
             ＋ add
           </button>

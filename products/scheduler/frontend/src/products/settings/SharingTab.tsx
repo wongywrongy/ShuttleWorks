@@ -171,7 +171,7 @@ export function SharingTab({ tid }: { tid: string }) {
                       <span
                         className={[
                           'text-xs font-medium',
-                          status === 'active' ? 'text-accent' : 'text-muted-foreground/70',
+                          status === 'active' ? 'text-accent' : 'text-muted-foreground',
                         ].join(' ')}
                       >
                         {STATUS_LABEL[status]}

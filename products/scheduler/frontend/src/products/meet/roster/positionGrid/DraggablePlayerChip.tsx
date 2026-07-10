@@ -41,7 +41,7 @@ export function DraggablePlayerChip({
           'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-sm px-1 text-3xs tabular-nums',
           heavy
             ? 'bg-status-warning-bg text-status-warning ring-1 ring-status-warning/40'
-            : 'text-muted-foreground/70',
+            : 'text-muted-foreground',
         ].join(' ')}
         title={
           heavy

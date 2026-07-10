@@ -38,6 +38,11 @@ class ErrorCode(str, Enum):
     BACKUP_NOT_FOUND = "BACKUP_NOT_FOUND"
     BACKUP_RESTORE_FAILED = "BACKUP_RESTORE_FAILED"
 
+    # Locked settings (Phase 0a — backend mirrors of the frontend locks;
+    # a frontend-only lock is a suggestion, not a lock)
+    CONFIG_LOCKED = "CONFIG_LOCKED"
+    ROSTER_LOCKED = "ROSTER_LOCKED"
+
     # Generic input validation (deeper than schema — raised when a
     # converter sees a malformed value that slipped past Pydantic).
     INVALID_INPUT = "INVALID_INPUT"

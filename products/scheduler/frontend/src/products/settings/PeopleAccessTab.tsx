@@ -81,7 +81,7 @@ export function PeopleAccessTab({
                   </span>
                   <span className="flex flex-col">
                     <span className="text-xs font-medium capitalize text-foreground">{m.role}</span>
-                    <span className="font-mono text-2xs text-muted-foreground/70" title="Member id">
+                    <span className="font-mono text-2xs text-muted-foreground" title="Member id">
                       {shortId(m.userId)}
                     </span>
                   </span>

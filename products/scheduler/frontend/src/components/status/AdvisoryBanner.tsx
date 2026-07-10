@@ -81,7 +81,7 @@ export function AdvisoryBanner({ readOnly = false, onReview, className = '' }: A
       <div className="flex-1 min-w-0">
         <div className={`text-sm font-medium ${tone.text}`}>{advisory.summary}</div>
         {advisory.detail && (
-          <div className={`mt-0.5 text-xs ${tone.text} opacity-80`}>{advisory.detail}</div>
+          <div className={`mt-0.5 text-xs ${tone.text}`}>{advisory.detail}</div>
         )}
       </div>
       {!readOnly && advisory.suggestedAction && onReview && (

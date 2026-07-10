@@ -34,7 +34,7 @@ export function ScheduleLockIndicator({
       </svg>
       <span>Schedule locked</span>
       {showUnlockHint && (
-        <span className="text-status-warning-fg/80">(edits will clear schedule)</span>
+        <span className="text-status-warning-fg">(edits will clear schedule)</span>
       )}
     </div>
   );

@@ -173,7 +173,7 @@ function TwoTierHeaderRow({
         >
           <span className={COLUMN_HEADER_ROW_CLASSES}>{col.label}</span>
           {col.subLabel ? (
-            <span className="text-3xs lowercase text-muted-foreground/70">
+            <span className="text-3xs lowercase text-muted-foreground">
               {col.subLabel}
             </span>
           ) : null}

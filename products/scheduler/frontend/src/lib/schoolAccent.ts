@@ -16,14 +16,14 @@ import type { PlayerDTO, RosterGroupDTO } from '../api/dto';
  *  Drawn from Tailwind's *-600 family so they read as data, not
  *  decoration. Order is fixed; the hash below indexes into it. */
 const PALETTE = [
-  '#2563eb', // blue
+  '#3B82F6', // blue
   '#059669', // emerald
   '#d97706', // amber
-  '#7c3aed', // violet
+  '#8B5CF6', // violet
   '#0d9488', // teal
   '#e11d48', // rose
   '#ea580c', // orange
-  '#475569', // slate
+  '#64748B', // slate
 ] as const;
 
 /** Stable 32-bit string hash (djb2). Sufficient to spread school IDs

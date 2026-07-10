@@ -101,14 +101,14 @@ export function DirectorToolsPanel() {
           <div className="sticky top-0 z-10 -mx-3 -mt-3 mb-2 border-b border-border bg-card/95 px-3 py-2 backdrop-blur-sm">
             <div className="flex items-center gap-2">
               <DoorOpen className="h-4 w-4 text-status-warning" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-fg">
+              <h3 className="text-sm font-semibold text-foreground">
                 Closed courts
               </h3>
               <span className="rounded bg-status-warning-bg px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-status-warning">
                 {(config.closedCourts ?? []).length + (config.courtClosures ?? []).length}
               </span>
             </div>
-            <p className="mt-0.5 text-2xs text-fg-muted">
+            <p className="mt-0.5 text-2xs text-muted-foreground">
               Reopen clears every closure on that court.
             </p>
           </div>
@@ -116,11 +116,11 @@ export function DirectorToolsPanel() {
             {(config.closedCourts ?? []).map((courtId) => (
               <li
                 key={`legacy-${courtId}`}
-                className="flex items-center justify-between rounded bg-bg-subtle px-2 py-1 text-xs"
+                className="flex items-center justify-between rounded bg-muted px-2 py-1 text-xs"
               >
-                <span className="text-fg">
+                <span className="text-foreground">
                   Court {courtId}{' '}
-                  <span className="ml-1 text-fg-muted">· all day</span>
+                  <span className="ml-1 text-muted-foreground">· all day</span>
                 </span>
                 <button
                   type="button"
@@ -128,7 +128,7 @@ export function DirectorToolsPanel() {
                   disabled={loading}
                   title="Reopen court — clears every closure for this court"
                   aria-label={`Reopen Court ${courtId} — clears every closure for this court`}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-muted/40 disabled:opacity-50`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-foreground hover:bg-muted/40 disabled:opacity-50`}
                 >
                   <DoorOpen className="h-3 w-3" aria-hidden="true" />
                   Reopen…
@@ -138,11 +138,11 @@ export function DirectorToolsPanel() {
             {(config.courtClosures ?? []).map((closure, i) => (
               <li
                 key={`window-${closure.courtId}-${i}`}
-                className="flex items-center justify-between rounded bg-bg-subtle px-2 py-1 text-xs"
+                className="flex items-center justify-between rounded bg-muted px-2 py-1 text-xs"
               >
-                <span className="text-fg">
+                <span className="text-foreground">
                   Court {closure.courtId}{' '}
-                  <span className="ml-1 text-fg-muted">
+                  <span className="ml-1 text-muted-foreground">
                     · {closure.fromTime ?? 'start'}–{closure.toTime ?? 'end'}
                     {closure.reason ? ` · ${closure.reason}` : ''}
                   </span>
@@ -153,7 +153,7 @@ export function DirectorToolsPanel() {
                   disabled={loading}
                   title="Reopen court — clears every closure for this court"
                   aria-label={`Reopen Court ${closure.courtId} — clears every closure for this court`}
-                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-fg hover:bg-muted/40 disabled:opacity-50`}
+                  className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-foreground hover:bg-muted/40 disabled:opacity-50`}
                 >
                   <DoorOpen className="h-3 w-3" aria-hidden="true" />
                   Reopen…
@@ -167,7 +167,7 @@ export function DirectorToolsPanel() {
       {/* Delay start */}
       <section className="rounded border border-border p-3">
         <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+          <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <h3 className="text-sm font-semibold">Delay start</h3>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -201,7 +201,7 @@ export function DirectorToolsPanel() {
           </button>
         </div>
         {(config.clockShiftMinutes ?? 0) > 0 && (
-          <div className="mt-2 text-xs text-fg-muted">
+          <div className="mt-2 text-xs text-muted-foreground">
             Currently shifted by {config.clockShiftMinutes} min.
           </div>
         )}
@@ -210,7 +210,7 @@ export function DirectorToolsPanel() {
       {/* Insert break / blackout */}
       <section className="rounded border border-border p-3">
         <div className="flex items-center gap-2">
-          <Coffee className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+          <Coffee className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <h3 className="text-sm font-semibold">Insert break</h3>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -267,9 +267,9 @@ export function DirectorToolsPanel() {
             {config.breaks.map((b, i) => (
               <li
                 key={`${b.start}-${b.end}-${i}`}
-                className="flex items-center justify-between rounded bg-bg-subtle px-2 py-1 text-xs"
+                className="flex items-center justify-between rounded bg-muted px-2 py-1 text-xs"
               >
-                <span className="text-fg">
+                <span className="text-foreground">
                   {b.start}–{b.end}
                 </span>
                 <button
@@ -277,7 +277,7 @@ export function DirectorToolsPanel() {
                   onClick={() => handleRemoveBlackout(i)}
                   disabled={loading}
                   aria-label="Remove blackout"
-                  className={`${INTERACTIVE_BASE} rounded p-0.5 text-fg-muted hover:bg-bg-subtle hover:text-fg`}
+                  className={`${INTERACTIVE_BASE} rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground`}
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>

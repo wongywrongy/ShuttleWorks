@@ -223,6 +223,12 @@
     --text-muted:      var(--gray-7);   /* #5F6877 */
     --text-on-accent:  var(--gray-0);   /* #FFFFFF */
 
+    /* Interaction washes (Phase 0a) — hover/selected must be VISIBLE on
+     * every surface step in both themes (old bg-muted/40 washes were no-ops
+     * on dark raised surfaces). Opaque tokens; apply as bg. */
+    --surface-hover:         var(--gray-2);   /* #EFF2F5 */
+    --surface-selected-wash: var(--blue-1);   /* #ECF1FC */
+
     /* Borders */
     --border-hairline: var(--gray-3);   /* #E3E7EC dividers (decorative)     */
     --border-strong:   var(--gray-6);   /* #7E8798 inputs/controls — ≥3:1    */
@@ -370,6 +376,11 @@
     --text-muted:      var(--gray-5);   /* #ACB4C0 — clears 4.5 on overlay   */
     --text-on-accent:  var(--blue-ink); /* #0E1A2F navy on the light accent  */
 
+    /* Interaction washes — dark values visible on raised (16%): hover
+     * lightens toward overlay; selected uses the deep azure. */
+    --surface-hover:         var(--gray-10);  /* #313640 */
+    --surface-selected-wash: var(--blue-10);  /* #14213D */
+
     /* Borders */
     --border-hairline: 221 13% 20%;     /* #2C313B divider on base/raised    */
     --border-strong:   var(--gray-6);   /* #7E8798 inputs — ≥3:1 on raised   */
@@ -452,8 +463,15 @@
     --module-display: var(--sky-4);
 
     /* ----- Legacy aliases -------------------------------------------------- */
-    --secondary:          var(--surface-raised);
-    --muted:              var(--surface-raised);
+    /* Phase 0a fix (audit §3.G): dark --muted/--secondary aliased the RAISED
+     * surface, so every bg-muted/* wash and solid muted panel on a card was
+     * pixel-identical to the card — invisible hover/selected states,
+     * vanished header bands. --muted now maps to the SUNKEN gray (solids
+     * read recessed; alpha washes visibly darken on every surface step);
+     * --secondary (solid control fills) maps one step ABOVE raised so
+     * secondary buttons are visible on cards. */
+    --secondary:          var(--gray-10);
+    --muted:              var(--gray-13);
     --destructive:        var(--red-4);
     --destructive-foreground: var(--gray-13);
     --input:              var(--rule-soft);

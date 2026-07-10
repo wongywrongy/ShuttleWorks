@@ -86,7 +86,7 @@ export function InlineSearch({
           placeholder={placeholder}
           className={[
             'h-7 w-full rounded border border-border bg-background pl-7 pr-7 text-xs',
-            'placeholder:text-muted-foreground/70',
+            'placeholder:text-muted-foreground',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           ].join(' ')}
         />

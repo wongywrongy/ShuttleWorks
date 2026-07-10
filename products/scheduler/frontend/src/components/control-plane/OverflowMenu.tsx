@@ -17,7 +17,7 @@ export function OverflowMenu({ label, items }: { label?: string; items: Overflow
       <MenuButton
         aria-label={label ?? 'More actions'}
         onClick={(e) => e.stopPropagation()}
-        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted/40 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <DotsThree aria-hidden weight="bold" className="h-5 w-5" />
       </MenuButton>

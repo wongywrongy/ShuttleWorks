@@ -882,6 +882,35 @@ class _LocalBracketRepo:
         ).all()
         return {tid: int(c) for tid, c in rows}
 
+    def player_ids_referenced_by_generated(
+        self, tournament_id: uuid.UUID
+    ) -> set[str]:
+        """Roster player ids that a GENERATED (non-draft) draw references.
+
+        Union of participant ids and their ``member_ids`` across every
+        non-draft event. Feeds the Phase-0a ROSTER_LOCKED guard: deleting a
+        bracket roster player who is placed in a generated draw silently
+        invalidates the draw's placements, so the state PUT 409s instead.
+        """
+        rows = self.session.execute(
+            select(BracketParticipant.id, BracketParticipant.member_ids)
+            .join(
+                BracketEvent,
+                (BracketEvent.tournament_id == BracketParticipant.tournament_id)
+                & (BracketEvent.id == BracketParticipant.bracket_event_id),
+            )
+            .where(
+                BracketParticipant.tournament_id == tournament_id,
+                BracketEvent.status != "draft",
+            )
+        ).all()
+        out: set[str] = set()
+        for pid, member_ids in rows:
+            out.add(pid)
+            for mid in member_ids or []:
+                out.add(mid)
+        return out
+
     def resolved_unit_ids_by_tournament(
         self, tournament_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, set[str]]:

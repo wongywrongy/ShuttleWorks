@@ -43,7 +43,7 @@ const STATE_FILL: Record<MatchChipState, string> = {
   scheduled: 'bg-card border-border text-ink-3 hover:brightness-110',
   called: 'bg-status-called-solid border-status-called-border text-status-called-ink hover:brightness-110',
   playing: 'bg-status-live-solid border-status-live-border text-status-live-ink hover:brightness-110',
-  done: 'bg-surface-band border-border text-muted-foreground opacity-70 hover:brightness-110',
+  done: 'bg-surface-band border-border/60 text-muted-foreground hover:brightness-110',
 };
 
 export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -122,14 +122,14 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         {/* Source initial square (M=meet, B=bracket) */}
         <span
           aria-hidden
-          className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-xs text-[8px] font-semibold sw-num ${squareCls}`}
+          className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-xs text-3xs font-semibold sw-num ${squareCls}`}
         >
           {SOURCE_INITIAL[source]}
         </span>
         <span className={`truncate text-2xs font-semibold sw-num${doneLabel ? ' line-through' : ''}`}>{label}</span>
       </span>
       {showSides && sideA != null && sideB != null && (
-        <span className="mt-0.5 truncate text-2xs leading-tight opacity-80">
+        <span className="mt-0.5 truncate text-2xs leading-tight">
           {sideA} <span className="opacity-60">v</span> {sideB}
         </span>
       )}

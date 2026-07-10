@@ -189,7 +189,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
           <ul data-testid="inspector-checklist" className="grid grid-cols-2 gap-x-3 gap-y-1.5">
             {setupEntries.map(([key, done]) => (
               <li key={key} className="flex items-center gap-1.5 text-xs capitalize text-muted-foreground">
-                <span aria-hidden className={done ? 'text-status-success-fg' : 'text-muted-foreground/40'}>
+                <span aria-hidden className={done ? 'text-status-success-fg' : 'text-muted-foreground'}>
                   {done ? '✓' : '○'}
                 </span>
                 {setupLabel(key)}

@@ -247,7 +247,7 @@ function EventTypeEditor({
                     </span>
                   ) : null}
                   <span
-                    className="text-2xs italic text-muted-foreground/70"
+                    className="text-2xs italic text-muted-foreground"
                     data-testid={`event-locked-${ev.id}`}
                     title="Participants are locked once a draw is generated."
                   >

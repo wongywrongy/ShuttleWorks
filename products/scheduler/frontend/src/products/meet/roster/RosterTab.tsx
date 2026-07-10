@@ -425,7 +425,7 @@ function SchoolTabs({
           >
             <span className="max-w-[14rem] truncate">{g.name}</span>
             <span
-              className={`tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground/60'}`}
+              className={`tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground'}`}
             >
               {counts.get(g.id) ?? 0}
             </span>
@@ -710,7 +710,7 @@ function PlayerListSection({
               }}
               title={`Remove ${p.name}`}
               aria-label={`Remove ${p.name}`}
-              className="shrink-0 rounded-sm p-0.5 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+              className="shrink-0 rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
             >
               ×
             </button>

@@ -174,7 +174,7 @@ describe('<BracketMatchesTab />', () => {
       expect(el.className).toContain('text-status-warning');
     }
     for (const el of screen.getAllByText('Pending')) {
-      expect(el.className).toContain('text-muted-foreground/70');
+      expect(el.className).toContain('text-muted-foreground');
     }
   });
 

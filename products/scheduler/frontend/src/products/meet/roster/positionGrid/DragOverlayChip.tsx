@@ -12,7 +12,7 @@ export function DragOverlayChip({ name }: { name: string }) {
       <DotsSixVertical
         aria-hidden
         weight="bold"
-        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
       />
       <span className="truncate">{name || '(unnamed)'}</span>
     </div>

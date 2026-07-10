@@ -533,12 +533,84 @@ def put_tournament_state(
     field the GET route recomputes on every read (see
     ``_meet_standings_for``); persisting a client-sent snapshot of it
     would let a stale value linger in the blob.
+
+    Locked-settings guards (Phase 0a — the backend mirrors of the
+    frontend locks; a frontend-only lock is bypassable by any stale tab
+    or direct API client):
+
+    - **CONFIG_LOCKED (409):** the structural venue fields (courtCount /
+      intervalMinutes / dayStart / dayEnd) may not change in a blob that
+      RETAINS a committed schedule — those are the fields both engines
+      solved against, and changing them under a live schedule silently
+      invalidates every court/slot assignment. The sanctioned unlock path
+      (UnlockModal) clears the schedule in the same PUT, which passes.
+      Non-structural config (closedCourts, clockShiftMinutes, tv*, …)
+      stays freely writable — the director tools mutate those live.
+    - **ROSTER_LOCKED (409):** ``bracketPlayers`` entries referenced by a
+      GENERATED draw (participant ids + member_ids of non-draft events)
+      may not be removed; deleting them silently invalidates the draw's
+      placements. Draft draws don't block.
     """
-    _resolve_tournament(tournament_id, repo)  # 404 if missing
+    row_prior = _resolve_tournament(tournament_id, repo)  # 404 if missing
+    incoming = state.model_dump(exclude={"standings"})
+    prior = dict(row_prior.data or {})
+
+    _STRUCTURAL_CONFIG = ("courtCount", "intervalMinutes", "dayStart", "dayEnd")
+    prior_schedule = prior.get("schedule")
+    prior_assignments = (
+        prior_schedule.get("assignments") if isinstance(prior_schedule, dict) else None
+    )
+    incoming_schedule = incoming.get("schedule")
+    incoming_assignments = (
+        incoming_schedule.get("assignments")
+        if isinstance(incoming_schedule, dict)
+        else None
+    )
+    prior_cfg = prior.get("config") if isinstance(prior.get("config"), dict) else None
+    incoming_cfg = incoming.get("config") if isinstance(incoming.get("config"), dict) else None
+    if prior_assignments and incoming_assignments and prior_cfg and incoming_cfg:
+        changed = [
+            f
+            for f in _STRUCTURAL_CONFIG
+            if prior_cfg.get(f) is not None
+            and incoming_cfg.get(f) is not None
+            and prior_cfg.get(f) != incoming_cfg.get(f)
+        ]
+        if changed:
+            raise http_error(
+                409,
+                ErrorCode.CONFIG_LOCKED,
+                "Venue structure is locked while a schedule exists: "
+                f"{', '.join(changed)} cannot change. Clear or regenerate the "
+                "schedule first (the unlock flow does this).",
+            )
+
+    prior_roster = {
+        p.get("id")
+        for p in (prior.get("bracketPlayers") or [])
+        if isinstance(p, dict) and p.get("id")
+    }
+    incoming_roster = {
+        p.get("id")
+        for p in (incoming.get("bracketPlayers") or [])
+        if isinstance(p, dict) and p.get("id")
+    }
+    removed = prior_roster - incoming_roster
+    if removed:
+        referenced = repo.brackets.player_ids_referenced_by_generated(tournament_id)
+        blocked = sorted(removed & referenced)
+        if blocked:
+            raise http_error(
+                409,
+                ErrorCode.ROSTER_LOCKED,
+                "These players are placed in a generated draw and cannot be "
+                f"removed: {', '.join(blocked[:5])}"
+                f"{' …' if len(blocked) > 5 else ''}. Re-generate or reset the "
+                "draw first.",
+            )
+
     try:
-        row = repo.commit_tournament_state(
-            tournament_id, state.model_dump(exclude={"standings"})
-        )
+        row = repo.commit_tournament_state(tournament_id, incoming)
     except KeyError:
         raise http_error(
             404,
