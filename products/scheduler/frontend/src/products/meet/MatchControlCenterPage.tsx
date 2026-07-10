@@ -436,16 +436,8 @@ export function MatchControlCenterPage() {
     }
   }, []);
 
-  // Cross-component intent: the toast's onAction sets
-  // `pendingAdvisoryReview` on the store; this effect picks it up and
-  // dispatches to the same handler the banner's Review button uses.
-  const pendingAdvisoryReview = useUiStore((s) => s.pendingAdvisoryReview);
-  const setPendingAdvisoryReview = useUiStore((s) => s.setPendingAdvisoryReview);
-  useEffect(() => {
-    if (!pendingAdvisoryReview) return;
-    handleAdvisoryReview(pendingAdvisoryReview);
-    setPendingAdvisoryReview(null);
-  }, [pendingAdvisoryReview, handleAdvisoryReview, setPendingAdvisoryReview]);
+  // (The banner and rail both call handleAdvisoryReview directly now, so the
+  // old toast→pendingAdvisoryReview cross-component intent is gone — P2.)
 
   // No schedule state
   if (!liveTracking.schedule) {
@@ -615,7 +607,12 @@ export function MatchControlCenterPage() {
             (never hidden by selection), Match details below on selection
             (SPEC_AMENDMENT_alerts_activity_panel §4). */}
         <div className="motion-enter flex w-72 shrink-0 flex-col overflow-hidden border-l border-border">
-          <AlertsActivityPanel onReview={handleAdvisoryReview} />
+          {/* Cap alerts when Details is open so a long trail can't squeeze
+              Details to a sliver; let alerts fill when Details is collapsed. */}
+          <AlertsActivityPanel
+            onReview={handleAdvisoryReview}
+            className={detailsOpen ? 'max-h-[45%]' : 'flex-1'}
+          />
           {detailsOpen ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">

@@ -16,6 +16,10 @@ import type { Advisory } from '../../../api/dto';
 
 interface AlertsActivityPanelProps {
   onReview?: (advisory: Advisory) => void;
+  /** Height behaviour in the bounded rail column. The parent caps the
+   *  panel when Match Details is open (so a long trail can't squeeze
+   *  Details to a sliver) and lets it fill when Details is collapsed. */
+  className?: string;
 }
 
 function relativeTime(ts: string, nowMs: number): string {
@@ -80,7 +84,7 @@ function EntryRow({
   );
 }
 
-export function AlertsActivityPanel({ onReview }: AlertsActivityPanelProps) {
+export function AlertsActivityPanel({ onReview, className = '' }: AlertsActivityPanelProps) {
   const conditions = useAlertStore((s) => s.conditions);
   const activity = useAlertStore((s) => s.activity);
   const [collapsed, setCollapsed] = useState(false);
@@ -96,7 +100,7 @@ export function AlertsActivityPanel({ onReview }: AlertsActivityPanelProps) {
   const warningCount = Object.values(conditions).filter((e) => e.severity === 'warning').length;
 
   return (
-    <div className="flex min-h-0 flex-col border-b border-border">
+    <div className={`flex min-h-0 flex-col border-b border-border ${className}`}>
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
