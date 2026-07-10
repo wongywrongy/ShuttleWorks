@@ -58,14 +58,6 @@ module.exports = {
           control: 'hsl(var(--border-control))',
           strong:  'hsl(var(--border-strong))',
         },
-        // Finer substrate ramp (shell chrome): bg-surface-rail / -screen / -band / -active / -chip
-        surface: {
-          rail:   'hsl(var(--surface-rail))',
-          screen: 'hsl(var(--surface-screen))',
-          band:   'hsl(var(--surface-band))',
-          active: 'hsl(var(--surface-active))',
-          chip:   'hsl(var(--chip-tag))',
-        },
         // Module identity: border-module-meet / bg-module-bracket / text-module-ops …
         module: {
           meet:    'hsl(var(--module-meet))',
@@ -125,9 +117,47 @@ module.exports = {
           ink:     'hsl(var(--accent-ink))',
         },
 
+        // -------- Semantic layer (2026-07 refactor — preferred in new code) --------
+        // Components consume ONLY these (or the canonical aliases above);
+        // primitives (--gray-*, --blue-* …) never appear in component code.
+        surface: {
+          sunken:  'hsl(var(--surface-sunken))',
+          base:    'hsl(var(--surface-base))',
+          raised:  'hsl(var(--surface-raised))',
+          overlay: 'hsl(var(--surface-overlay))',
+          // pre-refactor shell names (aliases of the ladder)
+          rail:   'hsl(var(--surface-rail))',
+          screen: 'hsl(var(--surface-screen))',
+          band:   'hsl(var(--surface-band))',
+          active: 'hsl(var(--surface-active))',
+          chip:   'hsl(var(--chip-tag))',
+          card:   'hsl(var(--bg-elev))',
+        },
+        text: {
+          primary:     'hsl(var(--text-primary))',
+          secondary:   'hsl(var(--text-secondary))',
+          muted:       'hsl(var(--text-muted))',
+          'on-accent': 'hsl(var(--text-on-accent))',
+        },
+        action: {
+          primary:         'hsl(var(--action-primary))',
+          'primary-hover': 'hsl(var(--action-primary-hover))',
+          'selected-bg':   'hsl(var(--action-selected-bg))',
+        },
+        focus: 'hsl(var(--border-focus))',
+
         // -------- Status palette --------
-        // bg-status-live / text-status-live / border-status-live + -bg variant
+        // Semantic pairs (success/warning/danger/info) + the operational
+        // match-state vocabulary (live/called/started/… — aliases of the
+        // same families; see DESIGN_COLOR.md color budget).
         status: {
+          'success-fg': 'hsl(var(--status-success-fg))',
+          'success-bg': 'hsl(var(--status-success-bg))',
+          'warning-fg': 'hsl(var(--status-warning-fg))',
+          'danger-fg':  'hsl(var(--status-danger-fg))',
+          'danger-bg':  'hsl(var(--status-danger-bg))',
+          'info-fg':    'hsl(var(--status-info-fg))',
+          'info-bg':    'hsl(var(--status-info-bg))',
           live:            'hsl(var(--status-live))',
           'live-bg':       'hsl(var(--status-live-bg))',
           'live-solid':    'hsl(var(--status-live-solid))',

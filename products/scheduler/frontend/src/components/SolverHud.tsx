@@ -14,27 +14,27 @@ type PhaseStyle = {
 
 // Phase pills route through the semantic ``--status-*`` palette so the
 // HUD reads on the same hue ladder as Gantt blocks, toast borders, and
-// the TabBar app-status chip. ``ring`` is the rgba expansion of the
-// matching token at the saturated lightness — used by the phase-glow
-// keyframe (which can't read CSS custom properties directly).
+// the TabBar app-status chip. ``ring`` feeds the phase-glow keyframe via
+// the --phase-ring custom property; expressed in tokens so it desaturates
+// with the theme instead of pinning light-mode hues onto dark.
 const PHASES: Record<NonNullable<SolverPhase>, PhaseStyle> = {
   presolve: {
     label: 'Presolve',
-    ring: 'hsla(38, 92%, 42%, 0.55)',
+    ring: 'hsl(var(--status-warning-fg) / 0.55)',
     pill: 'bg-status-called-bg text-status-called border-status-called/40',
     dot: 'bg-status-called',
     loop: true,
   },
   search: {
     label: 'Searching',
-    ring: 'hsla(199, 89%, 38%, 0.55)',
+    ring: 'hsl(var(--status-info-fg) / 0.55)',
     pill: 'bg-status-started-bg text-status-started border-status-started/40',
     dot: 'bg-status-started',
     loop: true,
   },
   proving: {
     label: 'Proving optimal',
-    ring: 'hsla(142, 71%, 38%, 0.55)',
+    ring: 'hsl(var(--status-success-fg) / 0.55)',
     pill: 'bg-status-live-bg text-status-live border-status-live/40',
     dot: 'bg-status-live',
     loop: false,

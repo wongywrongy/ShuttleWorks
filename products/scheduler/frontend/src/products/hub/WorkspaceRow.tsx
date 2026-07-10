@@ -17,10 +17,13 @@ import { moduleGlyphs, type ModuleGlyphId } from './moduleGlyphs';
 
 /** Static per-module glyph classes (Tailwind can't scan dynamic names — these
  *  arbitrary-value strings carry the 16%-tint fill + the module hue). */
+/* Color budget (2026-07): module identity is carried by the LETTER, not a
+ * hue — the M/D/B rainbow was decoration. Enabled modules read as neutral
+ * filled chips, available ones as dashed outlines. */
 const GLYPH_CLASS: Record<ModuleGlyphId, string> = {
-  meet: 'bg-[hsl(var(--module-meet)/0.16)] text-module-meet',
-  display: 'bg-[hsl(var(--module-display)/0.16)] text-module-display',
-  bracket: 'bg-[hsl(var(--module-bracket)/0.16)] text-module-bracket',
+  meet: 'bg-surface-chip text-text-secondary',
+  display: 'bg-surface-chip text-text-secondary',
+  bracket: 'bg-surface-chip text-text-secondary',
 };
 
 /** The row's Modules column — enabled modules as solid tinted glyphs, or a
@@ -78,6 +81,9 @@ function DateCell({ iso, receded }: { iso: string | null; receded: boolean }) {
 interface RowProps {
   tournament: TournamentSummaryDTO;
   group: HubGroupId;
+  /** False when NO visible row has a date — the whole column is hidden
+   *  instead of rendering a rail of muted em-dashes (2026-07 cleanup). */
+  showDate?: boolean;
   selected: boolean;
   onSelect: () => void;
   onOpen: () => void;
@@ -89,6 +95,7 @@ interface RowProps {
 export function WorkspaceRow({
   tournament,
   group,
+  showDate = true,
   selected,
   onSelect,
   onOpen,
@@ -125,7 +132,7 @@ export function WorkspaceRow({
           : 'hover:bg-muted/40',
       ].join(' ')}
     >
-      <DateCell iso={tournament.tournamentDate} receded={receded} />
+      {showDate ? <DateCell iso={tournament.tournamentDate} receded={receded} /> : null}
 
       <span className="flex min-w-0 flex-1 items-center gap-2.5">
         <HealthDot health={health} />

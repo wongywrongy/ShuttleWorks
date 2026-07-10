@@ -155,6 +155,14 @@ export function HubPage() {
   );
   const facetLabel = HUB_FACETS.find((f) => f.id === facet)!.label;
 
+  // Hide the whole DATE column when no visible row has a date — a rail of
+  // muted em-dashes is noise; per-row "—" only appears when the column has
+  // data elsewhere (2026-07 cleanup).
+  const showDates = useMemo(
+    () => visible.some((t) => !!t.tournamentDate),
+    [visible],
+  );
+
   // Footer summary counts over the full (unfiltered) list.
   const footerCounts = useMemo(
     () => ({
@@ -285,7 +293,7 @@ export function HubPage() {
                 aria-hidden
                 className="flex items-center gap-3 border-b border-border px-4 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint"
               >
-                <span className="w-14 shrink-0">Date</span>
+                {showDates ? <span className="w-14 shrink-0">Date</span> : null}
                 <span className="min-w-0 flex-1">Workspace</span>
                 <span className="w-[108px] shrink-0">Modules</span>
                 <span className="w-40 shrink-0">Next action</span>
@@ -297,6 +305,7 @@ export function HubPage() {
                     key={t.id}
                     tournament={t}
                     group={temporalGroupOf(t, todayKey)}
+                    showDate={showDates}
                     selected={t.id === selectedId}
                     onSelect={() => setSelectedId(t.id)}
                     onOpen={() => openTournament(t.id)}

@@ -22,11 +22,12 @@ const LABEL: Record<MatchSource, string> = {
   bracket: 'Bracket',
 };
 
-// Engine-tinted so the two read apart at a glance once they interleave.
-// Uses the same dimensions as the surrounding eyebrow labels.
+// Color budget (2026-07): the chip TEXT names the engine — the sky/violet
+// tints were decoration on top of it. Neutral outlined chip; if provenance
+// ever needs a stronger glance-read, differentiate with an icon, not a hue.
 const TONE: Record<MatchSource, string> = {
-  meet: 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300',
-  bracket: 'border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300',
+  meet: 'border-border bg-surface-chip text-text-secondary',
+  bracket: 'border-border bg-surface-chip text-text-secondary',
 };
 
 export function SourceChip({

@@ -16,6 +16,15 @@
     border-color: hsl(var(--border));
   }
 
+  /* Focus safety net: every interactive element gets a visible
+   * --border-focus ring in both themes. :where() keeps specificity at
+   * zero so components using the Tailwind focus-visible:ring pattern
+   * (INTERACTIVE_BASE) override cleanly with their own ring. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--border-focus));
+    outline-offset: 2px;
+  }
+
   html,
   body {
     background-color: hsl(var(--bg));

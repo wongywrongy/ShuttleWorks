@@ -119,7 +119,7 @@ export function LoginPage() {
           </label>
 
           {error && (
-            <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
+            <div className="text-sm text-status-danger-fg">{error}</div>
           )}
 
           <Button type="submit" disabled={submitting} className="w-full">

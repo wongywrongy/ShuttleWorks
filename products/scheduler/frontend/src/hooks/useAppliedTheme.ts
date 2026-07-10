@@ -19,6 +19,9 @@ function resolve(pref: ThemePreference, systemPrefersDark: boolean): Resolved {
 function apply(resolved: Resolved) {
   const root = document.documentElement;
   root.classList.toggle('dark', resolved === 'dark');
+  // Semantic-token mappings key off [data-theme]; the .dark class is kept
+  // for Tailwind's class-based dark: variants. Both always agree.
+  root.setAttribute('data-theme', resolved);
 
   // Keep the ``color-scheme`` meta in sync so native form controls and
   // scrollbars render with the right palette even before the stylesheet

@@ -28,13 +28,13 @@ export function ScheduleLockIndicator({
   if (!isScheduleLocked) return null;
 
   return (
-    <div className={`flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-amber-700 text-xs ${className}`}>
+    <div className={`flex items-center gap-1.5 px-2 py-1 bg-status-warning-bg border border-status-warning-fg/30 rounded text-status-warning-fg text-xs ${className}`}>
       <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
         <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
       </svg>
       <span>Schedule locked</span>
       {showUnlockHint && (
-        <span className="text-amber-600">(edits will clear schedule)</span>
+        <span className="text-status-warning-fg/80">(edits will clear schedule)</span>
       )}
     </div>
   );

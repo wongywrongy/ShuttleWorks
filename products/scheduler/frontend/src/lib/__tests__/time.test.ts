@@ -699,19 +699,19 @@ describe('getStatusColor', () => {
     expect(getStatusColor('scheduled')).toBe('bg-muted text-foreground');
   });
 
-  it('returns blue classes for "called"', () => {
+  it('returns the called (amber) status tokens for "called"', () => {
     const color = getStatusColor('called');
-    expect(color).toContain('blue');
+    expect(color).toContain('status-called');
   });
 
-  it('returns green classes for "started"', () => {
+  it('returns the live (green) status tokens for "started"', () => {
     const color = getStatusColor('started');
-    expect(color).toContain('green');
+    expect(color).toContain('status-live');
   });
 
-  it('returns purple classes for "finished"', () => {
+  it('returns the neutral done tokens for "finished"', () => {
     const color = getStatusColor('finished');
-    expect(color).toContain('purple');
+    expect(color).toContain('status-done');
   });
 
   it('falls back to muted classes for an unknown status value', () => {

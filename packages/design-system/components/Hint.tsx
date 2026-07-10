@@ -86,11 +86,11 @@ export function Hint({ id, children, variant = 'info', className }: HintProps) {
   const tone =
     variant === 'subtle'
       ? 'border border-border/70 bg-muted/40 text-foreground/90'
-      : 'border border-blue-300/70 bg-blue-50 text-blue-900 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-100';
+      : 'border border-status-info-fg/30 bg-status-info-bg text-foreground';
   const iconTone =
     variant === 'subtle'
       ? 'text-muted-foreground'
-      : 'text-blue-600 dark:text-blue-300';
+      : 'text-status-info-fg';
 
   return (
     <div

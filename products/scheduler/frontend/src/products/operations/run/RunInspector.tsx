@@ -43,8 +43,8 @@ const STATUS_PILL: Record<RunStatus, string> = {
 
 // ── source dot / label (mirrors RunBoard / RunQueue) ──────────────────────
 const SOURCE_DOT: Record<'meet' | 'bracket', string> = {
-  meet: 'bg-sky-500',
-  bracket: 'bg-violet-500',
+  meet: 'bg-module-meet',
+  bracket: 'bg-module-bracket',
 };
 const SOURCE_LABEL: Record<'meet' | 'bracket', string> = {
   meet: 'Meet',

@@ -184,11 +184,13 @@ export function getRenderSlot(
   return { slotId: assignment.slotId, durationSlots: assignment.durationSlots };
 }
 
+// Token-driven; hues match the board vocabulary (called=amber, playing=green,
+// finished=neutral) instead of the old blue/green/purple stock trio.
 const STATUS_BADGE: Record<MatchStateDTO['status'], string> = {
   scheduled: 'bg-muted text-foreground',
-  called: 'bg-blue-200 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200',
-  started: 'bg-green-200 text-green-800 dark:bg-green-500/20 dark:text-green-200',
-  finished: 'bg-purple-200 text-purple-800 dark:bg-purple-500/20 dark:text-purple-200',
+  called: 'bg-status-called-bg text-status-called',
+  started: 'bg-status-live-bg text-status-live',
+  finished: 'bg-status-done-bg text-status-done',
 };
 
 export function getStatusColor(status: MatchStateDTO['status']): string {

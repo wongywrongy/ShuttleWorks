@@ -24,21 +24,23 @@ interface AdvisoryBannerProps {
   className?: string;
 }
 
+// Token-driven status pairs — previously stock light-only Tailwind hues
+// that never adapted to dark mode.
 const TONE: Record<AdvisorySeverity, { ring: string; text: string; icon: string }> = {
   info: {
-    ring: 'border-blue-200 bg-blue-50',
-    text: 'text-blue-800',
-    icon: 'text-blue-500',
+    ring: 'border-status-info-fg/30 bg-status-info-bg',
+    text: 'text-status-info-fg',
+    icon: 'text-status-info-fg',
   },
   warn: {
-    ring: 'border-amber-300 bg-amber-50',
-    text: 'text-amber-800',
-    icon: 'text-amber-500',
+    ring: 'border-status-warning-fg/40 bg-status-warning-bg',
+    text: 'text-status-warning-fg',
+    icon: 'text-status-warning-fg',
   },
   critical: {
-    ring: 'border-red-300 bg-red-50',
-    text: 'text-red-800',
-    icon: 'text-red-500',
+    ring: 'border-status-danger-fg/40 bg-status-danger-bg',
+    text: 'text-status-danger-fg',
+    icon: 'text-status-danger-fg',
   },
 };
 

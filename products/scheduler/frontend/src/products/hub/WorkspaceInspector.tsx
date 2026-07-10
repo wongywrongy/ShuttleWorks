@@ -27,14 +27,14 @@ function MetricTile({
 }: {
   value: number | string;
   label: string;
-  tone?: 'live' | 'warning';
+  tone?: 'warning';
 }) {
-  const color =
-    tone === 'live' ? 'text-status-live' : tone === 'warning' ? 'text-status-warning' : 'text-foreground';
+  // Color budget: counts are neutral — green is success/complete only.
+  const color = tone === 'warning' ? 'text-status-warning' : 'text-foreground';
   return (
     <div className="bg-surface-screen p-2.5">
       <div className={`text-lg font-bold leading-tight sw-num ${color}`}>{value}</div>
-      <div className="text-2xs uppercase tracking-[0.06em] text-ink-faint">{label}</div>
+      <div className="text-2xs text-text-muted">{label}</div>
     </div>
   );
 }
@@ -64,15 +64,10 @@ interface InspectorProps {
 }
 
 export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }: InspectorProps) {
-  if (!tournament) {
-    return (
-      <aside className="hidden w-[344px] shrink-0 flex-col border-l border-border bg-surface-rail lg:flex">
-        <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground/70">
-          Select a workspace to see what&rsquo;s next.
-        </div>
-      </aside>
-    );
-  }
+  // Empty-state decision (2026-07 cleanup): the rail COLLAPSES until a
+  // selection exists — the list gets the full width instead of a third of
+  // the screen spelling out one gray sentence.
+  if (!tournament) return null;
 
   const modules = tournament.modules
     ? modulesFromDto(tournament.modules)
@@ -151,14 +146,13 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
           className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border"
         >
           <MetricTile value={metrics ? metrics.total : '—'} label="matches" />
-          <MetricTile value={metrics ? metrics.scheduled : '—'} label="scheduled" tone="live" />
+          <MetricTile value={metrics ? metrics.scheduled : '—'} label="scheduled" />
           <MetricTile value={toDo} label="to do" tone={toDo > 0 ? 'warning' : undefined} />
         </div>
       </div>
 
       {todos.length > 0 ? (
         <div>
-          <RailLabel>TO DO</RailLabel>
           <ul data-testid="inspector-todos" className="space-y-1.5">
             {todos.map((r) => (
               <li key={r.code} className="flex items-start gap-2 text-xs text-ink-2">
@@ -190,12 +184,12 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
             aria-valuemax={100}
             className="mb-3 h-1.5 overflow-hidden rounded-full bg-surface-card"
           >
-            <div className="h-full rounded-full bg-status-live" style={{ width: `${pct}%` }} />
+            <div className="h-full rounded-full bg-status-success-fg" style={{ width: `${pct}%` }} />
           </div>
           <ul data-testid="inspector-checklist" className="grid grid-cols-2 gap-x-3 gap-y-1.5">
             {setupEntries.map(([key, done]) => (
               <li key={key} className="flex items-center gap-1.5 text-xs capitalize text-muted-foreground">
-                <span aria-hidden className={done ? 'text-status-live' : 'text-muted-foreground/40'}>
+                <span aria-hidden className={done ? 'text-status-success-fg' : 'text-muted-foreground/40'}>
                   {done ? '✓' : '○'}
                 </span>
                 {setupLabel(key)}
@@ -229,8 +223,8 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
               </span>
               <span
                 className={[
-                  'text-2xs font-semibold uppercase tracking-[0.04em] sw-num',
-                  m.status === 'enabled' ? 'text-accent' : 'text-ink-faint',
+                  'text-2xs capitalize',
+                  m.status === 'enabled' ? 'text-text-secondary font-medium' : 'text-text-muted',
                 ].join(' ')}
               >
                 {m.status.replace('-', ' ')}

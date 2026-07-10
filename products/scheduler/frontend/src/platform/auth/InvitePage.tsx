@@ -85,7 +85,7 @@ export function InvitePage() {
         <h1 className="text-2xl font-medium tracking-tight">Join tournament</h1>
 
         {resolveError && (
-          <div className="text-sm text-red-600 dark:text-red-400">
+          <div className="text-sm text-status-danger-fg">
             {resolveError}
           </div>
         )}
@@ -110,7 +110,7 @@ export function InvitePage() {
             </div>
 
             {acceptError && (
-              <div className="text-sm text-red-600 dark:text-red-400">
+              <div className="text-sm text-status-danger-fg">
                 {acceptError}
               </div>
             )}

@@ -93,12 +93,14 @@ export function AppStatusPopover() {
     ? 'bg-status-warning-bg text-status-warning border border-status-warning/40'
     : health?.status === 'degraded'
       ? 'bg-status-blocked-bg text-status-blocked border border-status-blocked/40'
-      : 'bg-status-live-bg text-status-live border border-status-live/40';
+      // Color budget: idle is NOT a success — neutral muted dot + label.
+      // Green is reserved for success/complete/live-play.
+      : 'bg-status-idle-bg text-text-muted border border-border';
   const chipDot = isGenerating
     ? 'bg-status-warning animate-pulse'
     : health?.status === 'degraded'
       ? 'bg-status-blocked'
-      : 'bg-status-live';
+      : 'bg-text-muted';
 
   return (
     <div ref={rootRef} className="relative">
@@ -138,7 +140,7 @@ export function AppStatusPopover() {
           </div>
 
           {healthError && (
-            <div className="mb-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-red-700 dark:bg-red-500/10 dark:text-red-200 dark:border-red-500/30">
+            <div className="mb-2 rounded border border-status-danger-fg/30 bg-status-danger-bg px-2 py-1 text-status-danger-fg">
               {healthError}
             </div>
           )}
@@ -146,11 +148,11 @@ export function AppStatusPopover() {
           <dl className="space-y-1 text-muted-foreground">
             <Row label="Backend">
               {health ? (
-                <span className={health.status === 'healthy' ? 'text-emerald-700' : 'text-red-700'}>
+                <span className={health.status === 'healthy' ? 'text-status-success-fg' : 'text-status-danger-fg'}>
                   {health.status} · v{health.version}
                 </span>
               ) : healthError ? (
-                <span className="text-red-700">unreachable</span>
+                <span className="text-status-danger-fg">unreachable</span>
               ) : (
                 <span className="text-muted-foreground">checking…</span>
               )}
@@ -158,17 +160,17 @@ export function AppStatusPopover() {
             <Row label="Schema">{health ? `v${health.schemaVersion}` : '—'}</Row>
             <Row label="Solver">
               {health
-                ? (health.solverLoaded ? 'loaded' : <span className="text-red-700">missing</span>)
+                ? (health.solverLoaded ? 'loaded' : <span className="text-status-danger-fg">missing</span>)
                 : '—'}
             </Row>
             <Row label="Data dir">
               {health
-                ? (health.dataDirWritable ? 'writable' : <span className="text-red-700">read-only</span>)
+                ? (health.dataDirWritable ? 'writable' : <span className="text-status-danger-fg">read-only</span>)
                 : '—'}
             </Row>
             <Row label="Last save">
               {persistStatus === 'error' ? (
-                <span className="text-red-700">failed</span>
+                <span className="text-status-danger-fg">failed</span>
               ) : lastSavedAt ? (
                 new Date(lastSavedAt).toLocaleTimeString()
               ) : persistStatus === 'saving' ? (

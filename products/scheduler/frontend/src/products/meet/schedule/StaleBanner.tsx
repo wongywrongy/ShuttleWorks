@@ -41,7 +41,7 @@ export function StaleBanner() {
           }}
           disabled={loading}
           data-testid="stale-banner-resolve"
-          className="rounded-sm bg-status-warning px-2 py-1 text-xs font-medium text-white transition-colors duration-fast ease-brand hover:bg-status-warning/90 disabled:opacity-50"
+          className="rounded-sm border border-status-warning-fg/40 bg-status-warning-bg px-2 py-1 text-xs font-medium text-status-warning-fg transition-colors duration-fast ease-brand hover:bg-status-warning-fg/20 disabled:opacity-50"
         >
           {loading ? 'Re-solving…' : 'Re-solve'}
         </button>

@@ -1,78 +1,10 @@
 /**
- * Shared status pill — collapses ~5 hand-rolled badge JSX blocks
- * across MatchDetailsPanel, WorkflowPanel rows, and the public TV.
+ * StatusPill — re-export of the design-system pill.
  *
- * Pick a ``tone`` (semantic colour) and optionally show a ``dot`` and
- * ``pulse``ing animation. Body text is the children.
- *
- * Tones map onto the design system's match-state palette:
- *   green  → status-live (emerald — match in progress)
- *   blue   → status-started (sky — operator started clock)
- *   amber  → status-called (amber — called to court)
- *   yellow → status-warning (amber — soft violation)
- *   red    → status-blocked (red — hard rule conflict)
- * Routing through ``--status-*`` keeps every pill on the same hue ladder
- * as the Gantt blocks, toast borders, and TabBar app-status chip.
+ * There is ONE pill component (2026-07 cleanup): the app-local copy had
+ * drifted into a near-duplicate with its own tone tables, so "Complete"
+ * rendered differently in the Hub inspector vs the workspace shell. All
+ * tones are token-driven; pick by MEANING (green = success/live only,
+ * idle/done = neutral) per DESIGN_COLOR.md.
  */
-import type { ReactNode } from 'react';
-
-type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber' | 'idle' | 'done';
-
-const TONE_BG: Record<PillTone, string> = {
-  green:  'bg-status-live-bg text-status-live border border-status-live/40',
-  yellow: 'bg-status-warning-bg text-status-warning border border-status-warning/40',
-  red:    'bg-status-blocked-bg text-status-blocked border border-status-blocked/40',
-  blue:   'bg-status-started-bg text-status-started border border-status-started/40',
-  amber:  'bg-status-called-bg text-status-called border border-status-called/40',
-  // Muted pair (parity with the design-system StatusPill): idle = parked,
-  // done = neutral grey terminal state ("Complete").
-  idle:   'bg-status-idle-bg text-status-idle border border-status-idle/40',
-  done:   'bg-status-done-bg text-muted-foreground border border-status-done/30',
-};
-
-const TONE_DOT: Record<PillTone, string> = {
-  green:  'bg-status-live',
-  yellow: 'bg-status-warning',
-  red:    'bg-status-blocked',
-  blue:   'bg-status-started',
-  amber:  'bg-status-called',
-  idle:   'bg-status-idle',
-  done:   'bg-status-done',
-};
-
-/* Pulsing dots glow in their own hue — the handoff pill's live-signal
- * treatment (`0 0 8px <dot color>`; glow marks live signals, not chrome). */
-const TONE_GLOW: Record<PillTone, string> = {
-  green:  'shadow-[0_0_8px_hsl(var(--status-live)/0.6)]',
-  yellow: 'shadow-[0_0_8px_hsl(var(--status-warning)/0.6)]',
-  red:    'shadow-[0_0_8px_hsl(var(--status-blocked)/0.6)]',
-  blue:   'shadow-[0_0_8px_hsl(var(--status-started)/0.6)]',
-  amber:  'shadow-[0_0_8px_hsl(var(--status-called)/0.6)]',
-  idle:   'shadow-[0_0_8px_hsl(var(--status-idle)/0.6)]',
-  done:   'shadow-[0_0_8px_hsl(var(--status-done)/0.6)]',
-};
-
-interface Props {
-  tone: PillTone;
-  dot?: boolean;
-  pulse?: boolean;
-  className?: string;
-  title?: string;
-  children: ReactNode;
-}
-
-export function StatusPill({ tone, dot, pulse, className = '', title, children }: Props) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium ${TONE_BG[tone]} ${className}`}
-      title={title}
-    >
-      {dot && (
-        <span
-          className={`h-1 w-1 rounded-full ${TONE_DOT[tone]} ${pulse ? `sw-pulse ${TONE_GLOW[tone]}` : ''}`}
-        />
-      )}
-      {children}
-    </span>
-  );
-}
+export { StatusPill, type PillTone } from '@scheduler/design-system/components';
