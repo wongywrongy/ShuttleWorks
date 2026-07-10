@@ -139,4 +139,22 @@ Order, each its own commit, gates green after each:
 6. **P1.F** guardrails appended to `DESIGN_SPEC_DRAFT.md` + CLAUDE.md draft.
 
 Deferred (documented, not applied): #4 ElapsedTimer shared tick; a `React.memo` pass on
-GanttChart/WorkflowPanel (now unblocked by FIX C but wants an empirical re-render count first).
+WorkflowPanel (GanttChart was memo'd under FIX C; WorkflowPanel wants an empirical re-render
+count first).
+
+## 5. P1 results (measured / verified)
+
+- **FIX A — measured.** Workspace-entry chunk `TournamentPage` (= AppShell + product wrappers):
+  **202 kB → 124 kB raw, 59 kB → 37 kB gzip** (−39% / −22 kB gz). Operations' surface is now a
+  separate **49.8 kB (14.8 kB gz)** lazy chunk loaded only on an Operations tab; Bracket/Display/
+  Meet wrappers dropped to ~2–3 kB each. Confirmed via `ANALYZE=1 npm run build`.
+- **FIX B — verified by construction.** O(N²) `.find`-in-render replaced by an O(1) `Map` lookup;
+  pixel-identical output; gates green.
+- **FIX C — applied.** `analyzeImpact` memoized (kills a per-render graph walk); GanttChart
+  `React.memo`'d with `impactedMatchIds`/`onRequestReopenCourt` stabilized, so it skips re-render
+  on the 5 s no-op sync and on unrelated parent state.
+- **FIX F — applied, staleness-free.** `matchStateStore.setMatchStates` skips the write when the
+  incoming map is content-equal to the current — eliminating the every-5 s whole-subtree re-render
+  on an idle board.
+- Gates after P1: `tsc` clean, vitest **1076/1076** (ModuleOutlet test updated for the async
+  Suspense boundary — same modules render, only now lazily), `lint:scheduler` 0 errors.

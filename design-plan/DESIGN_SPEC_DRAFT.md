@@ -319,3 +319,32 @@ UndoToast     tier0: commit + N-second undo action       [NEW — rides Toast's 
 Props contract: `disabled?: boolean`, `locked?: {reason: string; onUnlock?: () => void; href?: string}`,
 `readOnly?: boolean`, `pending?: boolean` on every interactive component. Nothing module-specific
 enters this layer.
+
+## 5. Performance guardrails (binding — added after the P0/P1 Run-view perf pass)
+
+Live-operations surfaces (Run, Ops, Display board) re-render on polling ticks; the migration must
+not reintroduce the costs P1 removed. These are review-blocking:
+
+1. **No `transition: all` / `transition-all`.** Enumerate the properties (`transition-colors`,
+   `transition-[transform,box-shadow]`, …). `transition: all` re-animates layout on unrelated
+   style changes and is a measured hot-path cost.
+2. **Route/module code-splitting is mandatory.** Every module product and every heavy tab loads
+   via `React.lazy` behind `Suspense`; never statically import a sibling module's surface into a
+   shared shell (that is the eager-Operations bug FIX A fixed). Heavy libs (`exceljs`, chart/date
+   packs) load via `await import()`, never at module top-level.
+3. **Shadow budget per view.** `shadow-glow` is static and scales with row count; a live board may
+   not exceed the current signature footprint (~1 per primary action + selected-block ring). No
+   *animated* shadow (`phase-glow`) outside a transient solver/loading affordance. No persistent
+   `backdrop-filter` on an always-rendered surface.
+4. **Portals mount on demand.** Tooltip/menu portals are created on open, never one-per-row eagerly.
+5. **No per-row timers.** One shared tick (context/store), not `setInterval` per list row — N
+   independent 1 s intervals is a known regression (see the ElapsedTimer deferred item).
+6. **No per-row context subscriptions / per-render graph walks.** Derive once and pass down;
+   memoize expensive per-render analysis (`analyzeImpact`-class walks); index lookups into a `Map`,
+   never `.find` inside a per-item render callback.
+7. **Polling writes must be no-op-safe.** A store setter fed by a poll must not create a fresh
+   reference when content is unchanged (see `matchStateStore.setMatchStates`), or every consumer
+   re-renders each tick.
+
+Verification: `ANALYZE=1 npm run build` for chunk deltas on any change touching the shell/route
+graph; React Profiler on one interaction for any change to a live surface's render tree.

@@ -83,6 +83,13 @@ To be added to the repo-root `CLAUDE.md` when implementation is authorized:
   window.confirm is banned; destructive writes use ConfirmButton (tier 2) or Modal (tier 1).
 - Contrast gates are blockers: run `node packages/design-system/scripts/check-contrast.mjs`
   after token changes; new fg/bg pairings must clear 4.5:1 (text) / 3:1 (UI) in BOTH themes.
+- Performance guardrails (DESIGN_SPEC §5) are blockers on live-ops surfaces: no `transition: all`;
+  module products + heavy tabs/libs load via `React.lazy`/`await import()` (never eager-import a
+  sibling module's surface into a shared shell); shadow budget per view (no animated shadow or
+  persistent `backdrop-filter` on an always-rendered surface); no per-row timers or per-row context
+  subscriptions; memoize per-render graph walks and use `Map` lookups (never `.find` in a per-item
+  render callback); poll-fed store setters must be no-op-safe (no fresh reference when unchanged).
+  Run `ANALYZE=1 npm run build` for chunk deltas on shell/route changes.
 ```
 
 ## 4. Review gate — RESOLVED 2026-07-10
