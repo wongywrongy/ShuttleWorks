@@ -180,9 +180,31 @@ targets where no baseline exists), recorded in `PERF_FINDINGS.md`.
   screenshot evidence in the PR. Both-themes screenshot pass.
 - **P3.5 Perf re-check:** re-run the P1 timeline-interaction measurement; no regression.
 
-## PHASE P4+ — resume the standing backlog (unchanged, for context)
+## PHASE P4 — Plan view parity (added to the program + shipped 2026-07-10)
 
-After P3, the pre-existing program continues per `MIGRATION_PLAN.md` §2 — none of it is
+The sibling Plan view (Meet Schedule page) adopted the P2/P3 standards via the shared modules —
+adoption + deletion, no parallel build:
+
+- **4.1 Alert pipeline:** Plan's rail gained the stacked model (AlertsActivityPanel always on top,
+  capped at 40% so the tab zone below keeps room; Log/Details/Candidates tabs are the details
+  zone). The page owns the same dialog hosts + `handleAdvisoryReview` dispatcher as Run, so its
+  decision banner is fully actionable (the P2-era read-only banner is superseded).
+- **4.2 Timeline encoding:** the encoding was extracted to `products/meet/timelineEncoding.ts` +
+  `TimelineKey.tsx` (build-for-both); DragGantt paints lifecycle-by-intensity + exception glyphs;
+  **event-type hues + both EVENTS legends deleted** (DragGantt + LiveTimelineGrid); selected →
+  neutral canon ring; pinned → PushPin glyph, not a color; infeasible drop targets stay danger.
+- **4.3 Chrome:** solver telemetry (`Time/Solutions/Score` with placeholder dashes) left the
+  toolbar — live progress shows in SolverHud + the rail's Log tab; the last Score sits in the
+  timeline's bottom status line. Director/Re-plan/Disruption moved to the toolbar (same home as
+  Run); the rail-header DYNAMIC cluster is gone. The "Day is live" caption was deleted — the
+  pre-existing Tier-2 two-click destructive guard ("Replace LIVE schedule?") communicates it. The
+  drag hint was already a persisted dismissable `Hint` (verified, no change needed). Strips between
+  toolbar and match table: timeline + Matches header = **2** (≤ 4 target met).
+- `LiveMetricsBar` deleted (sole consumer was the toolbar slot).
+
+## PHASE P5+ — resume the standing backlog (unchanged, for context)
+
+After P4, the pre-existing program continues per `MIGRATION_PLAN.md` §2 — none of it is
 pulled forward by this document:
 - **0b remainder:** merge duplicate Modal/Hint/INTERACTIVE_BASE; remaining primitives
   (SectionHeader, Glyph, ProgressBar, Checklist, FormField, Seg, Spinner, LockedControl,

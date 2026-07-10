@@ -35,17 +35,11 @@ export function ScheduleActions({
   liveDay = false,
 }: ScheduleActionsProps) {
   const confirming = hasSchedule && confirmingReplace && !generating;
+  // No standing "Day is live" caption: the destructive guard itself
+  // communicates the stakes ("Replace LIVE schedule?") at the moment it
+  // matters (Phase 4.3 — the guard replaces the chrome).
   return (
     <div className="flex items-center gap-2">
-      {liveDay && hasSchedule && !generating && (
-        <span
-          data-testid="schedule-live-guard"
-          className="hidden items-center gap-1 text-2xs font-medium text-status-warning sm:flex"
-          title="Matches have already been played or are on court. Re-solving replaces the plan for everything not yet finished."
-        >
-          Day is live
-        </span>
-      )}
       <Button
         type="button"
         size="xs"

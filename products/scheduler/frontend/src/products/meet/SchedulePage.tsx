@@ -10,8 +10,8 @@
  * (search, filters, view toggle) lives inside `MatchesTable`.
  */
 import { Link } from 'react-router-dom';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, CalendarBlank } from '@phosphor-icons/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Download, CalendarBlank, GearSix } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system/components';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useTournament } from '../../hooks/useTournament';
@@ -26,10 +26,18 @@ import { useMatchStateSync } from '../../hooks/useMatchStateSync';
 import { ScheduleActions } from './schedule/ScheduleActions';
 import { DragGantt } from './schedule/DragGantt';
 import { LiveTimelineGrid } from './schedule/live/LiveTimelineGrid';
-import { LiveMetricsBar } from './schedule/live/LiveMetricsBar';
 import { StaleBanner } from './schedule/StaleBanner';
 import { SuggestionsRail } from './suggestions/SuggestionsRail';
 import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
+import { DisruptionDialog } from './control-center/DisruptionDialog';
+import { MoveMatchDialog } from './control-center/MoveMatchDialog';
+import { WarmRestartDialog } from './schedule/WarmRestartDialog';
+import { DirectorToolsPanel } from './director/DirectorToolsPanel';
+import { Modal } from '../../components/common/Modal';
+import { useProposals } from '../../hooks/useProposals';
+import { useActivityLog } from '../../hooks/useActivityLog';
+import { INTERACTIVE_BASE } from '../../lib/utils';
+import type { Advisory } from '../../api/dto';
 import { exportScheduleXlsx } from './exports/xlsxExports';
 import { computeConstraintViolations } from '../../utils/constraintChecker';
 import { formatSlotTime } from '../../lib/time';
@@ -80,6 +88,57 @@ export function SchedulePage() {
 
   const [tableView, setTableView] = useState<TableView>('time');
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+
+  // Record match-state transitions into the Alerts & Activity trail while
+  // the operator is on the Plan surface (Phase 4.1).
+  useActivityLog();
+
+  // Dialog hosts live on the page (same home as the Run surface) so both
+  // the toolbar actions and the rail's intents open them (Phase 4.3).
+  const [disruptionOpen, setDisruptionOpen] = useState(false);
+  const [warmRestartOpen, setWarmRestartOpen] = useState(false);
+  const [directorOpen, setDirectorOpen] = useState(false);
+  const [moveMatchId, setMoveMatchId] = useState<string | null>(null);
+  const [disruptionPrefill, setDisruptionPrefill] = useState<{
+    type?: 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
+    matchId?: string;
+    courtId?: number;
+  }>({});
+  const { cancel: cancelProposal } = useProposals();
+  const openDirector = useCallback(() => setDirectorOpen(true), []);
+  const openDisruption = useCallback(
+    (prefill: { type?: 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation'; matchId?: string; courtId?: number } = {}) => {
+      setDisruptionPrefill(prefill);
+      setDisruptionOpen(true);
+    },
+    [],
+  );
+
+  // Advisory Review dispatcher — identical routing to the Run surface, so
+  // the decision banner + rail entries are actionable here too (Phase 4.1).
+  const handleAdvisoryReview = useCallback((advisory: Advisory) => {
+    const action = advisory.suggestedAction;
+    if (!action) return;
+    if (action.kind === 'repair') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const payload = action.payload as Record<string, any>;
+      setDisruptionPrefill({
+        type: payload.type,
+        matchId: payload.matchId,
+        courtId: payload.courtId,
+      });
+      setDisruptionOpen(true);
+    } else if (action.kind === 'warm_restart') {
+      setWarmRestartOpen(true);
+    } else if (
+      action.kind === 'delay_start' ||
+      action.kind === 'insert_blackout' ||
+      action.kind === 'remove_blackout' ||
+      action.kind === 'compress_remaining'
+    ) {
+      setDirectorOpen(true);
+    }
+  }, []);
 
   const currentSlot = useCurrentSlot();
   const isOptimizing = loading;
@@ -180,24 +239,19 @@ export function SchedulePage() {
   const slotToTime = (slot: number) => (config ? formatSlotTime(slot, config) : '00:00');
 
   const status: 'solving' | 'complete' = isOptimizing ? 'solving' : 'complete';
-  const elapsed = hasLiveProgress ? generationProgress.elapsed_ms : scheduleStats?.elapsed || 0;
   const solutionCount = hasLiveProgress
     ? generationProgress.solution_count
     : scheduleStats?.solutionCount;
   const objectiveScore = hasLiveProgress
     ? generationProgress.current_objective
     : scheduleStats?.objectiveScore || schedule?.objectiveScore || undefined;
-  const bestBound = hasLiveProgress ? generationProgress.best_bound : scheduleStats?.bestBound;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
       <StaleBanner />
-      {/* Read-only heads-up for critical advisories that can fire during
-          scheduling (infeasibility_risk / approaching_blackout). The action
-          dispatcher lives on the Run tab, so this surfaces the alert and
-          points the operator there — advisories no longer toast globally
-          (SPEC_AMENDMENT_alerts_activity_panel §3). */}
-      <AdvisoryBanner readOnly />
+      {/* Tier-1 pending-decision banner — same single pipeline as Run; the
+          Review action dispatches to this page's dialog hosts (Phase 4.1). */}
+      <AdvisoryBanner onReview={handleAdvisoryReview} />
       <SuggestionsRail />
 
       {needsConfig ? (
@@ -248,18 +302,10 @@ export function SchedulePage() {
             <ActionsBar
               title="Courts"
               status={
-                <>
-                  {/* Engine-provenance chip — single-engine source is a
-                      per-surface constant (this is a meet Operations surface). */}
-                  <SourceChip source="meet" />
-                  <LiveMetricsBar
-                    elapsed={elapsed}
-                    solutionCount={solutionCount}
-                    objectiveScore={objectiveScore}
-                    bestBound={bestBound}
-                    status={status}
-                  />
-                </>
+                // Solver telemetry left the toolbar (Phase 4.3): live progress
+                // shows in the SolverHud + the rail's Log tab during a solve;
+                // the last score sits in the timeline's bottom status line.
+                <SourceChip source="meet" />
               }
             >
               <Button
@@ -277,6 +323,34 @@ export function SchedulePage() {
               >
                 <Download aria-hidden="true" />
                 Export XLSX
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="toolbar"
+                onClick={openDirector}
+                title="Director tools — delays, breaks, reopen courts"
+              >
+                <GearSix aria-hidden="true" />
+                Director
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="toolbar"
+                onClick={() => setWarmRestartOpen(true)}
+                title="Re-plan from here (full re-solve, stay-close objective)"
+              >
+                Re-plan
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="toolbar"
+                onClick={() => openDisruption()}
+                title="Repair after a disruption"
+              >
+                Disruption
               </Button>
               <ScheduleActions
                 onGenerate={handleGenerate}
@@ -296,9 +370,11 @@ export function SchedulePage() {
                   readOnly={isOptimizing}
                   selectedMatchId={selectedMatchId}
                   onMatchSelect={setSelectedMatchId}
-                  onRequestReopenCourt={() => {
-                    /* hook to ScheduleSidebar's directorOpen if needed */
-                  }}
+                  currentSlot={currentSlot ?? undefined}
+                  matchStates={matchStates}
+                  trafficLights={trafficLights}
+                  objectiveScore={objectiveScore}
+                  onRequestReopenCourt={openDirector}
                 />
               ) : (
                 <LiveTimelineGrid
@@ -360,6 +436,9 @@ export function SchedulePage() {
             objectiveScore={objectiveScore}
             status={status}
             violations={violations}
+            onAdvisoryReview={handleAdvisoryReview}
+            onRequestDisruption={openDisruption}
+            onRequestMove={setMoveMatchId}
           />
         </div>
       ) : isOptimizing && !hasLiveProgress ? (
@@ -398,6 +477,54 @@ export function SchedulePage() {
             </p>
           ) : null}
         </div>
+      )}
+
+      {/* Dialog hosts — page-owned so the toolbar, the banner's Review, and
+          the rail's intents all land in one place (same shape as Run). */}
+      <DisruptionDialog
+        isOpen={disruptionOpen}
+        onClose={() => setDisruptionOpen(false)}
+        initialType={disruptionPrefill.type}
+        initialMatchId={disruptionPrefill.matchId}
+        initialCourtId={disruptionPrefill.courtId}
+      />
+      <WarmRestartDialog isOpen={warmRestartOpen} onClose={() => setWarmRestartOpen(false)} />
+      <MoveMatchDialog
+        isOpen={moveMatchId !== null}
+        onClose={() => setMoveMatchId(null)}
+        matchId={moveMatchId ?? undefined}
+      />
+      {directorOpen && (
+        <Modal
+          // Closing must also discard any in-flight director proposal —
+          // otherwise the next dialog opens with a stale preview.
+          onClose={() => {
+            void cancelProposal();
+            setDirectorOpen(false);
+          }}
+          titleId="director-tools-title"
+          widthClass="max-w-lg"
+        >
+          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+            <h2 id="director-tools-title" className="text-sm font-semibold">
+              Director tools
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                void cancelProposal();
+                setDirectorOpen(false);
+              }}
+              className={`${INTERACTIVE_BASE} rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground`}
+              aria-label="Close director tools"
+            >
+              ×
+            </button>
+          </div>
+          <div className="overflow-y-auto max-h-[calc(80vh-3rem)]">
+            <DirectorToolsPanel />
+          </div>
+        </Modal>
       )}
     </div>
   );

@@ -51,14 +51,11 @@ transient, non-advisory feedback elsewhere (e.g. the version-mismatch retry toas
 `useLiveTracking`, which is a distinct error-recovery affordance, not an advisory). Nothing may
 toast an event the Alerts & Activity model displays.
 
-**Advisories are a Run-view concern (scoping decision).** The advisory *action* dispatcher
-(`handleAdvisoryReview` → repair/warm-restart/director dialogs) only ever existed on the Run tab;
-on other pages the old toast's "Review" set `pendingAdvisoryReview`, which nothing off-Run
-consumed — so advisories were **visible-but-non-actionable** there. Because a few advisory kinds
-(`infeasibility_risk`, `approaching_blackout`) can fire during scheduling, the **Schedule page
-keeps a read-only `AdvisoryBanner`** (heads-up for critical advisories, no Review — it points the
-operator to Run to act). Warn-level advisories surface only in the Run rail; this is intentional
-(warn advisories are live-play conditions the operator reads on Run).
+**Scoping (superseded by Phase 4):** at P2 the dispatcher existed only on Run and the Schedule
+(Plan) page carried a read-only heads-up banner. **Phase 4.1 promoted Plan to full parity**: the
+Plan page owns the same dialog hosts (Disruption / WarmRestart / Director / Move) and the identical
+`handleAdvisoryReview` dispatcher, so its banner is actionable, and its rail hosts the same
+Alerts & Activity section — warnings and the activity trail render there exactly as on Run.
 
 ## 4. Rail contention
 
@@ -88,10 +85,11 @@ match-state transitions (`useActivityLog` diffs the match-state map and emits en
 local ring buffer. No backend changes. If a durable cross-session/cross-device audit log is wanted
 later, add the table and have the same pipeline write it — the panel already renders the model.
 
-**Known limitation:** `useActivityLog` is mounted on the Run surface, so it records transitions
-only while that tab is mounted. Transitions that happen while the operator is on another tab are
-not captured (the existing entries persist; only the intervening changes are missed). A durable
-backend event log would remove this gap; until then it is an accepted limitation, not a bug.
+**Known limitation:** `useActivityLog` is mounted on the Run AND Plan surfaces (one at a time —
+tabs swap), so it records transitions only while one of them is mounted. Transitions that happen
+while the operator is elsewhere are not captured (existing entries persist; only the intervening
+changes are missed). A durable backend event log would remove this gap; until then it is an
+accepted limitation, not a bug.
 
 ## 6a. Residual — SuggestionsRail double-surface (deferred)
 

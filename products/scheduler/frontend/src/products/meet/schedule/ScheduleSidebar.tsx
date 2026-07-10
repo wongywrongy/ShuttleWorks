@@ -1,18 +1,19 @@
 /**
- * Right-column sidebar for the SchedulePage shell. Owns the Log /
- * Details / Candidates tab swap, the Director / Re-plan / Disruption
- * action row, and the dialog hosts that those actions open.
+ * Right-column sidebar for the SchedulePage shell — the stacked rail
+ * model (SPEC_AMENDMENT_alerts_activity_panel §4, Phase 4.1):
  *
- * Lifted out of SchedulePage to keep that file under the Phase 5 line
- * target. State that's truly local here (which tab is active, which
- * dialog is open) stays here; state SchedulePage needs in its own
- * branches (e.g. `selectedMatchId`, the visualization layout) is
- * passed through as props.
+ *   1. Alerts & Activity on top — always visible, collapsible to a
+ *      count chip, never hidden by tab/selection state.
+ *   2. The Log / Details / Candidates tab zone below (the tabs ARE the
+ *      "details" zone on this surface).
+ *
+ * Dialog hosts and the Director / Re-plan / Disruption actions moved to
+ * SchedulePage's toolbar (Phase 4.3 — same home as Run); this component
+ * only raises intents via the onRequest* props.
  */
 import { useEffect, useState } from 'react';
-import { GearSix } from '@phosphor-icons/react';
-import { Button } from '@scheduler/design-system/components';
 import type {
+  Advisory,
   ScheduleAssignment,
   MatchDTO,
   PlayerDTO,
@@ -22,13 +23,8 @@ import type {
 import { SolverProgressLog } from '../schedule/live/SolverProgressLog';
 import { CandidatesPanel } from '../schedule/CandidatesPanel';
 import { MatchDetailsPanel } from '../control-center/MatchDetailsPanel';
-import { DisruptionDialog } from '../control-center/DisruptionDialog';
-import { MoveMatchDialog } from '../control-center/MoveMatchDialog';
-import { WarmRestartDialog } from '../schedule/WarmRestartDialog';
-import { DirectorToolsPanel } from '../director/DirectorToolsPanel';
-import { Modal } from '../../../components/common/Modal';
+import { AlertsActivityPanel } from '../control-center/AlertsActivityPanel';
 import { useTournamentStore } from '../../../store/tournamentStore';
-import { useProposals } from '../../../hooks/useProposals';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import type { TrafficLightResult } from '../../../hooks/useTrafficLights';
 
@@ -56,6 +52,9 @@ export function ScheduleSidebar({
   objectiveScore,
   status,
   violations,
+  onAdvisoryReview,
+  onRequestDisruption,
+  onRequestMove,
 }: {
   isOptimizing: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,18 +81,15 @@ export function ScheduleSidebar({
   status: 'solving' | 'complete';
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   violations: any[];
-}) {
-  const [sidebarTab, setSidebarTab] = useState<SidebarTabKey>('details');
-  const [disruptionOpen, setDisruptionOpen] = useState(false);
-  const [warmRestartOpen, setWarmRestartOpen] = useState(false);
-  const [directorOpen, setDirectorOpen] = useState(false);
-  const [moveMatchId, setMoveMatchId] = useState<string | null>(null);
-  const [disruptionPrefill, setDisruptionPrefill] = useState<{
+  onAdvisoryReview: (advisory: Advisory) => void;
+  onRequestDisruption: (prefill: {
     type?: 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
     matchId?: string;
     courtId?: number;
-  }>({});
-  const { cancel: cancelProposal } = useProposals();
+  }) => void;
+  onRequestMove: (matchId: string) => void;
+}) {
+  const [sidebarTab, setSidebarTab] = useState<SidebarTabKey>('details');
 
   // Auto-flip tabs as solver state changes — see SchedulePage's prior
   // logic. Solving → Log; idle → Details; selecting a match while idle
@@ -110,178 +106,91 @@ export function ScheduleSidebar({
   }, [selectedMatchId, isOptimizing]);
 
   return (
-    <>
-      <div className="w-80 flex-shrink-0 flex flex-col border-l border-border/60">
-        <div className="border-b border-border/60 flex-shrink-0">
-          <div
-            role="tablist"
-            aria-label="Sidebar views"
-            className="flex flex-wrap items-center gap-1 px-2 py-1.5"
-          >
-            {isOptimizing ? (
-              <>
-                <SidebarTab active={sidebarTab === 'log'} onClick={() => setSidebarTab('log')}>
-                  Log
-                </SidebarTab>
-                <SidebarTab active={sidebarTab === 'details'} onClick={() => setSidebarTab('details')}>
-                  Details
-                </SidebarTab>
-              </>
-            ) : (
-              <>
-                <SidebarTab active={sidebarTab === 'details'} onClick={() => setSidebarTab('details')}>
-                  Details
-                </SidebarTab>
-                {(schedule?.candidates?.length ?? 0) > 0 && (
-                  <SidebarTab
-                    active={sidebarTab === 'candidates'}
-                    onClick={() => setSidebarTab('candidates')}
-                  >
-                    Candidates
-                  </SidebarTab>
-                )}
-              </>
-            )}
-          </div>
-          {!isOptimizing && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-border/60 bg-muted/40 px-2 py-1.5">
-              <span className="eyebrow flex-shrink-0" aria-hidden="true">
-                Dynamic
-              </span>
-              <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="toolbar"
-                  onClick={() => setDirectorOpen(true)}
-                  title="Director tools — delays, breaks, reopen courts"
-                >
-                  <GearSix aria-hidden="true" />
-                  Director
-                </Button>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="toolbar"
-                  onClick={() => setWarmRestartOpen(true)}
-                  title="Re-plan from here (full re-solve, stay-close objective)"
-                >
-                  Re-plan
-                </Button>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="toolbar"
-                  onClick={() => {
-                    setDisruptionPrefill({});
-                    setDisruptionOpen(true);
-                  }}
-                  title="Repair after a disruption"
-                >
-                  Disruption
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="flex-1 min-h-0 overflow-auto">
-          {isOptimizing && sidebarTab === 'log' ? (
-            <div className="p-2">
-              <SolverProgressLog
-                solutionCount={solutionCount}
-                objectiveScore={objectiveScore}
-                matchCount={displayAssignments.length}
-                totalMatches={matches.length}
-                status={status}
-                violations={violations}
-              />
-            </div>
-          ) : sidebarTab === 'candidates' ? (
-            <CandidatesPanel
-              schedule={schedule}
-              onSelect={(i) => useTournamentStore.getState().setActiveCandidateIndex(i)}
-            />
+    <div className="w-80 flex-shrink-0 flex flex-col border-l border-border/60">
+      {/* Alerts never hidden by the tab zone; capped so a long trail can't
+          squeeze it out (same bound rationale as the Run rail). */}
+      <AlertsActivityPanel onReview={onAdvisoryReview} className="max-h-[40%]" />
+      <div className="border-b border-border/60 flex-shrink-0">
+        <div
+          role="tablist"
+          aria-label="Sidebar views"
+          className="flex flex-wrap items-center gap-1 px-2 py-1.5"
+        >
+          {isOptimizing ? (
+            <>
+              <SidebarTab active={sidebarTab === 'log'} onClick={() => setSidebarTab('log')}>
+                Log
+              </SidebarTab>
+              <SidebarTab active={sidebarTab === 'details'} onClick={() => setSidebarTab('details')}>
+                Details
+              </SidebarTab>
+            </>
           ) : (
-            <MatchDetailsPanel
-              assignment={selectedAssignment}
-              match={selectedMatch}
-              matchState={selectedMatchState}
-              matches={matches}
-              trafficLight={selectedTrafficLight}
-              playerNames={playerNames}
-              slotToTime={slotToTime}
-              onSelectMatch={setSelectedMatchId}
-              schedule={schedule}
-              matchStates={matchStates}
-              players={players}
-              groups={groups}
-              config={config}
-              currentSlot={currentSlot ?? undefined}
-              onRequestDisruption={(type, matchId) => {
-                const courtId =
-                  type === 'court_closed' && selectedAssignment
-                    ? selectedAssignment.courtId
-                    : undefined;
-                setDisruptionPrefill({
-                  type,
-                  matchId: type === 'court_closed' ? undefined : matchId,
-                  courtId,
-                });
-                setDisruptionOpen(true);
-              }}
-              onRequestMove={(matchId) => setMoveMatchId(matchId)}
-            />
+            <>
+              <SidebarTab active={sidebarTab === 'details'} onClick={() => setSidebarTab('details')}>
+                Details
+              </SidebarTab>
+              {(schedule?.candidates?.length ?? 0) > 0 && (
+                <SidebarTab
+                  active={sidebarTab === 'candidates'}
+                  onClick={() => setSidebarTab('candidates')}
+                >
+                  Candidates
+                </SidebarTab>
+              )}
+            </>
           )}
         </div>
       </div>
-
-      <DisruptionDialog
-        isOpen={disruptionOpen}
-        onClose={() => setDisruptionOpen(false)}
-        initialType={disruptionPrefill.type}
-        initialMatchId={disruptionPrefill.matchId}
-        initialCourtId={disruptionPrefill.courtId}
-      />
-      <WarmRestartDialog
-        isOpen={warmRestartOpen}
-        onClose={() => setWarmRestartOpen(false)}
-      />
-      <MoveMatchDialog
-        isOpen={moveMatchId !== null}
-        onClose={() => setMoveMatchId(null)}
-        matchId={moveMatchId ?? undefined}
-      />
-      {directorOpen && (
-        <Modal
-          onClose={() => {
-            void cancelProposal();
-            setDirectorOpen(false);
-          }}
-          titleId="director-tools-title"
-          widthClass="max-w-lg"
-        >
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <h2 id="director-tools-title" className="text-sm font-semibold">
-              Director tools
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                void cancelProposal();
-                setDirectorOpen(false);
-              }}
-              className={`${INTERACTIVE_BASE} rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground`}
-              aria-label="Close director tools"
-            >
-              ×
-            </button>
+      <div className="flex-1 min-h-0 overflow-auto">
+        {isOptimizing && sidebarTab === 'log' ? (
+          <div className="p-2">
+            <SolverProgressLog
+              solutionCount={solutionCount}
+              objectiveScore={objectiveScore}
+              matchCount={displayAssignments.length}
+              totalMatches={matches.length}
+              status={status}
+              violations={violations}
+            />
           </div>
-          <div className="overflow-y-auto max-h-[calc(80vh-3rem)]">
-            <DirectorToolsPanel />
-          </div>
-        </Modal>
-      )}
-    </>
+        ) : sidebarTab === 'candidates' ? (
+          <CandidatesPanel
+            schedule={schedule}
+            onSelect={(i) => useTournamentStore.getState().setActiveCandidateIndex(i)}
+          />
+        ) : (
+          <MatchDetailsPanel
+            assignment={selectedAssignment}
+            match={selectedMatch}
+            matchState={selectedMatchState}
+            matches={matches}
+            trafficLight={selectedTrafficLight}
+            playerNames={playerNames}
+            slotToTime={slotToTime}
+            onSelectMatch={setSelectedMatchId}
+            schedule={schedule}
+            matchStates={matchStates}
+            players={players}
+            groups={groups}
+            config={config}
+            currentSlot={currentSlot ?? undefined}
+            onRequestDisruption={(type, matchId) => {
+              const courtId =
+                type === 'court_closed' && selectedAssignment
+                  ? selectedAssignment.courtId
+                  : undefined;
+              onRequestDisruption({
+                type,
+                matchId: type === 'court_closed' ? undefined : matchId,
+                courtId,
+              });
+            }}
+            onRequestMove={onRequestMove}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
