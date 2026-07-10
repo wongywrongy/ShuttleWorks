@@ -13,7 +13,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, CaretLeft, CaretRight, ClipboardText, GearSix } from '@phosphor-icons/react';
+import { Download, CaretRight, CaretDown, ClipboardText, GearSix } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system/components';
 import { useLiveTracking } from '../../hooks/useLiveTracking';
 import { useLiveOperations } from '../../hooks/useLiveOperations';
@@ -32,6 +32,8 @@ import { WarmRestartDialog } from './schedule/WarmRestartDialog';
 import { Modal } from '../../components/common/Modal';
 import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
 import { SuggestionsRail } from './suggestions/SuggestionsRail';
+import { AlertsActivityPanel } from './control-center/AlertsActivityPanel';
+import { useActivityLog } from '../../hooks/useActivityLog';
 import { GanttLegend } from './control-center/GanttLegend';
 import { exportScheduleXlsx } from './exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../../lib/utils';
@@ -42,6 +44,8 @@ import type { Advisory } from '../../api/dto';
 export function MatchControlCenterPage() {
   const liveTracking = useLiveTracking();
   const liveOps = useLiveOperations();
+  // Feed the Alerts & Activity trail from match-state transitions.
+  useActivityLog();
   const { cancel: cancelProposal } = useProposals();
   const players = useTournamentStore((state) => state.players);
   const groups = useTournamentStore((state) => state.groups);
@@ -593,73 +597,81 @@ export function MatchControlCenterPage() {
           </div>
         </div>
 
-        {/* Right column — Match details (vertical hairline as separator) */}
-        {detailsOpen ? (
-          <div className="motion-enter flex w-72 shrink-0 flex-col overflow-hidden border-l border-border">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
-              <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Match details
-              </span>
-              <button
-                type="button"
-                onClick={() => setDetailsOpen(false)}
-                title="Collapse details"
-                aria-label="Collapse details"
-                className={`${INTERACTIVE_BASE} flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
-              >
-                <CaretRight aria-hidden="true" className="h-3.5 w-3.5" />
-              </button>
+        {/* Right column — always-present rail. Alerts & Activity on top
+            (never hidden by selection), Match details below on selection
+            (SPEC_AMENDMENT_alerts_activity_panel §4). */}
+        <div className="motion-enter flex w-72 shrink-0 flex-col overflow-hidden border-l border-border">
+          <AlertsActivityPanel onReview={handleAdvisoryReview} />
+          {detailsOpen ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
+                <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Match details
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen(false)}
+                  title="Collapse details"
+                  aria-label="Collapse details"
+                  className={`${INTERACTIVE_BASE} flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
+                >
+                  <CaretDown aria-hidden="true" className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <MatchDetailsPanel
+                  assignment={selectedAssignment}
+                  match={selectedMatch}
+                  matchState={selectedState}
+                  matches={liveOps.matches}
+                  trafficLight={selectedTrafficLight}
+                  analysis={selectedAnalysis}
+                  playerNames={playerNames}
+                  slotToTime={liveOps.slotToTime}
+                  onSelectMatch={setSelectedMatchId}
+                  schedule={liveOps.schedule}
+                  matchStates={liveOps.matchStates}
+                  players={players}
+                  groups={groups}
+                  config={liveOps.config}
+                  currentSlot={currentSlot}
+                  onUpdateStatus={liveTracking.updateMatchStatus}
+                  onConfirmPlayer={liveTracking.confirmPlayer}
+                  onSubstitute={handleSubstitute}
+                  onRemovePlayer={handleRemovePlayer}
+                  onCascadingStart={handleCascadingStart}
+                  onUndoStart={handleUndoStart}
+                  mode={panelMode}
+                  onModeChange={setPanelMode}
+                  onRequestDisruption={(type, matchId) => {
+                    const courtId =
+                      type === 'court_closed' && selectedAssignment
+                        ? selectedAssignment.courtId
+                        : undefined;
+                    setDisruptionPrefill({
+                      type,
+                      matchId: type === 'court_closed' ? undefined : matchId,
+                      courtId,
+                    });
+                    setDisruptionOpen(true);
+                  }}
+                  onRequestMove={(matchId) => setMoveMatchId(matchId)}
+                />
+              </div>
             </div>
-            <MatchDetailsPanel
-              assignment={selectedAssignment}
-              match={selectedMatch}
-              matchState={selectedState}
-              matches={liveOps.matches}
-              trafficLight={selectedTrafficLight}
-              analysis={selectedAnalysis}
-              playerNames={playerNames}
-              slotToTime={liveOps.slotToTime}
-              onSelectMatch={setSelectedMatchId}
-              schedule={liveOps.schedule}
-              matchStates={liveOps.matchStates}
-              players={players}
-              groups={groups}
-              config={liveOps.config}
-              currentSlot={currentSlot}
-              onUpdateStatus={liveTracking.updateMatchStatus}
-              onConfirmPlayer={liveTracking.confirmPlayer}
-              onSubstitute={handleSubstitute}
-              onRemovePlayer={handleRemovePlayer}
-              onCascadingStart={handleCascadingStart}
-              onUndoStart={handleUndoStart}
-              mode={panelMode}
-              onModeChange={setPanelMode}
-              onRequestDisruption={(type, matchId) => {
-                const courtId =
-                  type === 'court_closed' && selectedAssignment
-                    ? selectedAssignment.courtId
-                    : undefined;
-                setDisruptionPrefill({
-                  type,
-                  matchId: type === 'court_closed' ? undefined : matchId,
-                  courtId,
-                });
-                setDisruptionOpen(true);
-              }}
-              onRequestMove={(matchId) => setMoveMatchId(matchId)}
-            />
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setDetailsOpen(true)}
-            title="Show match details"
-            aria-label="Show match details"
-            className={`${INTERACTIVE_BASE} flex w-6 shrink-0 items-center justify-center border-l border-border text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
-          >
-            <CaretLeft aria-hidden="true" className="h-3.5 w-3.5" />
-          </button>
-        )}
+          ) : (
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(true)}
+              title="Show match details"
+              aria-label="Show match details"
+              className={`${INTERACTIVE_BASE} flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
+            >
+              <span>Match details</span>
+              <CaretRight aria-hidden="true" className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <DisruptionDialog

@@ -1,98 +1,67 @@
 /**
- * Live-operations advisory banner.
+ * Pending-decision banner.
  *
- * Renders the highest-severity active advisory at the top of pages
- * that opt in (Live tab and TV display). Mirrors the pattern of
- * ``ScheduleLockIndicator`` but with severity-driven coloring and an
- * optional CTA that dispatches the advisory's ``suggestedAction``.
+ * The single alert pipeline routes advisories to exactly one place by
+ * severity (SPEC_AMENDMENT_alerts_activity_panel.md §2). This banner is
+ * the **decision** sink: it surfaces the one highest-priority advisory
+ * that is a proposal awaiting the operator (Repair / Apply / Re-optimize /
+ * warm-restart), persisting until acted on. Warnings and info go to the
+ * Alerts & Activity rail, never here — so an event never renders twice.
  *
- * The banner is read-only on the public TV display (no CTA, just the
- * heads-up); operators see the CTA on the Live tab.
+ * At most one decision shows; additional queued decisions collapse to a
+ * "+N more" count. Built on the shared `Notice` grammar.
  */
-import { Warning, WarningOctagon, Info } from '@phosphor-icons/react';
+import { Notice } from '@scheduler/design-system/components';
 import { useUiStore } from '../../store/uiStore';
-import type { Advisory, AdvisorySeverity } from '../../api/dto';
+import { classifyAdvisory } from '../../platform/domain/alertModel';
+import type { Advisory } from '../../api/dto';
 
 interface AdvisoryBannerProps {
-  /** When true, the banner only shows the message (no Review button).
-   *  Used on the public TV display. */
+  /** When true, show the message only (no Review button) — e.g. a
+   *  read-only spectator surface. */
   readOnly?: boolean;
-  /** Override the action handler for the Review button. Defaults to
-   *  setting the active advisory's matchId / suggestedAction in the
-   *  store so the page-owner dialog can pick it up. */
+  /** Handler for the Review button — routes the advisory's suggestedAction
+   *  to the matching dialog. */
   onReview?: (advisory: Advisory) => void;
   className?: string;
 }
 
-// Token-driven status pairs — previously stock light-only Tailwind hues
-// that never adapted to dark mode.
-const TONE: Record<AdvisorySeverity, { ring: string; text: string; icon: string }> = {
-  info: {
-    ring: 'border-status-info-fg/30 bg-status-info-bg',
-    text: 'text-status-info-fg',
-    icon: 'text-status-info-fg',
-  },
-  warn: {
-    ring: 'border-status-warning-fg/40 bg-status-warning-bg',
-    text: 'text-status-warning-fg',
-    icon: 'text-status-warning-fg',
-  },
-  critical: {
-    ring: 'border-status-danger-fg/40 bg-status-danger-bg',
-    text: 'text-status-danger-fg',
-    icon: 'text-status-danger-fg',
-  },
-};
-
-const RANK: Record<AdvisorySeverity, number> = { critical: 0, warn: 1, info: 2 };
-
-function pickHighestSeverity(advisories: Advisory[], readOnly: boolean): Advisory | null {
-  // The TV banner only surfaces critical advisories — info/warn would
-  // be noise to spectators. The Live banner surfaces warn + critical.
-  const eligible = advisories.filter((a) =>
-    readOnly ? a.severity === 'critical' : a.severity !== 'info',
-  );
-  if (eligible.length === 0) return null;
-  return eligible.reduce((best, candidate) =>
-    RANK[candidate.severity] < RANK[best.severity] ? candidate : best,
-  );
-}
-
-function Icon({ severity, className }: { severity: AdvisorySeverity; className: string }) {
-  const Component =
-    severity === 'critical' ? WarningOctagon : severity === 'warn' ? Warning : Info;
-  return <Component aria-hidden="true" className={className} />;
-}
-
 export function AdvisoryBanner({ readOnly = false, onReview, className = '' }: AdvisoryBannerProps) {
   const advisories = useUiStore((s) => s.advisories);
-  const advisory = pickHighestSeverity(advisories, readOnly);
-  if (!advisory) return null;
+  const decisions = advisories
+    .filter((a) => classifyAdvisory(a) === 'decision')
+    .sort((a, b) => b.detectedAt.localeCompare(a.detectedAt));
 
-  const tone = TONE[advisory.severity];
+  if (decisions.length === 0) return null;
+  const top = decisions[0];
+  const extra = decisions.length - 1;
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={`motion-enter flex items-start gap-2 rounded border ${tone.ring} px-3 py-2 ${className}`}
+    <Notice
+      tone="accent"
+      placement="full-bleed"
+      className={`motion-enter ${className}`}
+      title={top.summary}
+      action={
+        <div className="flex items-center gap-2">
+          {extra > 0 && (
+            <span className="whitespace-nowrap text-2xs font-medium text-muted-foreground tabular-nums">
+              +{extra} more
+            </span>
+          )}
+          {!readOnly && top.suggestedAction && onReview && (
+            <button
+              type="button"
+              onClick={() => onReview(top)}
+              className="rounded border border-accent/50 px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              Review
+            </button>
+          )}
+        </div>
+      }
     >
-      <Icon severity={advisory.severity} className={`h-4 w-4 mt-0.5 flex-shrink-0 ${tone.icon}`} />
-      <div className="flex-1 min-w-0">
-        <div className={`text-sm font-medium ${tone.text}`}>{advisory.summary}</div>
-        {advisory.detail && (
-          <div className={`mt-0.5 text-xs ${tone.text}`}>{advisory.detail}</div>
-        )}
-      </div>
-      {!readOnly && advisory.suggestedAction && onReview && (
-        <button
-          type="button"
-          onClick={() => onReview(advisory)}
-          className={`flex-shrink-0 rounded border border-current px-2 py-1 text-xs font-medium ${tone.text} hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-current`}
-        >
-          Review
-        </button>
-      )}
-    </div>
+      {top.detail ?? undefined}
+    </Notice>
   );
 }

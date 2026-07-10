@@ -30,6 +30,7 @@ export {
   type StatusCountItem,
 } from './StatusBar';
 export { Modal } from './Modal';
+export { Notice, type NoticeProps, type NoticeTone } from './Notice';
 export { Hint, useHint } from './Hint';
 export { Toast, ToastStack, type ToastData, type ToastLevel } from './Toast';
 export {
