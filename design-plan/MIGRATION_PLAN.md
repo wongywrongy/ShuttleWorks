@@ -16,21 +16,33 @@
 4. A module is **done** when its column in the AUDIT §2 matrix reads `canonical` on every row and
    its AUDIT §4 convention cells read `applied` or `N-A` (no `missing-but-applicable` left).
 
-## 1. Phase 0 — foundations (no visible redesign)
+## 1. Phase 0 — pre-migration BUGFIX PASS + foundations (✅expanded per review)
 
-- Merge duplicate primitives: one Modal (DS absorbs `motion-enter`; app copy → re-export), one
-  Hint, one INTERACTIVE_BASE; delete dead DS `PageHeader`; re-spec DS `Input`/`Select` to
-  `border-border-strong`.
-- Add the NEW tokens (`--surface-hover`, `--surface-selected-wash`) + extend the contrast gate;
-  fix the unwired classes (`bg-bg-subtle`/`text-fg`/`text-fg-muted`, 38 occurrences) and add the
+Ships first and independently — these are bugs, not migrations:
+
+**0a. Operational bugfixes (no design dependency, highest urgency):**
+- The dark-mode **no-op `bg-muted/*` selected states** (Run queue / UnifiedOpsList /
+  LiveMatchList — invisible selected rows are a live-day operational hazard) via the NEW
+  `--surface-hover` / `--surface-selected-wash` tokens + gate extension.
+- The **38 unwired-class occurrences** (`bg-bg-subtle`/`text-fg`/`text-fg-muted`) + the
   unknown-utility CI check.
+- The **47 alpha-suffix text failures** + opacity-on-status texts + HealthDot + OverflowMenu
+  focus + StandingsView light podium + schoolAccent dark trio (mechanical class edits).
+- **Backend 409 mirrors** for every frontend lock (meet config, venue, bracket roster) — lands
+  independently of all visual work; ranked the most important single item in the plan.
+
+**0b. Foundations:**
+- Merge duplicate primitives: one Modal (DS absorbs `motion-enter`; app copy → re-export), one
+  Hint, one INTERACTIVE_BASE. Delete the three dead DS components (PageHeader, Input, Label) —
+  re-spec `Input`/`Select` to `border-border-strong` ONLY at the point something adopts them
+  (P8/pilot), not speculatively.
 - Build the NEW primitives at sketch level: SectionHeader, Glyph, ProgressBar, Checklist,
-  FormField, Seg (promote), Popover, Notice, Spinner, LockedControl, ConfirmButton, EmptyState
-  icon/inline variants, MetricStat finish, StatusPill `size="lg"` + `icon`.
-- Mechanical contrast fixes that change no layout: the 47 alpha-suffix texts, opacity-on-status
-  texts, HealthDot, OverflowMenu focus, StandingsView podium, schoolAccent dark trio.
-- **Blast radius:** wide but shallow (class-string edits); zero behavior change. Everything else
-  builds on this.
+  FormField, Seg (promote), Popover, Notice, Spinner, LockedControl, ConfirmButton, **UndoToast
+  (Tier 0)**, EmptyState icon/inline variants, MetricStat finish, StatusPill `size="lg"` + `icon`.
+- Display's name-colliding local `StatusPill` is renamed **when its module migration starts**
+  (step 6), not before.
+- **Blast radius:** 0a wide but shallow, zero behavior change except the backend 409s (approved);
+  everything else builds on this.
 
 ## 2. Module order (pilot → traffic)
 
@@ -73,34 +85,36 @@ To be added to the repo-root `CLAUDE.md` when implementation is authorized:
   after token changes; new fg/bg pairings must clear 4.5:1 (text) / 3:1 (UI) in BOTH themes.
 ```
 
-## 4. Review gate — decisions requiring human sign-off
+## 4. Review gate — RESOLVED 2026-07-10
 
-**Canon choices with multiple reasonable winners (⚖ rows in the spec):**
-1. Row gutter px-4 vs px-5 (P3 — proposal: px-4; banded surfaces re-gutter).
-2. Stat label case: sentence (Hub) vs uppercase (Operations band) (P5 — proposal: sentence).
-3. BracketEmptyState: fold into EmptyState as a variant vs delete outright (P7).
-4. Shell tier keeps h-12 bars (Hub/identity) vs unifying on h-11 ActionsBar (P1).
-5. Settings/admin stays a distinct bar-less "document family" (codified) vs adopting ActionsBar (P1).
-6. Detail-rail widths collapse to {w-72, w-[380px]} — Hub inspector 344→380? (P13).
-7. SchoolTabs underline style retained as the top-level-tab tier vs Seg everywhere (P11).
+**Canon calls (1–7): all resolved.** Gutters = px-4; stat labels sentence case;
+**BracketEmptyState deleted**; shell h-12 tier approved; bar-less settings family approved
+(codified via PageTitle); rail widths → {288, 380} (Hub inspector 344→380); **SchoolTabs keeps
+its behavior** (verified: `activeSchoolId` scope state drives roster filtering/selection/creation,
+`RosterTab.tsx:59-262`) and is codified as the one top-level-scope tab tier on tokens.
 
-**Applicability rules (behavior changes — each newly locks or guards something):**
-8. **Venue & schedule locks while a schedule exists** (unlock clears schedule; live-day copy).
-9. **Bracket roster delete/seeding locks while a generated draw references the player.**
-10. Backend 409 mirrors for all frontend locks (meet config, venue, bracket roster).
-11. Run record-winner gets Tier-2 confirm (adds one click to the fastest surface — deliberate).
-12. Invite revoke gets Tier-2 confirm.
-13. `dirty` navigation guards (beforeunload + router blocker) on explicit-save forms.
-14. Read-only role mode: viewers stop seeing edit affordances (changes what shared users see).
-15. Backup-restore confirm button becomes destructive-ranked.
+**Applicability rules (8–15): 7 approved, 1 amended.**
+- 8, 9 approved (the textbook cascading-damage cases).
+- 10 approved and ranked the single most important item — a frontend-only lock is a suggestion,
+  not a lock. Moved into Phase 0a.
+- **11 AMENDED:** Run record-winner uses **Tier 0 undo-over-confirm** (record instantly + 8s
+  "Winner recorded — Undo" toast); Tier-2 confirm reserved for overwriting an existing result or
+  correcting after downstream bracket units started. Rationale: a modal per score at 9pm trains
+  rage-clicking through confirms and defeats the tier system. Bracket Live keeps Tier 2 (low
+  frequency there). Hot-path scan for other confirm-tier friction: suggestions "Apply" moved to
+  Tier 0 (rides scheduleHistory revert); everything else on the Run/board hot paths stays
+  unguarded-reversible — no other assignments slow the live day.
+- 12–15 approved (14 = read-only viewer mode is the frontend mirror of authorization that
+  already exists server-side; "fully armed cockpit + 403 toasts" is the worst viewer UX).
 
-**Proposed as intentionally different (confirm or overrule):**
-16. Display TV board keeps its own type scale + tvAccent + `tracking-widest` (config plane adopts canon).
-17. Discipline/event colors + school accents remain categorical data palettes (with the dark-mode
-    and size fixes from §3), exempt from the one-accent rule.
-18. Modal scrim staying `bg-foreground/40` (inverted lightening in dark) — cosmetic oddity, works.
-19. Solver HUD keeps its bespoke telemetry styling (unique genre, single instance).
+**Intentionally different (16–19): all approved with ONE CONDITION** — exempt from the canon ≠
+exempt from tokens: the TV type tier, categorical palettes, scrim, and Solver HUD must draw
+their values from the primitive layer so they re-theme with everything else (the TV preset hex
+duplication in `displayPresets.ts` gets primitive-ized during step 6).
 
-**Migration order** (§2 table) — approve or reorder.
+**Migration order: approved**, with the bugfix items (unwired classes, contrast failures,
+dead-component deletion, backend 409s) pulled forward into Phase 0a as a pre-migration pass —
+invisible selected rows in the Run queue must not wait behind four module migrations.
 
-**Stop point:** these three documents are the entire output. No implementation has begun.
+**Stop point:** planning remains the entire output. Implementation begins with Phase 0a on
+explicit go-ahead.

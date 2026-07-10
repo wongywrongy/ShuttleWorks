@@ -1,6 +1,8 @@
 # DESIGN_SPEC (draft) — the ShuttleWorks pattern canon
 
-> Status: **DRAFT for human review** — approve/annotate row by row. Companion: `AUDIT.md`
+> Status: **REVIEWED 2026-07-10 — canon calls resolved** (decisions inlined below as ✅RESOLVED;
+> the former ⚖ items are closed). One amendment: destructive-guarded gained an UNDO tier for
+> hot-path writes (§2). Implementation still not begun. Companion: `AUDIT.md`
 > (evidence), `MIGRATION_PLAN.md` (sequencing). Value layer = the two-layer token system
 > (`packages/design-system/tokens.css` + `DESIGN_COLOR.md`); this spec defines the
 > pattern/component layer on top of it. All proposals respect the house rules: one outer container
@@ -25,11 +27,11 @@ the end of MIGRATION_PLAN.md).
   `SectionHeader` rows, not second bars.
 - **Replaces:** Operations hand-rolled header (`OperationsProduct:198`); `SchedulePage:308` and
   `BracketMatchesTable:94` strips; Display Preview status prose normalizes to the count grammar.
-- **Family carve-outs (⚖ sign-off):** (a) shell tier (Hub command bar + workspace identity bar)
-  stays `h-12` as a deliberate outer-chrome tier; (b) Settings/admin tabs keep their bar-less
-  `p-6 max-w-*` document family BUT adopt the shared `PageTitle` (`h2 text-lg font-semibold`
-  + optional `text-sm text-secondary` subtitle) as a named component so the family is codified,
-  not accidental.
+- **Family carve-outs (✅RESOLVED — both approved):** (a) shell tier (Hub command bar + workspace
+  identity bar) stays `h-12` as a deliberate outer-chrome tier; (b) Settings/admin tabs keep
+  their bar-less `p-6 max-w-*` document family BUT adopt the shared `PageTitle`
+  (`h2 text-lg font-semibold` + optional subtitle) as a named component so the family is
+  codified, not accidental.
 - Delete dead DS `PageHeader` (0 imports, disagrees on tracking).
 
 ### P2. Section overline → ONE `SectionHeader` (consolidation of Eyebrow/RailLabel/…)
@@ -47,8 +49,8 @@ the end of MIGRATION_PLAN.md).
 ### P3. Rows → `BandedList/BandedTable` grammar everywhere
 
 - **Winner:** `BANDED_ROW_CLASSES` (already the most-adopted).
-- **Spec:** row `min-h-[40px] px-4 gap-3 border-b border-hairline` (⚖ px-4 vs px-5: propose
-  **px-4** — Hub/ops majority; banded surfaces migrate from px-5); dense tier `min-h-[32px]
+- **Spec:** row `min-h-[40px] px-4 gap-3 border-b border-hairline` (✅RESOLVED: **px-4** — on
+  the 4-step scale, tighter is safer for data-dense views; banded surfaces migrate from px-5); dense tier `min-h-[32px]
   py-1.5` for operational queues (RunQueue/UnifiedOpsList are the prior art — codified as
   `density="dense"`); hover `hover:bg-hover` (NEW token, see §3 resolutions — replaces
   muted/30-40-50); selected = `bg-selected` (NEW token) **+ inset 2px accent stripe** (one
@@ -72,11 +74,10 @@ the end of MIGRATION_PLAN.md).
 - **NEW `Glyph`:** the 1-letter square (M/D/B, source squares) — one component, two sizes
   (18px rows / 12px chips), neutral chip styling per the color budget.
 
-### P5. Stat block → `MetricStat` (exists, 0 consumers — finish and adopt) ⚖
+### P5. Stat block → `MetricStat` (exists, 0 consumers — finish and adopt)
 
 - **Spec:** value `text-lg font-bold sw-num text-text-primary`; label `text-2xs text-text-muted`
-  **sentence case** (⚖ vs RunSummaryBand's uppercase — proposal: sentence case; uppercase is
-  reserved for SectionHeader); layout variants `tiles` (Hub's gap-px grid) and `band`
+  **sentence case** (✅RESOLVED — follows the caps diet; uppercase is reserved for SectionHeader); layout variants `tiles` (Hub's gap-px grid) and `band`
   (Operations' seamed flex with optional status top-bar). Replaces MetricTile, StatItem, and the
   meet Run header inline stats; DS `StatusBar` stays for count-strips (different role).
 
@@ -94,9 +95,9 @@ the end of MIGRATION_PLAN.md).
   max-w-sm`; action slot. New `variant="inline"` (the one-liner: `px-4 py-6 text-sm
   text-text-muted` centered) for queues/rails. Copy voice: **"Select a …"** everywhere (kills
   "Click a …"); no italics.
-- **Replaces:** BracketEmptyState (⚖ its editorial text-xl look is the minority; if kept, it must
-  become a variant of the shared component, not a sibling), all 9 hand-rolls. Display TV tier
-  exempt.
+- **Replaces:** **BracketEmptyState — DELETED** (✅RESOLVED: module-specific variants of shared
+  patterns are exactly the disease; its 4 call sites adopt the shared component), plus all 9
+  hand-rolls. Display TV tier exempt.
 
 ### P8. Forms → `FormField` + resurrect DS `Input`/`Select`
 
@@ -136,9 +137,12 @@ the end of MIGRATION_PLAN.md).
   (workspace rail wins); Global-settings nav rebases onto it. Back = the icon-only shell button
   at shell tier; in-canvas back = `variant="link"` Button with ← label (both survive; the split
   is tier-based and codified). In-page switchers: **`Seg` is the one component** (square,
-  `px-3 py-1 text-xs`, active `bg-selected text-accent`); underline SchoolTabs allowed ONLY as
-  the top-level-tab tier (⚖); glow pills / boxed tabs / FilterChip variants die (FilterChip
-  restyles as Seg).
+  `px-3 py-1 text-xs`, active `bg-selected text-accent`). **SchoolTabs (✅RESOLVED): keeps its
+  behavior** — verified to encode real scope state (`activeSchoolId` drives roster filtering,
+  selection auto-correction, and new-player group assignment, `RosterTab.tsx:59-262`), not just
+  styling — and is codified as the ONE top-level-scope tab tier (underline style; skin already
+  token-based; its `/60` count suffix is on the Phase-0 contrast list). Glow pills / boxed tabs /
+  FilterChip variants die (FilterChip restyles as Seg).
 
 ### P12. Typography roles (the six voices)
 
@@ -156,10 +160,10 @@ practice; pick the class with the utility name).
 
 ### P13. Spacing constants
 
-- List/row gutter: `px-4`. Section padding (document family): `p-6`. Rail: **`w-72` compact
-  rails, `w-[380px]` detail drawers** — the only two rail widths (⚖ Hub inspector w-[344px]
-  migrates to 380 or 288; propose 380). Row heights: 40 standard / 32 dense. Everything else
-  from the `--space-*` ladder; arbitrary `p-[18px]`-style values banned.
+- List/row gutter: `px-4`. Section padding (document family): `p-6`. Rail: **`w-72` (288px)
+  compact rails, `w-[380px]` detail drawers** — the only two rail widths (✅RESOLVED; Hub
+  inspector 344→380). Row heights: 40 standard / 32 dense. Everything else from the `--space-*`
+  ladder; arbitrary `p-[18px]`-style values banned.
 
 ### P14. Feedback
 
@@ -229,20 +233,35 @@ these as props; per-module styling of states is banned.
   (resolves AUDIT §4.4 — currently zero protection repo-wide).
 
 ### `destructive-guarded`
-- **Visual/behavior — ONE confirm pattern, two tiers:**
+- **Visual/behavior — ONE guard system, THREE tiers** (✅AMENDED per review: hot-path writes get
+  undo-over-confirm; a modal on every 9pm score entry would train rage-clicking through confirms
+  everywhere and defeat the tier system):
+  - **Tier 0 (undo toast) — high-frequency writes on live surfaces:** commit instantly, show an
+    8s toast "Winner recorded — **Undo**" (Toast action slot). Undo reverts the write while
+    reverting is still clean; once it isn't (a downstream bracket unit has started), the toast
+    omits Undo and later corrections route through Tier 2. Requires a real revert path — for
+    bracket results the re-record/reset semantics, for meet results the state-machine
+    walk-back, for schedule applies the existing `scheduleHistory` revert pool.
   - **Tier 1 (modal):** irreversible + broad blast radius (delete workspace, reset bracket,
-    restore backup, unlock-and-clear-schedule). DS Modal; title Eyebrow `destructive`; body names
-    exactly what is destroyed; footer ghost Cancel + `variant="destructive"` verb button
-    ("Delete permanently"). Restore-backup's confirm button becomes destructive-ranked.
-  - **Tier 2 (two-click inline):** irreversible but narrow/frequent (record winner, remove
-    player, re-generate one draw, revoke invite): first click arms the control
-    (destructive style + explicit label, 4s window), second click commits. This is the existing
+    restore backup, unlock-and-clear-schedule). DS Modal; title Eyebrow `destructive`; body
+    names exactly what is destroyed; footer ghost Cancel + `variant="destructive"` verb button.
+    Restore-backup's confirm button becomes destructive-ranked (restore overwrites live state).
+  - **Tier 2 (two-click inline):** irreversible-ish but narrow/infrequent: first click arms the
+    control (destructive style + explicit label, 4s), second commits. The existing
     ScheduleActions/MatchDetailsPanel pattern, promoted.
   - `window.confirm` is banned (4 sites migrate).
-- **Applicability rule:** every irreversible server write gets a tier; assignments (sign-off):
-  Run record-winner → Tier 2 (currently NONE — the audit's sharpest guard gap); invite revoke →
-  Tier 2; bracket reset → Tier 1; re-generate draw → Tier 2; record winner in Bracket Live →
-  Tier 2 (replacing window.confirm). Reversible actions (postpone, uncall, archive) need none.
+- **Applicability rule + assignments (✅RESOLVED):**
+  - **Run record-winner → Tier 0** (first-time result: instant + Undo toast). **Tier 2 only for
+    overwriting an already-recorded result or when downstream bracket units have started.**
+  - Suggestions "Apply" (repair/re-optimize) → **Tier 0** (apply instantly + "Applied — Revert"
+    toast riding the scheduleHistory pool) — found in the hot-path scan; currently one-click
+    with no recovery affordance surfaced.
+  - Record winner in Bracket Live/Detail → Tier 2 (low-frequency there; replaces window.confirm).
+  - Invite revoke → Tier 2. Re-generate one draw → Tier 2. Walkover from the draw board → Tier 2.
+  - Bracket reset / workspace delete / restore / unlock-and-clear → Tier 1.
+  - Reversible actions (call, start, postpone, uncall, check-in, archive) need no guard —
+    verified against the live-day workflow; nothing else on the Run/board hot paths gains a
+    confirm.
 
 ---
 
@@ -294,6 +313,7 @@ Toast         (exists)
 Spinner       size                                       [NEW]
 LockedControl reason, unlockPath, children               [NEW — the `locked` state wrapper]
 ConfirmButton tier2 two-click arm pattern                [NEW — promotes ScheduleActions idiom]
+UndoToast     tier0: commit + N-second undo action       [NEW — rides Toast's action slot]
 ```
 
 Props contract: `disabled?: boolean`, `locked?: {reason: string; onUnlock?: () => void; href?: string}`,
