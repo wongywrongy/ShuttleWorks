@@ -25,6 +25,7 @@ export function useTournamentKind(tournamentId: string | null): void {
   const setActiveTournamentPhase = useUiStore(
     (s) => s.setActiveTournamentPhase,
   );
+  const setActiveTournamentRole = useUiStore((s) => s.setActiveTournamentRole);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,6 +33,7 @@ export function useTournamentKind(tournamentId: string | null): void {
       setActiveTournamentKind(null);
       setActiveTournamentStatus(null);
       setActiveTournamentPhase(null);
+      setActiveTournamentRole(null);
       return () => {
         cancelled = true;
       };
@@ -44,12 +46,16 @@ export function useTournamentKind(tournamentId: string | null): void {
           setActiveTournamentKind(row.kind);
           setActiveTournamentStatus(row.status ?? null);
           setActiveTournamentPhase(row.signals?.phase ?? null);
+          // The caller's role rides along on the same summary row — no extra
+          // request. It gates every write (audit A2); see permissions.canEdit.
+          setActiveTournamentRole(row.role ?? null);
         })
         .catch(() => {
           if (cancelled || isRefresh) return; // keep last-known values on a failed refresh
           setActiveTournamentKind(null);
           setActiveTournamentStatus(null);
           setActiveTournamentPhase(null);
+          setActiveTournamentRole(null);
         });
     };
     load(false);
@@ -68,5 +74,6 @@ export function useTournamentKind(tournamentId: string | null): void {
     setActiveTournamentKind,
     setActiveTournamentStatus,
     setActiveTournamentPhase,
+    setActiveTournamentRole,
   ]);
 }

@@ -539,7 +539,7 @@ export interface BackupCreatedDTO {
 // Multi-tournament CRUD (Step 2; widened in Step 6)
 export type TournamentStatus = 'draft' | 'active' | 'archived';
 
-type TournamentRole = 'owner' | 'operator' | 'viewer';
+export type TournamentRole = 'owner' | 'operator' | 'viewer';
 
 /** Top-level kind of event a tournament row represents. ``meet`` is
  *  the intercollegiate dual / tri-meet workflow (Setup / Roster /

@@ -14,6 +14,7 @@ import type {
   ScheduleAssignment,
   SolverProgressEvent,
   Suggestion,
+  TournamentRole,
 } from '../api/dto';
 
 export type AppTab =
@@ -149,6 +150,14 @@ interface UiState {
     status: 'draft' | 'active' | 'archived' | null,
   ) => void;
 
+  // The caller's role on the active workspace, from the same summary row as
+  // ``kind``/``status``. Read through ``platform/domain/permissions.canEdit``
+  // — never compared inline — so the write gate has exactly one definition.
+  // ``null`` while loading or on failure, which ``canEdit`` treats as read-only
+  // (fail closed: a viewer must never get a live control, audit finding A2).
+  activeTournamentRole: TournamentRole | null;
+  setActiveTournamentRole: (role: TournamentRole | null) => void;
+
   // Active tournament's derived lifecycle phase (setup → ready → live →
   // complete) from ``signals.phase`` — real play state, unlike the
   // operator-managed ``status`` above. The Workspace Shell prefers this
@@ -242,6 +251,7 @@ const INITIAL: Pick<
   | 'activeTournamentId'
   | 'activeTournamentKind'
   | 'activeTournamentStatus'
+  | 'activeTournamentRole'
   | 'activeTournamentPhase'
   | 'bracketDataReady'
   | 'solverHud'
@@ -267,6 +277,7 @@ const INITIAL: Pick<
   activeTournamentId: null,
   activeTournamentKind: null,
   activeTournamentStatus: null,
+  activeTournamentRole: null,
   activeTournamentPhase: null,
   bracketDataReady: null,
   solverHud: DEFAULT_SOLVER_HUD,
@@ -296,6 +307,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
   setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
   setActiveTournamentStatus: (activeTournamentStatus) => set({ activeTournamentStatus }),
+  setActiveTournamentRole: (activeTournamentRole) => set({ activeTournamentRole }),
   setActiveTournamentPhase: (activeTournamentPhase) => set({ activeTournamentPhase }),
   setBracketDataReady: (bracketDataReady) => set({ bracketDataReady }),
 

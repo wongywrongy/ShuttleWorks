@@ -7,6 +7,7 @@ import { CircleNotch } from '@phosphor-icons/react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO } from '../../../../api/dto';
 import { getMatchLabel } from '../../../../utils/matchUtils';
 import { ACTION_BTN } from './styles';
+import { useCanEdit } from '../../../../hooks/useCanEdit';
 
 export function FinishedCard({
   assignment,
@@ -30,6 +31,11 @@ export function FinishedCard({
   ) => Promise<void>;
 }) {
   const [updating, setUpdating] = useState(false);
+  // A viewer may not drive the live day (audit A2): fold the permission into
+  // the in-flight flag so every action button here carries the `disabled`
+  // vocabulary, which blocks pointer AND keyboard.
+  const canEditWorkspace = useCanEdit();
+  const locked = updating || !canEditWorkspace;
   if (!match) return null;
 
   const sideANames = (match.sideA || []).map((id) => playerNames.get(id) || id).join(' & ');
@@ -84,7 +90,7 @@ export function FinishedCard({
           e.stopPropagation();
           handleUndo();
         }}
-        disabled={updating}
+        disabled={locked}
         className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
         title="Undo finish — back to in progress"
         aria-label="Undo finish"

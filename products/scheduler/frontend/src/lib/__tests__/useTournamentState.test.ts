@@ -32,8 +32,13 @@ function makePut() {
 beforeEach(() => {
   vi.useFakeTimers();
   _resetSaveStateForTests();
-  // Arm the active tournament id so forceSaveNow doesn't short-circuit.
-  useUiStore.setState({ activeTournamentId: 'test-tournament-1' });
+  // Arm the active tournament id AND an authorized role so forceSaveNow doesn't
+  // short-circuit. The write gate (audit A2) fails closed on an unknown role —
+  // these tests exercise save mechanics, so the caller must be able to save.
+  useUiStore.setState({
+    activeTournamentId: 'test-tournament-1',
+    activeTournamentRole: 'owner',
+  });
   // Seed a minimal config so the snapshot is valid.
   useTournamentStore.setState({
     config: {
@@ -58,6 +63,30 @@ afterEach(() => {
 });
 
 // ---- Tests -------------------------------------------------------------
+
+describe('forceSaveNow — the viewer write gate (audit A2)', () => {
+  it('does not PUT when the caller is a viewer — the edit never reaches the wire', async () => {
+    useUiStore.setState({ activeTournamentRole: 'viewer' });
+    const putSpy = vi
+      .spyOn(clientModule.apiClient, 'putTournamentState')
+      .mockResolvedValue(undefined as never);
+
+    await forceSaveNow();
+
+    expect(putSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not PUT while the role is still unknown (fails closed)', async () => {
+    useUiStore.setState({ activeTournamentRole: null });
+    const putSpy = vi
+      .spyOn(clientModule.apiClient, 'putTournamentState')
+      .mockResolvedValue(undefined as never);
+
+    await forceSaveNow();
+
+    expect(putSpy).not.toHaveBeenCalled();
+  });
+});
 
 describe('forceSaveNow — in-flight race safety', () => {
   it('does not fire a second PUT when forceSaveNow is called while a PUT is in flight', async () => {

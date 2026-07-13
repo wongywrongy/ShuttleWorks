@@ -21,6 +21,7 @@ import { useUiStore } from '../store/uiStore';
 import { apiClient, MatchVersionMismatch } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
 import { transitionPath } from '../platform/domain/matchTransitions';
+import { assertCanEdit } from './useCanEdit';
 import { useTournamentIdOrNull } from './useTournamentId';
 
 // The transition table lives in `platform/domain/matchTransitions` — a mirror
@@ -160,6 +161,11 @@ export function useLiveTracking() {
     status: MatchStateDTO['status'],
     additionalData?: Partial<MatchStateDTO>
   ) => {
+    // A viewer's press must never reach the wire (audit A2). Refusing here — at
+    // the seam — means a control we failed to disable still no-ops client-side
+    // instead of 403-ing and leaving the board diverged from the server.
+    if (!assertCanEdit()) return;
+
     try {
       const startStatus =
         useMatchStateStore.getState().matchStates[matchId]?.status || 'scheduled';
@@ -313,6 +319,7 @@ export function useLiveTracking() {
     score: { sideA: number; sideB: number },
     notes?: string
   ) => {
+    if (!assertCanEdit()) return;
     try {
       const store = useMatchStateStore.getState();
       let version = store.canonicalVersionsByMatchId[matchId];
@@ -352,6 +359,7 @@ export function useLiveTracking() {
     playerId: string,
     confirmed: boolean
   ) => {
+    if (!assertCanEdit()) return;
     try {
       const freshMatchStates = useMatchStateStore.getState().matchStates;
       const currentState = freshMatchStates[matchId] || { matchId, status: 'called' };

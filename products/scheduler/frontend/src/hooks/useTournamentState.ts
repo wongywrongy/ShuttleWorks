@@ -22,6 +22,7 @@ import { apiClient } from '../api/client';
 import type { TournamentStateDTO } from '../api/dto';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore } from '../store/uiStore';
+import { assertCanEdit } from './useCanEdit';
 
 const DEBOUNCE_MS = 500;
 
@@ -60,6 +61,11 @@ export async function forceSaveNow(): Promise<void> {
   }
   const tid = useUiStore.getState().activeTournamentId;
   if (!tid) return;
+  // A viewer may not write (audit A2). This is the single funnel for every
+  // blob write — roster, matches, config, schedule — so refusing here means a
+  // viewer's edit never reaches the wire, instead of 403-ing and leaving the
+  // local store diverged from the server.
+  if (!assertCanEdit()) return;
   // Reset the followup flag BEFORE taking the snapshot so any concurrent
   // mutation that arrives after the snapshot triggers another save.
   pendingFollowup = false;

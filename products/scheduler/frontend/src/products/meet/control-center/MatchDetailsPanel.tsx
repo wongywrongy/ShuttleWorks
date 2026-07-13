@@ -14,6 +14,7 @@ import { buildGroupIndex, getPlayerSchoolAccent } from '../../../lib/schoolAccen
 import { SchoolDot } from '../../../components/SchoolDot';
 import { ScoreEditor } from './ScoreEditor';
 import { StatusPill } from '../../../components/StatusPill';
+import { useCanEdit } from '../../../hooks/useCanEdit';
 import { indexById } from '../../../lib/indexById';
 import { LIGHT_LABEL, expandRankLabel, getPlayerRestTime } from './matchDetails/helpers';
 
@@ -101,6 +102,12 @@ export function MatchDetailsPanel({
     else setInternalMode(next);
   };
   const [updating, setUpdating] = useState(false);
+  // A viewer may not drive the live day (audit A2). Folded into the existing
+  // in-flight flag so every action button in this panel carries the `disabled`
+  // vocabulary — which blocks pointer AND keyboard — from one place. `updating`
+  // still drives the spinners; `locked` drives activation.
+  const canEditWorkspace = useCanEdit();
+  const locked = updating || !canEditWorkspace;
   // Which player row, if any, is currently expanded into a substitute
   // picker. ``null`` = no row expanded. The picker drops down below
   // the player row so the rest of the panel stays in place.
@@ -388,7 +395,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={handleCall}
-                  disabled={updating || light === 'red'}
+                  disabled={locked || light === 'red'}
                   className={primaryActionBtn}
                   title={light === 'red' ? trafficLight?.reason ?? 'Blocked' : 'Call match — players head to court'}
                 >
@@ -397,7 +404,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={handlePostpone}
-                  disabled={updating}
+                  disabled={locked}
                   className={actionBtn}
                   title={matchState?.postponed ? 'Restore match' : 'Postpone match'}
                 >
@@ -410,7 +417,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={handleStart}
-                  disabled={updating}
+                  disabled={locked}
                   className={primaryActionBtn}
                   title="Start match — court is now in play"
                 >
@@ -419,7 +426,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={() => setMode('score')}
-                  disabled={updating}
+                  disabled={locked}
                   className={actionBtn}
                   title="Skip ahead — record final score"
                 >
@@ -432,7 +439,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={() => setMode('score')}
-                  disabled={updating}
+                  disabled={locked}
                   className={primaryActionBtn}
                   title="Record final score"
                 >
@@ -441,7 +448,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={handleUndoStart}
-                  disabled={updating}
+                  disabled={locked}
                   className={actionBtn}
                   title="Undo start — returns the match to the queue"
                 >
@@ -552,7 +559,7 @@ export function MatchDetailsPanel({
                       <button
                         type="button"
                         onClick={() => handleConfirmPlayer(playerId)}
-                        disabled={updating}
+                        disabled={locked}
                         title={confirmed ? 'Mark as not checked in' : 'Check in'}
                         aria-label={confirmed ? 'Mark as not checked in' : 'Check in'}
                         className={`inline-flex items-center justify-center rounded h-4 w-4 text-3xs ${

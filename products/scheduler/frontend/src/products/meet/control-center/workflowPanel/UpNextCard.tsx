@@ -19,6 +19,7 @@ import { ElapsedTimer } from '../../../../components/common/ElapsedTimer';
 import { INTERACTIVE_BASE } from '../../../../lib/utils';
 import { StatusPill } from '../../../../components/StatusPill';
 import { ACTION_BTN, LIGHT_STYLES, CALL_BTN_BG } from './styles';
+import { useCanEdit } from '../../../../hooks/useCanEdit';
 
 export function UpNextCard({
   assignment,
@@ -56,6 +57,11 @@ export function UpNextCard({
   onCascadingStart?: (matchId: string, courtId: number) => void;
 }) {
   const [updating, setUpdating] = useState(false);
+  // A viewer may not drive the live day (audit A2): fold the permission into
+  // the in-flight flag so every action button here carries the `disabled`
+  // vocabulary, which blocks pointer AND keyboard.
+  const canEditWorkspace = useCanEdit();
+  const locked = updating || !canEditWorkspace;
 
   if (!match) return null;
 
@@ -173,7 +179,7 @@ export function UpNextCard({
                       e.stopPropagation();
                       handleConfirmPlayer(p.id);
                     }}
-                    disabled={updating}
+                    disabled={locked}
                     aria-pressed={confirmed}
                     className={[
                       INTERACTIVE_BASE,
@@ -202,7 +208,7 @@ export function UpNextCard({
                       e.stopPropagation();
                       handleCheckInAll();
                     }}
-                    disabled={updating}
+                    disabled={locked}
                     className={`${INTERACTIVE_BASE} inline-flex items-center gap-0.5 rounded bg-accent px-1.5 py-0 text-3xs font-medium text-accent-ink shadow-glow hover:brightness-110`}
                     title={`Check in all ${missingPlayers.length} remaining`}
                     aria-label="Check in all"
@@ -270,7 +276,7 @@ export function UpNextCard({
                 e.stopPropagation();
                 handleCall();
               }}
-              disabled={updating || light === 'red'}
+              disabled={locked || light === 'red'}
               className={`${ACTION_BTN} !px-2 !py-0.5 !text-2xs ${CALL_BTN_BG[light]}`}
               title={
                 light === 'green'
@@ -287,7 +293,7 @@ export function UpNextCard({
                 e.stopPropagation();
                 handlePostpone();
               }}
-              disabled={updating}
+              disabled={locked}
               className={[
                 ACTION_BTN,
                 '!px-2 !py-0.5 !text-2xs',
@@ -309,7 +315,7 @@ export function UpNextCard({
                 e.stopPropagation();
                 handleStart();
               }}
-              disabled={updating}
+              disabled={locked}
               className={`${ACTION_BTN} bg-accent text-accent-ink shadow-glow hover:brightness-110 !px-2 !py-0.5 !text-2xs`}
               title={
                 missingPlayers.length > 0
@@ -326,7 +332,7 @@ export function UpNextCard({
                 e.stopPropagation();
                 handleUndoCalled();
               }}
-              disabled={updating}
+              disabled={locked}
               className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
               title="Undo to scheduled"
               aria-label="Undo call"

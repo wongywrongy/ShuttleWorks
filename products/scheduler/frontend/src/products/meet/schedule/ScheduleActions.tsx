@@ -1,5 +1,7 @@
 import { CircleNotch } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system/components';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 
 /**
  * Schedule toolbar — the single primary action for producing a plan.
@@ -34,6 +36,10 @@ export function ScheduleActions({
   confirmingReplace = false,
   liveDay = false,
 }: ScheduleActionsProps) {
+  // A viewer may not re-solve the day (audit A2). `disabled` on the native
+  // button blocks pointer AND keyboard activation — the seam in
+  // `useTournamentState` is the backstop, this is the vocabulary.
+  const canEditWorkspace = useCanEdit();
   const confirming = hasSchedule && confirmingReplace && !generating;
   // No standing "Day is live" caption: the destructive guard itself
   // communicates the stakes ("Replace LIVE schedule?") at the moment it
@@ -45,7 +51,8 @@ export function ScheduleActions({
         size="xs"
         variant={generating ? 'toolbar' : confirming ? 'destructive' : 'brand'}
         onClick={onGenerate}
-        disabled={generating}
+        disabled={generating || !canEditWorkspace}
+        title={!canEditWorkspace ? READ_ONLY_MESSAGE : undefined}
         data-testid="schedule-generate"
         aria-busy={generating}
         className={confirming ? 'sw-pulse' : undefined}
