@@ -30,7 +30,20 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 
-const TID = process.env.SMOKE_TID ?? '07a3776a-1cf8-41b4-b8bd-77a8abc445f7';
+/**
+ * Required, deliberately: this used to fall back to a hardcoded workspace id,
+ * and that fallback hid a broken seed script for a whole session — against a
+ * workspace that doesn't exist, the app renders an error page with almost no
+ * controls, so "press everything" presses nothing and the suite passes VACUOUSLY.
+ * A gate that goes green when its fixture is missing is worse than no gate.
+ * Seed with interaction-sweep/seed-smoke.mjs, which prints `tid=`/`viewerTid=`.
+ */
+const TID = process.env.SMOKE_TID;
+if (!TID) {
+  throw new Error(
+    'SMOKE_TID is required — seed a workspace with e2e/interaction-sweep/seed-smoke.mjs first',
+  );
+}
 
 type HarnessEvent = {
   kind: 'error' | 'unhandledrejection' | 'console.error' | 'boundary';
@@ -110,6 +123,9 @@ test.describe('interaction smoke — pressing the UI must not break it', () => {
       // hangs). We press by index over a re-queried list: the exact coverage
       // shifts a little as the DOM changes, which is fine for a smoke crawl.
       const initial = await page.locator(CONTROL_SELECTOR).count();
+      // Zero controls means the view didn't render (bad fixture, bad route) and
+      // the crawl below would assert nothing at all. Fail loudly instead.
+      expect(initial, `/${view} rendered no interactive controls to press`).toBeGreaterThan(0);
       const budget = Math.min(initial, 30);
 
       for (let i = 0; i < budget; i++) {
@@ -206,6 +222,12 @@ test.describe('interaction smoke — real flows against real stores', () => {
 
     const actions = page.locator('button[aria-label*="Call"], button[aria-label*="Start"]');
     const n = await actions.count();
+    // The seed puts matches on courts precisely so these controls exist. If they
+    // don't, the loop below would assert nothing and the test would pass while
+    // proving nothing — the failure mode this whole suite exists to prevent.
+    expect(n, 'no live-day action buttons rendered — the viewer fixture is wrong').toBeGreaterThan(
+      0,
+    );
     for (let i = 0; i < n; i++) {
       expect(await actions.nth(i).isDisabled()).toBe(true);
     }

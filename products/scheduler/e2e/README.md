@@ -31,13 +31,32 @@ which must be compiled in — that's what lets a failure name the button that br
 instead of just "something threw".
 
 ```bash
-VITE_ERROR_HARNESS=1 npm --prefix ../frontend run build   # harness in the build
-E2E_BASE_URL=http://localhost:4173 npx playwright test tests/interaction-smoke.spec.ts
+# 1. seed the fixtures — prints `tid=…` and `viewerTid=…`
+node interaction-sweep/seed-smoke.mjs http://localhost:8600
+
+# 2. there is no HTTP path to a viewer role (the creator is always written as
+#    `owner`, and no endpoint mutates a member's role), so the fixture writes
+#    the row the API won't. Run it AFTER seeding, never before.
+python interaction-sweep/make-viewer.py ../backend/local.db <viewerTid>
+
+# 3. the suite asserts on the error harness (frontend/src/platform/errorHarness.ts),
+#    which must be compiled in — that's what lets a failure name the button that
+#    broke instead of just "something threw".
+VITE_ERROR_HARNESS=1 npm --prefix ../frontend run build
+E2E_BASE_URL=http://localhost:4173 SMOKE_TID=<tid> SMOKE_VIEWER_TID=<viewerTid> \
+  npx playwright test tests/interaction-smoke.spec.ts
 ```
 
-- `SMOKE_TID` — seeded workspace to sweep (defaults to the mid-day meet sim).
-- `SMOKE_VIEWER_TID` — a workspace the caller only has `viewer` on. The
-  viewer-gating test **skips** without it; set it in CI to keep that covered.
+- `SMOKE_TID` — **required**. It used to default to a hardcoded id, and that
+  fallback hid a broken seed script for a whole session: against a workspace that
+  doesn't exist the app renders an error page with almost no controls, so "press
+  everything" pressed nothing and the suite passed **vacuously**. Both the crawl
+  and the viewer test now assert they found controls at all. A gate that goes
+  green when its fixture is missing is worse than no gate.
+- `SMOKE_VIEWER_TID` — a workspace the caller only has `viewer` on (step 2). The
+  viewer-gating test skips without it; CI always sets it.
+
+Note `vite preview` binds IPv6 — reach it as `localhost`, not `127.0.0.1`.
 
 **Fatal:** an uncaught error, an unhandled rejection, a React error-boundary
 catch, or a native dialog (`window.confirm` is banned — it also blocks the event

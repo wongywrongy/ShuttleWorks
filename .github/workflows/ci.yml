@@ -88,11 +88,20 @@ jobs:
             sleep 1
           done
 
-      - name: Seed the smoke workspace
+      # Two workspaces: one the caller owns, one the caller only views. The seed
+      # script prints `tid=` / `viewerTid=` lines straight into $GITHUB_OUTPUT.
+      - name: Seed the smoke workspaces
         id: seed
+        run: node products/scheduler/e2e/interaction-sweep/seed-smoke.mjs http://127.0.0.1:8600 >> "$GITHUB_OUTPUT"
+
+      # No HTTP path to a viewer role exists (the creator is always written as
+      # `owner`), so the fixture writes the row the API won't. Without this the
+      # viewer-gating test skips and audit finding A2 goes unguarded.
+      - name: Demote the viewer workspace
         run: |
-          TID=$(node products/scheduler/e2e/interaction-sweep/seed-smoke.mjs http://127.0.0.1:8600)
-          echo "tid=$TID" >> "$GITHUB_OUTPUT"
+          python products/scheduler/e2e/interaction-sweep/make-viewer.py \
+            products/scheduler/backend/smoke.db \
+            "${{ steps.seed.outputs.viewerTid }}"
 
       # The suite asserts on the error harness, so it must be compiled in — that
       # is what lets a failure name the button that broke.
@@ -125,6 +134,7 @@ jobs:
           E2E_BASE_URL: http://127.0.0.1:4173
           E2E_MANAGE_STACK: "0"
           SMOKE_TID: ${{ steps.seed.outputs.tid }}
+          SMOKE_VIEWER_TID: ${{ steps.seed.outputs.viewerTid }}
         run: npx playwright test tests/interaction-smoke.spec.ts
 
       - name: Upload the failure trace
