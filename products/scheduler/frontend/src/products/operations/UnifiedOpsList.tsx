@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 
 interface Props {
   blocks: OpsBlock[];
@@ -106,14 +107,19 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         : b.court != null
           ? 'bg-status-called'
           : 'bg-muted-foreground';
+    const isSelected = selectedKey === b.key;
     return (
       <li
         key={b.key}
         data-testid="ops-row"
         data-row-id={b.id}
         data-source={b.source}
-        className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${selectedKey === b.key ? 'bg-muted/40' : ''}`}
-        onClick={() => onSelect?.(b.key)}
+        // Courts omits `onSelect` for a read-only overview — a row with nothing
+        // to activate must not be focusable (audit G1).
+        {...(onSelect ? selectableRowProps(() => onSelect(b.key), isSelected) : {})}
+        className={`flex items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${
+          onSelect ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : ''
+        } ${isSelected ? 'bg-muted/40' : ''}`}
       >
         <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
         {/* Same match-code grammar as the Run queue rows. */}

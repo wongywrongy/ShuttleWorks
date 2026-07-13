@@ -17,6 +17,7 @@
  *     group (collapse state internal, all expanded initially).
  */
 import { useState, type ReactNode } from 'react';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 import {
   BANDED_ROW_CLASSES,
   COLUMN_HEADER_ROW_CLASSES,
@@ -99,29 +100,12 @@ export function BandedTable<T>({
           {...(rowAttrs?.(item) ?? {})}
           data-testid={rowTestId?.(item)}
           data-selected={selected ? 'true' : undefined}
-          onClick={onRowClick ? () => onRowClick(item) : undefined}
-          // A clickable row must be reachable by keyboard (audit G1). These rows
-          // back the Matches list and both rosters, so one fix here gives every
-          // one of them a keyboard path. Enter/Space activate, matching the
-          // native button contract; the row only becomes focusable when it is
-          // actually clickable.
-          {...(onRowClick
-            ? {
-                role: 'button' as const,
-                tabIndex: 0,
-                'aria-pressed': selected,
-                onKeyDown: (e: React.KeyboardEvent) => {
-                  if (e.key !== 'Enter' && e.key !== ' ') return;
-                  // Let an inner control (a delete ×, a select) handle its own keys.
-                  if (e.target !== e.currentTarget) return;
-                  e.preventDefault();
-                  onRowClick(item);
-                },
-              }
-            : {})}
+          // A clickable row must be reachable by keyboard (audit G1) — the row
+          // only becomes focusable when it is actually clickable.
+          {...(onRowClick ? selectableRowProps(() => onRowClick(item), selected) : {})}
           className={[
             BANDED_ROW_CLASSES,
-            onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring' : '',
+            onRowClick ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : '',
             selected ? 'bg-accent/10 shadow-[inset_2px_0_0_hsl(var(--accent))]' : '',
             rowClassName?.(item) ?? '',
           ]

@@ -17,6 +17,7 @@ import { formatSlotTime } from '../../../../lib/time';
 import { getMatchLabel } from '../../../../utils/matchUtils';
 import { ElapsedTimer } from '../../../../components/common/ElapsedTimer';
 import { INTERACTIVE_BASE } from '../../../../lib/utils';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../../lib/selectableRow';
 import { StatusPill } from '../../../../components/StatusPill';
 import { ACTION_BTN, LIGHT_STYLES, CALL_BTN_BG } from './styles';
 import { useCanEdit } from '../../../../hooks/useCanEdit';
@@ -149,10 +150,11 @@ export function UpNextCard({
 
   return (
     <div
-      onClick={onSelect}
+      {...selectableRowProps(onSelect, isSelected)}
       style={{ gridTemplateColumns: 'auto auto auto 1fr auto auto' }}
       className={[
         'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
+        SELECTABLE_ROW_FOCUS,
         lightStyles.border,
         isSelected ? 'bg-status-started-bg' : `${lightStyles.bg} hover:brightness-[0.98]`,
       ].join(' ')}

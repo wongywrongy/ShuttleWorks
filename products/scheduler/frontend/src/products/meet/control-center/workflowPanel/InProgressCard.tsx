@@ -8,6 +8,7 @@ import { CircleNotch } from '@phosphor-icons/react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO } from '../../../../api/dto';
 import { ElapsedTimer } from '../../../../components/common/ElapsedTimer';
 import { getMatchLabel } from '../../../../utils/matchUtils';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../../lib/selectableRow';
 import { ACTION_BTN } from './styles';
 import { useCanEdit } from '../../../../hooks/useCanEdit';
 
@@ -70,10 +71,11 @@ export function InProgressCard({
 
   return (
     <div
-      onClick={onSelect}
+      {...selectableRowProps(onSelect, isSelected)}
       style={{ gridTemplateColumns: 'auto auto auto 1fr auto' }}
       className={[
         'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
+        SELECTABLE_ROW_FOCUS,
         isSelected
           ? 'border-l-status-started bg-status-started-bg'
           : 'border-l-status-live bg-status-live-bg/40 hover:bg-status-live-bg/60',

@@ -9,6 +9,7 @@
  */
 import type { CSSProperties } from 'react';
 import type { RunMatch } from '../runtime/runModel';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
 
 // ── source initial + square tint (M=meet azure, B=bracket violet) ─────────
 const SOURCE_INITIAL: Record<'meet' | 'bracket', string> = { meet: 'M', bracket: 'B' };
@@ -57,10 +58,10 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
             data-testid={`run-queue-row-${match.key}`}
             data-source={match.source}
             style={{ '--i': i } as CSSProperties}
-            className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${
+            className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
               isSelected ? 'bg-muted/40' : ''
             }`}
-            onClick={() => onSelect(match.key)}
+            {...selectableRowProps(() => onSelect(match.key), isSelected)}
           >
             {/* Position */}
             <span className="w-6 flex-shrink-0 text-right text-2xs sw-num text-ink-faint">

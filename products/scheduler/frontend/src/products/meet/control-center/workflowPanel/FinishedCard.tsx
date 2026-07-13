@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO } from '../../../../api/dto';
 import { getMatchLabel } from '../../../../utils/matchUtils';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../../lib/selectableRow';
 import { ACTION_BTN } from './styles';
 import { useCanEdit } from '../../../../hooks/useCanEdit';
 
@@ -57,10 +58,11 @@ export function FinishedCard({
 
   return (
     <div
-      onClick={onSelect}
+      {...selectableRowProps(onSelect, isSelected)}
       style={{ gridTemplateColumns: 'auto auto 1fr auto auto' }}
       className={[
         'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
+        SELECTABLE_ROW_FOCUS,
         isSelected
           ? 'border-l-status-started bg-status-started-bg'
           : 'border-l-status-done bg-muted/40 hover:bg-muted/60',

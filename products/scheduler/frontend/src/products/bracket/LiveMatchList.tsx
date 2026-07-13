@@ -22,6 +22,7 @@ import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import { useUiStore } from '../../store/uiStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 import { formatBracketSlot } from './formatBracketSlot';
 import { playUnitSideLabels } from './bracketLabels';
 import { WinnerButton } from './WinnerButton';
@@ -113,10 +114,10 @@ export function LiveMatchList({ data, onChange }: Props) {
     return (
       <li
         key={pu.id}
-        className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${
+        className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
           selectedId === pu.id ? 'bg-muted/40' : ''
         }`}
-        onClick={() => setSelectedId(pu.id)}
+        {...selectableRowProps(() => setSelectedId(pu.id), selectedId === pu.id)}
       >
         <span aria-hidden="true" className={`h-2 w-2 flex-shrink-0 rounded-full ${dotClass}`} />
         <span className="w-20 flex-shrink-0 sw-num text-2xs text-foreground">

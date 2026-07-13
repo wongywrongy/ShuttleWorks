@@ -358,6 +358,7 @@ export function SchedulePage() {
                 hasSchedule={!!schedule}
                 confirmingReplace={confirmingReplace}
                 liveDay={liveDay}
+                hasMatches={matches.length > 0}
               />
             </ActionsBar>
 
@@ -462,6 +463,7 @@ export function SchedulePage() {
             hasSchedule={!!schedule}
             confirmingReplace={confirmingReplace}
             liveDay={liveDay}
+            hasMatches={matches.length > 0}
           />
           {!needsConfig && matches.length === 0 ? (
             <p className="text-xs text-muted-foreground">
