@@ -32,6 +32,7 @@ import {
   type BracketEventDTO,
 } from './eventUpsertPayload';
 import { formatLabel, disciplineLabel } from './bracketLabels';
+import { useConfirmClick } from '../../hooks/useConfirmClick';
 import {
   DRAW_FORMATS,
   descriptorFor,
@@ -456,6 +457,11 @@ function ActionCell({
   onGenerate: () => void;
   onRegenerate: () => void;
 }) {
+  // Two-click arm instead of `window.confirm` — the canon bans the native dialog
+  // and it blocks the event loop (audit E1). Same shape as Generate-replace on
+  // the meet Plan: the first press re-labels the button to name the consequence.
+  const confirmRegen = useConfirmClick(onRegenerate);
+
   if (status === 'draft') {
     return (
       <Button variant="brand" size="sm" disabled={!eventReady} onClick={onGenerate}>
@@ -466,15 +472,17 @@ function ActionCell({
   if (status === 'generated') {
     return (
       <Button
-        variant="outline"
+        variant={confirmRegen.armed ? 'destructive' : 'outline'}
         size="sm"
-        onClick={() => {
-          if (window.confirm('This will discard the existing draws. Re-generate?')) {
-            onRegenerate();
-          }
-        }}
+        onClick={confirmRegen.press}
+        onBlur={confirmRegen.reset}
+        title={
+          confirmRegen.armed
+            ? 'Click again to discard the existing draws and re-generate'
+            : 'Re-generate this draw'
+        }
       >
-        Re-generate
+        {confirmRegen.armed ? 'Discard draws?' : 'Re-generate'}
       </Button>
     );
   }

@@ -10,10 +10,13 @@
  * Wrapped in SettingsPrimitives.SectionHeader + Row so the visual
  * rhythm matches meet's DataSettings.
  */
+import { useCallback, useState } from 'react';
+import { Button, Modal } from '@scheduler/design-system';
 import { apiClient } from '../../api/client';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import { useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
+import { useAction } from '../../hooks/useAction';
 import { Row, SectionHeader } from '../../platform/settings/SettingsControls';
 
 const LINK_CLASSES =
@@ -23,23 +26,22 @@ export function BracketDataSection() {
   const tid = useTournamentId();
   const api = useBracketApi();
   const { setData } = useBracket();
+  // Confirmed in a Modal, not `window.confirm` (banned by the canon; it also
+  // blocks the event loop — audit E1). This one destroys data outright, so it
+  // gets a dialog that names exactly what is lost, not a two-click arm.
+  const [confirming, setConfirming] = useState(false);
 
-  const handleReset = async () => {
-    if (!window.confirm('Reset the bracket? All draws, schedules and results are discarded.')) {
-      return;
-    }
-    // Only clear the local copy after the server-side DELETE succeeds.
-    // The polling hook re-fetches every 2.5s; clearing on failure
-    // would let the next poll snap the bracket back into ``data``.
-    // The shared axios interceptor already surfaces a toast on
-    // failure, so the ``catch`` is a no-op here.
-    try {
+  const reset = useAction(
+    useCallback(async () => {
+      // Only clear the local copy after the server-side DELETE succeeds. The
+      // polling hook re-fetches every 2.5s; clearing on failure would let the
+      // next poll snap the bracket back into ``data``.
       await api.remove();
       setData(null);
-    } catch {
-      // Interceptor already toasted; nothing more to do.
-    }
-  };
+      setConfirming(false);
+    }, [api, setData]),
+    { errorMessage: 'Could not reset the bracket' },
+  );
 
   return (
     <div>
@@ -75,7 +77,7 @@ export function BracketDataSection() {
         control={
           <button
             type="button"
-            onClick={() => void handleReset()}
+            onClick={() => setConfirming(true)}
             className="inline-flex items-center rounded-sm border border-destructive/40 bg-card px-3 py-1 text-2xs font-medium text-destructive hover:bg-destructive/10"
           >
             Reset bracket
@@ -83,6 +85,43 @@ export function BracketDataSection() {
         }
         last
       />
+
+      {confirming && (
+        <Modal
+          onClose={() => !reset.pending && setConfirming(false)}
+          titleId="reset-bracket-heading"
+        >
+          <div className="p-6">
+            <h2
+              id="reset-bracket-heading"
+              className="text-base font-semibold text-foreground"
+            >
+              Reset the bracket?
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Every draw, schedule and recorded result in this bracket is
+              discarded. This cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-between">
+              <Button
+                variant="ghost"
+                onClick={() => setConfirming(false)}
+                disabled={reset.pending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => void reset.run()}
+                disabled={reset.pending}
+                aria-busy={reset.pending}
+              >
+                {reset.pending ? 'Resetting…' : 'Reset bracket'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

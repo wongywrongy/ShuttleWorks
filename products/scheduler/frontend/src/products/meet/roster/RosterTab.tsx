@@ -45,6 +45,7 @@ import { DetailDrawer } from './PlayerDetailPanel';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 
 export function RosterTab() {
   const groups = useTournamentStore((s) => s.groups);
@@ -701,19 +702,13 @@ function PlayerListSection({
             <span className="min-w-0 flex-1">
               <DraggablePlayerChip player={p} schoolId={schoolId} />
             </span>
-            <button
-              type="button"
-              data-no-select="true"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeletePlayer(p.id);
-              }}
-              title={`Remove ${p.name}`}
-              aria-label={`Remove ${p.name}`}
-              className="shrink-0 rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-            >
-              ×
-            </button>
+            {/* Two-click arm: this used to delete a player outright on one
+                hover-revealed click, with no confirm and no undo (audit F1). */}
+            <ConfirmDeleteButton
+              label={p.name}
+              onConfirm={() => onDeletePlayer(p.id)}
+              testId={`roster-remove-${p.id}`}
+            />
           </li>
         );
       })}

@@ -18,6 +18,7 @@ import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { BracketScoreEntry } from './BracketScoreEntry';
 import { BracketInlineNotice } from './BracketInlineNotice';
 import { applyOptimisticResult } from './optimisticResult';
+import { WinnerButton } from './WinnerButton';
 
 interface Props {
   data: BracketTournamentDTO;
@@ -171,11 +172,13 @@ export function MatchDetailPanel({ data, onChange }: Props) {
         )}
         {assignment?.started && !result && !setsMode && (
           <>
-            <button
-              type="button"
-              className={actionBtn}
-              onClick={() => {
-                if (!window.confirm(`Record ${labelA} as the winner? This cannot be undone.`)) return;
+            {/* The `window.confirm` these carried is gone — banned by the canon
+                and it blocks the event loop. `WinnerButton` arms on the first
+                press and commits on the second (audit E1). */}
+            <WinnerButton
+              label={labelA}
+              testId="detail-win-a"
+              onConfirm={() => {
                 setConflict(null);
                 void submitResult({
                   matchId,
@@ -184,14 +187,11 @@ export function MatchDetailPanel({ data, onChange }: Props) {
                   finishedAtSlot: assignment.slot_id + assignment.duration_slots,
                 });
               }}
-            >
-              {labelA} wins
-            </button>
-            <button
-              type="button"
-              className={actionBtn}
-              onClick={() => {
-                if (!window.confirm(`Record ${labelB} as the winner? This cannot be undone.`)) return;
+            />
+            <WinnerButton
+              label={labelB}
+              testId="detail-win-b"
+              onConfirm={() => {
                 setConflict(null);
                 void submitResult({
                   matchId,
@@ -200,9 +200,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
                   finishedAtSlot: assignment.slot_id + assignment.duration_slots,
                 });
               }}
-            >
-              {labelB} wins
-            </button>
+            />
             {/* Undo a mis-pressed Start: clears actual_start/end on the
                 assignment (the only reversible step in the lifecycle). */}
             <button

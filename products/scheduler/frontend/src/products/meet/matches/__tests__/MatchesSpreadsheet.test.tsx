@@ -192,12 +192,25 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
     expect(within(panel).queryByText('Slots')).not.toBeInTheDocument();
   });
 
-  it('dismisses the panel when the selected match is deleted', () => {
+  it('arms on the first delete press and does NOT delete (audit F1 guard)', () => {
+    renderSheet();
+    const row = screen.getByTestId('match-row-m1');
+    fireEvent.click(within(row).getByTestId('match-delete-m1'));
+
+    // Still there: deleting a match now takes a confirming second press.
+    expect(screen.getByTestId('match-row-m1')).toBeInTheDocument();
+    // ...and the control names the consequence.
+    expect(within(row).getByLabelText(/Confirm removal of/i)).toBeInTheDocument();
+  });
+
+  it('dismisses the panel when the selected match is deleted (two-click confirm)', () => {
     renderSheet();
     fireEvent.click(screen.getByTestId('match-row-m1'));
     expect(screen.getByTestId('match-detail-panel')).toBeInTheDocument();
     const row = screen.getByTestId('match-row-m1');
-    fireEvent.click(within(row).getByLabelText('Delete match'));
+    // Arm, then confirm.
+    fireEvent.click(within(row).getByTestId('match-delete-m1'));
+    fireEvent.click(within(row).getByTestId('match-delete-m1'));
     expect(screen.queryByTestId('match-row-m1')).not.toBeInTheDocument();
     expect(screen.queryByTestId('match-detail-panel')).not.toBeInTheDocument();
   });

@@ -29,6 +29,7 @@ import { useDisruptions } from './useDisruptions';
 import { EVENT_LABEL, EVENT_ORDER, isDoublesRank } from '../roster/positionGrid/helpers';
 import { MatchDetailPanel } from './MatchDetailPanel';
 import { maxSeverity, type MatchIssue } from './validateMatch';
+import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 
 /** Side capacity derived from the event rank. Singles = 1, doubles =
  *  2, unknown rank = 2 (let the operator fill it; validation will flag
@@ -404,18 +405,14 @@ const MatchRow = memo(function MatchRow({
         capacity={sideCapacity}
         eligibleForRank={match.eventRank}
       />
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(match.id);
-        }}
-        className="w-8 rounded-sm p-1 text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-        title="Delete match"
-        aria-label="Delete match"
-      >
-        ×
-      </button>
+      {/* Two-click arm: deleting a match used to take one hover-revealed click,
+          with no confirm and no undo (audit F1). */}
+      <ConfirmDeleteButton
+        label={match.eventRank ? `match ${match.eventRank}` : 'this match'}
+        onConfirm={() => onDelete(match.id)}
+        className="w-8"
+        testId={`match-delete-${match.id}`}
+      />
     </>
   );
 });
