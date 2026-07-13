@@ -141,6 +141,7 @@ function SimpleScoreEditor({
             value={a}
             onChange={(e) => setA(e.target.value)}
             placeholder="0"
+            aria-label={`Score for ${sideAName}`}
             className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base sw-num tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
         </div>
@@ -153,6 +154,7 @@ function SimpleScoreEditor({
             inputMode="numeric"
             value={b}
             onChange={(e) => setB(e.target.value)}
+            aria-label={`Score for ${sideBName}`}
             placeholder="0"
             className="w-full rounded border border-border bg-card px-2 py-1.5 text-center text-base sw-num tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
@@ -377,6 +379,7 @@ function BadmintonInlineEditor({
                 value={s.sideA || ''}
                 onChange={(e) => updateScore(i, 'sideA', e.target.value)}
                 placeholder="—"
+                aria-label={`Set ${i + 1} score for ${sideAName}`}
                 className={`${inputCls} ${wonBy === 'A' ? 'border-status-live bg-status-live-bg font-semibold text-status-live' : ''}`}
               />
               <span className="text-muted-foreground">–</span>
@@ -389,6 +392,7 @@ function BadmintonInlineEditor({
                 value={s.sideB || ''}
                 onChange={(e) => updateScore(i, 'sideB', e.target.value)}
                 placeholder="—"
+                aria-label={`Set ${i + 1} score for ${sideBName}`}
                 className={`${inputCls} ${wonBy === 'B' ? 'border-status-live bg-status-live-bg font-semibold text-status-live' : ''}`}
               />
             </div>
