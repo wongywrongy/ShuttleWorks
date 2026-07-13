@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useAction } from '../../hooks/useAction';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState } from '../../components/control-plane';
 import { useTournamentBackups } from '../../hooks/useTournamentBackups';
@@ -25,11 +26,21 @@ export function SyncBackupsTab() {
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
   const restoring = busyAction === restoreTarget;
 
-  async function confirmRestore() {
-    if (!restoreTarget) return;
-    await restoreBackup(restoreTarget); // hook applies the restored state to the store + refreshes
-    setRestoreTarget(null);
-  }
+  // `busyAction` alone did NOT stop a double-press: it's React state, so it
+  // doesn't apply until the next render and a second click in the same tick
+  // still fired a second `POST /state/backup` (audit C1). `useAction`'s lock is
+  // a ref, so it takes effect immediately.
+  const backupAction = useAction(createBackup, {
+    errorMessage: 'Could not create the backup',
+  });
+  const restoreAction = useAction(
+    useCallback(async () => {
+      if (!restoreTarget) return;
+      await restoreBackup(restoreTarget); // hook re-hydrates the store + refreshes
+      setRestoreTarget(null);
+    }, [restoreTarget, restoreBackup]),
+    { errorMessage: 'Could not restore the backup' },
+  );
 
   return (
     <div className="max-w-2xl space-y-4 p-6">
@@ -41,8 +52,12 @@ export function SyncBackupsTab() {
             current state with the snapshot.
           </p>
         </div>
-        <Button onClick={() => void createBackup()} disabled={busyAction === 'create'}>
-          {busyAction === 'create' ? 'Creating…' : 'Create backup'}
+        <Button
+          onClick={() => void backupAction.run()}
+          disabled={backupAction.pending || busyAction === 'create'}
+          aria-busy={backupAction.pending}
+        >
+          {backupAction.pending || busyAction === 'create' ? 'Creating…' : 'Create backup'}
         </Button>
       </div>
 
@@ -99,8 +114,12 @@ export function SyncBackupsTab() {
               <Button variant="ghost" onClick={() => setRestoreTarget(null)} disabled={restoring}>
                 Cancel
               </Button>
-              <Button onClick={() => void confirmRestore()} disabled={restoring}>
-                {restoring ? 'Restoring…' : 'Restore workspace'}
+              <Button
+                onClick={() => void restoreAction.run()}
+                disabled={restoring || restoreAction.pending}
+                aria-busy={restoring || restoreAction.pending}
+              >
+                {restoring || restoreAction.pending ? 'Restoring…' : 'Restore workspace'}
               </Button>
             </div>
           </div>

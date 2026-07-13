@@ -39,10 +39,16 @@ import { INTERACTIVE_BASE } from '../../lib/utils';
 import { SourceChip } from '../../components/SourceChip';
 import { ActionsBar } from '../../components/control-plane';
 import type { Advisory } from '../../api/dto';
+import { useAction } from '../../hooks/useAction';
 
 export function MatchControlCenterPage() {
   const liveTracking = useLiveTracking();
   const liveOps = useLiveOperations();
+  // A rapid double-press fired TWO solves (audit C1) — `isReoptimizing` is React
+  // state and doesn't apply until the next render. `useAction` locks on a ref.
+  const reoptimizeAction = useAction(liveOps.triggerReoptimize, {
+    errorMessage: 'Re-optimize failed',
+  });
   // Feed the Alerts & Activity trail from match-state transitions.
   useActivityLog();
   const { cancel: cancelProposal } = useProposals();
@@ -554,11 +560,12 @@ export function MatchControlCenterPage() {
               type="button"
               size="xs"
               variant="toolbar"
-              onClick={liveOps.triggerReoptimize}
-              disabled={liveOps.isReoptimizing}
+              onClick={() => void reoptimizeAction.run()}
+              disabled={liveOps.isReoptimizing || reoptimizeAction.pending}
+              aria-busy={liveOps.isReoptimizing || reoptimizeAction.pending}
               title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan or Move/postpone."
             >
-              {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
+              {liveOps.isReoptimizing || reoptimizeAction.pending ? 'Optimizing…' : 'Re-optimize'}
             </Button>
           </ActionsBar>
           {/* Gantt grid — the block encoding is self-describing (lifecycle

@@ -1,4 +1,6 @@
+import { useCallback } from 'react';
 import { Button } from '@scheduler/design-system';
+import { useAction } from '../../hooks/useAction';
 import { isModuleEnableable } from '../../platform/domain/moduleModel';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
 import { catalogMeta } from './moduleCatalog';
@@ -12,10 +14,23 @@ export function ModuleCatalogRow({
   onDisable,
 }: {
   module: WorkspaceModule;
-  onEnable: () => void;
-  onDisable: () => void;
+  onEnable: () => void | Promise<unknown>;
+  onDisable: () => void | Promise<unknown>;
 }) {
   const meta = catalogMeta(module.id);
+  const enabled = module.status === 'enabled';
+  // The backend refuses to disable the last operational module, or one that has
+  // data. Those rejections had NO failure path here — `void disable(id)` turned
+  // them into genuine `unhandledrejection` events (audit B1). `useAction` owns
+  // the failure (and the api client's `__handled` marker keeps it from
+  // double-toasting what the interceptor already surfaced), plus it stops the
+  // double-fire the sweep saw on these same buttons (audit C1).
+  const toggle = useAction(
+    useCallback(
+      async () => (enabled ? onDisable() : onEnable()),
+      [enabled, onEnable, onDisable],
+    ),
+  );
   return (
     <li
       data-testid={`settings-module-${module.id}`}
@@ -44,11 +59,23 @@ export function ModuleCatalogRow({
       </div>
       <div className="shrink-0">
         {module.status === 'enabled' ? (
-          <Button variant="ghost" onClick={onDisable} className="text-muted-foreground">
+          <Button
+            variant="ghost"
+            onClick={() => void toggle.run()}
+            disabled={toggle.pending}
+            aria-busy={toggle.pending}
+            className="text-muted-foreground"
+          >
             Disable
           </Button>
         ) : isModuleEnableable(module.status) ? (
-          <Button onClick={onEnable}>Enable</Button>
+          <Button
+            onClick={() => void toggle.run()}
+            disabled={toggle.pending}
+            aria-busy={toggle.pending}
+          >
+            Enable
+          </Button>
         ) : null}
       </div>
     </li>

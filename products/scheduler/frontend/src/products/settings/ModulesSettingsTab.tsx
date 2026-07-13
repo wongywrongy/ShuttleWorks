@@ -25,8 +25,8 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
             <ModuleCatalogRow
               key={m.id}
               module={m}
-              onEnable={() => void enable(m.id)}
-              onDisable={() => void disable(m.id)}
+              onEnable={() => enable(m.id)}
+              onDisable={() => disable(m.id)}
             />
           ))
         )}

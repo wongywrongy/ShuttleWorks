@@ -36,6 +36,7 @@ import { OpsDetailRail } from './OpsDetailRail';
 import { RunSurface } from './run/RunSurface';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
+import { useAction } from '../../hooks/useAction';
 
 const schedBtn =
   `${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs ` +
@@ -128,15 +129,24 @@ function OperationsBody() {
   const planFinalized = useTournamentStore((s) => s.planFinalized);
   const setPlanFinalized = useTournamentStore((s) => s.setPlanFinalized);
 
-  const handlePlanFinalizeToggle = useCallback(async () => {
-    const newVal = !planFinalized;
-    setPlanFinalized(newVal); // optimistic
-    try {
-      await apiClient.setPlanFinalized(tid, newVal);
-    } catch {
-      setPlanFinalized(!newVal); // revert on failure
-    }
-  }, [planFinalized, setPlanFinalized, tid]);
+  // Wrapped in `useAction`: a rapid double-press used to fire TWO
+  // `POST /plan-finalized` (audit C1), and the failure path was an empty catch
+  // that reverted the toggle with no explanation (audit B). The wrapper gives a
+  // synchronous in-flight lock and a visible failure; the revert stays here
+  // because only this component knows what to revert to.
+  const planFinalizeAction = useAction(
+    useCallback(async () => {
+      const newVal = !planFinalized;
+      setPlanFinalized(newVal); // optimistic
+      try {
+        await apiClient.setPlanFinalized(tid, newVal);
+      } catch (err) {
+        setPlanFinalized(!newVal); // revert
+        throw err; // ...and let the wrapper surface it
+      }
+    }, [planFinalized, setPlanFinalized, tid]),
+    { errorMessage: 'Could not update the plan-ready state' },
+  );
 
   // ---- Courts-only selection (Live uses RunSurface's own selection) ----
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -226,7 +236,9 @@ function OperationsBody() {
             <button
               type="button"
               className={schedBtn}
-              onClick={() => void handlePlanFinalizeToggle()}
+              onClick={() => void planFinalizeAction.run()}
+              disabled={planFinalizeAction.pending}
+              aria-busy={planFinalizeAction.pending}
               data-testid="ops-plan-finalize-toggle"
             >
               {planFinalized ? 'Plan ready ✓' : 'Mark plan ready to run'}
