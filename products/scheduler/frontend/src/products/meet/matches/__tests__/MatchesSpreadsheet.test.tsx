@@ -10,6 +10,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MatchesSpreadsheet } from '../MatchesSpreadsheet';
 import { useTournamentStore } from '../../../../store/tournamentStore';
+import { useUiStore } from '../../../../store/uiStore';
 import type {
   MatchDTO,
   PlayerDTO,
@@ -77,6 +78,11 @@ beforeEach(() => {
     players: PLAYERS,
     matches: MATCHES,
   });
+  // These tests have always been about an OPERATOR editing the match list; they
+  // just never had to say so. The write gate (audit A2) fails CLOSED on an unset
+  // role, so state the role the fixture always implied. A viewer's view of this
+  // sheet is asserted separately, below.
+  useUiStore.setState({ activeTournamentRole: 'owner' });
 });
 
 const renderSheet = () =>
@@ -213,5 +219,19 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
     fireEvent.click(within(row).getByTestId('match-delete-m1'));
     expect(screen.queryByTestId('match-row-m1')).not.toBeInTheDocument();
     expect(screen.queryByTestId('match-detail-panel')).not.toBeInTheDocument();
+  });
+
+  it('will not delete a match for a viewer, however many times it is pressed', () => {
+    // Audit A2-followup. Without this, setting `owner` in the fixture above
+    // would simply hide the gate from the suite forever.
+    useUiStore.setState({ activeTournamentRole: 'viewer' });
+    renderSheet();
+    const row = screen.getByTestId('match-row-m1');
+    const del = within(row).getByTestId('match-delete-m1');
+
+    expect(del).toBeDisabled();
+    fireEvent.click(del);
+    fireEvent.click(del);
+    expect(screen.getByTestId('match-row-m1')).toBeInTheDocument();
   });
 });

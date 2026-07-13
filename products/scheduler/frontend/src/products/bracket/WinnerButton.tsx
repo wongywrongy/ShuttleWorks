@@ -12,6 +12,8 @@
  * winner paths use one vocabulary.
  */
 import { useConfirmClick } from '../../hooks/useConfirmClick';
+import { useCanEdit } from '../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../platform/domain/permissions';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 const BASE =
@@ -33,21 +35,29 @@ export function WinnerButton({
   testId?: string;
 }) {
   const confirm = useConfirmClick(onConfirm);
+  // Recording a winner is ALWAYS a mutation, so this gates itself rather than
+  // asking every bracket surface to remember (audit A2-followup). The bracket
+  // API seam refuses a viewer's write regardless; this is the vocabulary.
+  const canEditWorkspace = useCanEdit();
+  const blocked = disabled || !canEditWorkspace;
   return (
     <button
       type="button"
       data-testid={testId}
-      disabled={disabled}
+      disabled={blocked}
       onClick={(e) => {
         e.stopPropagation();
+        if (blocked) return;
         confirm.press();
       }}
       onBlur={confirm.reset}
       className={`${BASE} ${confirm.armed ? ARMED : IDLE}`}
       title={
-        confirm.armed
-          ? `Click again to record ${label} as the winner — this cannot be undone`
-          : `${label} wins`
+        !canEditWorkspace
+          ? READ_ONLY_MESSAGE
+          : confirm.armed
+            ? `Click again to record ${label} as the winner — this cannot be undone`
+            : `${label} wins`
       }
       aria-label={
         confirm.armed

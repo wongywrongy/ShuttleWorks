@@ -17,6 +17,7 @@ import { RegenerateMenu } from './RegenerateMenu';
 import { EmptyState } from '../../../components/control-plane';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { useCanEdit } from '../../../hooks/useCanEdit';
 
 export function MatchesTab() {
   const matches = useTournamentStore((s) => s.matches);
@@ -50,7 +51,10 @@ export function MatchesTab() {
     }).length;
   }, [matches, searchQuery, playerById]);
 
-  const canAddRow = players.length >= 2;
+  // A viewer may not build the match list (audit A2-followup). Folded into the
+  // existing precondition so every Add-match entry point inherits it.
+  const canEditWorkspace = useCanEdit();
+  const canAddRow = players.length >= 2 && canEditWorkspace;
   const addEmptyRow = () => {
     const id = uuid();
     addMatch({

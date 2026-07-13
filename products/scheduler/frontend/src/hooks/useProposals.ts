@@ -29,6 +29,7 @@ import { useTournamentStore } from '../store/tournamentStore';
 import { useMatchStateStore } from '../store/matchStateStore';
 import { useUiStore } from '../store/uiStore';
 import { useTournamentId } from './useTournamentId';
+import { assertCanEdit } from './useCanEdit';
 
 type Status = 'idle' | 'loading' | 'error';
 
@@ -72,6 +73,12 @@ export function useProposals(): UseProposalsResult {
   const [error, setError] = useState<string | null>(null);
 
   const guard = useCallback((): boolean => {
+    // A viewer may not re-plan the day (audit A2-followup). This seam was
+    // MISSED by the original A2 fix: it calls apiClient directly, so a viewer's
+    // "Commit repair" / "Commit move" actually left the browser and came back
+    // 403 with a retry that could never succeed. Every creator below routes
+    // through this guard, so one check closes all four.
+    if (!assertCanEdit()) return false;
     if (!config || !schedule) {
       pushToast({
         level: 'error',
@@ -200,6 +207,10 @@ export function useProposals(): UseProposalsResult {
 
   const commit = useCallback(
     async (id?: string): Promise<CommitProposalResponse | null> => {
+      // The creators are guarded, so a viewer should never HAVE a proposal to
+      // commit — but this is the call that actually rewrites the schedule, so it
+      // checks for itself rather than trusting that.
+      if (!assertCanEdit()) return null;
       const target = id || activeProposal?.id;
       if (!target) return null;
       setStatus('loading');

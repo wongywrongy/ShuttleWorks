@@ -45,6 +45,8 @@ import { DetailDrawer } from './PlayerDetailPanel';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 
 export function RosterTab() {
@@ -442,6 +444,8 @@ function SchoolTabs({
  * to name a new school. Enter commits; Esc / outside-click cancels.
  * ========================================================================= */
 function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void }) {
+  // Building the roster is a mutation — a viewer may not (audit A2-followup).
+  const canEditWorkspace = useCanEdit();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const ref = useRef<HTMLDivElement | null>(null);
@@ -467,10 +471,12 @@ function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void })
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        disabled={!canEditWorkspace}
+        title={!canEditWorkspace ? READ_ONLY_MESSAGE : undefined}
         aria-haspopup="dialog"
         aria-expanded={open}
         data-testid="school-add-button"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`}
       >
         ＋ Add school
       </button>
@@ -568,7 +574,8 @@ function BulkImportMenu({
     setOpen(false);
   };
 
-  const disabled = !schoolId;
+  const canEditWorkspace = useCanEdit();
+  const disabled = !schoolId || !canEditWorkspace;
   return (
     <div ref={ref} className="relative">
       <button
@@ -578,7 +585,13 @@ function BulkImportMenu({
         aria-haspopup="dialog"
         aria-expanded={open}
         data-testid="bulk-import-toggle"
-        title={disabled ? 'Select a school first' : 'Bulk-import players'}
+        title={
+          !canEditWorkspace
+            ? READ_ONLY_MESSAGE
+            : disabled
+              ? 'Select a school first'
+              : 'Bulk-import players'
+        }
         className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50`}
       >
         ＋ Bulk import

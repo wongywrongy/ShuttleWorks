@@ -248,3 +248,43 @@ Audited against `.agents/skills/shuttleworks-design` (archetype/token/voice rule
 - **Freshness pill vs lifecycle badge**: Display preview shows shell `COMPLETE` beside board `LIVE` (freshness) — spectator-calm vocabulary is deliberate on the TV, but in the operator preview the adjacency misreads; consider `Updated · 2s` phrasing in preview only. Size S.
 - **Solver verb pile-up**: Generate / Re-plan / Re-optimize / Apply all visible with no destructiveness hierarchy (Generate now carries the live-day guard; the others don't). Ties into the Run-convergence decision. Size M.
 - Minor: `Solutions: –`/`Score: 50` jargon; unlabeled green `Idle` health chip; unlabeled red check-in dots on Plan rows; standings `0L` in red; `COURT 1 —` dangling dash + duplicate fullscreen affordances; 12h clock on Display vs 24h axis on Run; hybrid board strikethrough reads "cancelled" for done; DE round selector R1–R6 doesn't say which bracket it scopes.
+
+## Viewer read-only vocabulary — remaining surfaces (2026-07-13, audit A2-followup)
+The **correctness** half is closed: no viewer write can reach the wire. The two
+seams that were ungated — `hooks/useProposals.ts` (Commit repair / Commit move)
+and `api/bracketClient.tsx` (**every** bracket mutation) — now refuse
+client-side, and `platform/domain/permissions.ts` fails closed on an unknown
+role. What remains is purely **vocabulary**: controls that render enabled for a
+viewer and then no-op. Nothing here is unsafe; each is a control that should say
+"you can't" before it is pressed rather than after.
+
+Gated so far: the live-day clusters (Run/workflow cards/MatchDetailsPanel incl.
+Sub, Remove, Move, Mark overrun, Cancel match, Close court), Generate, roster
+Add-school + Bulk-import, Add-match, and — via self-gating shared components —
+every `ConfirmDeleteButton` row delete and every bracket `WinnerButton`.
+
+Still rendering enabled for a viewer, by surface:
+- **Meet roster**: `PlayerDetailPanel` (school select, availability, min-rest,
+  notes, event-rank toggles); `positionGrid/*` (assign/unassign/add-partner,
+  column reorder/hide/reset).
+- **Meet matches**: `MatchesSpreadsheet` per-row event input + `PlayerCellEditor`
+  side pickers; `RegenerateMenu`.
+- **Bracket**: `BracketDrawsTab` (create/generate/delete event),
+  `BracketDataSection` (remove/reset), `BracketRosterTab`, `BracketPlayerFields`,
+  `BracketEngineSection`, `DrawView` (generateNext, scoring), `ParticipantPicker`,
+  `BracketScoreEntry`, `BracketViewHeader`. (All are *refused at the seam* — this
+  is the one area where the gap is most visible, since bracket had no gating at
+  all before.)
+- **Workspace/admin**: `SharingTab`, `SyncBackupsTab`, `ModulesSettingsTab`,
+  `VenueScheduleTab`, and the `displayConfig/` layout editor.
+
+Size S each, mechanical: `useCanEdit()` folded into the file's existing
+`locked`/`disabled` expression. The pattern to copy is `MatchDetailsPanel`
+(`const locked = updating || !canEditWorkspace`) or, for a control that is always
+a mutation, self-gate it like `ConfirmDeleteButton` / `WinnerButton`.
+
+**Verification note:** the unit suite cannot prove this. It mocks `useBracketApi`
+and the store seams, which is exactly why an ungated bracket write path survived
+a green 1,100-test suite. The real check is the viewer flow in
+`e2e/tests/interaction-smoke.spec.ts` (now running in CI): it asserts zero
+`POST/PUT/PATCH/DELETE` leave the browser as a viewer.
