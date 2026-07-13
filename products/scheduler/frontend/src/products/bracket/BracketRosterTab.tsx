@@ -26,6 +26,7 @@ import {
 } from '../../components/control-plane';
 import { BracketApiContext, useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
+import { lockedPlayerIds, ROSTER_LOCKED_REASON } from './lockedPlayers';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../api/dto';
 import { playerSlug } from '../../lib/playerSlug';
@@ -89,6 +90,8 @@ function BracketRosterTabCore({
   // Derived view: player id → sorted badge codes, from each event's own
   // participants (draft draws included — no play_units dependency).
   const badgesById = useMemo(() => badgesByPlayerId(bracketData), [bracketData]);
+  // Players a GENERATED draw is using: the server won't let them be deleted.
+  const locked = useMemo(() => lockedPlayerIds(bracketData), [bracketData]);
 
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
@@ -118,18 +121,27 @@ function BracketRosterTabCore({
     setDraft('');
   };
 
-  const rowOverflowItems = (p: BracketPlayerDTO): OverflowItem[] => [
-    {
-      key: 'delete',
-      label: 'Delete',
-      destructive: true,
-      testId: `roster-delete-${p.id}`,
-      onSelect: () => {
-        deletePlayer(p.id);
-        if (selectedId === p.id) setSelectedId(null);
+  const rowOverflowItems = (p: BracketPlayerDTO): OverflowItem[] => {
+    // The server refuses to delete a player a generated draw is using. Offering
+    // the action anyway didn't just fail — the rejected delete stayed in the
+    // store, and because the roster persists as a whole blob, EVERY later edit
+    // re-sent it and 409'd too (audit A3). Lock the action instead.
+    const isLocked = locked.has(p.id);
+    return [
+      {
+        key: 'delete',
+        label: 'Delete',
+        destructive: true,
+        testId: `roster-delete-${p.id}`,
+        disabled: isLocked,
+        disabledReason: ROSTER_LOCKED_REASON,
+        onSelect: () => {
+          deletePlayer(p.id);
+          if (selectedId === p.id) setSelectedId(null);
+        },
       },
-    },
-  ];
+    ];
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">

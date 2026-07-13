@@ -81,6 +81,36 @@ export async function forceSaveNow(): Promise<void> {
       const message = err instanceof Error ? err.message : 'Save failed';
       useUiStore.getState().setLastSaveError(message);
       useUiStore.getState().setPersistStatus('error');
+
+      // ── 409: the server REJECTED THE CONTENT, not our version ───────────
+      // The blob is all-or-nothing, so a single rejected edit (e.g. deleting a
+      // player who is placed in a generated draw) poisoned every later save:
+      // the bad value stayed in the store, so each subsequent edit re-sent the
+      // same rejected blob and 409'd too — roster editing was dead until the
+      // operator reloaded (audit finding A3).
+      //
+      // Re-hydrating from the server discards the rejected change and puts the
+      // store back on a blob the server will accept, so the NEXT edit saves.
+      // Only for 409: a network error or 5xx is transient and retryable, and
+      // must keep the operator's unsaved work.
+      const status = (err as { response?: { status?: number }; status?: number })
+        ?.response?.status ?? (err as { status?: number })?.status;
+      if (status === 409) {
+        try {
+          const remote = await apiClient.getTournamentState(tid);
+          if (remote) hydrate(remote);
+          useUiStore.getState().setPersistStatus('idle');
+          useUiStore.getState().pushToast({
+            level: 'warn',
+            message: 'That change was rejected',
+            detail: `${message} — the workspace has been re-synced to the server.`,
+            durationMs: 6000,
+          });
+        } catch {
+          // Re-sync failed (transient). Leave the error status standing: the
+          // store still holds the rejected edit, and the banner says so.
+        }
+      }
       throw err;
     } finally {
       flushPromise = null;
