@@ -250,13 +250,18 @@ Audited against `.agents/skills/shuttleworks-design` (archetype/token/voice rule
 - Minor: `Solutions: –`/`Score: 50` jargon; unlabeled green `Idle` health chip; unlabeled red check-in dots on Plan rows; standings `0L` in red; `COURT 1 —` dangling dash + duplicate fullscreen affordances; 12h clock on Display vs 24h axis on Run; hybrid board strikethrough reads "cancelled" for done; DE round selector R1–R6 doesn't say which bracket it scopes.
 
 ## Viewer read-only vocabulary — remaining surfaces (2026-07-13, audit A2-followup)
-The **correctness** half is closed: no viewer write can reach the wire. The two
+The **correctness** half is closed: no viewer write leaves the browser. The two
 seams that were ungated — `hooks/useProposals.ts` (Commit repair / Commit move)
 and `api/bracketClient.tsx` (**every** bracket mutation) — now refuse
 client-side, and `platform/domain/permissions.ts` fails closed on an unknown
-role. What remains is purely **vocabulary**: controls that render enabled for a
-viewer and then no-op. Nothing here is unsafe; each is a control that should say
-"you can't" before it is pressed rather than after.
+role.
+
+To be precise about what was at risk: the backend already required
+`operator` on all of those routes, so a viewer never could corrupt data. The bug
+was the client experience — the press went to the wire, 403'd, and offered a
+retry that could never succeed. What remains below is purely **vocabulary**:
+controls that render enabled for a viewer and then no-op. Nothing here is unsafe;
+each is a control that should say "you can't" before it is pressed, not after.
 
 Gated so far: the live-day clusters (Run/workflow cards/MatchDetailsPanel incl.
 Sub, Remove, Move, Mark overrun, Cancel match, Close court), Generate, roster

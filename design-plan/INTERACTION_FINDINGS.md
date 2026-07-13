@@ -75,9 +75,21 @@ the wire, 403, and offer a futile Retry:
 - `api/bracketClient.tsx` — **the entire bracket product had no permission check**:
   record result, generate draw, schedule round, reset bracket.
 
-Both are closed at the seam (`guardMutation` refuses with a rejection shaped like
-the server's 403 — `status: 403` + the api client's `__handled` marker — so call
-sites behave exactly as they already do on a real 403, minus the round trip).
+**What was and wasn't at risk.** The backend was never fooled: every mutating
+bracket and proposal route already carries `require_tournament_access("operator")`
+(19 of them in `api/brackets.py` alone), so a viewer could not corrupt data — the
+server refused. The defect was entirely client-side, and it is the one the audit
+prompt names explicitly: *a viewer's press must no-op client-side, not 403-toast*.
+It reached the wire, failed, and offered a retry that could never succeed. So the
+honest claim is **"no viewer write leaves the browser"** (client, now true and
+tested) — the server-side guarantee was already there, and this is defense in
+depth plus an honest UI.
+
+Both seams are closed (`guardMutation` refuses with a rejection shaped like the
+server's 403 — `status: 403` + the api client's `__handled` marker — so call sites
+behave exactly as they already do on a real 403, minus the round trip), and both
+are covered by real-seam tests (`api/__tests__/bracketClient.permissions.test.tsx`,
+`hooks/__tests__/useProposals.permissions.test.tsx`).
 `ConfirmDeleteButton` and `WinnerButton` now gate themselves, since both are
 *always* mutations. The enabled-but-safe surfaces that remain are enumerated in
 `docs/audits/debt-log.md`.
