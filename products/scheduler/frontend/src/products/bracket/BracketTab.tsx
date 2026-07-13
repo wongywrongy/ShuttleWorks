@@ -119,12 +119,25 @@ function BracketTabBody() {
 
   const [selectedPlayUnitId, setSelectedPlayUnitId] = useState<string | null>(null);
 
-  // Reset selection when the bracket data identity changes (regenerate,
-  // event switch). `data` is replaced wholesale by the setData callback,
-  // not mutated in place, so a reference check is sufficient.
+  // Drop the selection when the selected play unit is GONE (regenerate, reset).
+  //
+  // This used to key on `[data]` and clear unconditionally, on the assumption
+  // that `data`'s reference only changes on a regenerate. It doesn't: `useBracket`
+  // POLLS every 2.5s and replaces `data` wholesale each time, so the effect wiped
+  // the operator's selection roughly twice a second-and-a-half. Clicking a chip on
+  // the Plan timeline looked like a dead handler — the ring appeared and then
+  // silently vanished (audit finding D1). Comparing CONTENT, not identity, keeps
+  // the selection across polls while still clearing it when the draw really changes.
+  // (The Schedule timeline aggregates chips from EVERY event, so a selection
+  // does not need clearing on an event switch — only when its unit is gone.)
   useEffect(() => {
-    setSelectedPlayUnitId(null);
-  }, [data]);
+    if (
+      selectedPlayUnitId &&
+      !data?.play_units.some((pu) => pu.id === selectedPlayUnitId)
+    ) {
+      setSelectedPlayUnitId(null);
+    }
+  }, [data, selectedPlayUnitId]);
 
   // First-load migration: if we have a legacy bracket with participants
   // but no bracketPlayers in store yet, extract them once.
