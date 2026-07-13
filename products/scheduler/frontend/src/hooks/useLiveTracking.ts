@@ -20,29 +20,12 @@ import { useMatchStateStore } from '../store/matchStateStore';
 import { useUiStore } from '../store/uiStore';
 import { apiClient, MatchVersionMismatch } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
+import { transitionPath } from '../platform/domain/matchTransitions';
 import { useTournamentIdOrNull } from './useTournamentId';
 
-/**
- * Valid state transitions for match state machine
- * Key = current status, Value = array of valid next statuses
- */
-const VALID_TRANSITIONS: Record<MatchStateDTO['status'], MatchStateDTO['status'][]> = {
-  scheduled: ['called', 'scheduled', 'finished'], // call, stay, or record score after-the-fact
-  called: ['started', 'scheduled', 'finished'],   // start, undo, or record score after-the-fact
-  started: ['finished', 'called'],                // finish or undo to called
-  finished: ['started', 'finished'],              // undo to started OR edit score (stays finished)
-};
-
-/**
- * Validate if a state transition is allowed
- */
-function isValidTransition(
-  currentStatus: MatchStateDTO['status'],
-  newStatus: MatchStateDTO['status']
-): boolean {
-  const validNextStates = VALID_TRANSITIONS[currentStatus];
-  return validNextStates.includes(newStatus);
-}
+// The transition table lives in `platform/domain/matchTransitions` — a mirror
+// of the backend contract, unit-tested against it. It used to be defined here
+// and had drifted into a superset of what the server accepts (audit finding A1).
 
 /** Operator-facing label for a match id — the display code ("Match M12")
  *  when we know its `matchNumber`, else a short UUID prefix. Reads the store
@@ -178,14 +161,30 @@ export function useLiveTracking() {
     additionalData?: Partial<MatchStateDTO>
   ) => {
     try {
+      const startStatus =
+        useMatchStateStore.getState().matchStates[matchId]?.status || 'scheduled';
+
+      // The operator's intent may not be reachable in one hop — scoring a match
+      // that was never explicitly started asks for `called → finished`, which
+      // the server refuses. Walk the machine instead of firing a request that
+      // can only 409. Directly-legal transitions yield a single step, so the
+      // common path is unchanged.
+      const path = transitionPath(startStatus, status);
+      if (path === null) {
+        console.warn(`Invalid state transition: ${startStatus} to ${status} for match ${matchId}`);
+        throw new Error(`Invalid state transition: cannot go from '${startStatus}' to '${status}'`);
+      }
+      for (const intermediate of path.slice(0, -1)) {
+        await updateMatchStatusRef.current(matchId, intermediate);
+      }
+
       const freshMatchStates = useMatchStateStore.getState().matchStates;
       const currentState = freshMatchStates[matchId] || { matchId, status: 'scheduled' };
       const currentStatus = currentState.status || 'scheduled';
 
-      if (!isValidTransition(currentStatus, status)) {
-        console.warn(`Invalid state transition: ${currentStatus} to ${status} for match ${matchId}`);
-        throw new Error(`Invalid state transition: cannot go from '${currentStatus}' to '${status}'`);
-      }
+      // An intermediate step can fail (it surfaced its own toast and returned).
+      // Don't follow it with a write the server is guaranteed to refuse.
+      if (path.length > 1 && currentStatus !== path[path.length - 2]) return;
 
       const now = new Date().toISOString();
       const newState: MatchStateDTO = {
@@ -249,18 +248,35 @@ export function useLiveTracking() {
             // status the server will never confirm.
             useMatchStateStore.getState().applyOptimisticStatus(matchId, previousStatus);
           }
-          // Surface a sticky toast so the operator knows the change
-          // didn't land. Retry replays with the fresh version.
+          // A 409 and a 412 mean different things and must not read the same.
+          //   412 — our version was stale. Replaying with the fresh version
+          //         succeeds, so Retry is real.
+          //   409 — the server refused the TRANSITION: the match already moved
+          //         on (another device called/started/finished it). Replaying
+          //         re-sends the same illegal move and fails identically, so
+          //         offering Retry is a lie. Say what happened instead; the
+          //         refetch above already re-synced to the server's truth.
+          // (Audit finding A1: every 409 used to read "version mismatch" and
+          //  carry a Retry that could never succeed.)
+          const isTransitionConflict = apiError.status === 409;
           try {
-            useUiStore.getState().pushToast({
-              level: 'error',
-              message: `${matchLabelOf(matchId)} — version mismatch`,
-              detail: apiError.message,
-              actionLabel: 'Retry',
-              onAction: () => {
-                void updateMatchStatusRef.current(matchId, status, additionalData);
-              },
-            });
+            useUiStore.getState().pushToast(
+              isTransitionConflict
+                ? {
+                    level: 'warn',
+                    message: `${matchLabelOf(matchId)} already moved on`,
+                    detail: `${apiError.message} — the board has been re-synced to the server.`,
+                  }
+                : {
+                    level: 'error',
+                    message: `${matchLabelOf(matchId)} — version mismatch`,
+                    detail: apiError.message,
+                    actionLabel: 'Retry',
+                    onAction: () => {
+                      void updateMatchStatusRef.current(matchId, status, additionalData);
+                    },
+                  },
+            );
           } catch { /* toast store unavailable */ }
           return;
         }

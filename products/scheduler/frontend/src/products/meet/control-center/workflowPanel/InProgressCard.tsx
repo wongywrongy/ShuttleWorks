@@ -47,7 +47,10 @@ export function InProgressCard({
     setUpdating(true);
     try {
       if (onUndoStart) onUndoStart(assignment.matchId);
-      await onUpdateStatus(assignment.matchId, 'called', { actualStartTime: undefined });
+      // Undo returns the match to `scheduled`, not `called`: the server has no
+      // playing→called edge, so the old target always 409'd (audit A1). The
+      // match drops back into the queue to be called again.
+      await onUpdateStatus(assignment.matchId, 'scheduled', { actualStartTime: undefined });
     } finally {
       setUpdating(false);
     }
@@ -107,7 +110,7 @@ export function InProgressCard({
           }}
           disabled={updating}
           className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
-          title="Undo to called"
+          title="Undo start — returns the match to the queue"
           aria-label="Undo started match"
         >
           {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}

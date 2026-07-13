@@ -209,12 +209,14 @@ export function MatchDetailsPanel({
     }
   };
 
-  const handleResetCalled = async () => {
+  const handleUndoStart = async () => {
     if (!onUpdateStatus) return;
     setUpdating(true);
     try {
       onUndoStart?.(match.id);
-      await onUpdateStatus(match.id, 'called', { actualStartTime: undefined });
+      // Back to `scheduled`, not `called`: the server has no playing→called
+      // edge, so the old target always 409'd (audit A1).
+      await onUpdateStatus(match.id, 'scheduled', { actualStartTime: undefined });
     } finally {
       setUpdating(false);
     }
@@ -438,10 +440,10 @@ export function MatchDetailsPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={handleResetCalled}
+                  onClick={handleUndoStart}
                   disabled={updating}
                   className={actionBtn}
-                  title="Step back to Called"
+                  title="Undo start — returns the match to the queue"
                 >
                   Undo start
                 </button>
