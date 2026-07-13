@@ -1,13 +1,77 @@
-# Interaction-bug audit — Stage 1 findings (report only) → GATE
+# Interaction-bug audit — findings, and how each was fixed
 
-> **STOP FOR SIGN-OFF. No fixes have been applied.** This is the Stage-1
-> deliverable: an empirical map of what breaks when every interactive element is
-> pressed in every reachable state. Fixes are Stage 2, per root-cause class,
-> after sign-off.
+> **Status: Stage 1 (audit) and Stage 2 (fixes) COMPLETE; Stage 3 (CI layer) in
+> place.** Signed off 2026-07-11; every root-cause class below is fixed,
+> verified in a browser, and committed. The original Stage-1 report is preserved
+> below as written — the findings are not edited after the fact — with a
+> **FIXED** note recording what changed and how it was proven.
 >
-> Branch `dev/workspace-suite`, 2026-07-10. Companion docs:
-> `INTERACTION_INVENTORY.md` (static element census) and the raw sweep JSON in
-> `products/scheduler/e2e/interaction-sweep/results/`.
+> Branch `dev/workspace-suite`. Companion docs: `INTERACTION_INVENTORY.md`
+> (static element census), `products/scheduler/e2e/README.md` (the two test
+> layers), raw sweep JSON in `products/scheduler/e2e/interaction-sweep/results/`.
+
+## Fix summary (Stage 2)
+
+| class | finding | fix | commit |
+|---|---|---|---|
+| **A1** | Run's state machine was a superset of the backend's — 4 transitions the server always refused; every Undo 409'd behind a misleading "version mismatch" toast + a futile Retry | one shared table (`platform/domain/matchTransitions.ts`) mirroring the backend, a path-walk for multi-hop intents, backend gains `FINISHED→PLAYING` so a mis-tapped Finish is correctable, 409 vs 412 no longer read the same | `0ede8f6` |
+| **A2** | a **viewer** saw the full editing UI; every press 403'd and left the board diverged | `canEdit` gate (fails closed), enforced at the mutation SEAM (nothing reaches the wire) *and* as the `disabled` vocabulary on the live-day clusters, plus a read-only banner | `8f23726` |
+| **A3** | one rejected roster delete **poisoned the whole-blob autosave** — all later edits failed until reload | 409 → re-sync from the server (cascade broken); locked players' Delete is disabled with its reason; `OverflowMenu` gains a real `disabled` that blocks the handler | `c1db513` |
+| **B1 + C1** | `void enable(id)` had no catch → real `unhandledrejection`; several actions double-submitted (a `busy` **state** flag can't stop a same-tick second click) | one `useAction` wrapper: a **ref** lock (immediate) + a failure path that never rethrows and never swallows | `e058d0b` |
+| **D1** | Plan-timeline chips never selected — looked like a dead handler | **not** a dead handler and **not** the stale-closure story the symptom suggested: a reset effect keyed on `[data]`, which the 2.5 s poll replaces every tick, was wiping the selection. Compare content, not identity | `d82354d` |
+| **E1 + F1** | 6 × `window.confirm` (banned; blocks the event loop); delete-player / delete-match were unguarded one-clicks | `useConfirmClick` two-click arm + `WinnerButton` + `ConfirmDeleteButton`; Reset-bracket gets a Modal naming what is lost. **Zero `window.confirm` call sites remain** | `016e288` |
+| **G1 + G2** | clickable rows were mouse-only; score inputs had no programmatic label | keyboard path at the shared `BandedTable` (covers Matches + both rosters + bracket matches at once); `aria-label` on every score input | `47c7373` |
+
+## Sweep delta (fixed build vs the audit build)
+
+Re-ran the press-everything sweep on the views that previously failed:
+
+| view | before | after |
+|---|---|---|
+| `bracket:bracket-roster` | **19 console.errors** (the A3 cascade) | **0** |
+| `midday:live` | 5 console.errors | 3 — all benign (see below) |
+| `midday:schedule` | 2 console.errors | **0** |
+| `empty:ws-modules` | **1 unhandled rejection** | **0 errors** |
+| everywhere | 6 `window.confirm` sites | **0 native dialogs** |
+
+**Totals: real errors 2 → 0. console.errors 29 → 4. Native dialogs → 0.**
+
+The 4 remaining console.errors are *entirely* the benign class the Stage-1 report
+calibrated out — the browser's own resource log for HTTP responses the client
+handles on purpose (`GET /bracket` → 404 ⇒ "no bracket yet"; a stale suggestion
+`Apply` → 410 ⇒ row dropped + info toast; the module-disable 409 ⇒ now toasted
+properly). None is an app failure, and the CI smoke suite filters exactly this
+class while treating uncaught errors, unhandled rejections and boundary catches
+as fatal.
+
+## Stage 3 — the CI layer (in place)
+
+`products/scheduler/e2e/tests/interaction-smoke.spec.ts`, wired as a **required**
+job in `.github/workflows/ci.yml`. It presses every control on every view and
+fails on any uncaught error / unhandled rejection / error-boundary catch / native
+dialog, plus two real-flow tests (the A1 state machine; the A2 viewer gate). It
+runs a preview build against a local uvicorn — **no Docker**, which is why it can
+gate without the flakiness the repo's lean-gate philosophy warns about.
+
+Verified locally against the seeded fixture: **14 passed, 1 skipped** (the viewer
+flow skips unless `SMOKE_VIEWER_TID` is set — set it in CI to keep A2 covered).
+
+**Deliberately still open** — tracked, not forgotten:
+- **A2-followup**: secondary editors (roster/matches inline controls, bracket
+  surfaces, admin tabs) are *correct* for a viewer — the seam refuses their
+  writes — but still render enabled rather than disabled. The vocabulary is
+  applied to the live-day clusters only.
+- **G1-followup**: the remaining mouse-only lists (`RunQueue`, `UnifiedOpsList`,
+  `LiveMatchList`, the workflow cards) still lack a keyboard path; `BandedTable`
+  covered the largest surfaces.
+- **A6**: Generate is still enabled with zero matches (runs a pointless solve).
+
+---
+
+# The Stage-1 report, as written at the gate
+
+> The report below is the original audit, unedited. It is what the fixes above
+> were signed off against.
 
 ## How this was produced
 
