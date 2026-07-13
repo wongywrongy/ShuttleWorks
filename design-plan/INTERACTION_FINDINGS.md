@@ -53,18 +53,41 @@ dialog, plus two real-flow tests (the A1 state machine; the A2 viewer gate). It
 runs a preview build against a local uvicorn — **no Docker**, which is why it can
 gate without the flakiness the repo's lean-gate philosophy warns about.
 
-Verified locally against the seeded fixture: **14 passed, 1 skipped** (the viewer
-flow skips unless `SMOKE_VIEWER_TID` is set — set it in CI to keep A2 covered).
+Verified locally against the seeded fixture: **15 passed, 0 skipped**.
 
-**Deliberately still open** — tracked, not forgotten:
-- **A2-followup**: secondary editors (roster/matches inline controls, bracket
-  surfaces, admin tabs) are *correct* for a viewer — the seam refuses their
-  writes — but still render enabled rather than disabled. The vocabulary is
-  applied to the live-day clusters only.
-- **G1-followup**: the remaining mouse-only lists (`RunQueue`, `UnifiedOpsList`,
-  `LiveMatchList`, the workflow cards) still lack a keyboard path; `BandedTable`
-  covered the largest surfaces.
-- **A6**: Generate is still enabled with zero matches (runs a pointless solve).
+## Follow-up pass (2026-07-13) — the open items, closed
+
+| item | outcome | commit |
+|---|---|---|
+| **G1-followup** | `lib/selectableRow.ts` lifts `BandedTable`'s keyboard fix into one definition, adopted by `RunQueue`, `UnifiedOpsList`, `LiveMatchList` and the 3 workflow cards. Enter/Space activate; nested controls keep their own keys | `b86d29d` |
+| **A6** | Generate refuses with a reason at zero matches (it sat directly above the "No matches yet" copy) | `b86d29d` |
+| **smoke gate** | **the gate was broken and passing.** `seed-smoke.mjs` 422'd on `PUT /state` (wrong config/assignment/status shapes) and then 412'd on match-states (version-guarded via If-Match; the blob PUT already creates the rows at v1 — read the ETag, don't model it). It never surfaced because `SMOKE_TID` fell back to a hardcoded id that happened to exist locally. `SMOKE_TID` is now **required**, and both the crawl and the viewer test assert they found controls at all — against a missing workspace the app renders an error page with no controls and the suite passed *vacuously*. A gate that goes green when its fixture is missing is worse than no gate | `b8f2dd2` |
+| **viewer gate in CI** | no HTTP path to a viewer role exists (the creator is always written `owner`; no endpoint mutates a member's role), so `make-viewer.py` writes the row the API won't, as the last seeding step, and hard-fails if it matches nothing. The viewer test now **runs**; confirmed it bites (pointed at an owner workspace it fails on the missing banner) | `b8f2dd2` |
+| **A2-followup** | ⚠️ **not cosmetic after all — see below** | `6ae23b0` |
+
+### A2-followup was a correctness bug, not vocabulary
+
+The item was logged as "safe but enabled". Tracing it found two mutation seams
+the original A2 fix **missed**, through which a viewer's press really did reach
+the wire, 403, and offer a futile Retry:
+
+- `hooks/useProposals.ts` — Disruption *Commit repair*, Reschedule *Commit move*.
+- `api/bracketClient.tsx` — **the entire bracket product had no permission check**:
+  record result, generate draw, schedule round, reset bracket.
+
+Both are closed at the seam (`guardMutation` refuses with a rejection shaped like
+the server's 403 — `status: 403` + the api client's `__handled` marker — so call
+sites behave exactly as they already do on a real 403, minus the round trip).
+`ConfirmDeleteButton` and `WinnerButton` now gate themselves, since both are
+*always* mutations. The enabled-but-safe surfaces that remain are enumerated in
+`docs/audits/debt-log.md`.
+
+**Why a 1,100-test green suite hid an entire product's ungated write path:** every
+bracket test `vi.mock`s `useBracketApi`. Mock the seam and you can never test the
+seam — the same structural blindness that motivated this whole audit. The new
+`bracketClient.permissions` test runs the real provider and fakes only
+`apiClient`; the browser-level check is the viewer flow in the smoke suite, which
+asserts zero writes leave the browser.
 
 ---
 
