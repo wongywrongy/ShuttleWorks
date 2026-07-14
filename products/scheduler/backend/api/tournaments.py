@@ -582,10 +582,19 @@ def put_tournament_state(
     prior_cfg = prior.get("config") if isinstance(prior.get("config"), dict) else None
     incoming_cfg = incoming.get("config") if isinstance(incoming.get("config"), dict) else None
 
+    bracket_session = prior.get("bracket_session")
+    bracket_assignments = (
+        bracket_session.get("assignments")
+        if isinstance(bracket_session, dict)
+        else None
+    )
+
     fields = changed_scheduling_fields(prior_cfg, incoming_cfg)
     locked_schedules: list[str] = []
     if fields and prior_assignments and incoming_assignments:
         locked_schedules.append("meet")
+    if fields and bracket_assignments:
+        locked_schedules.append("bracket")
 
     if locked_schedules and not clearSchedule:
         raise http_error(
@@ -598,10 +607,25 @@ def put_tournament_state(
             extra={"fields": fields, "schedules": locked_schedules},
         )
 
+    clear_bracket = False
     if clearSchedule and fields:
+        started = [
+            ev.id
+            for ev in repo.brackets.list_events(tournament_id)
+            if (ev.status or "draft") == "started"
+        ]
+        if started:
+            raise http_error(
+                409,
+                ErrorCode.DRAW_STARTED,
+                "Draws in play cannot have their schedule cleared: "
+                f"{', '.join(started)}. Finish or reset those draws first.",
+                extra={"events": started},
+            )
         # Atomic clear-and-apply: the same single upsert persists both.
         incoming["schedule"] = None
         incoming["scheduleIsStale"] = False
+        clear_bracket = bool(bracket_assignments)
 
     prior_roster = {
         p.get("id")
@@ -628,7 +652,9 @@ def put_tournament_state(
             )
 
     try:
-        row = repo.commit_tournament_state(tournament_id, incoming)
+        row = repo.commit_tournament_state(
+            tournament_id, incoming, clear_bracket_assignments=clear_bracket
+        )
     except KeyError:
         raise http_error(
             404,

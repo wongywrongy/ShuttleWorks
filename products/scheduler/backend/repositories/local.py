@@ -1561,6 +1561,8 @@ class LocalRepository:
         self,
         tournament_id: uuid.UUID,
         payload: dict,
+        *,
+        clear_bracket_assignments: bool = False,
     ) -> Tournament:
         """Snapshot the prior state into a backup, then write the new one.
 
@@ -1597,6 +1599,10 @@ class LocalRepository:
             for key in ("bracket_session",):
                 if key in prior.data and key not in merged:
                     merged[key] = prior.data[key]
+        if clear_bracket_assignments and isinstance(merged.get("bracket_session"), dict):
+            session = dict(merged["bracket_session"])
+            session.pop("assignments", None)
+            merged["bracket_session"] = session
         result = self.tournaments.upsert_data(tournament_id, merged)
         self._project_matches_from_payload(tournament_id, payload)
         return result

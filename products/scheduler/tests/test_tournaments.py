@@ -764,4 +764,146 @@ def test_clear_schedule_flag_atomic_rollback_on_write_failure(client, monkeypatc
     after = client.get(f"/tournaments/{tid}/state").json()
     assert after["schedule"] is not None
     assert after["schedule"]["assignments"] == original["schedule"]["assignments"]
-    assert after["config"]["defaultRestMinutes"] == original["config"]["defaultRestMinutes"]
+
+
+# ---- Bracket joins the schedule lock (Plan C, Task 4) --------------------
+
+
+def _seed_bracket_schedule(tid: str, *, started: bool = False) -> None:
+    """Plant a bracket event + a ``bracket_session`` assignments blob
+    directly through the repository (the bracket routers aren't mounted
+    in this module's ``app``).
+
+    Uses ``database.session.SessionLocal`` directly — the same pattern
+    ``test_shared_row_keeps_original_owner_name`` uses above — rather
+    than a nonexistent ``get_repository_factory`` seam, so the write
+    lands in the same per-test SQLite file the ``client`` fixture bound
+    via ``isolate_test_database``.
+    """
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        t_uuid = _uuid.UUID(tid)
+        repo.brackets.create_event(
+            t_uuid,
+            "MS",
+            discipline="MS",
+            format="se",
+            duration_slots=2,
+            status="started" if started else "generated",
+        )
+        row = repo.tournaments.get_by_id(t_uuid)
+        data = dict(row.data or {})
+        data["bracket_session"] = {
+            "total_slots": 128,
+            "assignments": [
+                {"play_unit_id": "MS-R1-M1", "slot_id": 0, "court_id": 1,
+                 "duration_slots": 2}
+            ],
+        }
+        repo.tournaments.upsert_data(t_uuid, data)
+    finally:
+        session.close()
+
+
+def test_bracket_assignments_lock_scheduling_fields(client):
+    created = client.post("/tournaments", json={"name": "B1"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("B1"))
+    _seed_bracket_schedule(tid)
+
+    edited = _basic_state("B1")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["code"] == "CONFIG_LOCKED"
+    assert detail["schedules"] == ["bracket"]
+
+
+def test_clear_schedule_strips_bracket_assignments(client):
+    created = client.post("/tournaments", json={"name": "B2"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("B2"))
+    _seed_bracket_schedule(tid)
+
+    edited = _basic_state("B2")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 200
+
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        data = repo.tournaments.get_by_id(_uuid.UUID(tid)).data
+    finally:
+        session.close()
+    assert data["bracket_session"].get("assignments") in (None, [])
+    # The rest of the session blob survives (total_slots untouched).
+    assert data["bracket_session"]["total_slots"] == 128
+
+
+def test_started_draw_is_hard_locked_even_with_flag(client):
+    created = client.post("/tournaments", json={"name": "B3"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("B3"))
+    _seed_bracket_schedule(tid, started=True)
+
+    edited = _basic_state("B3")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "DRAW_STARTED"
+
+
+def test_bracket_clear_atomic_rollback_on_write_failure(client, monkeypatch):
+    """Mirrors ``test_clear_schedule_flag_atomic_rollback_on_write_failure``
+    for the bracket side: if the single commit that would clear bracket
+    assignments + apply the edit fails mid-way, the prior assignments
+    must survive intact — no half-cleared state."""
+    from services.sync_service import SyncService
+
+    created = client.post("/tournaments", json={"name": "B4"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("B4"))
+    _seed_bracket_schedule(tid)
+
+    def _boom(session, tournament):
+        raise RuntimeError("simulated failure between mutation and commit")
+
+    monkeypatch.setattr(SyncService, "enqueue_tournament", staticmethod(_boom))
+
+    edited = _basic_state("B4")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 500
+
+    monkeypatch.undo()
+
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        data = repo.tournaments.get_by_id(_uuid.UUID(tid)).data
+    finally:
+        session.close()
+    assert data["bracket_session"]["assignments"] == [
+        {"play_unit_id": "MS-R1-M1", "slot_id": 0, "court_id": 1,
+         "duration_slots": 2}
+    ]
+    # The config edit must not have applied either (atomic all-or-nothing).
+    assert data["config"]["defaultRestMinutes"] == 30
