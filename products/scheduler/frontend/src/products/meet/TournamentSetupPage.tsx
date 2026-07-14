@@ -24,7 +24,7 @@ import { useSuccessFlash } from '../../hooks/useSuccessFlash';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { MeetStructureForm } from './tournaments/MeetStructureForm';
 import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
-import { EngineSettings } from './settings/EngineSettings';
+import { EngineConfigForm } from '../../platform/settings/EngineConfigForm';
 import { ConfigSurface } from '../../platform/settings/ConfigSurface';
 import { IconDone } from '@scheduler/design-system';
 import type { TournamentConfig } from '../../api/dto';
@@ -142,7 +142,12 @@ export function TournamentSetupPage() {
           saving={busy}
         />
       ) : (
-        <EngineSettings formId={FORM_ID} onBusyChange={setBusy} />
+        <EngineConfigForm
+          module="meet"
+          formId={FORM_ID}
+          onBusyChange={setBusy}
+          guardSave={() => confirmUnlock('save engine settings')}
+        />
       )}
     </ConfigSurface>
   );
