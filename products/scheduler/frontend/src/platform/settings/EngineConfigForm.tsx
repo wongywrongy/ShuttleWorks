@@ -58,7 +58,12 @@ export const ENGINE_CONFIG_FIELDS = [
   { key: 'breaks', group: 'timing', modules: ['meet', 'bracket'] },
   { key: 'restBetweenRounds', group: 'timing', modules: ['bracket'] },
   { key: 'deterministic', group: 'solver', modules: ['meet', 'bracket'] },
-  { key: 'solverTimeLimitSeconds', group: 'solver', modules: ['meet', 'bracket'] },
+  // Meet-only: C10's `_bracket_solver_options` (backend/api/brackets.py)
+  // deliberately does NOT read `solverTimeLimitSeconds` — bracket keeps
+  // its own per-request budget. Rendering the control on bracket would be
+  // decorative (it changes nothing), so the schema — and the gated render
+  // below — restrict it to meet.
+  { key: 'solverTimeLimitSeconds', group: 'solver', modules: ['meet'] },
   { key: 'freezeHorizonSlots', group: 'solver', modules: ['meet', 'bracket'] },
   { key: 'enableCourtUtilization', group: 'goals', modules: ['meet', 'bracket'] },
   { key: 'courtUtilizationPenalty', group: 'goals', modules: ['meet', 'bracket'] },
@@ -287,19 +292,21 @@ export function EngineConfigForm({
                 />
               }
             />
-            <Row
-              label="Solver time limit"
-              control={
-                <NumberWithSuffix
-                  value={formData.solverTimeLimitSeconds ?? 30}
-                  onChange={(v) => set('solverTimeLimitSeconds', v)}
-                  suffix="s"
-                  min={1}
-                  max={600}
-                  ariaLabel="Solver wall-clock cap in seconds"
-                />
-              }
-            />
+            {engineFieldAppliesTo('solverTimeLimitSeconds', module) ? (
+              <Row
+                label="Solver time limit"
+                control={
+                  <NumberWithSuffix
+                    value={formData.solverTimeLimitSeconds ?? 30}
+                    onChange={(v) => set('solverTimeLimitSeconds', v)}
+                    suffix="s"
+                    min={1}
+                    max={600}
+                    ariaLabel="Solver wall-clock cap in seconds"
+                  />
+                }
+              />
+            ) : null}
             <Row
               label="Freeze horizon"
               control={

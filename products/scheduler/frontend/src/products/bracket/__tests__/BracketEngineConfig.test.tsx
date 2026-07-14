@@ -129,7 +129,11 @@ describe('bracket engine config (shared form)', () => {
     expect(screen.getByLabelText('Rest between matches')).toBeInTheDocument();
     // Advanced solver (previously Meet-only)
     expect(screen.getByLabelText('Reproducible solver run')).toBeInTheDocument();
-    expect(screen.getByLabelText('Solver wall-clock cap in seconds')).toBeInTheDocument();
+    // Solver time limit is meet-only (C10: bracket keeps its own
+    // per-request budget — see EngineConfigForm's ENGINE_CONFIG_FIELDS).
+    expect(
+      screen.queryByLabelText('Solver wall-clock cap in seconds'),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText('Freeze horizon in slots')).toBeInTheDocument();
     // Optimisation goals (previously Meet-only)
     expect(screen.getByLabelText('Maximise court utilisation')).toBeInTheDocument();

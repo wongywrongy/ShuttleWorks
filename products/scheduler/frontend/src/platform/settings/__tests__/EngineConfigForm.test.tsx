@@ -77,9 +77,20 @@ describe('engineFieldAppliesTo (schema helper)', () => {
     expect(engineFieldAppliesTo('deterministic', 'bracket')).toBe(true);
   });
 
-  it('schema declares exactly one module-specific field', () => {
+  it('schema declares exactly two module-specific fields', () => {
     const specific = ENGINE_CONFIG_FIELDS.filter((f) => f.modules.length === 1);
-    expect(specific.map((f) => f.key)).toEqual(['restBetweenRounds']);
+    expect(specific.map((f) => f.key).sort()).toEqual([
+      'restBetweenRounds',
+      'solverTimeLimitSeconds',
+    ]);
+  });
+
+  it('solverTimeLimitSeconds applies only to meet — bracket keeps its own per-request budget (C10)', () => {
+    // backend/api/brackets.py `_bracket_solver_options` deliberately does
+    // not read solverTimeLimitSeconds; rendering it on bracket would be a
+    // decorative control that changes nothing.
+    expect(engineFieldAppliesTo('solverTimeLimitSeconds', 'meet')).toBe(true);
+    expect(engineFieldAppliesTo('solverTimeLimitSeconds', 'bracket')).toBe(false);
   });
 });
 
@@ -100,7 +111,6 @@ describe('<EngineConfigForm /> — shared groups', () => {
     (module) => {
       mount(module);
       expect(screen.getByLabelText('Reproducible solver run')).toBeInTheDocument();
-      expect(screen.getByLabelText('Solver wall-clock cap in seconds')).toBeInTheDocument();
       expect(screen.getByLabelText('Freeze horizon in slots')).toBeInTheDocument();
       expect(screen.getByLabelText('Maximise court utilisation')).toBeInTheDocument();
       expect(screen.getByLabelText('Enforce game spacing')).toBeInTheDocument();
@@ -123,6 +133,20 @@ describe('<EngineConfigForm /> — module applicability', () => {
     expect(
       screen.getByLabelText('Rest between rounds (slots)'),
     ).toBeInTheDocument();
+  });
+
+  it('meet DOES render Solver time limit', () => {
+    mount('meet');
+    expect(
+      screen.getByLabelText('Solver wall-clock cap in seconds'),
+    ).toBeInTheDocument();
+  });
+
+  it('bracket does NOT render Solver time limit — it is decorative there (C10 divergence)', () => {
+    mount('bracket');
+    expect(
+      screen.queryByLabelText('Solver wall-clock cap in seconds'),
+    ).not.toBeInTheDocument();
   });
 });
 

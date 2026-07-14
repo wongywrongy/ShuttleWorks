@@ -13,6 +13,9 @@ export function meetMatchStatus(
   matchStates: Record<string, MatchStateDTO>,
 ): MatchListStatus {
   const status = matchStates[matchId]?.status;
+  // Intentionally only 'finished' maps to 'done': MatchStateDTO.status
+  // cannot carry 'retired' today. If that union is ever widened to the
+  // canonical 'retired' (Operations' match-state machine), add it here.
   if (status === 'finished') return 'done';
   if (status === 'called' || status === 'started') return 'live';
   if (assignedIds.has(matchId)) return 'ready';
