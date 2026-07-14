@@ -1,7 +1,7 @@
 """Pydantic schemas for API requests/responses - simplified for school sparring."""
 import uuid
 from typing import Annotated, List, Literal, Optional, Dict, Any
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from enum import Enum
 from app.time_utils import now_iso
 
@@ -634,6 +634,7 @@ class BracketCommandRequest(BaseModel):
     with 409 ``stale_version`` when present and stale.  The replay check
     always runs BEFORE the version guard so a re-delivered command whose
     version has advanced is still accepted.
+    ``reason`` annotates contingency results (walkover/retired/forfeit).
     """
 
     id: uuid.UUID
@@ -644,6 +645,17 @@ class BracketCommandRequest(BaseModel):
     finished_at_slot: Optional[int] = None
     walkover: bool = False
     score: Optional[Dict[str, Any]] = None
+    # Contingency annotation (spec 2026-07-14 §1): why the result was
+    # awarded without (full) play. ``walkover`` keeps its existing BYE
+    # routing; ``retired``/``forfeit`` currently ride the same result
+    # path — distinct routing semantics are deferred (debt-log).
+    reason: Optional[Literal["walkover", "retired", "forfeit"]] = None
+
+    @model_validator(mode="after")
+    def _walkover_reason_implies_flag(self) -> "BracketCommandRequest":
+        if self.reason == "walkover":
+            self.walkover = True
+        return self
 
 
 class MatchStateOut(BaseModel):
