@@ -33,8 +33,8 @@ import {
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { Modal } from '../../components/common/Modal';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ParticipantPicker itself relocates into Task 3's panel
-import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
+import type { PickedSingle, PickedPair } from './ParticipantPicker';
+import { DrawDetailPanel } from './DrawDetailPanel';
 import {
   buildEventUpsertPayload,
   type BracketEventDTO,
@@ -80,11 +80,11 @@ export function BracketDrawsTab() {
   const api = useBracketApi();
   const tid = useTournamentId();
   const navigate = useNavigate();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Task 3's panel wires this to the picker
   const players = useTournamentStore((s) => s.bracketPlayers);
 
   const [creating, setCreating] = useState(false);
   const [configFor, setConfigFor] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Legacy deep links (and the old "New draw" route) arrived with ?new=1
   // to auto-open the create flow. Honor it by opening the layer, then
@@ -198,9 +198,12 @@ export function BracketDrawsTab() {
   const openDraw = (eventId: string) =>
     navigate(`/tournaments/${tid}/bracket-draw?event=${encodeURIComponent(eventId)}`);
 
+  const selectedRow = selectedId
+    ? drawRows.find((r) => r.ev.id === selectedId) ?? null
+    : null;
+
   // Seed-preserving participants commit — relocated from the old in-card
-  // picker; the Draw detail panel (Task 3) drives it.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- consumed by Task 3's panel
+  // picker; the Draw detail panel drives it.
   const commitPicks = useCallback(
     async (ev: BracketEventDTO, picks: PickedSingle[] | PickedPair[]) => {
       const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
@@ -265,6 +268,13 @@ export function BracketDrawsTab() {
               groups={tableGroups}
               rowId={(row) => row.ev.id}
               rowTestId={(row) => `bracket-draw-row-${row.ev.id}`}
+              onRowClick={(row) => setSelectedId(row.ev.id)}
+              selectedId={selectedId}
+              // Without an explicit name, a clickable row's accessible name
+              // falls back to its full text content — which would swallow
+              // "Generate"/"Re-generate" from the nested action buttons and
+              // make getByRole('button', { name: /Generate/i }) ambiguous.
+              rowAttrs={(row) => ({ 'aria-label': `Draw ${row.ev.id}` })}
               renderRow={(row) => (
                 <>
                   <span
@@ -362,6 +372,19 @@ export function BracketDrawsTab() {
             />
           )}
         </div>
+
+        {selectedRow ? (
+          <DrawDetailPanel
+            key={selectedRow.ev.id}
+            ev={selectedRow.ev}
+            players={players}
+            onClose={() => setSelectedId(null)}
+            onCommitPicks={async (picks) => {
+              await commitPicks(selectedRow.ev, picks);
+              setSelectedId(null);
+            }}
+          />
+        ) : null}
       </div>
 
       {creating && (

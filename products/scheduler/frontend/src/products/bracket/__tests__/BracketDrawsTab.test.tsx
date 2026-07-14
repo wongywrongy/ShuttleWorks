@@ -242,25 +242,26 @@ describe('BracketDrawsTab — status + generate', () => {
   });
 });
 
-describe.skip('BracketDrawsTab — participant picker', () => {
-  it('opens and closes the picker', () => {
+describe('BracketDrawsTab — draw detail panel', () => {
+  it('opens the panel on row click and closes on Escape', () => {
     renderDraws();
-    fireEvent.click(screen.getByRole('button', { name: /entered/i }));
-    expect(screen.getByText(/Pick participants/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
-    expect(screen.queryByText(/Pick participants/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('bracket-draw-row-MS'));
+    expect(screen.getByTestId('draw-detail-panel')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('draw-detail-panel')).not.toBeInTheDocument();
   });
 
-  it('commits singles picks via eventUpsert', async () => {
+  it('commits singles picks from the panel via eventUpsert', async () => {
     mockBracketData = makeBracketData({ status: 'draft' });
     const next = { ...mockBracketData };
     mockEventUpsert.mockResolvedValue(next);
     renderDraws();
-    fireEvent.click(screen.getByRole('button', { name: /entered/i }));
-    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(screen.getByTestId('bracket-draw-row-MS'));
+    const panel = screen.getByTestId('draw-detail-panel');
+    const checkboxes = within(panel).getAllByRole('checkbox');
     fireEvent.click(checkboxes[0]);
     fireEvent.click(checkboxes[1]);
-    fireEvent.click(screen.getByRole('button', { name: /^Commit$/i }));
+    fireEvent.click(within(panel).getByRole('button', { name: /^Commit$/i }));
     await vi.waitFor(() =>
       expect(mockEventUpsert).toHaveBeenCalledWith(
         'MS',
@@ -275,6 +276,14 @@ describe.skip('BracketDrawsTab — participant picker', () => {
       ),
     );
     expect(mockSetData).toHaveBeenCalledWith(next);
+  });
+
+  it('row action buttons do not open the panel', () => {
+    mockBracketData = makeBracketData({ status: 'generated' });
+    renderDraws();
+    fireEvent.click(screen.getByTestId('bracket-open-draw-MS'));
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('draw-detail-panel')).not.toBeInTheDocument();
   });
 });
 
