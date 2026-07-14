@@ -52,6 +52,11 @@ function renderPage() {
 
 beforeEach(() => {
   seed();
+  // Lock-guard tests below flip global store state (isScheduleLocked,
+  // useUiStore's unlockModalState) — reset both so ordering can't leak
+  // an open modal / stuck lock into an unrelated test.
+  useTournamentStore.setState({ isScheduleLocked: false, schedule: null });
+  useUiStore.getState().setUnlockModalState(null);
 });
 
 describe('Meet Configuration — two tabs', () => {
