@@ -123,6 +123,28 @@ const INITIAL = {
   planFinalized: undefined as boolean | undefined,
 };
 
+/** Config keys that never feed the solver — changing them must not mark
+ *  the schedule stale or trip the lock. MUST stay in lockstep with
+ *  products/scheduler/shared/non-scheduling-keys.json (the backend
+ *  classifier's source) — pinned by nonSchedulingKeys.parity.test.ts. */
+export const NON_SCHEDULING_KEYS: ReadonlyArray<keyof TournamentConfig> = [
+  'scoringFormat',
+  'setsToWin',
+  'pointsPerSet',
+  'deuceEnabled',
+  'standingsMode',
+  'tvDisplayMode',
+  'tvAccent',
+  'tvPreset',
+  'tvGridColumns',
+  'tvCardSize',
+  'tvShowScores',
+  'courtOrder',
+  'hiddenCourts',
+  'tournamentName',
+  'clockShiftMinutes',
+];
+
 export const useTournamentStore = create<TournamentState>((set, get) => ({
   ...INITIAL,
 
@@ -139,21 +161,6 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       // field — board arrangement is presentation-only (an absolute
       // rule: hiding a court must never touch scheduling), so toggling
       // them must not trip a false "schedule is out of date" banner.
-      const NON_SCHEDULING_KEYS: Array<keyof TournamentConfig> = [
-        'scoringFormat',
-        'setsToWin',
-        'pointsPerSet',
-        'deuceEnabled',
-        'standingsMode',
-        'tvDisplayMode',
-        'tvAccent',
-        'tvPreset',
-        'tvGridColumns',
-        'tvCardSize',
-        'tvShowScores',
-        'courtOrder',
-        'hiddenCourts',
-      ];
       const changedKeys = (Object.keys(config) as Array<keyof TournamentConfig>).filter(
         (k) => JSON.stringify(config[k]) !== JSON.stringify(prev[k]),
       );

@@ -16,6 +16,7 @@
 import { useCallback } from 'react';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useUiStore } from '../store/uiStore';
+import { requestClearScheduleOnNextSave } from './useTournamentState';
 
 export function useLockGuard() {
   const isScheduleLocked = useTournamentStore((state) => state.isScheduleLocked);
@@ -27,8 +28,13 @@ export function useLockGuard() {
    *
    * If the schedule is unlocked already, resolves immediately with
    * `true`. Otherwise opens the global UnlockModal and resolves with
-   * the operator's choice. On `true`, the schedule is also cleared
-   * (matching the legacy behaviour) before resolving.
+   * the operator's choice. On `true`, the schedule is cleared locally
+   * (matching the legacy behaviour) AND the next save is armed with
+   * `?clearSchedule=true` so the server also clears the committed
+   * schedule(s) — including the bracket's, which lives in a
+   * server-managed blob this client cannot null out itself. The
+   * server-side 409 (CONFIG_LOCKED / DRAW_STARTED) remains the
+   * enforcement backstop for stale tabs or raw API clients.
    */
   const confirmUnlock = useCallback(
     (actionDescription?: string): Promise<boolean> => {
@@ -39,6 +45,7 @@ export function useLockGuard() {
           actionDescription,
           resolve: (confirmed: boolean) => {
             if (confirmed) {
+              requestClearScheduleOnNextSave();
               unlockSchedule();
             }
             setUnlockModalState(null);

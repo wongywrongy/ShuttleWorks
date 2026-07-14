@@ -747,14 +747,18 @@ class ApiClient {
     return response.data;
   }
 
-  /** Overwrite a tournament's state blob. Returns the stamped state. */
+  /** Overwrite a tournament's state blob. Returns the stamped state.
+   *  `clearSchedule` sanctions a scheduling-field edit by clearing the
+   *  committed schedule(s) server-side, atomically with the write. */
   async putTournamentState(
     tid: string,
     state: TournamentStateDTO,
+    opts?: { clearSchedule?: boolean },
   ): Promise<TournamentStateDTO> {
     const response = await this.client.put<TournamentStateDTO>(
       `/tournaments/${tid}/state`,
       state,
+      opts?.clearSchedule ? { params: { clearSchedule: true } } : undefined,
     );
     return response.data;
   }

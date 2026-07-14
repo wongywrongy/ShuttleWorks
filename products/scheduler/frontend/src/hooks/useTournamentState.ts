@@ -35,6 +35,15 @@ let flushPromise: Promise<void> | null = null;
 // the START of every flush (not the end) so a concurrent change after
 // the snapshot is taken but before the PUT resolves is still captured.
 let pendingFollowup = false;
+// Armed by useLockGuard's confirm: the next PUT carries ?clearSchedule=true
+// so the SERVER clears the committed schedule(s) — including the bracket's,
+// which lives in a server-managed blob the client cannot null out itself.
+let clearScheduleNext = false;
+
+/** One-shot: the next flushed PUT sanctions a scheduling-field edit. */
+export function requestClearScheduleOnNextSave(): void {
+  clearScheduleNext = true;
+}
 
 /** Cancel any pending debounced save and flush immediately.
  *
@@ -69,11 +78,17 @@ export async function forceSaveNow(): Promise<void> {
   // Reset the followup flag BEFORE taking the snapshot so any concurrent
   // mutation that arrives after the snapshot triggers another save.
   pendingFollowup = false;
+  const clearSchedule = clearScheduleNext;
+  clearScheduleNext = false;
   flushPromise = (async () => {
     const ui = useUiStore.getState();
     ui.setPersistStatus('saving');
     try {
-      await apiClient.putTournamentState(tid, snapshot(useTournamentStore.getState()));
+      await apiClient.putTournamentState(
+        tid,
+        snapshot(useTournamentStore.getState()),
+        clearSchedule ? { clearSchedule: true } : undefined,
+      );
       useUiStore.getState().setLastSavedAt(new Date().toISOString());
       useUiStore.getState().setLastSaveError(null);
       useUiStore.getState().setPersistStatus('idle');
@@ -140,6 +155,7 @@ export function _resetSaveStateForTests(): void {
   }
   flushPromise = null;
   pendingFollowup = false;
+  clearScheduleNext = false;
 }
 
 function snapshot(
