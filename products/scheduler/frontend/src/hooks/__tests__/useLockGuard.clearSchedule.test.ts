@@ -52,9 +52,10 @@ describe('lock guard → clearSchedule PUT', () => {
       { clearSchedule: true },
     );
 
-    // One-shot: the following save is a plain PUT.
+    // One-shot: the following save is a plain PUT — no opts argument at all,
+    // so the sanctioned clear cannot leak into an ordinary save.
     await forceSaveNow();
-    expect(put).toHaveBeenLastCalledWith('tid-1', expect.anything(), undefined);
+    expect(put).toHaveBeenLastCalledWith('tid-1', expect.anything());
   });
 
   it('declining the confirm sends nothing — the schedule survives', async () => {
@@ -78,9 +79,10 @@ describe('lock guard → clearSchedule PUT', () => {
     expect(useTournamentStore.getState().schedule).toEqual({ assignments: [] });
 
     // Even if something else triggers a save afterwards, it must NOT
-    // carry the clearSchedule opt-in — declining never arms it.
+    // carry the clearSchedule opt-in — declining never arms it. A plain
+    // two-argument call is exactly "no opt-in".
     await forceSaveNow();
-    expect(put).toHaveBeenCalledWith('tid-1', expect.anything(), undefined);
+    expect(put).toHaveBeenCalledWith('tid-1', expect.anything());
   });
 
   it('a DRAW_STARTED 409 is not met with an automatic clearSchedule retry', async () => {

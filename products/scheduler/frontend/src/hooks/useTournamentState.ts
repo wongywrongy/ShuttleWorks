@@ -84,11 +84,14 @@ export async function forceSaveNow(): Promise<void> {
     const ui = useUiStore.getState();
     ui.setPersistStatus('saving');
     try {
-      await apiClient.putTournamentState(
-        tid,
-        snapshot(useTournamentStore.getState()),
-        clearSchedule ? { clearSchedule: true } : undefined,
-      );
+      // Only the sanctioned path passes options — an ordinary save keeps the
+      // plain two-argument call it has always made.
+      const payload = snapshot(useTournamentStore.getState());
+      if (clearSchedule) {
+        await apiClient.putTournamentState(tid, payload, { clearSchedule: true });
+      } else {
+        await apiClient.putTournamentState(tid, payload);
+      }
       useUiStore.getState().setLastSavedAt(new Date().toISOString());
       useUiStore.getState().setLastSaveError(null);
       useUiStore.getState().setPersistStatus('idle');
