@@ -294,3 +294,14 @@ and the store seams, which is exactly why an ungated bracket write path survived
 a green 1,100-test suite. The real check is the viewer flow in
 `e2e/tests/interaction-smoke.spec.ts` (now running in CI): it asserts zero
 `POST/PUT/PATCH/DELETE` leave the browser as a viewer.
+
+- **2026-07-14 · bracket/contingency** — `record_result` commands now carry
+  `reason: walkover|retired|forfeit`, and `reason` is persisted end-to-end
+  locally (scheduler_core `Result` → DB column → DTO). What's deferred is only
+  the distinct LOSER-ROUTING SEMANTICS a `retired`/`forfeit` reason implies
+  (e.g. an injured player withdrawing from their OTHER draws, forfeit-specific
+  BYE policy in consolation feeds) — today all three reasons ride the plain
+  result path with no reason-specific routing. Contract + UI shipped (spec
+  2026-07-14 §1); routing semantics deferred. Entry points:
+  `app/schemas.py BracketCommandRequest.reason`,
+  `BracketMatchDetailPanel.ContingencySection`.

@@ -9,11 +9,12 @@
  * assigned before filtering), friendly play-unit codes ("MS SF1"),
  * status-column tones, and Meet-style muted-italic TBD placeholders.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { BracketMatchesTab } from '../BracketMatchesTab';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
+import { useUiStore } from '../../../store/uiStore';
 
 // A.8 pattern — module-level mock so useBracketApi doesn't throw
 // "must be used inside a <BracketApiProvider>" when rendered bare.
@@ -259,5 +260,44 @@ describe('<BracketMatchesTab /> — match detail panel', () => {
     expect(
       screen.queryByTestId('bracket-match-detail'),
     ).not.toBeInTheDocument();
+  });
+});
+
+/* A2-followup gap: the panel-level Contingency section is already gated
+ * (bracketContingency.test.tsx / BracketMatchDetailPanel.test.tsx), but
+ * nothing pinned the ROW-level "…" menu itself. Same fixture as above. */
+describe('<BracketMatchesTab /> — row-level contingency menu gating', () => {
+  beforeEach(() => {
+    // Same "state the role the fixture always implied" rationale as
+    // MatchesSpreadsheet.test.tsx — these rows are read by an operator.
+    useUiStore.setState({ activeTournamentRole: 'owner' });
+  });
+
+  it('does not render the contingency menu on a done row, even for an operator', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    // pu-ms-1 has a recorded result → status 'done'.
+    const row = screen.getByTestId('bracket-match-row-pu-ms-1');
+    expect(
+      within(row).queryByLabelText('Contingency for MS SF1'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not render the contingency menu for a viewer, on a non-done row', () => {
+    useUiStore.setState({ activeTournamentRole: 'viewer' });
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    // pu-ms-2 is assigned but not started → status 'ready' (not done), so an
+    // operator would see the menu here — a viewer must not.
+    const row = screen.getByTestId('bracket-match-row-pu-ms-2');
+    expect(
+      within(row).queryByLabelText('Contingency for MS SF2'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('sanity check: an operator DOES see the menu on a non-done row (control)', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    const row = screen.getByTestId('bracket-match-row-pu-ms-2');
+    expect(
+      within(row).getByLabelText('Contingency for MS SF2'),
+    ).toBeInTheDocument();
   });
 });
