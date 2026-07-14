@@ -112,10 +112,16 @@ describe('Bracket Configuration — two tabs', () => {
     expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
   });
 
-  it('toggling score type to Sets writes scoringFormat=badminton to the store', async () => {
+  it('toggling score type to Sets and saving writes scoringFormat=badminton to the store', async () => {
+    // The Engine tab now uses the shared EngineConfigForm's save-on-submit
+    // model (Task 8) — the shared form matches Meet, not the old bracket
+    // immediate-write pattern. No committed schedule is present, so the
+    // save guard resolves without a confirm.
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderBracketTab();
     fireEvent.click(screen.getByRole('radio', { name: 'Sets' }));
+    expect(setConfig).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Save engine settings/i }));
     await waitFor(() => expect(setConfig).toHaveBeenCalled());
     const last = setConfig.mock.calls[setConfig.mock.calls.length - 1][0];
     expect(last.scoringFormat).toBe('badminton');

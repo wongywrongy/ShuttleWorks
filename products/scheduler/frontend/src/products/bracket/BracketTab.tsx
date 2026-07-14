@@ -12,7 +12,7 @@
  * ``TabBar`` (``activeTab`` is a ``bracket-*`` id), with a
  * ``BracketViewHeader`` strip above the active view.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Sliders, ListChecks } from '@phosphor-icons/react';
 
@@ -24,11 +24,12 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
 import { reconcileBracketRoster } from './bracketMigration';
 import { type SettingsSectionDef } from '../../platform/settings/SettingsShell';
-import { ConfigSurface } from '../../platform/settings/ConfigSurface';
+import { ConfigSurface, LockedFieldset } from '../../platform/settings/ConfigSurface';
+import { EngineConfigForm } from '../../platform/settings/EngineConfigForm';
 import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
+import { requestClearScheduleOnNextSave } from '../../hooks/useTournamentState';
 import { useBracketScheduleLock } from './useBracketScheduleLock';
-import { BracketEngineSection } from './BracketEngineSection';
 import { BracketStructureSection } from './BracketStructureSection';
 import { BracketRosterTab } from './BracketRosterTab';
 import { BracketDrawsTab } from './BracketDrawsTab';
@@ -170,9 +171,31 @@ function BracketTabBody() {
     'engine',
     { debounceMs: 0 },
   );
-  // Per-engine lock signal — independent of the meet schedule. Derived
-  // from the bracket DTO (any event in play locks Configuration).
-  const { isLocked: bracketScheduleLocked } = useBracketScheduleLock(data);
+  // Per-engine lock signals — independent of the meet schedule. Derived
+  // from the bracket DTO. `bracketScheduleLocked` (hard lock) is a draw in
+  // play — never clearable, so the fieldset just disables. `bracketHasSchedule`
+  // (soft lock) is a committed bracket schedule — saving routes through the
+  // confirm-unlock modal, mirroring the meet's `useLockGuard`.
+  const { isLocked: bracketScheduleLocked, hasSchedule: bracketHasSchedule } =
+    useBracketScheduleLock(data);
+  const setUnlockModalState = useUiStore((s) => s.setUnlockModalState);
+  // Soft lock: confirm → the next PUT carries ?clearSchedule=true and the
+  // backend clears the bracket schedule atomically with the config write.
+  // Hard lock (draw started) never reaches here — the fieldset is disabled.
+  const guardBracketSave = useCallback((): Promise<boolean> => {
+    if (!bracketHasSchedule) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      setUnlockModalState({
+        open: true,
+        actionDescription: 'save engine settings (clears the bracket schedule)',
+        resolve: (confirmed: boolean) => {
+          if (confirmed) requestClearScheduleOnNextSave();
+          setUnlockModalState(null);
+          resolve(confirmed);
+        },
+      });
+    });
+  }, [bracketHasSchedule, setUnlockModalState]);
 
   const bracketSetupSections = useMemo<SettingsSectionDef[]>(
     () => [
@@ -180,7 +203,11 @@ function BracketTabBody() {
         id: 'engine',
         label: 'Engine',
         icon: Sliders,
-        render: () => <BracketEngineSection locked={bracketScheduleLocked} />,
+        render: () => (
+          <LockedFieldset locked={bracketScheduleLocked}>
+            <EngineConfigForm module="bracket" guardSave={guardBracketSave} />
+          </LockedFieldset>
+        ),
       },
       {
         // Label is 'Events' (shared grammar with Meet Configuration); the
@@ -194,7 +221,7 @@ function BracketTabBody() {
       // switcher — they live in workspace settings (Sync and backups /
       // Sharing) now, the same as Meet.
     ],
-    [bracketScheduleLocked],
+    [bracketScheduleLocked, guardBracketSave],
   );
 
   // Setup, Roster, and Events do NOT depend on bracket-events data.
@@ -268,10 +295,10 @@ function BracketTabBody() {
             section={setupSection}
             onSectionChange={(v) => setSetupSection(v)}
             ribbons={
-              bracketScheduleLocked ? (
+              bracketScheduleLocked || bracketHasSchedule ? (
                 <ScheduleLockIndicator
-                  locked={bracketScheduleLocked}
-                  showUnlockHint={false}
+                  locked
+                  showUnlockHint={!bracketScheduleLocked && bracketHasSchedule}
                 />
               ) : null
             }
