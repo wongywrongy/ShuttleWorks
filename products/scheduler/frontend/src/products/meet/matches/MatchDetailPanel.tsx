@@ -12,7 +12,12 @@
  */
 import { useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
-import { DetailPanel } from '../../../components/control-plane';
+import {
+  DetailPanel,
+  STATUS_CLASS,
+  STATUS_LABEL,
+  type MatchListStatus,
+} from '../../../components/control-plane';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import {
@@ -26,9 +31,11 @@ const FIELD_LABEL_CLASSES =
 
 export function MatchDetailPanel({
   match,
+  status,
   onClose,
 }: {
   match: MatchDTO;
+  status?: MatchListStatus;
   onClose: () => void;
 }) {
   const players = useTournamentStore((s) => s.players);
@@ -59,6 +66,18 @@ export function MatchDetailPanel({
           players={players}
           groups={groups}
         />
+        {status ? (
+          <div className="flex flex-col gap-1">
+            <span className={FIELD_LABEL_CLASSES}>Status</span>
+            {/* Read-only pill — Operations owns run-state; never interactive. */}
+            <span
+              data-testid="match-status-pill"
+              className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+            >
+              {STATUS_LABEL[status]}
+            </span>
+          </div>
+        ) : null}
       </div>
     </DetailPanel>
   );

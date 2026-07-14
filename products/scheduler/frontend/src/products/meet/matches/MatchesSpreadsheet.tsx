@@ -18,18 +18,24 @@ import { Select } from '@scheduler/design-system/components';
 import {
   BandedTable,
   ColumnHeaderRow,
-  type BandedListColumn,
+  MATCH_LIST_COLUMNS,
+  STATUS_CLASS,
+  STATUS_LABEL,
   type BandedTableGroup,
+  type MatchListStatus,
 } from '../../../components/control-plane';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { useMatchStateStore } from '../../../store/matchStateStore';
 import { usePlayerMap } from '../../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../../hooks/useSearchParamState';
 import { useDisruptions } from './useDisruptions';
 import { EVENT_LABEL, EVENT_ORDER, isDoublesRank } from '../roster/positionGrid/helpers';
 import { MatchDetailPanel } from './MatchDetailPanel';
+import { meetMatchStatus } from './meetMatchStatus';
 import { maxSeverity, type MatchIssue } from './validateMatch';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
+import { getActiveAssignments } from '../../../lib/getActiveAssignments';
 
 /** Side capacity derived from the event rank. Singles = 1, doubles =
  *  2, unknown rank = 2 (let the operator fill it; validation will flag
@@ -42,18 +48,6 @@ function capacityForRank(rank: string | null | undefined): number {
 /** Stable empty-array reference so MatchRow's useMemo deps don't churn
  *  when a match has no disruptions. */
 const EMPTY_ISSUES: MatchIssue[] = [];
-
-/** Column set for the match list — `padding: 6px 20px` rhythm shared
- *  with the match rows below. Leading/trailing spacers align with the
- *  warning-icon and delete-button cells. */
-const MATCH_COLUMNS: BandedListColumn[] = [
-  { label: '', className: 'w-4' },
-  { label: '#', className: 'w-8' },
-  { label: 'Event', className: 'w-20' },
-  { label: 'Side A', className: 'min-w-0 flex-[3]' },
-  { label: 'Side B', className: 'min-w-0 flex-[3]' },
-  { label: '', className: 'w-8' },
-];
 
 function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
   const school = groups.find((g) => g.id === p.groupId)?.name ?? '?';
@@ -77,6 +71,12 @@ export function MatchesSpreadsheet({
   const groups = useTournamentStore((s) => s.groups);
   const updateMatch = useTournamentStore((s) => s.updateMatch);
   const deleteMatch = useTournamentStore((s) => s.deleteMatch);
+  const schedule = useTournamentStore((s) => s.schedule);
+  const matchStates = useMatchStateStore((s) => s.matchStates);
+  const assignedIds = useMemo(
+    () => new Set(getActiveAssignments(schedule).map((a) => a.matchId)),
+    [schedule],
+  );
 
   // Subscribes to the same URL-backed search the page header writes to.
   const [searchQuery] = useSearchParamState('q', '');
@@ -182,6 +182,7 @@ export function MatchesSpreadsheet({
     return {
       key,
       label,
+      code: key === '—' ? undefined : key,
       items: groupsByPrefix.get(key)!,
       testId: `match-group-${label}`,
     };
@@ -203,14 +204,14 @@ export function MatchesSpreadsheet({
       <div className="min-h-0 flex-1 overflow-auto">
         {filteredMatches.length === 0 ? (
           <>
-            <ColumnHeaderRow columns={MATCH_COLUMNS} />
+            <ColumnHeaderRow columns={MATCH_LIST_COLUMNS} />
             <div className="px-5 py-10 text-center text-sm text-muted-foreground">
               No matches match the current search.
             </div>
           </>
         ) : (
           <BandedTable
-            columns={MATCH_COLUMNS}
+            columns={MATCH_LIST_COLUMNS}
             groups={tableGroups}
             rowId={(m) => m.id}
             onRowClick={(m) => setSelectedId(m.id)}
@@ -224,6 +225,7 @@ export function MatchesSpreadsheet({
               <MatchRow
                 match={m}
                 index={matches.indexOf(m)}
+                status={meetMatchStatus(m.id, assignedIds, matchStates)}
                 players={players}
                 groups={groups}
                 configuredRanks={configuredRanks}
@@ -241,6 +243,7 @@ export function MatchesSpreadsheet({
         <MatchDetailPanel
           key={selectedMatch.id}
           match={selectedMatch}
+          status={meetMatchStatus(selectedMatch.id, assignedIds, matchStates)}
           onClose={() => setSelectedId(null)}
         />
       ) : null}
@@ -262,6 +265,7 @@ export function MatchesSpreadsheet({
 const MatchRow = memo(function MatchRow({
   match,
   index,
+  status,
   players,
   groups,
   configuredRanks,
@@ -273,6 +277,7 @@ const MatchRow = memo(function MatchRow({
 }: {
   match: MatchDTO;
   index: number;
+  status: MatchListStatus;
   players: PlayerDTO[];
   groups: RosterGroupDTO[];
   /** Ranks defined in `config.rankCounts` — the select populates from
@@ -405,6 +410,12 @@ const MatchRow = memo(function MatchRow({
         capacity={sideCapacity}
         eligibleForRank={match.eventRank}
       />
+      <span
+        data-testid={`match-status-${match.id}`}
+        className={`w-[5.5rem] text-right text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+      >
+        {STATUS_LABEL[status]}
+      </span>
       {/* Two-click arm: deleting a match used to take one hover-revealed click,
           with no confirm and no undo (audit F1). */}
       <ConfirmDeleteButton
