@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, StatusBar, StatusPill } from '@scheduler/design-system';
+import { Button, StatusBar, StatusPill } from '@scheduler/design-system';
 import { useBracket } from '../../hooks/useBracket';
 import { useBracketApi } from '../../api/bracketClient';
 import { useTournamentId } from '../../hooks/useTournamentId';
@@ -23,9 +23,17 @@ import type {
   BracketEventStatus,
   BracketTournamentDTO,
 } from '../../api/bracketDto';
-import { ActionsBar, EmptyState } from '../../components/control-plane';
+import {
+  ActionsBar,
+  BandedTable,
+  EmptyState,
+  type BandedListColumn,
+  type BandedTableGroup,
+} from '../../components/control-plane';
+import { disciplineOrderIndex } from '../../lib/eventColors';
 import { Modal } from '../../components/common/Modal';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ParticipantPicker itself relocates into Task 3's panel
 import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
 import {
   buildEventUpsertPayload,
@@ -40,14 +48,41 @@ import {
   type FormatDescriptor,
 } from './formatRegistry';
 
+/** One draws-table row — a draw plus everything its cells need, computed
+ *  once so renderRow stays a pure projection. */
+interface DrawRow {
+  ev: BracketEventDTO;
+  status: BracketEventStatus;
+  partCount: number;
+  targetSize: number;
+  counts?: DrawCounts;
+  generated: boolean;
+  isSwiss: boolean;
+  swissRounds?: number;
+  roundComplete: boolean;
+  completed: boolean;
+}
+
+/** Column set for the draws table. The trailing unlabeled column hosts the
+ *  per-row action buttons (Generate / Configure / Next round / Open). */
+const DRAW_COLUMNS: BandedListColumn[] = [
+  { label: 'Code', className: 'w-16' },
+  { label: 'Format', className: 'w-44 min-w-0' },
+  { label: 'Size', className: 'w-12 text-right' },
+  { label: 'Entered', className: 'w-16 text-right' },
+  { label: 'Progress', className: 'min-w-0 flex-1' },
+  { label: 'Status', className: 'w-28 text-right' },
+  { label: '', className: 'w-80' },
+];
+
 export function BracketDrawsTab() {
   const { data, setData, refresh } = useBracket();
   const api = useBracketApi();
   const tid = useTournamentId();
   const navigate = useNavigate();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Task 3's panel wires this to the picker
   const players = useTournamentStore((s) => s.bracketPlayers);
 
-  const [openPickerFor, setOpenPickerFor] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [configFor, setConfigFor] = useState<string | null>(null);
 
@@ -75,6 +110,61 @@ export function BracketDrawsTab() {
     [data],
   );
 
+  // Row models — one pass over events so every cell (and later the panel)
+  // reads precomputed facts instead of re-deriving them in renderRow.
+  const drawRows = useMemo<DrawRow[]>(
+    () =>
+      events.map((ev) => {
+        const status: BracketEventStatus = ev.status ?? 'draft';
+        const partCount = ev.participant_count ?? 0;
+        const targetSize = ev.bracket_size ?? partCount;
+        const counts = countsByEvent.get(ev.id);
+        const isSwiss = ev.format === 'swiss';
+        const rawSwissRounds = isSwiss ? ev.config?.swiss_rounds : undefined;
+        const swissRounds =
+          typeof rawSwissRounds === 'number' ? rawSwissRounds : undefined;
+        const roundComplete =
+          !!counts && counts.live === 0 && counts.ready === 0 && counts.pending === 0;
+        return {
+          ev,
+          status,
+          partCount,
+          targetSize,
+          counts,
+          generated: status !== 'draft',
+          isSwiss,
+          swissRounds,
+          roundComplete,
+          completed:
+            !!counts &&
+            counts.done > 0 &&
+            roundComplete &&
+            (!isSwiss || (swissRounds !== undefined && ev.rounds.length >= swissRounds)),
+        };
+      }),
+    [events, countsByEvent],
+  );
+
+  // Discipline bands, same ordering convention as Bracket Matches.
+  const tableGroups = useMemo<BandedTableGroup<DrawRow>[]>(() => {
+    const byDiscipline = new Map<string, DrawRow[]>();
+    for (const row of drawRows) {
+      const arr = byDiscipline.get(row.ev.discipline) ?? [];
+      arr.push(row);
+      byDiscipline.set(row.ev.discipline, arr);
+    }
+    return [...byDiscipline.entries()]
+      .sort(([a], [b]) => disciplineOrderIndex(a) - disciplineOrderIndex(b))
+      .map(([discipline, items]) => ({
+        key: discipline,
+        code: discipline,
+        label: disciplineLabel(discipline),
+        items,
+        testId: `bracket-draw-group-${discipline}`,
+      }));
+  }, [drawRows]);
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reused by Task 2's actions cell
   const handleGenerate = useCallback(
     async (eventId: string, wipe: boolean) => {
       try {
@@ -90,6 +180,7 @@ export function BracketDrawsTab() {
 
   // Swiss progressive generation: append the next round's pairings from
   // standings. The backend gates with 409 (incomplete round / exhausted).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reused by Task 2's actions cell
   const handleNextRound = useCallback(
     async (eventId: string) => {
       try {
@@ -106,8 +197,34 @@ export function BracketDrawsTab() {
   // Open a draw's bracket visualization. The event id rides along as a
   // query param so the Draw view lands on the row the operator clicked
   // (not just whichever event happened to be selected).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reused by Task 2's actions cell
   const openDraw = (eventId: string) =>
     navigate(`/tournaments/${tid}/bracket-draw?event=${encodeURIComponent(eventId)}`);
+
+  // Seed-preserving participants commit — relocated from the old in-card
+  // picker; the Draw detail panel (Task 3) drives it.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- consumed by Task 3's panel
+  const commitPicks = useCallback(
+    async (ev: BracketEventDTO, picks: PickedSingle[] | PickedPair[]) => {
+      const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
+      const seedOf = (id: string): number | undefined => {
+        const s = (ev.participants ?? []).find((x) => x.id === id)?.seed;
+        return s == null ? undefined : s;
+      };
+      const participants = isDoubles
+        ? (picks as PickedPair[]).map((p) => {
+            const seed = seedOf(p.id);
+            return { id: p.id, name: p.name, members: p.members, ...(seed != null ? { seed } : {}) };
+          })
+        : (picks as PickedSingle[]).map((p) => {
+            const seed = seedOf(p.id);
+            return { id: p.id, name: p.name, ...(seed != null ? { seed } : {}) };
+          });
+      const next = await api.eventUpsert(ev.id, buildEventUpsertPayload(ev, participants));
+      setData(next);
+    },
+    [api, setData],
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
@@ -129,215 +246,80 @@ export function BracketDrawsTab() {
         </button>
       </ActionsBar>
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        {events.length === 0 ? (
-          <EmptyState
-            title="No draws yet"
-            body="A draw is one event's bracket. Create a draw, enter its participants, then generate — it’ll appear here and feed Matches and Operations."
-            action={
-              <button
-                type="button"
-                onClick={() => setCreating(true)}
-                className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
-              >
-                ＋ New draw
-              </button>
-            }
-          />
-        ) : (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-            {events.map((ev) => {
-              const status: BracketEventStatus = ev.status ?? 'draft';
-              const partCount = ev.participant_count ?? 0;
-              const targetSize = ev.bracket_size ?? partCount;
-              const pickerOpen = openPickerFor === ev.id;
-              const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
-              const generated = status !== 'draft';
-              const counts = countsByEvent.get(ev.id);
-              const isSwiss = ev.format === 'swiss';
-              const rawSwissRounds = isSwiss ? ev.config?.swiss_rounds : undefined;
-              const swissRounds =
-                typeof rawSwissRounds === 'number' ? rawSwissRounds : undefined;
-              // "Next round" only once every existing play unit has a result.
-              const roundComplete =
-                !!counts && counts.live === 0 && counts.ready === 0 && counts.pending === 0;
-              return (
-                <Card
-                  key={ev.id}
-                  variant="frame"
-                  data-testid={`bracket-draw-card-${ev.id}`}
-                  // Whole-card click is a pointer convenience; the footer's
-                  // "Open draw →" button is the accessible control (giving
-                  // the card role="button" would swallow the inner buttons'
-                  // accessible names into one giant card label).
-                  title={generated ? `Open the ${ev.id} draw` : undefined}
-                  onClick={generated ? () => openDraw(ev.id) : undefined}
-                  className={`flex flex-col gap-2 rounded-lg p-4 transition-[border-color,box-shadow] duration-fast ease-brand hover:border-accent/40 hover:shadow-glow${generated ? ' cursor-pointer' : ''}`}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-auto">
+          {events.length === 0 ? (
+            <EmptyState
+              title="No draws yet"
+              body="A draw is one event's bracket. Create a draw, enter its participants, then generate — it’ll appear here and feed Matches and Operations."
+              action={
+                <button
+                  type="button"
+                  onClick={() => setCreating(true)}
+                  className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-accent sw-num">{ev.id}</span>
-                    <span className="truncate text-sm font-semibold">
-                      {disciplineLabel(ev.discipline)}
-                    </span>
-                    <span className="ml-auto flex-shrink-0">
-                      <StatusPillFor
-                        status={status}
-                        completed={
-                          !!counts &&
-                          counts.done > 0 &&
-                          roundComplete &&
-                          // Swiss: complete only once all K rounds exist —
-                          // an inter-round lull is not "Completed".
-                          (!isSwiss ||
-                            (swissRounds !== undefined && ev.rounds.length >= swissRounds))
-                        }
-                      />
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    <span>{formatLabel(ev.format)}</span>
-                    {' · '}
-                    <span className="sw-num">{targetSize}</span>
-                    {' players · '}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenPickerFor(pickerOpen ? null : ev.id);
-                      }}
-                      className="sw-num hover:text-foreground hover:underline"
-                    >
-                      {partCount} entered
-                    </button>
-                  </div>
-
-                  {/* Swiss progressive meta — "Round k of K" once generated. */}
-                  {isSwiss && swissRounds !== undefined && generated && (
-                    <div className="text-xs text-muted-foreground">
-                      Round <span className="sw-num">{ev.rounds.length}</span> of{' '}
-                      <span className="sw-num">{swissRounds}</span>
-                    </div>
-                  )}
-
-                  {/* Same voice as the Draw header's DONE/LIVE/READY/PEND strip. */}
-                  {counts && (
-                    <StatusBar
-                      items={[
-                        { tone: 'done', label: 'DONE', count: counts.done },
-                        { tone: 'green', label: 'LIVE', count: counts.live },
-                        { tone: 'amber', label: 'READY', count: counts.ready },
-                        { tone: 'idle', label: 'PEND', count: counts.pending },
-                      ]}
-                    />
-                  )}
-
-                  {pickerOpen && (
-                    <div
-                      className="rounded-sm bg-bg-elev p-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <ParticipantPicker
-                        mode={isDoubles ? 'doubles' : 'singles'}
-                        eventId={ev.id}
-                        players={players}
-                        initialIds={[]}
-                        onCommit={async (picks) => {
-                          // Preserve any seed already assigned to a
-                          // carried-over participant (e.g. CSV/JSON import) —
-                          // the picker replaces the set but must not reset
-                          // seeds on participants that survive the commit.
-                          const seedOf = (id: string): number | undefined => {
-                            const s = (ev.participants ?? []).find((x) => x.id === id)?.seed;
-                            return s == null ? undefined : s;
-                          };
-                          const participants = isDoubles
-                            ? (picks as PickedPair[]).map((p) => {
-                                const seed = seedOf(p.id);
-                                return { id: p.id, name: p.name, members: p.members, ...(seed != null ? { seed } : {}) };
-                              })
-                            : (picks as PickedSingle[]).map((p) => {
-                                const seed = seedOf(p.id);
-                                return { id: p.id, name: p.name, ...(seed != null ? { seed } : {}) };
-                              });
-                          try {
-                            // Echo the draw's current config knobs so a
-                            // participants commit never resets what the
-                            // operator configured (upsert replaces fields).
-                            const next = await api.eventUpsert(
-                              ev.id,
-                              buildEventUpsertPayload(ev, participants),
-                            );
-                            setData(next);
-                          } finally {
-                            setOpenPickerFor(null);
-                          }
-                        }}
-                        onCancel={() => setOpenPickerFor(null)}
-                      />
-                    </div>
-                  )}
-
-                  <div
-                    className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2.5"
-                    onClick={(e) => e.stopPropagation()}
+                  ＋ New draw
+                </button>
+              }
+            />
+          ) : (
+            <BandedTable
+              columns={DRAW_COLUMNS}
+              groups={tableGroups}
+              rowId={(row) => row.ev.id}
+              rowTestId={(row) => `bracket-draw-row-${row.ev.id}`}
+              renderRow={(row) => (
+                <>
+                  <span
+                    className="w-16 truncate text-sm font-semibold text-accent sw-num"
+                    title={row.ev.id}
                   >
-                    <ActionCell
-                      status={status}
-                      eventReady={partCount > 0 && partCount === targetSize}
-                      onGenerate={() => handleGenerate(ev.id, false)}
-                      onRegenerate={() => handleGenerate(ev.id, true)}
-                    />
-                    <div className="flex items-center gap-3">
-                      {status === 'draft' && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConfigFor(ev.id);
-                          }}
-                          data-testid={`bracket-configure-${ev.id}`}
-                          className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-                        >
-                          Configure
-                        </button>
-                      )}
-                      {isSwiss && generated && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNextRound(ev.id);
-                          }}
-                          disabled={!roundComplete}
-                          data-testid={`bracket-next-round-${ev.id}`}
-                          title={
-                            roundComplete
-                              ? 'Pair the next Swiss round from standings'
-                              : 'Record every result in the current round first'
-                          }
-                          className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          Next round
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => openDraw(ev.id)}
-                        disabled={!generated}
-                        data-testid={`bracket-open-draw-${ev.id}`}
-                        title={generated ? `Open the ${ev.id} draw` : 'Generate the draw first'}
-                        className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Open draw →
-                      </button>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                    {row.ev.id}
+                  </span>
+                  <span className="w-44 min-w-0 truncate text-xs text-muted-foreground">
+                    {formatLabel(row.ev.format)}
+                    {row.isSwiss && row.swissRounds !== undefined && row.generated ? (
+                      <span className="ml-1.5 sw-num">
+                        Round {row.ev.rounds.length} of {row.swissRounds}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="w-12 text-right text-xs text-muted-foreground sw-num">
+                    {row.targetSize}
+                  </span>
+                  <span
+                    className={`w-16 text-right text-xs sw-num ${
+                      row.partCount < row.targetSize
+                        ? 'text-status-warning'
+                        : 'text-muted-foreground'
+                    }`}
+                  >
+                    {row.partCount}/{row.targetSize}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    {row.counts ? (
+                      <StatusBar
+                        items={[
+                          { tone: 'done', label: 'DONE', count: row.counts.done },
+                          { tone: 'green', label: 'LIVE', count: row.counts.live },
+                          { tone: 'amber', label: 'READY', count: row.counts.ready },
+                          { tone: 'idle', label: 'PEND', count: row.counts.pending },
+                        ]}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </span>
+                  <span className="flex w-28 justify-end">
+                    <StatusPillFor status={row.status} completed={row.completed} />
+                  </span>
+                  {/* Actions cell — populated in the next change (Task 2). */}
+                  <span className="flex w-80 items-center justify-end gap-3" />
+                </>
+              )}
+            />
+          )}
+        </div>
       </div>
 
       {creating && (
@@ -446,6 +428,7 @@ function StatusPillFor({
   return <StatusPill tone="green" dot pulse>Started</StatusPill>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- reused by Task 2's actions cell
 function ActionCell({
   status,
   eventReady,
