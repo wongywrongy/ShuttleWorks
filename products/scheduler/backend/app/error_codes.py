@@ -11,7 +11,7 @@ means adding it here first so the frontend can predict the set.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
@@ -42,6 +42,7 @@ class ErrorCode(str, Enum):
     # a frontend-only lock is a suggestion, not a lock)
     CONFIG_LOCKED = "CONFIG_LOCKED"
     ROSTER_LOCKED = "ROSTER_LOCKED"
+    DRAW_STARTED = "DRAW_STARTED"
 
     # Generic input validation (deeper than schema — raised when a
     # converter sees a malformed value that slipped past Pydantic).
@@ -74,19 +75,32 @@ class ErrorCode(str, Enum):
     INTERNAL = "INTERNAL"
 
 
-def http_error(status: int, code: ErrorCode, message: str) -> HTTPException:
+def http_error(
+    status: int,
+    code: ErrorCode,
+    message: str,
+    extra: Optional[Dict[str, Any]] = None,
+) -> HTTPException:
     """Build an ``HTTPException`` whose detail is a structured payload.
 
     The frontend axios interceptor reads ``detail.code`` for the toast
     title and ``detail.message`` for the body. Older callers that
     raise ``HTTPException(detail="…")`` still work — the interceptor
-    falls back to treating ``detail`` as the message.
+    falls back to treating ``detail`` as the message. ``extra`` keys are
+    merged into the payload for machine-readable context (e.g.
+    CONFIG_LOCKED's offending ``fields`` and the ``schedules`` a clear
+    would remove).
     """
     return HTTPException(
         status_code=status,
-        detail=_payload(code, message),
+        detail=_payload(code, message, extra),
     )
 
 
-def _payload(code: ErrorCode, message: str) -> Dict[str, Any]:
-    return {"code": code.value, "message": message}
+def _payload(
+    code: ErrorCode, message: str, extra: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    out: Dict[str, Any] = {"code": code.value, "message": message}
+    if extra:
+        out.update(extra)
+    return out
