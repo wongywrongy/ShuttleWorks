@@ -988,6 +988,7 @@ class _LocalBracketRepo:
         score: Optional[dict] = None,
         finished_at_slot: Optional[int] = None,
         walkover: bool = False,
+        reason: Optional[str] = None,
     ) -> BracketResult:
         """Insert (or replace) the result row for a bracket match.
 
@@ -1006,6 +1007,7 @@ class _LocalBracketRepo:
                 score=score,
                 finished_at_slot=finished_at_slot,
                 walkover=walkover,
+                reason=reason,
             )
             self.session.add(row)
         else:
@@ -1013,6 +1015,7 @@ class _LocalBracketRepo:
             existing.score = score
             existing.finished_at_slot = finished_at_slot
             existing.walkover = walkover
+            existing.reason = reason
             row = existing
         self.session.flush()
         SyncService.enqueue_bracket_result(self.session, row)

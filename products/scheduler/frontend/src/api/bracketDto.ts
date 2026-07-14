@@ -108,6 +108,9 @@ export interface ResultDTO {
   finished_at_slot: number | null;
   /** Present only when the bracket Engine runs in Sets mode. */
   score?: BracketScore | null;
+  /** Contingency annotation only — does not affect advancement/BYE
+   *  routing, which stays keyed off `walkover`. */
+  reason?: 'walkover' | 'retired' | 'forfeit' | null;
 }
 
 /** One named draw segment of a multi-segment format (DE 'W'/'L'/'GF',

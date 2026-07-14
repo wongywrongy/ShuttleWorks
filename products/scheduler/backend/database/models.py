@@ -582,6 +582,12 @@ class BracketResult(Base):
     score: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     finished_at_slot: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     walkover: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Contingency annotation only (spec 2026-07-14 §1): why the result was
+    # awarded without (full) play — 'walkover' | 'retired' | 'forfeit' | None.
+    # Does NOT drive advancement/BYE-sweep routing; that stays keyed off
+    # ``walkover`` alone. Distinct routing for retired/forfeit is deferred
+    # (debt-log).
+    reason: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

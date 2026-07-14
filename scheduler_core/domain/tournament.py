@@ -88,6 +88,11 @@ class Result:
     score: Optional[Dict[str, Any]] = None
     finished_at_slot: Optional[int] = None
     walkover: bool = False
+    # Contingency annotation only (spec 2026-07-14 §1) — does NOT affect
+    # advancement/BYE-sweep routing, which keys off ``walkover`` alone.
+    # ``retired``/``forfeit`` deliberately ride the same result path as a
+    # plain win; distinct routing is deferred (debt-log).
+    reason: Optional[str] = None
 
 
 @dataclass

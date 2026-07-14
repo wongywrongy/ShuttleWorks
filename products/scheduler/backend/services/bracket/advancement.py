@@ -48,6 +48,7 @@ def record_result(
     finished_at_slot: Optional[int],
     walkover: bool = False,
     score: Optional[dict] = None,
+    reason: Optional[str] = None,
 ) -> List[PlayUnitId]:
     """Store a Result for ``play_unit_id`` and propagate the winner forward.
 
@@ -82,6 +83,7 @@ def record_result(
         finished_at_slot=finished_at_slot,
         walkover=walkover,
         score=score,
+        reason=reason,
     )
     swept = _sweep_walkovers(state, draw_map)
     # Return the FULL frontier of changed units, not just the recorded
@@ -143,6 +145,7 @@ def _record_and_propagate(
     finished_at_slot: Optional[int],
     walkover: bool,
     score: Optional[dict],
+    reason: Optional[str] = None,
 ) -> List[PlayUnitId]:
     """Store the result and update downstream slots. Does NOT sweep."""
     state.results[play_unit_id] = Result(
@@ -150,6 +153,7 @@ def _record_and_propagate(
         score=score,
         finished_at_slot=finished_at_slot,
         walkover=walkover,
+        reason=reason,
     )
 
     winner = _winner_participant_id(draw, play_unit_id, winner_side)

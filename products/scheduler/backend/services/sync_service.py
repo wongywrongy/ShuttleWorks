@@ -488,6 +488,7 @@ def _bracket_result_to_payload(result: BracketResult) -> dict:
         "score": result.score,
         "finished_at_slot": result.finished_at_slot,
         "walkover": result.walkover,
+        "reason": result.reason,
         "created_at": _isoformat(result.created_at),
     }
 

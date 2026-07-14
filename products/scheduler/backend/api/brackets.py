@@ -284,6 +284,9 @@ class ResultOut(BaseModel):
     finished_at_slot: Optional[int] = None
     # Opaque set-by-set score JSON (Sets mode). None for winner-only results.
     score: Optional[dict] = None
+    # Contingency annotation only (spec 2026-07-14 §1); does not drive
+    # advancement/BYE-sweep routing.
+    reason: Optional[str] = None
 
 
 class SegmentOut(BaseModel):
@@ -837,6 +840,7 @@ def _hydrate_session(
                 score=r.score,
                 finished_at_slot=r.finished_at_slot,
                 walkover=r.walkover,
+                reason=r.reason,
             )
 
     # Assignments live in tournaments.data["bracket_session"]["assignments"]
@@ -1149,6 +1153,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
             walkover=r.walkover,
             finished_at_slot=r.finished_at_slot,
             score=r.score,
+            reason=r.reason,
         )
         for pu_id, r in state.results.items()
     ]
@@ -1310,6 +1315,7 @@ def _persist_result_advancement(
         score=recorded.score,
         finished_at_slot=recorded.finished_at_slot,
         walkover=recorded.walkover,
+        reason=recorded.reason,
     )
     # First result on a Generated event flips its status to 'started'.
     ev_row = repo.brackets.get_event(tournament_id, pu.event_id)
@@ -1348,6 +1354,7 @@ def _persist_result_advancement(
                 score=r.score,
                 finished_at_slot=r.finished_at_slot,
                 walkover=r.walkover,
+                reason=r.reason,
             )
 
 
@@ -1503,6 +1510,7 @@ def create_bracket(
             score=result.score,
             finished_at_slot=result.finished_at_slot,
             walkover=result.walkover,
+            reason=result.reason,
         )
     # Persist session config last so a partial failure earlier leaves
     # nothing for ``_hydrate_session`` to rehydrate.
@@ -2265,6 +2273,7 @@ def generate_event_route(
             score=result.score,
             finished_at_slot=result.finished_at_slot,
             walkover=result.walkover,
+            reason=result.reason,
         )
     # 6. Persist assignments (session.state.assignments updated by solver).
     _persist_session_metadata(repo, tournament_id, session=session)
@@ -2439,6 +2448,7 @@ def generate_next_round_route(
             score=recorded.score,
             finished_at_slot=recorded.finished_at_slot,
             walkover=recorded.walkover,
+            reason=recorded.reason,
         )
     # Session blob (assignments etc.) is unchanged in content but kept in
     # the same write rhythm as the other mutating routes.
@@ -2623,6 +2633,7 @@ def submit_bracket_command(
             finished_at_slot=body.finished_at_slot,
             walkover=body.walkover,
             score=body.score,
+            reason=body.reason,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -3065,6 +3076,7 @@ def import_tournament_json(
             score=result.score,
             finished_at_slot=result.finished_at_slot,
             walkover=result.walkover,
+            reason=result.reason,
         )
     _persist_session_metadata(
         repo,
@@ -3154,6 +3166,7 @@ async def import_tournament_csv(
             score=result.score,
             finished_at_slot=result.finished_at_slot,
             walkover=result.walkover,
+            reason=result.reason,
         )
     _persist_session_metadata(
         repo,
