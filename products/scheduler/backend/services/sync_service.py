@@ -488,7 +488,12 @@ def _bracket_result_to_payload(result: BracketResult) -> dict:
         "score": result.score,
         "finished_at_slot": result.finished_at_slot,
         "walkover": result.walkover,
-        "reason": result.reason,
+        # NOTE: "reason" (walkover/retired/forfeit) is deliberately NOT mirrored
+        # to Supabase yet. The cloud schema is applied out-of-band (see
+        # docs/deploy/cloud.md) and bracket_results there has no reason column;
+        # pushing an unknown key fails the upsert and the outbox row caps out
+        # at 10 attempts. Add the column via a documented migration first,
+        # then re-add this key. See docs/audits/debt-log.md.
         "created_at": _isoformat(result.created_at),
     }
 
