@@ -39,7 +39,7 @@ beforeEach(() => {
     matches: [],
   });
   useUiStore.setState({ activeTournamentRole: 'owner' });
-  useMatchStateStore.setState({ matchStates: {}, lastSynced: null });
+  useMatchStateStore.setState({ matchStates: {} });
 });
 
 const renderTab = () =>
