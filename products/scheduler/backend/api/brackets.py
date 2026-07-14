@@ -47,11 +47,12 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
+from adapters.badminton import schedule_config_for_bracket
 from app.dependencies import (
     require_tournament_access,
 )
 from app.exceptions import ConflictError
-from app.schemas import BracketCommandRequest, BracketPlayerDTO
+from app.schemas import BracketCommandRequest, BracketPlayerDTO, TournamentConfig
 from repositories import LocalRepository, get_repository
 from scheduler_core.domain.models import (
     SolverOptions,
@@ -685,6 +686,30 @@ def _segments_from_match_meta(
     return segments
 
 
+def _bracket_solver_options(
+    time_limit_seconds: float, camel_cfg: dict
+) -> SolverOptions:
+    """Bracket ``SolverOptions``: per-request time budget (bracket-owned,
+    default 5 s) + the shared deterministic/seed knobs from the engine
+    config.
+
+    ``config.solverTimeLimitSeconds`` deliberately does NOT apply here —
+    unlike the meet path (``solver_options_for``), the bracket's solve
+    budget is a request/session parameter (``time_limit_seconds``,
+    persisted on ``bracket_session``), and that precedence is
+    intentionally unchanged by this wiring.
+    """
+    if camel_cfg.get("deterministic"):
+        return SolverOptions(
+            time_limit_seconds=time_limit_seconds,
+            num_workers=1,
+            random_seed=int(camel_cfg.get("randomSeed") or 42),
+            log_progress=False,
+            deterministic=True,
+        )
+    return SolverOptions(time_limit_seconds=time_limit_seconds, log_progress=False)
+
+
 def _hydrate_session(
     repo: LocalRepository, tournament_id: uuid.UUID
 ) -> Optional[BracketSession]:
@@ -707,19 +732,29 @@ def _hydrate_session(
     total_slots = int(session_cfg.get("total_slots", 128))
     rest = int(_pick(camel_cfg, session_cfg, "restBetweenRounds", "rest_between_rounds", 1))
 
-    # Built through the shared scheduling-parameter builder so courts /
-    # time window / slot duration are read into a ``ScheduleConfig`` the
-    # same way the meet path reads them (see
-    # ``services/scheduling/params.py``).
-    config = build_schedule_config(
-        SchedulingParams(
-            court_count=court_count,
-            total_slots=total_slots,
-            interval_minutes=interval_minutes,
-            # Hybrid coordination: schedule bracket matches AROUND the meet
-            # schedule so the two engines never double-book a court.
-            closed_court_windows=_meet_occupied_windows(data_blob, court_count),
-        )
+    # Full shared assembly (rest / freeze / breaks / objective weights),
+    # with the session-owned structural overrides on top. camel_cfg may be
+    # sparse on old blobs — merge over the same defaults the meet uses.
+    cfg_model = TournamentConfig.model_validate(
+        {
+            "intervalMinutes": interval_minutes,
+            "dayStart": "09:00",
+            "dayEnd": "18:00",
+            "breaks": [],
+            "courtCount": court_count,
+            "defaultRestMinutes": 0,
+            "freezeHorizonSlots": 0,
+            **{k: v for k, v in camel_cfg.items() if v is not None},
+        }
+    )
+    config = schedule_config_for_bracket(
+        cfg_model,
+        court_count=court_count,
+        total_slots=total_slots,
+        interval_minutes=interval_minutes,
+        # Hybrid coordination: schedule bracket matches AROUND the meet
+        # schedule so the two engines never double-book a court.
+        closed_court_windows=_meet_occupied_windows(data_blob, court_count),
     )
 
     start_time_iso = session_cfg.get("start_time")
@@ -1573,16 +1608,15 @@ def schedule_next_round(
     # bracket-session blob; the lightweight BracketSession dataclass
     # doesn't carry it (parser variants don't need it).
     tournament = repo.tournaments.get_by_id(tournament_id)
-    session_cfg = (
-        (tournament.data or {}).get("bracket_session") if tournament else None
-    ) or {}
+    data_blob = (tournament.data or {}) if tournament else {}
+    session_cfg = data_blob.get("bracket_session") or {}
     time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
 
     driver = TournamentDriver(
         state=session.state,
         config=session.config,
-        solver_options=SolverOptions(
-            time_limit_seconds=time_limit_seconds,
+        solver_options=_bracket_solver_options(
+            time_limit_seconds, data_blob.get("config") or {}
         ),
         rest_between_rounds=session.rest_between_rounds,
         player_extras=session.player_extras,
@@ -1676,12 +1710,13 @@ async def schedule_next_round_stream(
         )
 
     tournament = repo.tournaments.get_by_id(tournament_id)
-    session_cfg = (
-        (tournament.data or {}).get("bracket_session") if tournament else None
-    ) or {}
+    data_blob = (tournament.data or {}) if tournament else {}
+    session_cfg = data_blob.get("bracket_session") or {}
     time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
     pool_size = _resolve_candidate_pool_size(session_cfg, candidate_pool_size)
-    solver_options = SolverOptions(time_limit_seconds=time_limit_seconds)
+    solver_options = _bracket_solver_options(
+        time_limit_seconds, data_blob.get("config") or {}
+    )
 
     driver = TournamentDriver(
         state=session.state,
@@ -2868,16 +2903,15 @@ def pin_bracket_match(
         )
 
     tournament = repo.tournaments.get_by_id(tournament_id)
-    session_cfg = (
-        (tournament.data or {}).get("bracket_session") if tournament else None
-    ) or {}
+    data_blob = (tournament.data or {}) if tournament else {}
+    session_cfg = data_blob.get("bracket_session") or {}
     time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
 
     driver = TournamentDriver(
         state=session.state,
         config=session.config,
-        solver_options=SolverOptions(
-            time_limit_seconds=time_limit_seconds,
+        solver_options=_bracket_solver_options(
+            time_limit_seconds, data_blob.get("config") or {}
         ),
         rest_between_rounds=session.rest_between_rounds,
         player_extras=session.player_extras,
