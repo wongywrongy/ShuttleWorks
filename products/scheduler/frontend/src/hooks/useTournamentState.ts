@@ -45,6 +45,56 @@ export function requestClearScheduleOnNextSave(): void {
   clearScheduleNext = true;
 }
 
+/**
+ * Shared error-bookkeeping for a rejected save: sets the error banner,
+ * and for a 409 (the server rejected the CONTENT, not our version)
+ * re-syncs from the server and toasts. A network error / 5xx is
+ * transient and retryable, so it must keep the operator's unsaved work
+ * — only a 409 re-hydrates.
+ *
+ * DRAW_STARTED (the absolute schedule lock — a draw in play) gets a
+ * distinct, non-actionable message: there is no clear-and-retry to
+ * offer for it, unlike CONFIG_LOCKED which the caller handles with a
+ * confirm-and-retry BEFORE reaching here (see the 409 branch in
+ * `forceSaveNow`, which only falls through to this helper once no
+ * clear-schedule retry applies).
+ */
+async function handleRejectedSave(tid: string, err: unknown): Promise<void> {
+  const message = err instanceof Error ? err.message : 'Save failed';
+  useUiStore.getState().setLastSaveError(message);
+  useUiStore.getState().setPersistStatus('error');
+
+  const status = (err as { response?: { status?: number }; status?: number })
+    ?.response?.status ?? (err as { status?: number })?.status;
+  if (status !== 409) return;
+
+  const code = (err as { code?: string })?.code;
+  try {
+    const remote = await apiClient.getTournamentState(tid);
+    if (remote) hydrate(remote);
+    useUiStore.getState().setPersistStatus('idle');
+    if (code === 'DRAW_STARTED') {
+      useUiStore.getState().pushToast({
+        level: 'warn',
+        message: "A started draw locks the schedule",
+        detail:
+          "It can't be cleared while a draw is in play — the workspace has been re-synced to the server.",
+        durationMs: 6000,
+      });
+    } else {
+      useUiStore.getState().pushToast({
+        level: 'warn',
+        message: 'That change was rejected',
+        detail: `${message} — the workspace has been re-synced to the server.`,
+        durationMs: 6000,
+      });
+    }
+  } catch {
+    // Re-sync failed (transient). Leave the error status standing: the
+    // store still holds the rejected edit, and the banner says so.
+  }
+}
+
 /** Cancel any pending debounced save and flush immediately.
  *
  * Reads the active tournament id from ``useUiStore`` (set by
@@ -83,10 +133,10 @@ export async function forceSaveNow(): Promise<void> {
   flushPromise = (async () => {
     const ui = useUiStore.getState();
     ui.setPersistStatus('saving');
+    const payload = snapshot(useTournamentStore.getState());
     try {
       // Only the sanctioned path passes options — an ordinary save keeps the
       // plain two-argument call it has always made.
-      const payload = snapshot(useTournamentStore.getState());
       if (clearSchedule) {
         await apiClient.putTournamentState(tid, payload, { clearSchedule: true });
       } else {
@@ -96,39 +146,66 @@ export async function forceSaveNow(): Promise<void> {
       useUiStore.getState().setLastSaveError(null);
       useUiStore.getState().setPersistStatus('idle');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Save failed';
-      useUiStore.getState().setLastSaveError(message);
-      useUiStore.getState().setPersistStatus('error');
-
-      // ── 409: the server REJECTED THE CONTENT, not our version ───────────
-      // The blob is all-or-nothing, so a single rejected edit (e.g. deleting a
-      // player who is placed in a generated draw) poisoned every later save:
-      // the bad value stayed in the store, so each subsequent edit re-sent the
-      // same rejected blob and 409'd too — roster editing was dead until the
-      // operator reloaded (audit finding A3).
-      //
-      // Re-hydrating from the server discards the rejected change and puts the
-      // store back on a blob the server will accept, so the NEXT edit saves.
-      // Only for 409: a network error or 5xx is transient and retryable, and
-      // must keep the operator's unsaved work.
       const status = (err as { response?: { status?: number }; status?: number })
         ?.response?.status ?? (err as { status?: number })?.status;
-      if (status === 409) {
+      const code = (err as { code?: string })?.code;
+
+      // ── 409 CONFIG_LOCKED, no clearSchedule opt-in yet: REACT to the
+      // backend's lock instead of trusting a per-module proactive guess.
+      // The engine config is shared and gated by ONE backend lock that
+      // fires when EITHER module (meet or bracket) has a committed
+      // schedule with assignments — a per-module guard (isScheduleLocked /
+      // bracketHasSchedule) only ever sees its OWN module's schedule, so it
+      // misses the cross-module case (e.g. editing meet's Engine tab while
+      // only the bracket has a committed schedule). This branch is the
+      // backstop: it fires the same confirm-unlock modal the proactive
+      // guards use, and on confirm retries the exact same PUT with
+      // `?clearSchedule=true`. On decline, the edit is abandoned cleanly
+      // (re-hydrate) with no raw backend string in the toast.
+      if (status === 409 && code === 'CONFIG_LOCKED' && !clearSchedule) {
+        const confirmed = await new Promise<boolean>((resolve) => {
+          useUiStore.getState().setUnlockModalState({
+            open: true,
+            // UnlockModal templates this as "{actionDescription} will clear
+            // the currently committed schedule…" — keep it a short phrase
+            // like the other callers ('save engine settings'), not a full
+            // sentence, or the copy comes out doubled/ungrammatical.
+            actionDescription: 'This edit',
+            resolve: (ok: boolean) => {
+              useUiStore.getState().setUnlockModalState(null);
+              resolve(ok);
+            },
+          });
+        });
+        if (confirmed) {
+          useTournamentStore.getState().unlockSchedule();
+          try {
+            await apiClient.putTournamentState(tid, payload, { clearSchedule: true });
+            useUiStore.getState().setLastSavedAt(new Date().toISOString());
+            useUiStore.getState().setLastSaveError(null);
+            useUiStore.getState().setPersistStatus('idle');
+            return;
+          } catch (retryErr) {
+            await handleRejectedSave(tid, retryErr);
+            throw retryErr;
+          }
+        }
+        // Declined: abandon the edit cleanly. Re-sync from the server so
+        // the store holds a blob it will accept next time, but skip the
+        // generic "rejected" toast — the operator just said no, that's not
+        // a surprise worth a warning banner.
         try {
           const remote = await apiClient.getTournamentState(tid);
           if (remote) hydrate(remote);
-          useUiStore.getState().setPersistStatus('idle');
-          useUiStore.getState().pushToast({
-            level: 'warn',
-            message: 'That change was rejected',
-            detail: `${message} — the workspace has been re-synced to the server.`,
-            durationMs: 6000,
-          });
         } catch {
-          // Re-sync failed (transient). Leave the error status standing: the
-          // store still holds the rejected edit, and the banner says so.
+          // Re-sync failed (transient) — leave the store as-is.
         }
+        useUiStore.getState().setLastSaveError(null);
+        useUiStore.getState().setPersistStatus('idle');
+        return;
       }
+
+      await handleRejectedSave(tid, err);
       throw err;
     } finally {
       flushPromise = null;

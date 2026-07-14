@@ -194,6 +194,118 @@ export class MatchVersionMismatch extends Error {
   }
 }
 
+/**
+ * The axios response-error interceptor body, extracted to module scope so
+ * it can be exercised directly in tests (mocking `apiClient`'s methods
+ * bypasses this entirely — the interceptor never runs, so the toast logic
+ * inside it, including the CONFIG_LOCKED/DRAW_STARTED suppression below,
+ * would otherwise go untested). Registered as the reject handler on
+ * `client.interceptors.response.use` in the `ApiClient` constructor.
+ */
+export function handleApiResponseError(error: any): never {
+  // User-initiated aborts: swallow silently. React Query / SWR-style
+  // cancellations legitimately flow through here and shouldn't produce
+  // a user-visible toast.
+  if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+    throw error;
+  }
+
+  const requestId: string | undefined =
+    error.response?.headers?.['x-request-id'] ??
+    error.response?.headers?.['X-Request-ID'];
+
+  // Backend errors now ship a structured ``detail`` of the form
+  // ``{ code: 'STATE_CORRUPT', message: '...' }``. We extract the
+  // code as the toast title and the message as the body. Older
+  // routes that still pass a bare string ``detail`` keep working
+  // — the code falls back to nothing and the string becomes the
+  // message.
+  let code: string | undefined;
+  let message: string;
+  if (error.response) {
+    const detail = error.response.data?.detail;
+    if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
+      code = typeof detail.code === 'string' ? detail.code : undefined;
+      message = detail.message;
+    } else if (typeof detail === 'string') {
+      message = detail;
+    } else {
+      message =
+        error.response.data?.message ||
+        `Server error ${error.response.status}`;
+    }
+  } else if (error.request) {
+    message = 'No response from server. Is the backend running?';
+  } else {
+    message = error.message || 'An unexpected error occurred';
+  }
+
+  // Compose a single ``detail`` line containing the code (named,
+  // not bytes) and the request id if known. The body of the toast
+  // is the human message.
+  const detailParts: string[] = [];
+  if (code) detailParts.push(code);
+  if (requestId) detailParts.push(`request ${requestId.slice(0, 8)}`);
+
+  // CONFIG_LOCKED / DRAW_STARTED are raised ONLY by the tournament
+  // state PUT's schedule-lock guard (backend/api/tournaments.py) —
+  // and that funnel (`useTournamentState.forceSaveNow`) now owns their
+  // UX end to end: CONFIG_LOCKED opens the unlock-confirm modal (and
+  // on decline re-syncs quietly), DRAW_STARTED shows its own friendly
+  // "started draw" toast. Letting THIS generic handler also toast the
+  // raw backend string (which literally reads "...Retry with
+  // ?clearSchedule=true...") would surface a second, scarier toast
+  // alongside — or instead of — that dedicated handling.
+  const isLockCode = code === 'CONFIG_LOCKED' || code === 'DRAW_STARTED';
+
+  // Surface the failure exactly once, at the edge, so every hook /
+  // component gets consistent UI without needing to handle it.
+  // Dedupe identical (status, message) pairs within a 30s window
+  // so polling hooks don't pile up sticky error toasts forever
+  // when the backend returns the same error every poll cycle.
+  const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
+  const suppress = isLockCode || _shouldSuppressErrorToast(dedupeKey);
+  if (!suppress) {
+    try {
+      useUiStore.getState().pushToast({
+        level: 'error',
+        message,
+        detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
+      });
+    } catch {
+      // The store may not be ready during very-early-lifecycle calls —
+      // fall through to the thrown error below.
+    }
+  }
+
+  const err = new Error(message) as Error & {
+    requestId?: string;
+    code?: string;
+    status?: number;
+    response?: unknown;
+    /** Set by this interceptor so the global
+     *  ``window.onunhandledrejection`` handler in ``AppShell``
+     *  doesn't surface a second toast for the same error. */
+    __handled?: boolean;
+  };
+  if (requestId) err.requestId = requestId;
+  if (code) err.code = code;
+  // Preserve the ORIGINAL axios response on the rebuilt error.
+  // submitCommand classifies 409s by reading response.data.error
+  // (conflict vs stale_version); without this passthrough every
+  // rejection degraded to 'networkError', so the command queue
+  // kept a permanently-rejected command 'pending' and replayed
+  // it on every drain, forever (Phase-10 finding).
+  if (error.response) err.response = error.response;
+  // Promote the HTTP status so callers can branch on it without
+  // pattern-matching the rebuilt ``message`` string. The
+  // backend-merge arc's ``useBracket`` hook needs this to tell
+  // "no bracket configured yet" (404) from a real server error.
+  if (error.response?.status) err.status = error.response.status;
+  err.__handled = true;
+  throw err;
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -225,98 +337,7 @@ class ApiClient {
 
     this.client.interceptors.response.use(
       (response) => response,
-      (error) => {
-        // User-initiated aborts: swallow silently. React Query / SWR-style
-        // cancellations legitimately flow through here and shouldn't produce
-        // a user-visible toast.
-        if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
-          throw error;
-        }
-
-        const requestId: string | undefined =
-          error.response?.headers?.['x-request-id'] ??
-          error.response?.headers?.['X-Request-ID'];
-
-        // Backend errors now ship a structured ``detail`` of the form
-        // ``{ code: 'STATE_CORRUPT', message: '...' }``. We extract the
-        // code as the toast title and the message as the body. Older
-        // routes that still pass a bare string ``detail`` keep working
-        // — the code falls back to nothing and the string becomes the
-        // message.
-        let code: string | undefined;
-        let message: string;
-        if (error.response) {
-          const detail = error.response.data?.detail;
-          if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
-            code = typeof detail.code === 'string' ? detail.code : undefined;
-            message = detail.message;
-          } else if (typeof detail === 'string') {
-            message = detail;
-          } else {
-            message =
-              error.response.data?.message ||
-              `Server error ${error.response.status}`;
-          }
-        } else if (error.request) {
-          message = 'No response from server. Is the backend running?';
-        } else {
-          message = error.message || 'An unexpected error occurred';
-        }
-
-        // Compose a single ``detail`` line containing the code (named,
-        // not bytes) and the request id if known. The body of the toast
-        // is the human message.
-        const detailParts: string[] = [];
-        if (code) detailParts.push(code);
-        if (requestId) detailParts.push(`request ${requestId.slice(0, 8)}`);
-
-        // Surface the failure exactly once, at the edge, so every hook /
-        // component gets consistent UI without needing to handle it.
-        // Dedupe identical (status, message) pairs within a 30s window
-        // so polling hooks don't pile up sticky error toasts forever
-        // when the backend returns the same error every poll cycle.
-        const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
-        const suppress = _shouldSuppressErrorToast(dedupeKey);
-        if (!suppress) {
-          try {
-            useUiStore.getState().pushToast({
-              level: 'error',
-              message,
-              detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
-            });
-          } catch {
-            // The store may not be ready during very-early-lifecycle calls —
-            // fall through to the thrown error below.
-          }
-        }
-
-        const err = new Error(message) as Error & {
-          requestId?: string;
-          code?: string;
-          status?: number;
-          response?: unknown;
-          /** Set by this interceptor so the global
-           *  ``window.onunhandledrejection`` handler in ``AppShell``
-           *  doesn't surface a second toast for the same error. */
-          __handled?: boolean;
-        };
-        if (requestId) err.requestId = requestId;
-        if (code) err.code = code;
-        // Preserve the ORIGINAL axios response on the rebuilt error.
-        // submitCommand classifies 409s by reading response.data.error
-        // (conflict vs stale_version); without this passthrough every
-        // rejection degraded to 'networkError', so the command queue
-        // kept a permanently-rejected command 'pending' and replayed
-        // it on every drain, forever (Phase-10 finding).
-        if (error.response) err.response = error.response;
-        // Promote the HTTP status so callers can branch on it without
-        // pattern-matching the rebuilt ``message`` string. The
-        // backend-merge arc's ``useBracket`` hook needs this to tell
-        // "no bracket configured yet" (404) from a real server error.
-        if (error.response?.status) err.status = error.response.status;
-        err.__handled = true;
-        throw err;
-      }
+      handleApiResponseError,
     );
   }
 
