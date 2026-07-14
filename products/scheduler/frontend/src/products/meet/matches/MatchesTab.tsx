@@ -18,8 +18,17 @@ import { EmptyState } from '../../../components/control-plane';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { useCanEdit } from '../../../hooks/useCanEdit';
+import { useTournamentId } from '../../../hooks/useTournamentId';
+import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
 
 export function MatchesTab() {
+  const tid = useTournamentId();
+  // The Status column (Pending/Ready/Live/Done) reads matchStateStore, but
+  // nothing else mounted on this surface hydrates it — an operator who opens
+  // Matches directly (without ever visiting Schedule/Operations/Display)
+  // would see a stale/empty store and a lying status. One mount keeps it
+  // converged the same way SchedulePage does (initial load + 5s poll).
+  useMatchStateSync(tid);
   const matches = useTournamentStore((s) => s.matches);
   const players = useTournamentStore((s) => s.players);
   const groups = useTournamentStore((s) => s.groups);
