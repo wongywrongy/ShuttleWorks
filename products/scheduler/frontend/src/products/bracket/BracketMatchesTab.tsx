@@ -14,6 +14,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Download, MagnifyingGlass } from '@phosphor-icons/react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
+import { useSearchParamState } from '../../hooks/useSearchParamState';
 import {
   ActionsBar,
   BandedTable,
@@ -47,7 +48,9 @@ export function BracketMatchesTab({
   onData?: (next: BracketTournamentDTO) => void;
 }) {
   const api = useBracketApi();
-  const [query, setQuery] = useState('');
+  // Same URL-backed `?q=` contract as Meet Matches — the URL is the shared
+  // source of truth, so a pasted link restores the operator's filter.
+  const [query, setQuery] = useSearchParamState('q', '');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Panel-side event entry writes ride the same upsert path as the

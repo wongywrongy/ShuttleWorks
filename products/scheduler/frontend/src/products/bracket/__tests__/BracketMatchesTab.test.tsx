@@ -11,6 +11,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { BracketMatchesTab } from '../BracketMatchesTab';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
@@ -127,15 +128,19 @@ function makeRichData(): BracketTournamentDTO {
 const indexOfRow = (row: HTMLElement) =>
   row.querySelector('.w-8')?.textContent;
 
+/** Render BracketMatchesTab within a MemoryRouter for useSearchParamState support. */
+const renderWithRouter = (component: React.ReactElement) =>
+  render(<MemoryRouter>{component}</MemoryRouter>);
+
 describe('<BracketMatchesTab />', () => {
   it('shows the "N matches · from draws" bar readout', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     expect(screen.getByText('6 matches')).toBeInTheDocument();
     expect(screen.getByText('· from draws')).toBeInTheDocument();
   });
 
   it('renders one band per event with its count, and all rows', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     const msBand = screen.getByTestId('bracket-match-group-MS-1');
     const wdBand = screen.getByTestId('bracket-match-group-WD-1');
     expect(msBand).toHaveTextContent("Men's Singles");
@@ -146,13 +151,13 @@ describe('<BracketMatchesTab />', () => {
   });
 
   it('restarts the # index for each event group', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     const rows = screen.getAllByTestId(/^bracket-match-row-/);
     expect(rows.map(indexOfRow)).toEqual(['1', '2', '3', '1', '2', '3']);
   });
 
   it('renders friendly play-unit codes instead of raw ids', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     for (const code of ['MS SF1', 'MS SF2', 'MS F', 'WD SF1', 'WD SF2', 'WD F']) {
       expect(screen.getByText(code)).toBeInTheDocument();
     }
@@ -161,13 +166,13 @@ describe('<BracketMatchesTab />', () => {
   });
 
   it('joins doubles sides with a slash', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     expect(screen.getAllByText('Elle Kim / Fay Wu').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Gia Lopez / Hana Sato').length).toBeGreaterThan(0);
   });
 
   it('tones the status column per state (done/live/ready/pending)', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     expect(screen.getByText('Done').className).toContain('text-status-done');
     expect(screen.getByText('Live').className).toContain('text-status-live');
     for (const el of screen.getAllByText('Ready')) {
@@ -179,7 +184,7 @@ describe('<BracketMatchesTab />', () => {
   });
 
   it('renders unresolved sides as a muted-italic TBD placeholder (Meet placeholder grammar)', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     const tbds = screen.getAllByText('TBD');
     expect(tbds).toHaveLength(4); // two finals × two sides
     for (const el of tbds) {
@@ -190,7 +195,7 @@ describe('<BracketMatchesTab />', () => {
   });
 
   it('collapsing a band hides only that band\'s rows', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.click(screen.getByTestId('bracket-match-group-MS-1'));
     const rows = screen.getAllByTestId(/^bracket-match-row-/);
     expect(rows).toHaveLength(3);
@@ -198,7 +203,7 @@ describe('<BracketMatchesTab />', () => {
   });
 
   it('keeps # numbers stable under search (no renumbering of filtered rows)', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.change(screen.getByTestId('bracket-matches-search'), {
       target: { value: 'Carol' },
     });
@@ -211,7 +216,7 @@ describe('<BracketMatchesTab />', () => {
   });
 
   it('shows the no-results message when the search matches nothing', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.change(screen.getByTestId('bracket-matches-search'), {
       target: { value: 'zzz-no-such-player' },
     });
@@ -226,7 +231,7 @@ describe('<BracketMatchesTab />', () => {
  * open the right-docked match DetailPanel. */
 describe('<BracketMatchesTab /> — match detail panel', () => {
   it('opens the DetailPanel on row click and marks the row selected', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
     const panel = screen.getByTestId('bracket-match-detail');
     expect(within(panel).getByText('Match')).toBeInTheDocument();
@@ -239,7 +244,7 @@ describe('<BracketMatchesTab /> — match detail panel', () => {
   });
 
   it('shows the selected match\'s read-only status pill in the panel', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     // pu-ms-1 has a recorded result → Done.
     fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
     const pill = screen.getByTestId('bracket-match-status-pill');
@@ -248,7 +253,7 @@ describe('<BracketMatchesTab /> — match detail panel', () => {
   });
 
   it('closes the panel via the × button', () => {
-    render(<BracketMatchesTab data={makeRichData()} />);
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
     fireEvent.click(screen.getByLabelText('Close detail'));
     expect(
