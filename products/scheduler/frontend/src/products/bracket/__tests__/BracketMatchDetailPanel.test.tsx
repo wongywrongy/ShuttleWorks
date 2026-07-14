@@ -16,7 +16,7 @@ import type {
   BracketTournamentDTO,
   PlayUnitDTO,
 } from '../../../api/bracketDto';
-import type { BracketMatchStatus } from '../matchStatus';
+import type { BracketMatchStatus } from '../../../components/control-plane';
 
 const slot = (
   participant_id: string | null = null,

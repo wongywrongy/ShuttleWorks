@@ -18,19 +18,17 @@ import {
   ActionsBar,
   BandedTable,
   EmptyState,
+  STATUS_CLASS,
+  STATUS_LABEL,
   type BandedListColumn,
   type BandedTableGroup,
+  type BracketMatchStatus,
 } from '../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { buildPlayUnitLabels, disciplineLabel } from './bracketLabels';
 import { BracketMatchDetailPanel } from './BracketMatchDetailPanel';
 import { type CommitEventFn } from './BracketPlayerFields';
-import {
-  STATUS_CLASS,
-  STATUS_LABEL,
-  type BracketMatchStatus,
-} from './matchStatus';
 
 /** One numbered row: the play unit plus its stable per-event `#`. */
 type NumberedUnit = {

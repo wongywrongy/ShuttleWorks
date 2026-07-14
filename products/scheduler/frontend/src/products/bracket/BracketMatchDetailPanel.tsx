@@ -13,7 +13,12 @@
  */
 import { useMemo, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
-import { DetailPanel } from '../../components/control-plane';
+import {
+  DetailPanel,
+  STATUS_CLASS,
+  STATUS_LABEL,
+  type BracketMatchStatus,
+} from '../../components/control-plane';
 import { useTournamentStore } from '../../store/tournamentStore';
 import type {
   BracketTournamentDTO,
@@ -28,11 +33,6 @@ import {
   FIELD_LABEL_CLASSES,
   type CommitEventFn,
 } from './BracketPlayerFields';
-import {
-  STATUS_CLASS,
-  STATUS_LABEL,
-  type BracketMatchStatus,
-} from './matchStatus';
 
 export function BracketMatchDetailPanel({
   pu,

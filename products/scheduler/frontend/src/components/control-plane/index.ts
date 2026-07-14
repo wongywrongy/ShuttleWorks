@@ -18,6 +18,12 @@ export {
   type BandedTableColumn,
   type BandedTableGroup,
 } from './BandedTable';
+export {
+  STATUS_CLASS,
+  STATUS_LABEL,
+  type BracketMatchStatus,
+  type MatchListStatus,
+} from './matchStatus';
 export { DetailPanel } from './DetailPanel';
 export { AvailabilityControl } from './AvailabilityControl';
 export {
