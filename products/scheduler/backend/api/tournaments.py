@@ -12,7 +12,7 @@ import logging
 import uuid
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, Path, Response
+from fastapi import APIRouter, Depends, Path, Query, Response
 from pydantic import BaseModel, Field
 
 from app.dependencies import (
@@ -24,6 +24,7 @@ from app.error_codes import ErrorCode, http_error
 from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO
 from database.models import Tournament, normalize_module_seed, display_dependency_satisfied
 from repositories import LocalRepository, get_repository
+from services.config_lock import changed_scheduling_fields
 from services.meet.standings import compute_meet_standings
 from api.invites import (
     InviteCreateDTO,
@@ -521,6 +522,14 @@ def get_tournament_state(
 def put_tournament_state(
     state: TournamentStateDTO,
     tournament_id: uuid.UUID = Path(...),
+    clearSchedule: bool = Query(
+        False,
+        description=(
+            "Sanction the edit by clearing the committed schedule(s) it "
+            "invalidates, atomically with the write. Refused (409 "
+            "DRAW_STARTED) while any bracket draw is started."
+        ),
+    ),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Overwrite the tournament data blob.
@@ -538,14 +547,19 @@ def put_tournament_state(
     frontend locks; a frontend-only lock is bypassable by any stale tab
     or direct API client):
 
-    - **CONFIG_LOCKED (409):** the structural venue fields (courtCount /
-      intervalMinutes / dayStart / dayEnd) may not change in a blob that
-      RETAINS a committed schedule — those are the fields both engines
-      solved against, and changing them under a live schedule silently
-      invalidates every court/slot assignment. The sanctioned unlock path
-      (UnlockModal) clears the schedule in the same PUT, which passes.
-      Non-structural config (closedCourts, clockShiftMinutes, tv*, …)
-      stays freely writable — the director tools mutate those live.
+    - **CONFIG_LOCKED (409):** ANY scheduling-relevant config key (see
+      ``services.config_lock.changed_scheduling_fields`` — fail-closed:
+      everything except the shared non-scheduling-keys exemption list)
+      may not change in a blob that RETAINS a committed schedule — those
+      are the fields the engine solved against, and changing them under
+      a live schedule silently invalidates every court/slot assignment.
+      The structural venue fields (courtCount / intervalMinutes /
+      dayStart / dayEnd) are a subset of this — the old venue-only guard
+      is subsumed, not replaced. The sanctioned unlock path either clears
+      the schedule in the same PUT (passes unconditionally) or retries
+      with ``?clearSchedule=true``, which atomically nulls the schedule
+      and applies the edit in the same commit. Non-scheduling config
+      (scoringFormat, tv*, …) stays freely writable.
     - **ROSTER_LOCKED (409):** ``bracketPlayers`` entries referenced by a
       GENERATED draw (participant ids + member_ids of non-draft events)
       may not be removed; deleting them silently invalidates the draw's
@@ -555,7 +569,6 @@ def put_tournament_state(
     incoming = state.model_dump(exclude={"standings"})
     prior = dict(row_prior.data or {})
 
-    _STRUCTURAL_CONFIG = ("courtCount", "intervalMinutes", "dayStart", "dayEnd")
     prior_schedule = prior.get("schedule")
     prior_assignments = (
         prior_schedule.get("assignments") if isinstance(prior_schedule, dict) else None
@@ -568,22 +581,27 @@ def put_tournament_state(
     )
     prior_cfg = prior.get("config") if isinstance(prior.get("config"), dict) else None
     incoming_cfg = incoming.get("config") if isinstance(incoming.get("config"), dict) else None
-    if prior_assignments and incoming_assignments and prior_cfg and incoming_cfg:
-        changed = [
-            f
-            for f in _STRUCTURAL_CONFIG
-            if prior_cfg.get(f) is not None
-            and incoming_cfg.get(f) is not None
-            and prior_cfg.get(f) != incoming_cfg.get(f)
-        ]
-        if changed:
-            raise http_error(
-                409,
-                ErrorCode.CONFIG_LOCKED,
-                "Venue structure is locked while a schedule exists: "
-                f"{', '.join(changed)} cannot change. Clear or regenerate the "
-                "schedule first (the unlock flow does this).",
-            )
+
+    fields = changed_scheduling_fields(prior_cfg, incoming_cfg)
+    locked_schedules: list[str] = []
+    if fields and prior_assignments and incoming_assignments:
+        locked_schedules.append("meet")
+
+    if locked_schedules and not clearSchedule:
+        raise http_error(
+            409,
+            ErrorCode.CONFIG_LOCKED,
+            "Schedule locked: "
+            f"{', '.join(fields)} cannot change while a committed schedule "
+            "exists. Retry with ?clearSchedule=true to clear it and apply "
+            "the edit.",
+            extra={"fields": fields, "schedules": locked_schedules},
+        )
+
+    if clearSchedule and fields:
+        # Atomic clear-and-apply: the same single upsert persists both.
+        incoming["schedule"] = None
+        incoming["scheduleIsStale"] = False
 
     prior_roster = {
         p.get("id")

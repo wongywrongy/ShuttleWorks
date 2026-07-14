@@ -646,3 +646,122 @@ def test_shared_row_keeps_original_owner_name(client):
     assert len(matching) == 1
     assert matching[0]["role"] == "viewer"
     assert matching[0]["ownerName"] == "alice@example.com"
+
+
+# ---- Generalized schedule lock (Plan C, Task 3) --------------------------
+
+
+def _state_with_schedule(name: str = "Locked") -> dict:
+    s = _basic_state(name)
+    s["matches"] = [
+        {"id": "m1", "sideA": ["p1"], "sideB": ["p2"], "durationSlots": 2}
+    ]
+    s["schedule"] = {
+        "assignments": [
+            {"matchId": "m1", "slotId": 0, "courtId": 1, "durationSlots": 2}
+        ],
+        "status": "optimal",  # ScheduleDTO.status is required; brief omitted it
+    }
+    return s
+
+
+def test_scheduling_field_locked_while_schedule_retained(client):
+    created = client.post("/tournaments", json={"name": "L"}).json()
+    tid = created["id"]
+    assert client.put(f"/tournaments/{tid}/state", json=_state_with_schedule()).status_code == 200
+
+    edited = _state_with_schedule()
+    edited["config"]["defaultRestMinutes"] = 5  # scheduling-relevant
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["code"] == "CONFIG_LOCKED"
+    assert detail["fields"] == ["defaultRestMinutes"]
+    assert "meet" in detail["schedules"]
+
+
+def test_non_scheduling_field_passes_while_locked(client):
+    created = client.post("/tournaments", json={"name": "L2"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule())
+
+    edited = _state_with_schedule()
+    edited["config"]["scoringFormat"] = "simple"  # exempt
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 200
+
+
+def test_clearing_schedule_in_same_put_passes_without_flag(client):
+    # The sanctioned unlock path: the client nulls the schedule itself.
+    created = client.post("/tournaments", json={"name": "L3"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule())
+
+    edited = _state_with_schedule()
+    edited["config"]["defaultRestMinutes"] = 5
+    edited["schedule"] = None
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 200
+
+
+def test_clear_schedule_flag_clears_and_applies_atomically(client):
+    created = client.post("/tournaments", json={"name": "L4"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule())
+
+    edited = _state_with_schedule()  # still carries assignments
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 200
+    after = client.get(f"/tournaments/{tid}/state").json()
+    assert after["schedule"] is None
+    assert after["config"]["defaultRestMinutes"] == 5
+
+
+def test_venue_structural_fields_still_lock(client):
+    # The old _STRUCTURAL_CONFIG guard is subsumed, not lost.
+    created = client.post("/tournaments", json={"name": "L5"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule())
+
+    edited = _state_with_schedule()
+    edited["config"]["courtCount"] = 8
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 409
+    assert r.json()["detail"]["fields"] == ["courtCount"]
+
+
+def test_clear_schedule_flag_atomic_rollback_on_write_failure(client, monkeypatch):
+    """If the single commit that would clear+apply fails mid-way, the
+    prior schedule must survive intact — no half-cleared state.
+
+    We force the failure inside ``upsert_data`` (after the in-memory
+    ``row.data`` mutation but before its ``session.commit()``) by making
+    the sync-outbox staging step raise. Since nothing commits, the DB
+    row is untouched and a fresh read must show the original schedule
+    and config, not a partially-applied edit.
+    """
+    from services.sync_service import SyncService
+
+    created = client.post("/tournaments", json={"name": "L6"}).json()
+    tid = created["id"]
+    original = _state_with_schedule()
+    assert client.put(f"/tournaments/{tid}/state", json=original).status_code == 200
+
+    def _boom(session, tournament):
+        raise RuntimeError("simulated failure between mutation and commit")
+
+    monkeypatch.setattr(SyncService, "enqueue_tournament", staticmethod(_boom))
+
+    edited = _state_with_schedule()
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 500
+
+    # Undo the monkeypatch so the verifying GET (and repo internals) work.
+    monkeypatch.undo()
+
+    after = client.get(f"/tournaments/{tid}/state").json()
+    assert after["schedule"] is not None
+    assert after["schedule"]["assignments"] == original["schedule"]["assignments"]
+    assert after["config"]["defaultRestMinutes"] == original["config"]["defaultRestMinutes"]

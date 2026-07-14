@@ -80,12 +80,49 @@ def test_unlock_flow_clearing_schedule_passes(client, tid):
     assert client.put(f"/tournaments/{tid}/state", json=unlocked).status_code == 200
 
 
-def test_non_structural_config_change_under_schedule_passes(client, tid):
+def test_non_scheduling_config_change_under_schedule_passes(client, tid):
+    """Fields on the fail-closed exempt list (services.config_lock /
+    shared/non-scheduling-keys.json) stay freely writable under a
+    committed schedule, and the schedule itself is retained untouched —
+    not merely a 200, but no silent clear."""
     assert client.put(f"/tournaments/{tid}/state", json=_scheduled_blob()).status_code == 200
     blob = _scheduled_blob()
     blob["config"]["clockShiftMinutes"] = 30  # director tool — must stay writable
+    blob["config"]["scoringFormat"] = "badminton"  # scoring field — never locks
+    resp = client.put(f"/tournaments/{tid}/state", json=blob)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["config"]["clockShiftMinutes"] == 30
+    assert body["config"]["scoringFormat"] == "badminton"
+    assert body["schedule"] is not None
+    assert body["schedule"]["assignments"] == _scheduled_blob()["schedule"]["assignments"]
+
+
+def test_closed_courts_change_under_schedule_locks(client, tid):
+    """Deliberately-closed gap (Task 3): ``closedCourts`` is a real CP-SAT
+    input (it feeds ``closed_court_ids`` on ScheduleConfig) and is NOT on
+    the non-scheduling exempt list, so — unlike before this task, when
+    only the 4 venue fields were checked — it can no longer change
+    silently under a live, retained schedule. A solver input now requires
+    either clearing the schedule in the same PUT or the explicit
+    ``?clearSchedule=true`` opt-in."""
+    assert client.put(f"/tournaments/{tid}/state", json=_scheduled_blob()).status_code == 200
+    blob = _scheduled_blob()
     blob["config"]["closedCourts"] = [2]
-    assert client.put(f"/tournaments/{tid}/state", json=blob).status_code == 200
+
+    resp = client.put(f"/tournaments/{tid}/state", json=blob)
+    assert resp.status_code == 409
+    body = resp.json()
+    assert "CONFIG_LOCKED" in str(body)
+    assert "closedCourts" in str(body)
+
+    # Opt-in path: ?clearSchedule=true atomically clears the schedule and
+    # applies the edit in the same commit.
+    resp2 = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=blob)
+    assert resp2.status_code == 200
+    body2 = resp2.json()
+    assert body2["config"]["closedCourts"] == [2]
+    assert body2["schedule"] is None
 
 
 def test_config_change_without_schedule_passes(client, tid):
