@@ -203,6 +203,35 @@ def schedule_config_from_dto(config: TournamentConfig) -> ScheduleConfig:
     )
 
 
+def schedule_config_for_bracket(
+    config: TournamentConfig,
+    *,
+    court_count: int,
+    total_slots: int,
+    interval_minutes: int,
+    closed_court_windows: List[Tuple[int, int, int]],
+) -> ScheduleConfig:
+    """Bracket variant of the shared config assembly.
+
+    Reuses the full meet mapping (rest, freeze horizon, breaks, solver
+    objective weights) so both engines consume the SAME engine-config
+    fields, then overrides the structural fields the bracket session
+    owns: its slot axis is a session constant (not a day-window
+    computation) and its closures are the meet-occupied windows the
+    caller derives (which already account for closed courts).
+    """
+    base = schedule_config_from_dto(config)
+    return replace(
+        base,
+        court_count=court_count,
+        total_slots=total_slots,
+        interval_minutes=interval_minutes,
+        closed_court_windows=list(closed_court_windows),
+        closed_court_ids=[],
+        current_slot=0,
+    )
+
+
 def _build_closed_court_windows(
     config: TournamentConfig, total_slots: int
 ) -> List[Tuple[int, int, int]]:
