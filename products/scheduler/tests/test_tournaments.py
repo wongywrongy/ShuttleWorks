@@ -764,6 +764,8 @@ def test_clear_schedule_flag_atomic_rollback_on_write_failure(client, monkeypatc
     after = client.get(f"/tournaments/{tid}/state").json()
     assert after["schedule"] is not None
     assert after["schedule"]["assignments"] == original["schedule"]["assignments"]
+    # The other half of atomicity: the edit must not leak through either.
+    assert after["config"]["defaultRestMinutes"] == original["config"]["defaultRestMinutes"]
 
 
 # ---- Bracket joins the schedule lock (Plan C, Task 4) --------------------
