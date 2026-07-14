@@ -18,6 +18,7 @@ export {
   type BandedTableColumn,
   type BandedTableGroup,
 } from './BandedTable';
+export { MATCH_LIST_COLUMNS } from './matchListColumns';
 export {
   STATUS_CLASS,
   STATUS_LABEL,

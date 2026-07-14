@@ -18,9 +18,9 @@ import {
   ActionsBar,
   BandedTable,
   EmptyState,
+  MATCH_LIST_COLUMNS,
   STATUS_CLASS,
   STATUS_LABEL,
-  type BandedListColumn,
   type BandedTableGroup,
   type BracketMatchStatus,
 } from '../../components/control-plane';
@@ -35,22 +35,6 @@ type NumberedUnit = {
   pu: BracketTournamentDTO['play_units'][number];
   n: number;
 };
-
-/** Column set for the bracket match list — same `px-5` rhythm and the
- *  same leading anatomy as Meet Matches: a `w-4` gutter spacer (Meet's
- *  warning-icon slot — kept here so the `#` column starts at the same x
- *  on both surfaces), then `#`, the accent code, and two flex-[3] sides. */
-// Same column set as Meet Matches ('Event' code column; the trailing
-// column is w-[5.5rem] = Meet's Slots w-14 + delete w-8, so Side B's
-// right edge lines up across the two surfaces).
-const MATCH_COLUMNS: BandedListColumn[] = [
-  { label: '', className: 'w-4' },
-  { label: '#', className: 'w-8' },
-  { label: 'Event', className: 'w-20' },
-  { label: 'Side A', className: 'min-w-0 flex-[3]' },
-  { label: 'Side B', className: 'min-w-0 flex-[3]' },
-  { label: 'Status', className: 'w-[5.5rem] text-right' },
-];
 
 export function BracketMatchesTab({
   data,
@@ -238,7 +222,7 @@ export function BracketMatchesTab({
           ) : (
             <>
               <BandedTable
-                columns={MATCH_COLUMNS}
+                columns={MATCH_LIST_COLUMNS}
                 groups={tableGroups}
                 rowId={({ pu }) => pu.id}
                 onRowClick={({ pu }) => setSelectedId(pu.id)}
@@ -276,6 +260,7 @@ export function BracketMatchesTab({
                       >
                         {STATUS_LABEL[status]}
                       </span>
+                      <span className="w-8 shrink-0" aria-hidden />
                     </>
                   );
                 }}

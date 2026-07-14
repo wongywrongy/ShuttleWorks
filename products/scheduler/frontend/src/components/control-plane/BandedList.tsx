@@ -24,13 +24,13 @@ import { CaretRight } from '@phosphor-icons/react';
 export const COLUMN_HEADER_ROW_CLASSES =
   'text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint';
 
-/** Canonical shell for a banded-list data row: flex row, `min-h-[40px]`,
+/** Canonical shell for a banded-list data row: flex row, `min-h-[32px]`,
  *  `px-5` horizontal gutter, `gap-3` column rhythm, hairline `border-b`,
  *  muted hover wash. Consumers compose their own cells (and extras like
  *  `group` or an accent stripe) on top of this string so Meet Matches and
  *  Bracket Matches rows stay visually indistinguishable. */
 export const BANDED_ROW_CLASSES =
-  'flex min-h-[40px] items-center gap-3 border-b border-border px-5 transition-colors duration-fast ease-brand hover:bg-muted/30';
+  'flex min-h-[32px] items-center gap-3 border-b border-border px-5 transition-colors duration-fast ease-brand hover:bg-muted/30';
 
 export interface BandedListColumn {
   /** Column label. Empty string renders an `aria-hidden` spacer cell. */
