@@ -66,6 +66,14 @@ export interface BracketApi {
     action: 'start' | 'finish' | 'reset';
     slot?: number;
   }) => Promise<BracketTournamentDTO>;
+  /** Contingency result (walkover / retired / forfeit) through the
+   *  idempotent command path — never the legacy /bracket/results route. */
+  recordResultCommand: (body: {
+    play_unit_id: string;
+    winner_side: 'A' | 'B';
+    reason: 'walkover' | 'retired' | 'forfeit';
+    seen_version?: number;
+  }) => Promise<BracketTournamentDTO>;
   validateMove: (body: BracketValidateIn) => Promise<BracketValidationOut>;
   pinMatch: (body: BracketPinIn) => Promise<BracketTournamentDTO>;
   importJson: (body: unknown) => Promise<BracketTournamentDTO>;
@@ -133,6 +141,16 @@ export function BracketApiProvider({
       commitRound: guardMutation((body) => apiClient.commitBracketRound(tournamentId, body)),
       recordResult: guardMutation((body) => apiClient.recordBracketResult(tournamentId, body)),
       matchAction: guardMutation((body) => apiClient.bracketMatchAction(tournamentId, body)),
+      recordResultCommand: guardMutation(async (body) => {
+        await apiClient.recordBracketResultCommand(tournamentId, {
+          id: crypto.randomUUID(),
+          walkover: body.reason === 'walkover',
+          ...body,
+        });
+        const next = await apiClient.getBracket(tournamentId);
+        if (!next) throw new Error('Bracket not found after recording result');
+        return next;
+      }),
       validateMove: (body) => apiClient.validateBracketMove(tournamentId, body),
       pinMatch: guardMutation((body) => apiClient.pinBracketMatch(tournamentId, body)),
       importJson: guardMutation((body) => apiClient.importBracketJson(tournamentId, body)),

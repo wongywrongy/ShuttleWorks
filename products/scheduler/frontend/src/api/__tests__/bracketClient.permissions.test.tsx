@@ -23,6 +23,7 @@ vi.mock('../client', () => ({
     getBracket: vi.fn().mockResolvedValue({ id: 'b1' }),
     deleteBracket: vi.fn().mockResolvedValue(undefined),
     recordBracketResult: vi.fn().mockResolvedValue({ ok: true }),
+    recordBracketResultCommand: vi.fn().mockResolvedValue({ ok: true }),
     bracketEventGenerate: vi.fn().mockResolvedValue({ ok: true }),
     scheduleNextBracketRound: vi.fn().mockResolvedValue({ ok: true }),
   },
@@ -54,6 +55,15 @@ describe('bracket API — the write gate', () => {
       await api().eventGenerate('e1', { wipe: false } as never);
       expect(apiClient.bracketEventGenerate).toHaveBeenCalledTimes(1);
     });
+
+    it('lets a contingency result be recorded through the command path', async () => {
+      await api().recordResultCommand({
+        play_unit_id: 'pu1',
+        winner_side: 'A',
+        reason: 'walkover',
+      });
+      expect(apiClient.recordBracketResultCommand).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('as a viewer', () => {
@@ -64,10 +74,20 @@ describe('bracket API — the write gate', () => {
       ['eventGenerate', (a: ReturnType<typeof api>) => a.eventGenerate('e1', {} as never)],
       ['remove', (a: ReturnType<typeof api>) => a.remove()],
       ['scheduleNext', (a: ReturnType<typeof api>) => a.scheduleNext()],
+      [
+        'recordResultCommand',
+        (a: ReturnType<typeof api>) =>
+          a.recordResultCommand({
+            play_unit_id: 'pu1',
+            winner_side: 'A',
+            reason: 'walkover',
+          }),
+      ],
     ])('refuses %s without touching the network', async (_name, call) => {
       await expect(call(api())).rejects.toThrow(/view-only/i);
 
       expect(apiClient.recordBracketResult).not.toHaveBeenCalled();
+      expect(apiClient.recordBracketResultCommand).not.toHaveBeenCalled();
       expect(apiClient.bracketEventGenerate).not.toHaveBeenCalled();
       expect(apiClient.deleteBracket).not.toHaveBeenCalled();
       expect(apiClient.scheduleNextBracketRound).not.toHaveBeenCalled();

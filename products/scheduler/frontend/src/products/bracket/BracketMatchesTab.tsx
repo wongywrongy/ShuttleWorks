@@ -15,11 +15,13 @@ import { Download, MagnifyingGlass } from '@phosphor-icons/react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
+import { useCanEdit } from '../../hooks/useCanEdit';
 import {
   ActionsBar,
   BandedTable,
   EmptyState,
   MATCH_LIST_COLUMNS,
+  OverflowMenu,
   STATUS_CLASS,
   STATUS_LABEL,
   type BandedTableGroup,
@@ -28,8 +30,17 @@ import {
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { buildPlayUnitLabels, disciplineLabel } from './bracketLabels';
-import { BracketMatchDetailPanel } from './BracketMatchDetailPanel';
+import {
+  BracketMatchDetailPanel,
+  type ContingencyReason,
+} from './BracketMatchDetailPanel';
 import { type CommitEventFn } from './BracketPlayerFields';
+
+const CONTINGENCY_MENU_LABEL: Record<ContingencyReason, string> = {
+  walkover: 'Walkover…',
+  retired: 'Retired (injury)…',
+  forfeit: 'Forfeit…',
+};
 
 /** One numbered row: the play unit plus its stable per-event `#`. */
 type NumberedUnit = {
@@ -48,10 +59,14 @@ export function BracketMatchesTab({
   onData?: (next: BracketTournamentDTO) => void;
 }) {
   const api = useBracketApi();
+  const canEdit = useCanEdit();
   // Same URL-backed `?q=` contract as Meet Matches — the URL is the shared
   // source of truth, so a pasted link restores the operator's filter.
   const [query, setQuery] = useSearchParamState('q', '');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Row-menu deep-link into the detail panel's Contingency section (a
+  // winner must still be chosen there — this only pre-selects the kind).
+  const [contingency, setContingency] = useState<ContingencyReason | null>(null);
 
   // Panel-side event entry writes ride the same upsert path as the
   // roster panel (config echoed by BracketPlayerFields).
@@ -263,7 +278,27 @@ export function BracketMatchesTab({
                       >
                         {STATUS_LABEL[status]}
                       </span>
-                      <span className="w-8 shrink-0" aria-hidden />
+                      <span
+                        className="flex w-8 shrink-0 items-center justify-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {status !== 'done' && canEdit ? (
+                          <OverflowMenu
+                            label={`Contingency for ${labelById.get(pu.id) ?? pu.id}`}
+                            items={(['walkover', 'retired', 'forfeit'] as const).map(
+                              (r) => ({
+                                key: r,
+                                label: CONTINGENCY_MENU_LABEL[r],
+                                testId: `bracket-match-menu-${r}-${pu.id}`,
+                                onSelect: () => {
+                                  setSelectedId(pu.id);
+                                  setContingency(r);
+                                },
+                              }),
+                            )}
+                          />
+                        ) : null}
+                      </span>
                     </>
                   );
                 }}
@@ -285,8 +320,26 @@ export function BracketMatchesTab({
             label={labelById.get(selected.id) ?? selected.id}
             status={statusOf(selected.id)}
             labelById={labelById}
-            onClose={() => setSelectedId(null)}
+            onClose={() => {
+              setSelectedId(null);
+              setContingency(null);
+            }}
             onCommitEvent={commitEvent}
+            initialContingency={contingency}
+            onRecordContingency={
+              canEdit
+                ? async (reason, winner) => {
+                    const next = await api.recordResultCommand({
+                      play_unit_id: selected.id,
+                      winner_side: winner,
+                      reason,
+                      seen_version: selected.version,
+                    });
+                    onData?.(next);
+                    setContingency(null);
+                  }
+                : null
+            }
           />
         ) : null}
       </div>

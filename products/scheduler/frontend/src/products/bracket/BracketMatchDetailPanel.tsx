@@ -33,6 +33,15 @@ import {
   FIELD_LABEL_CLASSES,
   type CommitEventFn,
 } from './BracketPlayerFields';
+import { useConfirmClick } from '../../hooks/useConfirmClick';
+
+export type ContingencyReason = 'walkover' | 'retired' | 'forfeit';
+
+const CONTINGENCY_LABEL: Record<ContingencyReason, string> = {
+  walkover: 'Walkover',
+  retired: 'Retired (injury)',
+  forfeit: 'Forfeit',
+};
 
 export function BracketMatchDetailPanel({
   pu,
@@ -42,6 +51,8 @@ export function BracketMatchDetailPanel({
   labelById,
   onClose,
   onCommitEvent,
+  initialContingency,
+  onRecordContingency,
 }: {
   pu: PlayUnitDTO;
   data: BracketTournamentDTO;
@@ -52,6 +63,10 @@ export function BracketMatchDetailPanel({
   labelById: ReadonlyMap<string, string>;
   onClose: () => void;
   onCommitEvent: CommitEventFn | null;
+  /** Pre-select a contingency kind (row menu deep-link). */
+  initialContingency?: ContingencyReason | null;
+  /** Record a contingency result; absent → section hidden (e.g. viewer). */
+  onRecordContingency?: ((reason: ContingencyReason, winner: 'A' | 'B') => void) | null;
 }) {
   const roster = useTournamentStore((s) => s.bracketPlayers);
   const updatePlayer = useTournamentStore((s) => s.updateBracketPlayer);
@@ -62,6 +77,12 @@ export function BracketMatchDetailPanel({
     [data.participants],
   );
   const badgesById = useMemo(() => badgesByPlayerId(data), [data]);
+  // Plain id→name record for sideLabel's resolved-side branch, so the
+  // Contingency section reads "Alice / Bob advances" rather than raw ids.
+  const nameById = useMemo(
+    () => Object.fromEntries([...participantById].map(([id, p]) => [id, p.name])),
+    [participantById],
+  );
 
   const sideProps = {
     participantById,
@@ -95,8 +116,93 @@ export function BracketMatchDetailPanel({
             {STATUS_LABEL[status]}
           </span>
         </div>
+        {onRecordContingency && status !== 'done' ? (
+          <ContingencySection
+            sideALabel={sideLabel(pu.side_a, pu.slot_a, nameById, labelById)}
+            sideBLabel={sideLabel(pu.side_b, pu.slot_b, nameById, labelById)}
+            initial={initialContingency ?? null}
+            onRecord={onRecordContingency}
+          />
+        ) : null}
       </div>
     </DetailPanel>
+  );
+}
+
+/* =========================================================================
+ * ContingencySection — pick a kind (walkover / retired / forfeit), then
+ * which side advances. Two-click arm per side — window.confirm is banned
+ * (audit E1/F1). Hidden entirely by the caller when the match is `done`
+ * (nothing left to award) or the caller lacks mutation permission.
+ * ========================================================================= */
+function ContingencySection({
+  sideALabel,
+  sideBLabel,
+  initial,
+  onRecord,
+}: {
+  sideALabel: string;
+  sideBLabel: string;
+  initial: ContingencyReason | null;
+  onRecord: (reason: ContingencyReason, winner: 'A' | 'B') => void;
+}) {
+  const [reason, setReason] = useState<ContingencyReason | null>(initial);
+  const confirmA = useConfirmClick(() => reason && onRecord(reason, 'A'));
+  const confirmB = useConfirmClick(() => reason && onRecord(reason, 'B'));
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className={FIELD_LABEL_CLASSES}>Contingency</span>
+      <div className="flex gap-1">
+        {(['walkover', 'retired', 'forfeit'] as const).map((r) => (
+          <button
+            key={r}
+            type="button"
+            data-testid={`contingency-${r}`}
+            aria-pressed={reason === r}
+            onClick={() => {
+              setReason(r);
+              confirmA.reset();
+              confirmB.reset();
+            }}
+            className={[
+              'rounded-sm border px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em]',
+              'transition-colors duration-fast ease-brand',
+              reason === r
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-border text-muted-foreground hover:text-foreground',
+            ].join(' ')}
+          >
+            {CONTINGENCY_LABEL[r]}
+          </button>
+        ))}
+      </div>
+      {reason ? (
+        <div className="flex gap-1.5">
+          {([['A', sideALabel, confirmA], ['B', sideBLabel, confirmB]] as const).map(
+            ([side, label, confirm]) => (
+              <button
+                key={side}
+                type="button"
+                data-testid={`contingency-advance-${side}`}
+                onClick={confirm.press}
+                className={[
+                  'flex-1 rounded-sm border px-2 py-1 text-xs',
+                  'transition-colors duration-fast ease-brand',
+                  confirm.armed
+                    ? 'border-destructive bg-destructive/10 text-destructive'
+                    : 'border-border text-foreground hover:bg-muted/40',
+                ].join(' ')}
+              >
+                {confirm.armed
+                  ? `Confirm — ${label} advances`
+                  : `${label} advances`}
+              </button>
+            ),
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

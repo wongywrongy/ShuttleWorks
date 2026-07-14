@@ -1328,6 +1328,7 @@ class ApiClient {
       finished_at_slot?: number;
       score?: unknown;
       walkover?: boolean;
+      reason?: 'walkover' | 'retired' | 'forfeit';
     },
   ): Promise<unknown> {
     const { data } = await this.client.post(
