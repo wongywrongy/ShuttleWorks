@@ -164,7 +164,6 @@ export function BracketDrawsTab() {
       }));
   }, [drawRows]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reused by Task 2's actions cell
   const handleGenerate = useCallback(
     async (eventId: string, wipe: boolean) => {
       try {
@@ -180,7 +179,6 @@ export function BracketDrawsTab() {
 
   // Swiss progressive generation: append the next round's pairings from
   // standings. The backend gates with 409 (incomplete round / exhausted).
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reused by Task 2's actions cell
   const handleNextRound = useCallback(
     async (eventId: string) => {
       try {
@@ -197,7 +195,6 @@ export function BracketDrawsTab() {
   // Open a draw's bracket visualization. The event id rides along as a
   // query param so the Draw view lands on the row the operator clicked
   // (not just whichever event happened to be selected).
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reused by Task 2's actions cell
   const openDraw = (eventId: string) =>
     navigate(`/tournaments/${tid}/bracket-draw?event=${encodeURIComponent(eventId)}`);
 
@@ -313,8 +310,53 @@ export function BracketDrawsTab() {
                   <span className="flex w-28 justify-end">
                     <StatusPillFor status={row.status} completed={row.completed} />
                   </span>
-                  {/* Actions cell — populated in the next change (Task 2). */}
-                  <span className="flex w-80 items-center justify-end gap-3" />
+                  <span
+                    className="flex w-80 items-center justify-end gap-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ActionCell
+                      status={row.status}
+                      eventReady={row.partCount > 0 && row.partCount === row.targetSize}
+                      onGenerate={() => handleGenerate(row.ev.id, false)}
+                      onRegenerate={() => handleGenerate(row.ev.id, true)}
+                    />
+                    {row.status === 'draft' && (
+                      <button
+                        type="button"
+                        onClick={() => setConfigFor(row.ev.id)}
+                        data-testid={`bracket-configure-${row.ev.id}`}
+                        className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        Configure
+                      </button>
+                    )}
+                    {row.isSwiss && row.generated && (
+                      <button
+                        type="button"
+                        onClick={() => handleNextRound(row.ev.id)}
+                        disabled={!row.roundComplete}
+                        data-testid={`bracket-next-round-${row.ev.id}`}
+                        title={
+                          row.roundComplete
+                            ? 'Pair the next Swiss round from standings'
+                            : 'Record every result in the current round first'
+                        }
+                        className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Next round
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openDraw(row.ev.id)}
+                      disabled={!row.generated}
+                      data-testid={`bracket-open-draw-${row.ev.id}`}
+                      title={row.generated ? `Open the ${row.ev.id} draw` : 'Generate the draw first'}
+                      className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Open draw →
+                    </button>
+                  </span>
                 </>
               )}
             />
@@ -428,7 +470,6 @@ function StatusPillFor({
   return <StatusPill tone="green" dot pulse>Started</StatusPill>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- reused by Task 2's actions cell
 function ActionCell({
   status,
   eventReady,
