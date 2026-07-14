@@ -62,4 +62,12 @@ describe('DrawDetailPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Close detail/i }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('closes via the participant picker\'s own Cancel button', () => {
+    render(
+      <DrawDetailPanel ev={ev} players={players} onClose={onClose} onCommitPicks={onCommitPicks} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
+    expect(onClose).toHaveBeenCalled();
+  });
 });
