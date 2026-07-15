@@ -13,6 +13,7 @@ import { useEffect, useRef } from 'react';
 
 import { apiClient } from '../api/client';
 import { isTerminalPollError } from '../lib/pollPolicy';
+import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { useUiStore } from '../store/uiStore';
 import { useTournamentIdOrNull } from './useTournamentId';
 
@@ -30,7 +31,7 @@ export function useSuggestions(): null {
     const tick = async () => {
       if (cancelledRef.current) return;
       // Skip the network roundtrip while the tab is hidden.
-      if (typeof document !== 'undefined' && document.hidden) return;
+      if (isPageHidden()) return;
       try {
         const list = await apiClient.getSuggestions(tid);
         if (!cancelledRef.current) setSuggestions(list);
@@ -53,17 +54,16 @@ export function useSuggestions(): null {
     // Tab becomes visible after being hidden — fire an immediate tick
     // so the operator sees a fresh inbox without waiting for the next
     // 8s slot.
-    const onVisible = () => {
-      if (!cancelledRef.current && document.visibilityState === 'visible') {
+    const unsubscribe = subscribeVisibility((hidden) => {
+      if (!cancelledRef.current && !hidden) {
         void tick();
       }
-    };
-    document.addEventListener('visibilitychange', onVisible);
+    });
 
     return () => {
       cancelledRef.current = true;
       window.clearInterval(id);
-      document.removeEventListener('visibilitychange', onVisible);
+      unsubscribe();
     };
   }, [tid, setSuggestions]);
 

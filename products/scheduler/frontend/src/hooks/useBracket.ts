@@ -36,10 +36,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useBracketApi } from '../api/bracketClient';
 import { isTerminalPollError } from '../lib/pollPolicy';
+import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { useTournamentId } from './useTournamentId';
 import type { BracketTournamentDTO } from '../api/bracketDto';
 
 const POLL_MS = 2500;
+
+/** Bounded DTO — cheap to stringify at most once per poll tick (2.5s). */
+function dtoEqual(a: BracketTournamentDTO | null, b: BracketTournamentDTO | null): boolean {
+  if (a === b) return true;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 type BracketGetFn = () => Promise<BracketTournamentDTO | null>;
 
@@ -60,6 +67,11 @@ interface PollEntry {
   inFlight: boolean;
   refcount: number;
   subscribers: Set<() => void>;
+  /** Cached ``readSnapshot`` result — reused (same object) while `data`,
+   *  `loading`, and `error` are all unchanged, so React's `setState` bails
+   *  on reference equality instead of re-rendering every consumer on
+   *  every poll tick. */
+  lastSnapshot: { data: BracketTournamentDTO | null; loading: boolean; error: string | null } | null;
 }
 
 // Keyed by tournamentId so every consumer of the same tournament shares
@@ -80,6 +92,7 @@ function ensureEntry(tid: string, get: BracketGetFn): PollEntry {
       inFlight: false,
       refcount: 0,
       subscribers: new Set(),
+      lastSnapshot: null,
     };
     registry.set(tid, e);
   }
@@ -94,10 +107,25 @@ function ensureInterval(e: PollEntry): void {
   e.paused = false;
   if (e.timer == null) {
     e.timer = setInterval(() => {
+      // Nobody can see the update while the tab is hidden — skip the
+      // network roundtrip entirely rather than fetch-and-discard.
+      if (isPageHidden()) return;
       if (Date.now() - e.lastTouched >= POLL_MS - 100) void runFetch(e);
     }, POLL_MS);
   }
 }
+
+// Module-level, process-lifetime subscription: on visibility regain, wake
+// every entry that is actively polling (has a live timer) and is NOT
+// semantically paused. `paused` covers both "no draw yet" (404) and
+// "terminal error" (deleted workspace / access revoked) — either way a
+// regain must not resurrect the exact storm those pauses exist to kill.
+subscribeVisibility((hidden) => {
+  if (hidden) return;
+  for (const e of registry.values()) {
+    if (!e.paused && e.timer != null) void runFetch(e);
+  }
+});
 
 function pause(e: PollEntry): void {
   e.paused = true;
@@ -118,16 +146,25 @@ function stop(e: PollEntry): void {
 async function runFetch(e: PollEntry): Promise<void> {
   if (e.inFlight) return;
   e.inFlight = true;
-  e.loading = true;
-  // Deliberately NOT clearing e.error here: wiping it at fetch start made
-  // a terminal "workspace no longer available" notice flicker away on
-  // every resumed tick. The success path below sets it to null; a failure
-  // overwrites it — either way the outcome, not the attempt, decides.
-  notify(e);
+  // The loading spinner is only meaningful for the FIRST load. Once we
+  // already have data, a poll tick is a silent background refresh — flip
+  // `loading` (and notify) here only when there's nothing on screen yet.
+  const isInitialLoad = e.data == null;
+  if (isInitialLoad) {
+    e.loading = true;
+    // Deliberately NOT clearing e.error here: wiping it at fetch start made
+    // a terminal "workspace no longer available" notice flicker away on
+    // every resumed tick. The success path below sets it to null; a failure
+    // overwrites it — either way the outcome, not the attempt, decides.
+    notify(e);
+  }
   try {
     const d = await e.get();
     e.lastTouched = Date.now();
-    e.data = d;
+    // Content-guard: an unchanged DTO keeps the OLD reference so every
+    // subscriber's snapshot stays reference-identical and React bails on
+    // the re-render. Only replace `data` when the content actually moved.
+    if (!dtoEqual(d, e.data)) e.data = d;
     e.error = null;
     if (d == null) {
       // No draw configured yet — pause to stop the repeated 404 network
@@ -166,7 +203,16 @@ function readSnapshot(tid: string): {
 } {
   const e = registry.get(tid);
   if (!e) return { data: null, loading: false, error: null };
-  return { data: e.data, loading: e.loading, error: e.error };
+  const last = e.lastSnapshot;
+  if (last != null && last.data === e.data && last.loading === e.loading && last.error === e.error) {
+    // Nothing observable changed since the last read — return the SAME
+    // object so a consumer's `setSnap(readSnapshot(tid))` is a no-op
+    // reference-equal write and React skips the re-render.
+    return last;
+  }
+  const snap = { data: e.data, loading: e.loading, error: e.error };
+  e.lastSnapshot = snap;
+  return snap;
 }
 
 export function useBracket() {

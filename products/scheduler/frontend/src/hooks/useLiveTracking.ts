@@ -23,6 +23,7 @@ import type { MatchStateDTO } from '../api/dto';
 import { transitionPath } from '../platform/domain/matchTransitions';
 import { assertCanEdit } from './useCanEdit';
 import { useTournamentIdOrNull } from './useTournamentId';
+import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 
 // The transition table lives in `platform/domain/matchTransitions` — a mirror
 // of the backend contract, unit-tested against it. It used to be defined here
@@ -131,9 +132,19 @@ export function useLiveTracking() {
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Skip the roundtrip while the tab is hidden — nobody can see the
+      // live-tracking board update anyway.
+      if (isPageHidden()) return;
       syncMatchStates();
     }, 5000);
-    return () => clearInterval(interval);
+    // Regain: fire an immediate sync instead of waiting out the interval.
+    const unsubscribe = subscribeVisibility((hidden) => {
+      if (!hidden) syncMatchStates();
+    });
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [syncMatchStates]);
 
   useEffect(() => {

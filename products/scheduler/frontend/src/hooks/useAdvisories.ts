@@ -18,6 +18,7 @@ import { useEffect } from 'react';
 
 import { apiClient } from '../api/client';
 import { isTerminalPollError } from '../lib/pollPolicy';
+import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { useUiStore } from '../store/uiStore';
 import { useAlertStore } from '../store/alertStore';
 import { useTournamentIdOrNull } from './useTournamentId';
@@ -38,7 +39,7 @@ export function useAdvisories(): null {
       // Skip the network roundtrip when the tab is hidden — the user
       // can't see banners anyway, and a poll-while-idle on every browser
       // tab adds up across many open windows.
-      if (typeof document !== 'undefined' && document.hidden) return;
+      if (isPageHidden()) return;
       try {
         const advisories = await apiClient.getAdvisories(tid);
         if (cancelled) return;
@@ -76,17 +77,16 @@ export function useAdvisories(): null {
     // When the tab becomes visible again after being hidden, fire an
     // immediate tick so the operator sees fresh advisories without
     // waiting for the next 15s slot.
-    const onVisibilityChange = () => {
-      if (!cancelled && !document.hidden) {
+    const unsubscribe = subscribeVisibility((hidden) => {
+      if (!cancelled && !hidden) {
         void tick();
       }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
+    });
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
+      unsubscribe();
     };
   }, [tid, setAdvisories]);
 

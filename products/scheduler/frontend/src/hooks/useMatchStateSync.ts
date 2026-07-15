@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useMatchStateStore } from '../store/matchStateStore';
 import { apiClient } from '../api/client';
 import { isTerminalPollError } from '../lib/pollPolicy';
+import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import type { MatchStateDTO } from '../api/dto';
 
 const POLL_MS = 5000;
@@ -67,7 +68,20 @@ export function useMatchStateSync(tid: string | null | undefined): void {
   useEffect(() => {
     stoppedRef.current = false; // new tid → fresh start
     void sync();
-    const interval = setInterval(() => void sync(), POLL_MS);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      // Skip the roundtrip while the tab is hidden — nobody is watching
+      // the store this feeds.
+      if (isPageHidden()) return;
+      void sync();
+    }, POLL_MS);
+    // Regain: fire an immediate sync so the store isn't stale for up to
+    // POLL_MS after the operator switches back.
+    const unsubscribe = subscribeVisibility((hidden) => {
+      if (!hidden && !stoppedRef.current) void sync();
+    });
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [sync]);
 }
