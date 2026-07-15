@@ -1,7 +1,10 @@
 /**
  * Vitest test for useLiveTracking's 5s match-state sync visibility gate
- * (perf pass 1). Only the 5s `syncMatchStates` interval is in scope here —
- * the 1s clock tick (`setCurrentTime`) is deliberately untouched (pass 2).
+ * (perf pass 1). Only the 5s `syncMatchStates` interval is in scope here.
+ *
+ * Perf pass 2 removed the 1s wall-clock tick (`setCurrentTime`) entirely —
+ * see `useLiveTracking.clock.test.tsx` for the regression test proving it's
+ * gone.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

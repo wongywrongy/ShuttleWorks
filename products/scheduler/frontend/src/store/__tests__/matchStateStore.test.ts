@@ -86,18 +86,7 @@ describe('matchStateStore — setMatchStates / setMatchState', () => {
   });
 });
 
-describe('matchStateStore — setCurrentTime / setLastSynced', () => {
-  it('setCurrentTime updates liveState.currentTime when liveState exists', () => {
-    get().setMatchStates({ m1: mkState('m1', 'called') });
-    get().setCurrentTime('09:41');
-    expect(get().liveState!.currentTime).toBe('09:41');
-  });
-
-  it('setCurrentTime is a no-op (stays null) when liveState is null', () => {
-    get().setCurrentTime('09:41');
-    expect(get().liveState).toBeNull();
-  });
-
+describe('matchStateStore — setLastSynced', () => {
   it('setLastSynced updates liveState.lastSynced when liveState exists', () => {
     get().setMatchStates({ m1: mkState('m1', 'called') });
     get().setLastSynced('2026-06-30T00:00:00.000Z');

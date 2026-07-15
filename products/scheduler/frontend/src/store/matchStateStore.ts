@@ -50,7 +50,6 @@ interface MatchStateState {
 
   setMatchStates: (states: Record<string, MatchStateDTO>) => void;
   setMatchState: (matchId: string, state: MatchStateDTO) => void;
-  setCurrentTime: (time: string) => void;
   setLastSynced: (time: string) => void;
   reset: () => void;
 
@@ -128,10 +127,6 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
       };
     }),
 
-  setCurrentTime: (time) =>
-    set((state) => ({
-      liveState: state.liveState ? { ...state.liveState, currentTime: time } : null,
-    })),
   setLastSynced: (time) =>
     set((state) => ({
       liveState: state.liveState ? { ...state.liveState, lastSynced: time } : null,

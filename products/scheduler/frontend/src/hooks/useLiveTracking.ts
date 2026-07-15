@@ -51,10 +51,8 @@ export function useLiveTracking() {
   const config = useTournamentStore((state) => state.config);
   const matches = useTournamentStore((state) => state.matches);
   const matchStates = useMatchStateStore((state) => state.matchStates);
-  const liveState = useMatchStateStore((state) => state.liveState);
   const setMatchStates = useMatchStateStore((state) => state.setMatchStates);
   const setMatchState = useMatchStateStore((state) => state.setMatchState);
-  const setCurrentTime = useMatchStateStore((state) => state.setCurrentTime);
   const setLastSynced = useMatchStateStore((state) => state.setLastSynced);
 
   const loadMatchStates = useCallback(async () => {
@@ -146,18 +144,6 @@ export function useLiveTracking() {
       unsubscribe();
     };
   }, [syncMatchStates]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date().toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-      setCurrentTime(now);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [setCurrentTime]);
 
   // Self-ref so the toast `onAction` retry can invoke the latest
   // `updateMatchStatus` without tripping React's temporal-dead-zone
@@ -461,9 +447,9 @@ export function useLiveTracking() {
   // whether its match was still scheduled, which let the percentage
   // exceed 100 after a cancellation/court-closure removed a played
   // match from the plan.
-  // Memoized so the per-second clock tick (setCurrentTime) doesn't re-run these
-  // filters or hand consumers fresh array references every second — they
-  // recompute only when the schedule or match states actually change.
+  // Memoized so these filters recompute only when the schedule or match
+  // states actually change, not on every render (perf pass 2 removed the
+  // 1s wall-clock tick that used to force one every second).
   const scheduledAssignments = useMemo(() => schedule?.assignments ?? [], [schedule]);
   const progressStats = useMemo(() => {
     const finished = scheduledAssignments.filter((a) => matchStates[a.matchId]?.status === 'finished').length;
@@ -497,7 +483,6 @@ export function useLiveTracking() {
     config,
     matches,
     matchStates,
-    liveState,
     progressStats,
     matchesByStatus,
     updateMatchStatus,
