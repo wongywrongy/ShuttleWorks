@@ -333,3 +333,27 @@ a green 1,100-test suite. The real check is the viewer flow in
   session/request time budget. Behavior was already correct (per the
   function's docstring); only the regression guard was missing. See
   **Cleared** below.
+
+- **2026-07-15 · bracket GET is a full session rebuild per request** (found in
+  the tab-latency perf investigation; the residual after the frontend fixes
+  4a47113/3d5ccf0/7ce0c05) — `GET /tournaments/{id}/bracket` runs
+  `_hydrate_session` (`api/brackets.py`): 1 + 3·N repo queries (events ×
+  participants/matches/results), full `TournamentState`/`Draw` reconstruction,
+  `schedule_config_for_bracket`, `_meet_occupied_windows`, and per-event
+  rr/swiss `compute_standings` in `_serialize_session` — on EVERY request,
+  i.e. every 2.5 s poll tick and every bracket re-entry (the frontend
+  registry drops its cache when the last consumer unmounts). Measured
+  effect: an occasional ~1.5 s tab-click outlier on bracket RE-ENTRY under
+  4× CPU throttle (the only click-latency spike left). Fix directions:
+  server-side memo of the serialized DTO keyed on a session/results version
+  with invalidation on bracket writes, or ETag/304 so unchanged polls skip
+  the rebuild; optionally keep the frontend registry entry warm across
+  brief module exits. Size M.
+- **2026-07-15 · GET /tournaments/{id}/state recomputes meet standings per
+  call** (`api/tournaments.py` `_meet_standings_for`: module-catalog lookup +
+  an extra `match_states.list_for_tournament` read + `compute_meet_standings`
+  over all matches on every GET) and the debounced 500 ms PUT writes the
+  whole blob whose `scheduleHistory` grows unboundedly over a tournament's
+  life (every PUT also snapshots a backup row). Not the measured lag source
+  today, but both scale with tournament size. Fix directions: standings memo
+  keyed on results version; cap/compact `scheduleHistory`. Size S–M.
