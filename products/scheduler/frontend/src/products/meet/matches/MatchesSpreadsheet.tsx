@@ -133,9 +133,14 @@ export function MatchesSpreadsheet({
 
   // Selected match — a click on a row's background/# cell (not its inline
   // editors) opens the right-docked match DetailPanel. Derived find so a
-  // deleted match auto-dismisses the panel.
+  // deleted match auto-dismisses the panel. Memoized so a re-render that
+  // doesn't touch `matches`/`selectedId` doesn't re-scan the full match
+  // array every time.
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selectedMatch = matches.find((m) => m.id === selectedId) ?? null;
+  const selectedMatch = useMemo(
+    () => matches.find((m) => m.id === selectedId) ?? null,
+    [matches, selectedId],
+  );
 
   // Configured event ranks — derived from `config.rankCounts`. Memoized so every
   // row gets a STABLE `configuredRanks` reference (the React Compiler is not
@@ -151,6 +156,40 @@ export function MatchesSpreadsheet({
     return ranks;
   }, [config?.rankCounts]);
 
+  // Group the filtered matches by event prefix so each discipline gets
+  // its own collapsible section. Section order follows EVENT_ORDER; any
+  // match with no/unknown rank collects into a trailing "Unassigned"
+  // group keyed by the '—' sentinel. Collapse state lives inside the
+  // shared BandedTable shell (default all-expanded, as before). Memoized
+  // (with the regex-per-match grouping pass) so an unrelated re-render
+  // doesn't rebuild these on every render — only when `filteredMatches`
+  // actually changes.
+  const tableGroups = useMemo<BandedTableGroup<MatchDTO>[]>(() => {
+    const groupsByPrefix = new Map<string, MatchDTO[]>();
+    for (const m of filteredMatches) {
+      const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
+      const key = prefix || '—';
+      if (!groupsByPrefix.has(key)) groupsByPrefix.set(key, []);
+      groupsByPrefix.get(key)!.push(m);
+    }
+    const orderedKeys = [
+      ...EVENT_ORDER.filter((p) => groupsByPrefix.has(p)),
+      ...[...groupsByPrefix.keys()].filter(
+        (k) => !(EVENT_ORDER as readonly string[]).includes(k),
+      ),
+    ];
+    return orderedKeys.map((key) => {
+      const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
+      return {
+        key,
+        label,
+        code: key === '—' ? undefined : key,
+        items: groupsByPrefix.get(key)!,
+        testId: `match-group-${label}`,
+      };
+    });
+  }, [filteredMatches]);
+
   if (matches.length === 0) {
     return (
       <div className="px-5 py-10 text-center text-sm text-muted-foreground">
@@ -158,35 +197,6 @@ export function MatchesSpreadsheet({
       </div>
     );
   }
-
-  // Group the filtered matches by event prefix so each discipline gets
-  // its own collapsible section. Section order follows EVENT_ORDER; any
-  // match with no/unknown rank collects into a trailing "Unassigned"
-  // group keyed by the '—' sentinel. Collapse state lives inside the
-  // shared BandedTable shell (default all-expanded, as before).
-  const groupsByPrefix = new Map<string, MatchDTO[]>();
-  for (const m of filteredMatches) {
-    const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
-    const key = prefix || '—';
-    if (!groupsByPrefix.has(key)) groupsByPrefix.set(key, []);
-    groupsByPrefix.get(key)!.push(m);
-  }
-  const orderedKeys = [
-    ...EVENT_ORDER.filter((p) => groupsByPrefix.has(p)),
-    ...[...groupsByPrefix.keys()].filter(
-      (k) => !(EVENT_ORDER as readonly string[]).includes(k),
-    ),
-  ];
-  const tableGroups: BandedTableGroup<MatchDTO>[] = orderedKeys.map((key) => {
-    const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
-    return {
-      key,
-      label,
-      code: key === '—' ? undefined : key,
-      items: groupsByPrefix.get(key)!,
-      testId: `match-group-${label}`,
-    };
-  });
 
   const issuesFor = (m: MatchDTO) =>
     disruptions.byMatch.get(m.id) ?? EMPTY_ISSUES;

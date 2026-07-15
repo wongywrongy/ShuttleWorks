@@ -26,6 +26,24 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
+    // Pre-transform the lazily-loaded module entrypoints (ModuleOutlet.tsx)
+    // + Meet's own lazy sub-pages (MeetProduct.tsx) so the FIRST tab click
+    // in dev doesn't pay cold esbuild-transform cost. Perf pass 2 (dev-UX).
+    warmup: {
+      clientFiles: [
+        './src/products/meet/MeetProduct.tsx',
+        './src/products/meet/TournamentSetupPage.tsx',
+        './src/products/meet/roster/RosterTab.tsx',
+        './src/products/meet/matches/MatchesTab.tsx',
+        './src/products/meet/SchedulePage.tsx',
+        './src/products/meet/MatchControlCenterPage.tsx',
+        './src/products/bracket/BracketProduct.tsx',
+        './src/products/bracket/BracketTab.tsx',
+        './src/products/operations/OperationsProduct.tsx',
+        './src/products/display/DisplayProduct.tsx',
+        './src/products/display/PublicDisplayPage.tsx',
+      ],
+    },
   },
   build: {
     // Code splitting for better caching
