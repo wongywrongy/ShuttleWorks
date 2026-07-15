@@ -46,6 +46,27 @@ export function requestClearScheduleOnNextSave(): void {
 }
 
 /**
+ * Cross-module disclosure line for the CONFIG_LOCKED confirm modal.
+ *
+ * `useTournamentState` is mounted on the meet side, so from here "the
+ * other module" is always the bracket. The backend's `schedules` extra
+ * (`backend/api/tournaments.py`) names every module whose committed
+ * schedule the sanctioned clearSchedule PUT will actually clear — when
+ * it includes `'bracket'`, silently confirming the meet-worded unlock
+ * modal would also wipe a bracket draw's committed schedule without the
+ * operator ever being told. Returns `undefined` when there is nothing
+ * extra to disclose (bracket not in the list, or the 409 carried no
+ * `schedules` at all — e.g. an older/mismatched backend).
+ */
+function crossModuleNoteFor(schedules: string[] | undefined): string | undefined {
+  if (!schedules || !schedules.includes('bracket')) return undefined;
+  if (schedules.includes('meet')) {
+    return 'This will also clear the bracket schedule — both the meet and bracket schedules will be cleared.';
+  }
+  return 'This will also clear the bracket schedule.';
+}
+
+/**
  * Shared error-bookkeeping for a rejected save: sets the error banner,
  * and for a 409 (the server rejected the CONTENT, not our version)
  * re-syncs from the server and toasts. A network error / 5xx is
@@ -163,6 +184,7 @@ export async function forceSaveNow(): Promise<void> {
       // `?clearSchedule=true`. On decline, the edit is abandoned cleanly
       // (re-hydrate) with no raw backend string in the toast.
       if (status === 409 && code === 'CONFIG_LOCKED' && !clearSchedule) {
+        const schedules = (err as { schedules?: string[] })?.schedules;
         const confirmed = await new Promise<boolean>((resolve) => {
           useUiStore.getState().setUnlockModalState({
             open: true,
@@ -171,6 +193,7 @@ export async function forceSaveNow(): Promise<void> {
             // like the other callers ('save engine settings'), not a full
             // sentence, or the copy comes out doubled/ungrammatical.
             actionDescription: 'This edit',
+            crossModuleNote: crossModuleNoteFor(schedules),
             resolve: (ok: boolean) => {
               useUiStore.getState().setUnlockModalState(null);
               resolve(ok);

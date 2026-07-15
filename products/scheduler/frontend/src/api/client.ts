@@ -222,11 +222,20 @@ export function handleApiResponseError(error: any): never {
   // message.
   let code: string | undefined;
   let message: string;
+  // Promoted alongside `code` for CONFIG_LOCKED payloads: the tournament
+  // state PUT's schedule-lock guard ships `extra={"fields": [...],
+  // "schedules": [...]}` (backend/api/tournaments.py) so the frontend can
+  // disclose exactly which committed schedule(s) a confirm-unlock will
+  // clear, instead of guessing from its own module's local state.
+  let fields: string[] | undefined;
+  let schedules: string[] | undefined;
   if (error.response) {
     const detail = error.response.data?.detail;
     if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
       code = typeof detail.code === 'string' ? detail.code : undefined;
       message = detail.message;
+      if (Array.isArray(detail.fields)) fields = detail.fields;
+      if (Array.isArray(detail.schedules)) schedules = detail.schedules;
     } else if (typeof detail === 'string') {
       message = detail;
     } else {
@@ -281,6 +290,8 @@ export function handleApiResponseError(error: any): never {
   const err = new Error(message) as Error & {
     requestId?: string;
     code?: string;
+    fields?: string[];
+    schedules?: string[];
     status?: number;
     response?: unknown;
     /** Set by this interceptor so the global
@@ -290,6 +301,8 @@ export function handleApiResponseError(error: any): never {
   };
   if (requestId) err.requestId = requestId;
   if (code) err.code = code;
+  if (fields) err.fields = fields;
+  if (schedules) err.schedules = schedules;
   // Preserve the ORIGINAL axios response on the rebuilt error.
   // submitCommand classifies 409s by reading response.data.error
   // (conflict vs stale_version); without this passthrough every

@@ -112,6 +112,12 @@ interface ScheduleGenerationStats {
 interface UnlockModalState {
   open: boolean;
   actionDescription?: string;
+  /** Extra disclosure line for the cross-module case: set when the
+   *  triggering 409's `schedules` payload names more than just the
+   *  current module (e.g. confirming a meet-worded unlock also clears
+   *  a committed bracket schedule). Omitted when there is nothing extra
+   *  to disclose. */
+  crossModuleNote?: string;
   resolve: (confirmed: boolean) => void;
 }
 

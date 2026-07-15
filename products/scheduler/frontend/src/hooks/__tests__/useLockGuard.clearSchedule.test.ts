@@ -34,14 +34,22 @@ function makeInterceptedError(
   status: number,
   code: string,
   message: string,
-): Error & { status: number; code: string; response: { status: number } } {
+  schedules?: string[],
+): Error & {
+  status: number;
+  code: string;
+  schedules?: string[];
+  response: { status: number };
+} {
   const err = new Error(message) as Error & {
     status: number;
     code: string;
+    schedules?: string[];
     response: { status: number };
   };
   err.status = status;
   err.code = code;
+  if (schedules) err.schedules = schedules;
   err.response = { status };
   return err;
 }
@@ -250,6 +258,64 @@ describe('forceSaveNow — reactive 409 CONFIG_LOCKED backstop (cross-module loc
     expect(put).toHaveBeenCalledWith('tid-1', expect.anything());
     expect(useUiStore.getState().unlockModalState).toBeNull();
     expect(useUiStore.getState().persistStatus).toBe('idle');
+  });
+
+  it('a CONFIG_LOCKED 409 naming both schedules discloses the bracket clear in the modal', async () => {
+    const put = vi
+      .spyOn(apiClient, 'putTournamentState')
+      .mockRejectedValueOnce(
+        makeInterceptedError(
+          409,
+          'CONFIG_LOCKED',
+          'Schedule locked: defaultRestMinutes cannot change.',
+          ['meet', 'bracket'],
+        ) as never,
+      )
+      .mockResolvedValueOnce({} as never);
+
+    const flush = forceSaveNow();
+
+    await vi.waitFor(() =>
+      expect(useUiStore.getState().unlockModalState?.open).toBe(true),
+    );
+
+    expect(useUiStore.getState().unlockModalState?.crossModuleNote).toMatch(
+      /bracket/i,
+    );
+
+    act(() => {
+      useUiStore.getState().unlockModalState?.resolve(true);
+    });
+
+    await flush;
+    expect(put).toHaveBeenCalledTimes(2);
+  });
+
+  it('a CONFIG_LOCKED 409 naming only the meet schedule does NOT mention the bracket', async () => {
+    vi.spyOn(apiClient, 'putTournamentState')
+      .mockRejectedValueOnce(
+        makeInterceptedError(
+          409,
+          'CONFIG_LOCKED',
+          'Schedule locked: defaultRestMinutes cannot change.',
+          ['meet'],
+        ) as never,
+      )
+      .mockResolvedValueOnce({} as never);
+
+    const flush = forceSaveNow();
+
+    await vi.waitFor(() =>
+      expect(useUiStore.getState().unlockModalState?.open).toBe(true),
+    );
+
+    expect(useUiStore.getState().unlockModalState?.crossModuleNote).toBeUndefined();
+
+    act(() => {
+      useUiStore.getState().unlockModalState?.resolve(true);
+    });
+
+    await flush;
   });
 
   it('a normal (unlocked) save with no committed schedule anywhere does not prompt at all', async () => {

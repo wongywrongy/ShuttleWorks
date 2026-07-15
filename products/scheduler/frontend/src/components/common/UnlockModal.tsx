@@ -25,9 +25,18 @@ interface UnlockModalProps {
    *  "Edit court count" or "Add a new player". Optional — when omitted
    *  the modal uses generic copy. */
   actionDescription?: string;
+  /** Extra disclosure line for the cross-module case, e.g. "This will
+   *  also clear the bracket schedule." Optional — omitted when the
+   *  triggering 409 only named the current module's own schedule. */
+  crossModuleNote?: string;
 }
 
-export function UnlockModal({ onConfirm, onCancel, actionDescription }: UnlockModalProps) {
+export function UnlockModal({
+  onConfirm,
+  onCancel,
+  actionDescription,
+  crossModuleNote,
+}: UnlockModalProps) {
   // Tracks whether the operator has explicitly clicked the destructive
   // primary. We deliberately don't auto-focus it — the destructive
   // button is the *second* tab stop after Cancel.
@@ -48,6 +57,11 @@ export function UnlockModal({ onConfirm, onCancel, actionDescription }: UnlockMo
           {action} will clear the currently committed schedule. The next
           generate or replan will start fresh.
         </p>
+        {crossModuleNote && (
+          <p className="mt-2 text-sm font-medium text-danger-fg">
+            {crossModuleNote}
+          </p>
+        )}
         <div className="mt-4 rounded border border-border bg-muted p-3 text-sm text-muted-foreground">
           <div className="font-medium text-foreground">This will clear:</div>
           <ul className="mt-1 list-disc pl-5">

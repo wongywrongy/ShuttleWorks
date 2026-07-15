@@ -17,6 +17,7 @@ export function UnlockModalHost() {
   return (
     <UnlockModal
       actionDescription={state.actionDescription}
+      crossModuleNote={state.crossModuleNote}
       onConfirm={() => state.resolve(true)}
       onCancel={() => state.resolve(false)}
     />
