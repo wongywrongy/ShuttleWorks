@@ -828,6 +828,56 @@ def test_bracket_assignments_lock_scheduling_fields(client):
     assert detail["schedules"] == ["bracket"]
 
 
+def test_config_locked_lists_both_schedules_when_both_committed(client):
+    """When BOTH the meet and bracket schedules are committed, the
+    CONFIG_LOCKED 409 payload must disclose both — the frontend confirm
+    modal relies on ``schedules`` to warn the operator the bracket
+    schedule will also be cleared."""
+    created = client.post("/tournaments", json={"name": "B6"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule("B6"))
+    _seed_bracket_schedule(tid)
+
+    edited = _state_with_schedule("B6")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["code"] == "CONFIG_LOCKED"
+    assert detail["schedules"] == ["meet", "bracket"]
+
+
+def test_clear_schedule_flag_clears_both_when_both_committed(client):
+    """The sanctioned clearSchedule=true PUT clears BOTH schedules
+    atomically when both are committed — the combined case the audit
+    flagged as uncovered."""
+    created = client.post("/tournaments", json={"name": "B7"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule("B7"))
+    _seed_bracket_schedule(tid)
+
+    edited = _state_with_schedule("B7")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 200
+    after = client.get(f"/tournaments/{tid}/state").json()
+    assert after["schedule"] is None
+    assert after["config"]["defaultRestMinutes"] == 5
+
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        data = repo.tournaments.get_by_id(_uuid.UUID(tid)).data
+    finally:
+        session.close()
+    assert data["bracket_session"].get("assignments") in (None, [])
+
+
 def test_clear_schedule_strips_bracket_assignments(client):
     created = client.post("/tournaments", json={"name": "B2"}).json()
     tid = created["id"]
@@ -853,6 +903,45 @@ def test_clear_schedule_strips_bracket_assignments(client):
     assert data["bracket_session"].get("assignments") in (None, [])
     # The rest of the session blob survives (total_slots untouched).
     assert data["bracket_session"]["total_slots"] == 128
+
+
+def test_started_draw_does_not_block_meet_only_clear(client):
+    """A started bracket event with NO committed bracket assignments must
+    not freeze the meet's own clearSchedule path. The DRAW_STARTED hard
+    lock protects clearing an in-play bracket schedule — it must not
+    fire when there is nothing bracket-side to clear."""
+    created = client.post("/tournaments", json={"name": "B5"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule("B5"))
+
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        repo.brackets.create_event(
+            _uuid.UUID(tid),
+            "MS",
+            discipline="MS",
+            format="se",
+            duration_slots=2,
+            status="started",
+        )
+        # No bracket_session assignments seeded — nothing bracket-side
+        # to clear.
+    finally:
+        session.close()
+
+    edited = _state_with_schedule("B5")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 200
+    after = client.get(f"/tournaments/{tid}/state").json()
+    assert after["schedule"] is None
+    assert after["config"]["defaultRestMinutes"] == 5
 
 
 def test_started_draw_is_hard_locked_even_with_flag(client):

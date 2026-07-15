@@ -609,11 +609,19 @@ def put_tournament_state(
 
     clear_bracket = False
     if clearSchedule and fields:
-        started = [
-            ev.id
-            for ev in repo.brackets.list_events(tournament_id)
-            if (ev.status or "draft") == "started"
-        ]
+        # The hard lock only protects a bracket schedule actually being
+        # cleared — a started draw with no committed assignments has
+        # nothing bracket-side for this clear to touch, so it must not
+        # freeze a meet-only clearSchedule.
+        started = (
+            [
+                ev.id
+                for ev in repo.brackets.list_events(tournament_id)
+                if (ev.status or "draft") == "started"
+            ]
+            if bracket_assignments
+            else []
+        )
         if started:
             raise http_error(
                 409,
