@@ -168,3 +168,16 @@ def test_bracket_solver_options_deterministic_flows_through(repo):
 
     opts_non_deterministic = _bracket_solver_options(5.0, {})
     assert opts_non_deterministic.deterministic is False
+
+
+def test_bracket_solver_options_ignores_config_time_limit(repo):
+    """``config.solverTimeLimitSeconds`` deliberately does NOT override the
+    bracket solve budget — that stays a request/session parameter
+    (``bracket_session.time_limit_seconds``). This is the negative-guard
+    regression test flagged in the debt log (2026-07-14 entry): setting
+    the config field must leave ``SolverOptions.time_limit_seconds`` at
+    the passed-in session/request value, not the config override."""
+    from api.brackets import _bracket_solver_options
+
+    opts = _bracket_solver_options(5.0, {"solverTimeLimitSeconds": 999})
+    assert opts.time_limit_seconds == 5.0

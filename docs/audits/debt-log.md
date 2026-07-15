@@ -162,6 +162,14 @@ design-gated items above + engine coverage.
 
 ## Cleared
 
+- **2026-07-15 (bracket solver-options negative guard)** — closed the
+  2026-07-14 debt-log entry: added
+  `test_bracket_solver_options_ignores_config_time_limit`
+  (`tests/unit/test_bracket_hydrate_config.py`), which sets
+  `solverTimeLimitSeconds` in the camel config and asserts
+  `_bracket_solver_options(...)` still returns the passed-in
+  session/request `time_limit_seconds`, unmodified by the config. Test-only
+  change; backend suite green.
 - **2026-07-02 (loose-ends pass)** — cleared the five open polish/UX items in one
   sweep alongside the Hub dashboard integration: the 409-toast raw-UUID (meet match
   code at the `useLiveTracking` call-sites), the Plan zoom-bar doubled hairline
@@ -305,19 +313,11 @@ a green 1,100-test suite. The real check is the viewer flow in
   2026-07-14 §1); routing semantics deferred. Entry points:
   `app/schemas.py BracketCommandRequest.reason`,
   `BracketMatchDetailPanel.ContingencySection`.
-- **2026-07-14 · bracket solver-options negative guard untested** (found in
-  Plan C Task 11, whole-program gate pass) — Task 10 wired
-  `_bracket_solver_options` (`products/scheduler/backend/api/brackets.py`)
-  to deliberately **not** apply `config.solverTimeLimitSeconds`: the
-  bracket solve budget stays a request/session parameter
-  (`bracket_session.time_limit_seconds`, default 5.0 s), documented in the
-  function's docstring. `test_bracket_solver_options_deterministic_flows_through`
-  (`tests/unit/test_bracket_hydrate_config.py`) proves the deterministic/seed
-  branch flows through, but no test proves the *negative* — that setting
-  `config.solverTimeLimitSeconds` on a bracket session's engine config leaves
-  `SolverOptions.time_limit_seconds` unchanged (still the session/request
-  value, not the config override). Minor: the behavior is correct and
-  documented, only the regression guard is missing. Fix = one assertion in
-  `test_bracket_hydrate_config.py` setting `solverTimeLimitSeconds` in
-  `camel_cfg` and asserting `_bracket_solver_options(...).time_limit_seconds`
-  still equals the passed `time_limit_seconds` arg. Size XS.
+- ~~**2026-07-14 · bracket solver-options negative guard untested**~~ ✅ **fixed
+  2026-07-15**: added `test_bracket_solver_options_ignores_config_time_limit`
+  (`tests/unit/test_bracket_hydrate_config.py`) — asserts
+  `_bracket_solver_options(5.0, {"solverTimeLimitSeconds": 999}).time_limit_seconds
+  == 5.0`, proving `config.solverTimeLimitSeconds` does not override the
+  session/request time budget. Behavior was already correct (per the
+  function's docstring); only the regression guard was missing. See
+  **Cleared** below.
