@@ -77,6 +77,7 @@ from services.bracket import (
     TournamentDriver,
     record_result,
 )
+from services.bracket import response_cache
 from services.bracket.formats import (
     FORMAT_REGISTRY,
     build_swiss_round,
@@ -1556,6 +1557,7 @@ def create_bracket(
         time_limit_seconds=body.time_limit_seconds,
     )
 
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session_obj)
 
 
@@ -1564,13 +1566,27 @@ def get_bracket(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ) -> TournamentOut:
+    """Read the full bracket state.
+
+    Served from a short-TTL in-process cache (``response_cache``) when
+    fresh — the frontend polls this route every 2.5 s and refetches on
+    every bracket-surface re-entry, so an unconditional rebuild on every
+    request is the last measured tab-latency hot path. See
+    ``services/bracket/response_cache.py`` for the staleness bound and
+    the fail-safety property.
+    """
     _ensure_tournament_exists(repo, tournament_id)
+    cached = response_cache.get(tournament_id)
+    if cached is not None:
+        return cached
     session = _hydrate_session(repo, tournament_id)
     if session is None:
         raise HTTPException(
             status_code=404, detail="no bracket configured for this tournament"
         )
-    return _serialize_session(session)
+    payload = _serialize_session(session)
+    response_cache.put(tournament_id, payload)
+    return payload
 
 
 @router.delete("", dependencies=[_OPERATOR])
@@ -1580,6 +1596,7 @@ def delete_bracket(
 ) -> Dict[str, bool]:
     _ensure_tournament_exists(repo, tournament_id)
     _clear_bracket(repo, tournament_id)
+    response_cache.invalidate(tournament_id)
     return {"ok": True}
 
 
@@ -1626,6 +1643,7 @@ def schedule_next_round(
     runtime_ms = (time.perf_counter() - perf_start) * 1000.0
     # Persist the new assignments into the session blob.
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
 
     return ScheduleNextRoundOut(
         status=result.status.value,
@@ -1906,6 +1924,7 @@ def commit_next_round(
         )
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2001,6 +2020,7 @@ def upsert_event(
         raise HTTPException(
             status_code=404, detail="no bracket session for this tournament"
         )
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2069,6 +2089,7 @@ def patch_event_config(
         raise HTTPException(
             status_code=404, detail="no bracket session for this tournament"
         )
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2312,6 +2333,7 @@ def generate_event_route(
         )
     # 6. Persist assignments (session.state.assignments updated by solver).
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2488,6 +2510,7 @@ def generate_next_round_route(
     # Session blob (assignments etc.) is unchanged in content but kept in
     # the same write rhythm as the other mutating routes.
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2517,6 +2540,7 @@ def delete_event_route(
             detail=f"event status is {existing.status!r}; only draft can be deleted",
         )
     repo.brackets.delete_event(tournament_id, event_id)
+    response_cache.invalidate(tournament_id)
     return Response(status_code=204)
 
 
@@ -2604,6 +2628,7 @@ def record_match_result(
     # tokens so the returned DTO carries the authoritative versions (SP-F3).
     session.match_versions = _load_match_versions(repo, tournament_id)
 
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2689,6 +2714,10 @@ def submit_bracket_command(
     # Refresh match versions so the returned DTO carries authoritative tokens.
     session.match_versions = _load_match_versions(repo, tournament_id)
 
+    # CRITICAL: this is the one user-visible staleness case — the command
+    # queue does POST-then-immediate-GET, so a stale cache hit here would
+    # show an unrecorded result. Must invalidate before returning.
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2760,6 +2789,7 @@ def match_action(
         assignment.actual_end_slot = None
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2952,6 +2982,7 @@ def pin_bracket_match(
         )
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -3008,6 +3039,7 @@ def assign_bracket_court(
     )
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -3041,6 +3073,7 @@ def unassign_bracket_court(
     session.state.assignments.pop(body.play_unit_id, None)
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -3118,6 +3151,7 @@ def import_tournament_json(
         session=session,
         time_limit_seconds=body.time_limit_seconds,
     )
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -3208,6 +3242,7 @@ async def import_tournament_csv(
         session=session,
         time_limit_seconds=time_limit_seconds,
     )
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 

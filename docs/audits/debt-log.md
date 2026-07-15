@@ -334,21 +334,28 @@ a green 1,100-test suite. The real check is the viewer flow in
   function's docstring); only the regression guard was missing. See
   **Cleared** below.
 
-- **2026-07-15 · bracket GET is a full session rebuild per request** (found in
-  the tab-latency perf investigation; the residual after the frontend fixes
-  4a47113/3d5ccf0/7ce0c05) — `GET /tournaments/{id}/bracket` runs
-  `_hydrate_session` (`api/brackets.py`): 1 + 3·N repo queries (events ×
-  participants/matches/results), full `TournamentState`/`Draw` reconstruction,
-  `schedule_config_for_bracket`, `_meet_occupied_windows`, and per-event
-  rr/swiss `compute_standings` in `_serialize_session` — on EVERY request,
-  i.e. every 2.5 s poll tick and every bracket re-entry (the frontend
-  registry drops its cache when the last consumer unmounts). Measured
-  effect: an occasional ~1.5 s tab-click outlier on bracket RE-ENTRY under
-  4× CPU throttle (the only click-latency spike left). Fix directions:
-  server-side memo of the serialized DTO keyed on a session/results version
-  with invalidation on bracket writes, or ETag/304 so unchanged polls skip
-  the rebuild; optionally keep the frontend registry entry warm across
-  brief module exits. Size M.
+- ~~**2026-07-15 · bracket GET is a full session rebuild per request**~~ ✅
+  **resolved 2026-07-15**: added a bounded-staleness in-process cache,
+  `services/bracket/response_cache.py` — `GET /tournaments/{id}/bracket`
+  serves the cached serialized `TournamentOut` when younger than
+  `TTL_SECONDS` (2.0 s, below the frontend's 2.5 s poll period so staleness
+  never exceeds existing poll latency), and rebuilds via `_hydrate_session` +
+  `_serialize_session` on a miss. Every mutating bracket route (create,
+  delete, schedule-next, schedule-next/commit, event upsert/patch/generate/
+  delete, rounds/next, results, commands, match-action, pin, assign,
+  unassign, import.json, import.csv — 17 sites) calls `invalidate(tid)`
+  after its write, before returning; `PUT /tournaments/{id}/state
+  ?clearSchedule=true` (`api/tournaments.py`) also invalidates when it nulls
+  bracket assignments. The command path's POST-then-immediate-GET (the one
+  user-visible staleness case) is covered explicitly. Fail-safety: a missed
+  invalidation site degrades to ≤2 s staleness then self-heals — never
+  permanent — and the cache assumes the single uvicorn process CLAUDE.md
+  documents (no cross-process coherence). Tests:
+  `tests/unit/test_bracket_response_cache.py` (cache-module unit tests +
+  cache-hit-skips-hydrate, write-invalidation incl. the command path, TTL
+  expiry, `clearSchedule` invalidation) — full backend suite (804 tests)
+  green with the cache live, proving invalidation coverage rather than
+  disabling the cache in tests.
 - **2026-07-15 · GET /tournaments/{id}/state recomputes meet standings per
   call** (`api/tournaments.py` `_meet_standings_for`: module-catalog lookup +
   an extra `match_states.list_for_tournament` read + `compute_meet_standings`

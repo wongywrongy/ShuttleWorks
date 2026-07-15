@@ -24,6 +24,7 @@ from app.error_codes import ErrorCode, http_error
 from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO
 from database.models import Tournament, normalize_module_seed, display_dependency_satisfied
 from repositories import LocalRepository, get_repository
+from services.bracket import response_cache
 from services.config_lock import changed_scheduling_fields
 from services.meet.standings import compute_meet_standings
 from api.invites import (
@@ -663,6 +664,12 @@ def put_tournament_state(
         row = repo.commit_tournament_state(
             tournament_id, incoming, clear_bracket_assignments=clear_bracket
         )
+        if clear_bracket:
+            # clearSchedule just nulled the committed bracket assignments —
+            # a cached GET /bracket payload would still show them until the
+            # TTL expires. Invalidate now so a poll or re-entry right after
+            # this write sees the cleared schedule immediately.
+            response_cache.invalidate(tournament_id)
     except KeyError:
         raise http_error(
             404,
