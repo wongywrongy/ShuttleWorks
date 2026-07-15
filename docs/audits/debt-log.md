@@ -303,16 +303,27 @@ a green 1,100-test suite. The real check is the viewer flow in
 `e2e/tests/interaction-smoke.spec.ts` (now running in CI): it asserts zero
 `POST/PUT/PATCH/DELETE` leave the browser as a viewer.
 
-- **2026-07-14 · bracket/contingency** — `record_result` commands now carry
-  `reason: walkover|retired|forfeit`, and `reason` is persisted end-to-end
-  locally (scheduler_core `Result` → DB column → DTO). What's deferred is only
-  the distinct LOSER-ROUTING SEMANTICS a `retired`/`forfeit` reason implies
-  (e.g. an injured player withdrawing from their OTHER draws, forfeit-specific
-  BYE policy in consolation feeds) — today all three reasons ride the plain
-  result path with no reason-specific routing. Contract + UI shipped (spec
-  2026-07-14 §1); routing semantics deferred. Entry points:
+- ~~**2026-07-14 · bracket/contingency**~~ ✅ **resolved 2026-07-15**:
+  `record_result` commands carry `reason: walkover|retired|forfeit`, persisted
+  end-to-end locally (scheduler_core `Result` → DB column → DTO). PRODUCT
+  DECISION (2026-07-15): **BYE-downstream-only**. A `retired`/`forfeit` result
+  now routes its LOSER exactly like a walkover for the loser feed only — the
+  affected loser's consolation/plate/`feeder_take='loser'` slot becomes a BYE
+  — but the stored `Result` keeps `walkover=False` / `reason` set; a
+  retirement/forfeit is not reported as a walkover. Winner advancement is
+  unchanged. Deliberately NO automatic withdrawal from the player's OTHER
+  draws — the operator decides that manually per draw (out of scope by
+  design, not deferred). Implementation: single predicate
+  `services.bracket.advancement.loser_cannot_continue(walkover, reason)`,
+  used by `_loser_participant_id`; the auto-walkover BYE sweep
+  (`_sweep_walkovers`) and its own result construction are untouched. Tests:
+  `tests/unit/test_advancement_loser_routing.py::test_retired_loser_is_bye_and_plate_cascades`
+  and `::test_forfeit_loser_is_bye_and_plate_cascades` (twins of the existing
+  `test_walkover_loser_is_bye_and_plate_cascades`), plus a negative guard
+  `::test_plain_result_with_no_reason_routes_loser_normally`. Entry points:
   `app/schemas.py BracketCommandRequest.reason`,
-  `BracketMatchDetailPanel.ContingencySection`.
+  `BracketMatchDetailPanel.ContingencySection`,
+  `services/bracket/advancement.py`.
 - ~~**2026-07-14 · bracket solver-options negative guard untested**~~ ✅ **fixed
   2026-07-15**: added `test_bracket_solver_options_ignores_config_time_limit`
   (`tests/unit/test_bracket_hydrate_config.py`) — asserts

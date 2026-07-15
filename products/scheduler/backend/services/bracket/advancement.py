@@ -158,7 +158,7 @@ def _record_and_propagate(
 
     winner = _winner_participant_id(draw, play_unit_id, winner_side)
     loser = _loser_participant_id(
-        draw, play_unit_id, winner_side, walkover=walkover
+        draw, play_unit_id, winner_side, walkover=walkover, reason=reason
     )
     resolved: List[PlayUnitId] = []
     for downstream_id, downstream in draw.play_units.items():
@@ -253,12 +253,34 @@ def _winner_participant_id(
     return None  # WinnerSide.NONE — double-bye / dead branch
 
 
+# Reasons that make a loser unable to continue downstream, even though
+# the result itself is NOT a walkover (the winner_side is real and the
+# match was actually played/started). BYE-downstream-only policy,
+# decision 2026-07-15: the loser's consolation/plate/feeder_take slot
+# becomes a BYE, exactly like a walkover, but the stored Result keeps
+# walkover=False — a retirement/forfeit is not a walkover and must not
+# be reported as one. No automatic withdrawal from the player's OTHER
+# draws; that stays a manual, per-draw operator decision.
+_LOSER_CANNOT_CONTINUE_REASONS = frozenset({"retired", "forfeit"})
+
+
+def loser_cannot_continue(*, walkover: bool, reason: Optional[str]) -> bool:
+    """True when the loser must NOT be fed into a ``feeder_take='loser'``
+
+    slot: either a real walkover, or a ``retired``/``forfeit`` reason
+    (BYE-downstream-only policy, decision 2026-07-15). Centralizes the
+    predicate so the rule is written once.
+    """
+    return walkover or reason in _LOSER_CANNOT_CONTINUE_REASONS
+
+
 def _loser_participant_id(
     draw: Draw,
     play_unit_id: PlayUnitId,
     winner_side: WinnerSide,
     *,
     walkover: bool,
+    reason: Optional[str] = None,
 ) -> Optional[str]:
     """The participant a ``feeder_take='loser'`` slot receives.
 
@@ -268,8 +290,12 @@ def _loser_participant_id(
     normal ``_sweep_walkovers`` cascade hollows the plate match. This is
     the documented bye-hazard rule for double elimination / Monrad /
     compass (docs/architecture/draw-formats.md).
+
+    A ``retired``/``forfeit`` reason gets the SAME BYE treatment for the
+    loser feed only (see ``loser_cannot_continue``) — the result itself
+    stays a real (non-walkover) result.
     """
-    if walkover:
+    if loser_cannot_continue(walkover=walkover, reason=reason):
         return None
     pu = draw.play_units[play_unit_id]
     if winner_side == WinnerSide.A:

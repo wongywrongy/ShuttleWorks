@@ -109,6 +109,63 @@ def test_walkover_loser_is_bye_and_plate_cascades():
     assert f.side_a == ["a"] and f.side_b == ["c"]
 
 
+def test_retired_loser_is_bye_and_plate_cascades():
+    """A 'retired' reason routes exactly like a walkover for the LOSER
+
+    feed only (BYE-downstream-only policy, decision 2026-07-15): the
+    consolation slot becomes BYE, but the stored result keeps
+    walkover=False / reason='retired' — a retirement is not a walkover.
+    """
+    state, draw = _mini_plate_draw()
+
+    record_result(
+        state, draw, "M0", WinnerSide.A, finished_at_slot=1, reason="retired"
+    )
+    slot_a, _ = draw.slots["P"]
+    assert slot_a.is_bye  # loser feed → BYE, not 'b'
+    assert state.results["M0"].walkover is False
+    assert state.results["M0"].reason == "retired"
+
+    affected = record_result(state, draw, "M1", WinnerSide.A, finished_at_slot=1)
+    assert "P" in affected
+    assert state.results["P"].walkover is True
+    assert state.results["P"].winner_side == WinnerSide.B
+    f = state.play_units["F"]
+    assert f.side_a == ["a"] and f.side_b == ["c"]
+
+
+def test_forfeit_loser_is_bye_and_plate_cascades():
+    """Twin of the retired test for reason='forfeit'."""
+    state, draw = _mini_plate_draw()
+
+    record_result(
+        state, draw, "M0", WinnerSide.A, finished_at_slot=1, reason="forfeit"
+    )
+    slot_a, _ = draw.slots["P"]
+    assert slot_a.is_bye
+    assert state.results["M0"].walkover is False
+    assert state.results["M0"].reason == "forfeit"
+
+    affected = record_result(state, draw, "M1", WinnerSide.A, finished_at_slot=1)
+    assert "P" in affected
+    assert state.results["P"].walkover is True
+    assert state.results["P"].winner_side == WinnerSide.B
+
+
+def test_plain_result_with_no_reason_routes_loser_normally():
+    """Guard: no reason and no walkover → the real loser advances to
+
+    the plate, exactly as ``test_real_result_routes_winner_and_loser``.
+    """
+    state, draw = _mini_plate_draw()
+
+    record_result(state, draw, "M0", WinnerSide.A, finished_at_slot=1)
+    p = state.play_units["P"]
+    assert p.side_a == ["b"]  # real loser, not BYE
+    assert state.results["M0"].walkover is False
+    assert state.results["M0"].reason is None
+
+
 def test_double_walkover_feeds_bye_to_both_takes():
     state, draw = _mini_plate_draw()
 
