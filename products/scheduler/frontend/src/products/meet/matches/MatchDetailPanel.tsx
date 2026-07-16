@@ -46,6 +46,7 @@ export function MatchDetailPanel({
 
   return (
     <DetailPanel
+      variant="docked"
       label="Match"
       value={code || '—'}
       sub={EVENT_LABEL[prefix]?.full}

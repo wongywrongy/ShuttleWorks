@@ -19,7 +19,9 @@ import { useCanEdit } from '../../hooks/useCanEdit';
 import {
   ActionsBar,
   BandedTable,
+  DetailDock,
   EmptyState,
+  MATCH_CELL,
   MATCH_LIST_COLUMNS,
   OverflowMenu,
   STATUS_CLASS,
@@ -228,10 +230,9 @@ export function BracketMatchesTab({
         </a>
       </ActionsBar>
 
-      {/* `relative` so the detail panel docks over the list's right edge
-          as a layer on top (the list keeps full width). */}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="min-h-0 flex-1 overflow-auto">
+      {/* Flex ROW: match list + docked detail pane (see BracketRosterTab). */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
           {total === 0 ? (
             <EmptyState
               title="No matches yet"
@@ -243,7 +244,9 @@ export function BracketMatchesTab({
                 columns={MATCH_LIST_COLUMNS}
                 groups={tableGroups}
                 rowId={({ pu }) => pu.id}
-                onRowClick={({ pu }) => setSelectedId(pu.id)}
+                onRowClick={({ pu }) =>
+                  setSelectedId((prev) => (prev === pu.id ? null : pu.id))
+                }
                 selectedId={selectedId}
                 rowTestId={({ pu }) => `bracket-match-row-${pu.id}`}
                 renderRow={({ pu, n }) => {
@@ -253,8 +256,8 @@ export function BracketMatchesTab({
                       {/* Gutter spacer — Meet's warning-icon slot;
                           empty here but kept so the columns start
                           at the same x on both surfaces. */}
-                      <span className="w-4 shrink-0" aria-hidden />
-                      <span className="w-8 text-xs text-muted-foreground tabular-nums">
+                      <span className={`${MATCH_CELL.warnGutter} shrink-0`} aria-hidden />
+                      <span className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}>
                         {n}
                       </span>
                       {/* Friendly label; raw id kept on title for
@@ -262,24 +265,24 @@ export function BracketMatchesTab({
                           px-1.5 mirrors the inner inset of Meet's
                           editable event field. */}
                       <span
-                        className="w-20 truncate px-1.5 text-sm font-semibold text-accent sw-num"
+                        className={`${MATCH_CELL.event} truncate px-1.5 text-sm font-semibold text-accent sw-num`}
                         title={pu.id}
                       >
                         {labelById.get(pu.id) ?? pu.id}
                       </span>
-                      <span className="min-w-0 flex-[3] text-sm leading-relaxed text-foreground">
+                      <span className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}>
                         {renderSide(pu.side_a)}
                       </span>
-                      <span className="min-w-0 flex-[3] text-sm leading-relaxed text-foreground">
+                      <span className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}>
                         {renderSide(pu.side_b)}
                       </span>
                       <span
-                        className={`w-[5.5rem] text-right text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+                        className={`${MATCH_CELL.status} text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
                       >
                         {STATUS_LABEL[status]}
                       </span>
                       <span
-                        className="flex w-8 shrink-0 items-center justify-center"
+                        className={`flex ${MATCH_CELL.actionGutter} shrink-0 items-center justify-center`}
                         onClick={(e) => e.stopPropagation()}
                       >
                         {status !== 'done' && canEdit ? (
@@ -312,6 +315,7 @@ export function BracketMatchesTab({
           )}
         </div>
 
+        <DetailDock open={selected != null}>
         {selected ? (
           <BracketMatchDetailPanel
             key={selected.id}
@@ -342,6 +346,7 @@ export function BracketMatchesTab({
             }
           />
         ) : null}
+        </DetailDock>
       </div>
     </div>
   );

@@ -23,6 +23,7 @@ import {
   COLUMN_HEADER_ROW_CLASSES,
   ColumnHeaderRow,
   GroupBandHeader,
+  colClass,
   type BandedListColumn,
 } from './BandedList';
 
@@ -171,7 +172,12 @@ function TwoTierHeaderRow({
       {columns.map((col, i) => (
         <span
           key={i}
-          className={['flex flex-col', col.className].filter(Boolean).join(' ')}
+          // Two-tier cells stack label over sub-label with `flex flex-col`,
+          // so a collapsed-priority column must restore to `flex` (the
+          // default `block` restore would unstack this one).
+          className={['flex flex-col', colClass(col, 'flex')]
+            .filter(Boolean)
+            .join(' ')}
           aria-hidden={col.label || col.subLabel ? undefined : true}
         >
           <span className={COLUMN_HEADER_ROW_CLASSES}>{col.label}</span>

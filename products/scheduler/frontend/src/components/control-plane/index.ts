@@ -5,12 +5,15 @@ export { EmptyState } from './EmptyState';
 export { Skeleton } from './Skeleton';
 export { SectionCard } from './SectionCard';
 export { OverflowMenu, type OverflowItem } from './OverflowMenu';
+export { PickerPopover } from './PickerPopover';
 export { ActionsBar } from './ActionsBar';
 export {
   ColumnHeaderRow,
   GroupBandHeader,
   COLUMN_HEADER_ROW_CLASSES,
   BANDED_ROW_CLASSES,
+  COL_PRIORITY_CLASS,
+  colClass,
   type BandedListColumn,
 } from './BandedList';
 export {
@@ -18,7 +21,7 @@ export {
   type BandedTableColumn,
   type BandedTableGroup,
 } from './BandedTable';
-export { MATCH_LIST_COLUMNS } from './matchListColumns';
+export { MATCH_LIST_COLUMNS, MATCH_CELL } from './matchListColumns';
 export {
   STATUS_CLASS,
   STATUS_LABEL,
@@ -26,6 +29,7 @@ export {
   type MatchListStatus,
 } from './matchStatus';
 export { DetailPanel } from './DetailPanel';
+export { DetailDock } from './DetailDock';
 export { AvailabilityControl } from './AvailabilityControl';
 export {
   EventsControl,

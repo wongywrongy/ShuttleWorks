@@ -18,6 +18,7 @@ import { INTERACTIVE_BASE } from '../../lib/utils';
 import {
   ActionsBar,
   BandedTable,
+  DetailDock,
   DetailPanel,
   EventBadge,
   OverflowMenu,
@@ -43,8 +44,8 @@ import { exportBracketRosterXlsx } from './exports/xlsxExports';
 const ROSTER_COLUMNS: BandedTableColumn[] = [
   { label: 'Player', className: 'min-w-0 flex-1' },
   { label: 'Events', className: 'min-w-0 flex-1' },
-  { label: 'Min rest', subLabel: 'slots', className: 'w-16 text-right' },
-  { label: '', className: 'w-8' },
+  { label: 'Min rest', subLabel: 'slots', className: 'w-16 shrink-0 text-right', priority: 2 },
+  { label: '', className: 'w-8 shrink-0' },
 ];
 
 export function BracketRosterTab() {
@@ -193,15 +194,19 @@ function BracketRosterTabCore({
         </button>
       </ActionsBar>
 
-      {/* `relative` so the detail panel docks over the table's right edge
-          as a layer on top (the table keeps full width). */}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="min-h-0 flex-1 overflow-auto">
+      {/* Flex ROW: table column + docked detail pane. The pane is a real
+          layout column (DetailDock) — the table reflows beside it via the
+          @container/table column priorities instead of being covered.
+          `relative` anchors the dock's narrow-viewport overlay fallback. */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
           <BandedTable
             columns={ROSTER_COLUMNS}
             rows={filtered}
             rowId={(p) => p.id}
-            onRowClick={(p) => setSelectedId(p.id)}
+            onRowClick={(p) =>
+              setSelectedId((prev) => (prev === p.id ? null : p.id))
+            }
             selectedId={selectedId}
             rowClassName={() => 'group'}
             rowTestId={(p) => `roster-row-${p.id}`}
@@ -215,11 +220,11 @@ function BracketRosterTabCore({
                     <EventBadge key={b.code} code={b.code} />
                   ))}
                 </span>
-                <span className="w-16 text-right text-xs text-muted-foreground sw-num">
+                <span className="w-16 shrink-0 text-right text-xs text-muted-foreground sw-num hidden @2xl/table:block">
                   {p.restSlots ?? '—'}
                 </span>
                 <span
-                  className="flex w-8 justify-end opacity-0 transition-opacity duration-fast ease-brand focus-within:opacity-100 group-hover:opacity-100"
+                  className="flex w-8 shrink-0 justify-end opacity-0 transition-opacity duration-fast ease-brand focus-within:opacity-100 group-hover:opacity-100"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <OverflowMenu
@@ -259,24 +264,27 @@ function BracketRosterTabCore({
           )}
         </div>
 
-        {selected && (
-          <DetailPanel
-            label="Player"
-            value={selected.name || '(unnamed)'}
-            onClose={() => setSelectedId(null)}
-            testId="bracket-player-detail"
-          >
-            <PlayerDetailFields
-              key={selected.id}
-              player={selected}
-              roster={players}
-              bracketData={bracketData}
-              badges={badgesById.get(selected.id) ?? []}
-              onUpdate={updatePlayer}
-              onCommitEvent={onCommitEvent}
-            />
-          </DetailPanel>
-        )}
+        <DetailDock open={selected != null}>
+          {selected && (
+            <DetailPanel
+              variant="docked"
+              label="Player"
+              value={selected.name || '(unnamed)'}
+              onClose={() => setSelectedId(null)}
+              testId="bracket-player-detail"
+            >
+              <PlayerDetailFields
+                key={selected.id}
+                player={selected}
+                roster={players}
+                bracketData={bracketData}
+                badges={badgesById.get(selected.id) ?? []}
+                onUpdate={updatePlayer}
+                onCommitEvent={onCommitEvent}
+              />
+            </DetailPanel>
+          )}
+        </DetailDock>
       </div>
     </div>
   );

@@ -257,6 +257,9 @@ describe('<BracketMatchesTab /> — match detail panel', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
     fireEvent.click(screen.getByLabelText('Close detail'));
+    // The dock retains the pane while its close-width transition runs;
+    // completing the transition unmounts it.
+    fireEvent.transitionEnd(screen.getByTestId('detail-dock'));
     expect(
       screen.queryByTestId('bracket-match-detail'),
     ).not.toBeInTheDocument();

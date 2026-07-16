@@ -31,6 +31,40 @@ describe('BandedTable', () => {
     expect(screen.getByText('Name')).toBeInTheDocument();
   });
 
+  it('applies container-query priority classes to header cells', () => {
+    render(
+      <BandedTable
+        {...baseProps}
+        columns={[
+          { label: '#', className: 'w-8', priority: 2 },
+          { label: 'Name', className: 'min-w-0 flex-1' },
+        ]}
+        rows={[]}
+      />,
+    );
+    // jsdom can't evaluate the container query — pin the classes.
+    expect(screen.getByText('#').className).toContain('hidden @2xl/table:block');
+    expect(screen.getByText('Name').className).not.toContain('hidden');
+  });
+
+  it('two-tier header priority cells restore to flex (label stacking)', () => {
+    render(
+      <BandedTable
+        {...baseProps}
+        columns={[
+          { label: '#', className: 'w-8', priority: 2 },
+          { label: 'MD', subLabel: 'doubles', className: 'w-20' },
+        ]}
+        rows={[]}
+      />,
+    );
+    // Two-tier cells wrap the label in an inner span; the priority class
+    // sits on the outer cell.
+    expect(screen.getByText('#').parentElement?.className).toContain(
+      'hidden @2xl/table:flex',
+    );
+  });
+
   it('renders a two-tier header when any column has a subLabel', () => {
     render(
       <BandedTable

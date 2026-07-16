@@ -26,7 +26,9 @@ const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-accent px-2 py-1 ` +
   `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
 
-const RAIL = 'w-72 flex-shrink-0 space-y-3 overflow-auto border-l border-border p-4';
+// Pure rail content — geometry (width, border) is owned by the DetailDock
+// host the rail mounts into.
+const RAIL = 'h-full w-full space-y-3 overflow-auto p-4';
 
 interface Props {
   block: OpsBlock | null;

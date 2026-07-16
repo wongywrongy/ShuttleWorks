@@ -301,6 +301,18 @@ Forbidden on every new surface:
 8. **Long durations on chrome** (>300ms on any nav/tab/toggle/dialog). Polish moments (save success, modal enter) cap at `--motion-moderate` (300ms).
 9. **`box-shadow` keyframes** — performance-hostile. Use opacity + transform; reach for the `--shadow-hard` token if substrate elevation is needed.
 
+### Recorded exception — `sw-dock-transition` (2026-07-15 docked detail pane)
+
+`DetailDock` transitions `width` (blocklist item 2) and animates its
+Esc-driven close (item 5), deliberately: the pane is a REAL layout column
+and the sibling table reflowing during the transition — columns collapsing
+via container queries as room tightens — **is the feature**; a transform
+animation cannot reflow siblings. Scope guards: one instance per surface,
+`contain: layout style` + `--dur-slow` bound the reflow cost, and
+`prefers-reduced-motion` kills the transition entirely (close is then a
+hard cut with no retention, honoring item 5's intent). Do not cite this
+exception for chrome/decoration — it exists only for the dock geometry.
+
 ---
 
 ## 11. When in doubt

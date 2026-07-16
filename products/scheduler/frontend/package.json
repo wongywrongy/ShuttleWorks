@@ -22,6 +22,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@headlessui/react": "^2.2.9",
     "@phosphor-icons/react": "^2.1.10",
+    "@radix-ui/react-popover": "^1.1.19",
     "@radix-ui/react-select": "^2.2.6",
     "@supabase/supabase-js": "^2.105.4",
     "axios": "^1.7.9",

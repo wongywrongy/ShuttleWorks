@@ -56,7 +56,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
 
   if (!matchId) {
     return (
-      <aside className="w-72 flex-shrink-0 border-l border-border p-4 text-sm text-muted-foreground">
+      <aside className="h-full w-full p-4 text-sm text-muted-foreground">
         Select a match to see details.
       </aside>
     );
@@ -68,7 +68,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
 
   if (!pu) {
     return (
-      <aside className="w-72 flex-shrink-0 border-l border-border p-4 text-sm text-muted-foreground">
+      <aside className="h-full w-full p-4 text-sm text-muted-foreground">
         Match not found.
       </aside>
     );
@@ -82,9 +82,11 @@ export function MatchDetailPanel({ data, onChange }: Props) {
     // Keyed by the selected match id so switching selection re-mounts the
     // rail and re-triggers `sw-panel-in`; a poll re-render (fresh `data`)
     // keeps the same key so the animation never re-fires on ticks.
+    // Geometry (width, border) is owned by the DetailDock host — this is
+    // pure rail content.
     <aside
       key={matchId}
-      className="w-72 flex-shrink-0 border-l border-border p-4 space-y-3 overflow-auto sw-panel-in"
+      className="h-full w-full p-4 space-y-3 overflow-auto sw-panel-in"
     >
       {/* Match id eyebrow */}
       <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">

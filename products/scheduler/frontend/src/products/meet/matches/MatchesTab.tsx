@@ -137,10 +137,11 @@ export function MatchesTab() {
         <RegenerateMenu />
       </MeetActionsBar>
 
-      {/* `relative` + overflow-hidden so the match DetailPanel (rendered
-          by MatchesSpreadsheet) docks over the list's right edge as a
-          layer on top; the rows keep their own scroll area inside. */}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Flex ROW: the match list + the docked match DetailPanel (both
+          rendered by MatchesSpreadsheet — its scroll column and DetailDock
+          are fragment children of this container). `relative` anchors the
+          dock's narrow-viewport overlay fallback. */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {matches.length === 0 ? (
           <div className="min-h-0 flex-1 overflow-auto">
             <EmptyState

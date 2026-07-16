@@ -225,10 +225,15 @@ describe('BracketDrawsTab — status + generate', () => {
     expect(screen.getByRole('button', { name: /Re-generate/i })).toBeInTheDocument();
   });
 
-  it('shows locked when started', () => {
+  it('a started draw offers no generate-family action (the STARTED pill carries the state)', () => {
+    // Intentional change (2026-07-15 polish audit): the raw "— (locked)"
+    // action-cell text is gone — status lives in the pill, and the
+    // Configuration page's hard-lock ribbon explains the why.
     mockBracketData = makeBracketData({ status: 'started' });
     renderDraws();
-    expect(screen.getByText(/locked/i)).toBeInTheDocument();
+    expect(screen.getByText(/started/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Generate|Re-generate/i })).toBeNull();
+    expect(screen.queryByText(/locked/i)).toBeNull();
   });
 
   it('calls eventGenerate with wipe=false when Generate is clicked', async () => {
@@ -248,6 +253,9 @@ describe('BracketDrawsTab — draw detail panel', () => {
     fireEvent.click(screen.getByTestId('bracket-draw-row-MS'));
     expect(screen.getByTestId('draw-detail-panel')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
+    // The dock retains the pane while its close-width transition runs;
+    // completing the transition unmounts it.
+    fireEvent.transitionEnd(screen.getByTestId('detail-dock'));
     expect(screen.queryByTestId('draw-detail-panel')).not.toBeInTheDocument();
   });
 

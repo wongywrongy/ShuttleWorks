@@ -33,6 +33,7 @@ import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from 
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
 import { OpsDetailRail } from './OpsDetailRail';
+import { DetailDock } from '../../components/control-plane';
 import { RunSurface } from './run/RunSurface';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
@@ -285,10 +286,12 @@ function OperationsBody() {
             />
           ) : (
             // COURTS = planning surface. Drag board + the matches overview list
-            // + a detail-rail overlay. Selection and the OpsDetailRail overlay
-            // live entirely inside this branch.
-            <div className="relative h-full min-h-0">
-              <div className="h-full min-h-0 overflow-auto">
+            // + a docked detail rail. The rail is a real layout column
+            // (DetailDock) — the board reflows beside it; on narrow
+            // viewports the dock falls back to an overlay by itself, which
+            // replaces the hand-rolled overlay workaround that lived here.
+            <div className="relative flex h-full min-h-0">
+              <div className="h-full min-h-0 min-w-0 flex-1 overflow-auto">
                 <UnifiedOpsBoard
                   blocks={blocks}
                   courtCount={courtCount}
@@ -302,19 +305,17 @@ function OperationsBody() {
                 <UnifiedOpsList blocks={blocks} selectedKey={selectedKey} onSelect={setSelectedKey} />
               </div>
 
-              {/* Detail rail OVERLAYS the content so it never steals layout
-                  width (the source of the text cutoff at narrower viewports). */}
-              {selectedBlock ? (
-                <div className="absolute inset-y-0 right-0 z-20 flex bg-card shadow-xl">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedKey(null)}
-                    aria-label="Close details"
-                    className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                  >
-                    ✕
-                  </button>
-                  <div className="min-h-0 w-80 max-w-[88vw] overflow-auto">
+              <DetailDock open={selectedBlock != null} width={320}>
+                {selectedBlock ? (
+                  <div className="relative h-full min-h-0">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedKey(null)}
+                      aria-label="Close details"
+                      className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    >
+                      ✕
+                    </button>
                     <OpsDetailRail
                       block={selectedBlock}
                       data={data}
@@ -323,8 +324,8 @@ function OperationsBody() {
                       live={false}
                     />
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </DetailDock>
             </div>
           )}
         </div>

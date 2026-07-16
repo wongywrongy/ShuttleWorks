@@ -29,6 +29,7 @@ export function DrawDetailPanel({
   const configEntries = Object.entries(ev.config ?? {});
   return (
     <DetailPanel
+      variant="docked"
       label="Draw"
       value={ev.id}
       sub={`${disciplineLabel(ev.discipline)} · ${formatLabel(ev.format)}`}

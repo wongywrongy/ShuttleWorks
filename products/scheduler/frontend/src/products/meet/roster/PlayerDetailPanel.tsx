@@ -62,6 +62,7 @@ export function DetailDrawer({
 }) {
   return (
     <DetailPanel
+      variant="docked"
       label={eyebrow}
       value={title}
       sub={subtitle}

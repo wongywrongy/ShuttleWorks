@@ -202,6 +202,51 @@ test.describe('interaction smoke — real flows against real stores', () => {
     expect(events.filter((e) => FATAL.has(e.kind))).toEqual([]);
   });
 
+  test('the docked match detail pane coexists with the table (2026-07 rework)', async ({ page }) => {
+    // The pane is a real layout column (DetailDock): the table must stay
+    // visible and clickable while it's open, row-to-row clicks switch the
+    // pane without closing it, Esc closes it, and on a narrow viewport the
+    // dock falls back to an overlay. jsdom can't evaluate the container
+    // queries or the width transition, so this scenario is the only gate on
+    // the real reflow behavior.
+    await page.goto(`/tournaments/${TID}/matches`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1500);
+    await drainHarness(page);
+
+    const rows = page.locator('[data-testid^="match-row-"]');
+    const rowCount = await rows.count();
+    expect(rowCount, 'the smoke fixture must seed matches').toBeGreaterThan(1);
+
+    // Open: pane docks, table rows remain visible and interactive.
+    await rows.first().click();
+    const dock = page.locator('[data-testid="detail-dock"]');
+    const panel = page.locator('[data-testid="match-detail-panel"]');
+    await expect(panel).toBeVisible();
+    await expect(dock).toHaveAttribute('data-mode', 'docked');
+    await expect(rows.first()).toBeVisible();
+    await expect(rows.nth(1)).toBeVisible();
+
+    // Row-to-row: the pane switches content without closing.
+    await rows.nth(1).click();
+    await expect(panel).toBeVisible();
+    await expect(rows.nth(1)).toHaveAttribute('data-selected', 'true');
+
+    // Esc closes (the dock animates shut, then unmounts the pane).
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden({ timeout: 2000 });
+
+    // Narrow viewport: the dock yields to overlay mode instead of
+    // squeezing the table below usefulness.
+    await page.setViewportSize({ width: 900, height: 720 });
+    await page.waitForTimeout(300);
+    await rows.first().click();
+    await expect(page.locator('[data-testid="match-detail-panel"]')).toBeVisible();
+    await expect(dock).toHaveAttribute('data-mode', 'overlay');
+
+    const events = await drainHarness(page);
+    expect(events.filter((e) => FATAL.has(e.kind))).toEqual([]);
+  });
+
   test('a viewer cannot mutate: no write leaves the browser', async ({ page }) => {
     // Audit A2. Requires a workspace the caller only has `viewer` on; skipped
     // when SMOKE_VIEWER_TID isn't provided so the suite stays runnable locally.

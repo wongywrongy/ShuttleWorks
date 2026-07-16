@@ -340,6 +340,52 @@
 }
 .sw-sheet-up { animation: sw-sheet-up var(--dur-slow) var(--ease) both; }
 
+/* ===========================================================================
+ * Scrollbars — the seamed command-plane must not be cut by fat native
+ * chrome. Thin, hairline-toned thumbs on every scroll container; track
+ * stays the surface color so scrollbars read as part of the plane.
+ * ======================================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Read-only presentation for a locked settings fieldset: the native
+ * `disabled` cascade still ENFORCES the lock, but values keep full
+ * contrast — locked config is review data the operator must still be
+ * able to read (dim-grey review data is the enterprise anti-pattern).
+ * Interactive affordances (Save) are hidden by the form, not restyled. */
+.sw-readonly :disabled,
+.sw-readonly [aria-disabled='true'] {
+  opacity: 1 !important;
+  cursor: default !important;
+}
+
+/* Dock transition: a docked detail pane animates its layout width so the
+ * sibling table reflows with it (columns collapse via container queries). */
+.sw-dock-transition {
+  transition: width var(--dur-slow) var(--ease);
+  will-change: width;
+  contain: layout style;
+}
+
 /* NOTE: the skill's sw-cell-drag / sw-reorder-shift are intentionally NOT
  * ported — they are gallery demo choreography; real drag interactions in
  * the app come from dnd-kit. */
@@ -370,5 +416,8 @@
   .pin-marquee,
   .scan-bar::after {
     animation: none !important;
+  }
+  .sw-dock-transition {
+    transition: none !important;
   }
 }

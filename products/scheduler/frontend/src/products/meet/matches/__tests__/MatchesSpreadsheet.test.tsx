@@ -218,6 +218,9 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
     fireEvent.click(within(row).getByTestId('match-delete-m1'));
     fireEvent.click(within(row).getByTestId('match-delete-m1'));
     expect(screen.queryByTestId('match-row-m1')).not.toBeInTheDocument();
+    // The dock retains the pane while its close-width transition runs;
+    // completing the transition unmounts it.
+    fireEvent.transitionEnd(screen.getByTestId('detail-dock'));
     expect(screen.queryByTestId('match-detail-panel')).not.toBeInTheDocument();
   });
 

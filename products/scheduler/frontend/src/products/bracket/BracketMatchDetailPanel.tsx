@@ -96,6 +96,7 @@ export function BracketMatchDetailPanel({
 
   return (
     <DetailPanel
+      variant="docked"
       label="Match"
       value={label}
       sub={disciplineLabel(event?.discipline)}

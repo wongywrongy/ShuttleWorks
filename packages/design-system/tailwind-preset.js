@@ -346,6 +346,7 @@ module.exports = {
   },
   plugins: [
     require('tailwindcss-animate'),
+    require('@tailwindcss/container-queries'),
     plugin(({ addVariant }) => {
       addVariant('compact',     '[data-density="compact"] &');
       addVariant('comfortable', '[data-density="comfortable"] &, :root:not([data-density]) &');

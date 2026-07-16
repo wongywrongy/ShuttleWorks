@@ -38,7 +38,49 @@ export interface BandedListColumn {
   /** Per-column width/flex/alignment classes (e.g. `w-20`, `min-w-0 flex-1`,
    *  `w-16 text-right`). */
   className?: string;
+  /** Responsive priority — how soon the column collapses as the surface
+   *  narrows (a docked detail pane opening, a small window):
+   *    1 (default) — always visible.
+   *    2 — hidden below the `@2xl` (672px) container width.
+   *    3 — hidden below the `@4xl` (896px) container width.
+   *  Requires an `@container/table` ancestor (the surface's scroll
+   *  wrapper) — without one the container query never matches and the
+   *  column stays hidden. */
+  priority?: 1 | 2 | 3;
 }
+
+/** Container-query visibility classes per priority tier. CSS-driven so
+ *  columns collapse continuously WHILE the DetailDock width animates —
+ *  zero React renders. `block` restore is right for every single-tier
+ *  banded cell (they're flex items, so display is blockified regardless);
+ *  cells whose INNER layout is flex (two-tier header stacks) use the
+ *  `flex` restore via `colClass(col, 'flex')`. Both maps are spelled out
+ *  literally so Tailwind's scanner generates the variants. */
+export const COL_PRIORITY_CLASS: Record<1 | 2 | 3, string> = {
+  1: '',
+  2: 'hidden @2xl/table:block',
+  3: 'hidden @4xl/table:block',
+};
+
+const COL_PRIORITY_CLASS_FLEX: Record<1 | 2 | 3, string> = {
+  1: '',
+  2: 'hidden @2xl/table:flex',
+  3: 'hidden @4xl/table:flex',
+};
+
+/** A column's full cell class string: geometry + priority visibility. */
+export const colClass = (
+  col: BandedListColumn,
+  restore: 'block' | 'flex' = 'block',
+): string =>
+  [
+    col.className,
+    (restore === 'flex' ? COL_PRIORITY_CLASS_FLEX : COL_PRIORITY_CLASS)[
+      col.priority ?? 1
+    ],
+  ]
+    .filter(Boolean)
+    .join(' ');
 
 /**
  * ColumnHeaderRow — a flex row of column labels sitting above the
@@ -72,7 +114,7 @@ export function ColumnHeaderRow({
       {columns.map((col, i) => (
         <span
           key={i}
-          className={[COLUMN_HEADER_ROW_CLASSES, col.className]
+          className={[COLUMN_HEADER_ROW_CLASSES, colClass(col)]
             .filter(Boolean)
             .join(' ')}
           aria-hidden={col.label ? undefined : true}

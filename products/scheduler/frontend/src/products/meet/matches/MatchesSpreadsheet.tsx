@@ -12,13 +12,16 @@
  * subscribes to the same `?q=` search param as the page header so the
  * URL is the shared source of truth.
  */
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Check, Warning } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
 import {
   BandedTable,
   ColumnHeaderRow,
+  DetailDock,
+  MATCH_CELL,
   MATCH_LIST_COLUMNS,
+  PickerPopover,
   STATUS_CLASS,
   STATUS_LABEL,
   type BandedTableGroup,
@@ -211,7 +214,10 @@ export function MatchesSpreadsheet({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-auto">
+      {/* @container/table: the column-priority classes in MATCH_CELL query
+          THIS wrapper's width, so columns collapse as the detail dock takes
+          room — not just when the window shrinks. */}
+      <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
         {filteredMatches.length === 0 ? (
           <>
             <ColumnHeaderRow columns={MATCH_LIST_COLUMNS} />
@@ -224,7 +230,9 @@ export function MatchesSpreadsheet({
             columns={MATCH_LIST_COLUMNS}
             groups={tableGroups}
             rowId={(m) => m.id}
-            onRowClick={(m) => setSelectedId(m.id)}
+            onRowClick={(m) =>
+              setSelectedId((prev) => (prev === m.id ? null : m.id))
+            }
             selectedId={selectedId}
             rowClassName={(m) => ['group', stripeFor(m)].filter(Boolean).join(' ')}
             rowTestId={(m) => `match-row-${m.id}`}
@@ -249,14 +257,16 @@ export function MatchesSpreadsheet({
           />
         )}
       </div>
-      {selectedMatch ? (
-        <MatchDetailPanel
-          key={selectedMatch.id}
-          match={selectedMatch}
-          status={meetMatchStatus(selectedMatch.id, assignedIds, matchStates)}
-          onClose={() => setSelectedId(null)}
-        />
-      ) : null}
+      <DetailDock open={selectedMatch != null}>
+        {selectedMatch ? (
+          <MatchDetailPanel
+            key={selectedMatch.id}
+            match={selectedMatch}
+            status={meetMatchStatus(selectedMatch.id, assignedIds, matchStates)}
+            onClose={() => setSelectedId(null)}
+          />
+        ) : null}
+      </DetailDock>
     </>
   );
 }
@@ -338,7 +348,7 @@ const MatchRow = memo(function MatchRow({
   return (
     <>
       <span
-        className="flex w-4 shrink-0 items-center justify-center"
+        className={`flex ${MATCH_CELL.warnGutter} shrink-0 items-center justify-center`}
         aria-hidden={issues.length === 0}
         title={
           issues.length > 0
@@ -357,7 +367,7 @@ const MatchRow = memo(function MatchRow({
           />
         ) : null}
       </span>
-      <span className="w-8 text-xs text-muted-foreground tabular-nums">
+      <span className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}>
         {match.matchNumber ?? index + 1}
       </span>
       {configuredRanks.length > 0 ? (
@@ -382,7 +392,7 @@ const MatchRow = memo(function MatchRow({
             clearable
             size="sm"
             ariaLabel="Event"
-            triggerClassName="w-20 border-transparent px-1.5 py-0.5 text-accent font-semibold sw-num hover:border-border/60 focus:bg-card"
+            triggerClassName={`${MATCH_CELL.event} border-transparent px-1.5 py-0.5 text-accent font-semibold sw-num hover:border-border/60 focus:bg-card`}
           />
         </span>
       ) : (
@@ -396,7 +406,8 @@ const MatchRow = memo(function MatchRow({
           placeholder="MS1, WD2…"
           aria-label="Event"
           className={[
-            'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-semibold text-accent sw-num outline-none',
+            MATCH_CELL.event,
+            'rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-semibold text-accent sw-num outline-none',
             'transition-colors duration-fast ease-brand',
             'hover:border-border/60 focus:border-accent focus:bg-card',
           ].join(' ')}
@@ -422,7 +433,7 @@ const MatchRow = memo(function MatchRow({
       />
       <span
         data-testid={`match-status-${match.id}`}
-        className={`w-[5.5rem] text-right text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+        className={`${MATCH_CELL.status} text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
       >
         {STATUS_LABEL[status]}
       </span>
@@ -431,7 +442,7 @@ const MatchRow = memo(function MatchRow({
       <ConfirmDeleteButton
         label={match.eventRank ? `match ${match.eventRank}` : 'this match'}
         onConfirm={() => onDelete(match.id)}
-        className="w-8"
+        className={MATCH_CELL.actionGutter}
         testId={`match-delete-${match.id}`}
       />
     </>
@@ -503,7 +514,7 @@ function PlayerCellEditor({
   eligibleForRank?: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
+  const cellRef = useRef<HTMLDivElement | null>(null);
   const selectedPlayers = useMemo(
     () =>
       selected
@@ -512,22 +523,6 @@ function PlayerCellEditor({
     [selected, players],
   );
   const atCapacity = selected.length >= capacity;
-
-  useEffect(() => {
-    if (!open) return;
-    const click = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', click);
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('mousedown', click);
-      document.removeEventListener('keydown', key);
-    };
-  }, [open]);
 
   const toggle = (id: string) => {
     if (selected.includes(id)) {
@@ -584,16 +579,18 @@ function PlayerCellEditor({
     // the row read as click-dead). While the picker is open, every click in
     // the cell is editor interaction.
     <div
-      ref={ref}
+      ref={cellRef}
       data-testid={`player-cell-${side.replace(/\s+/g, '-').toLowerCase()}`}
-      className="relative min-w-0 flex-[3]"
-      onClick={(e) => {
+      className={`relative ${MATCH_CELL.side}`}
+      onClick={(e: ReactMouseEvent<HTMLElement>) => {
         const target = e.target as HTMLElement;
         if (open || target.closest('button, input, [data-player-picker]')) {
           e.stopPropagation();
         }
       }}
     >
+      <PickerPopover open={open} onOpenChange={setOpen}>
+      <PickerPopover.Anchor asChild>
       <div className="flex flex-wrap items-baseline gap-x-1 text-sm leading-relaxed">
         {selectedPlayers.length === 0 ? (
           <button
@@ -658,11 +655,9 @@ function PlayerCellEditor({
           </button>
         ) : null}
       </div>
-      {open ? (
-        <div
-          data-player-picker
-          className="motion-enter absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg"
-        >
+      </PickerPopover.Anchor>
+      <PickerPopover.Panel data-player-picker guardRef={cellRef}>
+        <>
           {/* Eligible-for-rank section — these are the players the
               Roster page has configured for this match's event. Top
               of the picker so the natural candidate is one click
@@ -731,8 +726,9 @@ function PlayerCellEditor({
               No players. Add some in the Roster tab.
             </div>
           ) : null}
-        </div>
-      ) : null}
+        </>
+      </PickerPopover.Panel>
+      </PickerPopover>
     </div>
   );
 }

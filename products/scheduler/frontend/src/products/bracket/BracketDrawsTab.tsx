@@ -26,7 +26,9 @@ import type {
 import {
   ActionsBar,
   BandedTable,
+  DetailDock,
   EmptyState,
+  colClass,
   type BandedListColumn,
   type BandedTableGroup,
 } from '../../components/control-plane';
@@ -65,14 +67,17 @@ interface DrawRow {
 
 /** Column set for the draws table. The trailing unlabeled column hosts the
  *  per-row action buttons (Generate / Configure / Next round / Open). */
+// Fixed cells are `shrink-0` so a docked detail pane can never crush them
+// into overlapping their neighbors — only Format (truncates) and Progress
+// (overflow-hidden) give way.
 const DRAW_COLUMNS: BandedListColumn[] = [
-  { label: 'Code', className: 'w-16' },
-  { label: 'Format', className: 'w-44 min-w-0' },
-  { label: 'Size', className: 'w-12 text-right' },
-  { label: 'Entered', className: 'w-16 text-right' },
+  { label: 'Code', className: 'w-16 shrink-0' },
+  { label: 'Format', className: 'w-44 min-w-0', priority: 3 },
+  { label: 'Size', className: 'w-12 shrink-0 text-right', priority: 2 },
+  { label: 'Entered', className: 'w-16 shrink-0 text-right' },
   { label: 'Progress', className: 'min-w-0 flex-1' },
-  { label: 'Status', className: 'w-28 text-right' },
-  { label: '', className: 'w-80' },
+  { label: 'Status', className: 'w-28 shrink-0 text-right' },
+  { label: '', className: 'w-80 shrink-0' },
 ];
 
 export function BracketDrawsTab() {
@@ -236,18 +241,21 @@ export function BracketDrawsTab() {
           </span>
         }
       >
+        {/* Secondary on purpose: the row-level Generate is this surface's
+            one glowing intent — two competing primaries read as noise. */}
         <button
           type="button"
           onClick={() => setCreating(true)}
           data-testid="bracket-new-draw"
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
         >
           ＋ New draw
         </button>
       </ActionsBar>
 
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="min-h-0 flex-1 overflow-auto">
+      {/* Flex ROW: draws table + docked detail pane (see BracketRosterTab). */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
           {events.length === 0 ? (
             <EmptyState
               title="No draws yet"
@@ -268,7 +276,9 @@ export function BracketDrawsTab() {
               groups={tableGroups}
               rowId={(row) => row.ev.id}
               rowTestId={(row) => `bracket-draw-row-${row.ev.id}`}
-              onRowClick={(row) => setSelectedId(row.ev.id)}
+              onRowClick={(row) =>
+                setSelectedId((prev) => (prev === row.ev.id ? null : row.ev.id))
+              }
               selectedId={selectedId}
               // Without an explicit name, a clickable row's accessible name
               // falls back to its full text content — which would swallow
@@ -278,12 +288,15 @@ export function BracketDrawsTab() {
               renderRow={(row) => (
                 <>
                   <span
-                    className="w-16 truncate text-sm font-semibold text-accent sw-num"
+                    className="w-16 shrink-0 truncate text-sm font-semibold text-accent sw-num"
                     title={row.ev.id}
                   >
                     {row.ev.id}
                   </span>
-                  <span className="w-44 min-w-0 truncate text-xs text-muted-foreground">
+                  {/* Cell visibility derives from the column spec (colClass)
+                      so header and body can never drift on a priority
+                      change. */}
+                  <span className={`${colClass(DRAW_COLUMNS[1])} truncate text-xs text-muted-foreground`}>
                     {formatLabel(row.ev.format)}
                     {row.isSwiss && row.swissRounds !== undefined && row.generated ? (
                       <span className="ml-1.5 sw-num">
@@ -291,11 +304,11 @@ export function BracketDrawsTab() {
                       </span>
                     ) : null}
                   </span>
-                  <span className="w-12 text-right text-xs text-muted-foreground sw-num">
+                  <span className={`${colClass(DRAW_COLUMNS[2])} text-xs text-muted-foreground sw-num`}>
                     {row.targetSize}
                   </span>
                   <span
-                    className={`w-16 text-right text-xs sw-num ${
+                    className={`w-16 shrink-0 text-right text-xs sw-num ${
                       row.partCount < row.targetSize
                         ? 'text-status-warning'
                         : 'text-muted-foreground'
@@ -303,7 +316,7 @@ export function BracketDrawsTab() {
                   >
                     {row.partCount}/{row.targetSize}
                   </span>
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 overflow-hidden">
                     {row.counts ? (
                       <StatusBar
                         items={[
@@ -317,11 +330,11 @@ export function BracketDrawsTab() {
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </span>
-                  <span className="flex w-28 justify-end">
+                  <span className="flex w-28 shrink-0 justify-end">
                     <StatusPillFor status={row.status} completed={row.completed} />
                   </span>
                   <span
-                    className="flex w-80 items-center justify-end gap-3"
+                    className="flex w-80 shrink-0 items-center justify-end gap-3"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ActionCell
@@ -373,18 +386,23 @@ export function BracketDrawsTab() {
           )}
         </div>
 
-        {selectedRow ? (
-          <DrawDetailPanel
-            key={selectedRow.ev.id}
-            ev={selectedRow.ev}
-            players={players}
-            onClose={() => setSelectedId(null)}
-            onCommitPicks={async (picks) => {
-              await commitPicks(selectedRow.ev, picks);
-              setSelectedId(null);
-            }}
-          />
-        ) : null}
+        {/* minContentWidth ≈ the draws row's fixed-cell total (with Format
+            collapsed) — below it the dock overlays instead of docking, so
+            the shrink-0 cells never force a squashed/overflowing table. */}
+        <DetailDock open={selectedRow != null} minContentWidth={760}>
+          {selectedRow ? (
+            <DrawDetailPanel
+              key={selectedRow.ev.id}
+              ev={selectedRow.ev}
+              players={players}
+              onClose={() => setSelectedId(null)}
+              onCommitPicks={async (picks) => {
+                await commitPicks(selectedRow.ev, picks);
+                setSelectedId(null);
+              }}
+            />
+          ) : null}
+        </DetailDock>
       </div>
 
       {creating && (
@@ -511,7 +529,9 @@ function ActionCell({
 
   if (status === 'draft') {
     return (
-      <Button variant="brand" size="sm" disabled={!eventReady} onClick={onGenerate}>
+      // xs (28px) — the only Button height that FITS the 32px banded row;
+      // sm (36px) overflowed the row hairlines and dwarfed the bar controls.
+      <Button variant="brand" size="xs" disabled={!eventReady} onClick={onGenerate}>
         Generate
       </Button>
     );
@@ -520,7 +540,7 @@ function ActionCell({
     return (
       <Button
         variant={confirmRegen.armed ? 'destructive' : 'outline'}
-        size="sm"
+        size="xs"
         onClick={confirmRegen.press}
         onBlur={confirmRegen.reset}
         title={
@@ -533,14 +553,10 @@ function ActionCell({
       </Button>
     );
   }
-  return (
-    <span
-      className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground"
-      title="Event is in progress; reset bracket to re-generate."
-    >
-      — (locked)
-    </span>
-  );
+  // Started: no generate-family action exists. The STARTED pill (and the
+  // Configuration page's hard-lock ribbon) already say why — a raw
+  // "(locked)" here just read as debug text.
+  return null;
 }
 
 // ---------------------------------------------------------------------------
