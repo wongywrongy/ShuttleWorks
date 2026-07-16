@@ -13,7 +13,7 @@
  * ``BracketViewHeader`` strip above the active view.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Sliders, ListChecks } from '@phosphor-icons/react';
 
 import { BracketApiProvider } from '../../api/bracketClient';
@@ -26,7 +26,7 @@ import { reconcileBracketRoster } from './bracketMigration';
 import { type SettingsSectionDef } from '../../platform/settings/SettingsShell';
 import { ConfigSurface, LockedFieldset } from '../../platform/settings/ConfigSurface';
 import { EngineConfigForm } from '../../platform/settings/EngineConfigForm';
-import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
+import { LockRibbon } from '../../components/status/LockRibbon';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { requestClearScheduleOnNextSave } from '../../hooks/useTournamentState';
 import { useBracketScheduleLock } from './useBracketScheduleLock';
@@ -205,7 +205,11 @@ function BracketTabBody() {
         icon: Sliders,
         render: () => (
           <LockedFieldset locked={bracketScheduleLocked}>
-            <EngineConfigForm module="bracket" guardSave={guardBracketSave} />
+            <EngineConfigForm
+              module="bracket"
+              guardSave={guardBracketSave}
+              readOnly={bracketScheduleLocked}
+            />
           </LockedFieldset>
         ),
       },
@@ -295,11 +299,21 @@ function BracketTabBody() {
             section={setupSection}
             onSectionChange={(v) => setSetupSection(v)}
             ribbons={
-              bracketScheduleLocked || bracketHasSchedule ? (
-                <ScheduleLockIndicator
+              bracketScheduleLocked ? (
+                <LockRibbon
+                  tier="hard"
                   locked
-                  showUnlockHint={!bracketScheduleLocked && bracketHasSchedule}
+                  action={
+                    <Link
+                      to={`/tournaments/${params.id}/bracket-draws`}
+                      className="ml-1 font-medium text-accent hover:underline"
+                    >
+                      View draws →
+                    </Link>
+                  }
                 />
+              ) : bracketHasSchedule ? (
+                <LockRibbon tier="soft" locked />
               ) : null
             }
           >

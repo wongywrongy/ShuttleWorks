@@ -23,7 +23,7 @@ import { useLockGuard } from '../../hooks/useLockGuard';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { MeetStructureForm } from './tournaments/MeetStructureForm';
-import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
+import { LockRibbon } from '../../components/status/LockRibbon';
 import { EngineConfigForm } from '../../platform/settings/EngineConfigForm';
 import { ConfigSurface } from '../../platform/settings/ConfigSurface';
 import { IconDone } from '@scheduler/design-system';
@@ -112,7 +112,7 @@ export function TournamentSetupPage() {
       ribbons={
         <>
           {/* Page-level banners — full-bleed border-b ribbons, each shrink-0. */}
-          {isLocked ? <ScheduleLockIndicator showUnlockHint /> : null}
+          {isLocked ? <LockRibbon tier="soft" locked /> : null}
           {isNewTournament ? (
             <div className="motion-enter shrink-0 border-b border-status-started/40 bg-status-started/5 px-4 py-2 text-xs text-status-started">
               <span className="font-semibold">New tournament — </span>

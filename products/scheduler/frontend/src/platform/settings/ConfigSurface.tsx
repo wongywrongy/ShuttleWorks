@@ -52,10 +52,14 @@ export function ConfigSurface({
 }
 
 /**
- * LockedFieldset — disables every form control beneath it while a
- * schedule/draw lock is active. The visual dim + native `disabled`
- * cascade give a real lock mechanism to surfaces that persist
- * immediately (no Save step to guard with a confirm-unlock modal).
+ * LockedFieldset — locks every form control beneath it while a
+ * schedule/draw lock is active. The native `disabled` cascade is the
+ * ENFORCEMENT; the presentation is read-only, not dimmed-out: values
+ * keep full contrast (`sw-readonly`, globals.css) because a locked
+ * config is review data the operator still needs to read mid-tournament
+ * — greying it is the classic enterprise anti-pattern. Interactive
+ * affordances (Save) should be hidden by the form itself (see
+ * EngineConfigForm's `readOnly`), not merely disabled here.
  */
 export function LockedFieldset({
   locked,
@@ -67,7 +71,7 @@ export function LockedFieldset({
   return (
     <fieldset
       disabled={locked}
-      className={locked ? 'opacity-60' : undefined}
+      className={locked ? 'sw-readonly' : undefined}
       data-locked={locked || undefined}
     >
       {children}

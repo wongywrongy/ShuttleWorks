@@ -47,6 +47,10 @@ export interface EngineConfigFormProps {
   onBusyChange?: (busy: boolean) => void;
   /** Resolves false to abort the save (lock guard). Defaults to allow. */
   guardSave?: () => Promise<boolean>;
+  /** Hard lock (e.g. a bracket draw in play): values are shown for review
+   *  only — no save affordance renders and submit is a no-op. Pair with a
+   *  `LockedFieldset` so the controls themselves are inert too. */
+  readOnly?: boolean;
 }
 
 export const ENGINE_CONFIG_FIELDS = [
@@ -97,6 +101,7 @@ export function EngineConfigForm({
   formId,
   onBusyChange,
   guardSave,
+  readOnly = false,
 }: EngineConfigFormProps) {
   const { config, updateConfig } = useTournament();
   const tid = useTournamentId();
@@ -175,7 +180,7 @@ export function EngineConfigForm({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!config) return;
+    if (readOnly || !config) return;
     if (guardSave && !(await guardSave())) return;
     setSaving(true);
     onBusyChange?.(true);
@@ -399,10 +404,14 @@ export function EngineConfigForm({
         </div>
       )}
       {/* In-form Save — hidden when the page actions-bar Save owns
-          submission (formId set). */}
-      {!formId ? (
+          submission (formId set) and under a hard lock (read-only review:
+          a disabled Save would just beg the question the LockRibbon
+          already answers). */}
+      {!formId && !readOnly ? (
         <div className="mt-6">
-          <Button type="submit" disabled={saving || !config}>
+          {/* xs (28px) — matches the meet's actions-bar Save so the shared
+              Configuration archetype reads identically on both engines. */}
+          <Button size="xs" type="submit" disabled={saving || !config}>
             {justSaved ? (
               <span key="saved" className="motion-enter-icon inline-flex items-center gap-2">
                 <IconDone size={16} /> Saved

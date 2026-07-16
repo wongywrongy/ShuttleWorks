@@ -189,18 +189,34 @@ describe('bracket engine config (shared form)', () => {
     expect(setConfig).not.toHaveBeenCalled();
   });
 
-  it('hard lock: a started draw disables the fields and offers no confirm', () => {
+  it('hard lock: a started draw makes the fields read-only and offers no confirm', () => {
     mockBracket(withStartedDraw());
     renderBracketTab();
 
     const fieldset = document.querySelector('fieldset[data-locked]');
     expect(fieldset).not.toBeNull();
+    // Read-only presentation, native-disabled enforcement: values keep
+    // full contrast (sw-readonly) while interaction stays off.
+    expect(fieldset?.className).toContain('sw-readonly');
     expect(
       screen.getByLabelText('Rest between rounds (slots)'),
     ).toBeDisabled();
-    // No Save button to even click through — LockedFieldset disables the
-    // whole subtree, including any submit control inside it.
+    // No Save affordance at all under a hard lock (a disabled Save would
+    // just beg the question the ribbon answers).
+    expect(
+      screen.queryByRole('button', { name: /Save engine settings/i }),
+    ).toBeNull();
     expect(useUiStore.getState().unlockModalState).toBeNull();
+    // The ribbon is the calm protective tier and names the exit path.
+    const ribbon = screen.getByTestId('lock-ribbon');
+    expect(ribbon.dataset.tier).toBe('hard');
+    expect(screen.getByRole('link', { name: /View draws/i })).toBeInTheDocument();
+  });
+
+  it('soft lock: the ribbon is the amber caution tier', () => {
+    mockBracket(withSchedule());
+    renderBracketTab();
+    expect(screen.getByTestId('lock-ribbon').dataset.tier).toBe('soft');
   });
 
   it('existing scoring behavior still persists correctly (no regression)', async () => {
