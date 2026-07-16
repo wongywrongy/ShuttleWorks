@@ -99,7 +99,9 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
   const squareCls = solidFill
     ? 'bg-white/20 text-inherit'
     : 'bg-surface-chip text-muted-foreground';
-  // A finished match's code reads struck-through on the state-tone board.
+  // A finished match reads muted + checked on the state-tone board —
+  // NOT struck-through (strikethrough is the "cancelled" idiom; a played
+  // match is a completed one).
   const doneLabel = tone === 'state' && state === 'done' && !selected;
 
   return (
@@ -126,7 +128,12 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         >
           {SOURCE_INITIAL[source]}
         </span>
-        <span className={`truncate text-2xs font-semibold sw-num${doneLabel ? ' line-through' : ''}`}>{label}</span>
+        <span className={`truncate text-2xs font-semibold sw-num${doneLabel ? ' text-muted-foreground' : ''}`}>{label}</span>
+        {doneLabel ? (
+          <span aria-hidden className="text-3xs text-muted-foreground">
+            ✓
+          </span>
+        ) : null}
       </span>
       {showSides && sideA != null && sideB != null && (
         <span className="mt-0.5 truncate text-2xs leading-tight">

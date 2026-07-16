@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import type { ReactElement } from 'react';
 import { PeopleAccessTab } from '../PeopleAccessTab';
 import { apiClient } from '../../../api/client';
 
 vi.mock('../../../api/client', () => ({ apiClient: { listMembers: vi.fn() } }));
+
+// The tab links to the Sharing page — renders need a router.
+const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 const summary = {
   id: 't1', name: 'WS', kind: 'meet', status: 'draft', tournamentDate: null,

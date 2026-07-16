@@ -300,7 +300,10 @@ export function GanttTimeline({
               key={slotId}
               style={{ width: tier.slot }}
               className={cn(
-                'flex-shrink-0 border-l border-border px-1 py-1 text-center text-2xs tabular-nums',
+                // whitespace-nowrap + visible overflow: a time label ("12:00")
+                // must never wrap/clip into "12:0" when the column is narrower
+                // than the text — label-less neighbors make bleed harmless.
+                'flex-shrink-0 overflow-visible whitespace-nowrap border-l border-border px-0.5 py-1 text-center text-2xs tabular-nums',
                 slotId === currentSlot
                   ? 'bg-status-live/15 font-semibold text-status-live'
                   : 'text-muted-foreground',

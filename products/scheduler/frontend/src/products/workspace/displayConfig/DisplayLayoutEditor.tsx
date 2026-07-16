@@ -290,19 +290,31 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
           />
         }
       />
-      <Row
-        label="Grid columns"
-        control={
-          <Seg
-            options={GRID_COLUMNS_OPTIONS}
-            value={tvGridColumns}
-            onChange={(v) =>
-              update({ tvGridColumns: v === 0 ? null : (v as 1 | 2 | 3 | 4) })
-            }
-            ariaLabel="Grid columns"
-          />
-        }
-      />
+      {/* Column count applies only in Grid mode — indented + dimmed as a
+          dependent control (same idiom as EngineConfigForm's utilisation
+          weight), with the Seg REALLY disabled (not just dimmed) so it is
+          equally inoperable by mouse and keyboard. The value persists. */}
+      <div
+        className={[
+          'pl-4 border-l border-border/60',
+          tvDisplayMode === 'grid' ? '' : 'opacity-50',
+        ].join(' ')}
+      >
+        <Row
+          label="Grid columns"
+          control={
+            <Seg
+              options={GRID_COLUMNS_OPTIONS}
+              value={tvGridColumns}
+              onChange={(v) =>
+                update({ tvGridColumns: v === 0 ? null : (v as 1 | 2 | 3 | 4) })
+              }
+              ariaLabel="Grid columns"
+              disabled={tvDisplayMode !== 'grid'}
+            />
+          }
+        />
+      </div>
       <Row
         label="Card size"
         control={

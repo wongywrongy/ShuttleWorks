@@ -121,10 +121,12 @@ export function SharingTab({ tid }: { tid: string }) {
             aria-label="Public display link"
             className="min-w-0 flex-1 rounded border border-border bg-muted/30 px-2 py-1.5 font-mono text-xs text-foreground"
           />
-          <Button variant="ghost" onClick={() => copy(displayLink, 'display')}>
+          {/* xs (28px) matches the row's input + the app's control scale —
+              the default 40px Button towered over its neighbors. */}
+          <Button size="xs" variant="ghost" onClick={() => copy(displayLink, 'display')}>
             {copied === 'display' ? 'Copied' : 'Copy'}
           </Button>
-          <Button variant="ghost" onClick={() => window.open(displayLink, '_blank')}>
+          <Button size="xs" variant="ghost" onClick={() => window.open(displayLink, '_blank')}>
             Open fullscreen
           </Button>
         </div>
@@ -143,7 +145,7 @@ export function SharingTab({ tid }: { tid: string }) {
             ariaLabel="Invite role"
             size="sm"
           />
-          <Button onClick={create} disabled={busy}>
+          <Button size="xs" onClick={create} disabled={busy}>
             {busy ? 'Creating…' : 'Create invite'}
           </Button>
         </div>
@@ -182,11 +184,12 @@ export function SharingTab({ tid }: { tid: string }) {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <Button variant="ghost" onClick={() => copy(link, inv.token)}>
+                    <Button size="xs" variant="ghost" onClick={() => copy(link, inv.token)}>
                       {copied === inv.token ? 'Copied' : 'Copy'}
                     </Button>
                     {status === 'active' && (
                       <Button
+                        size="xs"
                         variant="ghost"
                         onClick={() => void revoke(inv.token)}
                         className="text-destructive hover:bg-destructive/10"

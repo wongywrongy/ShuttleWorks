@@ -364,3 +364,56 @@ a green 1,100-test suite. The real check is the viewer flow in
   life (every PUT also snapshots a backup row). Not the measured lag source
   today, but both scale with tournament size. Fix directions: standings memo
   keyed on results version; cap/compact `scheduleHistory`. Size S–M.
+- **2026-07-15 · RunSurface's RunInspector column not yet on DetailDock**
+  (`products/operations/run/RunSurface.tsx` ~382-436): the Live Run surface
+  keeps its own always-mounted inspector column instead of the shared
+  `DetailDock` host every other detail pane now uses (docked width column +
+  container-query table reflow + narrow-viewport overlay fallback). It does
+  NOT exhibit the push-on-click bug (it is persistent, so width never
+  changes on selection), which is why it was deferred from the 2026-07-15
+  docked-pane rework. Aligning it would unify the last rail onto one
+  primitive and give it the narrow-viewport fallback. Size S.
+- **2026-07-15 · docked-pane + polish rework — residuals** (from the
+  DetailDock/LockRibbon/polish sessions; all shipped-around, none blocking):
+  - **Hard-lock read-only is visual, not semantic.** `LockedFieldset`'s
+    `sw-readonly` restores full contrast (via `!important` overrides of the
+    per-control `disabled:` utilities) but controls stay natively `disabled` —
+    not keyboard-focusable, values not selectable. True per-control
+    `readOnly`/`aria-readonly` means touching Toggle/Select/Slider
+    individually. Size M.
+  - **The new interaction-smoke scenario has not been executed.** The
+    docked-pane spec block in `e2e/tests/interaction-smoke.spec.ts` (and it is
+    the ONLY gate on real container-query reflow — jsdom can't) was written
+    but not run: it needs the Docker stack + seed-smoke fixture. Run it before
+    trusting the reflow gate. Size S (just run it).
+  - **`minContentWidth={760}` on BracketDrawsTab is a hand-summed magic
+    number** (fixed-cell total with Format collapsed). If DRAW_COLUMNS
+    changes width, it silently drifts; derive it or pin it with a test. Size S.
+  - **Gantt header time-labels may bleed** onto the following (label-less)
+    column since the `overflow-visible whitespace-nowrap` clipping fix; at
+    extreme zoom-out two labels could touch. Cosmetic. Size S.
+  - **DetailDock close-retention shows stale children ≤450 ms** (deleted
+    entity's pane content persists for the close animation). Accepted
+    trade-off; noting in case a deleted-row flash ever confuses someone.
+  - **Members page can only name the OWNER** (summary.ownerName); other
+    members still render derived id chips because the members API exposes no
+    name/email. Backend gap. Size S–M (API + row).
+- **2026-07-16 · /code-review follow-ups (post-fix residuals)**:
+  - **DetailDock overlay-fallback keeps docked semantics.** In the narrow
+    fallback the pane COVERS the table yet stays `role="complementary"` with
+    no outside-click dismissal (children are hardcoded `variant="docked"`).
+    Right fix: dock exposes its mode to children (context/render-prop) so
+    overlay mode re-acquires dialog role + outside-mousedown close. Size M.
+  - **Venue & schedule lock signal is meet-only.** The LockRibbon + new
+    confirm-unlock guard read the meet store flag; a bracket-only lock
+    (committed bracket schedule / draw in play) shows nothing there because
+    bracket lock state needs bracket data not loaded at workspace level.
+    Backstop today: the server 409s (CONFIG_LOCKED/DRAW_STARTED). Size M.
+  - Cleanup shortlist from the same review (below the findings cap): shared
+    date-format helper (fmtDate is ~7th private copy), LockRibbon inline SVG
+    → phosphor `LockSimple`, shared `prefersReducedMotion()` (2 copies),
+    `DetailPanel.width` dead API, dead `::-webkit-scrollbar` rules on
+    Chromium ≥121 + thin scrollbars silently applying to the TV display,
+    `useContainerWidth` per-resize setState (threshold/hysteresis + initial
+    sync measurement), ops board lacks column-priority degradation when the
+    Courts dock takes width. Size S each.

@@ -73,7 +73,9 @@ describe('<DisplayLayoutEditor />', () => {
   });
 
   it('writes tvGridColumns as a number when a specific column count is chosen', () => {
-    resetStore({ tvGridColumns: null });
+    // Intentional change (2026-07-16 review fix): the Grid-columns Seg is
+    // REALLY disabled outside Grid mode, so these tests enter Grid first.
+    resetStore({ tvGridColumns: null, tvDisplayMode: 'grid' });
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     render(<DisplayLayoutEditor />);
     const gridGroup = screen.getByRole('radiogroup', { name: 'Grid columns' });
@@ -82,8 +84,19 @@ describe('<DisplayLayoutEditor />', () => {
     expect(last.tvGridColumns).toBe(3);
   });
 
+  it('grid-columns is really disabled outside Grid mode (keyboard included)', () => {
+    resetStore({ tvGridColumns: null }); // default mode: strip
+    const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
+    render(<DisplayLayoutEditor />);
+    const gridGroup = screen.getByRole('radiogroup', { name: 'Grid columns' });
+    const three = within(gridGroup).getByRole('radio', { name: '3' });
+    expect(three).toBeDisabled();
+    fireEvent.click(three);
+    expect(setConfig).not.toHaveBeenCalled();
+  });
+
   it('writes tvGridColumns as null when Auto is chosen', () => {
-    resetStore({ tvGridColumns: 3 });
+    resetStore({ tvGridColumns: 3, tvDisplayMode: 'grid' });
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     render(<DisplayLayoutEditor />);
     const gridGroup = screen.getByRole('radiogroup', { name: 'Grid columns' });

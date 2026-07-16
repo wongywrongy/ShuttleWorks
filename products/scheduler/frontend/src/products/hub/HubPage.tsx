@@ -23,6 +23,11 @@ import { needsAttention } from './hubSignals';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
 
+/** The ⌘K handler accepts Ctrl too — the hint should name the key the
+ *  user's OS actually has. */
+const IS_MAC =
+  typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.userAgent);
+
 /** Relative "updated" label for the footer (from a refresh timestamp vs now). */
 function sinceLabel(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -228,7 +233,7 @@ export function HubPage() {
               className="h-8 w-full rounded-md border border-border bg-bg-elev px-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
             />
             <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-xs border border-border bg-surface-chip px-1 text-[10px] text-muted-foreground">
-              ⌘K
+              {IS_MAC ? '⌘K' : 'Ctrl K'}
             </kbd>
           </div>
         </div>

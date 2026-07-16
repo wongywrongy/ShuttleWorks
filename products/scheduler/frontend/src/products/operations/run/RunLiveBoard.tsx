@@ -356,12 +356,16 @@ export function RunLiveBoard({
           className="ml-auto hidden items-center gap-3 text-muted-foreground sm:flex"
         >
           <span>
-            <span className="font-semibold text-status-warning">+</span> running over
+            <span className="font-semibold text-status-warning">+n</span> over time
           </span>
           <span>
-            <span className="font-semibold text-status-warning">▸+</span> delayed start
+            <span className="font-semibold text-status-warning">▸n</span> late start
           </span>
-          {slotMinutes != null && <span>plain = time played</span>}
+          {slotMinutes != null && (
+            <span>
+              <span className="font-semibold text-foreground">n</span> min played
+            </span>
+          )}
         </span>
       </div>
     </div>

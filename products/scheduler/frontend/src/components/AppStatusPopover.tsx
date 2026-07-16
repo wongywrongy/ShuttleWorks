@@ -157,13 +157,15 @@ export function AppStatusPopover() {
                 <span className="text-muted-foreground">checking…</span>
               )}
             </Row>
-            <Row label="Schema">{health ? `v${health.schemaVersion}` : '—'}</Row>
-            <Row label="Solver">
+            {/* Operator-first labels — the diagnostics stay, the internals
+                jargon ("Schema", "Solver loaded", "Data dir") doesn't. */}
+            <Row label="Data format">{health ? `v${health.schemaVersion}` : '—'}</Row>
+            <Row label="Scheduler">
               {health
-                ? (health.solverLoaded ? 'loaded' : <span className="text-status-danger-fg">missing</span>)
+                ? (health.solverLoaded ? 'ready' : <span className="text-status-danger-fg">unavailable</span>)
                 : '—'}
             </Row>
-            <Row label="Data dir">
+            <Row label="Data folder">
               {health
                 ? (health.dataDirWritable ? 'writable' : <span className="text-status-danger-fg">read-only</span>)
                 : '—'}
@@ -172,7 +174,10 @@ export function AppStatusPopover() {
               {persistStatus === 'error' ? (
                 <span className="text-status-danger-fg">failed</span>
               ) : lastSavedAt ? (
-                new Date(lastSavedAt).toLocaleTimeString()
+                new Date(lastSavedAt).toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })
               ) : persistStatus === 'saving' ? (
                 'saving…'
               ) : (
@@ -206,7 +211,8 @@ export function AppStatusPopover() {
           </div>
 
           <p className="mt-2 text-3xs text-muted-foreground">
-            To quit, close the launcher terminal window or run the Stop script.
+            To quit ShuttleWorks, close its launcher window (or run the Stop
+            script).
           </p>
         </div>
       )}

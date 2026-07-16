@@ -67,16 +67,21 @@ export function Seg<T extends string | number>({
   value,
   onChange,
   ariaLabel,
+  disabled = false,
 }: {
   options: readonly SegOption<T>[];
   value: T;
   onChange: (v: T) => void;
   ariaLabel?: string;
+  /** Real per-button `disabled` — a wrapper's `pointer-events-none` only
+   *  blocks the mouse; the buttons would stay keyboard-operable. */
+  disabled?: boolean;
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={ariaLabel}
+      aria-disabled={disabled || undefined}
       className="inline-flex overflow-hidden border border-border"
     >
       {options.map((opt) => {
@@ -87,6 +92,7 @@ export function Seg<T extends string | number>({
             type="button"
             role="radio"
             aria-checked={isActive}
+            disabled={disabled}
             onClick={() => onChange(opt.value)}
             className={[
               // MOTION.md §6 Seg: explicit duration-fast + ease-brand
