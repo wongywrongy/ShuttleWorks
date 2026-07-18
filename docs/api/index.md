@@ -126,12 +126,25 @@ and Display (preview source).
 | --- | --- |
 | `GET · POST /tournaments` | list (with [signals](/api/signals)) / create a workspace |
 | `GET · PATCH · DELETE /tournaments/{id}` | summary / update / delete |
-| `GET · PUT /tournaments/{id}/state` | the persisted workspace-state blob (shared) |
+| `GET · PUT /tournaments/{id}/state` | the persisted workspace-state blob (shared); `PUT` honours `?clearSchedule=true` — see the schedule lock below |
 | `GET …/state/backups`, `POST …/state/backup`, `POST …/state/restore/{file}` | snapshots |
 | `POST /tournaments/{id}/plan-finalized` | toggle the persisted `planFinalized` flag (Run surface) |
 | `GET /tournaments/{id}/modules`, `PATCH …/modules/{moduleId}` | the `workspace_modules` control plane |
 | `POST · GET /tournaments/{id}/invites`, `GET …/members` | create / list invites (owner-gated) + list members |
 | `GET /invites/{token}` (public) · `POST …/accept` (auth) · `DELETE …/{token}` (owner, revoke) | resolve / accept / revoke an invite link |
+
+:::info The schedule lock on `PUT …/state`
+`PUT /tournaments/{id}/state` is the single write funnel that enforces the
+**schedule lock**. Changing a scheduling-relevant config key while a committed
+schedule exists returns `409 CONFIG_LOCKED` with
+`{fields: [...], schedules: ["meet"|"bracket"]}`. Retrying with
+`?clearSchedule=true` clears the invalidated schedule(s) atomically with the
+write — unless a bracket draw is started, which hard-locks with
+`409 DRAW_STARTED` (`{events: [...]}`). A separate `409 ROSTER_LOCKED` blocks
+removing a roster player a generated draw already references. Which keys count
+as scheduling-relevant is defined in `shared/non-scheduling-keys.json` (fail-closed:
+anything not listed locks). Full contract: [Unified configuration](/architecture/unified-configuration#schedule-lock).
+:::
 
 ### Cross-module consumers
 
@@ -185,8 +198,11 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
 - **Error codes** — `HTTPException`s built via `error_codes.http_error(...)` carry a structured
   `{code, message}` body. `ErrorCode` (in `app/error_codes.py`) is the authoritative list the
   frontend branches on (e.g. `MODULE_DEPENDENCY_UNMET`, `MODULE_HAS_DATA`,
-  `SCHEDULE_VERSION_CONFLICT`, `BACKUP_NOT_FOUND`). Legacy bare-string `detail` still works — the
-  axios interceptor falls back to treating `detail` as the message.
+  `SCHEDULE_VERSION_CONFLICT`, `BACKUP_NOT_FOUND`, and the schedule-lock codes `CONFIG_LOCKED` /
+  `DRAW_STARTED` / `ROSTER_LOCKED`). `http_error(status, code, message, extra=)` merges `extra`
+  keys flat into the detail payload (e.g. `CONFIG_LOCKED`'s `fields` / `schedules`), so a client
+  can branch on structured context, not just the message. Legacy bare-string `detail` still works —
+  the axios interceptor falls back to treating `detail` as the message.
 - **Optimistic concurrency** — two families:
   - *Match-state writes* use `ETag` / `If-Match`. A `GET …/match-states/{mid}` returns
     `ETag: "<matches.version>"` (`"0"` for an unseen match); `PUT` / `DELETE` must send a matching

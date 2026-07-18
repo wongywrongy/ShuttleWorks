@@ -96,7 +96,7 @@ when **advancement resolves that match's slots** — i.e. when an upstream
 winner (or a re-pin) fills its sides. Recording a result does *not* bump
 the recorded match's own version. So `seen_version` catches a write against
 a match whose sides have changed since the client loaded it. Duplicate
-submissions of the *same* command are arbitrated by guard 2 (the command id),
+submissions of the *same* command are arbitrated by server guard 1 (the command id),
 not this version check.
 :::
 
@@ -125,8 +125,8 @@ bracket-owned and arrives only with the committed or refetched DTO.
 | Outcome | Source | Client action |
 |---|---|---|
 | `ok` | 200 + full DTO | `onSettled(dto)` — replace the view-model authoritatively |
-| `staleVersion` | 409 `error: stale_version` (guard 1) | surface inline + refetch the bracket |
-| `conflict` | any other 409 (guard 3) | surface inline + refetch |
+| `staleVersion` | 409 `error: stale_version` (server guard 2) | surface inline + refetch the bracket |
+| `conflict` | any other 409 (non-version conflict) | surface inline + refetch |
 | `networkError` | anything else | leave the command `pending`; the next flush retries |
 
 `MatchDetailPanel` injects the handlers and renders a conflict as an

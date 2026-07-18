@@ -14,9 +14,12 @@ flag and no `workspace_modules` row** — it is the `'operations'` arm of
   **Run** surface (the live, day-of control board) for whichever engine(s) are
   active. (Plan / Run were formerly *Courts* / *Live*.)
 - Owns the **canonical match-state machine** — the `MatchStatus` enum
-  `scheduled → called → playing → finished | retired` (with `uncall`:
-  `called → scheduled`), terminal states `finished` / `retired`, and
-  `LOCKED_STATUSES` the solver pins. See
+  `scheduled → called → playing → finished | retired`, plus the reverse edges
+  `uncall` (`called → scheduled`) and `postpone` (`playing → scheduled`). Only
+  `retired` is terminal (`RETIRED: []`); `finished` can **reopen** to `playing`
+  to correct a mis-finished match (`VALID_TRANSITIONS` in
+  `services/match_state.py`). `LOCKED_STATUSES` (`called`, `playing`, `finished`,
+  `retired`) are the states the solver pins. See
   [Data flow](/architecture/data-flow#the-match-state-machine).
 - Runs the **idempotent command pipeline** (call / start / finish / retire /
   uncall) with optimistic UI and inline conflict handling.

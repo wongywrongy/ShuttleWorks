@@ -31,11 +31,14 @@ side-by-side instead of z-fighting (the two engines solve the same physical
 courts independently per [ADR 0006](/decisions/0006-unified-scheduling-core), so
 they can double-book a `(court, slot)`).
 
-::: info `OpsBlock` vs `OperationalMatch`
-`OpsBlock` is the richer shape the interactive surfaces need. The older
-`lib/operations/operationalMatch.ts` `OperationalMatch` is the lighter **read-only
-chip projection** (with `meetMatchesToOperational` / `bracketToOperational`
-adapters) — kept for read-only consumers, not the interactive Plan/Run surfaces.
+::: info `OpsBlock` is the one shape now
+`OpsBlock` is the single engine-agnostic shape both Plan and Run speak; the
+earlier lighter `OperationalMatch` read-only chip projection (and its
+`lib/operations/operationalMatch.ts`) has been removed. The surviving
+write-direction module is `products/operations/operationalWriteback.ts`
+(`OperationalAction` · `OperationalWritebackRouter` · `routeOperationalAction`),
+which routes an operator action to the right engine's write path — not a chip
+projection. See [Operations § the write router](/modules/operations#the-run-surface).
 :::
 
 ## The Plan surface

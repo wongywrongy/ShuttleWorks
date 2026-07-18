@@ -30,9 +30,11 @@ and Operations/Display consumption.
   feeder reference means **"the winner of that play unit takes this slot"** — there
   is no loser reference. `advancement.py` propagates winners (and cascades `__BYE__`
   walkovers) into downstream slots when a result lands.
-- **Dispatch** — `generate_event_route` in `api/brackets.py` branches on
-  `event.format` (`"se"` else `"rr"`); the frontend `DrawView.tsx` branches the same
-  way between the mirrored bracket canvas and `RoundRobinView`.
+- **Dispatch** — generation and validation go **through the registry**, not a binary
+  branch: `generate_event_route` in `api/brackets.py` resolves `spec = get_format(body.format)`
+  and generates via that format's generator, with `body.format` validated against
+  `FORMAT_REGISTRY`. The frontend `DrawView.tsx` picks a renderer by the format's
+  `renderer` key (`bracket | grid | segments | swiss`), not a hardcoded `se`/`rr` split.
 - **Renderer** — the SE canvas draws a **mirrored** two-wing bracket converging on a
   centered Final (`computeBracketLayout`), panned/zoomed by `PanZoomCanvas` — see
   [Bracket draw canvas](/architecture/bracket-draw-canvas). Feeder slots render as
@@ -51,6 +53,14 @@ and Operations/Display consumption.
 | Group stage (groups → knockout) | Roadmap | Phase-boundary resolution (generate the knockout from concrete pool standings) |
 | Qualifying → main draw | Roadmap | Cross-draw *winner* feeds + "Qualifier" labeling (no loser routing needed) |
 | Ladder | Roadmap | Not a draw; challenge-driven match creation — a different product surface |
+
+:::info The per-format sections below are the original design analysis
+The subsections that follow record the *design rationale* written before these
+formats shipped — several read as "here's what it would need". For DE, Monrad,
+compass, and Swiss that work is **done** (see [How the gaps were closed](#how-the-gaps-were-closed-2026-07-02));
+read those sections as *why the shape maps onto the play-unit DAG*, not as open
+work. Only group stage, qualifying, and ladder remain roadmap.
+:::
 
 ### Single elimination (one-sided vs mirrored)
 
@@ -146,6 +156,13 @@ surface (a persistent ranking board), not a Bracket draw type. Deliberately last
    ("Loser of X"). **Walkover policy:** a walkover has no real loser — byes and
    withdrawals feed `BYE` into consolation slots and the existing walkover sweep
    hollows the plate match (pinned by `test_advancement_loser_routing.py`).
+   **Extended 2026-07-15:** a `retired` or `forfeit` loser is routed to BYE
+   downstream the same way (its consolation / `feeder_take='loser'` slot becomes a
+   BYE), but the stored `Result` keeps `walkover=False` and its `reason` set — a
+   retirement is not reported as a walkover. The single predicate
+   `advancement.py::loser_cannot_continue(walkover, reason)` gates all three; winner
+   advancement is unchanged and there is deliberately no auto-withdrawal from the
+   player's other draws.
 2. **Format registry** — `FormatSpec {generate, progressive, has_standings,
    uses_bracket_size, normalize_config}`; DTO `format` fields are plain strings
    validated against the registry (adding a format = one entry, zero DTO churn).
@@ -170,30 +187,42 @@ Remaining (roadmap): group-stage phase composition, qualifying cross-draw feeds,
 ladder, and real connector lines on the
 [draw canvas](/architecture/bracket-draw-canvas).
 
-## Recommended roadmap
+## Roadmap — shipped and remaining
 
-| Stage | Scope | Effort | Touches |
-| --- | --- | --- | --- |
-| **R1** | One-sided SE layout — **make it the default**, keep mirrored as an option | Small | Renderer only |
-| **R2** | RR standings + group stage (pools → knockout via phase-boundary resolution) | Medium | New generator glue + standings service + composite view |
-| **R3** | Double elimination, Monrad, compass | Large | Slot model + DTO + advancement + generators + multi-segment renderer |
-| **R4** | Qualifying draws, Swiss, ladder | Medium–large each | Cross-draw feeds (qualies); progressive generation (Swiss/ladder) |
+The original staged plan is mostly delivered. Status reflects the shipped
+`FORMAT_REGISTRY`:
 
-- **R1** is pure `DrawView.tsx`: a second layout function beside
-  `computeBracketLayout`, a toggle, one-sided by default. Real brackets read
-  left-to-right; the mirrored view stays as the "wall display" option.
-  `DrawView.centered.test.tsx` pins the mirrored geometry today and would be
-  re-pinned around the new default.
-- **R2** delivers the single most-requested real-world shape (the BWF group→knockout
-  format) without touching the slot model, and gives round robin its missing payoff.
-- **R3** is the structural investment. Land loser routing once, and double
-  elimination, Monrad, and compass become three generators over the same primitive.
-  Prioritize **Monrad** among them — it is the badminton-native consolation format.
-- **R4** rides R2/R3 machinery: qualifying is cross-draw winner-feeds; Swiss and
-  ladder are progressive formats whose between-rounds generation step slots into the
-  existing *schedule next round* rhythm rather than fighting it.
+| Stage | Scope | Status |
+| --- | --- | --- |
+| **R1** | One-sided SE layout as the default (mirrored kept as a wall-display option) | ✅ **Shipped** |
+| **R3** | Double elimination, Monrad, compass (loser routing + multi-segment renderer) | ✅ **Shipped** |
+| **R4a** | Swiss (progressive `rounds/next` generation) | ✅ **Shipped** |
+| **R2** | RR standings ✅ + group stage (pools → knockout via phase-boundary resolution) | ◑ **Standings shipped; group stage remaining** |
+| **R4b** | Qualifying draws (cross-draw winner feeds) · ladder (persistent ranking board) | ⬜ **Remaining** |
+
+What genuinely remains, and why it's harder than the shipped formats:
+
+- **Group stage** delivers the most-requested real-world shape (the BWF
+  group→knockout format). The pools and the knockout are each already expressible;
+  what's missing is the *composition* — a knockout slot that says "1st of Group A"
+  (a rank over a set of play units, which the winner-only `feeder_play_unit_id`
+  can't express). The cheap path is phase-boundary resolution: generate the knockout
+  with concrete participants once pools complete.
+- **Qualifying** is cross-draw **winner**-feeds (a Qualifier is the winner of a
+  qualifying draw's last round); it needs multi-draw advancement plumbing, since
+  advancement currently propagates within one event's draw.
+- **Ladder** shares Swiss's progressive-generation machinery but is really a
+  different product surface (a persistent ranking board), not a Bracket draw type —
+  deliberately last.
+- **Presentation:** real connector lines on the [draw canvas](/architecture/bracket-draw-canvas).
 
 ## UI direction
+
+:::info Largely shipped
+The format-picker card grid and the per-format `DrawView` renderer registry
+described below **shipped** with the draw-formats program — read this as the
+delivered UI model (roadmap formats' cards render disabled), not a proposal.
+:::
 
 - **Format picker at draw creation.** Replace the `se`/`rr` dropdown with a card
   grid — one card per format, each with a mini-glyph (bracket tree, round grid,
