@@ -28,12 +28,13 @@ import logging
 import uuid
 from typing import Any, Optional
 
-from fastapi import Depends, HTTPException, Path, status
+from fastapi import Depends, HTTPException, Path, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from app.config import settings
 from repositories import LocalRepository, get_repository
+from services import auth as auth_service
 
 log = logging.getLogger("scheduler.auth")
 
@@ -95,22 +96,41 @@ def reset_supabase_client() -> None:
 
 
 def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    repo: LocalRepository = Depends(get_repository),
 ) -> AuthUser:
-    """Verify the bearer JWT and return the authenticated user.
+    """Resolve the caller's identity. Order of precedence:
 
-    Behaviour:
-    - ``SUPABASE_URL`` blank → synthetic local-dev user (no token required).
-    - Configured + valid token → ``AuthUser`` derived from the Supabase
-      user record.
-    - Configured + missing/invalid token → 401.
+    1. **Session cookie** (SP-CLOUD-2): an opaque token minted by
+       ``POST /auth/login`` and backed by the ``auth_sessions`` table.
+    2. **Supabase bearer JWT** — legacy cloud path, kept until the
+       frontend finishes migrating to cookie sessions (Phase 3).
+    3. **Local bootstrap identity** — ``AUTH_MODE=local`` only: a
+       request with no credentials resolves to the zero-UUID local
+       operator, preserving the solo zero-friction flow.
+    4. Otherwise → 401.
     """
+    cookie_token = request.cookies.get(settings.session_cookie_name)
+    if cookie_token:
+        user_row = auth_service.resolve_session(repo.session, cookie_token)
+        if user_row is not None:
+            repo.session.commit()  # persist the rolling last_seen touch
+            return AuthUser(id=str(user_row.id), email=user_row.email)
+        # A dead cookie falls through: bearer may still authenticate,
+        # and local mode still bootstraps — mirroring browser reality
+        # where stale cookies linger after DB resets.
+
     client = _get_supabase_client()
     if client is None:
-        # Auth disabled — local dev / pytest path. Skip token check
-        # entirely; routes can still consume the synthetic user id for
-        # logging or future per-user scoping.
-        return _LOCAL_DEV_USER
+        if settings.auth_mode == "local":
+            # Zero-friction solo-operator path (Rule 3). The bootstrap
+            # users row is ensured at startup; this AuthUser mirrors it.
+            return _LOCAL_DEV_USER
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not signed in",
+        )
 
     if credentials is None or not credentials.credentials:
         raise HTTPException(

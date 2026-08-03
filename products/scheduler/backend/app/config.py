@@ -107,6 +107,35 @@ class Settings(BaseSettings):
     # to SQLite and sufficient at solves-per-day throughput.
     job_poll_interval_seconds: float = 1.0
 
+    # ---- Auth & sessions (SP-CLOUD-2) ---------------------------------
+    # ``local`` — the zero-friction solo-operator mode: requests without
+    # a session resolve to the bootstrap local identity; no signup, no
+    # email, no network. ``cloud`` — real accounts required; a request
+    # without a valid session cookie is 401. Explicit mode beats the old
+    # implicit "SUPABASE_URL is blank" keying.
+    auth_mode: str = "local"  # local | cloud
+    session_ttl_days: float = 30.0
+    session_cookie_name: str = "sw_session"
+    # Secure flag on the session cookie. Default off so plain-HTTP local
+    # dev works; cloud deployments MUST serve HTTPS and set this true
+    # (enforced by the cloud validator below).
+    session_cookie_secure: bool = False
+    # Blank = host-only cookie (the right default).
+    session_cookie_domain: str = ""
+    # Credential-endpoint throttle: after ``auth_throttle_max_failures``
+    # failed attempts inside the window, the key (account or IP) is
+    # locked for ``auth_throttle_lock_seconds`` (doubling per further
+    # failure, capped at 15 min).
+    auth_throttle_max_failures: int = 5
+    auth_throttle_window_seconds: float = 900.0
+    auth_throttle_lock_seconds: float = 60.0
+    # Password policy per NIST 800-63B: length only, no composition
+    # rules, no rotation.
+    password_min_length: int = 8
+    password_max_length: int = 128
+    # Password-reset token lifetime (delivery rides the email seam).
+    reset_token_ttl_minutes: float = 60.0
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: Any) -> Any:
@@ -132,6 +161,10 @@ class Settings(BaseSettings):
             missing.append("SUPABASE_ANON_KEY")
         if self.database_url.startswith("sqlite"):
             missing.append("DATABASE_URL (must be a postgres URL)")
+        if self.auth_mode != "cloud":
+            missing.append("AUTH_MODE=cloud (real accounts required)")
+        if not self.session_cookie_secure:
+            missing.append("SESSION_COOKIE_SECURE=true (HTTPS-only cookies)")
         if missing:
             raise ValueError(
                 "ENVIRONMENT=cloud requires: "

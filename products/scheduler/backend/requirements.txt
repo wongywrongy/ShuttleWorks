@@ -16,6 +16,10 @@ alembic>=1.13.0
 # this driver (its default for that scheme is still psycopg2). The
 # ``binary`` extra keeps the Dockerfile compiler-free.
 psycopg[binary]>=3.2
+# Argon2id password hashing (RFC 9106 / OWASP-recommended KDF) for the
+# self-hosted account system (SP-CLOUD-2).
+argon2-cffi>=23.1
+
 # Supabase Python client — used by ``app/dependencies.get_current_user``
 # to verify the JWT on every protected route. When ``SUPABASE_URL`` is
 # blank the dependency short-circuits into local-dev mode and the client

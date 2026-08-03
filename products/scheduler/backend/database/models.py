@@ -875,3 +875,100 @@ class SolveJob(Base):
             postgresql_where=text("status = 'queued'"),
         ),
     )
+
+
+# ---- Identity & sessions (SP-CLOUD-2 Phase 1) ------------------------
+
+
+class User(Base):
+    """A real account row — the end of the bare-UUID identity era.
+
+    ``password_hash`` is nullable on purpose: the local bootstrap
+    operator and identities migrated from the Supabase-JWT era have no
+    password until they set one (cloud: via the reset flow).
+    ``email_verified`` exists from day one; the verification *flow* is
+    cloud-only. Email uniqueness is case-insensitive via a functional
+    unique index on ``lower(email)`` — portable to both dialects — while
+    the stored value keeps the user's original casing.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    # Argon2id PHC string (contains its own salt + parameters).
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Password-reset token (SHA-256 of the mailed token; single active
+    # token per user, overwritten on re-request, cleared on use).
+    reset_token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    reset_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("uq_users_email_lower", text("lower(email)"), unique=True),
+    )
+
+
+class AuthSession(Base):
+    """Server-side session record backing the auth cookie.
+
+    The cookie carries an opaque random token; only its SHA-256 lands
+    here, so a leaked DB dump can't be replayed as live sessions.
+    Revocation is a timestamp (not a delete) so audit/debugging keeps
+    the row until retention pruning.
+    """
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("uq_auth_sessions_token_hash", "token_hash", unique=True),
+        Index("ix_auth_sessions_user", "user_id"),
+    )
+
+
+class AuthThrottle(Base):
+    """Credential-endpoint backoff counters (per account and per IP).
+
+    DB-backed (no Redis) and dual-dialect; one row per throttle key
+    (``account:<lower-email>`` or ``ip:<addr>``). Enough to blunt
+    credential stuffing — general rate limiting is out of scope.
+    """
+
+    __tablename__ = "auth_throttle"
+
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    failures: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    locked_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
