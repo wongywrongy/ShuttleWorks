@@ -132,17 +132,21 @@ export interface ModuleContract {
 
 /**
  * Meet — the scheduling engine. Owns the roster/matches/configuration IA and
- * the `/schedule` + proposal/advisory/suggestion routes. Consumes the shared
- * `/state` blob and live match-states as solve inputs. `/state` is shared,
- * NOT owned (it co-lives with control-plane CRUD in the tournaments router).
+ * the solve-job rail (`/tournaments/{id}/solve-jobs`, SP-CLOUD-1) plus the
+ * proposal/advisory/suggestion routes. Consumes the shared `/state` blob and
+ * live match-states as solve inputs. `/state` is shared, NOT owned (it
+ * co-lives with control-plane CRUD in the tournaments router).
  */
 export const meetContract: ModuleContract = {
   id: 'meet',
   enableable: true,
   ownedSegments: ['roster', 'matches', 'setup'],
   ownedEndpoints: [
-    apiClient.generateSchedule,
-    apiClient.generateScheduleWithProgress,
+    apiClient.submitSolveJob,
+    apiClient.getSolveJob,
+    apiClient.listSolveJobs,
+    apiClient.cancelSolveJob,
+    apiClient.runSolveJob,
     apiClient.validateMove,
     apiClient.createWarmRestartProposal,
     apiClient.createRepairProposal,

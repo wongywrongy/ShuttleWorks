@@ -1,48 +1,35 @@
-"""End-to-end smoke test for the three schedule endpoints.
+"""End-to-end tests for the schedule surface after SP-CLOUD-1.
 
-Confirms that the routes are registered, accept the documented
-payload shapes, and return the expected response shapes — without
-relying on any frontend code or running uvicorn.
-
-Path collision note: ``src/app/`` and ``backend/app/`` both exist as
-packages. We mirror the dance ``test_match_state.py`` does (put
-``backend/`` first on ``sys.path`` and clear cached ``app.*``
-modules) so ``from app.main import app`` resolves to the
-production FastAPI app, not the stub in ``src/``.
+The meet batch solve is a JOB now: submit via
+``POST /tournaments/{id}/solve-jobs`` (202 + job DTO), execute via the
+worker (real subprocess, real CP-SAT), poll to a terminal status. The
+legacy synchronous routes answer 410. Repair / warm-restart remain
+request-shaped (Phase 0 decision C3) and must keep accepting the
+schedule a job produced.
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+import uuid as uuid_mod
 
 import pytest
 
-
-def _import_fastapi_app():
-    """Re-import the production FastAPI app under the right sys.path.
-
-    Both ``app`` (FastAPI app) and ``adapters`` (badminton adapter)
-    have shadow packages in ``src/`` (legacy). When pytest runs from
-    the project root, ``src/`` is on the path first and Python
-    resolves ``app`` and ``adapters`` to the wrong directories. We
-    fix the path order, then clear cached entries for both so the
-    next import goes through the production paths.
-    """
-    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
-    sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
-    for k in [m for m in list(sys.modules)
-              if m in ("app", "adapters")
-              or m.startswith("app.") or m.startswith("adapters.")
-              or m.startswith("api.")]:
-        del sys.modules[k]
-    from app.main import app
-    return app
+from tests._helpers import isolate_test_database, seed_tournament
 
 
-@pytest.fixture(scope="module")
-def client():
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    return TestClient(_import_fastapi_app())
+    from app.main import app
+
+    return TestClient(app)
+
+
+def _run_worker_once() -> bool:
+    """Drive the embedded worker loop synchronously (no thread)."""
+    from services.solve_worker import SolveWorker
+
+    return SolveWorker(worker_id="pytest-worker").run_once()
 
 
 def _minimal_problem():
@@ -75,65 +62,81 @@ def _minimal_problem():
     return config, players, matches
 
 
-def test_routes_registered(client):
-    """The three schedule endpoints all exist.
+def _submit(client, tid, *, key=None, extra=None):
+    config, players, matches = _minimal_problem()
+    body = {"config": config, "players": players, "matches": matches}
+    if extra:
+        body.update(extra)
+    headers = {"Idempotency-Key": key} if key else {}
+    return client.post(f"/tournaments/{tid}/solve-jobs", json=body, headers=headers)
 
-    Inspect the OpenAPI schema rather than walking ``app.routes``: newer
-    FastAPI keeps each ``include_router`` as a nested ``_IncludedRouter``
-    object (``path=None``) instead of flattening the child ``APIRoute``s
-    onto the app, so ``app.routes`` no longer surfaces these paths. The
-    OpenAPI ``paths`` map is the version-independent source of truth.
-    """
+
+def _solve_to_completion(client, tid, *, extra=None):
+    r = _submit(client, tid, key=str(uuid_mod.uuid4()), extra=extra)
+    assert r.status_code == 202, r.text
+    job_id = r.json()["id"]
+    assert _run_worker_once() is True
+    r = client.get(f"/tournaments/{tid}/solve-jobs/{job_id}")
+    assert r.status_code == 200, r.text
+    job = r.json()
+    assert job["status"] == "succeeded", job.get("error")
+    return job
+
+
+def test_routes_registered(client):
     paths = client.app.openapi()["paths"]
+    # New job rail.
+    assert "/tournaments/{tournament_id}/solve-jobs" in paths
+    assert "/tournaments/{tournament_id}/solve-jobs/{job_id}" in paths
+    assert "/tournaments/{tournament_id}/solve-jobs/{job_id}/cancel" in paths
+    # Retired sync routes still answer (as 410), and the pure-Python
+    # validator stays.
     assert "/schedule" in paths
+    assert "/schedule/stream" in paths
+    assert "/schedule/validate" in paths
     assert "/schedule/repair" in paths
     assert "/schedule/warm-restart" in paths
 
 
-def test_schedule_honours_cross_engine_closed_windows(client):
-    """Hybrid coordination: the meet solve must avoid courts the bracket
-    already occupies, passed as ``closedCourtWindows`` [court, from, to].
-    Block slot 0 on every court and assert no match lands there."""
+def test_synchronous_solve_routes_are_gone(client):
     config, players, matches = _minimal_problem()
+    body = {"config": config, "players": players, "matches": matches}
+    for path in ("/schedule", "/schedule/stream"):
+        r = client.post(path, json=body)
+        assert r.status_code == 410, f"{path}: {r.status_code}"
+        assert r.json()["detail"]["code"] == "SOLVE_ENDPOINT_GONE"
+        assert "solve-jobs" in r.json()["detail"]["message"]
+
+
+def test_solve_job_full_flow_honours_closed_windows(client):
+    """Submit → worker → poll. The solve must honour cross-engine
+    closedCourtWindows exactly as the sync endpoint did."""
+    tid = seed_tournament(client, "jobs-e2e")
+    config, _, _ = _minimal_problem()
     block = [[c, 0, 1] for c in range(1, config["courtCount"] + 1)]
-    r = client.post("/schedule", json={
-        "config": config,
-        "players": players,
-        "matches": matches,
-        "closedCourtWindows": block,
-    })
-    assert r.status_code == 200, r.text
-    schedule = r.json()
+    job = _solve_to_completion(client, tid, extra={"closedCourtWindows": block})
+
+    schedule = job["result"]
     assert schedule["status"] in ("optimal", "feasible")
     on_slot_zero = [a for a in schedule["assignments"] if a["slotId"] == 0]
     assert on_slot_zero == [], f"matches placed on a closed slot: {on_slot_zero}"
+    # Determinism params persisted on the job (Rule 5a).
+    assert job["params"]["random_seed"] == 42
+    assert job["params"]["num_workers"] == 1
+    assert job["startedAt"] is not None and job["finishedAt"] is not None
 
 
-def test_generate_then_repair_then_warm_restart(client):
-    """One operator flow: generate a schedule, repair after a court
-    closure, then warm-restart. All three endpoints accept the
-    documented payloads and return the documented shapes."""
+def test_job_schedule_feeds_repair_and_warm_restart(client):
+    """The job-produced ScheduleDTO keeps flowing through the (still
+    request-shaped) repair and warm-restart endpoints unchanged."""
+    tid = seed_tournament(client, "jobs-repair")
     config, players, matches = _minimal_problem()
-
-    # 1) Initial solve.
-    r = client.post("/schedule", json={
-        "config": config,
-        "players": players,
-        "matches": matches,
-    })
-    assert r.status_code == 200, r.text
-    schedule = r.json()
-    assert schedule["status"] in ("optimal", "feasible")
+    job = _solve_to_completion(client, tid)
+    schedule = job["result"]
     assert len(schedule["assignments"]) == len(matches)
-    # Determinism mode threads the seed through.
     assert schedule["solverSeed"] == 42
-    # Candidate pool should have at least the final solution.
-    assert isinstance(schedule.get("candidates"), list)
-    assert schedule.get("activeCandidateIndex") == 0
-    # Top-level assignments must mirror candidates[0] (helper does this).
     assert schedule["assignments"] == schedule["candidates"][0]["assignments"]
 
-    # 2) Repair after closing whichever court the first match is on.
     closed_court = schedule["assignments"][0]["courtId"]
     r = client.post("/schedule/repair", json={
         "originalSchedule": schedule,
@@ -146,14 +149,11 @@ def test_generate_then_repair_then_warm_restart(client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert "schedule" in body and "repairedMatchIds" in body
-    new_schedule = body["schedule"]
-    # No surviving match may be on the closed court.
-    for a in new_schedule["assignments"]:
+    for a in body["schedule"]["assignments"]:
         assert a["courtId"] != closed_court
 
-    # 3) Warm-restart: re-plan from here with conservative weight.
     r = client.post("/schedule/warm-restart", json={
-        "originalSchedule": new_schedule,
+        "originalSchedule": body["schedule"],
         "config": config,
         "players": players,
         "matches": matches,
@@ -161,8 +161,59 @@ def test_generate_then_repair_then_warm_restart(client):
         "stayCloseWeight": 10,
     })
     assert r.status_code == 200, r.text
-    body = r.json()
-    assert "schedule" in body and "movedMatchIds" in body
+    assert "schedule" in r.json() and "movedMatchIds" in r.json()
+
+
+def test_idempotency_key_replays_the_same_job(client):
+    tid = seed_tournament(client, "jobs-idem")
+    key = str(uuid_mod.uuid4())
+    first = _submit(client, tid, key=key)
+    assert first.status_code == 202
+    replay = _submit(client, tid, key=key)
+    assert replay.status_code == 202
+    assert replay.json()["id"] == first.json()["id"]
+    # Replay after completion returns the finished job, not a new solve.
+    assert _run_worker_once() is True
+    done = _submit(client, tid, key=key)
+    assert done.json()["id"] == first.json()["id"]
+    assert done.json()["status"] == "succeeded"
+
+
+def test_second_submit_conflicts_while_active(client):
+    tid = seed_tournament(client, "jobs-conflict")
+    first = _submit(client, tid, key=str(uuid_mod.uuid4()))
+    assert first.status_code == 202
+    second = _submit(client, tid, key=str(uuid_mod.uuid4()))
+    assert second.status_code == 409
+    detail = second.json()["detail"]
+    assert detail["code"] == "SOLVE_JOB_ACTIVE"
+    assert detail["activeJobId"] == first.json()["id"]
+
+
+def test_cancel_queued_job_and_resubmit(client):
+    tid = seed_tournament(client, "jobs-cancel")
+    job_id = _submit(client, tid, key=str(uuid_mod.uuid4())).json()["id"]
+    r = client.post(f"/tournaments/{tid}/solve-jobs/{job_id}/cancel")
+    assert r.status_code == 200
+    assert r.json()["status"] == "cancelled"
+    # Idempotent cancel.
+    r = client.post(f"/tournaments/{tid}/solve-jobs/{job_id}/cancel")
+    assert r.json()["status"] == "cancelled"
+    # The cancelled job no longer blocks a fresh submit.
+    assert _submit(client, tid, key=str(uuid_mod.uuid4())).status_code == 202
+
+
+def test_job_list_and_scoping(client):
+    tid = seed_tournament(client, "jobs-list")
+    other_tid = seed_tournament(client, "jobs-other")
+    job_id = _submit(client, tid, key=str(uuid_mod.uuid4())).json()["id"]
+    r = client.get(f"/tournaments/{tid}/solve-jobs")
+    assert r.status_code == 200
+    assert [j["id"] for j in r.json()["jobs"]] == [job_id]
+    # Cross-tournament access to the job id 404s.
+    r = client.get(f"/tournaments/{other_tid}/solve-jobs/{job_id}")
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "SOLVE_JOB_NOT_FOUND"
 
 
 def test_repair_validates_disruption_payload(client):

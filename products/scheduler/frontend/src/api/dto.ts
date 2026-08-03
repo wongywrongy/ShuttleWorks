@@ -342,6 +342,54 @@ export interface SolverPhaseEvent {
   phase: SolverPhaseName;
 }
 
+// ---- Solve jobs (SP-CLOUD-1 async solve rail) --------------------------
+// Mirrors backend/app/schemas.py SolveJobDTO / SolveJobErrorDTO.
+
+export type SolveJobStatus =
+  | 'queued'
+  | 'claimed'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'infeasible'
+  | 'cancelled';
+
+export const SOLVE_JOB_TERMINAL_STATUSES: ReadonlySet<SolveJobStatus> = new Set([
+  'succeeded',
+  'failed',
+  'infeasible',
+  'cancelled',
+]);
+
+export interface SolveJobErrorDTO {
+  code: string;
+  message?: string;
+  detail?: Record<string, unknown> | null;
+}
+
+export interface SolveJobDTO {
+  id: string;
+  tournamentId: string;
+  type: string;
+  status: SolveJobStatus;
+  attempts: number;
+  maxAttempts: number;
+  /** Worker heartbeat metadata (best-effort; absent until first beat). */
+  progress?: Record<string, unknown> | null;
+  /** ScheduleDTO on succeeded AND on infeasible (its status field says which). */
+  result?: ScheduleDTO | null;
+  error?: SolveJobErrorDTO | null;
+  /** Persisted solver params — reproducibility record. */
+  params: Record<string, unknown>;
+  createdAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+export interface SolveJobListDTO {
+  jobs: SolveJobDTO[];
+}
+
 // Drag-to-reschedule types matching /schedule/validate.
 export interface ProposedMove {
   matchId: string;

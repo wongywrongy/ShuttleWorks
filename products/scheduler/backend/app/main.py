@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from api import (
     schedule,
+    solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
     match_state,
     tournaments,  # Step 2 — replaces the legacy /tournament/state singleton router
     schedule_repair,
@@ -226,6 +227,7 @@ async def close_repository_middleware(request: Request, call_next):
 _AUTH_DEP = [Depends(get_current_user)]
 
 app.include_router(schedule.router, dependencies=_AUTH_DEP)
+app.include_router(solve_jobs_api.router)  # carries its own auth + role deps
 app.include_router(schedule_repair.router, dependencies=_AUTH_DEP)
 app.include_router(schedule_warm_restart.router, dependencies=_AUTH_DEP)
 app.include_router(schedule_advisories.router, dependencies=_AUTH_DEP)

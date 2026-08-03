@@ -57,11 +57,11 @@ def setup_meet(ctx: RunContext, phase_cb, *, name: str, events: dict[str, int],
         client.put_state(ctx.tid, blob)
 
     with Phase("meet-solve", phase_cb):
-        schedule = client.solve(blob["config"], blob["players"], blob["matches"])
+        schedule = client.solve(ctx.tid, blob["config"], blob["players"], blob["matches"])
         ctx.violations.extend(check_schedule(schedule, blob["config"], blob["matches"], blob["players"]))
 
         # determinism: same input + deterministic config -> identical assignments
-        schedule2 = client.solve(blob["config"], blob["players"], blob["matches"])
+        schedule2 = client.solve(ctx.tid, blob["config"], blob["players"], blob["matches"])
         if schedule.get("assignments") != schedule2.get("assignments"):
             from ..invariants import Violation
             ctx.violations.append(Violation("solve", "nondeterministic-solve",

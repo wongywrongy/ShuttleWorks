@@ -45,7 +45,9 @@ export type AppTab =
   | 'ws-sync'
   | 'ws-settings';
 
-export type SolverPhase = 'presolve' | 'search' | 'proving' | null;
+// 'queued' = the solve job is waiting for a worker (SP-CLOUD-1 async rail);
+// the remaining phases cover the solve itself.
+export type SolverPhase = 'queued' | 'presolve' | 'search' | 'proving' | null;
 
 interface SolverHudState {
   phase: SolverPhase;

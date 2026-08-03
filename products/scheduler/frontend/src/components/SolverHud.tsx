@@ -18,6 +18,13 @@ type PhaseStyle = {
 // the --phase-ring custom property; expressed in tokens so it desaturates
 // with the theme instead of pinning light-mode hues onto dark.
 const PHASES: Record<NonNullable<SolverPhase>, PhaseStyle> = {
+  queued: {
+    label: 'Queued',
+    ring: 'hsl(var(--muted-foreground) / 0.4)',
+    pill: 'bg-muted/40 text-muted-foreground border-border',
+    dot: 'bg-muted-foreground',
+    loop: true,
+  },
   presolve: {
     label: 'Presolve',
     ring: 'hsl(var(--status-warning-fg) / 0.55)',

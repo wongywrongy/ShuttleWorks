@@ -283,6 +283,47 @@ class ScheduleDTO(BaseModel):
     activeCandidateIndex: Optional[int] = None
 
 
+# ---- Solve jobs (SP-CLOUD-1 long-running-operation resource) ----------
+
+class SolveJobErrorDTO(BaseModel):
+    """Structured run-time error carried INSIDE the job resource.
+
+    Errors that prevent a job from *starting* are normal HTTP errors at
+    submit; anything after 202 lives here (AIP-151's dividing line)."""
+    code: str
+    message: str = ""
+    detail: Optional[dict] = None
+
+
+class SolveJobDTO(BaseModel):
+    """One asynchronous solve — submit returns it, the client polls it.
+
+    ``status`` vocabulary: queued | claimed | running | succeeded |
+    failed | infeasible | cancelled. ``infeasible`` is a domain outcome
+    with its detail in ``result`` (a ScheduleDTO whose status is
+    ``infeasible``), never in ``error``."""
+    id: str
+    tournamentId: str
+    type: str
+    status: str
+    attempts: int
+    maxAttempts: int
+    # Worker-written coarse progress (phase/heartbeat metadata); best-
+    # effort, absent until the first heartbeat.
+    progress: Optional[dict] = None
+    result: Optional[ScheduleDTO] = None
+    error: Optional[SolveJobErrorDTO] = None
+    # Persisted solver params — lets an operator reproduce the solve.
+    params: dict = Field(default_factory=dict)
+    createdAt: str
+    startedAt: Optional[str] = None
+    finishedAt: Optional[str] = None
+
+
+class SolveJobListDTO(BaseModel):
+    jobs: List[SolveJobDTO] = Field(default_factory=list)
+
+
 # ---- Schedule impact (proposal pipeline) ------------------------------
 
 class MatchMove(BaseModel):

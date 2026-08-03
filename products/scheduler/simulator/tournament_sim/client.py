@@ -6,8 +6,10 @@ Retries cover transport errors only (connect/read timeouts) — an HTTP
 response, even a 500, is never retried: a 5xx is a *finding* and fails the
 run at report time.
 
-Solves use the synchronous ``POST /schedule`` / ``POST /bracket/schedule-next``
-endpoints — never the ``/stream`` SSE variants (dev proxies buffer SSE).
+Meet solves ride the async job rail (``POST /tournaments/{id}/solve-jobs``
++ polling — SP-CLOUD-1); bracket solves still use the synchronous
+``POST /bracket/schedule-next``. Never the ``/stream`` SSE variants
+(dev proxies buffer SSE).
 """
 from __future__ import annotations
 
@@ -171,14 +173,46 @@ class SimClient:
 
     def solve(
         self,
+        tid: str,
         config: dict,
         players: list[dict],
         matches: list[dict],
+        *,
+        poll_interval: float = 0.25,
+        timeout: float = 120.0,
     ) -> dict:
-        return self._json(
+        """Submit a solve job and poll it to a terminal status.
+
+        SP-CLOUD-1 replaced the synchronous ``POST /schedule`` with the
+        job rail; this drives the exact flow the frontend uses (submit →
+        poll → read ``result``). ``infeasible`` returns the ScheduleDTO
+        (its ``status`` says so — invariant checks treat it as a
+        finding); ``failed``/``cancelled`` raise :class:`ApiError` so the
+        run fails loudly.
+        """
+        job = self._json(
             "POST",
-            "/schedule",
+            f"/tournaments/{tid}/solve-jobs",
             json={"config": config, "players": players, "matches": matches},
+            expect={202},
+        )
+        deadline = time.monotonic() + timeout
+        terminal = {"succeeded", "failed", "infeasible", "cancelled"}
+        while job["status"] not in terminal:
+            if time.monotonic() > deadline:
+                raise ApiError(
+                    "GET", f"/tournaments/{tid}/solve-jobs/{job['id']}", 0,
+                    f"solve job still {job['status']} after {timeout}s",
+                )
+            time.sleep(poll_interval)
+            job = self._json("GET", f"/tournaments/{tid}/solve-jobs/{job['id']}")
+        if job["status"] in ("succeeded", "infeasible"):
+            return job["result"]
+        raise ApiError(
+            "GET",
+            f"/tournaments/{tid}/solve-jobs/{job['id']}",
+            0,
+            f"solve job terminal status {job['status']}: {job.get('error')}",
         )
 
     def finalize_plan(self, tid: str, finalized: bool = True) -> dict:

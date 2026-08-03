@@ -244,7 +244,10 @@ export function useLiveOperations() {
         /* meet-only workspace or bracket fetch failure — solve unblocked */
       }
 
-      const result = await apiClient.generateSchedule({
+      // Async solve rail: submit a job and poll it to completion. The
+      // one-active-job rule means a concurrent Schedule-page solve
+      // surfaces as a 409 here rather than racing it.
+      const result = await apiClient.runSolveJob(tid, {
         config: {
           ...config,
           freezeHorizonSlots: Math.max(config.freezeHorizonSlots, 2),

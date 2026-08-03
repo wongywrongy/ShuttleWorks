@@ -164,7 +164,7 @@ describe('moduleContract — endpoints are real apiClient methods (by reference)
   }
 
   it('spot-checks identity against named apiClient methods', () => {
-    expect(meetContract.ownedEndpoints).toContain(apiClient.generateSchedule);
+    expect(meetContract.ownedEndpoints).toContain(apiClient.submitSolveJob);
     expect(bracketContract.ownedEndpoints).toContain(apiClient.getBracket);
     expect(operationsContract.ownedEndpoints).toContain(apiClient.submitCommand);
     expect(operationsContract.consumedEndpoints).toContain(apiClient.getBracket);

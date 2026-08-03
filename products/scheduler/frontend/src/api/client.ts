@@ -11,6 +11,8 @@ import type {
   ScheduleDTO,
   ScheduleAssignment,
   MatchStateDTO,
+  SolveJobDTO,
+  SolveJobListDTO,
   SolverProgressEvent,
   SolverModelBuiltEvent,
   SolverPhaseEvent,
@@ -37,6 +39,7 @@ import type {
   CommandResponseDTO,
   CommandConflictDTO,
 } from './dto';
+import { SOLVE_JOB_TERMINAL_STATUSES } from './dto';
 import type {
   BracketCreateIn,
   BracketTournamentDTO,
@@ -90,6 +93,14 @@ interface GenerateScheduleRequest {
   /** Hybrid coordination: extra [court, fromSlot, toSlot] windows the meet
    *  solve must avoid — the bracket's occupied courts. */
   closedCourtWindows?: number[][];
+}
+
+export interface SolveJobPollOptions {
+  signal?: AbortSignal;
+  /** Called with every observed job snapshot (submit + each poll). */
+  onJob?: (job: SolveJobDTO) => void;
+  /** Initial poll delay; grows 1.5× per round, capped at 2 s. */
+  basePollMs?: number;
 }
 
 export type DisruptionType = 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
@@ -354,12 +365,42 @@ class ApiClient {
     );
   }
 
-  /**
-   * Generate optimized schedule.
-   * Stateless compute — no tournament_id needed; the full problem is in the body.
-   */
-  async generateSchedule(request: GenerateScheduleRequest): Promise<ScheduleDTO> {
-    const response = await this.client.post<ScheduleDTO>('/schedule', request);
+  // ---- Solve jobs (SP-CLOUD-1 async solve rail) ------------------------
+
+  /** Submit a solve job (202). Stripe idempotency: a retry with the same
+   *  key returns the original job, never a second solve. */
+  async submitSolveJob(
+    tid: string,
+    request: GenerateScheduleRequest,
+    idempotencyKey: string,
+  ): Promise<SolveJobDTO> {
+    const response = await this.client.post<SolveJobDTO>(
+      `/tournaments/${tid}/solve-jobs`,
+      request,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  }
+
+  async getSolveJob(tid: string, jobId: string): Promise<SolveJobDTO> {
+    const response = await this.client.get<SolveJobDTO>(
+      `/tournaments/${tid}/solve-jobs/${jobId}`,
+    );
+    return response.data;
+  }
+
+  /** Recent jobs, newest first (bounded server-side). */
+  async listSolveJobs(tid: string): Promise<SolveJobDTO[]> {
+    const response = await this.client.get<SolveJobListDTO>(
+      `/tournaments/${tid}/solve-jobs`,
+    );
+    return response.data.jobs;
+  }
+
+  async cancelSolveJob(tid: string, jobId: string): Promise<SolveJobDTO> {
+    const response = await this.client.post<SolveJobDTO>(
+      `/tournaments/${tid}/solve-jobs/${jobId}/cancel`,
+    );
     return response.data;
   }
 
@@ -580,170 +621,74 @@ class ApiClient {
   }
 
   /**
-   * Generate schedule with progress updates via Server-Sent Events.
+   * Run one solve through the job rail: submit (idempotency-keyed) and
+   * poll until a terminal status.
    *
-   * The backend emits these event types:
-   *   - ``model_built`` (once) — model statistics
-   *   - ``phase``                 — presolve | search | proving
-   *   - ``progress`` (many)       — intermediate solution
-   *   - ``complete``              — final ScheduleDTO
-   *   - ``error``                 — solver exception
-   *   - ``done``                  — stream terminator (always last)
+   * - ``succeeded`` and ``infeasible`` both resolve with the job's
+   *   ScheduleDTO — its ``status`` field distinguishes them, which is
+   *   exactly what the existing infeasible banner keys on.
+   * - ``failed`` rejects with the job's structured error message.
+   * - ``cancelled`` (or an aborted signal, which also requests a
+   *   server-side cancel) rejects with an ``AbortError`` so callers
+   *   keep treating user cancellation as silent.
+   *
+   * Transient poll failures are tolerated for a few consecutive rounds
+   * (the job keeps solving server-side regardless); a submit that hits
+   * the one-active-job rule surfaces as the interceptor's 409 toast.
    */
-  async generateScheduleWithProgress(
+  async runSolveJob(
+    tid: string,
     request: GenerateScheduleRequest,
-    callbacks: {
-      onProgress?: (event: SolverProgressEvent) => void;
-      onModelBuilt?: (event: SolverModelBuiltEvent) => void;
-      onPhase?: (event: SolverPhaseEvent) => void;
-    } | ((event: SolverProgressEvent) => void),
-    abortSignal?: AbortSignal
+    opts: SolveJobPollOptions = {},
   ): Promise<ScheduleDTO> {
-    // Back-compat: old call sites pass a single progress callback.
-    const cb = typeof callbacks === 'function'
-      ? { onProgress: callbacks }
-      : callbacks;
+    const job = await this.submitSolveJob(tid, request, crypto.randomUUID());
+    opts.onJob?.(job);
+    return this.pollSolveJob(tid, job, opts);
+  }
 
-    return new Promise((resolve, reject) => {
-      const url = `${API_BASE_URL}/schedule/stream`;
+  /**
+   * Poll an already-submitted job to completion (also the resume path:
+   * a reload mid-solve re-adopts the active job instead of losing it).
+   * Terminal mapping is identical to ``runSolveJob``.
+   */
+  async pollSolveJob(
+    tid: string,
+    initial: SolveJobDTO,
+    opts: SolveJobPollOptions = {},
+  ): Promise<ScheduleDTO> {
+    const { signal, onJob, basePollMs = 500 } = opts;
+    const abortError = () => new DOMException('Solve cancelled', 'AbortError');
 
-      // Initial-handshake retry with backoff. A dropped-mid-stream failure
-      // is *not* retried here because the solver has already started; a
-      // reconnect would silently kick off a duplicate run. Instead we
-      // surface a toast with a Retry action so the user stays in control.
-      const BACKOFFS_MS = [500, 1_000, 2_000];
+    let job = initial;
+    let delayMs = basePollMs;
+    let consecutivePollFailures = 0;
+    while (!SOLVE_JOB_TERMINAL_STATUSES.has(job.status)) {
+      if (signal?.aborted) {
+        void this.cancelSolveJob(tid, job.id).catch(() => {});
+        throw abortError();
+      }
+      await new Promise((r) => setTimeout(r, delayMs));
+      delayMs = Math.min(delayMs * 1.5, 2_000);
+      try {
+        job = await this.getSolveJob(tid, job.id);
+        consecutivePollFailures = 0;
+        onJob?.(job);
+      } catch (err) {
+        // A dead poll must not kill a live solve — but five dead polls
+        // in a row means we've genuinely lost the backend.
+        consecutivePollFailures += 1;
+        if (consecutivePollFailures >= 5) throw err;
+      }
+    }
 
-      const startFetch = async (attempt = 0): Promise<Response> => {
-        try {
-          const r = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(request),
-            signal: abortSignal,
-          });
-          return r;
-        } catch (err) {
-          if ((err as Error).name === 'AbortError') throw err;
-          if (attempt >= BACKOFFS_MS.length) throw err;
-          await new Promise((r) => setTimeout(r, BACKOFFS_MS[attempt]));
-          return startFetch(attempt + 1);
-        }
-      };
-
-      let reconnectToastId: string | null = null;
-      let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-
-      // The caller's AbortSignal should also tear down the reader so an
-      // external cancel (e.g. the user starts a new solve mid-stream)
-      // doesn't leak a dangling reader / listener.
-      const onExternalAbort = () => {
-        if (activeReader) {
-          void activeReader.cancel().catch(() => {});
-          activeReader = null;
-        }
-      };
-      abortSignal?.addEventListener('abort', onExternalAbort, { once: true });
-
-      startFetch()
-        .then(async (response) => {
-          // Clear the reconnecting toast once we have a response.
-          if (reconnectToastId) {
-            useUiStore.getState().dismissToast(reconnectToastId);
-            reconnectToastId = null;
-          }
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          const reader = response.body?.getReader();
-          if (!reader) throw new Error('Response body is not readable');
-          activeReader = reader;
-
-          const decoder = new TextDecoder();
-          let buffer = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-
-            const messages = buffer.split('\n\n');
-            buffer = messages.pop() || '';
-
-            for (const message of messages) {
-              if (!message.trim()) continue;
-              const dataMatch = message.match(/^data: (.+)$/m);
-              if (!dataMatch) continue;
-
-              try {
-                const event = JSON.parse(dataMatch[1]);
-                switch (event.type) {
-                  case 'model_built':
-                    cb.onModelBuilt?.(event as SolverModelBuiltEvent);
-                    break;
-                  case 'phase':
-                    cb.onPhase?.({ phase: event.phase });
-                    break;
-                  case 'progress':
-                    cb.onProgress?.({
-                      elapsed_ms: event.elapsed_ms,
-                      current_objective: event.current_objective,
-                      best_bound: event.best_bound,
-                      solution_count: event.solution_count,
-                      current_assignments: event.current_assignments,
-                      gap_percent: event.gap_percent,
-                      messages: event.messages,
-                    });
-                    break;
-                  case 'complete':
-                    resolve(event.result as ScheduleDTO);
-                    return;
-                  case 'error':
-                    reject(new Error(event.message));
-                    return;
-                  case 'done':
-                    // Stream terminator — no-op, resolve/reject already handled.
-                    break;
-                }
-              } catch (e) {
-                console.error('Failed to parse SSE event:', e);
-              }
-            }
-          }
-        })
-        .catch((err: Error) => {
-          // Silently swallow user-cancelled solves — the caller (useSchedule)
-          // aborts on navigation or new-solve-click and doesn't want a toast.
-          if (err.name === 'AbortError') {
-            reject(err);
-            return;
-          }
-          // Tear down the reader on any non-abort error so we never leak
-          // a half-drained stream into the next attempt.
-          if (activeReader) {
-            void activeReader.cancel().catch(() => {});
-            activeReader = null;
-          }
-          // Mid-stream failure: surface a Retry affordance so the user can
-          // rerun the solve after fixing the network/backend. We deliberately
-          // don't auto-retry here to avoid silent duplicate solves.
-          try {
-            useUiStore.getState().pushToast({
-              level: 'error',
-              message: 'Solver stream dropped',
-              detail: err.message,
-              actionLabel: 'Retry',
-              onAction: () => {
-                // Fire-and-forget — caller already saw this promise reject, so
-                // the retry starts a fresh solve via the same request object.
-                void this.generateScheduleWithProgress(request, callbacks, abortSignal);
-              },
-            });
-          } catch {
-            /* store unavailable — fall through */
-          }
-          reject(err);
-        });
-    });
+    if (job.status === 'succeeded' || job.status === 'infeasible') {
+      if (!job.result) throw new Error('solve job finished without a result');
+      return job.result;
+    }
+    if (job.status === 'cancelled') throw abortError();
+    throw new Error(
+      job.error?.message || job.error?.code || 'Solve failed',
+    );
   }
 
   /**
