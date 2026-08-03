@@ -233,6 +233,14 @@ escalate it before making any further code change.
   behavior-equivalence line-by-line (iteration order, occupancy-mutation timing, the guard
   swaps, `moved_count`, config-field preservation, None-side coercion — all confirmed, no divergence).
 - Executed inline (single session) under `CODE_HEALTH.md` Part 2, not a workflow.
+- **Post-SP-CLOUD-1 re-baseline note (2026-08-03):** `scheduler_core` changed after
+  Phase 7's characterization work — SP-CLOUD-1 added (user-approved, additive only)
+  `SolverOptions.max_deterministic_time` + a guarded parameter assignment in
+  `CPSATScheduler.solve` (13 insertions, 2 files; neither `GreedyBackend.solve`
+  nor `bridge.build` touched). Any future characterization or engine-determinism
+  work (e.g. the debt-log's sorted-iteration fix in `_player_matches`) must
+  baseline against the **post-SP-CLOUD-1** state of `scheduler_core`, not the
+  Phase-7-era tree. The existing characterization suites remain green against it.
 
 ### SP-D7 — Unify Meet/Bracket Roster & Matches — §2 AUDIT (2026-07-02)
 - Status: **PROGRAM COMPLETE (2026-07-02).** Audit → Kyle's §2.5 decisions (see the

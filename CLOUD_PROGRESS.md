@@ -35,7 +35,13 @@ Convention: read this at every session start, update at every session end (same 
 4. `docker-compose.dev.yml` header advertises nonexistent `make dev-postgres` target.
 5. `api/README.md` stale (EventSource claim); `unscheduledMatches` never rendered.
 
-## Session log
+## SP-CLOUD-2 — Acceptance & Hardening + Tenancy & Auth
+
+| Phase | State | Notes |
+|---|---|---|
+| 0 — Acceptance & audit | **DELIVERED 2026-08-03, awaiting user confirmation** | Report: `~/.claude/plans/2026-08-03-sp-cloud-2-phase0-audit.md`. 0.A: branch pushed (local==remote @7ef2ca3). 0.B: scheduler_core delta = exactly the approved 13-line/2-file change, neither locked function touched; **prompt premise stale — Refactor Phase 7 already COMPLETE (2026-07-01)**, re-baseline note added to REFACTOR_PROGRESS.md. 0.C: debt-log entry completed (mask/silent-reversion/engine fix); `services/determinism.py` guard shipped (warn-unmissably in both SolverOptions funnels; job child keeps hard-fail) + 6 tests. 0.D: all gates re-verified fresh — ruff clean, backend 881 pass/1 by-design skip (PG leg on), vitest 1260, eslint/depcruise 0 errors, build clean, **test_config 7/7 under psycopg 3 (baseline retired)**, both compose round-trips PASS. 0.E: 5-area audit done — headline findings: display "public" link has NO public backend (viewer-gated data plane; works locally only via synthetic user); proto-seam `require_tournament_access` exists (403 not 404); cloud auth today IS Supabase Auth (to be replaced); no users table; invites = eternal multi-use PK-tokens; no member-management API. Proposed model: users/orgs/org_members/sessions + tournaments.org_id, lossless migration w/ downgrade, cookie sessions + CSRF header, AUTH_MODE local|cloud, display capability-token projection. STOPPED for C-decisions. |
+
+## Session log (SP-CLOUD-1)
 
 - **2026-08-03 (a)** — Phase 0 audit executed (4 parallel read-only explorations + solve-time/fingerprint measurements; no repo code touched). Report delivered; STOPPED pending user confirmation on C1–C4 + branch name.
 - **2026-08-03 (b)** — User confirmed all four Phase 0 recommendations and additionally directed a stack-currency pass ("check if any packages have been updated… make sure our stack is modern"). Findings: ortools 9.15.6755 already latest; sqlalchemy/alembic/pydantic/pydantic-settings/supabase current; venv fastapi+uvicorn lagged → upgraded; psycopg2-binary replaced with psycopg 3 (superior successor; this slice introduces real Postgres so the driver choice happens now); frontend current with deliberate major holds (vitest 3, dnd-kit sortable 8, uuid 13). Phase 1 implemented and verified end-to-end (see Status).

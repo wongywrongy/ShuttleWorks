@@ -104,6 +104,7 @@ from services.bracket.state import (
     register_draw,
 )
 from services.bracket.validation import BracketConflict, validate_bracket_move
+from services.determinism import warn_if_unpinned
 from services.scheduling.params import SchedulingParams, build_schedule_config
 
 router = APIRouter(
@@ -701,6 +702,7 @@ def _bracket_solver_options(
     intentionally unchanged by this wiring.
     """
     if camel_cfg.get("deterministic"):
+        warn_if_unpinned("bracket.solver_options")
         return SolverOptions(
             time_limit_seconds=time_limit_seconds,
             num_workers=1,
