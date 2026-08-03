@@ -50,6 +50,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -748,5 +749,129 @@ class WorkspaceModule(Base):
     __table_args__ = (
         UniqueConstraint(
             "tournament_id", "module_id", name="uq_workspace_modules_tournament_module"
+        ),
+    )
+
+
+class SolveJobStatus(str, enum.Enum):
+    """Lifecycle of a solve job (SP-CLOUD-1 job boundary).
+
+    ``QUEUED``     — enqueued, waiting for a worker.
+    ``CLAIMED``    — a worker owns the lease, child not yet running.
+    ``RUNNING``    — solve subprocess executing, heartbeats expected.
+    ``SUCCEEDED``  — terminal; ``result`` holds the ScheduleDTO.
+    ``FAILED``     — terminal; infrastructure/validation failure after
+                     retries, ``error`` holds the structured reason.
+    ``INFEASIBLE`` — terminal; the solver *proved* there is no feasible
+                     schedule (or exhausted its budget without one).
+                     A domain outcome, never retried, never a 500.
+    ``CANCELLED``  — terminal; user-requested.
+    """
+
+    QUEUED = "queued"
+    CLAIMED = "claimed"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    INFEASIBLE = "infeasible"
+    CANCELLED = "cancelled"
+
+
+# Shared WHERE fragment for the active-job partial unique index. String
+# literal (not bound params) because partial-index predicates must be
+# constant expressions on both dialects.
+_ACTIVE_SOLVE_JOB_PREDICATE = text(
+    "status IN ('queued', 'claimed', 'running')"
+)
+
+
+class SolveJob(Base):
+    """One asynchronous CP-SAT solve — the long-running-operation record.
+
+    The HTTP layer enqueues (in the same transaction as any related
+    business writes) and polls; workers claim, execute in a child
+    subprocess, heartbeat, and complete. ``params`` and
+    ``input_snapshot`` are captured at submit time so the worker never
+    reads live tournament tables and a job stays reproducible after the
+    tournament is edited.
+
+    Two distinct dedup mechanisms (do not conflate):
+    - ``uq_solve_jobs_idempotency_key`` — client retry safety (Stripe
+      semantics): a resubmit with the same key returns the original job.
+    - ``uq_solve_jobs_active`` — business rule: at most one *active*
+      job per ``(tournament_id, type)``, enforced declaratively by a
+      partial unique index (works on both SQLite and Postgres; no
+      advisory locks).
+    """
+
+    __tablename__ = "solve_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
+    )
+    type: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), default=SolveJobStatus.QUEUED.value, nullable=False
+    )
+    # Solver parameters persisted at submit (random_seed, num_workers,
+    # max_deterministic_time, wall-clock ceiling, candidate_pool_size…).
+    # The worker reads ONLY from here — never from live settings — so a
+    # re-run reproduces the original solve.
+    params: Mapped[dict] = mapped_column(JSON, nullable=False)
+    # Full solver input (the stateless GenerateScheduleRequest shape).
+    input_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
+    # Terminal payloads. ``result`` holds the ScheduleDTO for both
+    # ``succeeded`` and ``infeasible`` (the DTO carries status +
+    # infeasibleReasons); ``error`` is structured {code, message, detail}.
+    result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    error: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Coarse live progress written on worker heartbeats (phase,
+    # solutionCount, objective…) for the polling UI. Never authoritative.
+    progress: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Lower = sooner. Claim order is (priority ASC, created_at ASC).
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    claimed_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    heartbeat_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_solve_jobs_idempotency_key",
+            "idempotency_key",
+            unique=True,
+        ),
+        Index(
+            "uq_solve_jobs_active",
+            "tournament_id",
+            "type",
+            unique=True,
+            sqlite_where=_ACTIVE_SOLVE_JOB_PREDICATE,
+            postgresql_where=_ACTIVE_SOLVE_JOB_PREDICATE,
+        ),
+        # Claim hot path: workers only ever scan queued rows, so
+        # terminal-job accumulation never slows the claim query.
+        Index(
+            "ix_solve_jobs_claimable",
+            "priority",
+            "created_at",
+            sqlite_where=text("status = 'queued'"),
+            postgresql_where=text("status = 'queued'"),
         ),
     )

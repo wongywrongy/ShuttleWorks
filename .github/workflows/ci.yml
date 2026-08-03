@@ -31,6 +31,26 @@ jobs:
     # Required gate. The 3 previously-flaky tests (repository ordering ×2 +
     # a stale route-registration assertion) are fixed and the suite is
     # deterministically green, so this blocks like the frontend job.
+    #
+    # The postgres service exists for the dual-dialect solve-job queue
+    # suite (SP-CLOUD-1): tests/unit/test_solve_jobs.py runs its whole
+    # parametrized matrix against SQLite always and against this
+    # service when TEST_POSTGRES_URL is set. Local-first parity is a
+    # product rule — the queue must behave identically on both.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: scheduler
+          POSTGRES_PASSWORD: scheduler
+          POSTGRES_DB: scheduler
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U scheduler"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,6 +65,8 @@ jobs:
       - name: Lint (ruff)
         run: ruff check products/scheduler scheduler_core
       - name: Unit tests (pytest)
+        env:
+          TEST_POSTGRES_URL: postgresql://scheduler:scheduler@localhost:5433/scheduler
         run: pytest products/scheduler/tests
 
   interaction-smoke:

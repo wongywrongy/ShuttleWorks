@@ -71,6 +71,42 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("DATA_DIR", "BACKEND_DATA_DIR"),
     )
 
+    # ---- Solve jobs & worker runtime (SP-CLOUD-1) ----------------------
+    # The embedded worker runs the job loop inside the API process
+    # (local mode, zero-config). Cloud mode turns it off and runs
+    # ``python -m worker`` containers against the same DATABASE_URL.
+    embedded_worker: bool = True
+    # One solve owns its CPU allocation — two concurrent solves on one
+    # node degrade both. Raise only on machines with headroom to spare.
+    worker_concurrency: int = 1
+    # Stable identity stamped into ``solve_jobs.claimed_by``. Blank →
+    # derived at startup as ``<hostname>-<pid>``.
+    worker_id: str = ""
+    # Determinism defaults persisted into every job's ``params`` at
+    # submit (Rule 5): fixed seed, single search worker, and a
+    # deterministic-time budget as the binding stop criterion. The
+    # wall-clock ceiling is an outer safety kill only — far above the
+    # deterministic budget so it never binds on a healthy run.
+    solve_random_seed: int = 42
+    solve_num_workers: int = 1
+    solve_max_deterministic_time: float = 60.0
+    solve_wall_clock_ceiling_seconds: float = 300.0
+    # Child-process address-space cap (enforced on Linux via
+    # ``resource.setrlimit``; logged-off on Windows dev).
+    solve_memory_limit_mb: int = 1024
+    # A running job whose heartbeat is older than the lease returns to
+    # the queue (bounded by ``max_attempts``) — how a dead worker's job
+    # survives. Heartbeats are emitted every few seconds, so 30 s means
+    # several missed beats before a reap.
+    job_lease_seconds: float = 30.0
+    job_max_attempts: int = 2
+    # Terminal jobs are pruned after this window (AIP-151's operation
+    # expiry rule of thumb) so the table stays small forever.
+    job_retention_days: int = 30
+    # Worker claim-poll cadence. Plain short-interval polling — portable
+    # to SQLite and sufficient at solves-per-day throughput.
+    job_poll_interval_seconds: float = 1.0
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: Any) -> Any:
