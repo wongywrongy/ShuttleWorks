@@ -127,6 +127,11 @@ def _run_in_workdir(
 
     env = dict(os.environ)
     env["PYTHONHASHSEED"] = "0"  # Rule 5(d) — stable model-build order
+    # numpy (imported by ortools) initialises an OpenBLAS thread pool
+    # sized to the host's cores; CP-SAT gains nothing from BLAS threads
+    # and under the child's RLIMIT_AS cap the pool's per-thread stacks
+    # can't even allocate (observed: pthread_create EAGAIN at import).
+    env["OPENBLAS_NUM_THREADS"] = "1"
 
     with open(log_path, "w", encoding="utf-8") as log_file:
         proc = subprocess.Popen(

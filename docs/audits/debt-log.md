@@ -417,3 +417,23 @@ a green 1,100-test suite. The real check is the viewer flow in
     `useContainerWidth` per-resize setState (threshold/hysteresis + initial
     sync measurement), ops board lacks column-priority degradation when the
     Courts dock takes width. Size S each.
+- **2026-08-03 · SP-CLOUD-1 Phase 0 audit findings (adjacent, out of slice scope)**:
+  - **docker-compose.release.yml sets no DATABASE_URL** — the release image
+    falls back to `sqlite:///./local.db` on a read-only rootfs, so first
+    write fails. Add the explicit URL the main compose already carries. Size S.
+  - **`test_backup_create_and_list_newest_first` is a created_at-tie flake** —
+    `backups.list_for_tournament` orders by `created_at` alone; two backups in
+    the same timestamp tick order nondeterministically. Add the standard
+    `, id DESC` tiebreaker (repo-wide ordering hazard class). Size S.
+  - **Bracket `POST /events/{id}/generate` ignores session solver config** —
+    builds `TournamentDriver` with no `solver_options` (brackets.py:2225-2230),
+    silently dropping the session's time_limit/deterministic/seed. Size S.
+  - **docker-compose.dev.yml header advertises `make dev-postgres`** which
+    does not exist in any Makefile. Add the target or fix the comment. Size S.
+  - **api/README.md still documents an EventSource SSE flow** (now fully
+    retired — solves are jobs; the meet SSE routes answer 410); and
+    `unscheduledMatches` is returned by every solve but rendered nowhere. Size S.
+  - **scheduler_core `_player_matches()` iterates hash-ordered sets** feeding
+    constraint emission order — masked operationally by the worker's
+    PYTHONHASHSEED=0 pin, but the honest fix is sorted iteration in the
+    engine (needs characterization cover; Refactor Phase 7 territory). Size M.
