@@ -93,6 +93,19 @@ async def lifespan(app: FastAPI):
     else:
         log.info("sync_service skipped (SUPABASE_URL blank — local-dev mode)")
 
+    # SP-CLOUD-1: the embedded solve worker — local mode's zero-config
+    # job executor (one thread, concurrency 1). Cloud mode sets
+    # EMBEDDED_WORKER=false and runs ``python -m worker`` containers
+    # against the same queue instead; the loop code is identical.
+    from services.solve_worker import SolveWorker
+    solve_worker = SolveWorker()
+    app.state.solve_worker = solve_worker
+    if settings.embedded_worker:
+        solve_worker.start()
+        log.info("embedded solve worker started (%s)", solve_worker.worker_id)
+    else:
+        log.info("embedded solve worker disabled (EMBEDDED_WORKER=false)")
+
     # The single-tournament 90 s OPTIMIZE heartbeat retired in Step 2 —
     # post-commit and advisory-driven triggers now carry an explicit
     # ``tournament_id``, and a global periodic tick has no obvious way
@@ -105,6 +118,8 @@ async def lifespan(app: FastAPI):
     finally:
         await worker.stop()
         log.info("suggestions_worker stopped")
+        solve_worker.stop()
+        log.info("solve_worker stopped")
         sync_service.stop()
         log.info("sync_service stopped")
         log.info("app_shutdown")
