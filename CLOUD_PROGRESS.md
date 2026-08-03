@@ -1,0 +1,41 @@
+# CLOUD_PROGRESS — SP-CLOUD ledger
+
+Program: SP-CLOUD (SaaS enablement, Track A — application changes only).
+Slice: **SP-CLOUD-1 — Solve Job Boundary & Dual-Mode Runtime** (v2 prompt, research-grounded).
+Convention: read this at every session start, update at every session end (same as REFACTOR_PROGRESS.md).
+
+## Status
+
+| Phase | State | Notes |
+|---|---|---|
+| 0 — Audit | **CONFIRMED 2026-08-03** | Full report: `~/.claude/plans/2026-08-03-sp-cloud-1-phase0-audit.md`. User accepted all four recommendations: **C1(a)** tiny additive scheduler_core change for `max_deterministic_time`; **C2** `PYTHONHASHSEED=0` env-pin as the Rule 5(d) mechanism; **C3** Rule-4 scope = batch meet generate only this slice (interactive ≤10s solves stay in-request as documented exception; bracket = later slice); **C4** ortools exact pin at app layer only. Branch `dev/cloud-runtime` created off `dev/workspace-suite` @ 16925db. |
+| 1 — Job model & queue | **DONE 2026-08-03** | `solve_jobs` table + migration `l5c9d3e7f1a2` (both dialects, both partial indexes verified via migration on fresh SQLite, a copy of the real `data/local.db`, and Postgres 16 — pg_indexes shows the WHERE clauses). Queue service `backend/services/solve_jobs.py` (state machine, atomic claim w/ SKIP LOCKED on PG + guarded UPDATE on SQLite, both dedup mechanisms, transactional enqueue, lease reap, retry classification, retention prune, determinism defaults). Settings knobs added to `app/config.py`. 55-test dual-dialect suite `tests/unit/test_solve_jobs.py` (green on both; PG leg via `TEST_POSTGRES_URL`, wired into CI with a postgres:16 service). Stack modernization per user directive: ortools==9.15.6755 (already latest), psycopg2→psycopg3 (+URL normalization in `database/session.py` + `pool_pre_ping`), venv fastapi 0.141.1 / uvicorn 0.52.1; frontend current (majors deliberately held). scheduler_core exception implemented: `SolverOptions.max_deterministic_time` + guarded assignment in `CPSATScheduler.solve`. Full backend suite 832 passed. |
+| 2 — Worker runtime | next | Worker loop (daemon thread à la SyncService), solve subprocess w/ PYTHONHASHSEED=0 + Linux rlimit guard, cancellation via heartbeat status, embedded+standalone entry points. |
+| 3 — API & frontend | not started | |
+| 4 — Containers & migrations | not started | Note: exactly-once migrations + workers-wait; docs env matrix. |
+
+## Phase 0 headline findings (details in the report)
+
+- `POST /schedule` is **stateless** — persistence is client-driven (store → 500 ms debounced `PUT /tournaments/{id}/state`). `input_snapshot` = the request body; Rule 11 satisfiable by client-applied job results (exact parity).
+- **11 in-request CP-SAT sites**, not 1 (meet generate+SSE, repair, warm-restart, 3 proposals, director, 4 bracket) + background SuggestionsWorker → Rule 4 scope decision C3.
+- Measured (Win dev box, ortools 9.15.6755): 20-match meet OPTIMAL in 12.1 s (1 worker) / 15.6 s (4 workers — parallel not faster); 60-match doubles instance **hits the 30 s wall limit** (FEASIBLE only) → wall-clock budgets bind in practice.
+- **Model build is cross-process nondeterministic** (`cpsat_backend._player_matches` set iteration; different hash seeds → different fingerprints AND different schedules at equal objective). Verified mitigation without touching scheduler_core: `PYTHONHASHSEED=0` in the solve process env → identical fingerprints + byte-identical schedules. Backend-side set hazards (warm-restart/repair inputs) fixable in scope.
+- `max_deterministic_time` / interleave params **cannot be passed** through `SolverOptions` — hardcoded param application at `cpsat_backend.py:641-645` (conflict C1).
+- ortools floor-pinned (`>=9.8.0`), not exact (conflict C4).
+- Recommended determinism mode: `num_workers=1` + fixed seed + hash-seed pin (+ deterministic-time budget if C1(a) approved).
+- Pytest baseline correction: psycopg2 test_config failure is a system-python artifact — `.venv` baseline is 803 pass + 1 known flake (`test_backup_create_and_list_newest_first`, created_at-tie ordering).
+- SQLite is already bind-mounted in all compose files; `docker-compose.dev.yml` already has a postgres:16 service; migrations run in lifespan with no exactly-once guard (Phase 4 item).
+- Simulator (`make sim-ephemeral`) = the local-parity verification harness; its client calls `POST /schedule` synchronously → must migrate to the job flow in Phase 3.
+
+## Adjacent debt logged during Phase 0 (for docs/audits/debt-log.md once branch exists)
+
+1. `docker-compose.release.yml` missing `DATABASE_URL` → falls back to `sqlite:///./local.db` on a read-only rootfs.
+2. `test_backup_create_and_list_newest_first` flake — backups list query lacks `id DESC` tiebreaker.
+3. `brackets.py:2225-2230` — event generate builds `TournamentDriver` without `solver_options`, ignoring session solver config.
+4. `docker-compose.dev.yml` header advertises nonexistent `make dev-postgres` target.
+5. `api/README.md` stale (EventSource claim); `unscheduledMatches` never rendered.
+
+## Session log
+
+- **2026-08-03 (a)** — Phase 0 audit executed (4 parallel read-only explorations + solve-time/fingerprint measurements; no repo code touched). Report delivered; STOPPED pending user confirmation on C1–C4 + branch name.
+- **2026-08-03 (b)** — User confirmed all four Phase 0 recommendations and additionally directed a stack-currency pass ("check if any packages have been updated… make sure our stack is modern"). Findings: ortools 9.15.6755 already latest; sqlalchemy/alembic/pydantic/pydantic-settings/supabase current; venv fastapi+uvicorn lagged → upgraded; psycopg2-binary replaced with psycopg 3 (superior successor; this slice introduces real Postgres so the driver choice happens now); frontend current with deliberate major holds (vitest 3, dnd-kit sortable 8, uuid 13). Phase 1 implemented and verified end-to-end (see Status).
