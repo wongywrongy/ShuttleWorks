@@ -3,14 +3,19 @@ uvicorn[standard]>=0.27.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 python-dotenv>=1.0.0
-ortools>=9.8.0
+# Exact pin: CP-SAT results are only reproducible within a single solver
+# version, and determinism is a product guarantee (SP-CLOUD-1 Rule 5e).
+# Bumping this requires re-running the determinism e2e test and accepting
+# that historical schedules may not re-solve byte-identically.
+ortools==9.15.6755
 python-multipart>=0.0.6
 sqlalchemy>=2.0.0
 alembic>=1.13.0
-# Postgres driver — SQLAlchemy auto-selects when DATABASE_URL starts
-# with ``postgresql://`` (or ``postgresql+psycopg2://``). The pure-binary
-# wheel keeps the Dockerfile compiler-free.
-psycopg2-binary>=2.9.0
+# Postgres driver — psycopg 3. ``database/session.py`` normalises bare
+# ``postgresql://`` URLs to ``postgresql+psycopg://`` so SQLAlchemy picks
+# this driver (its default for that scheme is still psycopg2). The
+# ``binary`` extra keeps the Dockerfile compiler-free.
+psycopg[binary]>=3.2
 # Supabase Python client — used by ``app/dependencies.get_current_user``
 # to verify the JWT on every protected route. When ``SUPABASE_URL`` is
 # blank the dependency short-circuits into local-dev mode and the client

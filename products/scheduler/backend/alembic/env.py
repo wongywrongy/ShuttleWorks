@@ -22,6 +22,7 @@ from alembic import context
 # these imports resolve when alembic is run from products/scheduler/backend/.
 from app.config import settings  # noqa: E402
 from database.models import Base  # noqa: E402
+from database.session import normalize_database_url  # noqa: E402
 
 config = context.config
 
@@ -30,7 +31,7 @@ if config.config_file_name is not None:
 
 # Override sqlalchemy.url from settings — keeps the canonical source of
 # truth in one place. The ini file's placeholder is left blank.
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", normalize_database_url(settings.database_url))
 
 target_metadata = Base.metadata
 
