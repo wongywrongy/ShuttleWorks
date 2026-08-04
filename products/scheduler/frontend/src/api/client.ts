@@ -280,6 +280,17 @@ export function handleApiResponseError(error: any): never {
   // alongside — or instead of — that dedicated handling.
   const isLockCode = code === 'CONFIG_LOCKED' || code === 'DRAW_STARTED';
 
+  // Member-management failures are owned end-to-end by People & Access,
+  // which renders them inline against the row that produced them. A
+  // global toast would be strictly worse here: MEMBER_LAST_OWNER is the
+  // stale-tab path, and its whole value is telling you *which* member
+  // can't be demoted and what to do instead — context a detached toast
+  // throws away. Same reasoning as the CONFIG_LOCKED suppression above.
+  const isMemberCode =
+    code === 'MEMBER_LAST_OWNER' ||
+    code === 'MEMBER_NOT_FOUND' ||
+    code === 'MEMBER_INVALID_ROLE';
+
   // Surface the failure exactly once, at the edge, so every hook /
   // component gets consistent UI without needing to handle it.
   // Dedupe identical (status, message) pairs within a 30s window
@@ -300,7 +311,7 @@ export function handleApiResponseError(error: any): never {
   }
 
   const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
-  const suppress = isLockCode || _shouldSuppressErrorToast(dedupeKey);
+  const suppress = isLockCode || isMemberCode || _shouldSuppressErrorToast(dedupeKey);
   if (!suppress) {
     try {
       useUiStore.getState().pushToast({
@@ -637,6 +648,47 @@ class ApiClient {
   /** Owner-only. Stamps ``revoked_at`` on the invite. */
   async revokeInvite(token: string): Promise<void> {
     await this.client.delete(`/invites/${token}`);
+  }
+
+  // ---- Member management (SP-CLOUD-3 Phase 1) -------------------------
+  //
+  // All four reject with `MEMBER_LAST_OWNER` (409) when the operation
+  // would strand the workspace. That code is deliberately excluded from
+  // the global error toast (see `_MEMBER_CODES` above) — People & Access
+  // renders it inline, next to the row that caused it, because a toast
+  // detached from the row is not actionable.
+
+  /** Owner-only. Promote or demote a member. */
+  async changeMemberRole(
+    tid: string,
+    userId: string,
+    role: string,
+  ): Promise<TournamentMemberDTO> {
+    const r = await this.client.patch<TournamentMemberDTO>(
+      `/tournaments/${tid}/members/${userId}`,
+      { role },
+    );
+    return r.data;
+  }
+
+  /** Owner-only. Removal takes effect on the member's very next request
+   *  — membership is read live per request and never cached. */
+  async removeMember(tid: string, userId: string): Promise<void> {
+    await this.client.delete(`/tournaments/${tid}/members/${userId}`);
+  }
+
+  /** Any member. Remove yourself. A sole owner cannot — same guard as
+   *  being removed, so this is not a back door. */
+  async leaveTournament(tid: string): Promise<void> {
+    await this.client.delete(`/tournaments/${tid}/members/me`);
+  }
+
+  /** Owner-only. Promotes the target and demotes the caller to operator,
+   *  in one transaction that never passes through a zero-owner state. */
+  async transferOwnership(tid: string, userId: string): Promise<void> {
+    await this.client.post(`/tournaments/${tid}/transfer-ownership`, {
+      userId,
+    });
   }
 
   // ---- Two-phase commit (proposal pipeline) ----------------------------

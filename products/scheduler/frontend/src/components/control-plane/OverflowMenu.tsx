@@ -32,11 +32,29 @@ export function OverflowMenu({ label, items }: { label?: string; items: Overflow
         className="z-modal min-w-40 rounded-md border border-border bg-card py-1 shadow-md focus:outline-none"
       >
         {items.map((item) => (
-          <MenuItem key={item.key} disabled={item.disabled}>
+          // Deliberately NOT `disabled` on MenuItem: that drops the item
+          // out of keyboard navigation entirely, so the reason it exists
+          // never reaches anyone navigating by keyboard.
+          <MenuItem key={item.key}>
             <button
               type="button"
               data-testid={item.testId}
-              disabled={item.disabled}
+              // `aria-disabled`, NOT the `disabled` attribute. A disabled
+              // control is removed from the tab order and goes
+              // unannounced, so a keyboard or screen-reader user meets an
+              // item that simply isn't there rather than one that
+              // explains itself. Activation is blocked in the handler
+              // below instead.
+              aria-disabled={item.disabled || undefined}
+              // Fold the reason into the accessible name so it is spoken
+              // on focus. The tooltip stays for pointer users, but
+              // callers should ALSO render the reason visibly — nobody
+              // hovers a control they don't believe is live.
+              aria-label={
+                item.disabled && item.disabledReason
+                  ? `${item.label} — unavailable: ${item.disabledReason}`
+                  : undefined
+              }
               title={item.disabled ? item.disabledReason : undefined}
               onClick={(e) => {
                 e.stopPropagation();
