@@ -83,11 +83,12 @@ def _probe_all(client, app, tid, headers):
 def test_enumeration_is_nonempty_and_covers_the_known_surface(harness):
     app, _, _ = harness
     ops = _workspace_operations(app)
-    # 61 workspace-scoped operations at the time of writing (Phase 0.E
-    # enumeration). Growth is fine; shrinkage below the audited floor
-    # means routes moved off the {tournament_id} convention — the seam
-    # binds to that name, so investigate before lowering this number.
-    assert len(ops) >= 61, f"only {len(ops)} workspace ops discovered"
+    # 67 workspace-scoped operations after SP-CLOUD-3 Phase 1 added
+    # member management (was 61 at the SP-CLOUD-2 Phase 0.E enumeration).
+    # Growth is fine; shrinkage below the audited floor means routes
+    # moved off the {tournament_id} convention — the seam binds to that
+    # name, so investigate before lowering this number.
+    assert len(ops) >= 67, f"only {len(ops)} workspace ops discovered"
 
 
 def test_authenticated_non_member_gets_uniform_404_everywhere(harness):

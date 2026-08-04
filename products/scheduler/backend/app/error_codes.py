@@ -84,6 +84,14 @@ class ErrorCode(str, Enum):
     # tell which of those it is.
     INVITE_NOT_FOUND = "INVITE_NOT_FOUND"
 
+    # Member management (SP-CLOUD-3 Phase 1). MEMBER_LAST_OWNER is the
+    # single answer for every path that would strand a workspace —
+    # remove, demote, transfer, or leave — so the UI can explain the
+    # refusal the same way however the caller got there.
+    MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND"
+    MEMBER_LAST_OWNER = "MEMBER_LAST_OWNER"
+    MEMBER_INVALID_ROLE = "MEMBER_INVALID_ROLE"
+
     # Auth & sessions (SP-CLOUD-2)
     AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"
     AUTH_THROTTLED = "AUTH_THROTTLED"

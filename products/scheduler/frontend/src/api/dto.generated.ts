@@ -1170,7 +1170,7 @@ export interface paths {
          *     user can immediately read / write / delete the new tournament via
          *     the role-checked endpoints. ``owner_email`` is denormalised here
          *     so Step 6's "Shared with You" dashboard rows can show who the
-         *     tournament belongs to without a Supabase auth join.
+         *     tournament belongs to without a second lookup.
          */
         post: operations["create_tournament_tournaments_post"];
         delete?: never;
@@ -1407,6 +1407,80 @@ export interface paths {
         get: operations["list_tournament_members_tournaments__tournament_id__members_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/members/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Leave Tournament
+         * @description Remove yourself from a workspace.
+         *
+         *     Viewer-gated: any member may leave. A sole owner cannot — self-removal
+         *     goes through the same guard as being removed, so it is not a back door
+         *     around the last-owner invariant.
+         */
+        delete: operations["leave_tournament_tournaments__tournament_id__members_me_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Tournament Member
+         * @description Remove a member. Owner-gated. Effective on their next request.
+         */
+        delete: operations["remove_tournament_member_tournaments__tournament_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change Tournament Member Role
+         * @description Promote or demote a member. Owner-gated.
+         *
+         *     Demoting the only owner is refused (409) rather than silently
+         *     reordering the workspace into an unreachable state.
+         */
+        patch: operations["change_tournament_member_role_tournaments__tournament_id__members__user_id__patch"];
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/transfer-ownership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transfer Tournament Ownership
+         * @description Hand the workspace to another member, demoting yourself to operator.
+         *
+         *     An explicit operation rather than demote-then-promote, which would
+         *     pass through a zero-owner state.
+         */
+        post: operations["transfer_tournament_ownership_tournaments__tournament_id__transfer_ownership_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3248,6 +3322,11 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** RoleChangeRequest */
+        RoleChangeRequest: {
+            /** Role */
+            role: string;
+        };
         /** RosterGroupDTO */
         RosterGroupDTO: {
             /** Id */
@@ -3842,6 +3921,11 @@ export interface components {
             status?: ("draft" | "active" | "archived") | null;
             /** Tournamentdate */
             tournamentDate?: string | null;
+        };
+        /** TransferOwnershipRequest */
+        TransferOwnershipRequest: {
+            /** Userid */
+            userId: string;
         };
         /** UserDTO */
         UserDTO: {
@@ -6190,6 +6274,134 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TournamentMemberDTO"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    leave_tournament_tournaments__tournament_id__members_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_tournament_member_tournaments__tournament_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_tournament_member_role_tournaments__tournament_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentMemberDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transfer_tournament_ownership_tournaments__tournament_id__transfer_ownership_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferOwnershipRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

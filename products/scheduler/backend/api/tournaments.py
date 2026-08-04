@@ -12,7 +12,7 @@ import logging
 import uuid
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, Path, Query, Response
+from fastapi import APIRouter, Depends, Path, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.dependencies import (
@@ -22,8 +22,14 @@ from app.dependencies import (
 )
 from app.error_codes import ErrorCode, http_error
 from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO
-from database.models import Tournament, normalize_module_seed, display_dependency_satisfied
+from database.models import (
+    Tournament,
+    TournamentMember,
+    normalize_module_seed,
+    display_dependency_satisfied,
+)
 from repositories import LocalRepository, get_repository
+from services import members as members_service
 from services.bracket import response_cache
 from services.config_lock import changed_scheduling_fields
 from services.meet.standings import compute_meet_standings
@@ -943,3 +949,164 @@ def list_tournament_members(
             )
         )
     return out
+
+
+# ---- Member management (SP-CLOUD-3 Phase 1) -----------------------------
+#
+# The invariant lives in ``services/members.py``, not here: these routes
+# translate its errors to HTTP and own the transaction. Removal takes
+# effect immediately because ``require_tournament_access`` reads
+# membership live per request and nothing caches it.
+#
+# ROUTE ORDER MATTERS: ``/members/me`` must be declared before
+# ``/members/{user_id}``. FastAPI matches in declaration order, and
+# ``user_id`` is typed ``uuid.UUID``, so the literal "me" would 422
+# against the parameterised route instead of reaching the leave handler.
+
+
+class RoleChangeRequest(BaseModel):
+    role: str
+
+
+class TransferOwnershipRequest(BaseModel):
+    userId: str
+
+
+def _member_error(exc: members_service.MemberError):
+    if isinstance(exc, members_service.LastOwnerError):
+        return http_error(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.MEMBER_LAST_OWNER,
+            "A workspace must always have at least one owner.",
+        )
+    return http_error(
+        status.HTTP_404_NOT_FOUND,
+        ErrorCode.MEMBER_NOT_FOUND,
+        "That person is not a member of this workspace.",
+    )
+
+
+@router.delete(
+    "/{tournament_id}/members/me",
+    status_code=204,
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
+def leave_tournament(
+    tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Remove yourself from a workspace.
+
+    Viewer-gated: any member may leave. A sole owner cannot — self-removal
+    goes through the same guard as being removed, so it is not a back door
+    around the last-owner invariant.
+    """
+    user_uuid = user.as_uuid()
+    if user_uuid is None:
+        raise _member_error(members_service.MemberNotFoundError())
+    try:
+        members_service.remove_member(repo.session, tournament_id, user_uuid)
+        repo.session.commit()
+    except members_service.MemberError as exc:
+        repo.session.rollback()
+        raise _member_error(exc)
+    return Response(status_code=204)
+
+
+@router.delete(
+    "/{tournament_id}/members/{user_id}",
+    status_code=204,
+    dependencies=[Depends(require_tournament_access("owner"))],
+)
+def remove_tournament_member(
+    tournament_id: uuid.UUID = Path(...),
+    user_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Remove a member. Owner-gated. Effective on their next request."""
+    try:
+        members_service.remove_member(repo.session, tournament_id, user_id)
+        repo.session.commit()
+    except members_service.MemberError as exc:
+        repo.session.rollback()
+        raise _member_error(exc)
+    return Response(status_code=204)
+
+
+@router.patch(
+    "/{tournament_id}/members/{user_id}",
+    response_model=TournamentMemberDTO,
+    dependencies=[Depends(require_tournament_access("owner"))],
+)
+def change_tournament_member_role(
+    body: RoleChangeRequest,
+    tournament_id: uuid.UUID = Path(...),
+    user_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Promote or demote a member. Owner-gated.
+
+    Demoting the only owner is refused (409) rather than silently
+    reordering the workspace into an unreachable state.
+    """
+    from database.models import User
+
+    try:
+        members_service.set_role(repo.session, tournament_id, user_id, body.role)
+        repo.session.commit()
+    except ValueError:
+        repo.session.rollback()
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            ErrorCode.MEMBER_INVALID_ROLE,
+            f"Role must be one of: {', '.join(members_service.ROLES)}.",
+        )
+    except members_service.MemberError as exc:
+        repo.session.rollback()
+        raise _member_error(exc)
+
+    row = repo.session.get(TournamentMember, (tournament_id, user_id))
+    u = repo.session.get(User, user_id)
+    email = None if (u is None or u.email.endswith("@unmigrated.local")) else u.email
+    return TournamentMemberDTO(
+        userId=str(user_id),
+        role=row.role,
+        joinedAt=row.joined_at.isoformat() if row.joined_at else "",
+        email=email,
+        displayName=(u.display_name if u else None),
+    )
+
+
+@router.post(
+    "/{tournament_id}/transfer-ownership",
+    status_code=204,
+    dependencies=[Depends(require_tournament_access("owner"))],
+)
+def transfer_tournament_ownership(
+    body: TransferOwnershipRequest,
+    tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Hand the workspace to another member, demoting yourself to operator.
+
+    An explicit operation rather than demote-then-promote, which would
+    pass through a zero-owner state.
+    """
+    caller = user.as_uuid()
+    if caller is None:
+        raise _member_error(members_service.MemberNotFoundError())
+    try:
+        target = uuid.UUID(body.userId)
+    except (ValueError, AttributeError, TypeError):
+        raise _member_error(members_service.MemberNotFoundError())
+    try:
+        members_service.transfer_ownership(
+            repo.session, tournament_id, caller, target
+        )
+        repo.session.commit()
+    except members_service.MemberError as exc:
+        repo.session.rollback()
+        raise _member_error(exc)
+    return Response(status_code=204)
