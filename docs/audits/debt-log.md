@@ -421,10 +421,13 @@ a green 1,100-test suite. The real check is the viewer flow in
   - **docker-compose.release.yml sets no DATABASE_URL** — the release image
     falls back to `sqlite:///./local.db` on a read-only rootfs, so first
     write fails. Add the explicit URL the main compose already carries. Size S.
-  - **`test_backup_create_and_list_newest_first` is a created_at-tie flake** —
-    `backups.list_for_tournament` orders by `created_at` alone; two backups in
-    the same timestamp tick order nondeterministically. Add the standard
-    `, id DESC` tiebreaker (repo-wide ordering hazard class). Size S.
+  - ~~**`test_backup_create_and_list_newest_first` created_at-tie flake**~~
+    **CLEARED 2026-08-03** (with a diagnosis correction: the query already
+    carried the `, id DESC` tiebreaker — but `id` is a *random* UUID, so the
+    tiebreaker makes same-tick ordering deterministic, not "newest". The test
+    was the bug: it relied on sub-tick timestamp separation. Fixed by
+    stamping strictly increasing `created_at`, the same pattern the
+    neighboring rotate/list_all tests already used.)
   - **Bracket `POST /events/{id}/generate` ignores session solver config** —
     builds `TournamentDriver` with no `solver_options` (brackets.py:2225-2230),
     silently dropping the session's time_limit/deterministic/seed. Size S.

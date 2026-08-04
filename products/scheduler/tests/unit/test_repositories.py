@@ -242,10 +242,18 @@ def test_match_state_bulk_upsert_empty_dict_is_noop(repo):
 # ---- TournamentBackup --------------------------------------------------
 
 
-def test_backup_create_and_list_newest_first(repo):
+def test_backup_create_and_list_newest_first(repo, session):
     tid = _seed_tournament(repo, name="A")
     b1 = repo.backups.create(tid, {"v": 1}, "tournament-a-2026-01-01.json")
     b2 = repo.backups.create(tid, {"v": 2}, "tournament-b-2026-01-02.json")
+    # Stamp strictly increasing created_at: both creates can land in the
+    # same clock tick, and the id tiebreaker is a *random* UUID — it
+    # makes the order deterministic, not "newest" (this was the suite's
+    # one long-standing flake; same pattern as rotate/list_all tests).
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    b1.created_at = base
+    b2.created_at = base + timedelta(seconds=1)
+    session.commit()
     listed = repo.backups.list_for_tournament(tid)
     assert [b.filename for b in listed] == [b2.filename, b1.filename]
 
