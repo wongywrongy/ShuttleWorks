@@ -431,8 +431,10 @@ a green 1,100-test suite. The real check is the viewer flow in
   - **Bracket `POST /events/{id}/generate` ignores session solver config** —
     builds `TournamentDriver` with no `solver_options` (brackets.py:2225-2230),
     silently dropping the session's time_limit/deterministic/seed. Size S.
-  - **docker-compose.dev.yml header advertises `make dev-postgres`** which
-    does not exist in any Makefile. Add the target or fix the comment. Size S.
+  - ~~**docker-compose.dev.yml header advertises `make dev-postgres`**~~ —
+    ✅ **CLEARED 2026-08-04.** The target was added (plus `dev-postgres-stop`)
+    rather than the comment reworded: `CLOUD_PROGRESS.md` referenced it too,
+    and it is the quickest way to get a Postgres for the dual-dialect tests.
   - **Nothing enforces "a streaming generator must not touch the repository".**
     The repo-closing middleware (`app/main.py`) runs when `call_next` returns,
     which for a `StreamingResponse` is *before* the body streams — so the

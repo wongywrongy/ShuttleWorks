@@ -1,4 +1,4 @@
-.PHONY: build run rebuild stop logs clean dev help test-e2e test-e2e-rebuild test-e2e-dev test-e2e-install generate-api sim sim-ephemeral sim-all sim-test
+.PHONY: build run rebuild stop logs clean dev dev-postgres dev-postgres-stop help test-e2e test-e2e-rebuild test-e2e-dev test-e2e-install generate-api sim sim-ephemeral sim-all sim-test
 
 # Default target
 help:
@@ -14,6 +14,8 @@ help:
 	@echo ""
 	@echo "Development (Hybrid):"
 	@echo "  make dev               - Run backend (Docker) + frontend (npm dev server)"
+	@echo "  make dev-postgres      - Local Postgres + backend (exercise the cloud path)"
+	@echo "  make dev-postgres-stop - Stop the Postgres dev stack"
 	@echo ""
 	@echo "End-to-end tests (Playwright):"
 	@echo "  make test-e2e-install  - Install Playwright browsers (one-time)"
@@ -85,6 +87,17 @@ dev:
 	@echo ""
 	@echo "Starting frontend dev server..."
 	cd frontend && npm run dev
+
+# Local Postgres + backend, for exercising the cloud path without
+# leaving the laptop. docker-compose.dev.yml has advertised this target
+# in its header since it was written; it did not exist until 2026-08-04.
+# Also the quickest way to get a Postgres for the dual-dialect tests:
+#   TEST_POSTGRES_URL=postgresql://scheduler:scheduler@localhost:5433/scheduler pytest
+dev-postgres:
+	docker compose -f docker-compose.dev.yml up -d --build
+
+dev-postgres-stop:
+	docker compose -f docker-compose.dev.yml down
 
 # === End-to-end tests (Playwright) ===
 

@@ -14,7 +14,7 @@ help:
 	@echo "                          (frontend :80, backend :8000, docs :8081)"
 	@echo "  make scheduler-dev      Backend in Docker, Vite dev server on :5173"
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
-	@echo "  make stop               Stop the stack"
+	@echo "  make stop               Stop the dev-facing stacks (default, dev, cloud)"
 	@echo "  make logs               Tail container logs"
 	@echo "  make ps                 Show running containers"
 	@echo ""
@@ -31,6 +31,10 @@ help:
 	@echo ""
 	@echo "Misc:"
 	@echo "  make clean              Down + remove images / volumes"
+	@echo ""
+	@echo "  Server stacks are started explicitly and NOT touched by stop/clean:"
+	@echo "    docker compose -f products/scheduler/docker-compose.selfhost.yml ..."
+	@echo "    docker compose -f products/scheduler/docker-compose.worker.yml ..."
 	@echo "  make engine-readme      Open the shared scheduler_core/ README"
 	@echo ""
 	@echo "The legacy ``make tournament`` target was retired in the"
@@ -48,8 +52,15 @@ scheduler-dev:
 scheduler-rebuild:
 	$(MAKE) -C products/scheduler rebuild
 
+# `stop` covers the stacks a developer actually starts on this machine.
+# The selfhost and worker stacks run on servers, are started with an
+# explicit -f, and are listed in `help` rather than torn down from here:
+# a `make stop` that reaches into a production stack is a footgun, not a
+# convenience. Leading `-` so a stack that was never up is not an error.
 stop:
 	$(MAKE) -C products/scheduler stop
+	-cd products/scheduler && docker compose -f docker-compose.dev.yml down
+	-cd products/scheduler && docker compose -f docker-compose.cloud.yml down
 
 logs:
 	$(MAKE) -C products/scheduler logs
@@ -83,6 +94,8 @@ sim-test:
 
 clean:
 	-$(MAKE) -C products/scheduler clean
+	-cd products/scheduler && docker compose -f docker-compose.dev.yml down -v
+	-cd products/scheduler && docker compose -f docker-compose.cloud.yml down -v
 
 engine-readme:
 	@$${PAGER:-less} scheduler_core/README.md
@@ -95,3 +108,6 @@ check:
 	npm run depcruise
 	ruff check products/scheduler scheduler_core
 	cd products/scheduler && pytest
+	@echo ""
+	@echo "--- docs freshness (advisory — never fails the gate) ---"
+	-npm run docs:freshness

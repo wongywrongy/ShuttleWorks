@@ -69,6 +69,50 @@ jobs:
           TEST_POSTGRES_URL: postgresql://scheduler:scheduler@localhost:5433/scheduler
         run: pytest products/scheduler/tests
 
+  compose-lint:
+    name: Compose files parse (docker compose config)
+    runs-on: ubuntu-latest
+    # Nothing else validates the compose files, and they are the entire
+    # deployment contract. This bug class has already reached main once:
+    # the release compose shipped without DATABASE_URL (fixed in feba243).
+    # A `config` run interpolates variables, resolves secrets and
+    # validates structure WITHOUT pulling an image or starting a
+    # container, so it stays a lean gate — seconds, no services, no flake
+    # surface.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate every compose file
+        working-directory: products/scheduler
+        env:
+          # Dummy values for the `${VAR:?}` fail-fast variables. Their
+          # real values are per-deployment; what is under test here is
+          # that the files PARSE and that every referenced variable is
+          # actually declared somewhere.
+          POSTGRES_BIND_ADDR: 127.0.0.1
+          PUBLIC_HOSTNAME: example.test
+          CLOUDFLARE_TUNNEL_TOKEN: dummy-tunnel-token
+          TRUSTED_PROXY_IPS: 172.20.0.9
+          SMTP_HOST: smtp.example.test
+          SW_WORKER_PASSWORD: dummy-password
+          PRIMARY_TAILNET_HOST: 100.64.0.1
+        run: |
+          # The self-host stack declares file-backed secrets; `config`
+          # resolves the paths, so the files must exist.
+          mkdir -p secrets
+          touch secrets/postgres_password secrets/database_url secrets/ops_token
+          status=0
+          for f in docker-compose.yml \
+                   docker-compose.dev.yml \
+                   docker-compose.release.yml \
+                   docker-compose.cloud.yml \
+                   docker-compose.selfhost.yml \
+                   docker-compose.worker.yml; do
+            echo "::group::$f"
+            docker compose -f "$f" config -q || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
   interaction-smoke:
     name: Interaction smoke (pressing the UI must not break it)
     runs-on: ubuntu-latest
