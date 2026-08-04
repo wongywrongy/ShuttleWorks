@@ -28,7 +28,7 @@ live in `backend/api/brackets.py`.
 
 ### The stream — `schedule-next/stream`
 
-`schedule_next_round_stream` mirrors the meet's `POST /schedule/stream`
+`schedule_next_round_stream` mirrors the (since-retired) meet `POST /schedule/stream`
 event shape exactly. It hydrates the bracket session, builds the next
 ready wave via `TournamentDriver.prepare_next_round_problem()` (the same
 ready-set / `current_slot` computation the batch path uses), then drives

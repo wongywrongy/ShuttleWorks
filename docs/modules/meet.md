@@ -11,8 +11,8 @@ Meet produces.
 - **Roster authoring** — schools / groups and their players, edited inline (the position grid) and
   via bulk import.
 - **CP-SAT-optimised court assignments** across courts, slots, players, rest, and game-spacing
-  constraints, with **live SSE solver progress** (phase, current objective, optimality gap) and a
-  top-N candidate pool you can swap into without re-solving.
+  constraints, run as an **async solve job** (submit + poll; the HUD shows `queued` then the solve
+  phases) with a top-N candidate pool you can swap into without re-solving.
 - **The live-planning pipeline** — every change (re-plan, repair, drag-to-reschedule, director
   action) is staged as a **proposal** with a full impact diff *before* it commits:
   optimistic-concurrency-locked, atomic swap, rolling audit history. Plus **advisories** (the
@@ -29,38 +29,45 @@ below.
 ## The intake → engine → emit anatomy
 
 Meet is, at heart, a stateless transform: roster + matches + config go in, a solved schedule comes
-out. The solve carries the whole problem in the request body — there is no server-side scheduling
-state.
+out. Since SP-CLOUD-1 the transform runs as an **async job**: the full problem is snapshotted at
+submit into the `solve_jobs` queue, a worker executes it in a killable child subprocess, and the
+client polls the job (the legacy synchronous `POST /schedule` and its SSE stream answer
+`410 Gone`).
 
 ```text
-INTAKE                         ENGINE                              EMIT
-Roster / Matches / Config  ─▶  POST /schedule (or /schedule/stream) ─▶ ScheduleDTO
-  tournamentStore                adapters/badminton.py                  tournamentStore.setSchedule
-  { config, players,             prepare_solver_input()                 → scheduleFinalized edge
-    matches }                    → scheduler_core ScheduleRequest        → Operations seeds the
-                                 → CPSATScheduler solve (threadpool)        live court layout
-                                 → result_to_dto()
+INTAKE                         ENGINE                                 EMIT
+Roster / Matches / Config  ─▶  POST …/solve-jobs (202) ─▶ worker  ─▶  ScheduleDTO (job.result)
+  tournamentStore                input_snapshot + params                tournamentStore.setSchedule
+  { config, players,             → solve_child subprocess               → scheduleFinalized edge
+    matches }                    → adapters/badminton.py                → Operations seeds the
+                                   prepare_solver_input()                  live court layout
+                                 → CPSATScheduler solve
+                                 → result_to_dto()          ◀── client polls GET …/solve-jobs/{id}
 ```
 
 **1. Roster intake.** The `roster/` (position grid), `matches/` (the matches spreadsheet), and
 `tournaments/` + `TournamentSetupPage` (Configuration) surfaces author the three solver inputs and
 hold them in `tournamentStore`: a `TournamentConfig`, a `PlayerDTO[]`, and a `MatchDTO[]`.
 
-**2. CP-SAT solve.** The frontend posts `{ config, players, matches, previousAssignments }` to
-`POST /schedule` (one-shot) or `POST /schedule/stream` (Server-Sent Events). The route surface in
-`backend/api/schedule.py` is deliberately thin — DTO ↔ engine conversion lives in
-`backend/adapters/badminton.py` (`prepare_solver_input`, `solver_options_for`,
-`candidate_pool_size_for`, `result_to_dto`). It builds a `scheduler_core` `ScheduleRequest` and runs
-the CPU-bound `CPSATScheduler` solve in a threadpool (`loop.run_in_executor`) so the async event loop
-stays responsive. The shared engine is the same `scheduler_core` core that Bracket schedules through —
-see [Scheduling unification](/architecture/scheduling-unification) and
+**2. CP-SAT solve (as a job).** The frontend submits `{ config, players, matches,
+previousAssignments }` (the `GenerateScheduleRequest`) to `POST /tournaments/{id}/solve-jobs` with
+a client-minted `Idempotency-Key` and polls the job to a terminal status (`apiClient.runSolveJob`;
+a reload mid-solve re-adopts the active job). The route (`backend/api/solve_jobs.py`) persists the
+input snapshot plus determinism params — seed, one search worker, `max_deterministic_time` — and a
+worker (`services/solve_worker.py`) claims the job and executes it in a child subprocess
+(`services/solve_child.py`), where the DTO ↔ engine conversion still lives in
+`backend/adapters/badminton.py` (`prepare_solver_input`, `result_to_dto`). The subprocess is what
+makes Cancel real — CP-SAT cannot be preempted in-process, so cancel kills the child. The shared
+engine is the same `scheduler_core` core that Bracket schedules through — see
+[Scheduling unification](/architecture/scheduling-unification) and
 [ADR 0006](/decisions/0006-unified-scheduling-core).
 
 **3. Schedule emit.** `result_to_dto` returns a **`ScheduleDTO`** — the court/slot assignments plus a
-candidate pool of near-optimal alternatives. The store writes it via `tournamentStore.setSchedule`,
-which is the **`scheduleFinalized`** edge that Operations reacts to (Seam A). The streaming variant
-emits typed SSE events along the way — `model_built` → `phase` (presolve / search / proving) →
-`progress` (each intermediate solution) → `complete` → `done`.
+candidate pool of near-optimal alternatives — which lands in `job.result`. The polling client
+writes it via `tournamentStore.setSchedule`, which is the **`scheduleFinalized`** edge that
+Operations reacts to (Seam A). Infeasibility and run-time failure live *inside* the job resource
+(`job.error`), not as transport errors; progress is honest-but-coarse job polling (the HUD gains a
+`queued` phase) rather than the retired SSE event stream.
 
 :::tip Feasibility without a solve
 Drag-to-reschedule needs an answer in milliseconds, so it does **not** invoke CP-SAT.
@@ -101,11 +108,11 @@ Two read-only feeds sit alongside the proposal flow:
 | Kind | Owned |
 | --- | --- |
 | **Nav surfaces** | Roster · Matches · Configuration (`ownedSegments: ['roster', 'matches', 'setup']`) |
-| **Backend routes** | `/schedule`, `/schedule/stream`, `/schedule/validate`, `/schedule/warm-restart`; and under `/tournaments/{id}/schedule/`: `advisories`, `proposals/*`, `suggestions/*`, `director-action` |
-| **`apiClient` methods** | `generateSchedule`, `generateScheduleWithProgress`, `validateMove`, `createWarmRestartProposal`, `createRepairProposal`, `createManualEditProposal`, `createDirectorActionProposal`, `commitProposal`, `cancelProposal`, `getProposal`, `getAdvisories`, `getSuggestions`, `applySuggestion`, `dismissSuggestion` |
+| **Backend routes** | `/tournaments/{id}/solve-jobs*` (submit / list / get / cancel — the async solve rail), `/schedule/validate`, `/schedule/warm-restart` (`/schedule` + `/schedule/stream` are `410 Gone`); and under `/tournaments/{id}/schedule/`: `advisories`, `proposals/*`, `suggestions/*`, `director-action` |
+| **`apiClient` methods** | `submitSolveJob`, `getSolveJob`, `listSolveJobs`, `cancelSolveJob`, `runSolveJob`, `validateMove`, `createWarmRestartProposal`, `createRepairProposal`, `createManualEditProposal`, `createDirectorActionProposal`, `commitProposal`, `cancelProposal`, `getProposal`, `getAdvisories`, `getSuggestions`, `applySuggestion`, `dismissSuggestion` |
 | **Store slices** | the editable document in `tournamentStore` (config, roster, matches, schedule, `scheduleVersion` + history); the review pipeline in `uiStore` (`activeProposal`, `advisories`, `suggestions`) |
 | **Frontend code** | `products/meet/` — `roster/`, `matches/`, `tournaments/` + `TournamentSetupPage` (Configuration), `schedule/` + `SchedulePage` (Plan), `MatchControlCenterPage` + `control-center/` (Run), `suggestions/`, `director/`, `setup/`, `exports/` |
-| **Backend services** | `adapters/badminton.py` (DTO ↔ engine boundary), `services/suggestions_worker.py` (background re-optimisation), `services/schedule_impact.py` (impact scoring) |
+| **Backend services** | `adapters/badminton.py` (DTO ↔ engine boundary), `services/solve_jobs.py` + `solve_worker.py` + `solve_runner.py` + `solve_child.py` (the job rail), `services/suggestions_worker.py` (background re-optimisation), `services/schedule_impact.py` (impact scoring) |
 
 These owned facts are pinned by the `meetContract` descriptor in
 `platform/contracts/moduleContract.ts`, whose colocated test asserts every endpoint by function
@@ -140,9 +147,10 @@ segments to the unified `OperationsProduct` instead, so the meet-resident surfac
 meet-only workspace. The first-class `products/operations/` home now exists — this meet-side residue
 is the remaining structural overlap, not a contradiction of it. See [Operations](/modules/operations).
 
-The `/schedule*` routes are intentionally **stateless**: each solve re-serialises the whole problem
-in the request body. This is simple and robust at meet scale; it is noted as a perf consideration
-only for very large problems.
+The solve input is still **self-contained**: each submit re-serialises the whole problem into the
+job's `input_snapshot`, so the worker never reads live tournament tables and a job re-run
+reproduces the original solve. This is simple and robust at meet scale; it is noted as a perf
+consideration only for very large problems.
 
 ## See also
 

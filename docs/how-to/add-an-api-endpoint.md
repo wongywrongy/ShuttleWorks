@@ -27,6 +27,28 @@ is the most common source of runtime surprises.
    ```
 3. Register the router in `backend/app/main.py` if the feature file is new.
 
+### The enforcement seam — non-negotiable for workspace routes
+
+Every route that acts on a workspace resource MUST (SP-CLOUD-2):
+
+1. take the tenant id from a path param named **exactly `tournament_id`** — the
+   seam binds to that name; and
+2. attach `Depends(require_tournament_access("<viewer|operator|owner>"))`, at
+   router level or per route (the `_OPERATOR` dep in the example above is
+   exactly this).
+
+The seam answers a **uniform 404** (`TOURNAMENT_NOT_FOUND`) for non-members and
+nonexistent ids alike — existence is information; never hand-roll a 403 for
+"not yours". A real member with an insufficient *role* gets `403`. This is not
+merely convention: the cross-tenant isolation suite
+(`tests/test_tenant_isolation.py`) discovers every `{tournament_id}` operation
+from the OpenAPI schema and fails CI if any of them leaks — a new endpoint that
+forgets the dependency is caught automatically, with no test to hand-write.
+
+The **only** unauthenticated data plane is the spectator display
+(`/display/{token}/*`, resolved by a capability token). Never add public routes
+keyed on raw tournament UUIDs.
+
 For a **write** that needs optimistic UI + conflict safety, follow the command
 pipeline rather than a bare mutation — carry a client UUID idempotency key and a
 `seen_version`. See [Data flow → the command pipeline](/architecture/data-flow#the-command-pipeline-write-path)

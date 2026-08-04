@@ -38,10 +38,10 @@ This split is declared, and **test-enforced**, in
 
 | Module | Owns (nav surfaces) | Owns (backend routes) | Produces | Consumes |
 | --- | --- | --- | --- | --- |
-| **Meet** | Roster · Matches · Configuration | `/schedule*`, `…/schedule/proposals/*`, `…/advisories`, `…/suggestions/*`, `…/director-action` | `ScheduleDTO` | `TournamentConfig`, `PlayerDTO`, `MatchDTO`, `MatchStateDTO` |
+| **Meet** | Roster · Matches · Configuration | `…/solve-jobs*` (the async solve rail), `/schedule/validate`, `…/schedule/proposals/*`, `…/advisories`, `…/suggestions/*`, `…/director-action` | `ScheduleDTO` | `TournamentConfig`, `PlayerDTO`, `MatchDTO`, `MatchStateDTO` |
 | **Bracket** | Roster · Draws · Matches · Configuration | `…/bracket*` (draws, schedule-next, results + result-command queue, match-action, import/export) | `BracketTournamentDTO` (carrying `PlayUnitDTO` / `AssignmentDTO` / `ResultDTO`) | `BracketCreateIn`, `EventIn`, `ResultDTO` |
 | **Operations** | Plan · Run (for the active engine) | `…/match-states*`, `…/commands` | `MatchStateDTO` | `ScheduleDTO`, `BracketTournamentDTO` |
-| **Display** | Preview · Configuration | *(none — poll-only)* | *(none)* | `TournamentStateDTO`, `MatchStateDTO`, `BracketTournamentDTO` |
+| **Display** | Preview · Configuration | `/display/{token}/*` (public capability-token projection) | *(none — read-only)* | `TournamentStateDTO`, `MatchStateDTO`, `BracketTournamentDTO` |
 
 :::info Plan / Run were formerly Courts / Live
 The Operations nav labels were renamed: **Plan** (the drag-to-reschedule court board) and **Run**
@@ -66,8 +66,14 @@ A few things worth internalising:
   idempotent, client-id-keyed command — see
   [Bracket result queue](/architecture/bracket-result-queue) and
   [ADR 0007](/decisions/0007-bracket-result-command-queue).
-- **Display owns no backend route.** It is strictly read-only and **polls** — it consumes the
-  persisted tournament state, the live match states, and the bracket snapshot.
+- **The meet batch solve is a job, not a request.** Since SP-CLOUD-1, `POST …/solve-jobs`
+  enqueues the full solver input into the DB-backed `solve_jobs` queue and a worker executes it
+  in a killable subprocess; the client polls the job (the synchronous `POST /schedule` + its SSE
+  stream answer `410 Gone`). See [Backend structure](/architecture/backend-structure).
+- **Display is strictly read-only, and its public link is a capability token.** Inside the shell
+  it polls the owner-side endpoints; spectators get `/display?token=…`, backed by the
+  unauthenticated `/display/{token}/*` projection routes (SP-CLOUD-2) — a strict field allowlist,
+  every route `GET`, minted/rotated by the owner at `…/display-token`.
 - **`/state` is shared, not owned by Meet.** The persisted tournament blob (`GET/PUT …/state`)
   lives in the control-plane `tournaments` router and is *consumed* by Meet, not owned by it.
 
@@ -93,7 +99,9 @@ Everything sits on two shared layers:
   schedules and Bracket round scheduling call into it. See
   [ADR 0004](/decisions/0004-ortools-cpsat-engine) and `scheduler_core/README.md`.
 - **SQLite via SQLAlchemy 2.0** — the canonical persistence, with Alembic migrations, fronted by
-  `repositories/local.py` (`LocalRepository`). A background outbox mirrors writes to Supabase. See
+  `repositories/local.py` (`LocalRepository`); cloud mode runs the same code against Postgres 16.
+  A background outbox mirrors writes to Supabase (mirror-only — identity is self-hosted
+  cookie-session auth since SP-CLOUD-2). See
   [ADR 0003](/decisions/0003-sqlite-as-primary-persistence) and [Data flow](/architecture/data-flow).
 
 ## See also

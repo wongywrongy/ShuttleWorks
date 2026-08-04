@@ -73,6 +73,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  // SP-CLOUD-2: the api client broadcasts this when any request 401s
+  // mid-session (expired/revoked cloud session). Re-probing maps the
+  // dead session to ``user: null`` (cloud) so AuthGuard redirects to
+  // /login on the next render; in local mode the probe simply hands
+  // back the bootstrap identity, so the event is a harmless no-op.
+  useEffect(() => {
+    const onExpired = () => void refresh();
+    window.addEventListener('sw:session-expired', onExpired);
+    return () => window.removeEventListener('sw:session-expired', onExpired);
+  }, [refresh]);
+
   const signOut = useCallback(async () => {
     try {
       await apiClient.logout();

@@ -1,13 +1,37 @@
 # ShuttleWorks Deployment Guide
-_Last updated: 2026-05-13 (post backend-merge arc)_
+_Last updated: 2026-08-03 (post SP-CLOUD-1/2)_
 
 This document covers deploying the post-merge system: a single
 scheduler stack (FastAPI + React + SQLite) on the director's
-laptop with Supabase as the cloud read-mirror + auth, and a Vercel
-TV display. The backend-merge arc (PRs 1–4) folded the prior
-tournament product into the scheduler — one stack now serves both
-meet schedules and bracket draws. The standalone tournament
-product is archived at `archive/tournament-pre-merge/`.
+laptop with Supabase as the cloud **data mirror** (mirror-only —
+Supabase Auth is retired; identity is self-hosted cookie-session
+auth, see below), and a Vercel-hosted TV display. The backend-merge
+arc (PRs 1–4) folded the prior tournament product into the
+scheduler — one stack now serves both meet schedules and bracket
+draws. The standalone tournament product is archived at
+`archive/tournament-pre-merge/`.
+
+::: warning What SP-CLOUD-1/2 changed in this guide
+- **Auth is self-hosted** (`AUTH_MODE=local|cloud`, Argon2id +
+  cookie sessions, `/auth/*` endpoints). The old Supabase Auth /
+  JWT / OAuth-provider setup is gone; the Supabase env vars feed
+  only the outbox mirror.
+- **The public TV link is a capability token** —
+  `/display?token=…`, served by the backend's unauthenticated
+  `/display/{token}/*` projection routes (minted/rotated from
+  Settings → Sharing). It polls the director's backend; it does
+  not subscribe to Supabase Realtime, and a raw `?id=` UUID is
+  not a public key.
+- **A true cloud API topology exists**:
+  `products/scheduler/docker-compose.cloud.yml` runs the API +
+  Postgres 16 + `--scale`-able solve-worker containers. See
+  `products/scheduler/backend/README.md` ("Dual-mode runtime",
+  "Auth & tenancy") for the authoritative env matrix.
+
+Sections below that describe Supabase schema/publication setup for
+the **data mirror** remain valid; anything that used to say "sign
+in with a Supabase account" now means a self-hosted account.
+:::
 
 The cloud-prep arc shipped a Fly.io / Render-deployable FastAPI;
 the architecture-adjustment arc replaced that with the local
@@ -20,33 +44,31 @@ is no longer the deployment story.
 ## Deployment overview
 
 ```
-Director's laptop                    Supabase                    Vercel
-─────────────────────                ────────                    ──────
-Tauri app                            Postgres   ←── sync ─── ┐   TV display
-  ├── FastAPI sidecar  ───── push ──→ matches                │     (public)
-  │   (uvicorn, local)              tournaments              │
-  ├── SQLite (source                 sync_queue              │
-  │   of truth)                       …                      │
-  └── React WebView                                          │
-                                     Auth         ←─ JWT ────┤
-                                                             │
-Operator browsers     ─── Realtime read ──→ matches table    │
-                       (any device, LAN or internet)         │
-                       ── Commands ──→ Director's FastAPI    │
-                                                             │
-TV browsers           ───────── Realtime read ───────────────┘
+Director's laptop                    Supabase (mirror only)
+─────────────────────                ──────────────────────
+Tauri app                            Postgres   ←── outbox sync
+  ├── FastAPI sidecar  ───── push ──→ matches, tournaments,
+  │   (uvicorn, local)                bracket_* …
+  ├── SQLite (source
+  │   of truth)
+  └── React WebView
+
+Operator browsers  ── cookie-session auth + commands ──→ Director's FastAPI
+                      (any device, LAN or tunnel)
+
+TV browsers        ── GET /display/{token}/* (capability link,
+                      unauthenticated, poll-only) ──→ Director's FastAPI
 ```
 
 There are three deployable surfaces:
 
 1. **The director's laptop** runs the Tauri app (FastAPI sidecar +
    React WebView + SQLite). This is the only place the backend
-   runs.
-2. **Supabase project** holds the cloud Postgres mirror + Auth +
-   Realtime. Schema is the arc's six application tables + two
-   audit tables (see `docs/tech-stack.md`).
-3. **Vercel** hosts the public TV display web app (read-only,
-   Realtime subscriber).
+   runs in the local-first topology.
+2. **Supabase project** holds the cloud Postgres **data mirror**
+   (populated by the outbox). It no longer provides auth.
+3. **Vercel** hosts the public TV display web app (read-only; it
+   polls the backend's `/display/{token}/*` projection routes).
 
 The Tauri sidecar is what the operator boots on tournament day. The
 Supabase project and the Vercel TV display are one-time setups per
@@ -75,10 +97,10 @@ secret-hygiene audit entry in `docs/changes/`.
 
 ### Schema migrations on Supabase — what actually needs to land
 
-The local Alembic chain on the director's machine ends at revision
-`f7a3c9b2e8d4` (the backend-merge arc's T-A bracket schema). Of
-the seven new tables the two arcs add, **five need to exist on
-Supabase**:
+The local Alembic chain has grown well past the backend-merge arc
+(the SP-CLOUD migrations add `solve_jobs`, the auth/tenancy tables,
+and `display_tokens` — all **local-only**, never mirrored). Of the
+tables the outbox touches, **five need to exist on Supabase**:
 
 | Table | Local SQLite | Supabase | Why |
 |---|---|---|---|
@@ -135,24 +157,25 @@ Optional: also add `tournaments` if you want the public TV display
 to react to tournament-level metadata changes (name renames, etc.).
 The sync service pushes to that table too.
 
-### Supabase Auth providers
+### Auth — self-hosted (Supabase Auth retired)
 
-Unchanged from the cloud-prep arc — see the previous version of this
-doc in git history (or the equivalent setup in your Supabase
-Dashboard). Briefly:
+There is nothing to configure in the Supabase Dashboard for auth.
+Identity is self-hosted (SP-CLOUD-2): Argon2id passwords, opaque
+cookie sessions in the local `auth_sessions` table, `/auth/*`
+endpoints, and a custom-header CSRF check. Two modes
+(`AUTH_MODE`, default `local`):
 
-1. **Email**: enabled by default.
-2. **Google OAuth**: flip on, paste OAuth client id / secret per
-   Supabase's guide. Authorized redirect URI:
-   `https://<PROJECT_ID>.supabase.co/auth/v1/callback`.
-3. **Site URL**: the deployed frontend domain
-   (`https://<TV-DOMAIN>.vercel.app`).
-4. **Additional Redirect URLs**: same domain + any
-   `/invite/<token>` deep links.
+- **`local`** — zero-friction: a request without a session
+  resolves to the bootstrap operator (`local@dev`); accounts are
+  optional. Right for the single-laptop tournament.
+- **`cloud`** — real accounts only; no session → 401. Startup
+  refuses without `SESSION_COOKIE_SECURE=true` and an SMTP email
+  backend (see the validator notes below).
 
-The Tauri sidecar itself doesn't need OAuth — the operators using it
-in-person on the director's laptop are already authenticated through
-the WebView's session.
+Invites and password resets ride the email seam
+(`EMAIL_BACKEND=console|smtp`): console logs the mail locally,
+SMTP delivers it in cloud. See
+`products/scheduler/backend/README.md` → "Auth & tenancy".
 
 ---
 
@@ -175,14 +198,14 @@ no Supabase replication, no Realtime broadcast, the synthetic
 local-dev user. This is the right mode for a single-laptop
 tournament where the director is also the operator.
 
-To enable cloud-mirror mode (browser operators read from Supabase
-Realtime, the outbox worker pushes match writes to Postgres), drop
-a `backend/.env` file in `products/scheduler/backend/`:
+To enable the data mirror (the outbox worker pushes writes to the
+Supabase Postgres), drop a `backend/.env` file in
+`products/scheduler/backend/` — the mirror is keyed on
+`SUPABASE_URL` being set, independent of `ENVIRONMENT`:
 
 ```bash
 cd products/scheduler
 cat > backend/.env <<EOF
-ENVIRONMENT=cloud
 SUPABASE_URL=https://<your-supabase-project>.supabase.co
 SUPABASE_ANON_KEY=<your-publishable-key>
 CORS_ORIGINS=https://<your-tv-display>.vercel.app,http://192.168.1.100
@@ -194,10 +217,14 @@ make scheduler          # → http://localhost (frontend), backend on :8000
 The Compose backend service has `env_file: - path: backend/.env`
 with `required: false`, so the stack boots cleanly with or without
 the file. Values in `.env` override the inline `environment:`
-defaults; the backend's `Settings` model picks them up at boot
-and the `_enforce_cloud_secrets` validator hard-fails the
-container if `ENVIRONMENT=cloud` is set without all the Supabase
-secrets.
+defaults; the backend's `Settings` model picks them up at boot.
+Do **not** set `ENVIRONMENT=cloud` for a mirror-only laptop
+deployment: since SP-CLOUD-2 the `_enforce_cloud_secrets`
+validator makes `ENVIRONMENT=cloud` refuse to start unless a
+Postgres `DATABASE_URL`, `AUTH_MODE=cloud`,
+`SESSION_COOKIE_SECURE=true`, and an SMTP email backend are all
+configured — it is meant for a real hosted deployment
+(`docker-compose.cloud.yml`), not the sidecar.
 
 The Compose project namespaces ports + container names; runs
 cleanly side-by-side with the tournament product.
@@ -250,11 +277,12 @@ This is a known follow-up — `npm run tauri build` will fail with
 
 ### Environment configuration
 
-The sidecar reads its config from `backend/.env`. Cloud-mode config
-(replication on):
+The sidecar reads its config from `backend/.env`. Mirror-on config
+(replication to Supabase; note `ENVIRONMENT` stays `local` — see
+the validator note above):
 
 ```
-ENVIRONMENT=cloud
+ENVIRONMENT=local
 DATABASE_URL=sqlite:///./data/local.db
 SUPABASE_URL=https://<PROJECT_ID>.supabase.co
 SUPABASE_ANON_KEY=<YOUR_PUBLISHABLE_KEY>
@@ -271,6 +299,28 @@ ENVIRONMENT=local
 DATABASE_URL=sqlite:///./data/local.db
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+```
+
+Auth knobs (both optional locally): `AUTH_MODE=local|cloud`,
+`SESSION_COOKIE_SECURE`, `EMAIL_BACKEND=console|smtp` (+ `SMTP_*`),
+`PUBLIC_APP_ORIGIN` (used in invite/reset links). Solve-job knobs
+(`EMBEDDED_WORKER`, `SOLVE_*`, `JOB_*`) are tabulated in
+`products/scheduler/backend/README.md`.
+
+### Hosted cloud topology — `docker-compose.cloud.yml`
+
+Separate from the laptop sidecar, SP-CLOUD-1 added a hosted
+topology: `products/scheduler/docker-compose.cloud.yml` runs the
+API against **Postgres 16** with the embedded worker off and
+solve-worker containers (`python -m worker`) you can
+`--scale worker=N`. Only the API container migrates the schema;
+workers wait for it. A real internet-facing deployment of that
+stack is what `ENVIRONMENT=cloud` (and its validator) is for.
+
+```bash
+cd products/scheduler
+docker compose -f docker-compose.cloud.yml up -d --build
+docker compose -f docker-compose.cloud.yml up -d --scale worker=2
 ```
 
 When `SUPABASE_URL` is blank the sync service is a no-op (the queue
@@ -308,9 +358,11 @@ red.
 
 ## Public TV display — Vercel
 
-Unchanged from the cloud-prep arc. The TV display is a read-only
-subscriber to the Supabase Realtime `matches` table; no FastAPI
-calls.
+The TV display is a read-only **poller of the backend's public
+projection routes** (`GET /display/{token}/{summary,state,match-states,bracket}`)
+— it no longer subscribes to Supabase Realtime (`supabase-js` was
+uninstalled with SP-CLOUD-2), so the director's backend must be
+reachable from the TV's network (LAN or tunnel).
 
 ```bash
 # One-time:
@@ -321,14 +373,19 @@ vercel login
 cd products/scheduler/frontend
 
 # Set env vars in the Vercel dashboard → Project → Settings → Environment Variables:
-#   VITE_API_BASE_URL=http://localhost:8000   (placeholder; TV doesn't issue writes)
-#   VITE_SUPABASE_URL=https://<PROJECT_ID>.supabase.co
-#   VITE_SUPABASE_ANON_KEY=<YOUR_PUBLISHABLE_KEY>
+#   VITE_API_BASE_URL=https://<the-director-backend's-reachable-URL>
 
 vercel --prod
 ```
 
-The TV view is reached via `https://<your-project>.vercel.app/display?id=<tournament_id>`.
+The TV view is reached via the **capability link**
+`https://<your-project>.vercel.app/display?token=<display-token>` —
+mint / copy / rotate the token from Settings → Sharing (backed by
+`GET /tournaments/{id}/display-token` and `POST …/rotate`).
+Rotating kills the old link instantly. The raw
+`/display?id=<tournament_id>` form works only against the
+viewer-gated endpoints (in-shell preview / local mode) — it is
+deliberately not a public key.
 
 ---
 
@@ -344,9 +401,11 @@ director + operator on different devices.
    commits a schedule. Verify `matches` rows appear in Supabase via
    the SQL editor (the sync worker pushes within ~5 s of commit).
 3. **Operator (browser on LAN)** opens `http://<director-ip>:8000`
-   (or the tunneled URL). Signs in with a Supabase account that has
-   operator role on the tournament. Sees the schedule via the
-   Realtime read path.
+   (or the tunneled URL). Signs in with a self-hosted account
+   (`POST /auth/login`; registered via the login page) that has
+   operator role on the tournament — accept an invite link/email
+   from Settings → Sharing to get the membership row. Sees the
+   schedule via the normal API reads.
 4. **Operator clicks "Call to court"** on a scheduled match. The
    pending badge appears immediately; within ~200 ms the badge
    clears and the match shows `called` everywhere.
@@ -360,8 +419,9 @@ director + operator on different devices.
    click — commands queue in IndexedDB. Reconnect the director:
    `useReachability` fires the queue flush, pending commands apply,
    indicator goes back to green.
-7. **Public TV display** at `https://<TV>.vercel.app/display?id=<tid>`
-   sees every status change live via Realtime.
+7. **Public TV display** at `https://<TV>.vercel.app/display?token=<display-token>`
+   sees every status change within one poll interval (~5 s for
+   match states) via the `/display/{token}/*` projection routes.
 
 If any step fails, check:
 - The director's `pip install` / `npm install` + the Tauri build
@@ -419,10 +479,10 @@ arc and are migrating to the post-arc sidecar model:
 4. **Configure Realtime publication** on `matches` (also done).
 5. **Boot the sidecar** on the director's laptop via Docker
    Compose (`make scheduler` from the repo root) with the
-   cloud-mode `.env`. The sidecar's Alembic step builds the local
-   SQLite schema from scratch up to head revision `f7a3c9b2e8d4`
-   (T-A bracket schema — the chain runs all prior migrations in
-   order so a fresh install gets all tables).
+   mirror-on `.env`. The sidecar's Alembic step builds the local
+   SQLite schema from scratch to the current head (the chain runs
+   all prior migrations in order so a fresh install gets all
+   tables).
 6. **Import the tournament state** via the Setup → Backups → Import
    flow. The local DB is now seeded; the sync worker pushes
    everything to Supabase within a minute.

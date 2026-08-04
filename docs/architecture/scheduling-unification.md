@@ -63,13 +63,14 @@ config = build_schedule_config(
 Both batch paths invoke the solver through the engine's single entry,
 `scheduler_core.schedule(request, *, options=None, candidate_pool_size=0)`:
 
-- **Meet** `POST /schedule` calls it (with the candidate pool for the
-  near-optimal collector).
+- **Meet** — the solve-job subprocess (`services/solve_child.py`, claimed off the
+  `solve_jobs` queue; SP-CLOUD-1 retired the synchronous `POST /schedule`) calls it
+  with the candidate pool for the near-optimal collector.
 - **Bracket** `TournamentDriver` already called it.
 
-The streaming meet path (`POST /schedule/stream`) drives `CPSATScheduler`
-directly instead — it needs per-solution progress callbacks, a streaming
-concern, not a second solver.
+The bracket streaming path (`POST …/bracket/schedule-next/stream`) drives
+`CPSATScheduler` directly instead — it needs per-solution progress callbacks, a
+streaming concern, not a second solver.
 
 ## Data flow
 

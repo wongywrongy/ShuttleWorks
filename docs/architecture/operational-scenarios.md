@@ -26,9 +26,9 @@ once, ahead of time; you do **not** re-run it live.
 2. **Set the venue.** In [Settings](/modules/settings): courts, schedule window, and
    the parameters that become one [`ScheduleConfig`](/architecture/unified-configuration).
 3. **Build the plan with an engine:**
-   - **Meet:** assemble the roster and match config, then solve —
-     `POST /schedule/stream` streams [SSE progress](/architecture/bracket-schedule-streaming)
-     while CP-SAT works. Review advisories and any [proposal](/modules/meet), then
+   - **Meet:** assemble the roster and match config, then solve — the solve is
+     submitted as an async job (`POST …/solve-jobs`) and polled while CP-SAT works
+     in a worker subprocess. Review advisories and any [proposal](/modules/meet), then
      commit. **The commit is [Seam A](/contracts/meet-operations):** the schedule lands
      via `tournamentStore.setSchedule` (`scheduleFinalized`) and the Operations **Plan**
      board seeds from it.

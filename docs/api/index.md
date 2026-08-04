@@ -32,21 +32,33 @@ does the same against the FastAPI service. Paths below are written without the b
 
 Routes are grouped by the [architectural module](/architecture/system-overview) that owns them.
 Every router is registered in `app/main.py` under a single auth dependency (`get_current_user`),
-**except `invites`**, which is registered without it so its public resolve endpoint stays
-unauthenticated and declares per-endpoint auth itself. The route → module rationale lives in
+with four deliberate exceptions: `invites` (its public resolve endpoint declares per-endpoint
+auth), `auth` (you must be able to log in while logged out), the **public display projection**
+(`/display/{token}/*` — the only unauthenticated data plane, resolved by a capability token),
+and `solve-jobs` (carries its own auth + per-route role deps). Workspace-scoped routes
+additionally attach the tenancy seam `require_tournament_access(min_role)` — see
+[Conventions](#conventions). The route → module rationale lives in
 [Backend structure](/architecture/backend-structure#route-ownership).
 
 ### Meet — the scheduling engine
 
-Owns `/schedule*` plus the per-workspace proposal / advisory / suggestion routes. The bare
-`/schedule*` solves are **stateless** — the full problem travels in the request body and they are
-not tournament-scoped; everything under `/tournaments/{id}/schedule/*` operates on persisted state.
+Owns the **solve-job rail** (`/tournaments/{id}/solve-jobs`), `/schedule/validate`, and the
+per-workspace proposal / advisory / suggestion routes. Since SP-CLOUD-1 the batch solve is an
+**async job**, not a request: `POST …/solve-jobs` snapshots the full solver input
+(`GenerateScheduleRequest`), enqueues it transactionally in the `solve_jobs` table, and returns
+`202` with a job DTO; the client polls the job to a terminal status (`succeeded` carries the
+`ScheduleDTO`, run-time failure and infeasibility live *inside* the job's `error`, not as
+transport errors).
 
 | Method · Path | Purpose |
 | --- | --- |
-| `POST /schedule` | solve a schedule (stateless; full problem in body) |
-| `POST /schedule/stream` | solve with SSE progress (powers the live HUD) |
-| `POST /schedule/validate` | cheap feasibility check for a drag |
+| `POST /tournaments/{id}/solve-jobs` | enqueue one solve (`202`; `Idempotency-Key` header dedupes retries) |
+| `GET /tournaments/{id}/solve-jobs` | recent jobs for the workspace |
+| `GET …/solve-jobs/{job_id}` | poll one job (`queued → running → succeeded\|failed\|infeasible\|cancelled`) |
+| `POST …/solve-jobs/{job_id}/cancel` | cancel; running solves get their subprocess killed |
+| `POST /schedule` | **410 Gone** — retired synchronous solve; points at the job rail |
+| `POST /schedule/stream` | **410 Gone** — retired SSE solve progress |
+| `POST /schedule/validate` | cheap feasibility check for a drag (still request-shaped by design) |
 | `POST /schedule/warm-restart` | full re-solve biased to keep the current schedule |
 | `POST /schedule/repair` | targeted disruption repair (withdrawal, court closure, overrun) |
 | `GET /tournaments/{id}/schedule/advisories` | computed advisories (overrun, no-show, …) |
@@ -56,6 +68,16 @@ not tournament-scoped; everything under `/tournaments/{id}/schedule/*` operates 
 | `GET …/schedule/suggestions` | the suggestions inbox |
 | `POST …/schedule/suggestions/{sid}/{apply\|dismiss}` | apply / dismiss a suggestion |
 | `POST …/schedule/director-action` | director time-axis tool → proposal |
+
+:::info Solve-job semantics
+A replayed `Idempotency-Key` returns the original job instead of starting a second solve
+(Stripe retry semantics — a unique index on the key). At most **one active job per tournament**
+is enforced by a partial unique index (`uq_solve_jobs_active`); a conflicting submit returns
+`409 SOLVE_JOB_ACTIVE` carrying the active job's id so the UI can mirror it. Job params
+(seed, `num_workers=1`, `max_deterministic_time`) are persisted at submit, and the solve runs in
+a killable child subprocess — see [Backend structure](/architecture/backend-structure) for the
+worker runtime and determinism story.
+:::
 
 ### Bracket — the draw engine
 
@@ -110,11 +132,49 @@ architectural module with no enable flag.
 | `POST …/match-states/import-bulk` | merge a `{matchId: MatchStateDTO}` body |
 | `POST /tournaments/{id}/commands` | apply / reject an idempotent operator command |
 
-### Display — no routes
+### Display — the public capability link
 
-Display owns **no backend route**. Its surfaces are poll-only: they read existing endpoints
-(`GET …/state`, `GET …/match-states`, `GET …/bracket`) owned by other modules and react to live
-match-state changes via an independent poll (see `platform/contracts/moduleContract.ts`).
+Display's board is still poll-only, but since SP-CLOUD-2 the public link is a **capability
+token**, not a raw workspace id (`api/display.py`). The `/display/{token}/*` routes are the only
+unauthenticated data plane in the app, and they serve a *projection* — exactly the fields the
+board renders, never the raw state blob (which carries operator material such as the
+schedule-history revert pool). Every public route is `GET`; the token grants no mutation
+anywhere, and an invalid or rotated token answers the same uniform 404 as a nonexistent
+workspace.
+
+| Method · Path | Purpose |
+| --- | --- |
+| `GET /tournaments/{id}/display-token` | (owner) the workspace's display link, minted on first ask |
+| `POST /tournaments/{id}/display-token/rotate` | (owner) revoke-by-rotation — the old link dies immediately |
+| `GET /display/{token}/summary` | public: workspace kind + name |
+| `GET /display/{token}/state` | public: meet board projection (config/groups/players/matches/schedule + standings) |
+| `GET /display/{token}/match-states` | public: live match states |
+| `GET /display/{token}/bracket` | public: serialized bracket session (same projection DTO as `GET …/bracket`, short-TTL cached) |
+
+Inside the authenticated shell (and in local mode) the board can still read the owner-side
+endpoints directly via `?id=`; the token URL (`/display?token=…`) is what spectators get.
+
+### Auth — self-hosted accounts & sessions
+
+Self-hosted cookie-session auth (`api/auth.py`; Supabase Auth is retired). Passwords are
+Argon2id; the policy is NIST 800-63B length-bounds-only plus a small blocklist. Sessions are
+opaque 256-bit tokens in an `httpOnly; SameSite=Lax` cookie — only their SHA-256 lands in
+`auth_sessions`. Credential endpoints are throttled per-account and per-IP
+(`429 AUTH_THROTTLED` + `retryAfterSeconds`).
+
+| Method · Path | Purpose |
+| --- | --- |
+| `POST /auth/register` | create an account (`201`, sets the session cookie) |
+| `POST /auth/login` | sign in (uniform `401 AUTH_INVALID_CREDENTIALS` — never leaks which part failed) |
+| `POST /auth/logout` | revoke the session + clear the cookie |
+| `GET /auth/me` | current identity (flags `isBootstrap` and echoes `authMode`) |
+| `POST /auth/change-password` | verify current password; revokes every *other* session |
+| `POST /auth/request-password-reset` | always `202` (no account-existence oracle); token rides the email seam |
+| `POST /auth/reset-password` | consume a reset token |
+
+In `AUTH_MODE=local` (the default) none of this is required: a request with no session resolves
+to the zero-UUID bootstrap operator (`local@dev`), preserving the zero-friction offline flow.
+In `AUTH_MODE=cloud` a request without a live session is `401`.
 
 ### Control plane — workspace CRUD + collaboration
 
@@ -130,7 +190,7 @@ and Display (preview source).
 | `GET …/state/backups`, `POST …/state/backup`, `POST …/state/restore/{file}` | snapshots |
 | `POST /tournaments/{id}/plan-finalized` | toggle the persisted `planFinalized` flag (Run surface) |
 | `GET /tournaments/{id}/modules`, `PATCH …/modules/{moduleId}` | the `workspace_modules` control plane |
-| `POST · GET /tournaments/{id}/invites`, `GET …/members` | create / list invites (owner-gated) + list members |
+| `POST · GET /tournaments/{id}/invites`, `GET …/members` | create / list invites (owner-gated) + list members. `POST` with an `email` makes an **email invite**: delivered via the email seam (`services/email.py` — console backend locally, SMTP in cloud) with a bounded lifetime (`invite_ttl_days`); without `email` it stays a copy-the-URL link invite with no expiry |
 | `GET /invites/{token}` (public) · `POST …/accept` (auth) · `DELETE …/{token}` (owner, revoke) | resolve / accept / revoke an invite link |
 
 :::info The schedule lock on `PUT …/state`
@@ -161,8 +221,9 @@ are read by a module other than their owner appear here.
 | `GET · PUT …/state` (**Control plane**, shared) | **Meet**, **Display** | Meet reads `/state` as a solve input; Display draws the static layout from it. Shared, **not** owned by any engine. |
 
 Everything else is called only by its owning module (Bracket consumes nothing
-cross-module; `consumedEndpoints = []`). Display owns no route and only consumes,
-which is why it appears as a consumer everywhere and an owner nowhere.
+cross-module; `consumedEndpoints = []`). Display now *owns* the public
+`/display/{token}/*` projection routes (its contract's `ownedEndpoints`) but still
+consumes the owner-side reads above when running inside the authenticated shell.
 
 ### Health probes — unauthenticated
 
@@ -198,8 +259,9 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
 - **Error codes** — `HTTPException`s built via `error_codes.http_error(...)` carry a structured
   `{code, message}` body. `ErrorCode` (in `app/error_codes.py`) is the authoritative list the
   frontend branches on (e.g. `MODULE_DEPENDENCY_UNMET`, `MODULE_HAS_DATA`,
-  `SCHEDULE_VERSION_CONFLICT`, `BACKUP_NOT_FOUND`, and the schedule-lock codes `CONFIG_LOCKED` /
-  `DRAW_STARTED` / `ROSTER_LOCKED`). `http_error(status, code, message, extra=)` merges `extra`
+  `SCHEDULE_VERSION_CONFLICT`, `BACKUP_NOT_FOUND`, the schedule-lock codes `CONFIG_LOCKED` /
+  `DRAW_STARTED` / `ROSTER_LOCKED`, the solve-job codes `SOLVE_JOB_NOT_FOUND` /
+  `SOLVE_JOB_ACTIVE` / `SOLVE_ENDPOINT_GONE`, and the `AUTH_*` family). `http_error(status, code, message, extra=)` merges `extra`
   keys flat into the detail payload (e.g. `CONFIG_LOCKED`'s `fields` / `schedules`), so a client
   can branch on structured context, not just the message. Legacy bare-string `detail` still works —
   the axios interceptor falls back to treating `detail` as the message.
@@ -211,13 +273,26 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
     `ConflictError` → `409` with `error: "stale_version"`. An illegal state-machine transition is
     `409` with `error: "conflict"`. See
     [Data flow](/architecture/data-flow#the-command-pipeline-write-path).
-- **Auth** — every router requires a Supabase JWT (`get_current_user`) **except** the public invite
-  resolve (`GET /invites/{token}`) and the `/health` probes. Display has no routes; in cloud mode
-  its poll-only reads can be served through Supabase.
-- **SSE** — `POST /schedule/stream` and `POST /bracket/schedule-next/stream` return
-  `text/event-stream`. Each `data:` line is one JSON event:
+- **Auth** — identity is the self-hosted session cookie resolved by `get_current_user`
+  (`app/dependencies.py`). In `AUTH_MODE=local` a request without a session becomes the bootstrap
+  operator; in `AUTH_MODE=cloud` it is `401`. Unauthenticated by design: `/auth/*` credential
+  endpoints, the public invite resolve (`GET /invites/{token}`), the public display projection
+  (`GET /display/{token}/*`), and the `/health` probes.
+- **CSRF** — state-changing requests that carry the session cookie must also send
+  `X-ShuttleWorks-CSRF: 1` (custom-header check in `csrf_middleware`; missing →
+  `403 AUTH_CSRF_REQUIRED`). The frontend sends it on every request; cookie-less local bootstrap
+  traffic is exempt by construction.
+- **Tenancy** — every workspace-scoped route takes the tenant id from a path param named exactly
+  `tournament_id` and attaches `Depends(require_tournament_access("viewer|operator|owner"))`.
+  Non-members and nonexistent ids get the **uniform 404** (`TOURNAMENT_NOT_FOUND`) — existence is
+  information; a real member with an insufficient role gets `403`. The cross-tenant isolation
+  suite (`tests/test_tenant_isolation.py`) derives every `{tournament_id}` operation from the
+  OpenAPI schema, so an endpoint that forgets the dependency fails CI automatically.
+- **SSE** — only `POST /bracket/schedule-next/stream` still returns `text/event-stream`
+  (the meet solve's SSE progress went away with the `410`'d `/schedule/stream`). Each `data:`
+  line is one JSON event:
   `model_built` → `phase` (`presolve`→`search`→`proving`) → `progress` (per intermediate solution)
-  → `complete` → `done` (always last; the terminator), or `error`. The frontend opens these with
+  → `complete` → `done` (always last; the terminator), or `error`. The frontend opens it with
   `EventSource`, not axios.
 
 ## See also

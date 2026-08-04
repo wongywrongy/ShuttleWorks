@@ -90,4 +90,17 @@ describe('AuthProvider', () => {
     expect(vi.mocked(apiClient.getMe).mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(result.current.user).toEqual(bootstrapUser);
   });
+
+  it('sw:session-expired re-probes and nulls the session (cloud expiry)', async () => {
+    vi.mocked(apiClient.getMe).mockResolvedValue(accountUser as never);
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.session).not.toBeNull());
+    // Mid-session, some request 401s → the api client broadcasts this
+    // event; the provider must re-probe and drop the dead session.
+    vi.mocked(apiClient.getMe).mockResolvedValue(null as never);
+    act(() => {
+      window.dispatchEvent(new CustomEvent('sw:session-expired'));
+    });
+    await waitFor(() => expect(result.current.session).toBeNull());
+  });
 });

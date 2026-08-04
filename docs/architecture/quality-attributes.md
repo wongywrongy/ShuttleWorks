@@ -45,9 +45,13 @@ also not yet scaffolded; Docker Compose is the production shape today.
 **Stance:** cloud reads are membership-gated; only the backend writes; secrets never
 touch the repo.
 
-- **Auth.** Every router requires a Supabase JWT (`get_current_user`) **except** the
-  public invite resolve (`GET /invites/{token}`) and the `/health` probes, which
-  declare their own access. See [API reference → Conventions](/api/#conventions).
+- **Auth.** Identity is self-hosted cookie-session auth (`get_current_user`;
+  SP-CLOUD-2 retired Supabase Auth) — every router requires it **except** the
+  `/auth/*` credential endpoints, the public invite resolve (`GET /invites/{token}`),
+  the capability-token display projection (`GET /display/{token}/*`), and the
+  `/health` probes, which declare their own access. Workspace routes additionally run
+  behind `require_tournament_access`, which answers a uniform 404 for non-members.
+  See [API reference → Conventions](/api/#conventions).
 - **Row-level security.** On Supabase, every synced table has an RLS `_select_member`
   policy (reads gated by tournament membership) and **no INSERT/UPDATE/DELETE
   policy** — only the backend's Postgres role writes, via the outbox. A leaked

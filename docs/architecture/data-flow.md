@@ -125,6 +125,12 @@ The director's tournament can complete cleanly even if Supabase is unreachable f
 the queue accumulates and drains when connectivity returns. See
 [ADR 0003](/decisions/0003-sqlite-as-primary-persistence).
 
+Since SP-CLOUD-2 the Supabase role is **mirror-only**: its env vars feed only this outbox path.
+Identity and sessions are self-hosted (see
+[Backend structure → Auth & tenancy](/architecture/backend-structure#auth-tenancy-sp-cloud-2)),
+and the public spectator read path is the capability-token projection (`/display/{token}/*`),
+not a Supabase channel.
+
 ## The persistence flow (read/hydrate)
 
 On the frontend, **hooks are the seam** — components never call the API directly:
@@ -133,11 +139,20 @@ On the frontend, **hooks are the seam** — components never call the API direct
 mount → useTournamentState() hydrates the tournament store from GET /tournaments/{id}/state
       → user mutates the store via actions
       → useTournamentState() debounces (500 ms) a PUT back to /state
-      → schedule generation: useSchedule() → /schedule/stream (SSE) → store.setSchedule  (seam A)
+      → schedule generation: useSchedule() → POST /tournaments/{id}/solve-jobs (202)
+        → poll the job (~0.5–2 s backoff) to a terminal status → store.setSchedule  (seam A)
       → live ops: useLiveOperations()/useLiveTracking() patch match states,
         each transition flushed via the command queue / a `…/match-states/{id}` PUT immediately
       → display: independent poll of /state + /match-states + /bracket                    (seam D)
+        (public spectators poll the token projection: /display/{token}/{state,match-states,bracket})
 ```
+
+The solve is asynchronous end-to-end (SP-CLOUD-1): `apiClient.runSolveJob` submits with a
+client-minted `Idempotency-Key`, polls `GET …/solve-jobs/{job_id}` with backoff, and a reload
+mid-solve **re-adopts** the active job (`listSolveJobs` → `pollSolveJob`) instead of losing it;
+Cancel aborts the poll *and* requests a server-side cancel that kills the solve subprocess. The
+retired `/schedule/stream` SSE path is gone — progress is honest-but-coarse job polling, no CP-SAT
+ever runs inside an HTTP request.
 
 See [State management](/architecture/state-management) for the store split and
 [Backend structure](/architecture/backend-structure) for the route side.

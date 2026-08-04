@@ -178,6 +178,14 @@ class Settings(BaseSettings):
             missing.append("AUTH_MODE=cloud (real accounts required)")
         if not self.session_cookie_secure:
             missing.append("SESSION_COOKIE_SECURE=true (HTTPS-only cookies)")
+        # The console email backend writes full messages — including
+        # raw reset/invite tokens — into the log stream. Fine locally;
+        # in a real cloud deployment that is credential leakage plus
+        # silent non-delivery, so refuse to start without SMTP.
+        if self.email_backend != "smtp":
+            missing.append("EMAIL_BACKEND=smtp (console would log live tokens)")
+        elif not self.smtp_host:
+            missing.append("SMTP_HOST")
         if missing:
             raise ValueError(
                 "ENVIRONMENT=cloud requires: "

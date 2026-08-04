@@ -80,7 +80,9 @@ clean slate, which is deliberate. It holds:
   These are stamped on mount by `useTournamentState` and `useTournamentKind` / `BracketTab`, and let
   module-level helpers and the shell chrome reason about the active tournament without React Router params.
 - **Solver HUD + logs** — `solverHud`, `solverLogs`, and the generation lifecycle
-  (`isGenerating`, `generationProgress`, `generationError`, `scheduleStats`).
+  (`isGenerating`, `generationProgress`, `generationError`, `scheduleStats`). Since the
+  SP-CLOUD-1 async rail, `SolverPhase` gains a `'queued'` value (the solve job is waiting for a
+  worker) ahead of the solve phases `presolve | search | proving`.
 - **Drag-validate** — `pendingPin`, `lastValidation`.
 - **Persist status** — `persistStatus` (`idle | dirty | saving | error`), `lastSavedAt`, `lastSaveError`.
 - **Toasts** — `toasts` (`pushToast` returns the id so callers can dismiss later).
@@ -121,6 +123,20 @@ hydrates the tournament store on mount and debounces the PUT back; `useLiveTrack
 `useLiveOperations` round-trip the match-state store against `/match-states` immediately on every
 transition. Read-only composition hooks (e.g. `useTrafficLights`, …) live here
 too when they do non-trivial memoisation.
+
+Two hooks changed shape with the SP-CLOUD programs:
+
+- **`useSchedule` drives the async solve rail.** Generate / pin-and-resolve / reoptimize all go
+  through one submit-and-poll driver (`apiClient.runSolveJob`): `POST …/solve-jobs` with a
+  client-minted `Idempotency-Key`, then poll to a terminal status (~0.5–2 s backoff — honest,
+  coarse progress; the SSE stream client is gone). On mount it **adopts an orphaned active job**
+  (`listSolveJobs` → `pollSolveJob`), so a solve survives a reload; the abort controller lives at
+  module scope so the HUD's Cancel works from its own hook instance and also requests a
+  server-side cancel. `infeasible` / `failed` / `cancelled` render through the existing store
+  error states.
+- **`useLiveTracking` has a token mode** (SP-CLOUD-2): with no tournament id but a `?token=`,
+  match-state *reads* come from the unauthenticated `/display/{token}/match-states` projection
+  and every mutator is inert — the spectator board never writes.
 
 ### The write gate
 

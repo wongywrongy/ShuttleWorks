@@ -1,32 +1,43 @@
 # Display
 
 **Tier-1, user-enableable module.** Display is the read-only public output: the venue TV / projector
-view of live matches, the draw, and results for whichever engine is enabled. It writes nothing, owns
-no backend route, and reaches every screen by polling. This page is for engineers who need to know
-exactly what Display reads, what it owns, and the seam that guarantees it can never become a writer.
+view of live matches, the draw, and results for whichever engine is enabled. It writes nothing and
+reaches every screen by polling; since SP-CLOUD-2 its public link is a **capability token**, and
+the token-resolved `/display/{token}/*` projection routes are the only backend routes it owns.
+This page is for engineers who need to know exactly what Display reads, what it owns, and the seam
+that guarantees it can never become a writer.
 
 ## What it does
 
-- Renders the standalone public surface at **`/display?id=<tournament-id>`** (mounted *outside*
-  `AppShell`, so it needs no auth and no operator UI open) and the in-workspace **Preview** (`tv`)
-  surface. Both render the same `PublicDisplayPage`.
-- `PublicDisplayPage` is a **kind-router**: `useDisplayKind` reads the workspace `kind` (via
-  `getTournament`) and renders `MeetDisplayPage` for meet workspaces or `bracketDisplay/BracketDisplayPage`
-  for bracket workspaces. It defaults to the meet display while the kind is loading, so existing meet
-  workspaces are unchanged.
+- Renders the standalone public surface at **`/display?token=<capability-token>`** (mounted
+  *outside* `AppShell` — the token, not a session, is the credential) and the in-workspace
+  **Preview** (`tv`) surface. Both render the same `PublicDisplayPage`. The raw
+  `/display?id=<tournament-id>` form still works for the in-shell preview and local mode, but it
+  hits the viewer-gated owner-side endpoints — a raw workspace UUID is deliberately **not** a
+  public key.
+- The token is per-workspace (`display_tokens` table, one row per tournament), minted on first
+  ask at `GET /tournaments/{id}/display-token` and revoked by rotation
+  (`POST …/display-token/rotate` — the old link dies the moment it returns). The Settings →
+  Sharing tab surfaces mint/copy/rotate.
+- `PublicDisplayPage` is a **kind-router**: `useDisplayKind` reads the workspace `kind` — from the
+  unauthenticated `/display/{token}/summary` projection in token mode, or `getTournament` with
+  `?id=` — and renders `MeetDisplayPage` for meet workspaces or `bracketDisplay/BracketDisplayPage`
+  for bracket workspaces. It defaults to the meet display while the kind is loading, so existing
+  meet workspaces are unchanged.
 - The meet display offers three director-selectable views via `?view=`: **`courts`** (default —
   current / called match per court), **`schedule`** (upcoming matches), **`standings`** (school-vs-school
   leaderboard). The bracket display offers **`live`** (default), **`draw`** (the read-only tree, per
   `?event=`), and **`results`** (winners / champion per event).
 - Provides a **Configuration** surface (`display-config`) so the operator can set up what the TV shows;
   the in-shell `DisplayProduct` exposes a "Configure display" shortcut (to `setup?section=display`) and
-  an "Open fullscreen" affordance that opens the standalone `/display?id=…` window.
+  an "Open fullscreen" affordance that opens the standalone display window.
 
-:::warning Query parameter is `?id=`, not `?tournament_id=`
-The standalone route resolves the tournament from `searchParams.get('id')` (`useDisplaySync`,
-`useDisplayKind`, `useBracketDisplaySync`, and the shared `useLiveTracking` poll all read `?id=`).
-With no `id`, every server call no-ops and the page shows a "Missing `?id=`" message rather than
-crashing.
+:::warning Two query parameters: `?token=` (public) vs `?id=` (in-shell/local)
+The standalone route resolves its data source from the URL: with `?token=`, the polling hooks
+(`useDisplaySync`, `useDisplayKind`, `useBracketDisplaySync`, and the shared `useLiveTracking`
+poll) switch to the unauthenticated `/display/{token}/*` projection routes and every mutator is
+inert; with `?id=` they call the viewer-gated owner-side endpoints. With neither, every server
+call no-ops and the page shows a "missing parameter" message rather than crashing.
 :::
 
 ## What it owns
@@ -34,8 +45,8 @@ crashing.
 | Kind | Owned |
 | --- | --- |
 | **Nav surfaces** | Preview (`tv`) · Configuration (`display-config`) — both declared in `displayContract.ownedSegments` and rendered by the workspace shell |
-| **Backend routes** | **none** — `displayContract.ownedEndpoints === []`; Display is poll-only and writes nothing |
-| **`apiClient` methods** | none owned; it *consumes* `getTournamentState`, `getMatchStates`, `getBracket` (`displayContract.consumedEndpoints`) |
+| **Backend routes** | the public projection: `GET /display/{token}/{summary,state,match-states,bracket}` (`api/display.py`) — every route `GET`, resolved by capability token only, serving a strict field allowlist (the meet projection omits operator material like `scheduleHistory`); plus the owner-side `GET·POST /tournaments/{id}/display-token(/rotate)` |
+| **`apiClient` methods** | owned: `getDisplaySummary`, `getDisplayState`, `getDisplayMatchStates`, `getDisplayBracket` (`displayContract.ownedEndpoints`); it *consumes* `getTournamentState`, `getMatchStates`, `getBracket` (`displayContract.consumedEndpoints`) |
 | **Frontend code** | `products/display/` — `DisplayProduct.tsx`, `PublicDisplayPage.tsx` (the kind-router), `MeetDisplayPage.tsx`, `bracketDisplay/`, the `publicDisplay/` view components + `useDisplaySync`, and the TV presets (`publicDisplay/displayPresets.ts`) |
 
 The single source of truth for these claims is `platform/contracts/moduleContract.ts` (`displayContract`),
@@ -50,9 +61,9 @@ subscribes to another module's store as a push source:
 
 | DTO | Read via | Cadence | Owner |
 | --- | --- | --- | --- |
-| **`TournamentStateDTO`** | `getTournamentState` (`/state`) in `useDisplaySync` | ~10 s | Control plane (shared) |
-| **`MatchStateDTO`** | `getMatchStates` (`/match-states`) in `useLiveTracking` | ~5 s | **Operations** |
-| **`BracketTournamentDTO`** | `getBracket` (`/bracket`) in `useBracketDisplaySync` | ~10 s | **Bracket** |
+| **`TournamentStateDTO`** | `getTournamentState` (`/state`), or `getDisplayState` in token mode, in `useDisplaySync` | ~10 s | Control plane (shared) |
+| **`MatchStateDTO`** | `getMatchStates` (`/match-states`), or `getDisplayMatchStates` in token mode, in `useLiveTracking` | ~5 s | **Operations** |
+| **`BracketTournamentDTO`** | `getBracket` (`/bracket`), or `getDisplayBracket` in token mode, in `useBracketDisplaySync` | ~10 s | **Bracket** |
 
 The `MatchStateDTO` poll is the **[Operations → Display contract](/contracts/operations-display)** —
 **Seam D**, the `matchStateChanged` edge. The operator action that writes a `match_states` row *is*
@@ -65,9 +76,11 @@ that edge; Display reacts to it by re-fetching, not by being pushed to. The matc
 
 Display's read-only guarantee is structural, not a convention:
 
-- **No backend route, no emitted edge.** `ownedEndpoints === []`, `produces === []`, `emits === []`.
-  The standalone page mounts outside `AppShell`, so the operator hydrators and command pipeline are
-  not even in scope; the page runs only its own polling loops.
+- **No write path, no emitted edge.** `produces === []`, `emits === []`, and every route Display
+  owns is a `GET` — the capability token grants no mutation anywhere (a property the isolation
+  tests pin). The standalone page mounts outside `AppShell`, so the operator hydrators and command
+  pipeline are not even in scope; the page runs only its own polling loops, and in token mode
+  every store mutator is inert.
 - **Its own poll, not a store subscription.** `useDisplaySync` (tournament state) and
   `useBracketDisplaySync` (bracket) re-fetch from the API on a timer; they hydrate React/Zustand state
   but **never call a mutating action and never POST**. The header comments are explicit: *"Writes are
@@ -121,9 +134,10 @@ preset-driven, not theme-locked.
 
 ## Known architectural debt
 
-- **No dedicated backend module.** Display owns no route — it composes existing read endpoints
-  (`/state`, `/match-states`, `/bracket`). Configuration rides on the shared `TournamentConfig` blob;
-  a workspace-scoped display-config persistence is a possible future.
+- **Thin backend surface.** Display's routes are pure projections of data other modules own —
+  `/display/{token}/state` allowlists fields from the shared blob, `…/bracket` re-serves the
+  bracket cache. Configuration rides on the shared `TournamentConfig` blob; a workspace-scoped
+  display-config persistence is a possible future.
 - **Triple independent polls, no push.** Tournament state (~10 s), match state (~5 s), and bracket
   (~10 s) each run on their own timer. This is simple and robust but makes freshness poll-bounded:
   the `matchStateChanged` seam is named without a push transport.

@@ -1,9 +1,14 @@
 # Backend structure
 
-A FastAPI app that fronts the CP-SAT solver. The solver path is **stateless per request** (every
-`POST /schedule` carries the full problem in its body). Workspace and tournament state persist in
-**SQLite via SQLAlchemy 2.0** behind `repositories/local.py` (`LocalRepository`), with Alembic
+A FastAPI app that fronts the CP-SAT solver. Since SP-CLOUD-1 the meet batch solve is a **job,
+not a request**: `POST /tournaments/{id}/solve-jobs` snapshots the full problem into the
+`solve_jobs` queue table, a worker executes it in a killable child subprocess, and the client
+polls the job to a terminal status (the legacy synchronous `POST /schedule` answers `410 Gone`).
+Workspace and tournament state persist in **SQLite via SQLAlchemy 2.0** behind
+`repositories/local.py` (`LocalRepository`) — Postgres 16 in cloud mode — with Alembic
 migrations; the Supabase mirror is populated asynchronously by the outbox `sync_service`.
+Identity is self-hosted cookie-session auth (SP-CLOUD-2 — Supabase Auth is retired), and every
+workspace route runs behind the tenancy seam described below.
 
 ## Layout
 
@@ -22,7 +27,9 @@ backend/
 │   ├── local.py           LocalRepository + per-entity sub-repos
 │   └── base.py
 ├── alembic/               SQLite + Postgres migrations
-└── services/              match_state, sync_service (outbox), bracket/, suggestions_worker, csv_importer
+├── services/              auth, email, match_state, sync_service (outbox), bracket/, suggestions_worker,
+│                          csv_importer, solve_jobs / solve_worker / solve_runner / solve_child (the job rail)
+└── worker.py              standalone worker entrypoint (`python -m worker`, cloud mode)
 ```
 
 The solver engine itself lives under `scheduler_core/` and is installed as a regular package, so
@@ -35,24 +42,66 @@ Routes are grouped by the **architectural module** that owns them. The full endp
 
 | Route family | Owner | Notes |
 | --- | --- | --- |
-| `/schedule`, `/schedule/stream`, `/schedule/validate`, `/schedule/warm-restart` | **Meet** | stateless solver endpoints (no tournament id) |
+| `/tournaments/{id}/solve-jobs*` | **Meet** | the async solve rail (submit / poll / cancel); `POST /schedule` + `/schedule/stream` are `410 Gone` |
+| `/schedule/validate`, `/schedule/warm-restart`, `/schedule/repair` | **Meet** | request-shaped solver utilities (drag check, warm restart, repair) |
 | `/tournaments/{id}/schedule/{advisories,proposals/*,suggestions/*,director-action}` | **Meet** | the live-planning pipeline |
 | `/tournaments/{id}/bracket*` | **Bracket** | draws, schedule-next, results, match-action, import/export |
 | `/tournaments/{id}/match-states*` | **Operations** | live match status + optimistic-concurrency (`ETag` / `If-Match`) |
 | `/tournaments/{id}/commands` | **Operations** | idempotent operator command queue |
+| `/display/{token}/*`, `/tournaments/{id}/display-token*` | **Display** | public capability-token projection + owner mint/rotate |
 | `/tournaments`, `/tournaments/{id}`, `…/state`, `…/state/backups`, `…/members`, `…/invites` | **Control plane** | workspace CRUD + shared state + collaboration |
 | `/tournaments/{id}/modules`, `…/modules/{moduleId}` | **Control plane** | the `workspace_modules` API |
 | `/invites/*` | **Control plane** | public + authenticated invite endpoints |
+| `/auth/*` | **Control plane** | self-hosted accounts & cookie sessions (`api/auth.py`) |
 
-Every router is registered in `app/main.py` with an auth dependency, **except** `invites`, which is
-registered without a router-level auth dep so the public `GET /invites/{token}` lookup works
-(per-endpoint auth is declared inside that router).
+Every router is registered in `app/main.py` with an auth dependency, **except** `invites`
+(its public `GET /invites/{token}` lookup declares per-endpoint auth), `auth` (login while
+logged out), the public display projection router, and `solve-jobs` (carries its own auth +
+per-route role deps).
+
+### Auth & tenancy (SP-CLOUD-2)
+
+`get_current_user` (`app/dependencies.py`) is the single identity seam: it resolves the opaque
+session cookie against `auth_sessions`; with no session, `AUTH_MODE=local` (the default) falls
+back to the zero-UUID **bootstrap operator** (`local@dev`, ensured at startup), while
+`AUTH_MODE=cloud` answers `401`. Passwords are Argon2id, policy is NIST length-bounds-only, and
+state-changing cookie-authenticated requests must carry `X-ShuttleWorks-CSRF: 1` (middleware).
+
+Tenancy: **orgs own workspaces** (`tournaments.org_id`); every user gets a personal org
+(`services/auth.ensure_personal_org`), and per-workspace membership stays in
+`tournament_members`. `require_tournament_access(min_role)` is the enforcement seam — it binds
+to the `tournament_id` path param, answers a **uniform 404** (`TOURNAMENT_NOT_FOUND`) for
+non-members and nonexistent ids, and `403` only for real members with an insufficient role. It
+has no bypass: local mode records real member rows, so the same code path runs everywhere. The
+self-maintaining isolation suite (`tests/test_tenant_isolation.py`) derives every
+`{tournament_id}` operation from the OpenAPI schema, so a new endpoint that forgets the
+dependency fails CI. Full mechanics: `backend/README.md` § "Auth & tenancy".
+
+### The solve-job rail (SP-CLOUD-1)
+
+One codebase, two process topologies, entirely env-driven: locally an **embedded worker**
+thread runs inside the API process (`EMBEDDED_WORKER=true`); in cloud mode `python -m worker`
+containers scale independently against Postgres (`docker-compose.cloud.yml`). The queue rides
+the primary database (`solve_jobs` table; `FOR UPDATE SKIP LOCKED` claims on Postgres, guarded
+`UPDATE` on SQLite) — no broker, which buys *transactional enqueue* plus one thing to back up.
+Two dedup layers: an `Idempotency-Key` unique index and a partial unique index enforcing at
+most one active job per `(tournament, type)`. The solve itself runs in a **child subprocess**
+(`services/solve_child.py`) because CP-SAT cannot be preempted in-process — a kill is the only
+reliable cancel; the child also takes the memory cap and the `PYTHONHASHSEED=0` pin.
+Determinism is a product guarantee (same input + params ⇒ same schedule on any host): fixed
+seed, one search worker, `max_deterministic_time` as the binding stop criterion, and an exact
+`ortools` pin, gated end-to-end by `tests/test_solve_job_determinism.py`. The full env matrix
+and rationale live in `backend/README.md` § "Dual-mode runtime".
 
 ### Request lifecycle
 
 ```
-client → request_id_middleware → router → handler → schemas validation
-       → scheduler_core engine (CP-SAT) → ScheduleResult → schemas response
+client → request_id_middleware → csrf_middleware → router → get_current_user
+       → require_tournament_access → handler → schemas validation → response
+
+batch solve (async):
+submit → solve_jobs row (queued) → worker claims → solve_child subprocess
+       → scheduler_core engine (CP-SAT) → job.result (ScheduleDTO) ← client polls
 ```
 
 Every request gets an `X-Request-ID` (honouring an inbound header, else a fresh uuid4) that
@@ -67,7 +116,7 @@ from `tournaments`) and many use composite primary keys.
 
 | Table | Primary key | Owner / purpose |
 | --- | --- | --- |
-| `tournaments` | `id` (UUID) | the **workspace** row: `kind`, `status`, `tournament_date`, `data` JSON blob, `schema_version` |
+| `tournaments` | `id` (UUID) | the **workspace** row: `kind`, `status`, `tournament_date`, `data` JSON blob, `schema_version`, `org_id` (SP-CLOUD-2 — the owning org) |
 | `workspace_modules` | `(tournament_id, module_id)` ¹ | per-workspace module status + config (control plane) |
 | `matches` | `(tournament_id, id)` | the meet match rows: `court_id`, `time_slot`, `status`, `version` |
 | `match_states` | `(tournament_id, match_id)` | **Operations**: live status, timestamps, score |
@@ -78,8 +127,14 @@ from `tournaments`) and many use composite primary keys.
 | `bracket_matches` | `(tournament_id, bracket_event_id, id)` | **Bracket**: `round_index`, `match_index`, `kind`, slots, `version` |
 | `bracket_results` | `(tournament_id, bracket_event_id, bracket_match_id)` | **Bracket**: `winner_side`, `score`, `walkover` |
 | `tournament_backups` | `id` (UUID) | snapshots of `tournaments.data` |
-| `tournament_members` | `(tournament_id, user_id)` | control plane: `role`, `joined_at` |
-| `invite_links` | `id` (UUID) | control plane: `role`, `expires_at`, `revoked_at` |
+| `tournament_members` | `(tournament_id, user_id)` | control plane: `role`, `joined_at` (`user_id` is an FK to `users` since the SP-CLOUD-2 backfill) |
+| `invite_links` | `id` (UUID) | control plane: `role`, `email` (email invites), `expires_at`, `revoked_at` |
+| `solve_jobs` | `id` (UUID) | **Meet**: the async solve queue — `type`, `status`, `params` + `input_snapshot` captured at submit, `result` / `error`; unique `Idempotency-Key` index + `uq_solve_jobs_active` partial unique index (one active job per tournament/type) |
+| `users` | `id` (UUID) | auth: `email` (case-insensitive unique), nullable Argon2id `password_hash`, reset-token hash |
+| `auth_sessions` | `id` (UUID) | auth: SHA-256 `token_hash` of the session cookie, `expires_at`, `revoked_at`, rolling `last_seen_at` |
+| `auth_throttle` | `key` (string) | auth: per-account / per-IP credential backoff counters (DB-backed, no Redis) |
+| `orgs` / `org_members` | `id` · `(org_id, user_id)` | tenancy: orgs own workspaces; every user gets a personal org |
+| `display_tokens` | `tournament_id` | **Display**: the public capability token (stored raw; revocation = rotation) |
 
 ¹ `workspace_modules` has a surrogate autoincrement `id` PK with a uniqueness constraint on
 `(tournament_id, module_id)`.
@@ -107,7 +162,10 @@ than touching the session directly.
 
 Alembic migrations live in `backend/alembic/` and cover both SQLite and Postgres. The app runs
 `alembic upgrade` on startup (in the FastAPI lifespan), so a fresh database is migrated to head
-automatically; `BACKEND.md` records the head id (`j3e7f9a1b5c8` as of 2026-06). The database URL is
+automatically. In cloud mode only the **API** container migrates; standalone workers **wait**
+for the schema instead of racing it. The SP-CLOUD-2 tenancy migration is a **lossless
+backfill**: existing users get personal orgs, existing workspaces get `org_id`, and
+`tournament_members.user_id` gains its FK to `users` without dropping rows. The database URL is
 `settings.database_url`, read in `database/session.py`.
 
 ## Signals computation
@@ -124,8 +182,12 @@ counts (no N+1). This is the most important cross-cutting backend feature and ha
    `products/scheduler/` to refresh `frontend/src/api/dto.generated.ts` from the OpenAPI schema.
 2. Create the handler under `api/<feature>.py` with `router = APIRouter(prefix=…, tags=[…])`.
 3. Register it in `app/main.py` via `app.include_router(...)`.
-4. Use `error_codes.http_error(...)` for any `HTTPException`.
-5. Add a method on `frontend/src/api/client.ts` and call it from the relevant feature hook.
+4. **Workspace-scoped?** Take the tenant id from a path param named exactly `tournament_id` and
+   attach `Depends(require_tournament_access("viewer|operator|owner"))` — otherwise the
+   OpenAPI-driven isolation suite (`tests/test_tenant_isolation.py`) fails CI. See
+   [How to add an API endpoint](/how-to/add-an-api-endpoint).
+5. Use `error_codes.http_error(...)` for any `HTTPException`.
+6. Add a method on `frontend/src/api/client.ts` and call it from the relevant feature hook.
 
 The curated `dto.ts` mirrors the generated `dto.generated.ts` (the authority) plus a hand-written
 section for frontend-private shapes. Drift between the two is a bug.

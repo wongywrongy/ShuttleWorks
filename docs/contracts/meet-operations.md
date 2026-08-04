@@ -32,7 +32,7 @@ already `called` / `playing` / `finished`, which the solver pins via `LOCKED_STA
 | Artifact | Owner | Notes |
 | --- | --- | --- |
 | `ScheduleDTO` (the plan) | **Meet** | `meetContract.produces = ['ScheduleDTO']` |
-| `/schedule*` solver endpoints | **Meet** | owned |
+| `…/solve-jobs*` + solver-utility endpoints | **Meet** | owned (the async solve rail; the legacy `POST /schedule` is `410 Gone`) |
 | `MatchStateDTO` (live status) | **Operations** | `operationsContract.produces = ['MatchStateDTO']`; Meet lists it under `consumes` |
 | The court layout / live view | **Operations** | seeds from the schedule |
 
@@ -42,7 +42,8 @@ plane (it co-lives with the control-plane CRUD in the tournaments router).
 
 ## What the current implementation does
 
-1. Meet solves (`/schedule/stream`, SSE) and the result lands via `tournamentStore.setSchedule`.
+1. Meet solves via the async job rail (`POST …/solve-jobs`, polled to a terminal status —
+   SP-CLOUD-1) and the result lands via `tournamentStore.setSchedule`.
    That store write **is** the `scheduleFinalized` edge.
 2. The Operations surfaces read `tournamentStore.schedule` through a Zustand selector — there is no
    event bus and no explicit `emit('scheduleFinalized')` call; the coupling is the shared store.

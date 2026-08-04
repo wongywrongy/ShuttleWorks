@@ -285,6 +285,20 @@ export function handleApiResponseError(error: any): never {
   // Dedupe identical (status, message) pairs within a 30s window
   // so polling hooks don't pile up sticky error toasts forever
   // when the backend returns the same error every poll cycle.
+  // SP-CLOUD-2: a 401 mid-session means the cloud session expired or
+  // was revoked. Broadcast so AuthProvider re-probes /auth/me (which
+  // nulls the session in cloud mode → AuthGuard redirects to /login);
+  // pollers stop via isTerminalPollError. getMe itself never lands
+  // here (it maps 401 → null via validateStatus), so this can't loop.
+  if (error.response?.status === 401) {
+    try {
+      window.dispatchEvent(new CustomEvent('sw:session-expired'));
+    } catch {
+      // non-browser test environments without CustomEvent — ignore
+    }
+    message = 'Your session has expired — please sign in again';
+  }
+
   const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
   const suppress = isLockCode || _shouldSuppressErrorToast(dedupeKey);
   if (!suppress) {

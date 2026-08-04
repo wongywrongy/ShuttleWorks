@@ -91,8 +91,11 @@ curl -s localhost:8600/tournaments/$TID/solve-jobs/$JOB | jq .status
 docker compose -f docker-compose.cloud.yml up -d --scale worker=2
 ```
 
-`ENVIRONMENT` stays `local` in that stack on purpose — `cloud` switches
-on Supabase-auth enforcement, which is a later SP-CLOUD slice.
+`ENVIRONMENT` stays `local` in that stack on purpose — `cloud` makes
+startup fail closed without HTTPS-only cookies + SMTP delivery, which a
+plain-HTTP localhost smoke stack can't provide (see "Auth & tenancy"
+below; the stack still runs `AUTH_MODE=cloud` so real accounts are
+exercised).
 
 ## Auth & tenancy (SP-CLOUD-2)
 

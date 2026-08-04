@@ -116,9 +116,10 @@ POST /bracket/schedule-next/stream   # SSE: solve with live progress, returns a 
 POST /bracket/schedule-next/commit   # persist the operator-chosen candidate's assignment cells
 ```
 
-The streaming route mirrors Meet's `POST /schedule/stream` event shape (`model_built` → `phase` →
-`progress` → `complete` → `done`) and lets the operator pick among near-optimal candidates before
-committing — see [Bracket schedule streaming](/architecture/bracket-schedule-streaming). Interactive
+The streaming route keeps the classic SSE event shape (`model_built` → `phase` →
+`progress` → `complete` → `done`) — it is now the **only** SSE solve surface, since Meet's
+`POST /schedule/stream` was retired for the async job rail (SP-CLOUD-1) — and lets the operator
+pick among near-optimal candidates before committing — see [Bracket schedule streaming](/architecture/bracket-schedule-streaming). Interactive
 edits on the resulting schedule use `validate` (drag-feasibility) and `pin` (commit a move);
 `assign` / `unassign` place or queue a unit **without** re-solving and are driven by the Operations
 Run board.

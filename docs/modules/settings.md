@@ -45,8 +45,8 @@ always-present `nav.overview` item), and the six `ws-*` segments form the
 | --- | --- | --- | --- |
 | **Overview** | `overview` | `WorkspaceOverview` | the workspace **readiness checklist** — event name/date/type, attention items, and named setup steps with done/incomplete states (incomplete steps link to their section). Not a metrics dashboard. |
 | **Venue & schedule** | `ws-venue` | `VenueScheduleTab` | the shared venue + day-window fields (see below) |
-| **Members** | `ws-members` | `PeopleAccessTab` | People & Access — lists members and their roles |
-| **Sharing** | `ws-sharing` | `SharingTab` | public display link vs collaborator invite links |
+| **Members** | `ws-members` | `PeopleAccessTab` | People & Access — lists members with **real identity** (names/emails from the `users` table since SP-CLOUD-2) and their roles |
+| **Sharing** | `ws-sharing` | `SharingTab` | the public display **capability link** (mint / copy / rotate via `…/display-token`) plus collaborator invites — copy-URL link invites (no expiry) and email invites (delivered via the email seam, TTL-bounded) |
 | **Modules** | `ws-modules` | `ModulesSettingsTab` | the module catalog — enable / disable per the dependency rules |
 | **Sync and backups** | `ws-sync` | `SyncBackupsTab` | state-snapshot list / create / restore |
 | **Settings** | `ws-settings` | `GeneralSettingsTab` + `DangerZoneTab` | general details (name / date / status) + the danger zone (archive, delete) |
@@ -110,7 +110,8 @@ module router:
 | Workspace CRUD | `GET/POST /tournaments`, `GET/PATCH/DELETE /tournaments/{id}` |
 | State + backups | `GET/PUT /tournaments/{id}/state`, `…/state/backups`, `…/state/backup`, `…/state/restore/{filename}` |
 | Module catalog | `GET /tournaments/{id}/modules`, `PATCH …/modules/{moduleId}` |
-| Collaboration | `GET …/members`, `POST …/invites`, and the public `/invites/{token}*` lookup/accept/delete |
+| Collaboration | `GET …/members`, `POST …/invites` (link or email invites), and the public `/invites/{token}*` lookup/accept/delete |
+| Display link | `GET /tournaments/{id}/display-token` · `POST …/display-token/rotate` (owner-gated; see [Display](/modules/display)) |
 
 See the [API reference](/api/) for the full endpoint list and the
 [Workspace model](/architecture/workspace-model) for the module catalog's rules.
