@@ -433,6 +433,19 @@ a green 1,100-test suite. The real check is the viewer flow in
     silently dropping the session's time_limit/deterministic/seed. Size S.
   - **docker-compose.dev.yml header advertises `make dev-postgres`** which
     does not exist in any Makefile. Add the target or fix the comment. Size S.
+  - **Nothing enforces "a streaming generator must not touch the repository".**
+    The repo-closing middleware (`app/main.py`) runs when `call_next` returns,
+    which for a `StreamingResponse` is *before* the body streams — so the
+    session goes back to the pool while the generator is still yielding. The
+    one live streaming route (`schedule_next_round_stream`) is safe only
+    because `_hydrate_session` materializes everything into a Pydantic object
+    first; a future route that lazy-loads inside its generator would fail in
+    production under a shape unit tests don't reproduce (TestClient drains the
+    stream differently). Verified safe today, 2026-08-04 — the gap is that
+    it's an unguarded invariant, not a live bug. Candidate check: assert in a
+    test that no `StreamingResponse` route both depends on `get_repository`
+    and references it after the first yield, or give streaming routes their
+    own session lifetime. Size S.
   - **A worker that loses its lease keeps solving to completion.** The
     heartbeat ownership guard (2026-08-04, `solve_jobs.heartbeat`) stops a
     ghost worker from *extending* a lease it lost, and `_record_outcome`

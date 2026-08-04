@@ -237,12 +237,29 @@ async def close_repository_middleware(request: Request, call_next):
     blocked call is a sync route running in uvicorn's threadpool the pool
     wedges — sync routes hang while the async ``/health`` keeps answering.
 
-    Streaming routes are unaffected: ``api/schedule.py`` is the only file
-    using ``StreamingResponse`` and it never depends on ``get_repository``,
-    so closing here (after ``call_next`` returns, before the body is
-    streamed) can't pull a session out from under an in-flight stream.
     Requests that never touch ``get_repository`` (``/health``) have no
     ``request.state.repository`` and are a no-op.
+
+    STREAMING ROUTES — read this before adding one. This runs after
+    ``call_next`` returns, which for a ``StreamingResponse`` is *before*
+    the body has been streamed. So the repository is closed while the
+    generator is still running, and a generator that touched ``repo``
+    after its first yield would find a returned-to-pool session.
+
+    Today nothing does. The one live streaming route
+    (``schedule_next_round_stream`` in ``api/brackets.py``) does depend
+    on ``get_repository`` — the previous version of this comment claimed
+    no streaming route did, and that ``api/schedule.py`` was the only
+    file using ``StreamingResponse``; both stopped being true when the
+    bracket stream landed. It is safe for a specific reason worth
+    stating: it fully materializes its data *before* constructing the
+    response (``_hydrate_session`` returns a Pydantic ``BracketSession``
+    built from plain dicts, not a lazily-bound ORM row), so the
+    generator closes over values, not a session.
+
+    That is a real invariant with no test behind it. A future streaming
+    route that lazy-loads inside its generator would break in production
+    under a shape unit tests do not reproduce. Logged in the debt log.
     """
     try:
         return await call_next(request)

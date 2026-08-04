@@ -44,7 +44,20 @@ want to add domain-specific handling on top.
 
 ## SSE
 
-`/schedule/stream` uses an `EventSource` opened directly in
-`useSchedule.ts` rather than going through axios — the axios client
-doesn't fit streaming responses. Errors there are surfaced via the same
-toast plumbing manually.
+One live streaming route:
+`POST /tournaments/{id}/bracket/schedule-next/stream`, called by
+`scheduleNextBracketRoundWithProgress` in `client.ts`.
+
+It uses `fetch` with a `ReadableStream` reader and manual `\n\n` frame
+splitting — **not** `EventSource`, which cannot issue a POST and cannot
+carry the CSRF header. Errors are surfaced through the toast plumbing
+manually, since the axios interceptor never sees these calls.
+
+Any new SSE route must set `X-Accel-Buffering: no` on its
+`StreamingResponse`. That header is what keeps nginx from buffering the
+stream in the Docker deployment; there is no per-path exemption in
+`nginx.conf` to fall back on.
+
+(The old meet-side `/schedule/stream` answers 410 — the batch solve
+moved to the job rail. It was an `EventSource` flow, which is where this
+paragraph's earlier description came from.)
