@@ -59,8 +59,8 @@ transport errors).
 | `POST /schedule` | **410 Gone** — retired synchronous solve; points at the job rail |
 | `POST /schedule/stream` | **410 Gone** — retired SSE solve progress |
 | `POST /schedule/validate` | cheap feasibility check for a drag (still request-shaped by design) |
-| `POST /schedule/warm-restart` | full re-solve biased to keep the current schedule |
-| `POST /schedule/repair` | targeted disruption repair (withdrawal, court closure, overrun) |
+| `POST /schedule/warm-restart` | **410 Gone** — untenanted; use the proposal route below |
+| `POST /schedule/repair` | **410 Gone** — untenanted; use the proposal route below |
 | `GET /tournaments/{id}/schedule/advisories` | computed advisories (overrun, no-show, …) |
 | `POST …/schedule/proposals/{warm-restart\|repair\|manual-edit}` | create a proposal |
 | `GET · DELETE …/schedule/proposals/{pid}` | fetch / discard a proposal |
@@ -225,12 +225,22 @@ cross-module; `consumedEndpoints = []`). Display now *owns* the public
 `/display/{token}/*` projection routes (its contract's `ownedEndpoints`) but still
 consumes the owner-side reads above when running inside the authenticated shell.
 
-### Health probes — unauthenticated
+### Health probes
 
-| Method · Path | Purpose |
-| --- | --- |
-| `GET /health` | shallow liveness (the container is up) |
-| `GET /health/deep` | deep readiness — data dir writable **and** CP-SAT solver importable |
+Only liveness is unauthenticated. The other three report worker identities, live
+job ids, queue depth and the deployed schema revision, so they require
+`X-ShuttleWorks-Ops-Token` whenever `OPS_TOKEN` is set — blank (guard off) in
+local mode, **required** by the cloud API profile. Mismatch → `403`.
+
+| Method · Path | Ops token | Purpose |
+| --- | --- | --- |
+| `GET /health` | no | liveness — the process answers. Dependency-free on purpose: a probe that cannot distinguish "unauthorized" from "dead" gets a healthy container restarted |
+| `GET /health/ready` | **yes** | readiness — database reachable **and** schema at the shipped Alembic head; `503` when either fails |
+| `GET /health/deep` | **yes** | readiness plus the legacy fields (data-dir writable, CP-SAT importable) the Docker HEALTHCHECK reads |
+| `GET /health/metrics` | **yes** | queue depth, oldest-queued age, per-worker heartbeat age. The alert worth wiring: `queued > 0 AND running == 0 AND oldestQueuedAgeSeconds > N` |
+
+Error fields (`databaseError`, `dataDirError`, `solverError`) carry the exception
+**class name only** — the detail, which can include the DSN, goes to the log.
 
 ## Operator command vocabulary
 
@@ -277,7 +287,8 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
   (`app/dependencies.py`). In `AUTH_MODE=local` a request without a session becomes the bootstrap
   operator; in `AUTH_MODE=cloud` it is `401`. Unauthenticated by design: `/auth/*` credential
   endpoints, the public invite resolve (`GET /invites/{token}`), the public display projection
-  (`GET /display/{token}/*`), and the `/health` probes.
+  (`GET /display/{token}/*`), and `GET /health` (liveness only — the other health
+  endpoints take `OPS_TOKEN`, see [Health probes](#health-probes)).
 - **CSRF** — state-changing requests that carry the session cookie must also send
   `X-ShuttleWorks-CSRF: 1` (custom-header check in `csrf_middleware`; missing →
   `403 AUTH_CSRF_REQUIRED`). The frontend sends it on every request; cookie-less local bootstrap
