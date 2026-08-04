@@ -12,7 +12,10 @@ services:
       - "8000:8000"
     environment:
       - LOG_LEVEL=info
-      - BACKEND_DATA_DIR=/app/data
+      # DATA_DIR is the current name. BACKEND_DATA_DIR still works as a
+      # legacy alias in app/config.py, but no shipped file should be the
+      # reason that alias stays alive.
+      - DATA_DIR=/app/data
       # MUST be absolute and inside the bind-mounted data dir. Without
       # it the app falls back to the default ``sqlite:///./local.db``,
       # which is CWD-relative — i.e. ``/app/local.db``, on the

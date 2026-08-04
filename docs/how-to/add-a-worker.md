@@ -96,14 +96,18 @@ See [the backup section](/how-to/install-selfhost#backup-and-restore).
 sudo mkdir -p /opt/shuttleworks && sudo chown "$USER" /opt/shuttleworks
 cd /opt/shuttleworks && git clone <repo> .
 cd products/scheduler
-cat > .env <<EOF
+cp .env.worker.example .env
+chmod 600 .env
+```
+
+Then edit it — the values that matter on a worker host:
+
+```bash
 PRIMARY_TAILNET_HOST=100.101.102.103
 SW_WORKER_PASSWORD=CHANGE-ME
 WORKER_ID=neo-1
 WORKER_CONCURRENCY=2
 SOLVE_MEMORY_LIMIT_MB=2048
-EOF
-chmod 600 .env
 ```
 
 Set `WORKER_ID` explicitly. It is stamped into `solve_jobs.claimed_by` and shown

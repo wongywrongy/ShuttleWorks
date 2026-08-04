@@ -81,9 +81,14 @@ drifted apart and the API failed to authenticate.
 ## 3. `.env`
 
 ```bash
-cp backend/.env.example .env    # then edit
+cp .env.selfhost.example .env   # then edit
 chmod 600 .env
 ```
+
+`.env.selfhost.example` carries exactly the variables this stack's compose file
+reads, each with the consequence of getting it wrong. Compose fails fast on the
+required ones rather than booting into a broken state. The table below is the
+wider backend reference — most of its rows have defaults you will not touch.
 
 ### Reference
 
