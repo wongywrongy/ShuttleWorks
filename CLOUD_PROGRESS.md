@@ -115,7 +115,7 @@ value in the working tree is blank, so nothing is currently being pushed.
 | 0.C — invite oracle | **DONE** | `7e62f0c` |
 | dto.generated.ts regen | **DONE** | `bb29b21` |
 | Phase 1 — member management (5 ops) | **DONE** — 4 new + revoke already existed; last-owner invariant + negative controls | `a1030c1` / `b3a140f` / `d05bd71` |
-| 0.D — sorted iteration + re-baseline | not started | |
+| 0.D — sorted iteration + re-baseline | **DONE** — fix + fingerprints re-baselined + all 3 masks removed | `38e7782` |
 | 0.E — mirror removal + ADR | **DONE** — option (c), removed entirely; ADR 0012 | `465c2ca` / `d3a46b6` / `9e677a1` |
 | Phase 3 — deployment readiness | not started | |
 | Phase 4 — install docs | not started | |
@@ -441,3 +441,102 @@ Org-level member management. `orgs`/`org_members` exist in the schema but have
 **no HTTP surface at all**, and no UI addresses orgs — adding one is a slice,
 not a footnote to this one. Workspace-level People & Access is what users
 actually touch. Logged rather than silently skipped.
+
+## 0.D — Sorted iteration + determinism re-baseline: DONE (2026-08-04)
+
+Commit `38e7782`.
+
+### The fix
+
+One line, at the source: `scheduler_core/engine/diagnostics.py::get_player_ids`
+now returns `sorted(set(...))` as a **list**, not a `set`. `_player_matches`
+inherits its dict key order from that iteration, and the three constraint
+plugins (`player_no_overlap`, `rest`, `game_proximity`) walk that dict — so the
+set was setting CP-SAT's constraint creation order, and therefore its
+tie-breaking, per interpreter.
+
+Return type changed `set` → `list` deliberately: **the ordering is the contract
+now**, and every call site is a `for` loop, so restoring a set would reintroduce
+the bug in total silence.
+
+Everything else feeding the build was already ordered — `add_matches` /
+`add_players` sort by id, `bridge._build_players` sorts its participant set.
+This was the last unordered construct, which is exactly why `PYTHONHASHSEED=0`
+masked it so completely.
+
+The other six `get_player_ids` call sites needed no change: two are safe by
+construction (set intersection in `_allowed_starts`, counting in
+`_compute_model_stats`), one is `Counter` accumulation in diagnostics, and the
+three in `validation.py` get deterministic conflict ordering for free.
+
+### Fingerprint re-baseline (recorded per Rule 6)
+
+10-match doubles instance, sha256 of the built CP-SAT model proto:
+
+| Run | Fingerprint |
+|---|---|
+| **before**, `PYTHONHASHSEED=0` (the masked baseline) | `5d6d4ff8b6e01a7317ca8b95468775cf` |
+| **before**, seeds 1 / 2 / 3 / 4 | **four DISTINCT fingerprints** — the defect, measured |
+| **after**, seeds 1,2,3,4,5,6 **and** 0 | `88f2ee3552fa073d8436b1078c80ef00` — all seven agree |
+
+**The fingerprint changed, as predicted.** Constraint creation order changed, so
+the model is built differently even though it is the same model. Objective
+values are unaffected (same feasible set, same optimum) — only the tie-broken
+assignment can differ.
+
+**User-visible behaviour change, documented:** re-solving an input that was
+solved before this commit may return a *different, equally optimal* schedule.
+Persisted historical schedules are untouched; nothing is recomputed
+retroactively.
+
+### Rule 7 — all three compensations removed together
+
+| Compensation | Disposition |
+|---|---|
+| `PYTHONHASHSEED=0` in the solve child's env (`solve_runner`) | removed |
+| The child's hard-refusal to run unpinned (`solve_child`) | removed |
+| `services/determinism.py` + `warn_if_unpinned` (2 call sites) | **module deleted** |
+
+Deleting the module rather than keeping the warning was deliberate. Its own
+docstring stated its justification — *"the engine's model build iterates
+hash-ordered sets"* — and once that sentence is false the warning is not merely
+redundant, it is actively misleading: it would tell operators determinism is at
+risk when it is not. That trains people to ignore warnings, which is the failure
+mode Rule 7 exists to prevent.
+
+**A log line is not a guard.** The replacement is
+`tests/unit/test_engine_build_order.py` (4 tests), which builds the model in
+four subprocesses under four different hash seeds and asserts a single
+fingerprint. The warning could never fail a build; this can.
+
+`tests/test_solve_job_determinism.py` also became a *real* guard rather than a
+tautology: it now double-solves genuinely unpinned, where previously the pin
+guaranteed its own result.
+
+### Negative control (CODE_HEALTH rule 3b)
+
+Dropping the `sorted()` fails **3 of the 4** new tests, with the fingerprint
+test reporting 4 distinct hashes across 4 seeds. Recorded in the function's
+docstring. This is the third negative control in the program and the third to
+confirm a guard was real.
+
+### Scope
+
+`git diff --stat v0.1.0..HEAD -- scheduler_core/` → **`diagnostics.py` alone**,
+engine-internal ordering only (Rule 5). `archive/` untouched.
+
+Also registered a `slow` pytest marker in `pyproject.toml` so the subprocess
+test does not emit an unknown-mark warning — an unregistered mark warning is
+noise that can hide a real one.
+
+### Gates
+
+Backend **947 passed / 1 by-design skip** with the PG leg on. The drop from 949
+reconciles exactly: −6 deleted `test_determinism_guard.py` tests, +4 new
+build-order tests. ruff clean; `docs:build` clean; simulator
+`sim-ephemeral small-meet` **PASS**.
+
+Docs: `architecture/backend-structure.md` corrected (it advertised the pin as a
+live mechanism); the `_player_matches` debt-log entry closed with the measured
+before/after. The 08 and 09 audits keep their original text — they are dated
+records of what was true when written.
