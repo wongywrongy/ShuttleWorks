@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 
 interface Props {
   blocks: OpsBlock[];
@@ -25,8 +26,8 @@ const actionBtn =
   `bg-card px-2 py-0.5 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground ` +
   `disabled:cursor-not-allowed disabled:opacity-50`;
 const primaryBtn =
-  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm bg-primary px-2 py-0.5 ` +
-  `text-2xs font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`;
+  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm bg-accent px-2 py-0.5 ` +
+  `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
 
 function RowActions({
   b,
@@ -36,7 +37,7 @@ function RowActions({
   onAction: (block: OpsBlock, action: OperationalAction) => void;
 }) {
   if (b.done) {
-    return <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-status-done">Done</span>;
+    return <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-done">Done</span>;
   }
   const assigned = b.court != null;
   if (b.source === 'meet') {
@@ -105,24 +106,30 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         ? 'bg-status-live'
         : b.court != null
           ? 'bg-status-called'
-          : 'bg-muted-foreground/40';
+          : 'bg-muted-foreground';
+    const isSelected = selectedKey === b.key;
     return (
       <li
         key={b.key}
         data-testid="ops-row"
         data-row-id={b.id}
         data-source={b.source}
-        className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${selectedKey === b.key ? 'bg-muted/40' : ''}`}
-        onClick={() => onSelect?.(b.key)}
+        // Courts omits `onSelect` for a read-only overview — a row with nothing
+        // to activate must not be focusable (audit G1).
+        {...(onSelect ? selectableRowProps(() => onSelect(b.key), isSelected) : {})}
+        className={`flex items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${
+          onSelect ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : ''
+        } ${isSelected ? 'bg-muted/40' : ''}`}
       >
         <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
-        <span className="w-20 flex-shrink-0 truncate font-mono text-2xs tracking-wider text-foreground">{b.label}</span>
-        <span className="w-24 flex-shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
+        {/* Same match-code grammar as the Run queue rows. */}
+        <span className="w-20 flex-shrink-0 truncate text-2xs font-semibold sw-num text-ink-3">{b.label}</span>
+        <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
           {b.court != null ? `C${b.court} · S${b.slot}` : '—'}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm" title={`${b.sideA} vs ${b.sideB}`}>
           {b.sideA}
-          <span className="px-1.5 text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</span>
+          <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
           {b.sideB}
         </span>
         {onAction ? (
@@ -137,7 +144,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
   const section = (title: string, items: OpsBlock[]) =>
     items.length > 0 ? (
       <>
-        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {title} · {items.length}
         </li>
         {items.map(row)}
@@ -145,7 +152,10 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
     ) : null;
 
   return (
-    <ul className="divide-y divide-border/60 border-t border-border">
+    // No border-t on the list shell: the first child is always a section band
+    // (`border-y`) whose top border IS the board→list seam — one hairline per
+    // seam (seamed, not gapped).
+    <ul className="divide-y divide-border/60">
       {section('Up next', upNext)}
       {section('Waiting', waiting)}
       {section('Finished', finished)}

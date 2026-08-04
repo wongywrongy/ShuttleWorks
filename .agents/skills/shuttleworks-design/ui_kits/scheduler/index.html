@@ -1,0 +1,118 @@
+<!-- @dsCard group="Scheduler" viewport="1280x720" name="Operations · Run" subtitle="Live court board — the keystone screen" -->
+<!-- @startingPoint section="Scheduler" subtitle="Live court board (Run) — dark" viewport="1280x760" -->
+<!DOCTYPE html><html data-theme="dark"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-glow),var(--surface-page);font-family:var(--font-sans);color:var(--text-2);-webkit-font-smoothing:antialiased;padding:24px}
+  .frame{width:100%;max-width:var(--content-max);height:720px;border:1px solid var(--border-1);border-radius:var(--radius-2xl);background:var(--surface-screen);overflow:hidden;box-shadow:var(--shadow-frame);display:flex;flex-direction:column;margin:0 auto}
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:12px;height:var(--topbar-h);border-bottom:1px solid var(--border-1);padding:0 16px;flex-shrink:0}
+  .wm{display:inline-flex;align-items:center;height:24px;border:1px solid var(--border-3);border-radius:var(--radius-sm);padding:0 10px;font-size:13px;font-weight:600;color:var(--text-1)}
+  .pill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--accent-border);background:var(--accent-tint);border-radius:var(--radius-sm);padding:2px 8px;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--status-live)}
+  .dot{width:5px;height:5px;border-radius:9999px;background:var(--status-live);box-shadow:var(--glow-live)}
+  .body{display:flex;min-height:0;flex:1}
+  .rail{width:var(--sidebar-w);flex-shrink:0;border-right:1px solid var(--border-1);background:var(--surface-rail);padding:10px;overflow:hidden}
+  .navrow{padding:6px 12px;font-size:12px;color:var(--text-meta);display:flex;align-items:center;justify-content:space-between}
+  .modlabel{font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)}
+  .roletag{font-size:9px;font-weight:600;text-transform:uppercase;border:1px solid var(--border-control);border-radius:var(--radius-xs);padding:0 4px;color:var(--text-meta)}
+  .sub{margin-left:12px;border-left:1px solid var(--border-1);padding-left:8px;display:flex;flex-direction:column;gap:2px}
+  .subrow{position:relative;border-radius:var(--radius-md);padding:6px 12px;font-size:12px;color:var(--text-meta)}
+  .subrow.on{background:var(--surface-active);color:var(--text-1);font-weight:500}
+  .subrow.on:before{content:"";position:absolute;left:-9px;top:6px;bottom:6px;width:2px;border-radius:2px;background:var(--accent)}
+  .content{flex:1;min-width:0;display:flex}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .tiles{display:flex;border-bottom:1px solid var(--border-1)}
+  .tile{flex:1;border-right:1px solid var(--border-1);border-top:2px solid transparent;padding:11px 16px}
+  .tile:last-child{border-right:none}
+  .tile .v{font-size:18px;font-weight:700;color:var(--text-1)}
+  .tile .l{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+  .board{border-bottom:1px solid var(--border-1);overflow:hidden}
+  .thead{display:flex;border-bottom:1px solid var(--border-1)}
+  .thead .gut{width:44px;flex-shrink:0;border-right:1px solid var(--border-1)}
+  .lane{flex:1;position:relative;height:22px}
+  .lane b{position:absolute;top:5px;font-size:10px;color:var(--text-muted);font-weight:400}
+  .now{position:absolute;left:50%;top:0;width:1px;background:var(--accent);z-index:5}
+  .crow{display:flex;height:52px;border-bottom:1px solid var(--border-row)}
+  .crow:last-child{border-bottom:none}
+  .cgut{width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border-1);background:var(--surface-band);font-size:11px;font-weight:600;color:var(--text-meta)}
+  .track{flex:1;position:relative}
+  .chip{position:absolute;top:6px;border-radius:var(--radius-md);padding:0 10px;display:flex;flex-direction:column;justify-content:center;gap:2px;height:40px;overflow:hidden}
+  .chip .top{display:flex;align-items:center;gap:6px}
+  .init{width:14px;height:14px;border-radius:var(--radius-xs);display:inline-flex;align-items:center;justify-content:center;font-size:9px}
+  .code{font-size:11px;font-weight:600}.pl{font-size:10px}
+  .live{background:var(--sw-live-solid);border:1px solid var(--sw-live-border)}
+  .live .code,.live .pl{color:var(--sw-live-ink)}.live .init{background:rgba(0,0,0,.2);color:var(--sw-live-ink)}
+  .called{background:var(--sw-called-solid);border:1px solid var(--sw-called-border)}
+  .called .code{color:var(--sw-called-ink)}.called .init{background:rgba(0,0,0,.2);color:var(--sw-called-ink)}
+  .sched{background:var(--surface-card);border:1px solid var(--border-1)}.sched .code{color:var(--text-3)}.sched .init{background:var(--sw-chip-tag);color:var(--text-muted)}
+  .done{background:var(--surface-band);border:1px solid var(--border-1);opacity:.62}.done .code{color:var(--text-muted);text-decoration:line-through}.done .init{background:var(--sw-chip-tag);color:var(--text-muted)}
+  .lateb{position:absolute;inset:0 0 0 auto;width:16%;background:rgba(224,178,74,.2);border-left:1px solid var(--sw-called)}
+  .meta{margin-left:auto;font-size:9px}
+  .queue{flex:1;overflow:hidden}
+  .qh{padding:10px 16px 6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+  .qrow{display:flex;align-items:center;gap:10px;padding:7px 16px;border-top:1px solid var(--border-row)}
+  .qrow .init{width:13px;height:13px;font-size:8px;background:var(--sw-chip-tag);color:var(--text-muted)}
+  .insp{width:var(--inspector-w);flex-shrink:0;border-left:1px solid var(--border-1);background:var(--surface-rail);padding:16px;display:flex;flex-direction:column;gap:14px}
+  .card2{border:1px solid var(--border-1);border-radius:var(--radius-lg);background:var(--surface-screen);padding:12px;display:flex;flex-direction:column;gap:8px}
+  .btnp{height:40px;border:none;border-radius:var(--radius-lg);background:var(--accent);color:var(--accent-ink);box-shadow:var(--glow-accent);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer}
+  .btns{height:36px;border:1px solid var(--border-control);border-radius:var(--radius-lg);background:var(--surface-card);color:var(--text-meta);font-size:13px;font-family:inherit;cursor:pointer}
+  .sw-num{font-variant-numeric:tabular-nums}
+</style></head>
+<body>
+<div class="frame">
+  <div class="bar">
+    <div style="display:flex;align-items:center;gap:10px"><span style="color:var(--text-muted)">‹</span><span style="font-size:13px;font-weight:600;color:var(--text-1)">Bay Area HS Invitational</span><span class="sw-num" style="font-size:10px;color:var(--text-muted)">SUN JUL 12 · 4C</span></div>
+    <div style="display:flex;align-items:center;gap:10px"><span class="sw-num" style="font-size:11px;color:var(--status-live)">10:04</span><span class="pill"><span class="dot"></span>Live</span></div>
+  </div>
+  <div class="body">
+    <nav class="rail">
+      <div class="navrow" style="color:var(--text-meta)">Overview</div>
+      <div class="navrow"><span style="display:flex;gap:6px;align-items:center"><span class="modlabel">Meet</span><span class="roletag">ENG</span></span><span style="font-size:10px">›</span></div>
+      <div class="navrow"><span style="display:flex;gap:6px;align-items:center"><span class="modlabel">Operations</span><span class="roletag" style="color:var(--accent);border-color:var(--accent-border)">SHR</span></span><span style="font-size:10px;transform:rotate(90deg)">›</span></div>
+      <div class="sub"><div class="subrow">Plan</div><div class="subrow on">Run</div></div>
+      <div class="navrow"><span style="display:flex;gap:6px;align-items:center"><span class="modlabel">Display</span><span class="roletag">OUT</span></span><span style="font-size:10px">›</span></div>
+      <div style="margin:10px 0;border-top:1px solid var(--border-1)"></div>
+      <div style="padding:0 12px 4px;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Workspace</div>
+      <div class="subrow" style="margin-left:0">Members</div><div class="subrow" style="margin-left:0">Settings</div>
+    </nav>
+    <div class="content">
+      <div class="main">
+        <div class="tiles">
+          <div class="tile"><div class="v sw-num">3<span style="color:var(--text-muted)">/12</span></div><div class="l">done</div></div>
+          <div class="tile" style="border-top-color:color-mix(in srgb,var(--status-live) 55%,transparent)"><div class="v sw-num" style="color:var(--status-live)">3</div><div class="l">playing</div></div>
+          <div class="tile"><div class="v sw-num">1</div><div class="l">courts free</div></div>
+          <div class="tile" style="border-top-color:color-mix(in srgb,var(--status-called) 60%,transparent)"><div class="v sw-num" style="color:var(--status-called)">1</div><div class="l">late</div></div>
+        </div>
+        <div class="board">
+          <div class="thead"><div class="gut"></div><div class="lane"><b style="left:6px">09:00</b><b style="left:50%">10:00</b><span class="now" style="bottom:-208px"></span></div></div>
+          <div class="crow"><div class="cgut sw-num">C1</div><div class="track">
+            <div class="chip live" style="left:calc(12.5% + 3px);width:calc(37.5% - 6px)"><div class="top"><span class="init sw-num">M</span><span class="code sw-num">MS1</span><span class="meta sw-num" style="color:var(--sw-live-ink)">14:32</span></div><span class="pl">Chen v Webb</span></div>
+            <div class="chip sched" style="left:calc(50% + 3px);width:calc(12.5% - 6px)"><div class="top"><span class="init sw-num">M</span><span class="code sw-num">WD1</span></div></div>
+          </div></div>
+          <div class="crow"><div class="cgut sw-num">C2</div><div class="track">
+            <div class="chip called" style="left:calc(37.5% + 3px);width:calc(13.5% - 6px)"><div class="top"><span class="init sw-num">B</span><span class="code sw-num">XD1</span></div><span style="font-size:9px;font-weight:600;text-transform:uppercase;color:var(--sw-called-ink)">Called</span></div>
+          </div></div>
+          <div class="crow"><div class="cgut sw-num">C3</div><div class="track">
+            <div class="chip done" style="left:3px;width:calc(25% - 6px)"><div class="top"><span class="init sw-num">M</span><span class="code sw-num">MS3</span></div></div>
+            <div class="chip live" style="left:calc(25% + 3px);width:calc(37.5% - 6px);border-color:var(--sw-called-border)"><div class="top"><span class="init sw-num">M</span><span class="code sw-num">WD2</span><span class="meta sw-num" style="font-weight:600;color:var(--accent-ink);background:var(--sw-called);border-radius:3px;padding:1px 5px">+2</span></div><span class="pl">Kim v Tan</span><span class="lateb"></span></div>
+          </div></div>
+          <div class="crow"><div class="cgut sw-num" style="color:var(--text-faint)">C4</div><div class="track" style="display:flex;align-items:center;justify-content:center"><span style="font-size:10px;color:var(--text-muted)">court free</span></div></div>
+        </div>
+        <div class="queue">
+          <div class="qh">Queue · 9</div>
+          <div class="qrow"><span class="sw-num" style="width:18px;font-size:10px;color:var(--text-muted)">1</span><span class="init sw-num" style="border-radius:3px;display:inline-flex;align-items:center;justify-content:center">M</span><span class="sw-num" style="width:44px;font-size:11px;color:var(--text-3)">MS2</span><span style="flex:1;font-size:13px;color:var(--text-2)">Park v Ortiz</span></div>
+          <div class="qrow"><span class="sw-num" style="width:18px;font-size:10px;color:var(--text-muted)">2</span><span class="init sw-num" style="border-radius:3px;display:inline-flex;align-items:center;justify-content:center">B</span><span class="sw-num" style="width:44px;font-size:11px;color:var(--text-3)">R2-3</span><span style="flex:1;font-size:13px;color:var(--text-2)">Diaz v Cruz</span><span class="sw-num" style="font-size:9px;font-weight:600;color:var(--accent-ink);background:var(--sw-called);border-radius:3px;padding:1px 5px">LATE</span></div>
+          <div class="qrow"><span class="sw-num" style="width:18px;font-size:10px;color:var(--text-muted)">3</span><span class="init sw-num" style="border-radius:3px;display:inline-flex;align-items:center;justify-content:center">M</span><span class="sw-num" style="width:44px;font-size:11px;color:var(--text-3)">XD2</span><span style="flex:1;font-size:13px;color:var(--text-2)">Cruz/Lee v Fox/Obi</span></div>
+        </div>
+      </div>
+      <aside class="insp">
+        <div style="display:flex;align-items:center;gap:8px"><span class="init sw-num" style="width:15px;height:15px;border-radius:4px;background:var(--sw-chip-tag);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;font-size:9px">M</span><span class="sw-num" style="font-size:11px;color:var(--text-muted)">MS1</span><span style="margin-left:auto;font-size:9px;font-weight:600;text-transform:uppercase;color:var(--status-live);background:var(--accent-tint);border-radius:5px;padding:2px 7px">Playing</span></div>
+        <div class="sw-num" style="font-size:12px;color:var(--text-muted)">C1 · 09:30 · 14:32 elapsed</div>
+        <div class="card2"><div style="font-size:14px;font-weight:600;color:var(--text-1)">Alex Chen <span style="font-size:11px;color:var(--text-muted);font-weight:400">Lincoln</span></div><div style="font-size:10px;color:var(--text-muted)">VS</div><div style="font-size:14px;font-weight:600;color:var(--text-1)">Marcus Webb <span style="font-size:11px;color:var(--text-muted);font-weight:400">Roosevelt</span></div></div>
+        <button class="btnp">Record result</button>
+        <button class="btns">Postpone</button>
+      </aside>
+    </div>
+  </div>
+</div>
+</body></html>

@@ -38,6 +38,9 @@ describe('WorkspaceShell', () => {
     renderShell({ statusSlot: <span data-testid="chip">chip</span> });
     expect(screen.getByText('Spring Finals')).toBeInTheDocument();
     expect(screen.getByText('active')).toBeInTheDocument();
+    // The identity date is formatted (Apr 1, 2026), not raw ISO (2026-04-01).
+    expect(screen.queryByText('2026-04-01')).not.toBeInTheDocument();
+    expect(screen.getByText(/Apr\s*1,\s*2026/)).toBeInTheDocument();
     // The left workspace sidebar (Overview always present) replaces the dock.
     expect(screen.getByTestId('ws-nav-overview')).toBeInTheDocument();
     expect(screen.getByTestId('chip')).toBeInTheDocument();

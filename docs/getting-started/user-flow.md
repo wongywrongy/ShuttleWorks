@@ -27,7 +27,10 @@ Every step maps to a real surface in the workspace's left navigation:
 
 ### 1. Sign in and land on the Hub
 
-Authenticated operators land on the **Hub** (`/`) — a dashboard of every workspace they can see. Each
+Operators land on the **Hub** (`/`) — a dashboard of every workspace they can see. Sign-in is
+self-hosted cookie-session auth (SP-CLOUD-2): in local mode it is optional (the app boots as the
+zero-friction bootstrap operator), while a cloud deployment requires a real account
+(register / login / password-reset on the login page). Each
 card shows a live [signal](/api/signals): health (good / attention / draft / archived), what needs
 attention, a setup-readiness checklist, the enabled modules, and collaboration counts. This is where an
 operator decides *which event to work on* or *creates a new one*.
@@ -67,9 +70,11 @@ The **Meet** engine's three surfaces, left to right:
 3. **Configuration** — Meet-specific solver settings (the shared venue/day-window lives in *Venue &
    schedule*).
 
-When the roster and matches are ready, the operator **generates the schedule** — the CP-SAT solver runs
-with live SSE progress (phase / objective / gap) and offers a top-N candidate pool. The solved schedule
-becomes the input to Operations. (This crossing is [Seam A](/contracts/meet-operations).)
+When the roster and matches are ready, the operator **generates the schedule** — the solve is
+submitted as an **async job** and polled to completion (the HUD shows queued → solving; a reload
+mid-solve re-adopts the running job, and Cancel really kills the solve), then offers a top-N
+candidate pool. The solved schedule becomes the input to Operations. (This crossing is
+[Seam A](/contracts/meet-operations).)
 
 ### 5b. …or author a Bracket
 
@@ -110,26 +115,33 @@ The live flow is built for safety under pressure:
 
 **Display** turns the live state into the public view:
 
-- **Configuration** — set up what the screen shows.
+- **Configuration** — set up what the screen shows (presets, layout, accent — light presets exist
+  for sun-lit venues).
 - **Preview** — the in-workspace preview of the TV view.
-- The **public display** (`/display?tournament_id=…`) is opened on the venue screen — no login,
-  dark-only, courts / schedule / standings modes. It reads live match state ([Seam D](/contracts/operations-display)).
+- The **public display** is a **capability link** (`/display?token=…`, minted and rotated from
+  Settings → Sharing) opened on the venue screen — no login; the token itself is the credential
+  and grants read-only projection data only. Courts / schedule / standings modes. It reads live
+  match state ([Seam D](/contracts/operations-display)).
 
 ### 8. Collaborate and protect the data
 
 Throughout, the **Workspace** admin block supports the rest of the operation:
 
-- **Members** & **Sharing** — invite assistant operators (collaborator invite links) or share the
-  read-only public display link.
+- **Members** & **Sharing** — invite assistant operators (copy-URL invite links, or email invites
+  that expire) and share the read-only public display capability link (rotate it to revoke).
+  Members show with real names/emails.
 - **Sync and backups** — watch sync health and snapshot / restore the workspace state.
 
 ## The public viewer flow
 
-Short and login-free:
+Short and login-free — the link itself is the credential:
 
 ```
-Open /display?tournament_id=<id>  ──▶  live courts / schedule / standings, auto-refreshing
+Open /display?token=<capability-token>  ──▶  live courts / schedule / standings, auto-refreshing
 ```
+
+The token resolves through the unauthenticated `/display/{token}/*` projection routes (read-only
+by construction); the operator can rotate it at any time to kill an old link.
 
 Assistant operators on the LAN get a richer, read-mostly view of the same live state and can submit
 commands back to the director's machine. The director's laptop stays the source of truth; everyone else

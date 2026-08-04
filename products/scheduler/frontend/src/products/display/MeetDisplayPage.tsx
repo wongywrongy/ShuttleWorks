@@ -5,11 +5,18 @@
  *
  *   ?view=courts (default) — current/called match on each court
  *   ?view=schedule        — upcoming matches
- *   ?view=standings       — school-vs-school leaderboard
  *
  * Designed to be readable from across a gym: oversized type, high
  * contrast, and a built-in fullscreen toggle so the operator can hit
  * F or a button to take over the display without F11 ceremony.
+ *
+ * Standings (school-vs-school leaderboard, server-computed — Task 9) are
+ * NOT a manually-selectable tab: `config.standingsMode` (director-set, or
+ * "Auto" derived from court count — see ./publicDisplay/standingsLayout.ts)
+ * decides whether they render as a persistent side panel next to the
+ * courts grid, or periodically take over the whole content area on a
+ * timer ("rotate"). Hidden entirely whenever there's nothing to show
+ * (Meet disabled / no scored pool play yet).
  *
  * The /display route mounts this page *outside* AppShell, so the
  * tournament-state hydrator (``useTournamentState``) is not in scope
@@ -22,11 +29,10 @@ import { useSearchParams } from 'react-router-dom';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useLiveTracking } from '../../hooks/useLiveTracking';
 import { useAdvisories } from '../../hooks/useAdvisories';
-import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
 import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-import type { ScheduleAssignment } from '../../api/dto';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
+import { STALE_CAPTION } from './publicDisplay/freshness';
 import { useFullscreen } from './publicDisplay/useFullscreen';
 import { formatTournamentDate } from './publicDisplay/helpers';
 import { FullscreenButton } from './publicDisplay/FullscreenButton';
@@ -34,26 +40,53 @@ import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
 import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
 import { CourtsView } from './publicDisplay/CourtsView';
+import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
+import { orderCourts, visibleCourts, defaultColumns } from './publicDisplay/courtLayout';
+import { standingsPlacement } from './publicDisplay/standingsLayout';
+import {
+  resolveTvAccent,
+  resolveCardHeightPx,
+  resolveCardSizeClasses,
+  resolveGridColsClass,
+} from './publicDisplay/tvSizing';
 
-type ViewMode = 'courts' | 'schedule' | 'standings';
+// How often the ROTATE placement (Task 9) swaps the main content area
+// between the current view (courts/schedule) and a full-bleed standings
+// screen. Symmetric — same dwell time on each side — since the brief
+// doesn't call for asymmetric timing and a single interval is simplest
+// to reason about (and to fake-timer test) than a ping-pong of two
+// different durations.
+const ROTATION_INTERVAL_MS = 15_000;
+
+type ViewMode = 'courts' | 'schedule';
 
 export function MeetDisplayPage() {
   const [searchParams] = useSearchParams();
-  const viewParam = searchParams.get('view') as ViewMode | null;
-  const [view, setView] = useState<ViewMode>(viewParam || 'courts');
+  // Whitelist, not a blind cast: a stale bookmarked/QR'd URL from before
+  // task 9 (`?view=standings` was a real, documented param) must still
+  // resolve to a real view — falling through to 'courts' rather than a
+  // dead `view` value that matches neither render branch and would leave
+  // the content area blank on an unattended venue TV.
+  const viewParam = searchParams.get('view');
+  const [view, setView] = useState<ViewMode>(viewParam === 'schedule' ? 'schedule' : 'courts');
   const [now, setNow] = useState<Date>(() => new Date());
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const { schedule, config, matches, matchStates, matchesByStatus } = useLiveTracking();
   const players = useTournamentStore((state) => state.players);
-  const groups = useTournamentStore((state) => state.groups);
+  // Server-computed Meet pool standings (Task 2 + 9) — see
+  // ./publicDisplay/standingsLayout.ts for the panel-vs-rotation decision
+  // and useDisplaySync.ts / hooks/useTournamentState.ts for how this field
+  // is hydrated onto the store for the standalone board vs. the in-shell
+  // embed respectively. Empty for bracket-kind/Meet-disabled workspaces.
+  const standings = useTournamentStore((state) => state.standings);
 
-  // Standalone display surfaces critical advisories so spectators
-  // (and any operator watching the TV) know a replan is imminent.
-  // The hook is idempotent — when the page is embedded under
-  // AppShell as the TV preview tab, the AppShell-level mount
-  // already covers it; mounting again here is harmless.
+  // Display projects, never operates (see CLAUDE.md's module model) —
+  // the public board must not surface an operator-facing advisory, so
+  // no banner is rendered below. This call is left in place unchanged
+  // (out of scope for this removal); it is effectively inert here —
+  // see docs/audits/debt-log.md for why it's dead weight either way.
   useAdvisories();
 
   // 1 Hz tick drives both the wall clock and the elapsed timer on active matches.
@@ -62,8 +95,8 @@ export function MeetDisplayPage() {
     return () => window.clearInterval(t);
   }, []);
 
-  // Read-only polling + liveness derivation. See ./publicDisplay/useDisplaySync.ts.
-  const { liveStatus, syncError } = useDisplaySync(now);
+  // Read-only polling + freshness derivation. See ./publicDisplay/useDisplaySync.ts.
+  const { freshness } = useDisplaySync(now);
 
   // Fullscreen toggle + F-key shortcut. See ./publicDisplay/useFullscreen.ts.
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
@@ -75,8 +108,40 @@ export function MeetDisplayPage() {
   });
 
   const playerNames = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
-  const groupNames = useMemo(() => new Map(groups.map((g) => [g.id, g.name])), [groups]);
   const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
+
+  // ---- Standings placement (task 9) -------------------------------------
+  // `config?.courtCount` defaults to 0 (-> 'side' tier) before the first
+  // hydrate lands; harmless since `hasStandings` is false until real data
+  // arrives, so nothing renders either way. Hide entirely — never an empty
+  // panel — whenever Meet isn't enabled or there's no scored pool play yet:
+  // the server returns `[]` for both cases (see MeetStandingRowDTO's doc
+  // comment), so a single length check covers both.
+  const hasStandings = standings.length > 0;
+  const resolvedStandingsPlacement = standingsPlacement(
+    config?.courtCount ?? 0,
+    config?.standingsMode,
+  );
+  const showStandingsSidePanel = hasStandings && resolvedStandingsPlacement === 'side';
+  const rotateStandings = hasStandings && resolvedStandingsPlacement === 'rotate';
+
+  // Timed rotation: alternate the main content area between the current
+  // view (courts/schedule) and a full-bleed standings screen. Only ticks
+  // while rotation is actually active; flips back to "showing the normal
+  // view" the instant rotation stops (mode change, standings disappear,
+  // Meet gets disabled), so switching away never leaves the board stuck
+  // mid-rotation on a screen that's no longer supposed to exist.
+  const [rotationShowingStandings, setRotationShowingStandings] = useState(false);
+  useEffect(() => {
+    if (!rotateStandings) {
+      setRotationShowingStandings(false);
+      return;
+    }
+    const t = window.setInterval(() => {
+      setRotationShowingStandings((prev) => !prev);
+    }, ROTATION_INTERVAL_MS);
+    return () => window.clearInterval(t);
+  }, [rotateStandings]);
 
   // Indexing helpers we'll reuse below. O(1) by-matchId lookups so the
   // courts / standings derivations don't re-scan the full matchesByStatus
@@ -95,7 +160,55 @@ export function MeetDisplayPage() {
     return { active, called };
   }, [matchesByStatus.started, matchesByStatus.called, matchStates]);
 
-  // Get current match on each court (active > called > empty).
+  // ---- Relative Now/Next/Later lanes (task 8) --------------------------
+  // Retires the drifting wall-clock preview: the board's PRIMARY label per
+  // court is now a relative lane, not an absolute time that silently goes
+  // stale during delays. `now` is strictly LIVE-gated (only matches that
+  // have actually started/been called go in `nowIds`) — an idle court
+  // never gets a manufactured "now". Everything else on a court is ordered
+  // by its planned slot into `next`/`later`. This is deliberately a
+  // board-local helper (publicDisplay/courtLanes.ts), NOT shared with
+  // Operations' positional `deriveCourtLanes` — see that file's doc
+  // comment and task-8-report.md for why forcing a shared extraction
+  // would risk the shipped Run surface for a divergent `now` rule.
+  const laneItems = useMemo((): LaneItem[] => {
+    if (!schedule) return [];
+    return schedule.assignments
+      .filter((a) => matchStates[a.matchId]?.status !== 'finished')
+      .map((a) => ({
+        id: a.matchId,
+        court: matchStates[a.matchId]?.actualCourtId ?? a.courtId,
+        plannedSlot: a.slotId,
+      }));
+  }, [schedule, matchStates]);
+
+  const nowIds = useMemo(
+    () => new Set<string>([...matchesByCourt.active.values(), ...matchesByCourt.called.values()]),
+    [matchesByCourt],
+  );
+
+  const lanes = useMemo(() => assignLanes(laneItems, nowIds), [laneItems, nowIds]);
+
+  const assignmentByMatchId = useMemo(
+    () => new Map((schedule?.assignments ?? []).map((a) => [a.matchId, a])),
+    [schedule],
+  );
+
+  // Per-court preview ids — `assignLanes` guarantees at most one `next` and
+  // one `later` per court.
+  const previewByCourt = useMemo(() => {
+    const next = new Map<number, string>();
+    const later = new Map<number, string>();
+    for (const item of laneItems) {
+      const lane = lanes.get(item.id);
+      if (lane === 'next') next.set(item.court, item.id);
+      else if (lane === 'later') later.set(item.court, item.id);
+    }
+    return { next, later };
+  }, [laneItems, lanes]);
+
+  // Get current match on each court (active > called > empty), plus a
+  // Next/Later preview for idle courts.
   const courtMatches = useMemo(() => {
     if (!schedule || !config) return [];
     type Row = {
@@ -103,28 +216,16 @@ export function MeetDisplayPage() {
       match: (typeof matches)[number] | null;
       state: (typeof matchStates)[string] | null;
       status: 'active' | 'called' | 'empty';
-      // When ``status === 'empty'``, the next scheduled assignment for
-      // this court (if any). Used by the public TV to render a
-      // "Next: <event> at <time>" preview instead of an inert
-      // "Available" placeholder.
+      // When ``status === 'empty'``, the Next/Later lane preview for this
+      // court (if any). Used by the public TV to render relative
+      // "Next"/"Later" labels (de-emphasized planned clock) instead of an
+      // inert "Available" placeholder.
       nextMatch?: (typeof matches)[number] | null;
       nextStartTime?: string;
+      laterMatch?: (typeof matches)[number] | null;
+      laterStartTime?: string;
     };
     const courts: Row[] = [];
-
-    // Build a per-court list of *future* scheduled assignments, sorted
-    // by slot ascending. ``schedule.assignments`` is the source of
-    // truth for upcoming play; ``matchStates`` is consulted to skip
-    // anything already finished or in progress.
-    const futureByCourt = new Map<number, ScheduleAssignment[]>();
-    for (let c = 1; c <= config.courtCount; c++) futureByCourt.set(c, []);
-    for (const a of schedule.assignments) {
-      const s = matchStates[a.matchId]?.status;
-      if (s === 'finished' || s === 'started' || s === 'called') continue;
-      const list = futureByCourt.get(a.courtId);
-      if (list) list.push(a);
-    }
-    futureByCourt.forEach((list) => list.sort((x, y) => x.slotId - y.slotId));
 
     for (let courtId = 1; courtId <= config.courtCount; courtId++) {
       const activeId = matchesByCourt.active.get(courtId);
@@ -147,18 +248,39 @@ export function MeetDisplayPage() {
         });
         continue;
       }
-      const next = futureByCourt.get(courtId)?.[0] ?? null;
+      const nextId = previewByCourt.next.get(courtId) ?? null;
+      const nextAssignment = nextId ? assignmentByMatchId.get(nextId) : undefined;
+      const laterId = previewByCourt.later.get(courtId) ?? null;
+      const laterAssignment = laterId ? assignmentByMatchId.get(laterId) : undefined;
       courts.push({
         courtId,
         match: null,
         state: null,
         status: 'empty',
-        nextMatch: next ? matchMap.get(next.matchId) || null : null,
-        nextStartTime: next ? formatSlotTime(next.slotId, config) : undefined,
+        nextMatch: nextId ? matchMap.get(nextId) || null : null,
+        nextStartTime: nextAssignment ? formatSlotTime(nextAssignment.slotId, config) : undefined,
+        laterMatch: laterId ? matchMap.get(laterId) || null : null,
+        laterStartTime: laterAssignment ? formatSlotTime(laterAssignment.slotId, config) : undefined,
       });
     }
     return courts;
-  }, [schedule, config, matchesByCourt, matchMap, matchStates]);
+  }, [schedule, config, matchesByCourt, matchMap, matchStates, previewByCourt, assignmentByMatchId]);
+
+  // Director-controlled arrangement: manual order first, then hide
+  // (presentation-only — see courtLayout.ts's doc comment). This is the
+  // ONLY place hide/order apply; `courtMatches` above still computes
+  // every court's real state regardless of visibility, so a hidden
+  // court's live match keeps tracking normally in Operations — it's
+  // just never handed to CourtsView. A hidden court with a live match
+  // does NOT auto-reappear here (Q9); it stays hidden until the
+  // director restores it from the editor.
+  const displayedCourtRows = useMemo(() => {
+    if (courtMatches.length === 0) return courtMatches;
+    const byId = new Map(courtMatches.map((row) => [row.courtId, row]));
+    const ordered = orderCourts(courtMatches.map((row) => row.courtId), config?.courtOrder);
+    const visible = visibleCourts(ordered, config?.hiddenCourts);
+    return visible.map((id) => byId.get(id)).filter((row): row is (typeof courtMatches)[number] => row != null);
+  }, [courtMatches, config?.courtOrder, config?.hiddenCourts]);
 
   // Next 10 scheduled matches.
   const upcomingMatches = useMemo(() => {
@@ -168,43 +290,6 @@ export function MeetDisplayPage() {
       match: matchMap.get(a.matchId),
     }));
   }, [matchesByStatus.scheduled, matchMap, schedule]);
-
-  // School-vs-school standings (dual-meet friendly).
-  const standings = useMemo(() => {
-    const groupScores: Record<string, { wins: number; losses: number; matchesPlayed: number }> = {};
-    groups.forEach((g) => (groupScores[g.id] = { wins: 0, losses: 0, matchesPlayed: 0 }));
-    // Index players by id so the inner loop is O(1) instead of O(N) scans.
-    const playerById = new Map(players.map((p) => [p.id, p]));
-    matchesByStatus.finished.forEach((assignment) => {
-      const match = matchMap.get(assignment.matchId);
-      const state = matchStates[assignment.matchId];
-      if (!match || !state?.score) return;
-      const sideAGroupId = match.sideA?.map((id) => playerById.get(id)?.groupId).find(Boolean);
-      const sideBGroupId = match.sideB?.map((id) => playerById.get(id)?.groupId).find(Boolean);
-      if (!sideAGroupId || !sideBGroupId || sideAGroupId === sideBGroupId) return;
-      const aWon = state.score.sideA > state.score.sideB;
-      const bWon = state.score.sideB > state.score.sideA;
-      if (groupScores[sideAGroupId]) {
-        groupScores[sideAGroupId].matchesPlayed++;
-        if (aWon) groupScores[sideAGroupId].wins++;
-        if (bWon) groupScores[sideAGroupId].losses++;
-      }
-      if (groupScores[sideBGroupId]) {
-        groupScores[sideBGroupId].matchesPlayed++;
-        if (bWon) groupScores[sideBGroupId].wins++;
-        if (aWon) groupScores[sideBGroupId].losses++;
-      }
-    });
-    return Object.entries(groupScores)
-      .map(([groupId, scores]) => ({
-        groupId,
-        groupName: groupNames.get(groupId) || groupId,
-        ...scores,
-      }))
-      .filter((s) => s.matchesPlayed > 0)
-      .sort((a, b) => b.wins - a.wins || a.losses - b.losses);
-  }, [matchesByStatus.finished, matchMap, matchStates, groups, groupNames, players]);
-
 
   // ===== Rendering =====================================================
 
@@ -227,15 +312,13 @@ export function MeetDisplayPage() {
         className="min-h-[100dvh] bg-background text-foreground flex items-center justify-center"
       >
         <div className="absolute right-4 top-4 flex items-center gap-3">
-          <LiveStatusPill status={liveStatus} error={syncError} />
+          <LiveStatusPill status={freshness} />
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </div>
         <div className="text-center">
           <div className="text-6xl font-bold tracking-tight">Tournament Display</div>
           <div className="mt-3 text-2xl text-muted-foreground">
-            {liveStatus === 'live'
-              ? 'No schedule generated yet'
-              : 'Waiting for connection to the server…'}
+            {freshness === 'live' ? 'No schedule generated yet' : 'Waiting to connect…'}
           </div>
         </div>
       </div>
@@ -246,13 +329,13 @@ export function MeetDisplayPage() {
   const totalCount = schedule.assignments.length;
   const progressPct = totalCount === 0 ? 0 : Math.round((finishedCount / totalCount) * 100);
 
-  // TV view tabs: square 1px-border chip in sentence-case sans, active
-  // = brand-orange border + tinted bg + brand text. Readable across a
+  // TV view tabs: rounded 1px-border chip in sentence-case sans, active
+  // = accent (azure) border + tinted bg + accent text. Readable across a
   // gym without the mono-uppercase shouting.
   const tabClass = (mode: ViewMode) =>
     [
       INTERACTIVE_BASE,
-      'border px-4 py-2 text-base font-semibold',
+      'rounded border px-4 py-2 text-base font-semibold',
       view === mode
         ? 'border-accent bg-accent/15 text-accent'
         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
@@ -265,52 +348,50 @@ export function MeetDisplayPage() {
   // standalone /display window.
   const tvDisplayMode: 'strip' | 'grid' | 'list' = config.tvDisplayMode ?? 'strip';
 
-  // ---- TV sizing + accent knobs (per-tournament) ----------------------
-  // Accent — hex string driving the LIVE border, LIVE pill, and the
-  // bottom progress bar. Independent of the preset; always overlays.
-  // Defaults to emerald (#10b981).
-  const tvAccent = (config.tvAccent && /^#?[0-9a-fA-F]{6}$/.test(config.tvAccent.replace(/^#/, '')))
-    ? (config.tvAccent.startsWith('#') ? config.tvAccent : `#${config.tvAccent}`)
-    : '#10b981';
-  // Grid columns / card size / score visibility.
-  const tvGridColumns = config.tvGridColumns ?? null;
+  // ---- TV sizing + accent knobs (per-tournament) -----------------------
+  // Shared with DisplayPreview — see publicDisplay/tvSizing.ts for the
+  // single source of truth (previously duplicated verbatim in both
+  // files; extracted as part of task 7 to remove that drift risk).
+  const tvAccent = resolveTvAccent(config.tvAccent);
   const tvCardSize = config.tvCardSize ?? 'auto';
   const tvShowScores = config.tvShowScores !== false;
-  // Card size → height + matching type scale. Big cards get big text
-  // so the audience can read every name from across a gym.
-  const cardHeightPx =
-    tvCardSize === 'compact' ? 72 :
-    tvCardSize === 'comfortable' ? 128 :
-    tvCardSize === 'large' ? 176 :
-    isFullscreen ? 128 : 96;
-  const sizeTier = cardHeightPx >= 160 ? 'xl' : cardHeightPx >= 120 ? 'lg' : cardHeightPx >= 96 ? 'md' : 'sm';
-  // tracking-tighter on the giant court-number display — at 5xl-7xl the
-  // default tracking reads as gappy across a gym; tightening pulls the
-  // glyphs back into a single visual mass.
-  const SIZES = {
-    sm: { courtNum: 'text-3xl tracking-tight', eventCode: 'text-base', player: 'text-base', padX: 'px-4' },
-    md: { courtNum: 'text-5xl tracking-tighter', eventCode: 'text-2xl', player: 'text-2xl', padX: 'px-4' },
-    lg: { courtNum: 'text-6xl tracking-tighter', eventCode: 'text-3xl', player: 'text-3xl', padX: 'px-6' },
-    xl: { courtNum: 'text-7xl tracking-tighter', eventCode: 'text-4xl', player: 'text-4xl', padX: 'px-6' },
-  } as const;
-  const { courtNum: courtNumSize, eventCode: eventCodeSize, player: playerSize, padX: cardPadX } = SIZES[sizeTier];
+  const cardHeightPx = resolveCardHeightPx(tvCardSize, isFullscreen);
+  const { courtNumSize, eventCodeSize, playerSize, cardPadX } = resolveCardSizeClasses(cardHeightPx);
 
-  // Grid columns. Tailwind safelist won't pick up dynamic class
-  // names so we keep the literal strings; lookup beats a 4-deep
-  // ternary at the callsite.
-  const GRID_COLS: Record<number, string> = {
-    1: 'grid-cols-1',
-    2: 'grid-cols-1 md:grid-cols-2',
-    3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
-    4: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
-  };
-  const gridColsClass = (tvGridColumns && GRID_COLS[tvGridColumns]) || GRID_COLS[2];
+  // Grid columns — director override wins; otherwise a responsive
+  // default derived from how many courts are actually visible (see
+  // courtLayout.ts#defaultColumns). Hidden courts never count toward
+  // the column math since they're never on screen.
+  const resolvedColumns = defaultColumns(displayedCourtRows.length, config.tvGridColumns ?? null);
+  const gridColsClass = resolveGridColsClass(resolvedColumns);
+
+  // Built once and reused verbatim whether or not the SIDE standings panel
+  // is present (task 9) — the panel only wraps this in a flex row, it
+  // never changes the props CourtsView itself receives.
+  const courtsViewNode = (
+    <CourtsView
+      courts={displayedCourtRows}
+      config={config}
+      now={now}
+      displayMode={tvDisplayMode}
+      gridColsClass={gridColsClass}
+      cardHeightPx={cardHeightPx}
+      cardPadX={cardPadX}
+      courtNumSize={courtNumSize}
+      eventCodeSize={eventCodeSize}
+      playerSize={playerSize}
+      tvAccent={tvAccent}
+      tvShowScores={tvShowScores}
+      isFullscreen={isFullscreen}
+      playerNames={playerNames}
+    />
+  );
 
   return (
     <div
       ref={rootRef}
       data-tv-preset={tvPreset}
-      className="min-h-[100dvh] bg-background text-foreground selection:bg-primary/30"
+      className="min-h-[100dvh] bg-background text-foreground selection:bg-accent/30"
     >
       {/* Subtle film-grain overlay — adds a barely-there texture to the
           full-screen TV surface so the pure flats don't read as
@@ -325,10 +406,6 @@ export function MeetDisplayPage() {
             "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
         }}
       />
-      {/* Critical-only advisory banner (read-only on TV) */}
-      <div className="px-6 pt-4 empty:hidden">
-        <AdvisoryBanner readOnly />
-      </div>
       {/* ---------- Header ------------------------------------------------ */}
       <div className="sticky top-0 z-hud border-b border-border bg-background/90 px-6 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -344,7 +421,7 @@ export function MeetDisplayPage() {
                 {formatTournamentDate(config.tournamentDate)}
               </div>
             )}
-            <LiveStatusPill status={liveStatus} error={syncError} />
+            <LiveStatusPill status={freshness} />
           </div>
           <div className="flex items-center gap-3">
             <div className="flex gap-2">
@@ -358,13 +435,6 @@ export function MeetDisplayPage() {
               >
                 Schedule
               </button>
-              <button
-                type="button"
-                onClick={() => setView('standings')}
-                className={tabClass('standings')}
-              >
-                Standings
-              </button>
             </div>
             <div className="tabular-nums text-2xl text-muted-foreground">{currentTime}</div>
             <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
@@ -372,38 +442,63 @@ export function MeetDisplayPage() {
         </div>
       </div>
 
-      {/* View swap area. `key={view}` + `motion-enter` so changing tabs
-          materializes the new view via the brand recipe rather than
-          snapping in — visible from across a gym. */}
-      <div key={view} className="motion-enter px-6 pb-28 pt-6">
-        {view === 'courts' && (
-          <CourtsView
-            courts={courtMatches}
-            config={config}
-            now={now}
-            displayMode={tvDisplayMode}
-            gridColsClass={gridColsClass}
-            cardHeightPx={cardHeightPx}
-            cardPadX={cardPadX}
-            courtNumSize={courtNumSize}
-            eventCodeSize={eventCodeSize}
-            playerSize={playerSize}
-            tvAccent={tvAccent}
-            tvShowScores={tvShowScores}
-            isFullscreen={isFullscreen}
-            playerNames={playerNames}
-          />
-        )}
+      {/* View swap area. `key` + `motion-enter` so changing tabs (or the
+          ROTATE placement taking over the screen) materializes the new
+          content via the brand recipe rather than snapping in — visible
+          from across a gym. */}
+      <div
+        key={rotateStandings && rotationShowingStandings ? 'standings-rotation' : view}
+        className="motion-enter px-6 pb-28 pt-6"
+      >
+        {rotateStandings && rotationShowingStandings ? (
+          // ROTATE placement (task 9): periodically takes over the whole
+          // content area instead of a permanent side panel — for larger
+          // venues where a persistent panel would crowd an already-busy
+          // court grid. See ./publicDisplay/standingsLayout.ts.
+          <div data-testid="standings-rotation-screen">
+            <StandingsView standings={standings} />
+          </div>
+        ) : (
+          <>
+            {view === 'courts' && (
+              <>
+                {freshness === 'stale' && (
+                  <div className="mb-4 text-center text-base text-muted-foreground">
+                    {STALE_CAPTION}
+                  </div>
+                )}
+                <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>
+                  {showStandingsSidePanel ? (
+                    // SIDE placement (task 9): a persistent panel next to
+                    // the court grid — shrinks the space available to it,
+                    // it never resizes the grid's own column math (that
+                    // stays viewport-keyed via defaultColumns/CourtsView's
+                    // responsive classes, unrelated to this panel's width).
+                    <div className="flex flex-col gap-6 xl:flex-row">
+                      <div className="min-w-0 flex-1">{courtsViewNode}</div>
+                      <div
+                        className="w-full flex-none xl:w-96"
+                        data-testid="standings-side-panel"
+                      >
+                        <StandingsView standings={standings} />
+                      </div>
+                    </div>
+                  ) : (
+                    courtsViewNode
+                  )}
+                </div>
+              </>
+            )}
 
-        {view === 'schedule' && (
-          <ScheduleView
-            upcomingMatches={upcomingMatches}
-            config={config}
-            playerNames={playerNames}
-          />
+            {view === 'schedule' && (
+              <ScheduleView
+                upcomingMatches={upcomingMatches}
+                config={config}
+                playerNames={playerNames}
+              />
+            )}
+          </>
         )}
-
-        {view === 'standings' && <StandingsView standings={standings} />}
       </div>
 
       {/* ---------- Progress footer ------------------------------------- */}
@@ -424,7 +519,7 @@ export function MeetDisplayPage() {
               {matchesByStatus.started.length} active
             </span>
             <span className="inline-flex items-center gap-2 text-status-called">
-              <span className="h-2 w-2 rounded-full bg-status-called animate-pulse" />
+              <span className="h-2 w-2 rounded-full bg-status-called sw-pulse" />
               {matchesByStatus.called.length} called
             </span>
           </div>

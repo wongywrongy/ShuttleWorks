@@ -13,7 +13,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, CaretLeft, CaretRight, ClipboardText, GearSix } from '@phosphor-icons/react';
+import { Download, CaretRight, CaretDown, ClipboardText, GearSix } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system/components';
 import { useLiveTracking } from '../../hooks/useLiveTracking';
 import { useLiveOperations } from '../../hooks/useLiveOperations';
@@ -32,16 +32,25 @@ import { WarmRestartDialog } from './schedule/WarmRestartDialog';
 import { Modal } from '../../components/common/Modal';
 import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
 import { SuggestionsRail } from './suggestions/SuggestionsRail';
-import { GanttLegend } from './control-center/GanttLegend';
+import { AlertsActivityPanel } from './control-center/AlertsActivityPanel';
+import { useActivityLog } from '../../hooks/useActivityLog';
 import { exportScheduleXlsx } from './exports/xlsxExports';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { SourceChip } from '../../components/SourceChip';
 import { ActionsBar } from '../../components/control-plane';
 import type { Advisory } from '../../api/dto';
+import { useAction } from '../../hooks/useAction';
 
 export function MatchControlCenterPage() {
   const liveTracking = useLiveTracking();
   const liveOps = useLiveOperations();
+  // A rapid double-press fired TWO solves (audit C1) — `isReoptimizing` is React
+  // state and doesn't apply until the next render. `useAction` locks on a ref.
+  const reoptimizeAction = useAction(liveOps.triggerReoptimize, {
+    errorMessage: 'Re-optimize failed',
+  });
+  // Feed the Alerts & Activity trail from match-state transitions.
+  useActivityLog();
   const { cancel: cancelProposal } = useProposals();
   const players = useTournamentStore((state) => state.players);
   const groups = useTournamentStore((state) => state.groups);
@@ -86,6 +95,8 @@ export function MatchControlCenterPage() {
     setDetailsOpen(true);
     setPanelMode('score');
   }, []);
+  // Stable so it doesn't defeat GanttChart's memo (FIX C).
+  const openDirector = useCallback(() => setDirectorOpen(true), []);
   // Reset to idle whenever the user picks a different match — the
   // editor that was open belonged to the previous match.
   useEffect(() => {
@@ -131,9 +142,16 @@ export function MatchControlCenterPage() {
   const selectedAssignment = selectedMatchId && liveOps.schedule
     ? liveOps.schedule.assignments.find((a) => a.matchId === selectedMatchId)
     : undefined;
-  const selectedAnalysis = selectedMatchId
-    ? liveOps.analyzeImpact(selectedMatchId)
-    : null;
+  // Memoized: analyzeImpact walks all assignments and returns a fresh
+  // `directlyImpacted` array. Called unconditionally each render before,
+  // it re-ran on every 5s sync and handed GanttChart a new array reference
+  // (rebuilding its internal Set). Keyed on the selection + the live inputs
+  // analyzeImpact reads. PERF_FINDINGS.md FIX C.
+  const selectedAnalysis = useMemo(
+    () => (selectedMatchId ? liveOps.analyzeImpact(selectedMatchId) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedMatchId, liveOps.schedule, liveOps.matches, liveOps.matchStates],
+  );
   const selectedTrafficLight = selectedMatchId
     ? trafficLights.get(selectedMatchId)
     : undefined;
@@ -152,6 +170,22 @@ export function MatchControlCenterPage() {
       return isExplicitlyDelayed || isTimeDelayed;
     }).length;
   }, [liveOps.schedule, liveOps.matchStates, currentSlot]);
+
+  // Timeline "impacted" overlay = the matches a PENDING repair proposal
+  // would move (bound to the banner's proposal, cleared on apply/dismiss),
+  // NOT the selected match's shared-player set
+  // (SPEC_AMENDMENT_timeline_encoding §3).
+  const activeProposal = useUiStore((s) => s.activeProposal);
+  const impactedByProposal = useMemo(() => {
+    if (!activeProposal || !liveOps.schedule) return undefined;
+    const cur = new Map(liveOps.schedule.assignments.map((a) => [a.matchId, a]));
+    const moved: string[] = [];
+    for (const a of activeProposal.proposedSchedule.assignments) {
+      const c = cur.get(a.matchId);
+      if (!c || c.slotId !== a.slotId || c.courtId !== a.courtId) moved.push(a.matchId);
+    }
+    return moved;
+  }, [activeProposal, liveOps.schedule]);
 
   // Get updateMatch from store
   const updateMatch = useTournamentStore((state) => state.updateMatch);
@@ -408,16 +442,8 @@ export function MatchControlCenterPage() {
     }
   }, []);
 
-  // Cross-component intent: the toast's onAction sets
-  // `pendingAdvisoryReview` on the store; this effect picks it up and
-  // dispatches to the same handler the banner's Review button uses.
-  const pendingAdvisoryReview = useUiStore((s) => s.pendingAdvisoryReview);
-  const setPendingAdvisoryReview = useUiStore((s) => s.setPendingAdvisoryReview);
-  useEffect(() => {
-    if (!pendingAdvisoryReview) return;
-    handleAdvisoryReview(pendingAdvisoryReview);
-    setPendingAdvisoryReview(null);
-  }, [pendingAdvisoryReview, handleAdvisoryReview, setPendingAdvisoryReview]);
+  // (The banner and rail both call handleAdvisoryReview directly now, so the
+  // old toast→pendingAdvisoryReview cross-component intent is gone — P2.)
 
   // No schedule state
   if (!liveTracking.schedule) {
@@ -457,7 +483,10 @@ export function MatchControlCenterPage() {
           {/* Operator header strip — eyebrow + stats + actions, single
               baseline. Same vocabulary as Matches/Roster/Setup. */}
           <ActionsBar
-            title="Live"
+            // The sidebar nav calls this surface "Run" — the page eyebrow
+            // must say the same word or operators wonder if they landed on
+            // a different page (nav "Run" → header "Live" read as a miss).
+            title="Run"
             status={
               <>
                 {/* Engine-provenance chip — single-engine source is a
@@ -531,14 +560,18 @@ export function MatchControlCenterPage() {
               type="button"
               size="xs"
               variant="toolbar"
-              onClick={liveOps.triggerReoptimize}
-              disabled={liveOps.isReoptimizing}
+              onClick={() => void reoptimizeAction.run()}
+              disabled={liveOps.isReoptimizing || reoptimizeAction.pending}
+              aria-busy={liveOps.isReoptimizing || reoptimizeAction.pending}
               title="Re-solve the schedule, keeping started and finished matches fixed. For lighter changes use Re-plan or Move/postpone."
             >
-              {liveOps.isReoptimizing ? 'Optimizing…' : 'Re-optimize'}
+              {liveOps.isReoptimizing || reoptimizeAction.pending ? 'Optimizing…' : 'Re-optimize'}
             </Button>
           </ActionsBar>
-          {/* Gantt grid */}
+          {/* Gantt grid — the block encoding is self-describing (lifecycle
+              intensity + exception glyphs); the corner "?" key + rich chip
+              tooltips replaced the old legend strip
+              (SPEC_AMENDMENT_timeline_encoding §4). */}
           <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-3">
             <GanttChart
               schedule={liveOps.schedule}
@@ -548,14 +581,10 @@ export function MatchControlCenterPage() {
               currentSlot={currentSlot}
               selectedMatchId={selectedMatchId}
               onMatchSelect={setSelectedMatchId}
-              impactedMatchIds={selectedAnalysis?.directlyImpacted}
+              impactedMatchIds={impactedByProposal}
               trafficLights={trafficLights}
-              onRequestReopenCourt={() => setDirectorOpen(true)}
+              onRequestReopenCourt={openDirector}
             />
-          </div>
-          {/* Legend strip */}
-          <div className="shrink-0 border-b border-border px-4 py-1">
-            <GanttLegend />
           </div>
           {/* Match queue (WorkflowPanel) */}
           <div className="min-h-0 flex-1 overflow-hidden">
@@ -581,73 +610,86 @@ export function MatchControlCenterPage() {
           </div>
         </div>
 
-        {/* Right column — Match details (vertical hairline as separator) */}
-        {detailsOpen ? (
-          <div className="motion-enter flex w-72 shrink-0 flex-col overflow-hidden border-l border-border">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Match details
-              </span>
-              <button
-                type="button"
-                onClick={() => setDetailsOpen(false)}
-                title="Collapse details"
-                aria-label="Collapse details"
-                className={`${INTERACTIVE_BASE} flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
-              >
-                <CaretRight aria-hidden="true" className="h-3.5 w-3.5" />
-              </button>
+        {/* Right column — always-present rail. Alerts & Activity on top
+            (never hidden by selection), Match details below on selection
+            (SPEC_AMENDMENT_alerts_activity_panel §4). */}
+        <div className="motion-enter flex w-72 shrink-0 flex-col overflow-hidden border-l border-border">
+          {/* Cap alerts when Details is open so a long trail can't squeeze
+              Details to a sliver; let alerts fill when Details is collapsed. */}
+          <AlertsActivityPanel
+            onReview={handleAdvisoryReview}
+            className={detailsOpen ? 'max-h-[45%]' : 'flex-1'}
+          />
+          {detailsOpen ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
+                <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Match details
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen(false)}
+                  title="Collapse details"
+                  aria-label="Collapse details"
+                  className={`${INTERACTIVE_BASE} flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
+                >
+                  <CaretDown aria-hidden="true" className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <MatchDetailsPanel
+                  assignment={selectedAssignment}
+                  match={selectedMatch}
+                  matchState={selectedState}
+                  matches={liveOps.matches}
+                  trafficLight={selectedTrafficLight}
+                  analysis={selectedAnalysis}
+                  playerNames={playerNames}
+                  slotToTime={liveOps.slotToTime}
+                  onSelectMatch={setSelectedMatchId}
+                  schedule={liveOps.schedule}
+                  matchStates={liveOps.matchStates}
+                  players={players}
+                  groups={groups}
+                  config={liveOps.config}
+                  currentSlot={currentSlot}
+                  onUpdateStatus={liveTracking.updateMatchStatus}
+                  onConfirmPlayer={liveTracking.confirmPlayer}
+                  onSubstitute={handleSubstitute}
+                  onRemovePlayer={handleRemovePlayer}
+                  onCascadingStart={handleCascadingStart}
+                  onUndoStart={handleUndoStart}
+                  mode={panelMode}
+                  onModeChange={setPanelMode}
+                  onRequestDisruption={(type, matchId) => {
+                    const courtId =
+                      type === 'court_closed' && selectedAssignment
+                        ? selectedAssignment.courtId
+                        : undefined;
+                    setDisruptionPrefill({
+                      type,
+                      matchId: type === 'court_closed' ? undefined : matchId,
+                      courtId,
+                    });
+                    setDisruptionOpen(true);
+                  }}
+                  onRequestMove={(matchId) => setMoveMatchId(matchId)}
+                />
+              </div>
             </div>
-            <MatchDetailsPanel
-              assignment={selectedAssignment}
-              match={selectedMatch}
-              matchState={selectedState}
-              matches={liveOps.matches}
-              trafficLight={selectedTrafficLight}
-              analysis={selectedAnalysis}
-              playerNames={playerNames}
-              slotToTime={liveOps.slotToTime}
-              onSelectMatch={setSelectedMatchId}
-              schedule={liveOps.schedule}
-              matchStates={liveOps.matchStates}
-              players={players}
-              groups={groups}
-              config={liveOps.config}
-              currentSlot={currentSlot}
-              onUpdateStatus={liveTracking.updateMatchStatus}
-              onConfirmPlayer={liveTracking.confirmPlayer}
-              onSubstitute={handleSubstitute}
-              onRemovePlayer={handleRemovePlayer}
-              onCascadingStart={handleCascadingStart}
-              onUndoStart={handleUndoStart}
-              mode={panelMode}
-              onModeChange={setPanelMode}
-              onRequestDisruption={(type, matchId) => {
-                const courtId =
-                  type === 'court_closed' && selectedAssignment
-                    ? selectedAssignment.courtId
-                    : undefined;
-                setDisruptionPrefill({
-                  type,
-                  matchId: type === 'court_closed' ? undefined : matchId,
-                  courtId,
-                });
-                setDisruptionOpen(true);
-              }}
-              onRequestMove={(matchId) => setMoveMatchId(matchId)}
-            />
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setDetailsOpen(true)}
-            title="Show match details"
-            aria-label="Show match details"
-            className={`${INTERACTIVE_BASE} flex w-6 shrink-0 items-center justify-center border-l border-border text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
-          >
-            <CaretLeft aria-hidden="true" className="h-3.5 w-3.5" />
-          </button>
-        )}
+          ) : (
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(true)}
+              title="Show match details"
+              aria-label="Show match details"
+              className={`${INTERACTIVE_BASE} flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
+            >
+              <span>Match details</span>
+              <CaretRight aria-hidden="true" className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <DisruptionDialog

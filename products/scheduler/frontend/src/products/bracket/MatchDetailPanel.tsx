@@ -18,6 +18,7 @@ import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { BracketScoreEntry } from './BracketScoreEntry';
 import { BracketInlineNotice } from './BracketInlineNotice';
 import { applyOptimisticResult } from './optimisticResult';
+import { WinnerButton } from './WinnerButton';
 
 interface Props {
   data: BracketTournamentDTO;
@@ -55,7 +56,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
 
   if (!matchId) {
     return (
-      <aside className="w-72 flex-shrink-0 border-l border-border p-4 text-sm text-muted-foreground">
+      <aside className="h-full w-full p-4 text-sm text-muted-foreground">
         Select a match to see details.
       </aside>
     );
@@ -67,7 +68,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
 
   if (!pu) {
     return (
-      <aside className="w-72 flex-shrink-0 border-l border-border p-4 text-sm text-muted-foreground">
+      <aside className="h-full w-full p-4 text-sm text-muted-foreground">
         Match not found.
       </aside>
     );
@@ -78,9 +79,17 @@ export function MatchDetailPanel({ data, onChange }: Props) {
   const labelB = (pu.side_b ?? []).map((id) => nameById[id] ?? id).join(' / ') || '—';
 
   return (
-    <aside className="w-72 flex-shrink-0 border-l border-border p-4 space-y-3 overflow-auto">
+    // Keyed by the selected match id so switching selection re-mounts the
+    // rail and re-triggers `sw-panel-in`; a poll re-render (fresh `data`)
+    // keeps the same key so the animation never re-fires on ticks.
+    // Geometry (width, border) is owned by the DetailDock host — this is
+    // pure rail content.
+    <aside
+      key={matchId}
+      className="h-full w-full p-4 space-y-3 overflow-auto sw-panel-in"
+    >
       {/* Match id eyebrow */}
-      <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {pu.id}
       </div>
 
@@ -94,7 +103,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
       )}
 
       {/* Court + slot */}
-      <div className="text-sm font-mono">
+      <div className="text-sm sw-num">
         {assignment
           ? `Court C${assignment.court_id} · slot ${assignment.slot_id}`
           : '—'}
@@ -103,13 +112,13 @@ export function MatchDetailPanel({ data, onChange }: Props) {
       {/* Participants */}
       <div className="space-y-1">
         <div className="text-sm">{labelA}</div>
-        <div className="text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</div>
+        <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
         <div className="text-sm">{labelB}</div>
       </div>
 
       {/* Result summary (when finished) */}
       {result && (
-        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Done — {result.winner_side === 'A' ? labelA : labelB} wins
         </div>
       )}
@@ -165,11 +174,13 @@ export function MatchDetailPanel({ data, onChange }: Props) {
         )}
         {assignment?.started && !result && !setsMode && (
           <>
-            <button
-              type="button"
-              className={actionBtn}
-              onClick={() => {
-                if (!window.confirm(`Record ${labelA} as the winner? This cannot be undone.`)) return;
+            {/* The `window.confirm` these carried is gone — banned by the canon
+                and it blocks the event loop. `WinnerButton` arms on the first
+                press and commits on the second (audit E1). */}
+            <WinnerButton
+              label={labelA}
+              testId="detail-win-a"
+              onConfirm={() => {
                 setConflict(null);
                 void submitResult({
                   matchId,
@@ -178,14 +189,11 @@ export function MatchDetailPanel({ data, onChange }: Props) {
                   finishedAtSlot: assignment.slot_id + assignment.duration_slots,
                 });
               }}
-            >
-              {labelA} wins
-            </button>
-            <button
-              type="button"
-              className={actionBtn}
-              onClick={() => {
-                if (!window.confirm(`Record ${labelB} as the winner? This cannot be undone.`)) return;
+            />
+            <WinnerButton
+              label={labelB}
+              testId="detail-win-b"
+              onConfirm={() => {
                 setConflict(null);
                 void submitResult({
                   matchId,
@@ -194,9 +202,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
                   finishedAtSlot: assignment.slot_id + assignment.duration_slots,
                 });
               }}
-            >
-              {labelB} wins
-            </button>
+            />
             {/* Undo a mis-pressed Start: clears actual_start/end on the
                 assignment (the only reversible step in the lifecycle). */}
             <button

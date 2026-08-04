@@ -13,26 +13,24 @@
  *              in the header is the move that promotes these)
  *   FINISHED — result recorded
  *
- * Recording a winner is irreversible in the bracket API (409 on
- * overwrite), so the win buttons confirm() first.
+ * Recording a winner is irreversible in the bracket API (409 on overwrite), so
+ * the win buttons arm on the first press and commit on the second
+ * (`WinnerButton`) — no native dialog.
  */
 import { useMemo } from 'react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import { useUiStore } from '../../store/uiStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 import { formatBracketSlot } from './formatBracketSlot';
 import { playUnitSideLabels } from './bracketLabels';
+import { WinnerButton } from './WinnerButton';
 
 interface Props {
   data: BracketTournamentDTO;
   onChange: (t: BracketTournamentDTO) => void;
 }
-
-const actionBtn =
-  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm border border-border ` +
-  `bg-card px-2 py-0.5 text-2xs font-medium text-card-foreground ` +
-  `hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50`;
 
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm ` +
@@ -82,10 +80,10 @@ export function LiveMatchList({ data, onChange }: Props) {
     interval_minutes: data.interval_minutes,
   };
 
-  const recordWinner = async (puId: string, side: 'A' | 'B', name: string) => {
-    if (!window.confirm(`Record ${name} as the winner of ${puId}? This cannot be undone.`)) {
-      return;
-    }
+  // The `window.confirm` that used to guard this is gone — the canon two-click
+  // arm lives in `WinnerButton` (audit E1). A native dialog blocks the event
+  // loop and is banned by the design canon.
+  const recordWinner = async (puId: string, side: 'A' | 'B') => {
     const a = assignmentByPu.get(puId);
     onChange(
       await api.recordResult({
@@ -111,28 +109,28 @@ export function LiveMatchList({ data, onChange }: Props) {
         ? 'bg-status-live'
         : assignment
           ? 'bg-status-called'
-          : 'bg-muted-foreground/40';
+          : 'bg-muted-foreground';
 
     return (
       <li
         key={pu.id}
-        className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${
+        className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
           selectedId === pu.id ? 'bg-muted/40' : ''
         }`}
-        onClick={() => setSelectedId(pu.id)}
+        {...selectableRowProps(() => setSelectedId(pu.id), selectedId === pu.id)}
       >
         <span aria-hidden="true" className={`h-2 w-2 flex-shrink-0 rounded-full ${dotClass}`} />
-        <span className="w-20 flex-shrink-0 font-mono text-2xs tracking-wider text-foreground">
+        <span className="w-20 flex-shrink-0 sw-num text-2xs text-foreground">
           {pu.id}
         </span>
-        <span className="w-24 flex-shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
+        <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground">
           {assignment
             ? `C${assignment.court_id} · ${formatBracketSlot(assignment.slot_id, slotCtx)}`
             : '—'}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm">
           <span className={result?.winner_side === 'A' ? 'font-semibold' : ''}>{labelA}</span>
-          <span className="px-1.5 text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</span>
+          <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
           <span className={result?.winner_side === 'B' ? 'font-semibold' : ''}>{labelB}</span>
         </span>
         <span
@@ -140,7 +138,7 @@ export function LiveMatchList({ data, onChange }: Props) {
           onClick={(e) => e.stopPropagation()}
         >
           {result ? (
-            <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-status-done">
+            <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-done">
               {result.winner_side === 'A' ? labelA : labelB} won
             </span>
           ) : assignment && !started ? (
@@ -155,22 +153,16 @@ export function LiveMatchList({ data, onChange }: Props) {
             </button>
           ) : assignment && started ? (
             <>
-              <button
-                type="button"
-                className={actionBtn}
-                title={`${labelA} wins`}
-                onClick={() => void recordWinner(pu.id, 'A', labelA)}
-              >
-                {labelA} wins
-              </button>
-              <button
-                type="button"
-                className={actionBtn}
-                title={`${labelB} wins`}
-                onClick={() => void recordWinner(pu.id, 'B', labelB)}
-              >
-                {labelB} wins
-              </button>
+              <WinnerButton
+                label={labelA}
+                onConfirm={() => void recordWinner(pu.id, 'A')}
+                testId={`live-win-a-${pu.id}`}
+              />
+              <WinnerButton
+                label={labelB}
+                onConfirm={() => void recordWinner(pu.id, 'B')}
+                testId={`live-win-b-${pu.id}`}
+              />
             </>
           ) : (
             <span className="text-2xs text-muted-foreground">
@@ -185,7 +177,7 @@ export function LiveMatchList({ data, onChange }: Props) {
   const section = (title: string, ids: string[]) =>
     ids.length > 0 ? (
       <>
-        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {title} · {ids.length}
         </li>
         {ids.map(renderRow)}

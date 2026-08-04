@@ -45,6 +45,7 @@ from scheduler_core.domain.models import (  # noqa: E402
     ScheduleConfig,
     SolverOptions,
 )
+from services.determinism import warn_if_unpinned
 from services.scheduling.params import SchedulingParams, build_schedule_config
 
 
@@ -115,6 +116,7 @@ def solver_options_for(
     else:
         time_limit = DEFAULT_SOLVER_OPTIONS.time_limit_seconds
     if config.deterministic:
+        warn_if_unpinned("meet.solver_options_for")
         return SolverOptions(
             time_limit_seconds=time_limit,
             num_workers=1,
@@ -203,6 +205,35 @@ def schedule_config_from_dto(config: TournamentConfig) -> ScheduleConfig:
     )
 
 
+def schedule_config_for_bracket(
+    config: TournamentConfig,
+    *,
+    court_count: int,
+    total_slots: int,
+    interval_minutes: int,
+    closed_court_windows: List[Tuple[int, int, int]],
+) -> ScheduleConfig:
+    """Bracket variant of the shared config assembly.
+
+    Reuses the full meet mapping (rest, freeze horizon, breaks, solver
+    objective weights) so both engines consume the SAME engine-config
+    fields, then overrides the structural fields the bracket session
+    owns: its slot axis is a session constant (not a day-window
+    computation) and its closures are the meet-occupied windows the
+    caller derives (which already account for closed courts).
+    """
+    base = schedule_config_from_dto(config)
+    return replace(
+        base,
+        court_count=court_count,
+        total_slots=total_slots,
+        interval_minutes=interval_minutes,
+        closed_court_windows=list(closed_court_windows),
+        closed_court_ids=[],
+        current_slot=0,
+    )
+
+
 def _build_closed_court_windows(
     config: TournamentConfig, total_slots: int
 ) -> List[Tuple[int, int, int]]:
@@ -265,12 +296,18 @@ def players_from_dto(players: List[PlayerDTO], config: TournamentConfig) -> List
 
 
 def matches_from_dto(matches: List[MatchDTO]) -> List[Match]:
-    """Convert MatchDTOs to scheduler_core Match objects."""
+    """Convert MatchDTOs to scheduler_core Match objects.
+
+    A match takes exactly ONE slot — duration is not a per-match knob
+    (product rule, 2026-07-02). The DTO field survives for wire/blob
+    compatibility, but any legacy value is clamped to 1 here so a stale
+    ``durationSlots: 3`` in an old state blob can never stretch the plan.
+    """
     return [
         Match(
             id=m.id,
             event_code=m.eventRank if m.eventRank else f"MATCH-{m.id[:8]}",
-            duration_slots=m.durationSlots,
+            duration_slots=1,
             side_a=m.sideA if m.sideA else [],
             side_b=m.sideB if m.sideB else [],
         )

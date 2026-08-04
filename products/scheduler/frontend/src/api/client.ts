@@ -11,6 +11,8 @@ import type {
   ScheduleDTO,
   ScheduleAssignment,
   MatchStateDTO,
+  SolveJobDTO,
+  SolveJobListDTO,
   SolverProgressEvent,
   SolverModelBuiltEvent,
   SolverPhaseEvent,
@@ -36,7 +38,10 @@ import type {
   CommandRequestDTO,
   CommandResponseDTO,
   CommandConflictDTO,
+  UserDTO,
+  DisplayTokenDTO,
 } from './dto';
+import { SOLVE_JOB_TERMINAL_STATUSES } from './dto';
 import type {
   BracketCreateIn,
   BracketTournamentDTO,
@@ -47,6 +52,7 @@ import type {
   BracketValidationOut,
   BracketEventUpsertIn,
   BracketEventGenerateIn,
+  BracketEventPatchIn,
   BracketScore,
   BracketCommitRoundIn,
 } from './bracketDto';
@@ -89,6 +95,14 @@ interface GenerateScheduleRequest {
   /** Hybrid coordination: extra [court, fromSlot, toSlot] windows the meet
    *  solve must avoid — the bracket's occupied courts. */
   closedCourtWindows?: number[][];
+}
+
+export interface SolveJobPollOptions {
+  signal?: AbortSignal;
+  /** Called with every observed job snapshot (submit + each poll). */
+  onJob?: (job: SolveJobDTO) => void;
+  /** Initial poll delay; grows 1.5× per round, capped at 2 s. */
+  basePollMs?: number;
 }
 
 export type DisruptionType = 'withdrawal' | 'court_closed' | 'overrun' | 'cancellation';
@@ -193,6 +207,145 @@ export class MatchVersionMismatch extends Error {
   }
 }
 
+/**
+ * The axios response-error interceptor body, extracted to module scope so
+ * it can be exercised directly in tests (mocking `apiClient`'s methods
+ * bypasses this entirely — the interceptor never runs, so the toast logic
+ * inside it, including the CONFIG_LOCKED/DRAW_STARTED suppression below,
+ * would otherwise go untested). Registered as the reject handler on
+ * `client.interceptors.response.use` in the `ApiClient` constructor.
+ */
+export function handleApiResponseError(error: any): never {
+  // User-initiated aborts: swallow silently. React Query / SWR-style
+  // cancellations legitimately flow through here and shouldn't produce
+  // a user-visible toast.
+  if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+    throw error;
+  }
+
+  const requestId: string | undefined =
+    error.response?.headers?.['x-request-id'] ??
+    error.response?.headers?.['X-Request-ID'];
+
+  // Backend errors now ship a structured ``detail`` of the form
+  // ``{ code: 'STATE_CORRUPT', message: '...' }``. We extract the
+  // code as the toast title and the message as the body. Older
+  // routes that still pass a bare string ``detail`` keep working
+  // — the code falls back to nothing and the string becomes the
+  // message.
+  let code: string | undefined;
+  let message: string;
+  // Promoted alongside `code` for CONFIG_LOCKED payloads: the tournament
+  // state PUT's schedule-lock guard ships `extra={"fields": [...],
+  // "schedules": [...]}` (backend/api/tournaments.py) so the frontend can
+  // disclose exactly which committed schedule(s) a confirm-unlock will
+  // clear, instead of guessing from its own module's local state.
+  let fields: string[] | undefined;
+  let schedules: string[] | undefined;
+  if (error.response) {
+    const detail = error.response.data?.detail;
+    if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
+      code = typeof detail.code === 'string' ? detail.code : undefined;
+      message = detail.message;
+      if (Array.isArray(detail.fields)) fields = detail.fields;
+      if (Array.isArray(detail.schedules)) schedules = detail.schedules;
+    } else if (typeof detail === 'string') {
+      message = detail;
+    } else {
+      message =
+        error.response.data?.message ||
+        `Server error ${error.response.status}`;
+    }
+  } else if (error.request) {
+    message = 'No response from server. Is the backend running?';
+  } else {
+    message = error.message || 'An unexpected error occurred';
+  }
+
+  // Compose a single ``detail`` line containing the code (named,
+  // not bytes) and the request id if known. The body of the toast
+  // is the human message.
+  const detailParts: string[] = [];
+  if (code) detailParts.push(code);
+  if (requestId) detailParts.push(`request ${requestId.slice(0, 8)}`);
+
+  // CONFIG_LOCKED / DRAW_STARTED are raised ONLY by the tournament
+  // state PUT's schedule-lock guard (backend/api/tournaments.py) —
+  // and that funnel (`useTournamentState.forceSaveNow`) now owns their
+  // UX end to end: CONFIG_LOCKED opens the unlock-confirm modal (and
+  // on decline re-syncs quietly), DRAW_STARTED shows its own friendly
+  // "started draw" toast. Letting THIS generic handler also toast the
+  // raw backend string (which literally reads "...Retry with
+  // ?clearSchedule=true...") would surface a second, scarier toast
+  // alongside — or instead of — that dedicated handling.
+  const isLockCode = code === 'CONFIG_LOCKED' || code === 'DRAW_STARTED';
+
+  // Surface the failure exactly once, at the edge, so every hook /
+  // component gets consistent UI without needing to handle it.
+  // Dedupe identical (status, message) pairs within a 30s window
+  // so polling hooks don't pile up sticky error toasts forever
+  // when the backend returns the same error every poll cycle.
+  // SP-CLOUD-2: a 401 mid-session means the cloud session expired or
+  // was revoked. Broadcast so AuthProvider re-probes /auth/me (which
+  // nulls the session in cloud mode → AuthGuard redirects to /login);
+  // pollers stop via isTerminalPollError. getMe itself never lands
+  // here (it maps 401 → null via validateStatus), so this can't loop.
+  if (error.response?.status === 401) {
+    try {
+      window.dispatchEvent(new CustomEvent('sw:session-expired'));
+    } catch {
+      // non-browser test environments without CustomEvent — ignore
+    }
+    message = 'Your session has expired — please sign in again';
+  }
+
+  const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
+  const suppress = isLockCode || _shouldSuppressErrorToast(dedupeKey);
+  if (!suppress) {
+    try {
+      useUiStore.getState().pushToast({
+        level: 'error',
+        message,
+        detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
+      });
+    } catch {
+      // The store may not be ready during very-early-lifecycle calls —
+      // fall through to the thrown error below.
+    }
+  }
+
+  const err = new Error(message) as Error & {
+    requestId?: string;
+    code?: string;
+    fields?: string[];
+    schedules?: string[];
+    status?: number;
+    response?: unknown;
+    /** Set by this interceptor so the global
+     *  ``window.onunhandledrejection`` handler in ``AppShell``
+     *  doesn't surface a second toast for the same error. */
+    __handled?: boolean;
+  };
+  if (requestId) err.requestId = requestId;
+  if (code) err.code = code;
+  if (fields) err.fields = fields;
+  if (schedules) err.schedules = schedules;
+  // Preserve the ORIGINAL axios response on the rebuilt error.
+  // submitCommand classifies 409s by reading response.data.error
+  // (conflict vs stale_version); without this passthrough every
+  // rejection degraded to 'networkError', so the command queue
+  // kept a permanently-rejected command 'pending' and replayed
+  // it on every drain, forever (Phase-10 finding).
+  if (error.response) err.response = error.response;
+  // Promote the HTTP status so callers can branch on it without
+  // pattern-matching the rebuilt ``message`` string. The
+  // backend-merge arc's ``useBracket`` hook needs this to tell
+  // "no bracket configured yet" (404) from a real server error.
+  if (error.response?.status) err.status = error.response.status;
+  err.__handled = true;
+  throw err;
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -201,122 +354,174 @@ class ApiClient {
       baseURL,
       headers: {
         'Content-Type': 'application/json',
+        // CSRF double-submit shield: the backend refuses state-changing
+        // requests that carry the session cookie without this header
+        // (AUTH_CSRF_REQUIRED). Sending it on EVERY request is harmless
+        // and simpler than special-casing methods.
+        'X-ShuttleWorks-CSRF': '1',
       },
+      // Session auth is an httpOnly cookie — the browser attaches it
+      // only when credentials are enabled for cross-origin calls.
+      withCredentials: true,
       timeout: 300000, // 5 minutes for large schedules
-    });
-
-    // Attach the Supabase JWT to every outgoing request. ``getSession``
-    // returns the current cached session (Supabase handles automatic
-    // refresh, so we read at request time rather than caching here).
-    // When the Supabase client is null (no env config — local dev /
-    // pytest), the backend's ``get_current_user`` is in synthetic-user
-    // mode and doesn't need a header.
-    this.client.interceptors.request.use(async (config) => {
-      const { supabase } = await import('../lib/supabase');
-      if (!supabase) return config;
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (token) {
-        config.headers.set?.('Authorization', `Bearer ${token}`);
-      }
-      return config;
     });
 
     this.client.interceptors.response.use(
       (response) => response,
-      (error) => {
-        // User-initiated aborts: swallow silently. React Query / SWR-style
-        // cancellations legitimately flow through here and shouldn't produce
-        // a user-visible toast.
-        if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
-          throw error;
-        }
-
-        const requestId: string | undefined =
-          error.response?.headers?.['x-request-id'] ??
-          error.response?.headers?.['X-Request-ID'];
-
-        // Backend errors now ship a structured ``detail`` of the form
-        // ``{ code: 'STATE_CORRUPT', message: '...' }``. We extract the
-        // code as the toast title and the message as the body. Older
-        // routes that still pass a bare string ``detail`` keep working
-        // — the code falls back to nothing and the string becomes the
-        // message.
-        let code: string | undefined;
-        let message: string;
-        if (error.response) {
-          const detail = error.response.data?.detail;
-          if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
-            code = typeof detail.code === 'string' ? detail.code : undefined;
-            message = detail.message;
-          } else if (typeof detail === 'string') {
-            message = detail;
-          } else {
-            message =
-              error.response.data?.message ||
-              `Server error ${error.response.status}`;
-          }
-        } else if (error.request) {
-          message = 'No response from server. Is the backend running?';
-        } else {
-          message = error.message || 'An unexpected error occurred';
-        }
-
-        // Compose a single ``detail`` line containing the code (named,
-        // not bytes) and the request id if known. The body of the toast
-        // is the human message.
-        const detailParts: string[] = [];
-        if (code) detailParts.push(code);
-        if (requestId) detailParts.push(`request ${requestId.slice(0, 8)}`);
-
-        // Surface the failure exactly once, at the edge, so every hook /
-        // component gets consistent UI without needing to handle it.
-        // Dedupe identical (status, message) pairs within a 30s window
-        // so polling hooks don't pile up sticky error toasts forever
-        // when the backend returns the same error every poll cycle.
-        const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
-        const suppress = _shouldSuppressErrorToast(dedupeKey);
-        if (!suppress) {
-          try {
-            useUiStore.getState().pushToast({
-              level: 'error',
-              message,
-              detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
-            });
-          } catch {
-            // The store may not be ready during very-early-lifecycle calls —
-            // fall through to the thrown error below.
-          }
-        }
-
-        const err = new Error(message) as Error & {
-          requestId?: string;
-          code?: string;
-          status?: number;
-          /** Set by this interceptor so the global
-           *  ``window.onunhandledrejection`` handler in ``AppShell``
-           *  doesn't surface a second toast for the same error. */
-          __handled?: boolean;
-        };
-        if (requestId) err.requestId = requestId;
-        if (code) err.code = code;
-        // Promote the HTTP status so callers can branch on it without
-        // pattern-matching the rebuilt ``message`` string. The
-        // backend-merge arc's ``useBracket`` hook needs this to tell
-        // "no bracket configured yet" (404) from a real server error.
-        if (error.response?.status) err.status = error.response.status;
-        err.__handled = true;
-        throw err;
-      }
+      handleApiResponseError,
     );
   }
 
+  // ---- Auth (self-hosted cookie sessions, SP-CLOUD-2) ------------------
+
+  /** Create an account. Sets the httpOnly session cookie on success. */
+  async register(body: {
+    email: string;
+    password: string;
+    displayName?: string;
+  }): Promise<UserDTO> {
+    const r = await this.client.post<UserDTO>('/auth/register', body);
+    return r.data;
+  }
+
+  /** Email + password sign-in. Sets the httpOnly session cookie. */
+  async login(body: { email: string; password: string }): Promise<UserDTO> {
+    const r = await this.client.post<UserDTO>('/auth/login', body);
+    return r.data;
+  }
+
+  /** Clears the session cookie server-side (204). */
+  async logout(): Promise<void> {
+    await this.client.post('/auth/logout');
+  }
+
   /**
-   * Generate optimized schedule.
-   * Stateless compute — no tournament_id needed; the full problem is in the body.
+   * Who am I? Local mode always answers 200 with the bootstrap
+   * identity; cloud mode answers 401 when signed out — mapped to
+   * ``null`` here (NOT an error) so the AuthProvider's mount probe
+   * doesn't toast on every anonymous visit.
    */
-  async generateSchedule(request: GenerateScheduleRequest): Promise<ScheduleDTO> {
-    const response = await this.client.post<ScheduleDTO>('/schedule', request);
+  async getMe(): Promise<UserDTO | null> {
+    const r = await this.client.get<UserDTO>('/auth/me', {
+      validateStatus: (s) => s === 200 || s === 401,
+    });
+    if (r.status === 401) return null;
+    return r.data;
+  }
+
+  async changePassword(body: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<void> {
+    await this.client.post('/auth/change-password', body);
+  }
+
+  /** Always 202 (no account-existence oracle). */
+  async requestPasswordReset(email: string): Promise<void> {
+    await this.client.post('/auth/request-password-reset', { email });
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await this.client.post('/auth/reset-password', { token, newPassword });
+  }
+
+  // ---- Display capability tokens (owner-gated mint/rotate) -------------
+
+  /** The workspace's public display link, minted on first ask. Owner-only. */
+  async getDisplayToken(tid: string): Promise<DisplayTokenDTO> {
+    const r = await this.client.get<DisplayTokenDTO>(
+      `/tournaments/${tid}/display-token`,
+    );
+    return r.data;
+  }
+
+  /** Revoke-by-rotation: the old link dies the moment this returns. */
+  async rotateDisplayToken(tid: string): Promise<DisplayTokenDTO> {
+    const r = await this.client.post<DisplayTokenDTO>(
+      `/tournaments/${tid}/display-token/rotate`,
+    );
+    return r.data;
+  }
+
+  // ---- Public display projection (token-authenticated, read-only) ------
+  // The ONLY unauthenticated data plane: `/display/{token}/*` serves the
+  // spectator board a projection, never the raw state blob.
+
+  async getDisplaySummary(
+    token: string,
+  ): Promise<{ kind: string; name: string | null }> {
+    const r = await this.client.get(
+      `/display/${encodeURIComponent(token)}/summary`,
+    );
+    return r.data;
+  }
+
+  /** The meet-board projection. `null` when the workspace has no data yet (204). */
+  async getDisplayState(token: string): Promise<TournamentStateDTO | null> {
+    const r = await this.client.get<TournamentStateDTO>(
+      `/display/${encodeURIComponent(token)}/state`,
+      { validateStatus: (s) => s === 200 || s === 204 },
+    );
+    if (r.status === 204) return null;
+    return r.data;
+  }
+
+  async getDisplayMatchStates(
+    token: string,
+  ): Promise<Record<string, MatchStateDTO>> {
+    const r = await this.client.get<Record<string, MatchStateDTO>>(
+      `/display/${encodeURIComponent(token)}/match-states`,
+    );
+    return r.data;
+  }
+
+  /** Bracket board read. `null` when no bracket is configured yet (404),
+   *  mirroring ``getBracket``. */
+  async getDisplayBracket(token: string): Promise<BracketTournamentDTO | null> {
+    const r = await this.client.get(
+      `/display/${encodeURIComponent(token)}/bracket`,
+      { validateStatus: (s) => s === 200 || s === 404 },
+    );
+    if (r.status === 404) return null;
+    return r.data;
+  }
+
+  // ---- Solve jobs (SP-CLOUD-1 async solve rail) ------------------------
+
+  /** Submit a solve job (202). Stripe idempotency: a retry with the same
+   *  key returns the original job, never a second solve. */
+  async submitSolveJob(
+    tid: string,
+    request: GenerateScheduleRequest,
+    idempotencyKey: string,
+  ): Promise<SolveJobDTO> {
+    const response = await this.client.post<SolveJobDTO>(
+      `/tournaments/${tid}/solve-jobs`,
+      request,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  }
+
+  async getSolveJob(tid: string, jobId: string): Promise<SolveJobDTO> {
+    const response = await this.client.get<SolveJobDTO>(
+      `/tournaments/${tid}/solve-jobs/${jobId}`,
+    );
+    return response.data;
+  }
+
+  /** Recent jobs, newest first (bounded server-side). */
+  async listSolveJobs(tid: string): Promise<SolveJobDTO[]> {
+    const response = await this.client.get<SolveJobListDTO>(
+      `/tournaments/${tid}/solve-jobs`,
+    );
+    return response.data.jobs;
+  }
+
+  async cancelSolveJob(tid: string, jobId: string): Promise<SolveJobDTO> {
+    const response = await this.client.post<SolveJobDTO>(
+      `/tournaments/${tid}/solve-jobs/${jobId}/cancel`,
+    );
     return response.data;
   }
 
@@ -413,9 +618,8 @@ class ApiClient {
   }
 
   /** Public lookup. Returns tournament name + role + valid flag. The
-   *  call goes through the same axios instance so the interceptor
-   *  still tries to attach an Authorization header when a session
-   *  exists — backend ignores it on this route. */
+   *  call goes through the same axios instance so the session cookie
+   *  rides along when one exists — backend ignores it on this route. */
   async resolveInvite(token: string): Promise<InviteResolveDTO> {
     const r = await this.client.get<InviteResolveDTO>(`/invites/${token}`);
     return r.data;
@@ -537,170 +741,74 @@ class ApiClient {
   }
 
   /**
-   * Generate schedule with progress updates via Server-Sent Events.
+   * Run one solve through the job rail: submit (idempotency-keyed) and
+   * poll until a terminal status.
    *
-   * The backend emits these event types:
-   *   - ``model_built`` (once) — model statistics
-   *   - ``phase``                 — presolve | search | proving
-   *   - ``progress`` (many)       — intermediate solution
-   *   - ``complete``              — final ScheduleDTO
-   *   - ``error``                 — solver exception
-   *   - ``done``                  — stream terminator (always last)
+   * - ``succeeded`` and ``infeasible`` both resolve with the job's
+   *   ScheduleDTO — its ``status`` field distinguishes them, which is
+   *   exactly what the existing infeasible banner keys on.
+   * - ``failed`` rejects with the job's structured error message.
+   * - ``cancelled`` (or an aborted signal, which also requests a
+   *   server-side cancel) rejects with an ``AbortError`` so callers
+   *   keep treating user cancellation as silent.
+   *
+   * Transient poll failures are tolerated for a few consecutive rounds
+   * (the job keeps solving server-side regardless); a submit that hits
+   * the one-active-job rule surfaces as the interceptor's 409 toast.
    */
-  async generateScheduleWithProgress(
+  async runSolveJob(
+    tid: string,
     request: GenerateScheduleRequest,
-    callbacks: {
-      onProgress?: (event: SolverProgressEvent) => void;
-      onModelBuilt?: (event: SolverModelBuiltEvent) => void;
-      onPhase?: (event: SolverPhaseEvent) => void;
-    } | ((event: SolverProgressEvent) => void),
-    abortSignal?: AbortSignal
+    opts: SolveJobPollOptions = {},
   ): Promise<ScheduleDTO> {
-    // Back-compat: old call sites pass a single progress callback.
-    const cb = typeof callbacks === 'function'
-      ? { onProgress: callbacks }
-      : callbacks;
+    const job = await this.submitSolveJob(tid, request, crypto.randomUUID());
+    opts.onJob?.(job);
+    return this.pollSolveJob(tid, job, opts);
+  }
 
-    return new Promise((resolve, reject) => {
-      const url = `${API_BASE_URL}/schedule/stream`;
+  /**
+   * Poll an already-submitted job to completion (also the resume path:
+   * a reload mid-solve re-adopts the active job instead of losing it).
+   * Terminal mapping is identical to ``runSolveJob``.
+   */
+  async pollSolveJob(
+    tid: string,
+    initial: SolveJobDTO,
+    opts: SolveJobPollOptions = {},
+  ): Promise<ScheduleDTO> {
+    const { signal, onJob, basePollMs = 500 } = opts;
+    const abortError = () => new DOMException('Solve cancelled', 'AbortError');
 
-      // Initial-handshake retry with backoff. A dropped-mid-stream failure
-      // is *not* retried here because the solver has already started; a
-      // reconnect would silently kick off a duplicate run. Instead we
-      // surface a toast with a Retry action so the user stays in control.
-      const BACKOFFS_MS = [500, 1_000, 2_000];
+    let job = initial;
+    let delayMs = basePollMs;
+    let consecutivePollFailures = 0;
+    while (!SOLVE_JOB_TERMINAL_STATUSES.has(job.status)) {
+      if (signal?.aborted) {
+        void this.cancelSolveJob(tid, job.id).catch(() => {});
+        throw abortError();
+      }
+      await new Promise((r) => setTimeout(r, delayMs));
+      delayMs = Math.min(delayMs * 1.5, 2_000);
+      try {
+        job = await this.getSolveJob(tid, job.id);
+        consecutivePollFailures = 0;
+        onJob?.(job);
+      } catch (err) {
+        // A dead poll must not kill a live solve — but five dead polls
+        // in a row means we've genuinely lost the backend.
+        consecutivePollFailures += 1;
+        if (consecutivePollFailures >= 5) throw err;
+      }
+    }
 
-      const startFetch = async (attempt = 0): Promise<Response> => {
-        try {
-          const r = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(request),
-            signal: abortSignal,
-          });
-          return r;
-        } catch (err) {
-          if ((err as Error).name === 'AbortError') throw err;
-          if (attempt >= BACKOFFS_MS.length) throw err;
-          await new Promise((r) => setTimeout(r, BACKOFFS_MS[attempt]));
-          return startFetch(attempt + 1);
-        }
-      };
-
-      let reconnectToastId: string | null = null;
-      let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-
-      // The caller's AbortSignal should also tear down the reader so an
-      // external cancel (e.g. the user starts a new solve mid-stream)
-      // doesn't leak a dangling reader / listener.
-      const onExternalAbort = () => {
-        if (activeReader) {
-          void activeReader.cancel().catch(() => {});
-          activeReader = null;
-        }
-      };
-      abortSignal?.addEventListener('abort', onExternalAbort, { once: true });
-
-      startFetch()
-        .then(async (response) => {
-          // Clear the reconnecting toast once we have a response.
-          if (reconnectToastId) {
-            useUiStore.getState().dismissToast(reconnectToastId);
-            reconnectToastId = null;
-          }
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          const reader = response.body?.getReader();
-          if (!reader) throw new Error('Response body is not readable');
-          activeReader = reader;
-
-          const decoder = new TextDecoder();
-          let buffer = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-
-            const messages = buffer.split('\n\n');
-            buffer = messages.pop() || '';
-
-            for (const message of messages) {
-              if (!message.trim()) continue;
-              const dataMatch = message.match(/^data: (.+)$/m);
-              if (!dataMatch) continue;
-
-              try {
-                const event = JSON.parse(dataMatch[1]);
-                switch (event.type) {
-                  case 'model_built':
-                    cb.onModelBuilt?.(event as SolverModelBuiltEvent);
-                    break;
-                  case 'phase':
-                    cb.onPhase?.({ phase: event.phase });
-                    break;
-                  case 'progress':
-                    cb.onProgress?.({
-                      elapsed_ms: event.elapsed_ms,
-                      current_objective: event.current_objective,
-                      best_bound: event.best_bound,
-                      solution_count: event.solution_count,
-                      current_assignments: event.current_assignments,
-                      gap_percent: event.gap_percent,
-                      messages: event.messages,
-                    });
-                    break;
-                  case 'complete':
-                    resolve(event.result as ScheduleDTO);
-                    return;
-                  case 'error':
-                    reject(new Error(event.message));
-                    return;
-                  case 'done':
-                    // Stream terminator — no-op, resolve/reject already handled.
-                    break;
-                }
-              } catch (e) {
-                console.error('Failed to parse SSE event:', e);
-              }
-            }
-          }
-        })
-        .catch((err: Error) => {
-          // Silently swallow user-cancelled solves — the caller (useSchedule)
-          // aborts on navigation or new-solve-click and doesn't want a toast.
-          if (err.name === 'AbortError') {
-            reject(err);
-            return;
-          }
-          // Tear down the reader on any non-abort error so we never leak
-          // a half-drained stream into the next attempt.
-          if (activeReader) {
-            void activeReader.cancel().catch(() => {});
-            activeReader = null;
-          }
-          // Mid-stream failure: surface a Retry affordance so the user can
-          // rerun the solve after fixing the network/backend. We deliberately
-          // don't auto-retry here to avoid silent duplicate solves.
-          try {
-            useUiStore.getState().pushToast({
-              level: 'error',
-              message: 'Solver stream dropped',
-              detail: err.message,
-              actionLabel: 'Retry',
-              onAction: () => {
-                // Fire-and-forget — caller already saw this promise reject, so
-                // the retry starts a fresh solve via the same request object.
-                void this.generateScheduleWithProgress(request, callbacks, abortSignal);
-              },
-            });
-          } catch {
-            /* store unavailable — fall through */
-          }
-          reject(err);
-        });
-    });
+    if (job.status === 'succeeded' || job.status === 'infeasible') {
+      if (!job.result) throw new Error('solve job finished without a result');
+      return job.result;
+    }
+    if (job.status === 'cancelled') throw abortError();
+    throw new Error(
+      job.error?.message || job.error?.code || 'Solve failed',
+    );
   }
 
   /**
@@ -738,14 +846,18 @@ class ApiClient {
     return response.data;
   }
 
-  /** Overwrite a tournament's state blob. Returns the stamped state. */
+  /** Overwrite a tournament's state blob. Returns the stamped state.
+   *  `clearSchedule` sanctions a scheduling-field edit by clearing the
+   *  committed schedule(s) server-side, atomically with the write. */
   async putTournamentState(
     tid: string,
     state: TournamentStateDTO,
+    opts?: { clearSchedule?: boolean },
   ): Promise<TournamentStateDTO> {
     const response = await this.client.put<TournamentStateDTO>(
       `/tournaments/${tid}/state`,
       state,
+      opts?.clearSchedule ? { params: { clearSchedule: true } } : undefined,
     );
     return response.data;
   }
@@ -1061,7 +1173,14 @@ class ApiClient {
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // Same CSRF shield as the axios default header — this bare
+        // fetch() bypasses the axios instance, so it must carry the
+        // session cookie + CSRF marker itself.
+        'X-ShuttleWorks-CSRF': '1',
+      },
+      credentials: 'include',
       signal: abortSignal,
     });
     if (!response.ok) {
@@ -1231,6 +1350,39 @@ class ApiClient {
     return data;
   }
 
+  /**
+   * Draw-formats program: draft-only per-draw configuration edit
+   * (seeding / bracket size / rr rounds / format config blob) that does
+   * NOT touch participants — avoids the upsert-wipes-participants trap.
+   */
+  async bracketEventPatch(
+    tid: string,
+    eventId: string,
+    body: BracketEventPatchIn,
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.patch(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}`,
+      body,
+    );
+    return data;
+  }
+
+  /**
+   * Draw-formats program: generate the next Swiss round from current
+   * standings (append-only; 409 while the current round is incomplete,
+   * for non-progressive formats, drafts, or exhausted rounds).
+   */
+  async bracketEventNextRound(
+    tid: string,
+    eventId: string,
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post(
+      `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}/rounds/next`,
+      {},
+    );
+    return data;
+  }
+
   async bracketEventDelete(tid: string, eventId: string): Promise<void> {
     await this.client.delete(
       `/tournaments/${tid}/bracket/events/${encodeURIComponent(eventId)}`,
@@ -1286,6 +1438,7 @@ class ApiClient {
       finished_at_slot?: number;
       score?: unknown;
       walkover?: boolean;
+      reason?: 'walkover' | 'retired' | 'forfeit';
     },
   ): Promise<unknown> {
     const { data } = await this.client.post(

@@ -34,16 +34,18 @@ from scheduler_core.domain.tournament import (
 
 from .advancement import auto_walkover_byes
 from .draw import Draw
+from .player_constraints import PlayerExtras
 
 
 @dataclass
 class EventMeta:
     """Per-event metadata held alongside the Draw.
 
-    ``format`` is ``"se"`` (single-elimination) or ``"rr"`` (round-robin).
-    ``bracket_size`` is set for SE only; round-robin events leave it
-    ``None``. Lifted here from the tournament product so both backends
-    talk about events with the same shape.
+    ``format`` is a registered format id (``FORMAT_REGISTRY`` in
+    ``services.bracket.formats`` — ``"se"``, ``"rr"``, …).
+    ``bracket_size`` is set for knockout-family formats; round-robin
+    events leave it ``None``. Lifted here from the tournament product so
+    both backends talk about events with the same shape.
     """
 
     id: str
@@ -55,6 +57,13 @@ class EventMeta:
     # Per-event lifecycle: 'draft' | 'generated' | 'started'. Carried here
     # so serializers can report it without a second DB read.
     status: str = "draft"
+    # Per-draw configuration echoes — surfaced on EventOut so the client
+    # can render/edit a draw's options without a second read.
+    seeded_count: Optional[int] = None
+    rr_rounds: Optional[int] = None
+    # Format-specific knobs (the ``BracketEvent.config`` JSON column):
+    # Monrad consolation depth, DE grand-final reset, Swiss rounds, …
+    config: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -84,6 +93,11 @@ class BracketSession:
     # sorted list in the JSON blob (sets are not JSON-serialisable); hydrated
     # back to a Python set so membership checks are O(1).
     applied_command_ids: Set[str] = field(default_factory=set)
+    # SP-D7 S2: per-roster-player availability + rest extras, computed at
+    # hydrate time from ``tournaments.data.bracketPlayers`` and threaded
+    # into every ``TournamentDriver`` solve. Empty = no roster extras
+    # (uniform round-window behaviour, exactly as before).
+    player_extras: Dict[str, PlayerExtras] = field(default_factory=dict)
 
 
 def register_draw(state: TournamentState, draw: Draw) -> None:

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import type { TournamentMemberDTO, TournamentSummaryDTO } from '../../api/dto';
 import { shortId, initialFor } from './memberIdentity';
@@ -9,9 +10,13 @@ const ROLE_LEGEND: { role: string; desc: string }[] = [
   { role: 'Viewer', desc: 'Read-only / display support.' },
 ];
 
+/** Same date grammar as the workspace header ("Oct 1, 2026") — one format
+ *  everywhere, never the locale-default numeric soup. */
 function fmtDate(iso: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString();
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 /** People & Access: the roles legend + the workspace's members (read-only —
@@ -66,33 +71,51 @@ export function PeopleAccessTab({
               No members yet — invite collaborators from the Sharing tab.
             </li>
           ) : (
-            members.map((m) => (
-              <li
-                key={m.userId}
-                data-testid={`member-${m.userId}`}
-                className="flex items-center justify-between gap-3 p-3"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span
-                    aria-hidden
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-muted-foreground"
-                  >
-                    {initialFor(m.userId)}
-                  </span>
-                  <span className="flex flex-col">
-                    <span className="text-xs font-medium capitalize text-foreground">{m.role}</span>
-                    <span className="font-mono text-2xs text-muted-foreground/70" title="Member id">
-                      {shortId(m.userId)}
+            members.map((m) => {
+              // SP-CLOUD-2: member rows now carry real identity (displayName /
+              // email) from the users table. Prefer that; fall back to the
+              // owner's name off the summary for the owner row; and keep the
+              // short-id chip for pre-account placeholder identities (null
+              // email — unmigrated rows).
+              const name =
+                m.displayName?.trim() ||
+                m.email ||
+                (m.role === 'owner' && summary?.ownerName ? summary.ownerName : null);
+              return (
+                <li
+                  key={m.userId}
+                  data-testid={`member-${m.userId}`}
+                  className="flex items-center justify-between gap-3 p-3"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      aria-hidden
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-muted-foreground"
+                    >
+                      {name ? name[0].toUpperCase() : initialFor(m.userId)}
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-xs font-medium text-foreground">
+                        {name ?? shortId(m.userId)}
+                      </span>
+                      <span className="text-2xs capitalize text-muted-foreground">{m.role}</span>
                     </span>
                   </span>
-                </span>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  Joined {fmtDate(m.joinedAt)}
-                </span>
-              </li>
-            ))
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    Joined {fmtDate(m.joinedAt)}
+                  </span>
+                </li>
+              );
+            })
           )}
         </ul>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Invite people from{' '}
+          <Link to={`/tournaments/${tid}/ws-sharing`} className="text-accent hover:underline">
+            Sharing
+          </Link>
+          {' '}— collaborator invite links carry a role.
+        </p>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@
  * pinAndResolve().
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, DoorOpen, X as XIcon } from '@phosphor-icons/react';
+import { Check, DoorOpen, PushPin, X as XIcon } from '@phosphor-icons/react';
 import {
   DndContext,
   MouseSensor,
@@ -49,11 +49,20 @@ import {
 } from '../../../lib/courtClosures';
 import type {
   MatchDTO,
+  MatchStateDTO,
   ScheduleDTO,
   TournamentConfig,
   ValidationResponseDTO,
 } from '../../../api/dto';
-import { getEventColor, EVENT_COLORS } from '../../../lib/eventColors';
+import type { TrafficLightResult } from '../../../hooks/useTrafficLights';
+import {
+  LIFECYCLE_STYLES,
+  SELECTION_RING,
+  exceptionFor,
+  lifecycleOf,
+  type Lifecycle,
+} from '../timelineEncoding';
+import { TimelineKey } from '../TimelineKey';
 
 const VALIDATE_DEBOUNCE_MS = 80;
 
@@ -66,6 +75,14 @@ interface DragGanttProps {
   currentSlot?: number;
   readOnly?: boolean;
   onRequestReopenCourt?: (courtId: number) => void;
+  /** Live match states — drives the shared lifecycle-by-intensity fill
+   *  (SPEC_AMENDMENT_timeline_encoding; one color language with Run). */
+  matchStates?: Record<string, MatchStateDTO>;
+  /** Conflict signals — the blocked (danger) exception on blocks. */
+  trafficLights?: Map<string, TrafficLightResult>;
+  /** Last solve's penalty score — shown in the bottom status line (the
+   *  toolbar no longer hosts solver telemetry — Phase 4.3). */
+  objectiveScore?: number;
 }
 
 type CellId = `cell:${number}:${number}`;
@@ -101,6 +118,9 @@ export function DragGantt({
   currentSlot,
   readOnly = false,
   onRequestReopenCourt,
+  matchStates,
+  trafficLights,
+  objectiveScore,
 }: DragGanttProps) {
   const players = useTournamentStore((s) => s.players);
   const pendingPin = useUiStore((s) => s.pendingPin);
@@ -318,7 +338,7 @@ export function DragGantt({
       const fullyClosed = isCourtFullyClosed(closedWindows, courtId, minSlot, maxSlot);
       if (!fullyClosed) return null;
       return (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-2xs uppercase tracking-wider text-muted-foreground/80">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-2xs uppercase tracking-wider text-muted-foreground">
           court closed
         </div>
       );
@@ -380,11 +400,25 @@ export function DragGantt({
       if (!m) return null;
       const hiddenWhileDragging = activeId === `match:${placement.key}`;
       const idx = indexByKey.get(placement.key) ?? 0;
+      // Shared lifecycle + exception vocabulary (one language with Run).
+      const state = matchStates?.[placement.key];
+      const status = lifecycleOf(state);
+      const isLate =
+        currentSlot != null &&
+        currentSlot > placement.startSlot &&
+        (status === 'scheduled' || status === 'called');
+      const traffic = trafficLights?.get(placement.key);
+      const isBlocked =
+        !!traffic && traffic.status === 'red' && (status === 'scheduled' || status === 'called');
       return (
         <MatchBlock
           matchId={placement.key}
           match={m}
           box={box}
+          status={status}
+          isLate={isLate}
+          isBlocked={isBlocked}
+          isPostponed={state?.postponed === true}
           isSelected={selectedMatchId === placement.key}
           isPinned={pendingPin?.matchId === placement.key}
           isGenerating={isGenerating}
@@ -400,6 +434,9 @@ export function DragGantt({
       matchMap,
       activeId,
       indexByKey,
+      matchStates,
+      trafficLights,
+      currentSlot,
       selectedMatchId,
       pendingPin?.matchId,
       isGenerating,
@@ -414,31 +451,29 @@ export function DragGantt({
       <Hint id="schedule.drag-instructions" className="m-2">
         Drag a match to any cell — infeasible targets glow red. Drop pins the match and re-solves the rest.
       </Hint>
-      <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-3 py-1.5 text-2xs text-muted-foreground">
-        <span className="font-semibold uppercase tracking-wider">Events</span>
-        {Object.entries(EVENT_COLORS).map(([key, { bg, border, label }]) => (
-          <span key={key} className="inline-flex items-center gap-1" title={label}>
-            <span className={`inline-block h-2.5 w-2.5 rounded ${bg} border ${border}`} />
-            {key}
-          </span>
-        ))}
-      </div>
-
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
-        <GanttTimeline
-          data-testid="drag-gantt-grid"
-          courts={courts}
-          minSlot={minSlot}
-          slotCount={slotCount}
-          density="standard"
-          placements={placements}
-          renderBlock={renderBlock}
-          renderCell={renderCell}
-          renderRow={renderRow}
-          renderCourtLabel={renderCourtLabel}
-          renderSlotLabel={renderSlotLabel}
-          currentSlot={currentSlot}
-        />
+        {/* The EVENTS hue legend is gone — the chip label prefix (MS1/WD2…)
+            already encodes the event, and blocks now paint the shared
+            lifecycle/exception language. The "?" key (anchored to the grid,
+            clear of the dismissable hint above) is the decode reference
+            (SPEC_AMENDMENT_timeline_encoding §4, Phase 4.2). */}
+        <div className="relative">
+          <TimelineKey variant="plan" />
+          <GanttTimeline
+            data-testid="drag-gantt-grid"
+            courts={courts}
+            minSlot={minSlot}
+            slotCount={slotCount}
+            density="standard"
+            placements={placements}
+            renderBlock={renderBlock}
+            renderCell={renderCell}
+            renderRow={renderRow}
+            renderCourtLabel={renderCourtLabel}
+            renderSlotLabel={renderSlotLabel}
+            currentSlot={currentSlot}
+          />
+        </div>
 
         <div
           className="flex items-center justify-between border-t border-border/60 bg-muted/40 px-3 py-1.5 text-2xs"
@@ -463,6 +498,15 @@ export function DragGantt({
             <span className="text-muted-foreground">
               {schedule.assignments.length} matches scheduled across {config.courtCount} court
               {config.courtCount === 1 ? '' : 's'}.
+              {objectiveScore != null ? (
+                <span
+                  className="cursor-help tabular-nums"
+                  title="Total penalty score of the last solve — lower is better. Sums rest violations, late finishes, and movement away from any prior schedule."
+                >
+                  {' '}
+                  · Score {Math.round(objectiveScore)}
+                </span>
+              ) : null}
             </span>
           )}
           {pendingPin ? (
@@ -538,6 +582,10 @@ function MatchBlock({
   matchId,
   match,
   box,
+  status,
+  isLate,
+  isBlocked,
+  isPostponed,
   isSelected,
   isPinned,
   isGenerating,
@@ -550,6 +598,10 @@ function MatchBlock({
   matchId: string;
   match: MatchDTO;
   box: GanttBlockBox;
+  status: Lifecycle;
+  isLate: boolean;
+  isBlocked: boolean;
+  isPostponed: boolean;
   isSelected: boolean;
   isPinned: boolean;
   isGenerating: boolean;
@@ -576,7 +628,22 @@ function MatchBlock({
     ? 'none'
     : 'background-color 120ms var(--ease-brand), border-color 120ms var(--ease-brand)';
   const pinActive = isPinned && isGenerating;
-  const eventColor = getEventColor(match.eventRank);
+  // Shared lifecycle-by-intensity fill + exception vocabulary; selection is
+  // the neutral canon ring (interaction, not data); a pin is a GLYPH, not a
+  // color (SPEC_AMENDMENT_timeline_encoding, Phase 4.2).
+  const styles = LIFECYCLE_STYLES[status];
+  const exception = exceptionFor({ isBlocked, isPostponed, isLate, baseBorder: styles.border });
+  const ExceptionGlyph = exception.Glyph;
+  const title = [
+    matchLabel(match),
+    status,
+    isLate ? 'late' : null,
+    isPostponed ? 'postponed' : null,
+    isBlocked ? 'blocked' : null,
+    isPinned ? 'pinned' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <button
       ref={setNodeRef}
@@ -602,13 +669,16 @@ function MatchBlock({
       className={[
         'group rounded border text-left px-2 py-0.5 shadow-sm',
         'motion-safe:animate-block-in',
-        isSelected
-          ? 'bg-accent/10 border-accent text-accent ring-1 ring-accent/30'
-          : `${eventColor.bg} ${eventColor.border} text-foreground hover:shadow-md hover:brightness-95`,
-        isPinned && !pinActive ? 'ring-2 ring-inset ring-status-warning border-dashed' : '',
+        styles.bg,
+        exception.border,
+        exception.extra,
+        styles.text,
+        'hover:shadow-md hover:brightness-95',
+        isSelected ? SELECTION_RING : '',
+        isPinned && !pinActive ? 'border-dashed' : '',
         readOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing',
       ].join(' ')}
-      title={`${matchLabel(match)} · ${eventColor.label}`}
+      title={title}
     >
       {pinActive ? (
         <span
@@ -619,6 +689,19 @@ function MatchBlock({
       <span className="relative text-2xs font-semibold leading-tight block truncate">
         {matchLabel(match)}
       </span>
+      {isPinned && !pinActive ? (
+        <PushPin
+          aria-hidden="true"
+          weight="fill"
+          className="pointer-events-none absolute right-0.5 top-0.5 h-3 w-3 text-muted-foreground"
+        />
+      ) : ExceptionGlyph ? (
+        <ExceptionGlyph
+          aria-hidden="true"
+          weight="fill"
+          className={`pointer-events-none absolute right-0.5 top-0.5 h-3 w-3 ${exception.glyphTone}`}
+        />
+      ) : null}
     </button>
   );
 }

@@ -145,7 +145,7 @@ export function PositionCell({
           {/* Hover affordance: signals double-click reassigns. */}
           <PencilSimple
             aria-hidden
-            className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground/40 opacity-0 transition-opacity duration-fast ease-brand group-hover/cell:opacity-100"
+            className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand group-hover/cell:opacity-100"
           />
         </div>
       ) : (

@@ -1,0 +1,8 @@
+# tournament_sim — internal dev tool. HTTP-only client of the backend.
+# Deliberately NOT merged into backend/requirements-dev.txt: that file
+# feeds the CI backend job; the simulator stays outside the PR gate.
+httpx>=0.26
+pytest>=8
+
+# Phase 2 (load testing) — uncomment when the LocustClientAdapter lands:
+# locust>=2.29

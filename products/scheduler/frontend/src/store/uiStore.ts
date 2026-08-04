@@ -14,6 +14,7 @@ import type {
   ScheduleAssignment,
   SolverProgressEvent,
   Suggestion,
+  TournamentRole,
 } from '../api/dto';
 
 export type AppTab =
@@ -44,7 +45,9 @@ export type AppTab =
   | 'ws-sync'
   | 'ws-settings';
 
-export type SolverPhase = 'presolve' | 'search' | 'proving' | null;
+// 'queued' = the solve job is waiting for a worker (SP-CLOUD-1 async rail);
+// the remaining phases cover the solve itself.
+export type SolverPhase = 'queued' | 'presolve' | 'search' | 'proving' | null;
 
 interface SolverHudState {
   phase: SolverPhase;
@@ -111,6 +114,12 @@ interface ScheduleGenerationStats {
 interface UnlockModalState {
   open: boolean;
   actionDescription?: string;
+  /** Extra disclosure line for the cross-module case: set when the
+   *  triggering 409's `schedules` payload names more than just the
+   *  current module (e.g. confirming a meet-worded unlock also clears
+   *  a committed bracket schedule). Omitted when there is nothing extra
+   *  to disclose. */
+  crossModuleNote?: string;
   resolve: (confirmed: boolean) => void;
 }
 
@@ -147,6 +156,23 @@ interface UiState {
   activeTournamentStatus: 'draft' | 'active' | 'archived' | null;
   setActiveTournamentStatus: (
     status: 'draft' | 'active' | 'archived' | null,
+  ) => void;
+
+  // The caller's role on the active workspace, from the same summary row as
+  // ``kind``/``status``. Read through ``platform/domain/permissions.canEdit``
+  // — never compared inline — so the write gate has exactly one definition.
+  // ``null`` while loading or on failure, which ``canEdit`` treats as read-only
+  // (fail closed: a viewer must never get a live control, audit finding A2).
+  activeTournamentRole: TournamentRole | null;
+  setActiveTournamentRole: (role: TournamentRole | null) => void;
+
+  // Active tournament's derived lifecycle phase (setup → ready → live →
+  // complete) from ``signals.phase`` — real play state, unlike the
+  // operator-managed ``status`` above. The Workspace Shell prefers this
+  // for its badge so a mid-day/finished tournament never reads "draft".
+  activeTournamentPhase: 'setup' | 'ready' | 'live' | 'complete' | null;
+  setActiveTournamentPhase: (
+    phase: 'setup' | 'ready' | 'live' | 'complete' | null,
   ) => void;
 
   // Whether the active bracket-kind tournament has a generated draw.
@@ -207,8 +233,6 @@ interface UiState {
   setAdvisories: (advisories: Advisory[]) => void;
   suggestions: Suggestion[];
   setSuggestions: (suggestions: Suggestion[]) => void;
-  pendingAdvisoryReview: Advisory | null;
-  setPendingAdvisoryReview: (advisory: Advisory | null) => void;
 
   // Unlock-confirm modal handshake.
   unlockModalState: UnlockModalState | null;
@@ -235,6 +259,8 @@ const INITIAL: Pick<
   | 'activeTournamentId'
   | 'activeTournamentKind'
   | 'activeTournamentStatus'
+  | 'activeTournamentRole'
+  | 'activeTournamentPhase'
   | 'bracketDataReady'
   | 'solverHud'
   | 'pendingPin'
@@ -251,7 +277,6 @@ const INITIAL: Pick<
   | 'activeProposal'
   | 'advisories'
   | 'suggestions'
-  | 'pendingAdvisoryReview'
   | 'unlockModalState'
   | 'bracketSelectedMatchId'
   | 'bracketScheduleEventFilter'
@@ -260,6 +285,8 @@ const INITIAL: Pick<
   activeTournamentId: null,
   activeTournamentKind: null,
   activeTournamentStatus: null,
+  activeTournamentRole: null,
+  activeTournamentPhase: null,
   bracketDataReady: null,
   solverHud: DEFAULT_SOLVER_HUD,
   pendingPin: null,
@@ -276,19 +303,20 @@ const INITIAL: Pick<
   activeProposal: null,
   advisories: [],
   suggestions: [],
-  pendingAdvisoryReview: null,
   unlockModalState: null,
   bracketSelectedMatchId: null,
   bracketScheduleEventFilter: {},
 };
 
-export const useUiStore = create<UiState>((set) => ({
+export const useUiStore = create<UiState>((set, get) => ({
   ...INITIAL,
 
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
   setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
   setActiveTournamentStatus: (activeTournamentStatus) => set({ activeTournamentStatus }),
+  setActiveTournamentRole: (activeTournamentRole) => set({ activeTournamentRole }),
+  setActiveTournamentPhase: (activeTournamentPhase) => set({ activeTournamentPhase }),
   setBracketDataReady: (bracketDataReady) => set({ bracketDataReady }),
 
   setSolverHud: (patch) =>
@@ -303,6 +331,22 @@ export const useUiStore = create<UiState>((set) => ({
   setLastSaveError: (lastSaveError) => set({ lastSaveError }),
 
   pushToast: (toast) => {
+    // Dedupe: a toast with the same level + message refreshes the existing
+    // entry (latest detail wins) instead of stacking a duplicate — repeated
+    // failures of one action (e.g. clicking Generate against a full day
+    // plan) produce ONE toast, not a pile (docs/audits/debt-log.md:
+    // "Error toasts stack without auto-dismiss").
+    const existing = get().toasts.find(
+      (t) => t.level === toast.level && t.message === toast.message,
+    );
+    if (existing) {
+      set((state) => ({
+        toasts: state.toasts.map((t) =>
+          t.id === existing.id ? { ...existing, ...toast, id: existing.id } : t,
+        ),
+      }));
+      return existing.id;
+    }
     const id =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -338,8 +382,6 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveProposal: (activeProposal) => set({ activeProposal }),
   setAdvisories: (advisories) => set({ advisories }),
   setSuggestions: (suggestions) => set({ suggestions }),
-  setPendingAdvisoryReview: (pendingAdvisoryReview) =>
-    set({ pendingAdvisoryReview }),
   setUnlockModalState: (unlockModalState) => set({ unlockModalState }),
 
   setBracketSelectedMatchId: (bracketSelectedMatchId) => set({ bracketSelectedMatchId }),

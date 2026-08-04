@@ -5,39 +5,47 @@
  * directly (the bracket display has no Zustand store to hydrate).
  *
  * Writes are NEVER issued — the TV is a read-only mirror.
+ *
+ * Freshness derivation is shared with the meet board via
+ * `../publicDisplay/freshness` (`deriveFreshness`) so both public boards
+ * speak the same spectator-calm Live / Delayed / Out-of-date vocabulary
+ * instead of drifting into separate Reconnecting/Offline language.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../../api/client';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
-import type { LiveStatus } from '../publicDisplay/useDisplaySync';
+import { deriveFreshness, type FreshnessState } from '../publicDisplay/freshness';
 
 const POLL_MS = 10_000;
-const RECONNECTING_AFTER_MS = 25_000;
-const OFFLINE_AFTER_MS = 60_000;
 
 export interface UseBracketDisplaySyncResult {
   data: BracketTournamentDTO | null;
-  liveStatus: LiveStatus;
+  freshness: FreshnessState;
   syncError: string | null;
 }
 
 export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
   const [searchParams] = useSearchParams();
+  // Public capability link (SP-CLOUD-2): ?token= reads the unauthenticated
+  // /display/{token}/bracket projection; ?id= keeps the viewer-gated path.
+  const token = searchParams.get('token');
   const tid = searchParams.get('id');
   const [data, setData] = useState<BracketTournamentDTO | null>(null);
   const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!tid) {
-      setSyncError('Missing ?id=<tournament-id> query parameter');
+    if (!token && !tid) {
+      setSyncError('Missing ?token=<display-token> (or ?id=) query parameter');
       return;
     }
     let cancelled = false;
     const pull = async () => {
       try {
-        const remote = await apiClient.getBracket(tid);
+        const remote = token
+          ? await apiClient.getDisplayBracket(token)
+          : await apiClient.getBracket(tid as string);
         if (cancelled) return;
         if (remote) setData(remote);
         setLastSyncMs(Date.now());
@@ -53,15 +61,13 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, [tid]);
+  }, [tid, token]);
 
-  const liveStatus: LiveStatus = useMemo(() => {
-    if (lastSyncMs === null) return syncError ? 'reconnecting' : 'live';
+  const freshness: FreshnessState = useMemo(() => {
+    if (lastSyncMs === null) return syncError ? 'delayed' : 'live';
     const age = now.getTime() - lastSyncMs;
-    if (age >= OFFLINE_AFTER_MS) return 'offline';
-    if (age >= RECONNECTING_AFTER_MS) return 'reconnecting';
-    return 'live';
+    return deriveFreshness(age, POLL_MS);
   }, [lastSyncMs, now, syncError]);
 
-  return { data, liveStatus, syncError };
+  return { data, freshness, syncError };
 }

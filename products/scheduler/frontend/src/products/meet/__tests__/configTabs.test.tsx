@@ -1,19 +1,22 @@
 /**
- * SP-E4 — Meet Configuration is two tabs: Engine and Meet.
+ * SP-E4 — Meet Configuration is two tabs: Engine and Events.
  *
  * Engine tab = the CP-SAT input surface: the shared scoring field set
  * (score type / points / match format / deuce) + rest, with the solver
- * knobs below. Meet tab = meet type + lineup position counts (rankCounts);
- * the player-assignment grid stays in Roster.
+ * knobs below. Events tab = meet type + lineup position counts
+ * (rankCounts); the player-assignment grid stays in Roster. The section
+ * label is 'Events' (shared grammar with Bracket Configuration); its URL
+ * value stays 'meet'.
  *
  * These render the real `TournamentSetupPage`; `useTournament` reads the
  * Zustand store directly (no network), so seeding the store is enough.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { TournamentSetupPage } from '../TournamentSetupPage';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { useUiStore } from '../../../store/uiStore';
 import type { TournamentConfig } from '../../../api/dto';
 
 function seed(overrides: Partial<TournamentConfig> = {}) {
@@ -49,15 +52,20 @@ function renderPage() {
 
 beforeEach(() => {
   seed();
+  // Lock-guard tests below flip global store state (isScheduleLocked,
+  // useUiStore's unlockModalState) — reset both so ordering can't leak
+  // an open modal / stuck lock into an unrelated test.
+  useTournamentStore.setState({ isScheduleLocked: false, schedule: null });
+  useUiStore.getState().setUnlockModalState(null);
 });
 
 describe('Meet Configuration — two tabs', () => {
-  it('renders exactly two tabs: Engine and Meet', () => {
+  it('renders exactly two tabs: Engine and Events', () => {
     renderPage();
     const seg = screen.getByRole('radiogroup', { name: /Configuration section/i });
     expect(seg).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Engine' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Meet' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Events' })).toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: 'Tournament' })).toBeNull();
   });
 
@@ -70,9 +78,9 @@ describe('Meet Configuration — two tabs', () => {
     expect(screen.getByLabelText('Rest between matches')).toBeInTheDocument();
   });
 
-  it('Meet tab shows meet type + per-discipline position counts', () => {
+  it('Events tab shows meet type + per-discipline position counts', () => {
     renderPage();
-    fireEvent.click(screen.getByRole('radio', { name: 'Meet' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Events' }));
     expect(screen.getByLabelText('Meet type')).toBeInTheDocument();
     expect(screen.getByLabelText("Men's singles positions")).toBeInTheDocument();
     expect(screen.getByLabelText("Women's singles positions")).toBeInTheDocument();
@@ -84,7 +92,7 @@ describe('Meet Configuration — two tabs', () => {
   it('changing a position count then saving persists the new rankCounts', async () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderPage();
-    fireEvent.click(screen.getByRole('radio', { name: 'Meet' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Events' }));
     const ms = screen.getByLabelText("Men's singles positions") as HTMLInputElement;
     fireEvent.change(ms, { target: { value: '5' } });
     fireEvent.click(screen.getByTestId('config-save'));
@@ -93,16 +101,90 @@ describe('Meet Configuration — two tabs', () => {
     expect(last.rankCounts?.MS).toBe(5);
   });
 
-  it('Meet tab save never blanks identity that lives at the workspace level', async () => {
+  it('Events tab save never blanks identity that lives at the workspace level', async () => {
     seed({ tournamentName: undefined, tournamentDate: undefined });
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderPage();
-    fireEvent.click(screen.getByRole('radio', { name: 'Meet' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Events' }));
     fireEvent.click(screen.getByTestId('config-save'));
     await waitFor(() => expect(setConfig).toHaveBeenCalled());
     const last = setConfig.mock.calls[setConfig.mock.calls.length - 1][0] as TournamentConfig;
     expect(last.tournamentName).toBeUndefined();
     expect(last.tournamentName).not.toBe('');
     expect(last.tournamentDate).toBeUndefined();
+  });
+
+  // SP-C7 — Meet's Engine tab now renders the shared EngineConfigForm
+  // (Task 6/7). These pin the two things Task 6's report flagged as
+  // untested: the page actions-bar Save actually submits the shared
+  // form (via form={FORM_ID}), and the schedule lock guard wired
+  // through `guardSave` still gates that save exactly as before.
+  describe('Engine tab — shared EngineConfigForm via the actions-bar Save', () => {
+    it('actions-bar Save submits the shared form and persists an edited field', async () => {
+      const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
+      renderPage(); // Engine is the default section.
+      fireEvent.click(screen.getByLabelText('Reproducible solver run'));
+      fireEvent.click(screen.getByTestId('config-save'));
+      await waitFor(() => expect(setConfig).toHaveBeenCalled());
+      const last = setConfig.mock.calls[setConfig.mock.calls.length - 1][0] as TournamentConfig;
+      expect(last.deterministic).toBe(true);
+    });
+
+    it('when the schedule is locked, actions-bar Save opens the unlock modal instead of saving', async () => {
+      seed();
+      useTournamentStore.setState({
+        isScheduleLocked: true,
+        schedule: { assignments: [] } as never,
+      });
+      const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
+      renderPage();
+      fireEvent.click(screen.getByTestId('config-save'));
+
+      await waitFor(() =>
+        expect(useUiStore.getState().unlockModalState?.open).toBe(true),
+      );
+      expect(useUiStore.getState().unlockModalState?.actionDescription).toBe(
+        'save engine settings',
+      );
+      expect(setConfig).not.toHaveBeenCalled();
+    });
+
+    it('declining the unlock modal aborts the save — config is untouched', async () => {
+      seed();
+      useTournamentStore.setState({
+        isScheduleLocked: true,
+        schedule: { assignments: [] } as never,
+      });
+      const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
+      renderPage();
+      fireEvent.click(screen.getByTestId('config-save'));
+      await waitFor(() => expect(useUiStore.getState().unlockModalState).not.toBeNull());
+
+      await act(async () => {
+        useUiStore.getState().unlockModalState?.resolve(false);
+      });
+
+      expect(setConfig).not.toHaveBeenCalled();
+      expect(useTournamentStore.getState().isScheduleLocked).toBe(true);
+    });
+
+    it('confirming the unlock modal proceeds with the save and unlocks the schedule', async () => {
+      seed();
+      useTournamentStore.setState({
+        isScheduleLocked: true,
+        schedule: { assignments: [] } as never,
+      });
+      const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
+      renderPage();
+      fireEvent.click(screen.getByTestId('config-save'));
+      await waitFor(() => expect(useUiStore.getState().unlockModalState).not.toBeNull());
+
+      await act(async () => {
+        useUiStore.getState().unlockModalState?.resolve(true);
+      });
+
+      await waitFor(() => expect(setConfig).toHaveBeenCalled());
+      expect(useTournamentStore.getState().isScheduleLocked).toBe(false);
+    });
   });
 });

@@ -216,15 +216,31 @@ async def _handle_optimize(
         )
 
 
-def _repair_title(disruption_type: str, payload: dict) -> str:
+def _repair_title(
+    disruption_type: str, payload: dict, matches: list | None = None
+) -> str:
+    def match_name() -> str:
+        """Operator-facing match name — eventRank (MS1) like every board
+        chip, not the raw match id ('m007'), which is a dialect nobody
+        else in the app speaks."""
+        mid = payload.get("matchId")
+        for m in matches or []:
+            if getattr(m, "id", None) == mid:
+                if getattr(m, "eventRank", None):
+                    return m.eventRank
+                if getattr(m, "matchNumber", None) is not None:
+                    return f"#{m.matchNumber}"
+                break
+        return str(mid or "?")
+
     if disruption_type == "court_closed":
         return f"Repair: court {payload.get('courtId', '?')} closed"
     if disruption_type == "withdrawal":
         return f"Repair: player {payload.get('playerId', '?')} withdrew"
     if disruption_type == "overrun":
-        return f"Repair: match {payload.get('matchId', '?')} overrun"
+        return f"Repair: match {match_name()} overrun"
     if disruption_type == "cancellation":
-        return f"Repair: match {payload.get('matchId', '?')} cancelled"
+        return f"Repair: match {match_name()} cancelled"
     return f"Repair: {disruption_type}"
 
 
@@ -335,7 +351,7 @@ async def _handle_repair(
         )
         sug = Suggestion(
             kind="repair",
-            title=_repair_title(disruption_type, disruption_payload),
+            title=_repair_title(disruption_type, disruption_payload, persisted.matches),
             metric=_format_metric(
                 finish_delta_min=finish_delta, moves=moves,
             ),

@@ -12,8 +12,8 @@
  * ``TabBar`` (``activeTab`` is a ``bracket-*`` id), with a
  * ``BracketViewHeader`` strip above the active view.
  */
-import { useEffect, useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Sliders, ListChecks } from '@phosphor-icons/react';
 
 import { BracketApiProvider } from '../../api/bracketClient';
@@ -24,18 +24,18 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
 import { reconcileBracketRoster } from './bracketMigration';
 import { type SettingsSectionDef } from '../../platform/settings/SettingsShell';
-import { Seg } from '../../platform/settings/SettingsControls';
-import { ActionsBar } from '../../components/control-plane';
-import { ScheduleLockIndicator } from '../../components/status/ScheduleLockIndicator';
+import { ConfigSurface, LockedFieldset } from '../../platform/settings/ConfigSurface';
+import { EngineConfigForm } from '../../platform/settings/EngineConfigForm';
+import { LockRibbon } from '../../components/status/LockRibbon';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
+import { requestClearScheduleOnNextSave } from '../../hooks/useTournamentState';
 import { useBracketScheduleLock } from './useBracketScheduleLock';
-import { BracketEngineSection } from './BracketEngineSection';
 import { BracketStructureSection } from './BracketStructureSection';
 import { BracketRosterTab } from './BracketRosterTab';
 import { BracketDrawsTab } from './BracketDrawsTab';
 import { BracketMatchesTab } from './BracketMatchesTab';
 import { BracketViewHeader } from './BracketViewHeader';
-import { DrawView } from './DrawView';
+import { DrawView, type BracketLayoutMode } from './DrawView';
 import { ScheduleView } from './ScheduleView';
 import { LiveView } from './LiveView';
 import { BracketScheduleHeader } from './BracketScheduleHeader';
@@ -74,6 +74,10 @@ function BracketTabBody() {
   const goToDraws = () =>
     navigate(`/tournaments/${params.id}/bracket-draws`, { replace: true });
   const [eventId, setEventId] = useState<string>('');
+  // SE draw-canvas layout. Session-only (plain state, no persistence);
+  // lives here — beside ``eventId`` — because the toggle renders in
+  // ``BracketViewHeader`` while ``DrawView`` consumes it.
+  const [drawLayout, setDrawLayout] = useState<BracketLayoutMode>('one-sided');
   const activeTab = useUiStore((s) => s.activeTab);
   const setBracketDataReady = useUiStore((s) => s.setBracketDataReady);
 
@@ -116,12 +120,25 @@ function BracketTabBody() {
 
   const [selectedPlayUnitId, setSelectedPlayUnitId] = useState<string | null>(null);
 
-  // Reset selection when the bracket data identity changes (regenerate,
-  // event switch). `data` is replaced wholesale by the setData callback,
-  // not mutated in place, so a reference check is sufficient.
+  // Drop the selection when the selected play unit is GONE (regenerate, reset).
+  //
+  // This used to key on `[data]` and clear unconditionally, on the assumption
+  // that `data`'s reference only changes on a regenerate. It doesn't: `useBracket`
+  // POLLS every 2.5s and replaces `data` wholesale each time, so the effect wiped
+  // the operator's selection roughly twice a second-and-a-half. Clicking a chip on
+  // the Plan timeline looked like a dead handler — the ring appeared and then
+  // silently vanished (audit finding D1). Comparing CONTENT, not identity, keeps
+  // the selection across polls while still clearing it when the draw really changes.
+  // (The Schedule timeline aggregates chips from EVERY event, so a selection
+  // does not need clearing on an event switch — only when its unit is gone.)
   useEffect(() => {
-    setSelectedPlayUnitId(null);
-  }, [data]);
+    if (
+      selectedPlayUnitId &&
+      !data?.play_units.some((pu) => pu.id === selectedPlayUnitId)
+    ) {
+      setSelectedPlayUnitId(null);
+    }
+  }, [data, selectedPlayUnitId]);
 
   // First-load migration: if we have a legacy bracket with participants
   // but no bracketPlayers in store yet, extract them once.
@@ -154,9 +171,31 @@ function BracketTabBody() {
     'engine',
     { debounceMs: 0 },
   );
-  // Per-engine lock signal — independent of the meet schedule. Stubbed
-  // false today; the affordance is wired for when the backend supports it.
-  const { isLocked: bracketScheduleLocked } = useBracketScheduleLock();
+  // Per-engine lock signals — independent of the meet schedule. Derived
+  // from the bracket DTO. `bracketScheduleLocked` (hard lock) is a draw in
+  // play — never clearable, so the fieldset just disables. `bracketHasSchedule`
+  // (soft lock) is a committed bracket schedule — saving routes through the
+  // confirm-unlock modal, mirroring the meet's `useLockGuard`.
+  const { isLocked: bracketScheduleLocked, hasSchedule: bracketHasSchedule } =
+    useBracketScheduleLock(data);
+  const setUnlockModalState = useUiStore((s) => s.setUnlockModalState);
+  // Soft lock: confirm → the next PUT carries ?clearSchedule=true and the
+  // backend clears the bracket schedule atomically with the config write.
+  // Hard lock (draw started) never reaches here — the fieldset is disabled.
+  const guardBracketSave = useCallback((): Promise<boolean> => {
+    if (!bracketHasSchedule) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      setUnlockModalState({
+        open: true,
+        actionDescription: 'save engine settings (clears the bracket schedule)',
+        resolve: (confirmed: boolean) => {
+          if (confirmed) requestClearScheduleOnNextSave();
+          setUnlockModalState(null);
+          resolve(confirmed);
+        },
+      });
+    });
+  }, [bracketHasSchedule, setUnlockModalState]);
 
   const bracketSetupSections = useMemo<SettingsSectionDef[]>(
     () => [
@@ -164,11 +203,21 @@ function BracketTabBody() {
         id: 'engine',
         label: 'Engine',
         icon: Sliders,
-        render: () => <BracketEngineSection />,
+        render: () => (
+          <LockedFieldset locked={bracketScheduleLocked}>
+            <EngineConfigForm
+              module="bracket"
+              guardSave={guardBracketSave}
+              readOnly={bracketScheduleLocked}
+            />
+          </LockedFieldset>
+        ),
       },
       {
+        // Label is 'Events' (shared grammar with Meet Configuration); the
+        // id stays 'structure' — it's URL state (?section=structure).
         id: 'structure',
-        label: 'Structure',
+        label: 'Events',
         icon: ListChecks,
         render: () => <BracketStructureSection />,
       },
@@ -176,7 +225,7 @@ function BracketTabBody() {
       // switcher — they live in workspace settings (Sync and backups /
       // Sharing) now, the same as Meet.
     ],
-    [],
+    [bracketScheduleLocked, guardBracketSave],
   );
 
   // Setup, Roster, and Events do NOT depend on bracket-events data.
@@ -219,6 +268,8 @@ function BracketTabBody() {
           eventId={eventId}
           onEventId={setEventId}
           onRefresh={refresh}
+          drawLayout={drawLayout}
+          onDrawLayout={setDrawLayout}
         />
       )}
       {error && (
@@ -240,34 +291,37 @@ function BracketTabBody() {
         className="min-h-0 flex-1 overflow-auto animate-block-in"
       >
         {view === 'setup' && (
-          <div className="flex h-full min-h-0 flex-col">
-            <ActionsBar
-              title="Configuration"
-              status={
-                <Seg
-                  options={bracketSetupSections.map((s) => ({
-                    value: s.id,
-                    label: s.label,
-                  }))}
-                  value={setupSection}
-                  onChange={(v) => setSetupSection(v)}
-                  ariaLabel="Configuration section"
+          <ConfigSurface
+            sections={bracketSetupSections.map((s) => ({
+              value: s.id,
+              label: s.label,
+            }))}
+            section={setupSection}
+            onSectionChange={(v) => setSetupSection(v)}
+            ribbons={
+              bracketScheduleLocked ? (
+                <LockRibbon
+                  tier="hard"
+                  locked
+                  action={
+                    <Link
+                      to={`/tournaments/${params.id}/bracket-draws`}
+                      className="ml-1 font-medium text-accent hover:underline"
+                    >
+                      View draws →
+                    </Link>
+                  }
                 />
-              }
-            />
-            {bracketScheduleLocked ? (
-              <ScheduleLockIndicator
-                locked={bracketScheduleLocked}
-                showUnlockHint
-              />
-            ) : null}
-            <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 pt-3">
-              {(
-                bracketSetupSections.find((s) => s.id === setupSection) ??
-                bracketSetupSections[0]
-              ).render()}
-            </div>
-          </div>
+              ) : bracketHasSchedule ? (
+                <LockRibbon tier="soft" locked />
+              ) : null
+            }
+          >
+            {(
+              bracketSetupSections.find((s) => s.id === setupSection) ??
+              bracketSetupSections[0]
+            ).render()}
+          </ConfigSurface>
         )}
         {view === 'roster' && <BracketRosterTab />}
         {/* The standalone Events surface was folded into Draws — creating a
@@ -277,7 +331,9 @@ function BracketTabBody() {
           <Navigate to={`/tournaments/${params.id}/bracket-draws`} replace />
         )}
         {view === 'draws' && <BracketDrawsTab />}
-        {view === 'matches' && data && <BracketMatchesTab data={data} />}
+        {view === 'matches' && data && (
+          <BracketMatchesTab data={data} onData={setData} />
+        )}
         {view === 'draw' && data && (
           <div className="h-full overflow-hidden">
             <DrawView
@@ -285,6 +341,7 @@ function BracketTabBody() {
               eventId={eventId}
               onChange={setData}
               refresh={refresh}
+              layoutMode={drawLayout}
             />
           </div>
         )}

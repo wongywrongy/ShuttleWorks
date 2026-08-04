@@ -132,17 +132,21 @@ export interface ModuleContract {
 
 /**
  * Meet — the scheduling engine. Owns the roster/matches/configuration IA and
- * the `/schedule` + proposal/advisory/suggestion routes. Consumes the shared
- * `/state` blob and live match-states as solve inputs. `/state` is shared,
- * NOT owned (it co-lives with control-plane CRUD in the tournaments router).
+ * the solve-job rail (`/tournaments/{id}/solve-jobs`, SP-CLOUD-1) plus the
+ * proposal/advisory/suggestion routes. Consumes the shared `/state` blob and
+ * live match-states as solve inputs. `/state` is shared, NOT owned (it
+ * co-lives with control-plane CRUD in the tournaments router).
  */
 export const meetContract: ModuleContract = {
   id: 'meet',
   enableable: true,
   ownedSegments: ['roster', 'matches', 'setup'],
   ownedEndpoints: [
-    apiClient.generateSchedule,
-    apiClient.generateScheduleWithProgress,
+    apiClient.submitSolveJob,
+    apiClient.getSolveJob,
+    apiClient.listSolveJobs,
+    apiClient.cancelSolveJob,
+    apiClient.runSolveJob,
     apiClient.validateMove,
     apiClient.createWarmRestartProposal,
     apiClient.createRepairProposal,
@@ -189,6 +193,8 @@ export const bracketContract: ModuleContract = {
     apiClient.importBracketCsv,
     apiClient.bracketEventUpsert,
     apiClient.bracketEventGenerate,
+    apiClient.bracketEventPatch,
+    apiClient.bracketEventNextRound,
     apiClient.bracketEventDelete,
   ],
   consumedEndpoints: [],
@@ -229,15 +235,22 @@ export const operationsContract: ModuleContract = {
 };
 
 /**
- * Display — the read-only output module. Owns the preview/configuration IA but
- * NO backend route; it only polls. Reacts to live match-state changes via its
- * independent poll.
+ * Display — the read-only output module. Owns the preview/configuration IA and
+ * (since SP-CLOUD-2) the token-authenticated public projection routes
+ * (`/display/{token}/*`) that serve the spectator board without a session.
+ * Everything else it reads is a poll of endpoints other modules own. Reacts to
+ * live match-state changes via its independent poll.
  */
 export const displayContract: ModuleContract = {
   id: 'display',
   enableable: true,
   ownedSegments: ['tv', 'display-config'],
-  ownedEndpoints: [],
+  ownedEndpoints: [
+    apiClient.getDisplaySummary,
+    apiClient.getDisplayState,
+    apiClient.getDisplayMatchStates,
+    apiClient.getDisplayBracket,
+  ],
   consumedEndpoints: [
     apiClient.getTournamentState,
     apiClient.getMatchStates,

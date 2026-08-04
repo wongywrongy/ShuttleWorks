@@ -19,6 +19,15 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Record (not just recover): the interaction-audit harness, when
+    // installed (dev/test builds), keeps the component stack + triggering
+    // interaction so the sweep can attribute the crash.
+    window.__swErrorHarness?.record({
+      kind: 'boundary',
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack ?? undefined,
+    });
     console.error('Uncaught error:', error, errorInfo);
   }
 

@@ -10,10 +10,11 @@ endpoint free of per-row queries (see the SP-A spec's N+1 guardrail).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from database.models import display_dependency_satisfied
 
@@ -27,6 +28,20 @@ class RowCounts:
     bracket_matches: int = 0
     bracket_results: int = 0
     match_states: int = 0
+    # ``{match_id: status}`` for meet matches whose canonical status has left
+    # ``scheduled`` (called/playing/finished/retired). One grouped query
+    # (``matches.statuses_by_tournament``) — feeds the lifecycle phase +
+    # live-aware nextUp without breaking the no-per-row-query guarantee.
+    match_status_by_id: dict = field(default_factory=dict)
+    # Play-unit ids with a recorded bracket result (grouped query on
+    # bracket_results) — the bracket-side "this unit is done" truth for the
+    # nextUp filter; results recorded from the draw board never touch the
+    # assignment's match-action clock fields.
+    bracket_resolved_ids: set = field(default_factory=set)
+    # True when a generated Swiss event still has rounds to append — blocks
+    # the raw result/match count comparison from reading an inter-round lull
+    # as "complete" (see ``swiss_pending_by_tournament``).
+    swiss_pending: bool = False
 
 
 class AttentionReasonDTO(BaseModel):
@@ -46,6 +61,26 @@ class CollaborationDTO(BaseModel):
     activeInviteCount: int = 0
 
 
+class MatchMetricsDTO(BaseModel):
+    """The inspector's metric triplet. ``toDo`` = attention-reason count."""
+    total: int = 0
+    scheduled: int = 0
+    toDo: int = 0
+
+
+class NextMatchDTO(BaseModel):
+    """One upcoming match for the inspector's "Next up" list.
+
+    ``status`` is schedule-derivable only (``"scheduled"``): live called/started
+    state lives in the ``match_states`` table, not the loaded ``data`` blob, so
+    surfacing it would break the list endpoint's no-per-row-query guarantee.
+    """
+    code: str
+    timeLabel: Optional[str] = None
+    courtLabel: Optional[str] = None
+    status: str = "scheduled"
+
+
 class WorkspaceSignalsDTO(BaseModel):
     """Control-plane signals for one workspace (see ``build_signals``).
 
@@ -61,6 +96,15 @@ class WorkspaceSignalsDTO(BaseModel):
     modules: ModuleCountsDTO
     setup: dict  # dict[str, bool] — keys vary by kind
     collaboration: CollaborationDTO
+    matches: MatchMetricsDTO = Field(default_factory=MatchMetricsDTO)
+    nextUp: List[NextMatchDTO] = Field(default_factory=list)
+    # Lifecycle phase, derived from real match/result state (additive — the
+    # ``status`` column stays operator-managed and drives ``health``):
+    #   setup    — still being configured (no schedule / draw yet)
+    #   ready    — schedule or draw exists; nothing has been played
+    #   live     — at least one match has been called/started/finished
+    #   complete — every engine with matches has fully resolved them
+    phase: str = "setup"
 
 
 def _module_counts(modules) -> ModuleCountsDTO:
@@ -109,6 +153,205 @@ def _bracket_setup(counts: RowCounts) -> dict:
     }
 
 
+def _slot_time_label(day_start, interval, slot) -> Optional[str]:
+    """``"HH:MM"`` for ``day_start + slot*interval`` minutes, or ``None`` when
+    ``day_start`` is missing/unparseable. Capped at 23:59 (same-day only)."""
+    if not day_start:
+        return None
+    try:
+        h, m = str(day_start).split(":")[:2]
+        base = int(h) * 60 + int(m)
+    except (ValueError, TypeError):
+        return None
+    total = base + max(0, int(slot or 0)) * max(0, int(interval or 0))
+    total = min(total, 23 * 60 + 59)
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _court_label(court) -> Optional[str]:
+    return f"Court {court}" if court is not None else None
+
+
+def _first(d: dict, *keys):
+    """First present key's value (blob key spellings vary camel/snake)."""
+    for k in keys:
+        if k in d:
+            return d[k]
+    return None
+
+
+def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
+    """``(MatchMetricsDTO, [NextMatchDTO])`` from the loaded meet ``data`` blob
+    (ScheduleAssignment: matchId/slotId/courtId; MatchDTO: eventRank/matchNumber;
+    config: dayStart/intervalMinutes). No DB access — ``status_by_id`` is the
+    pre-batched ``{match_id: status}`` map of matches that left ``scheduled``."""
+    matches = data.get("matches") or []
+    by_id = {m.get("id"): m for m in matches if isinstance(m, dict)}
+    schedule = data.get("schedule")
+    assignments = (
+        (schedule.get("assignments") or []) if isinstance(schedule, dict) else []
+    )
+    config = data.get("config") or {}
+    day_start = config.get("dayStart")
+    interval = config.get("intervalMinutes") or 30
+
+    metrics = MatchMetricsDTO(
+        total=len(matches), scheduled=len(assignments), toDo=to_do
+    )
+
+    def slot_of(a):
+        v = _first(a, "slotId", "slot", "slot_id")
+        return v if isinstance(v, int) else 0
+
+    # ``scheduled`` counts every assignment; next-up only reads dict-shaped ones
+    # (some legacy/test blobs use scalar assignment sentinels). A match whose
+    # canonical status has left ``scheduled`` (called / playing / finished /
+    # retired) is NOT "next up" — it is on court or done; the old list showed
+    # already-finished matches as upcoming.
+    ordered = sorted(
+        (
+            a
+            for a in assignments
+            if isinstance(a, dict)
+            and _first(a, "matchId", "match_id") not in status_by_id
+        ),
+        key=slot_of,
+    )
+    next_up: List[NextMatchDTO] = []
+    for a in ordered[:3]:
+        mid = _first(a, "matchId", "match_id")
+        m = by_id.get(mid) or {}
+        # ``eventRank`` (MS1/WD2…) is the operator-facing match name across
+        # the app's boards; matchNumber is the fallback dialect only.
+        code = m.get("eventRank") or m.get("eventCode") or m.get("event_code")
+        if not code:
+            num = m.get("matchNumber") or m.get("match_number")
+            code = f"M{num}" if num is not None else str(mid or "")[:6]
+        next_up.append(NextMatchDTO(
+            code=code,
+            timeLabel=_slot_time_label(day_start, interval, slot_of(a)),
+            courtLabel=_court_label(_first(a, "courtId", "court", "court_id")),
+            status="scheduled",
+        ))
+    return metrics, next_up
+
+
+def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
+    """``(MatchMetricsDTO, [NextMatchDTO])`` from the loaded bracket session
+    blob (``data["bracket_session"]``: assignments play_unit_id/slot_id/court_id,
+    start_time ISO, interval_minutes). ``total`` is the already-grouped
+    ``bracket_matches`` count; the rest is blob-derived. No DB access."""
+    session = data.get("bracket_session") or {}
+    assignments = session.get("assignments") or []
+    interval = session.get("interval_minutes") or 30
+
+    day_start = None
+    start_time = session.get("start_time")
+    if start_time:
+        try:
+            day_start = datetime.fromisoformat(start_time).strftime("%H:%M")
+        except (ValueError, TypeError):
+            day_start = None
+
+    metrics = MatchMetricsDTO(
+        total=counts.bracket_matches,
+        scheduled=len(assignments),
+        toDo=to_do,
+    )
+
+    def slot_of(a):
+        v = a.get("slot_id") if isinstance(a, dict) else None
+        return v if isinstance(v, int) else 0
+
+    # Next-up = upcoming only. A unit is done when it has a RECORDED RESULT
+    # (``resolved_ids`` — the draw-board record-winner/walkover flow) or a
+    # finished match-action clock (``actual_end_slot``). Filtering on the
+    # clock alone kept board-recorded winners listed as upcoming (review
+    # finding). ``scheduled`` above still counts every assignment.
+    resolved_ids = counts.bracket_resolved_ids
+    ordered = sorted(
+        (
+            a
+            for a in assignments
+            if isinstance(a, dict)
+            and a.get("actual_end_slot") is None
+            and a.get("play_unit_id") not in resolved_ids
+        ),
+        key=slot_of,
+    )
+    next_up: List[NextMatchDTO] = []
+    for a in ordered[:3]:
+        next_up.append(NextMatchDTO(
+            code=str(a.get("play_unit_id") or ""),
+            timeLabel=_slot_time_label(day_start, interval, slot_of(a)),
+            courtLabel=_court_label(a.get("court_id")),
+            status="scheduled",
+        ))
+    return metrics, next_up
+
+
+#: canonical match statuses that mean "this match is over"
+_TERMINAL = frozenset({"finished", "retired"})
+
+
+def _derive_phase(data: dict, counts: RowCounts) -> str:
+    """Lifecycle phase from real play state (pure; see WorkspaceSignalsDTO).
+
+    Considers BOTH engines so hybrid workspaces read correctly: complete
+    requires every present engine to have fully resolved its matches; live
+    fires the moment either engine has any played state.
+    """
+    schedule = data.get("schedule")
+    assignments = (
+        (schedule.get("assignments") or []) if isinstance(schedule, dict) else []
+    )
+    meet_ids = {
+        _first(a, "matchId", "match_id")
+        for a in assignments
+        if isinstance(a, dict)
+    }
+    # Completion must cover EVERY meet match, not just the assigned ones —
+    # a solver run can legitimately leave matches unscheduled
+    # (schedule.unscheduledMatches), and matches added after the last solve
+    # have no assignment at all; neither may read as "complete".
+    all_meet_ids = meet_ids | {
+        m.get("id")
+        for m in (data.get("matches") or [])
+        if isinstance(m, dict) and m.get("id")
+    }
+    meet_present = len(meet_ids) > 0
+    status_by_id = counts.match_status_by_id
+    meet_touched = len(status_by_id) > 0
+    meet_complete = meet_present and all(
+        status_by_id.get(mid) in _TERMINAL for mid in all_meet_ids
+    )
+
+    bracket_present = counts.bracket_matches > 0
+    bracket_touched = counts.bracket_results > 0
+    # Approximation: every generated unit carries a result when done
+    # (walkovers/byes record results too, so the counts line up in practice).
+    # Swiss needs the extra guard: rounds generate progressively, so in the
+    # inter-round lull every EXISTING match has a result and the raw counts
+    # would read "complete" mid-tournament (review finding — the frontend
+    # draw card guards the same case via ev.rounds.length >= swissRounds).
+    bracket_complete = (
+        bracket_present
+        and counts.bracket_results >= counts.bracket_matches
+        and not counts.swiss_pending
+    )
+
+    if not meet_present and not bracket_present:
+        return "setup"
+    engines_complete = (not meet_present or meet_complete) and (
+        not bracket_present or bracket_complete
+    )
+    if engines_complete:
+        return "complete"
+    if meet_touched or bracket_touched:
+        return "live"
+    return "ready"
+
+
 def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
     """Compute the control-plane signals for one workspace. Pure — no DB."""
     statuses = {m.moduleId: m.status for m in modules}
@@ -149,10 +392,23 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
     collaboration = CollaborationDTO(
         memberCount=counts.members, activeInviteCount=counts.active_invites
     )
+
+    to_do = len(attention)
+    data_blob = getattr(row, "data", None) or {}
+    if kind == "bracket":
+        matches_metrics, next_up = _bracket_match_signals(data_blob, counts, to_do)
+    else:
+        matches_metrics, next_up = _meet_match_signals(
+            data_blob, to_do, counts.match_status_by_id
+        )
+
     return WorkspaceSignalsDTO(
         health=health,
         attention=attention,
         modules=module_counts,
         setup=setup,
         collaboration=collaboration,
+        matches=matches_metrics,
+        nextUp=next_up,
+        phase=_derive_phase(data_blob, counts),
     )

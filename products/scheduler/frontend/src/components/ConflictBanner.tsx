@@ -118,8 +118,8 @@ function BannerView({
   const isStale = flavour === 'stale_version';
   const text = isStale ? STALE_VERSION_MESSAGE : message;
   const variantClasses = isStale
-    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/40'
-    : 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/40';
+    ? 'bg-status-warning-bg text-status-warning-fg border-status-warning-fg/40'
+    : 'bg-status-danger-bg text-status-danger-fg border-status-danger-fg/40';
 
   return (
     <div
@@ -137,7 +137,7 @@ function BannerView({
           type="button"
           aria-label="Dismiss conflict"
           data-testid="conflict-dismiss"
-          className="shrink-0 rounded p-0.5 hover:bg-red-500/20"
+          className="shrink-0 rounded p-0.5 hover:bg-status-danger-fg/20"
           onClick={() => {
             setVisible(false);
             onDismiss();

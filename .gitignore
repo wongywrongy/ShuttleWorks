@@ -63,9 +63,23 @@ coverage/
 !/CLAUDE.md
 !/REFACTOR_PROGRESS.md
 !/CODE_HEALTH.md
+!/FRONTEND_PROGRESS.md
+!/CLOUD_PROGRESS.md
 
 # Old app folders (legacy)
 apps/
+
+# Design-system prototype (source spec for the frontend revamp — extracted into
+# .agents/skills/shuttleworks-design/; kept on disk as visual reference, not tracked).
+/ShuttleWorks Prototype/
+# claude.ai/design source-of-truth export — mirrors the tracked skill
+# (.agents/skills/shuttleworks-design/); a local reference for offline agents,
+# not a second copy to version.
+/ShuttleWorks Design System-handoff/
+# claude.ai/design mockup exports at repo root (design references pointed to by
+# specs; they need bound _ds/ assets to render, so keep them as local reference,
+# not tracked — same treatment as the prototype folders above).
+/ShuttleWorks - *.dc.html
 
 # OS
 .DS_Store

@@ -2,47 +2,83 @@
  * Bracket Matches — the bracket's output surface, the parallel of the
  * meet's Matches tab. Where the meet derives matches from the roster
  * grid, the bracket derives them from the draws: every PlayUnit across
- * every event. This is a read-only projection (edit the draw in Draw /
- * Events to change matches) grouped by event with collapsible headers,
- * mirroring the meet's grouped match list. The list feeds Operations
- * (Courts / Live) just like the meet's matches do.
+ * every event. The list is a read-only projection (edit the draw in
+ * Draw / Events to change matches) grouped by event on the shared
+ * BandedTable shell, mirroring the meet's grouped match list; clicking
+ * a row (anywhere — the rows hold no editors) opens the right-docked
+ * match DetailPanel with the sides' player cards and the read-only
+ * status pill. The list feeds Operations (Courts / Live) just like the
+ * meet's matches do.
  */
-import { useMemo, useState } from 'react';
-import { CaretRight, Download, MagnifyingGlass } from '@phosphor-icons/react';
+import { useCallback, useMemo, useState } from 'react';
+import { Download, MagnifyingGlass } from '@phosphor-icons/react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
-import { ActionsBar } from '../../components/control-plane';
-import { EmptyState } from '../../components/control-plane';
+import { useSearchParamState } from '../../hooks/useSearchParamState';
+import { useCanEdit } from '../../hooks/useCanEdit';
+import {
+  ActionsBar,
+  BandedTable,
+  DetailDock,
+  EmptyState,
+  MATCH_CELL,
+  MATCH_LIST_COLUMNS,
+  OverflowMenu,
+  STATUS_CLASS,
+  STATUS_LABEL,
+  type BandedTableGroup,
+  type BracketMatchStatus,
+} from '../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-import { disciplineLabel } from './bracketLabels';
+import { disciplineOrderIndex } from '../../lib/eventColors';
+import { buildPlayUnitLabels, disciplineLabel } from './bracketLabels';
+import {
+  BracketMatchDetailPanel,
+  type ContingencyReason,
+} from './BracketMatchDetailPanel';
+import { type CommitEventFn } from './BracketPlayerFields';
 
-type Status = 'done' | 'live' | 'ready' | 'pending';
-
-const STATUS_LABEL: Record<Status, string> = {
-  done: 'Done',
-  live: 'Live',
-  ready: 'Ready',
-  pending: 'Pending',
+const CONTINGENCY_MENU_LABEL: Record<ContingencyReason, string> = {
+  walkover: 'Walkover…',
+  retired: 'Retired (injury)…',
+  forfeit: 'Forfeit…',
 };
 
-const STATUS_CLASS: Record<Status, string> = {
-  done: 'text-status-done',
-  live: 'text-status-live',
-  ready: 'text-status-warning',
-  pending: 'text-muted-foreground/70',
+/** One numbered row: the play unit plus its stable per-event `#`. */
+type NumberedUnit = {
+  pu: BracketTournamentDTO['play_units'][number];
+  n: number;
 };
 
-export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
+export function BracketMatchesTab({
+  data,
+  onData,
+}: {
+  data: BracketTournamentDTO;
+  /** Receives the fresh snapshot after a panel-side event upsert (the
+   *  host's `setData` from useBracket). Optional — without it edits
+   *  still commit; the poll picks the snapshot up. */
+  onData?: (next: BracketTournamentDTO) => void;
+}) {
   const api = useBracketApi();
-  const [query, setQuery] = useState('');
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const toggle = (key: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const canEdit = useCanEdit();
+  // Same URL-backed `?q=` contract as Meet Matches — the URL is the shared
+  // source of truth, so a pasted link restores the operator's filter.
+  const [query, setQuery] = useSearchParamState('q', '');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Row-menu deep-link into the detail panel's Contingency section (a
+  // winner must still be chosen there — this only pre-selects the kind).
+  const [contingency, setContingency] = useState<ContingencyReason | null>(null);
+
+  // Panel-side event entry writes ride the same upsert path as the
+  // roster panel (config echoed by BracketPlayerFields).
+  const commitEvent = useCallback<CommitEventFn>(
+    async (eventId, body) => {
+      const next = await api.eventUpsert(eventId, body);
+      onData?.(next);
+    },
+    [api, onData],
+  );
 
   const participantById = useMemo(
     () => new Map(data.participants.map((p) => [p.id, p])),
@@ -56,13 +92,27 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
     () => new Set(data.results.map((r) => r.play_unit_id)),
     [data.results],
   );
+  // Operator-friendly play-unit labels ("MS QF1") — the same names the
+  // Draw / Live / Operations surfaces show, instead of the raw
+  // R{round}·M{match} indices.
+  const labelById = useMemo(() => buildPlayUnitLabels(data), [data]);
 
   const resolveSide = (ids: string[] | null): string => {
     if (!ids || ids.length === 0) return 'TBD';
     return ids.map((id) => participantById.get(id)?.name ?? id).join(' / ');
   };
 
-  const statusOf = (puId: string): Status => {
+  // Render form of a side: unresolved slots get the same muted-italic
+  // placeholder treatment as Meet's empty side ("＋ add player") so the
+  // two match lists read identically — TBD is a placeholder, not a name.
+  const renderSide = (ids: string[] | null) =>
+    !ids || ids.length === 0 ? (
+      <span className="text-xs italic text-muted-foreground">TBD</span>
+    ) : (
+      resolveSide(ids)
+    );
+
+  const statusOf = (puId: string): BracketMatchStatus => {
     if (resultSet.has(puId)) return 'done';
     const a = assignmentByPu.get(puId);
     if (a?.started && !a.finished) return 'live';
@@ -72,7 +122,9 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
 
   const q = query.toLowerCase().trim();
   // Group every play unit by its event, ordered by the events list, then
-  // by round / match index within the event.
+  // by round / match index within the event. Each unit is numbered
+  // BEFORE the search filter runs so a row's `#` is a stable per-event
+  // identifier (mirrors Meet, where filtering never renumbers rows).
   const groups = useMemo(() => {
     const byEvent = new Map<string, BracketTournamentDTO['play_units']>();
     for (const pu of data.play_units) {
@@ -81,6 +133,13 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
       byEvent.set(pu.event_id, arr);
     }
     return data.events
+      .slice()
+      // Same discipline banding order as Meet Matches (doubles-first
+      // dual-meet convention); ties keep the events-list order.
+      .sort(
+        (a, b) =>
+          disciplineOrderIndex(a.discipline) - disciplineOrderIndex(b.discipline),
+      )
       .map((ev) => {
         const units = (byEvent.get(ev.id) ?? [])
           .slice()
@@ -88,7 +147,8 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
             (a, b) =>
               a.round_index - b.round_index || a.match_index - b.match_index,
           )
-          .filter((pu) => {
+          .map((pu, idx) => ({ pu, n: idx + 1 }))
+          .filter(({ pu }) => {
             if (!q) return true;
             const hay = [
               pu.id,
@@ -110,8 +170,23 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
   const total = data.play_units.length;
   const shown = groups.reduce((n, g) => n + g.units.length, 0);
 
+  // Grouped-table view of the same data for the shared BandedTable shell.
+  const tableGroups: BandedTableGroup<NumberedUnit>[] = groups.map(
+    ({ ev, units }) => ({
+      key: ev.id,
+      code: ev.id,
+      label: disciplineLabel(ev.discipline),
+      items: units,
+      testId: `bracket-match-group-${ev.id}`,
+    }),
+  );
+
+  const selected = selectedId
+    ? data.play_units.find((pu) => pu.id === selectedId) ?? null
+    : null;
+
   return (
-    <div className="flex h-full min-h-0 flex-col bg-card">
+    <div className="flex h-full min-h-0 flex-col">
       <ActionsBar
         title="Matches"
         status={
@@ -155,81 +230,123 @@ export function BracketMatchesTab({ data }: { data: BracketTournamentDTO }) {
         </a>
       </ActionsBar>
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        {total === 0 ? (
-          <EmptyState
-            title="No matches yet"
-            body="Matches come from the draws. Add events and generate draws in the Events and Draw tabs; they’ll appear here and feed Operations."
-          />
-        ) : (
-          <>
-            <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              <span className="w-20">Match</span>
-              <span className="min-w-0 flex-1">Side A</span>
-              <span className="min-w-0 flex-1">Side B</span>
-              <span className="w-16 text-right">Status</span>
-            </div>
-            {groups.map(({ ev, units }) => {
-              const isCollapsed = collapsed.has(ev.id);
-              return (
-                <div key={ev.id}>
-                  <button
-                    type="button"
-                    onClick={() => toggle(ev.id)}
-                    aria-expanded={!isCollapsed}
-                    data-testid={`bracket-match-group-${ev.id}`}
-                    className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-4 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/60"
-                  >
-                    <CaretRight
-                      aria-hidden
-                      weight="bold"
-                      className={[
-                        'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-fast ease-brand',
-                        isCollapsed ? '' : 'rotate-90',
-                      ].join(' ')}
-                    />
-                    <span className="font-mono text-2xs font-semibold uppercase tracking-[0.12em] text-foreground">
-                      {ev.id}
-                    </span>
-                    <span className="text-2xs text-muted-foreground">
-                      {disciplineLabel(ev.discipline)}
-                    </span>
-                    <span className="text-2xs tabular-nums text-muted-foreground">
-                      {units.length}
-                    </span>
-                  </button>
-                  {!isCollapsed
-                    ? units.map((pu) => {
-                        const status = statusOf(pu.id);
-                        return (
-                          <div
-                            key={pu.id}
-                            data-testid={`bracket-match-row-${pu.id}`}
-                            className="flex min-h-[40px] items-center gap-3 border-b border-border px-4 text-sm transition-colors duration-fast ease-brand hover:bg-muted/30"
-                          >
-                            <span className="w-20 font-mono text-xs text-muted-foreground">
-                              R{pu.round_index}·M{pu.match_index}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-foreground">
-                              {resolveSide(pu.side_a)}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-foreground">
-                              {resolveSide(pu.side_b)}
-                            </span>
-                            <span
-                              className={`w-16 text-right text-2xs font-semibold uppercase tracking-[0.12em] ${STATUS_CLASS[status]}`}
-                            >
-                              {STATUS_LABEL[status]}
-                            </span>
-                          </div>
-                        );
-                      })
-                    : null}
+      {/* Flex ROW: match list + docked detail pane (see BracketRosterTab). */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
+          {total === 0 ? (
+            <EmptyState
+              title="No matches yet"
+              body="Matches come from the draws. Add events and generate draws in the Events and Draw tabs; they’ll appear here and feed Operations."
+            />
+          ) : (
+            <>
+              <BandedTable
+                columns={MATCH_LIST_COLUMNS}
+                groups={tableGroups}
+                rowId={({ pu }) => pu.id}
+                onRowClick={({ pu }) =>
+                  setSelectedId((prev) => (prev === pu.id ? null : pu.id))
+                }
+                selectedId={selectedId}
+                rowTestId={({ pu }) => `bracket-match-row-${pu.id}`}
+                renderRow={({ pu, n }) => {
+                  const status = statusOf(pu.id);
+                  return (
+                    <>
+                      {/* Gutter spacer — Meet's warning-icon slot;
+                          empty here but kept so the columns start
+                          at the same x on both surfaces. */}
+                      <span className={`${MATCH_CELL.warnGutter} shrink-0`} aria-hidden />
+                      <span className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}>
+                        {n}
+                      </span>
+                      {/* Friendly label; raw id kept on title for
+                          traceability (it's also the row testid).
+                          px-1.5 mirrors the inner inset of Meet's
+                          editable event field. */}
+                      <span
+                        className={`${MATCH_CELL.event} truncate px-1.5 text-sm font-semibold text-accent sw-num`}
+                        title={pu.id}
+                      >
+                        {labelById.get(pu.id) ?? pu.id}
+                      </span>
+                      <span className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}>
+                        {renderSide(pu.side_a)}
+                      </span>
+                      <span className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}>
+                        {renderSide(pu.side_b)}
+                      </span>
+                      <span
+                        className={`${MATCH_CELL.status} text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+                      >
+                        {STATUS_LABEL[status]}
+                      </span>
+                      <span
+                        className={`flex ${MATCH_CELL.actionGutter} shrink-0 items-center justify-center`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {status !== 'done' && canEdit ? (
+                          <OverflowMenu
+                            label={`Contingency for ${labelById.get(pu.id) ?? pu.id}`}
+                            items={(['walkover', 'retired', 'forfeit'] as const).map(
+                              (r) => ({
+                                key: r,
+                                label: CONTINGENCY_MENU_LABEL[r],
+                                testId: `bracket-match-menu-${r}-${pu.id}`,
+                                onSelect: () => {
+                                  setSelectedId(pu.id);
+                                  setContingency(r);
+                                },
+                              }),
+                            )}
+                          />
+                        ) : null}
+                      </span>
+                    </>
+                  );
+                }}
+              />
+              {shown === 0 ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  No matches match the current search.
                 </div>
-              );
-            })}
-          </>
-        )}
+              ) : null}
+            </>
+          )}
+        </div>
+
+        <DetailDock open={selected != null}>
+        {selected ? (
+          <BracketMatchDetailPanel
+            key={selected.id}
+            pu={selected}
+            data={data}
+            label={labelById.get(selected.id) ?? selected.id}
+            status={statusOf(selected.id)}
+            labelById={labelById}
+            onClose={() => {
+              setSelectedId(null);
+              setContingency(null);
+            }}
+            onCommitEvent={commitEvent}
+            initialContingency={contingency}
+            onRecordContingency={
+              canEdit
+                ? async (reason, winner) => {
+                    const next = await api.recordResultCommand({
+                      play_unit_id: selected.id,
+                      winner_side: winner,
+                      reason,
+                      seen_version: selected.version,
+                    });
+                    onData?.(next);
+                    setContingency(null);
+                  }
+                : null
+            }
+          />
+        ) : null}
+        </DetailDock>
       </div>
     </div>
   );

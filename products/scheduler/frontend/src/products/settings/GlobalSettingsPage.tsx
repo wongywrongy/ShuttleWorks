@@ -10,15 +10,16 @@
  * limitations are footnotes (muted), never accent-colored warnings.
  */
 import { useSearchParams } from 'react-router-dom';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { AppearanceSettings } from './AppearanceSettings';
 import { useAuth } from '../../context/AuthContext';
+import { apiClient } from '../../api/client';
 
-// The Compose stack runs local-only by default (synthetic local-dev session);
-// cloud mode (ENVIRONMENT=cloud + Supabase) unlocks account/security/sync.
-const LOCAL_DEV = true;
+// Profile/security editing is locked for the local-mode bootstrap identity
+// (no password, no real account); a signed-in account (cloud mode, or any
+// non-bootstrap identity) unlocks them. Derived from useAuth() per page.
 
 const NAV: { group: string; items: { id: string; label: string }[] }[] = [
   { group: 'Account', items: [
@@ -56,12 +57,17 @@ function Field({
   label,
   type = 'text',
   defaultValue,
+  value,
+  onChange,
   placeholder,
   disabled,
 }: {
   label: string;
   type?: string;
   defaultValue?: string;
+  /** Controlled-mode value (Security's change-password form). */
+  value?: string;
+  onChange?: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
 }) {
@@ -71,9 +77,11 @@ function Field({
       <input
         type={type}
         defaultValue={defaultValue}
+        value={value}
+        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:bg-muted/40 disabled:text-muted-foreground"
+        className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:bg-muted/40 disabled:text-muted-foreground"
       />
     </label>
   );
@@ -82,9 +90,11 @@ function Field({
 /* ------------------------------- pages -------------------------------- */
 
 function ProfilePage() {
-  const { user } = useAuth();
+  const { user, isBootstrap } = useAuth();
+  const locked = isBootstrap;
   const email = user?.email ?? 'local@dev';
-  const initials = email.trim().charAt(0).toUpperCase() || 'L';
+  const displayName = user?.displayName ?? '';
+  const initials = (displayName || email).trim().charAt(0).toUpperCase() || 'L';
   return (
     <div className="max-w-xl space-y-6 p-6">
       <PageHead title="Profile" subtitle="Your name and how you appear across the app." />
@@ -97,7 +107,7 @@ function ProfilePage() {
           {initials}
         </span>
         <div>
-          <Button variant="outline" size="sm" disabled={LOCAL_DEV}>
+          <Button variant="outline" size="sm" disabled={locked}>
             Change photo
           </Button>
           <p className="mt-1 text-xs text-muted-foreground">JPG or PNG, up to 2&nbsp;MB.</p>
@@ -105,14 +115,14 @@ function ProfilePage() {
       </div>
 
       <div className="space-y-4">
-        <Field label="Full name" defaultValue="" placeholder="Your name" disabled={LOCAL_DEV} />
-        <Field label="Email" type="email" defaultValue={email} disabled={LOCAL_DEV} />
+        <Field label="Full name" defaultValue={displayName} placeholder="Your name" disabled={locked} />
+        <Field label="Email" type="email" defaultValue={email} disabled={locked} />
       </div>
 
       <div className="flex items-center gap-3">
-        <Button disabled={LOCAL_DEV}>Save changes</Button>
-        {LOCAL_DEV ? (
-          <Note>Profile editing unlocks in cloud mode (Supabase Auth).</Note>
+        <Button disabled={locked}>Save changes</Button>
+        {locked ? (
+          <Note>Profile editing unlocks once you sign in with an account.</Note>
         ) : null}
       </div>
     </div>
@@ -120,20 +130,89 @@ function ProfilePage() {
 }
 
 function SecurityPage() {
+  const { isBootstrap } = useAuth();
+  const locked = isBootstrap;
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(
+    null,
+  );
+
+  async function updatePassword() {
+    if (next !== confirm) {
+      setFeedback({ kind: 'error', message: 'New passwords do not match.' });
+      return;
+    }
+    setBusy(true);
+    setFeedback(null);
+    try {
+      await apiClient.changePassword({ currentPassword: current, newPassword: next });
+      setFeedback({ kind: 'success', message: 'Password updated.' });
+      setCurrent('');
+      setNext('');
+      setConfirm('');
+    } catch (err) {
+      setFeedback({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not update the password.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="max-w-xl space-y-6 p-6">
       <PageHead title="Security" subtitle="Manage your password and account security." />
 
       <div className="space-y-4">
-        <Field label="Current password" type="password" placeholder="••••••••" disabled={LOCAL_DEV} />
-        <Field label="New password" type="password" placeholder="••••••••" disabled={LOCAL_DEV} />
-        <Field label="Confirm new password" type="password" placeholder="••••••••" disabled={LOCAL_DEV} />
+        <Field
+          label="Current password"
+          type="password"
+          placeholder="••••••••"
+          value={current}
+          onChange={setCurrent}
+          disabled={locked}
+        />
+        <Field
+          label="New password"
+          type="password"
+          placeholder="••••••••"
+          value={next}
+          onChange={setNext}
+          disabled={locked}
+        />
+        <Field
+          label="Confirm new password"
+          type="password"
+          placeholder="••••••••"
+          value={confirm}
+          onChange={setConfirm}
+          disabled={locked}
+        />
       </div>
 
       <div className="flex items-center gap-3">
-        <Button disabled={LOCAL_DEV}>Update password</Button>
-        {LOCAL_DEV ? (
-          <Note>Full security management is available in cloud mode.</Note>
+        <Button
+          disabled={locked || busy || !current || !next || !confirm}
+          onClick={() => void updatePassword()}
+        >
+          {busy ? 'Updating…' : 'Update password'}
+        </Button>
+        {locked ? (
+          <Note>Password management is available once you sign in with an account.</Note>
+        ) : feedback ? (
+          <p
+            role="status"
+            className={[
+              'text-xs leading-relaxed',
+              feedback.kind === 'success' ? 'text-accent' : 'text-destructive',
+            ].join(' ')}
+          >
+            {feedback.message}
+          </p>
         ) : null}
       </div>
     </div>
@@ -169,7 +248,7 @@ function SessionsPage() {
         </div>
 
         <Note>
-          Session management is handled by your local-dev environment. In cloud mode,
+          This install keeps a single local session. Once you sign in to the cloud, your
           other active sessions appear here and can be revoked individually.
         </Note>
       </div>
@@ -305,7 +384,7 @@ export function GlobalSettingsPage() {
         <nav className="w-56 shrink-0 space-y-4 overflow-y-auto border-r border-border p-3">
           {NAV.map((g) => (
             <div key={g.group} className="space-y-0.5">
-              <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
+              <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 {g.group}
               </div>
               {g.items.map((it) => (

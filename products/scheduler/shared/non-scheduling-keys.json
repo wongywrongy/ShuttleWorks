@@ -1,0 +1,17 @@
+[
+  "scoringFormat",
+  "setsToWin",
+  "pointsPerSet",
+  "deuceEnabled",
+  "standingsMode",
+  "tvDisplayMode",
+  "tvAccent",
+  "tvPreset",
+  "tvGridColumns",
+  "tvCardSize",
+  "tvShowScores",
+  "courtOrder",
+  "hiddenCourts",
+  "tournamentName",
+  "clockShiftMinutes"
+]

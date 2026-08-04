@@ -9,7 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api import (
+    auth as auth_api,  # SP-CLOUD-2 — self-hosted accounts + cookie sessions
+    display as display_api,  # SP-CLOUD-2 — capability-token spectator display
     schedule,
+    solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
     match_state,
     tournaments,  # Step 2 — replaces the legacy /tournament/state singleton router
     schedule_repair,
@@ -69,6 +72,22 @@ async def lifespan(app: FastAPI):
     except Exception:
         log.exception("alembic_upgrade_failed — continuing; reads will surface")
 
+    # SP-CLOUD-2: materialize the local bootstrap identity so the
+    # zero-friction solo-operator flow has a real users row (one code
+    # path with registered accounts). Cloud mode skips it — every
+    # principal there is a real account.
+    if settings.auth_mode == "local":
+        try:
+            from database.session import SessionLocal
+            from services.auth import ensure_bootstrap_user
+
+            with SessionLocal() as _boot_session:
+                ensure_bootstrap_user(_boot_session)
+                _boot_session.commit()
+            log.info("bootstrap_user_ensured")
+        except Exception:
+            log.exception("bootstrap_user_ensure_failed — continuing")
+
     from services.suggestions_worker import SuggestionsWorker
     from api.schedule_suggestions import build_handler
 
@@ -93,6 +112,19 @@ async def lifespan(app: FastAPI):
     else:
         log.info("sync_service skipped (SUPABASE_URL blank — local-dev mode)")
 
+    # SP-CLOUD-1: the embedded solve worker — local mode's zero-config
+    # job executor (one thread, concurrency 1). Cloud mode sets
+    # EMBEDDED_WORKER=false and runs ``python -m worker`` containers
+    # against the same queue instead; the loop code is identical.
+    from services.solve_worker import SolveWorker
+    solve_worker = SolveWorker()
+    app.state.solve_worker = solve_worker
+    if settings.embedded_worker:
+        solve_worker.start()
+        log.info("embedded solve worker started (%s)", solve_worker.worker_id)
+    else:
+        log.info("embedded solve worker disabled (EMBEDDED_WORKER=false)")
+
     # The single-tournament 90 s OPTIMIZE heartbeat retired in Step 2 —
     # post-commit and advisory-driven triggers now carry an explicit
     # ``tournament_id``, and a global periodic tick has no obvious way
@@ -105,6 +137,8 @@ async def lifespan(app: FastAPI):
     finally:
         await worker.stop()
         log.info("suggestions_worker stopped")
+        solve_worker.stop()
+        log.info("solve_worker stopped")
         sync_service.stop()
         log.info("sync_service stopped")
         log.info("app_shutdown")
@@ -123,7 +157,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_credentials=False,  # Set to False when not using cookies/session auth
+    # Cookie-session auth (SP-CLOUD-2) requires credentialed CORS. Safe
+    # because ``cors_origins`` is an explicit allowlist, never "*".
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
     expose_headers=["X-Request-ID"],
@@ -171,6 +207,36 @@ async def request_id_middleware(request: Request, call_next):
 
 
 @app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    """Custom-header CSRF check for cookie-authenticated writes.
+
+    OWASP's SameSite + custom-request-header double for cookie-auth
+    SPAs: a cross-site form/img can send our SameSite=Lax cookie on
+    top-level GETs but can never attach a custom header without a CORS
+    preflight we won't approve. Enforcement triggers only when a
+    state-changing request actually carries the session cookie —
+    bearer-token requests, local bootstrap requests (no cookie), and
+    all GET/HEAD/OPTIONS are untouched, so nothing existing breaks
+    before the frontend migrates.
+    """
+    if (
+        request.method in {"POST", "PUT", "PATCH", "DELETE"}
+        and settings.session_cookie_name in request.cookies
+        and request.headers.get("X-ShuttleWorks-CSRF") != "1"
+    ):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": {
+                    "code": "AUTH_CSRF_REQUIRED",
+                    "message": "Missing X-ShuttleWorks-CSRF header",
+                }
+            },
+        )
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def close_repository_middleware(request: Request, call_next):
     """Close the per-request DB session opened by ``get_repository``.
 
@@ -211,6 +277,7 @@ async def close_repository_middleware(request: Request, call_next):
 _AUTH_DEP = [Depends(get_current_user)]
 
 app.include_router(schedule.router, dependencies=_AUTH_DEP)
+app.include_router(solve_jobs_api.router)  # carries its own auth + role deps
 app.include_router(schedule_repair.router, dependencies=_AUTH_DEP)
 app.include_router(schedule_warm_restart.router, dependencies=_AUTH_DEP)
 app.include_router(schedule_advisories.router, dependencies=_AUTH_DEP)
@@ -226,6 +293,14 @@ app.include_router(workspace_modules.router, dependencies=_AUTH_DEP)
 # ``GET /invites/{token}`` resolve endpoint stays unauthenticated. The
 # accept + revoke endpoints declare their own auth requirements.
 app.include_router(invites.router)
+# Auth: register/login/reset are necessarily public; /me and
+# /change-password declare ``get_current_user`` themselves.
+app.include_router(auth_api.router)
+# Display: the public projection routes are the app's only
+# unauthenticated data plane (capability token, read-only — Rule 8);
+# the manage router carries its own owner-role dependency.
+app.include_router(display_api.public_router)
+app.include_router(display_api.manage_router)
 
 
 @app.get("/health")

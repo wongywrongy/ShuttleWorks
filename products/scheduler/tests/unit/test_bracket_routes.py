@@ -408,6 +408,9 @@ def test_record_result_replay_rejects_changed_metadata(client, tid):
             "walkover": False,
             "finished_at_slot": 4,
             "score": None,
+            # (task 5b) reason: Optional annotation field added to
+            # ResultOut; None here since this test never sends one.
+            "reason": None,
         }
     ]
 

@@ -9,24 +9,36 @@ import type {
   BracketSetScore,
   PlayUnitDTO,
   ResultDTO,
+  SegmentDTO,
+  StandingRowDTO,
   TournamentDTO,
 } from "../../api/bracketDto";
 import { useBracketResultQueue } from "../../hooks/useBracketResultQueue";
+import { INTERACTIVE_BASE } from "../../lib/utils";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { PanZoomCanvas } from "./PanZoomCanvas";
 import { BracketScoreEntry } from "./BracketScoreEntry";
 import { BracketInlineNotice } from "./BracketInlineNotice";
 import { applyOptimisticResult } from "./optimisticResult";
 import { bwfPositions } from "./bwf";
+import { descriptorFor } from "./formatRegistry";
+import { StandingsTable } from "./StandingsTable";
+
+/** How the SE canvas lays out its rounds. One-sided is the classic
+ *  printed-bracket cascade (R1 left, Final right) and the default;
+ *  mirrored is the two-wing "wall display" variant. */
+export type BracketLayoutMode = "one-sided" | "mirrored";
 
 interface Props {
   data: TournamentDTO;
   eventId: string;
   onChange: (t: TournamentDTO) => void;
   refresh: () => Promise<void>;
+  /** SE canvas layout — toggled from the Draw header. */
+  layoutMode?: BracketLayoutMode;
 }
 
-export function DrawView({ data, eventId, onChange }: Props) {
+export function DrawView({ data, eventId, onChange, layoutMode = "one-sided" }: Props) {
   const tid = useTournamentId();
   const navigate = useNavigate();
   const goToDraws = () =>
@@ -54,21 +66,44 @@ export function DrawView({ data, eventId, onChange }: Props) {
       />
     );
   }
-  return event.format === "se" ? (
-    <BracketView data={data} eventId={eventId} onChange={onChange} />
-  ) : (
-    <RoundRobinView data={data} eventId={eventId} onChange={onChange} />
-  );
+  // Renderer families come from the format registry (draw-formats program,
+  // S8) — unknown formats fall back to the classic bracket so a newer
+  // backend never blanks the canvas.
+  const renderer = descriptorFor(event.format)?.renderer ?? "bracket";
+  switch (renderer) {
+    case "grid":
+      return (
+        <RoundRobinWithStandings data={data} eventId={eventId} onChange={onChange} />
+      );
+    case "segments":
+      return (
+        <SegmentedBracketView data={data} eventId={eventId} onChange={onChange} />
+      );
+    case "swiss":
+      return <SwissView data={data} eventId={eventId} onChange={onChange} />;
+    case "bracket":
+    default:
+      return (
+        <BracketView
+          data={data}
+          eventId={eventId}
+          onChange={onChange}
+          layoutMode={layoutMode}
+        />
+      );
+  }
 }
 
 function BracketView({
   data,
   eventId,
   onChange,
+  layoutMode = "one-sided",
 }: {
   data: TournamentDTO;
   eventId: string;
   onChange: (t: TournamentDTO) => void;
+  layoutMode?: BracketLayoutMode;
 }) {
   const api = useBracketApi();
   const config = useTournamentStore((s) => s.config);
@@ -184,8 +219,11 @@ function BracketView({
   );
 
   const layout = useMemo(
-    () => computeBracketLayout(event.rounds),
-    [event.rounds],
+    () =>
+      layoutMode === "mirrored"
+        ? computeMirroredBracketLayout(event.rounds)
+        : computeOneSidedBracketLayout(event.rounds),
+    [event.rounds, layoutMode],
   );
 
   const recordResultFor = (
@@ -247,11 +285,12 @@ function BracketView({
       ) : null}
       <div className="min-h-0 flex-1">
         <PanZoomCanvas roundLabels={roundLabels}>
-          {/* Mirrored bracket: the Final is centered and earlier rounds fan
-              outward to the left and right wings. Each match is positioned
-              absolutely at the vertical midpoint of its two feeders, so the
-              connecting lines are implied by alignment. Positions are inline
-              styles (not flex) so the layout is deterministic and testable. */}
+          {/* Bracket canvas: one-sided (default) reads left-to-right with the
+              Final as the rightmost column; mirrored fans two wings out from
+              a centered Final. Either way each match is positioned absolutely
+              at the vertical midpoint of its two feeders, so the connecting
+              lines are implied by alignment. Positions are inline styles
+              (not flex) so the layout is deterministic and testable. */}
           <div
             data-testid="bracket-canvas"
             className="relative"
@@ -260,14 +299,20 @@ function BracketView({
               height: `${layout.contentHeight}px`,
             }}
           >
-            {layout.columns.map((col) => (
+            {layout.columns.map((col) => {
+              const isFinal = col.roundIndex === event.rounds.length - 1;
+              return (
               <div
                 key={col.key}
                 data-round={col.roundIndex}
                 className="absolute top-0"
                 style={{ left: `${col.left}px`, width: `${BRACKET_CARD_WIDTH}px` }}
               >
-                <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.18em]">
+                <h3
+                  className={`text-2xs font-semibold uppercase tracking-[0.08em] ${
+                    isFinal ? 'text-accent' : 'text-ink-faint'
+                  }`}
+                >
                   {roundLabel(col.roundIndex, event.rounds.length)}
                 </h3>
                 {col.matches.map((m) => {
@@ -288,6 +333,7 @@ function BracketView({
                         nameById={nameById}
                         result={resultByPu[puId]}
                         assignment={assignmentByPu[puId]}
+                        final={isFinal}
                         seeding={editing && col.roundIndex === 0}
                         selectedPos={selectedPos}
                         scoringFormat={scoringFormat}
@@ -301,7 +347,8 @@ function BracketView({
                   );
                 })}
               </div>
-            ))}
+              );
+            })}
           </div>
         </PanZoomCanvas>
       </div>
@@ -309,13 +356,17 @@ function BracketView({
   );
 }
 
-// ── Mirrored bracket geometry ───────────────────────────────────────────
+// ── Bracket geometry ────────────────────────────────────────────────────
 // The canvas is laid out with absolute positions rather than flex so it can
 // be panned/zoomed as one transformed surface (PanZoomCanvas) and unit-tested
-// under jsdom, which does no real layout. A single-elimination draw is drawn
-// as two wings that converge on a centered Final: the first half of each
-// round's matches feeds the left wing, the second half feeds the right wing
-// (binary-heap children are contiguous, so each half is a complete subtree).
+// under jsdom, which does no real layout. Two layout variants share the
+// constants and midpoint math:
+//   - one-sided (default): the classic printed bracket — one column per
+//     round, round 0 leftmost, Final rightmost.
+//   - mirrored: two wings converge on a centered Final — the first half of
+//     each round's matches feeds the left wing, the second half the right
+//     (binary-heap children are contiguous, so each half is a complete
+//     subtree).
 
 const BRACKET_CARD_WIDTH = 256; // matches the old w-64 card.
 const BRACKET_CARD_HEIGHT = 88; // fixed so feeder midpoints are deterministic.
@@ -338,14 +389,95 @@ interface BracketColumn {
   matches: BracketColumnMatch[];
 }
 
-interface BracketLayout {
+export interface BracketLayout {
   contentWidth: number;
   contentHeight: number;
   columns: BracketColumn[];
 }
 
 /**
- * Compute the mirrored/centered layout for a round-major SE draw.
+ * Compute the classic one-sided layout for a round-major SE draw.
+ *
+ *   - Horizontal: `N` uniform-pitch columns in reading order — round 0
+ *     leftmost, the Final rightmost (how printed brackets read).
+ *   - Vertical: whole-round midpoint recursion (no wing split). Round-0
+ *     cards are evenly spaced; each later match centers on the vertical
+ *     midpoint of its two feeders.
+ *
+ * Exported (with the mirrored variant) so the geometry can be unit-tested
+ * directly.
+ */
+export function computeOneSidedBracketLayout(rounds: string[][]): BracketLayout {
+  const n = rounds.length;
+  const pitchX = BRACKET_CARD_WIDTH + BRACKET_COL_GAP;
+  const pitchY = BRACKET_CARD_HEIGHT + BRACKET_ROW_GAP;
+
+  const base = rounds[0]?.length ?? 0;
+  // Tall enough for the WIDEST round — a plain knockout peaks at round 0,
+  // but a DE losers bracket alternates equal-size drop-in rounds.
+  const maxCount = Math.max(base, ...rounds.map((r) => r.length), 1);
+  const fullHeight =
+    maxCount * BRACKET_CARD_HEIGHT + (maxCount - 1) * BRACKET_ROW_GAP;
+
+  // Vertical center of each match, by [roundIndex][matchIndex].
+  const centers: number[][] = [];
+  for (let r = 0; r < n; r++) {
+    const count = rounds[r].length;
+    if (r === 0) {
+      centers[0] = Array.from(
+        { length: base },
+        (_, j) => j * pitchY + BRACKET_CARD_HEIGHT / 2,
+      );
+    } else {
+      const prev = centers[r - 1];
+      if (count * 2 === prev.length) {
+        // Halving cascade — classic feeder-midpoint recursion.
+        centers[r] = Array.from(
+          { length: count },
+          (_, j) => (prev[2 * j] + prev[2 * j + 1]) / 2,
+        );
+      } else {
+        // Non-halving round (DE losers brackets alternate merge rounds
+        // with equal-size drop-in rounds) — midpoints are undefined, so
+        // space uniformly like round 0 instead of collapsing to NaN.
+        centers[r] = Array.from(
+          { length: count },
+          (_, j) => j * pitchY + BRACKET_CARD_HEIGHT / 2,
+        );
+      }
+    }
+  }
+
+  const columns: BracketColumn[] = rounds.map((round, r) => ({
+    key: `r${r}`,
+    roundIndex: r,
+    left: r * pitchX,
+    matches: round.flatMap((puId, mi) =>
+      puId
+        ? [
+            {
+              puId,
+              matchIndex: mi,
+              top:
+                BRACKET_LABEL_HEIGHT +
+                centers[r][mi] -
+                BRACKET_CARD_HEIGHT / 2,
+            },
+          ]
+        : [],
+    ),
+  }));
+
+  const contentWidth =
+    Math.max(n, 1) * BRACKET_CARD_WIDTH + Math.max(n - 1, 0) * BRACKET_COL_GAP;
+  const contentHeight = BRACKET_LABEL_HEIGHT + fullHeight;
+
+  return { contentWidth, contentHeight, columns };
+}
+
+/**
+ * Compute the mirrored/centered layout for a round-major SE draw (the
+ * "wall display" option).
  *
  *   - Horizontal: `2N - 1` uniform-pitch columns (left wing, Final, right
  *     wing). The Final lives at column `N - 1`, so its horizontal center
@@ -355,7 +487,7 @@ interface BracketLayout {
  *     same vertical centers, so the Final sits at the content's vertical
  *     center between its two wing roots.
  */
-function computeBracketLayout(rounds: string[][]): BracketLayout {
+export function computeMirroredBracketLayout(rounds: string[][]): BracketLayout {
   const n = rounds.length;
   const pitchX = BRACKET_CARD_WIDTH + BRACKET_COL_GAP;
   const pitchY = BRACKET_CARD_HEIGHT + BRACKET_ROW_GAP;
@@ -450,11 +582,283 @@ function computeBracketLayout(rounds: string[][]): BracketLayout {
   return { contentWidth, contentHeight, columns };
 }
 
+// ── Segmented bracket geometry (DE / Monrad / compass) ──────────────────
+// Multi-segment formats stack one one-sided bracket block per segment
+// inside the same pan/zoom canvas: a header band above each block, a gap
+// between blocks. Every block runs the SAME one-sided layout, so column i
+// shares its x position across segments (constant x-pitch) and the
+// round-jump chips can address `data-round="i"` globally.
+
+export const SEGMENT_HEADER_HEIGHT = 40; // header band above each block.
+// Vertical gap between segment blocks. Generous because BracketCell can
+// exceed the nominal card height (the "Enter score" strip on recordable
+// matches) — the next segment's header must clear it.
+export const SEGMENT_GAP = 88;
+
+export interface SegmentedBracketBlock {
+  segment: SegmentDTO;
+  /** Top of the block's header band within the canvas, in pixels. */
+  yOffset: number;
+  layout: BracketLayout;
+}
+
+export interface SegmentedBracketLayout {
+  contentWidth: number;
+  contentHeight: number;
+  /** Blocks in `segment.order`, stacked top to bottom. */
+  blocks: SegmentedBracketBlock[];
+}
+
+/**
+ * Pure geometry for the segmented canvas: one one-sided bracket layout per
+ * segment (sorted by `order`), stacked vertically — each block owns a
+ * SEGMENT_HEADER_HEIGHT band, blocks are SEGMENT_GAP apart, and the canvas
+ * is as wide as the widest block.
+ */
+export function computeSegmentedLayout(
+  segments: SegmentDTO[],
+): SegmentedBracketLayout {
+  const sorted = [...segments].sort((a, b) => a.order - b.order);
+  const blocks: SegmentedBracketBlock[] = [];
+  let y = 0;
+  let contentWidth = 0;
+  for (const segment of sorted) {
+    if (blocks.length > 0) y += SEGMENT_GAP;
+    const layout = computeOneSidedBracketLayout(segment.rounds);
+    blocks.push({ segment, yOffset: y, layout });
+    y += SEGMENT_HEADER_HEIGHT + layout.contentHeight;
+    contentWidth = Math.max(contentWidth, layout.contentWidth);
+  }
+  return { contentWidth, contentHeight: y, blocks };
+}
+
+/**
+ * SegmentedBracketView — the 'segments' renderer (double elimination,
+ * Monrad, compass): every segment renders as its own one-sided bracket
+ * block, stacked vertically inside ONE PanZoomCanvas with an eyebrow
+ * header band per segment. Result recording reuses BracketCell verbatim;
+ * seeding edit is a 'bracket'-renderer affordance and is deliberately
+ * absent here (slots are format-generated, not operator-seeded).
+ */
+function SegmentedBracketView({
+  data,
+  eventId,
+  onChange,
+}: {
+  data: TournamentDTO;
+  eventId: string;
+  onChange: (t: TournamentDTO) => void;
+}) {
+  const config = useTournamentStore((s) => s.config);
+  const scoringFormat = config?.scoringFormat ?? "badminton";
+  const setsToWin = config?.setsToWin ?? 2;
+  const event = data.events.find((e) => e.id === eventId)!;
+  const segments = useMemo(() => event.segments ?? [], [event.segments]);
+
+  const idMap = useMemo(
+    () =>
+      Object.fromEntries(
+        data.play_units
+          .filter((p) => p.event_id === eventId)
+          .map((p) => [p.id, p]),
+      ),
+    [data.play_units, eventId],
+  );
+  const resultByPu = useMemo(
+    () => Object.fromEntries(data.results.map((r) => [r.play_unit_id, r])),
+    [data.results],
+  );
+  const assignmentByPu = useMemo(
+    () => Object.fromEntries(data.assignments.map((a) => [a.play_unit_id, a])),
+    [data.assignments],
+  );
+  const nameById = useMemo(
+    () => Object.fromEntries(data.participants.map((p) => [p.id, p.name])),
+    [data.participants],
+  );
+
+  // Result writes route through the idempotent command queue (SP-F3),
+  // exactly like BracketView.
+  const [resultConflict, setResultConflict] = useState<string | null>(null);
+  const { submit: submitResult } = useBracketResultQueue({
+    onOptimistic: (input) => onChange(applyOptimisticResult(data, input)),
+    onSettled: (dto) => onChange(dto),
+    onConflict: (_kind, message) => setResultConflict(message),
+  });
+
+  const layout = useMemo(() => computeSegmentedLayout(segments), [segments]);
+
+  // Older backend payloads may lack `segments` for a segments-renderer
+  // format — degrade to the classic one-sided bracket over the global
+  // rounds axis rather than blanking the canvas.
+  if (segments.length === 0) {
+    return (
+      <BracketView
+        data={data}
+        eventId={eventId}
+        onChange={onChange}
+        layoutMode="one-sided"
+      />
+    );
+  }
+
+  // The deciding final: the GF segment's last column, or — when the format
+  // has no GF (Monrad/compass) — the last column of the first segment.
+  const gfBlock = layout.blocks.find(
+    (b) => b.segment.id.toUpperCase() === "GF",
+  );
+  const finalSegmentId = (gfBlock ?? layout.blocks[0]).segment.id;
+
+  // Round-jump chips from the LONGEST segment's column count — all
+  // segments share the x-pitch, so column i aligns across segments.
+  const maxColumns = layout.blocks.reduce(
+    (m, b) => Math.max(m, b.layout.columns.length),
+    0,
+  );
+  const roundLabels = Array.from({ length: maxColumns }, (_, i) => `R${i + 1}`);
+
+  const recordResultFor = (
+    puId: string,
+    winner: "A" | "B",
+    sets?: BracketSetScore[],
+  ) => {
+    const a = assignmentByPu[puId];
+    const finishedAt = a
+      ? a.actual_end_slot ?? a.slot_id + a.duration_slots
+      : null;
+    setResultConflict(null);
+    void submitResult({
+      matchId: puId,
+      winnerSide: winner,
+      seenVersion: idMap[puId]?.version ?? 1,
+      finishedAtSlot: finishedAt,
+      score: sets && sets.length > 0 ? { sets } : null,
+    });
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {resultConflict && (
+        <BracketInlineNotice
+          tone="error"
+          title="Could not record result"
+          message={resultConflict}
+        />
+      )}
+      <div className="min-h-0 flex-1">
+        <PanZoomCanvas roundLabels={roundLabels}>
+          <div
+            data-testid="segmented-canvas"
+            className="relative"
+            style={{
+              width: `${layout.contentWidth}px`,
+              height: `${layout.contentHeight}px`,
+            }}
+          >
+            {layout.blocks.map((block) => {
+              const seg = block.segment;
+              const isGf = seg.id.toUpperCase() === "GF";
+              const positions = seg.positions ?? [];
+              const decidesPlaces = isGf || positions.length > 0;
+              const colCount = block.layout.columns.length;
+              const lo = positions.length > 0 ? Math.min(...positions) : null;
+              const hi = positions.length > 0 ? Math.max(...positions) : null;
+              return (
+                <div key={seg.id} data-segment={seg.id}>
+                  {/* Segment header band — eyebrow grammar; the grand final
+                      carries the accent (it is the draw's hero segment). */}
+                  <div
+                    data-testid={`segment-header-${seg.id}`}
+                    className="absolute left-0 flex items-baseline gap-2"
+                    style={{
+                      top: `${block.yOffset}px`,
+                      height: `${SEGMENT_HEADER_HEIGHT}px`,
+                    }}
+                  >
+                    <span
+                      className={`text-2xs font-semibold uppercase tracking-[0.08em] ${
+                        isGf ? "text-accent" : "text-ink-3"
+                      }`}
+                    >
+                      {seg.label}
+                    </span>
+                    {lo !== null && hi !== null ? (
+                      <span className="text-2xs text-muted-foreground sw-num">
+                        {lo === hi ? `· place ${lo}` : `· places ${lo}–${hi}`}
+                      </span>
+                    ) : null}
+                  </div>
+                  {block.layout.columns.map((col) => {
+                    const isLastCol = col.roundIndex === colCount - 1;
+                    const isFinalCol = seg.id === finalSegmentId && isLastCol;
+                    return (
+                      <div
+                        key={`${seg.id}-${col.key}`}
+                        data-round={col.roundIndex}
+                        className="absolute"
+                        style={{
+                          left: `${col.left}px`,
+                          top: `${block.yOffset + SEGMENT_HEADER_HEIGHT}px`,
+                          width: `${BRACKET_CARD_WIDTH}px`,
+                        }}
+                      >
+                        <h3
+                          className={`text-2xs font-semibold uppercase tracking-[0.08em] ${
+                            isFinalCol ? "text-accent" : "text-ink-faint"
+                          }`}
+                        >
+                          {decidesPlaces && isLastCol
+                            ? "Final"
+                            : `R${col.roundIndex + 1}`}
+                        </h3>
+                        {col.matches.map((m) => {
+                          const pu = idMap[m.puId];
+                          if (!pu) return null;
+                          return (
+                            <div
+                              key={m.puId}
+                              data-cell={`${seg.id}-r${col.roundIndex}m${m.matchIndex}`}
+                              className="absolute left-0"
+                              style={{
+                                top: `${m.top}px`,
+                                width: `${BRACKET_CARD_WIDTH}px`,
+                                height: `${BRACKET_CARD_HEIGHT}px`,
+                              }}
+                            >
+                              <BracketCell
+                                pu={pu}
+                                nameById={nameById}
+                                result={resultByPu[m.puId]}
+                                assignment={assignmentByPu[m.puId]}
+                                final={isFinalCol}
+                                scoringFormat={scoringFormat}
+                                setsToWin={setsToWin}
+                                onResult={(winner, sets) =>
+                                  recordResultFor(m.puId, winner, sets)
+                                }
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </PanZoomCanvas>
+      </div>
+    </div>
+  );
+}
+
 function BracketCell({
   pu,
   nameById,
   result,
   assignment,
+  final = false,
   seeding = false,
   selectedPos = null,
   scoringFormat = "badminton",
@@ -466,6 +870,8 @@ function BracketCell({
   nameById: Record<string, string>;
   result: ResultDTO | undefined;
   assignment: AssignmentDTO | undefined;
+  /** Final-round cell — carries the accent ring + glow (the draw's hero). */
+  final?: boolean;
   /** Round-0 cell in seeding-edit mode: sides swap instead of recording. */
   seeding?: boolean;
   selectedPos?: number | null;
@@ -483,10 +889,35 @@ function BracketCell({
   const posB = posA + 1;
   const setsMode = scoringFormat === "badminton";
   const [scoring, setScoring] = useState(false);
+  // Winner-perspective set score ("21-18 21-15"); "w/o" for a walkover.
+  // The score blob is opaque server-side (RecordResultIn.score: dict), so a
+  // non-frontend writer (import, sync restore, API client) can hand us any
+  // shape — guard every level and fall back to winner-only rather than
+  // rendering "undefined-undefined" or throwing on `.map` of a non-array.
+  const validSets = Array.isArray(result?.score?.sets)
+    ? result.score.sets.filter(
+        (s): s is BracketSetScore =>
+          !!s && typeof s.sideA === "number" && typeof s.sideB === "number",
+      )
+    : [];
+  const score = result
+    ? result.walkover
+      ? "w/o"
+      : validSets.length > 0
+        ? validSets
+            .map((s) =>
+              winner === "A" ? `${s.sideA}-${s.sideB}` : `${s.sideB}-${s.sideA}`,
+            )
+            .join(" ")
+        : undefined
+    : undefined;
 
   return (
-    <Card variant="frame" className="p-3 space-y-2">
-      <div className="flex justify-between text-3xs text-muted-foreground font-mono">
+    <Card
+      variant="frame"
+      className={`p-3 space-y-2${final ? " border-accent/40 ring-1 ring-accent/30 shadow-glow" : ""}`}
+    >
+      <div className="flex justify-between text-3xs text-muted-foreground sw-num">
         <span>{pu.id}</span>
         <span>
           {assignment
@@ -498,6 +929,7 @@ function BracketCell({
         label={aName}
         winning={winner === "A"}
         loser={result && winner === "B"}
+        score={winner === "A" ? score : undefined}
         bye={pu.side_a === null}
         seeding={seeding}
         selected={seeding && selectedPos === posA}
@@ -510,6 +942,7 @@ function BracketCell({
         label={bName}
         winning={winner === "B"}
         loser={result && winner === "A"}
+        score={winner === "B" ? score : undefined}
         bye={pu.side_b === null}
         seeding={seeding}
         selected={seeding && selectedPos === posB}
@@ -547,6 +980,7 @@ function Side({
   winning,
   loser,
   bye,
+  score,
   seeding = false,
   selected = false,
   onSlotClick,
@@ -556,6 +990,8 @@ function Side({
   winning?: boolean;
   loser?: boolean;
   bye?: boolean;
+  /** Winner-perspective score, shown on the winning side only. */
+  score?: string;
   seeding?: boolean;
   selected?: boolean;
   onSlotClick?: () => void;
@@ -573,7 +1009,7 @@ function Side({
         (selected
           ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
           : winning
-          ? "bg-status-done-bg border border-status-done/40 text-status-done font-medium"
+          ? "bg-status-live-solid border border-status-live-border text-status-live-ink font-medium"
           : loser
           ? "bg-muted text-muted-foreground line-through"
           : bye
@@ -586,6 +1022,8 @@ function Side({
       <span className="truncate">{label}</span>
       {seeding && !bye ? (
         <span className="text-3xs text-muted-foreground">⇄</span>
+      ) : winning && score ? (
+        <span className="text-2xs font-semibold sw-num">{score}</span>
       ) : onWin && !bye ? (
         <span className="text-3xs text-muted-foreground">↵ wins</span>
       ) : null}
@@ -595,7 +1033,11 @@ function Side({
 
 function labelFor(
   side: string[] | null,
-  slot: { participant_id: string | null; feeder_play_unit_id: string | null },
+  slot: {
+    participant_id: string | null;
+    feeder_play_unit_id: string | null;
+    feeder_take?: "loser" | null;
+  },
   nameById: Record<string, string>
 ): string {
   if (side && side.length > 0) {
@@ -603,7 +1045,8 @@ function labelFor(
   }
   if (slot.participant_id === "__BYE__" || slot.participant_id === null) {
     if (slot.feeder_play_unit_id) {
-      return `Winner of ${slot.feeder_play_unit_id}`;
+      const take = slot.feeder_take === "loser" ? "Loser" : "Winner";
+      return `${take} of ${slot.feeder_play_unit_id}`;
     }
     return "Bye";
   }
@@ -672,7 +1115,7 @@ function RoundRobinView({
       )}
       {event.rounds.map((round, ri) => (
         <Card key={ri} variant="frame" className="p-4">
-          <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.18em] mb-3">
+          <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.08em] mb-3">
             Round {ri + 1}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -710,6 +1153,205 @@ function RoundRobinView({
           </div>
         </Card>
       ))}
+    </div>
+  );
+}
+
+/** Standings side panel shared by the 'grid' and 'swiss' renderers:
+ *  a right-hand rail on xl+ screens, stacked below the rounds on smaller. */
+function StandingsAside({
+  rows,
+  nameById,
+}: {
+  rows: StandingRowDTO[];
+  nameById: Record<string, string>;
+}) {
+  return (
+    <aside className="max-h-[45%] shrink-0 overflow-auto border-t border-border p-4 xl:max-h-none xl:w-96 xl:border-l xl:border-t-0">
+      <StandingsTable rows={rows} nameById={nameById} />
+    </aside>
+  );
+}
+
+/**
+ * The 'grid' renderer (round robin): the classic round cards plus a
+ * standings panel. Standings are backend-computed and ride the event DTO
+ * (`EventOut.standings`) — absent/empty before that lands, in which case
+ * only the rounds render.
+ */
+function RoundRobinWithStandings({
+  data,
+  eventId,
+  onChange,
+}: {
+  data: TournamentDTO;
+  eventId: string;
+  onChange: (t: TournamentDTO) => void;
+}) {
+  const event = data.events.find((e) => e.id === eventId)!;
+  const standings = event.standings ?? [];
+  if (standings.length === 0) {
+    return <RoundRobinView data={data} eventId={eventId} onChange={onChange} />;
+  }
+  const nameById = Object.fromEntries(
+    data.participants.map((p) => [p.id, p.name]),
+  );
+  return (
+    <div className="flex h-full min-h-0 flex-col xl:flex-row">
+      <div className="min-h-0 flex-1">
+        <RoundRobinView data={data} eventId={eventId} onChange={onChange} />
+      </div>
+      <StandingsAside rows={standings} nameById={nameById} />
+    </div>
+  );
+}
+
+/**
+ * SwissView — the 'swiss' renderer: RR-style round cards titled
+ * "Round k of K" (K = the resolved `swiss_rounds` persisted at generate
+ * time), a standings panel, and the progressive "Generate round k+1"
+ * action. Generation appends the next round's pairings from standings
+ * (`POST …/rounds/next`) — gated here until every played match has a
+ * result, hidden once the configured rounds are exhausted.
+ */
+function SwissView({
+  data,
+  eventId,
+  onChange,
+}: {
+  data: TournamentDTO;
+  eventId: string;
+  onChange: (t: TournamentDTO) => void;
+}) {
+  const api = useBracketApi();
+  const config = useTournamentStore((s) => s.config);
+  const scoringFormat = config?.scoringFormat ?? "badminton";
+  const setsToWin = config?.setsToWin ?? 2;
+  const event = data.events.find((e) => e.id === eventId)!;
+  const nameById = Object.fromEntries(
+    data.participants.map((p) => [p.id, p.name]),
+  );
+  const resultByPu = Object.fromEntries(
+    data.results.map((r) => [r.play_unit_id, r]),
+  );
+  const assignmentByPu = Object.fromEntries(
+    data.assignments.map((a) => [a.play_unit_id, a]),
+  );
+  const eventPus = data.play_units.filter((p) => p.event_id === eventId);
+  const puById = Object.fromEntries(eventPus.map((p) => [p.id, p]));
+
+  // Result writes route through the idempotent command queue (SP-F3).
+  const [resultConflict, setResultConflict] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const { submit: submitResult } = useBracketResultQueue({
+    onOptimistic: (input) => onChange(applyOptimisticResult(data, input)),
+    onSettled: (dto) => onChange(dto),
+    onConflict: (_kind, message) => setResultConflict(message),
+  });
+
+  // Resolved round count, persisted into the event config at generate time.
+  const rawRounds = event.config?.["swiss_rounds"];
+  const parsedRounds =
+    typeof rawRounds === "number"
+      ? rawRounds
+      : typeof rawRounds === "string"
+        ? Number(rawRounds)
+        : NaN;
+  const totalRounds =
+    Number.isFinite(parsedRounds) && parsedRounds > 0
+      ? Math.floor(parsedRounds)
+      : null;
+
+  const playedRounds = event.rounds.length;
+  const allResulted = eventPus.every((pu) => resultByPu[pu.id]);
+  const canGenerate = totalRounds !== null && playedRounds < totalRounds;
+
+  const generateNext = async () => {
+    setGenerating(true);
+    try {
+      onChange(await api.eventNextRound(event.id));
+    } catch {
+      // Interceptor surfaces the 409/500 toast; nothing more here.
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const standings = event.standings ?? [];
+
+  return (
+    <div className="flex h-full min-h-0 flex-col xl:flex-row">
+      <div className="min-h-0 flex-1 space-y-6 overflow-auto p-4">
+        {resultConflict && (
+          <BracketInlineNotice
+            tone="error"
+            title="Could not record result"
+            message={resultConflict}
+          />
+        )}
+        {event.rounds.map((round, ri) => (
+          <Card key={ri} variant="frame" className="p-4">
+            <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.08em] mb-3">
+              {totalRounds !== null
+                ? `Round ${ri + 1} of ${totalRounds}`
+                : `Round ${ri + 1}`}
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {round.map((puId) => {
+                const pu = puById[puId];
+                if (!pu) return null;
+                const assignment = assignmentByPu[puId];
+                return (
+                  <BracketCell
+                    key={puId}
+                    pu={pu}
+                    nameById={nameById}
+                    result={resultByPu[puId]}
+                    assignment={assignment}
+                    scoringFormat={scoringFormat}
+                    setsToWin={setsToWin}
+                    onResult={(winner, sets) => {
+                      const finishedAt = assignment
+                        ? assignment.actual_end_slot ??
+                          assignment.slot_id + assignment.duration_slots
+                        : null;
+                      setResultConflict(null);
+                      void submitResult({
+                        matchId: puId,
+                        winnerSide: winner,
+                        seenVersion: pu.version ?? 1,
+                        finishedAtSlot: finishedAt,
+                        score: sets && sets.length > 0 ? { sets } : null,
+                      });
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </Card>
+        ))}
+        {canGenerate && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              data-testid="swiss-next-round"
+              onClick={() => void generateNext()}
+              disabled={!allResulted || generating}
+              title={
+                allResulted
+                  ? undefined
+                  : "Record every result to pair the next round"
+              }
+              className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+              {`Generate round ${playedRounds + 1} of ${totalRounds}`}
+            </button>
+          </div>
+        )}
+      </div>
+      {standings.length > 0 && (
+        <StandingsAside rows={standings} nameById={nameById} />
+      )}
     </div>
   );
 }

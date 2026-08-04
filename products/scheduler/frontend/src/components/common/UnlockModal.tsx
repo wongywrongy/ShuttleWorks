@@ -25,9 +25,18 @@ interface UnlockModalProps {
    *  "Edit court count" or "Add a new player". Optional — when omitted
    *  the modal uses generic copy. */
   actionDescription?: string;
+  /** Extra disclosure line for the cross-module case, e.g. "This will
+   *  also clear the bracket schedule." Optional — omitted when the
+   *  triggering 409 only named the current module's own schedule. */
+  crossModuleNote?: string;
 }
 
-export function UnlockModal({ onConfirm, onCancel, actionDescription }: UnlockModalProps) {
+export function UnlockModal({
+  onConfirm,
+  onCancel,
+  actionDescription,
+  crossModuleNote,
+}: UnlockModalProps) {
   // Tracks whether the operator has explicitly clicked the destructive
   // primary. We deliberately don't auto-focus it — the destructive
   // button is the *second* tab stop after Cancel.
@@ -40,22 +49,27 @@ export function UnlockModal({ onConfirm, onCancel, actionDescription }: UnlockMo
       <div className="p-6">
         <h2
           id="unlock-modal-title"
-          className="text-lg font-semibold text-fg-strong"
+          className="text-lg font-semibold text-foreground"
         >
           Discard committed schedule?
         </h2>
-        <p className="mt-3 text-sm text-fg">
+        <p className="mt-3 text-sm text-foreground">
           {action} will clear the currently committed schedule. The next
           generate or replan will start fresh.
         </p>
-        <div className="mt-4 rounded border border-border bg-bg-subtle p-3 text-sm text-fg-muted">
-          <div className="font-medium text-fg">This will clear:</div>
+        {crossModuleNote && (
+          <p className="mt-2 text-sm font-medium text-danger-fg">
+            {crossModuleNote}
+          </p>
+        )}
+        <div className="mt-4 rounded border border-border bg-muted p-3 text-sm text-muted-foreground">
+          <div className="font-medium text-foreground">This will clear:</div>
           <ul className="mt-1 list-disc pl-5">
             <li>The committed schedule and any candidates it produced</li>
             <li>Solver HUD progress + recent log entries</li>
             <li>Any in-flight proposal awaiting review</li>
           </ul>
-          <div className="mt-2 text-fg-muted">
+          <div className="mt-2 text-muted-foreground">
             Match states (called/started/finished, scores) are preserved.
           </div>
         </div>
@@ -63,7 +77,7 @@ export function UnlockModal({ onConfirm, onCancel, actionDescription }: UnlockMo
           <button
             type="button"
             onClick={onCancel}
-            className="rounded border border-border bg-card px-4 py-2 text-sm font-medium text-fg hover:bg-bg-subtle focus:outline-none focus:ring-2 focus:ring-accent"
+            className="rounded border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-accent"
           >
             Cancel
           </button>

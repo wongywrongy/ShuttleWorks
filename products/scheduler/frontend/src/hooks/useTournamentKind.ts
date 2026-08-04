@@ -22,30 +22,58 @@ export function useTournamentKind(tournamentId: string | null): void {
   const setActiveTournamentStatus = useUiStore(
     (s) => s.setActiveTournamentStatus,
   );
+  const setActiveTournamentPhase = useUiStore(
+    (s) => s.setActiveTournamentPhase,
+  );
+  const setActiveTournamentRole = useUiStore((s) => s.setActiveTournamentRole);
 
   useEffect(() => {
     let cancelled = false;
     if (!tournamentId) {
       setActiveTournamentKind(null);
       setActiveTournamentStatus(null);
+      setActiveTournamentPhase(null);
+      setActiveTournamentRole(null);
       return () => {
         cancelled = true;
       };
     }
-    apiClient
-      .getTournament(tournamentId)
-      .then((row) => {
-        if (cancelled) return;
-        setActiveTournamentKind(row.kind);
-        setActiveTournamentStatus(row.status ?? null);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setActiveTournamentKind(null);
-        setActiveTournamentStatus(null);
-      });
+    const load = (isRefresh: boolean) => {
+      apiClient
+        .getTournament(tournamentId)
+        .then((row) => {
+          if (cancelled) return;
+          setActiveTournamentKind(row.kind);
+          setActiveTournamentStatus(row.status ?? null);
+          setActiveTournamentPhase(row.signals?.phase ?? null);
+          // The caller's role rides along on the same summary row — no extra
+          // request. It gates every write (audit A2); see permissions.canEdit.
+          setActiveTournamentRole(row.role ?? null);
+        })
+        .catch(() => {
+          if (cancelled || isRefresh) return; // keep last-known values on a failed refresh
+          setActiveTournamentKind(null);
+          setActiveTournamentStatus(null);
+          setActiveTournamentPhase(null);
+          setActiveTournamentRole(null);
+        });
+    };
+    load(false);
+    // The lifecycle phase (signals.phase) changes DURING a session — the
+    // day goes live with the first call, complete with the last result.
+    // A one-shot fetch left the shell badge frozen at open-time state
+    // (review finding); a modest re-poll keeps it honest. `kind` and
+    // `status` ride along for free (same summary row).
+    const interval = window.setInterval(() => load(true), 30_000);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
-  }, [tournamentId, setActiveTournamentKind, setActiveTournamentStatus]);
+  }, [
+    tournamentId,
+    setActiveTournamentKind,
+    setActiveTournamentStatus,
+    setActiveTournamentPhase,
+    setActiveTournamentRole,
+  ]);
 }

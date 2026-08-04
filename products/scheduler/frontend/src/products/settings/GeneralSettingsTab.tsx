@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@scheduler/design-system';
+import { Select } from '@scheduler/design-system/components';
 import { apiClient } from '../../api/client';
 import type { TournamentStatus, TournamentSummaryDTO } from '../../api/dto';
+
+const STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'active', label: 'Active' },
+  { value: 'archived', label: 'Archived' },
+] as const;
 
 const INPUT =
   'mt-1 w-full rounded border border-border bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40';
@@ -70,17 +77,14 @@ export function GeneralSettingsTab({
         />
       </label>
       <label className="block">
-        <span className="text-sm text-muted-foreground">Status</span>
-        <select
+        <span className="mb-1 block text-sm text-muted-foreground">Status</span>
+        <Select
           value={status}
-          onChange={(e) => setStatus(e.target.value as TournamentStatus)}
-          aria-label="Workspace status"
-          className={INPUT}
-        >
-          <option value="draft">Draft</option>
-          <option value="active">Active</option>
-          <option value="archived">Archived</option>
-        </select>
+          onValueChange={(v) => setStatus(v as TournamentStatus)}
+          options={STATUS_OPTIONS}
+          ariaLabel="Workspace status"
+          triggerStyle={{ width: '100%' }}
+        />
       </label>
       <Button onClick={save} disabled={saving}>
         {saving ? 'Saving…' : 'Save changes'}

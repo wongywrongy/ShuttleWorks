@@ -94,12 +94,13 @@ def test_get_returns_summary(client):
     assert r.json()["name"] == "A"
 
 
-def test_get_missing_returns_403_to_non_member(client):
-    """Step 5: an id that doesn't exist (or that the caller isn't a
-    member of) returns 403, not 404. Hiding the existence distinction
-    keeps tournament ids from leaking via membership probes."""
+def test_get_missing_returns_404_to_non_member(client):
+    """SP-CLOUD-2 Rule 5: an id that doesn't exist (or that the caller
+    isn't a member of) returns a uniform 404 — existence never leaks
+    to non-members."""
     r = client.get("/tournaments/00000000-0000-0000-0000-000000000001")
-    assert r.status_code == 403
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_patch_updates_name_status_and_date(client):
@@ -133,25 +134,24 @@ def test_patch_rejects_unknown_status(client):
     assert r.status_code == 422
 
 
-def test_patch_missing_returns_403(client):
-    """Step 5: same as GET — non-membership trumps not-found."""
+def test_patch_missing_returns_404(client):
+    """Rule 5: same as GET — uniform 404 for missing/non-member."""
     r = client.patch(
         "/tournaments/00000000-0000-0000-0000-000000000001",
         json={"name": "X"},
     )
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
-def test_delete_returns_204_then_403(client):
+def test_delete_returns_204_then_404(client):
     """First DELETE succeeds (caller is owner via creation). Second
-    DELETE: the row + member row are both gone (CASCADE), so the
-    role check returns 403 — matching the missing/not-a-member pattern
-    used by GET and PATCH."""
+    DELETE: the row + member row are both gone (CASCADE), so the seam
+    answers the uniform 404 (Rule 5)."""
     created = client.post("/tournaments", json={"name": "A"}).json()
     r = client.delete(f"/tournaments/{created['id']}")
     assert r.status_code == 204
     r = client.delete(f"/tournaments/{created['id']}")
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 # ---- Scoped state ------------------------------------------------------
@@ -240,14 +240,14 @@ def test_state_put_updates_denormalised_name_on_summary(client):
     assert summary["name"] == "Renamed via PUT"
 
 
-def test_state_put_on_missing_tournament_403(client):
-    """Step 5: role check runs first; missing/non-member → 403."""
+def test_state_put_on_missing_tournament_404(client):
+    """Rule 5: the seam runs first; missing/non-member → uniform 404."""
     payload = _basic_state("X")
     r = client.put(
         "/tournaments/00000000-0000-0000-0000-000000000001/state",
         json=payload,
     )
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 def test_state_put_overwrites_previous(client):
@@ -265,6 +265,100 @@ def test_state_put_rejects_zero_interval(client):
     bad["config"]["intervalMinutes"] = 0
     r = client.put(f"/tournaments/{created['id']}/state", json=bad)
     assert r.status_code == 422
+
+
+# ---- Meet standings (Task 2) --------------------------------------------
+#
+# Authoritative pool (school-vs-school) standings, computed fresh on every
+# GET /state from services.meet.standings.compute_meet_standings — see
+# .superpowers/sdd/display/task-2-brief.md. matches/groups/players come
+# from the persisted state blob (PUT below); finished/score data lives in
+# the separate match_states table, seeded here directly through the repo
+# since match_state.py's router isn't mounted on this test app's client.
+
+
+def _seed_match_state(tid: str, match_id: str, *, status: str, score_a=None, score_b=None) -> None:
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        repo.match_states.upsert(
+            uuid.UUID(tid),
+            match_id,
+            {"status": status, "score_side_a": score_a, "score_side_b": score_b},
+        )
+    finally:
+        session.close()
+
+
+def _meet_state_with_pool_play(name: str) -> dict:
+    state = _basic_state(name)
+    state["groups"] = [
+        {"id": "g1", "name": "Riverside"},
+        {"id": "g2", "name": "Lakeside"},
+    ]
+    state["players"] = [
+        {"id": "p1", "name": "Alice", "groupId": "g1", "availability": []},
+        {"id": "p2", "name": "Bob", "groupId": "g2", "availability": []},
+    ]
+    state["matches"] = [
+        {"id": "m1", "sideA": ["p1"], "sideB": ["p2"], "durationSlots": 1},
+    ]
+    return state
+
+
+def test_state_returns_standings_for_meet_workspace_with_finished_matches(client):
+    """A meet (default kind) workspace with a finished, scored pool match
+    surfaces non-empty, computed standings on GET /state."""
+    created = client.post("/tournaments", json={"name": "Meet"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_meet_state_with_pool_play("Meet"))
+    _seed_match_state(tid, "m1", status="finished", score_a=21, score_b=15)
+
+    got = client.get(f"/tournaments/{tid}/state").json()
+    assert got["standings"] == [
+        {"groupId": "g1", "groupName": "Riverside", "matchesPlayed": 1, "wins": 1, "losses": 0},
+        {"groupId": "g2", "groupName": "Lakeside", "matchesPlayed": 1, "wins": 0, "losses": 1},
+    ]
+
+
+def test_state_standings_empty_for_bracket_only_workspace(client):
+    """Same matches/groups/players/match_states shape, but the workspace is
+    bracket-kind (meet module only 'available', not 'enabled') — standings
+    must be []."""
+    created = client.post("/tournaments", json={"name": "Bracket", "kind": "bracket"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_meet_state_with_pool_play("Bracket"))
+    _seed_match_state(tid, "m1", status="finished", score_a=21, score_b=15)
+
+    got = client.get(f"/tournaments/{tid}/state").json()
+    assert got["standings"] == []
+
+
+def test_state_standings_not_persisted_by_put(client):
+    """standings is derived, not part of the stored blob: PUT-ing a state
+    payload that includes a (client-stale) standings value must not make
+    it survive into what GET recomputes — the recompute always wins."""
+    created = client.post("/tournaments", json={"name": "Meet"}).json()
+    tid = created["id"]
+    payload = _meet_state_with_pool_play("Meet")
+    payload["standings"] = [
+        {"groupId": "bogus", "groupName": "Bogus", "matchesPlayed": 99, "wins": 99, "losses": 0}
+    ]
+    client.put(f"/tournaments/{tid}/state", json=payload)
+    # Assert that standings were excluded from the persisted blob itself.
+    # This guards the real exclusion point (the PUT handler's
+    # model_dump(exclude={"standings"})), not just a recomputed GET.
+    from database.session import SessionLocal
+    from database.models import Tournament
+    session = SessionLocal()
+    try:
+        row = session.query(Tournament).filter(Tournament.id == uuid.UUID(tid)).one()
+        assert "standings" not in row.data, "standings should not be persisted in data blob"
+    finally:
+        session.close()
 
 
 # ---- Scoped backups ----------------------------------------------------
@@ -344,9 +438,9 @@ def test_state_writes_do_not_leak_across_tournaments(client):
 def test_delete_cascades_backups(client):
     """Deleting a tournament drops its backups (CASCADE on the FK).
 
-    Step 5: the post-delete request returns 403 because the member row
-    is gone too (CASCADE) — the caller is no longer authorized to ask
-    whether backups exist.
+    Rule 5: the post-delete request returns 404 because the member row
+    is gone too (CASCADE) — the caller can no longer even learn whether
+    the workspace existed.
     """
     created = client.post("/tournaments", json={"name": "A"}).json()
     tid = created["id"]
@@ -356,7 +450,7 @@ def test_delete_cascades_backups(client):
 
     client.delete(f"/tournaments/{tid}")
     r = client.get(f"/tournaments/{tid}/state/backups")
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 # ---- Role matrix (Step 5) ---------------------------------------------
@@ -424,15 +518,16 @@ def test_role_matrix_viewer_can_read_but_not_write(client):
     assert client.delete(f"/tournaments/{tid}").status_code == 403
 
 
-def test_role_matrix_non_member_gets_403_everywhere(client):
+def test_role_matrix_non_member_gets_404_everywhere(client):
+    """Rule 5: non-members get the uniform 404 on every verb."""
     tid = client.post("/tournaments", json={"name": "A"}).json()["id"]
     _remove_membership(tid)
 
-    assert client.get(f"/tournaments/{tid}").status_code == 403
-    assert client.get(f"/tournaments/{tid}/state").status_code == 403
-    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 403
-    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 403
-    assert client.delete(f"/tournaments/{tid}").status_code == 403
+    assert client.get(f"/tournaments/{tid}").status_code == 404
+    assert client.get(f"/tournaments/{tid}/state").status_code == 404
+    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 404
+    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 404
+    assert client.delete(f"/tournaments/{tid}").status_code == 404
 
 
 def test_role_matrix_owner_only_for_restore(client):
@@ -552,3 +647,355 @@ def test_shared_row_keeps_original_owner_name(client):
     assert len(matching) == 1
     assert matching[0]["role"] == "viewer"
     assert matching[0]["ownerName"] == "alice@example.com"
+
+
+# ---- Generalized schedule lock (Plan C, Task 3) --------------------------
+
+
+def _state_with_schedule(name: str = "Locked") -> dict:
+    s = _basic_state(name)
+    s["matches"] = [
+        {"id": "m1", "sideA": ["p1"], "sideB": ["p2"], "durationSlots": 2}
+    ]
+    s["schedule"] = {
+        "assignments": [
+            {"matchId": "m1", "slotId": 0, "courtId": 1, "durationSlots": 2}
+        ],
+        "status": "optimal",  # ScheduleDTO.status is required; brief omitted it
+    }
+    return s
+
+
+def test_scheduling_field_locked_while_schedule_retained(client):
+    created = client.post("/tournaments", json={"name": "L"}).json()
+    tid = created["id"]
+    assert client.put(f"/tournaments/{tid}/state", json=_state_with_schedule()).status_code == 200
+
+    edited = _state_with_schedule()
+    edited["config"]["defaultRestMinutes"] = 5  # scheduling-relevant
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["code"] == "CONFIG_LOCKED"
+    assert detail["fields"] == ["defaultRestMinutes"]
+    assert "meet" in detail["schedules"]
+
+
+def test_non_scheduling_field_passes_while_locked(client):
+    created = client.post("/tournaments", json={"name": "L2"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule())
+
+    edited = _state_with_schedule()
+    edited["config"]["scoringFormat"] = "simple"  # exempt
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 200
+
+
+def test_clearing_schedule_in_same_put_passes_without_flag(client):
+    # The sanctioned unlock path: the client nulls the schedule itself.
+    created = client.post("/tournaments", json={"name": "L3"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule())
+
+    edited = _state_with_schedule()
+    edited["config"]["defaultRestMinutes"] = 5
+    edited["schedule"] = None
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 200
+
+
+def test_clear_schedule_flag_clears_and_applies_atomically(client):
+    created = client.post("/tournaments", json={"name": "L4"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule())
+
+    edited = _state_with_schedule()  # still carries assignments
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 200
+    after = client.get(f"/tournaments/{tid}/state").json()
+    assert after["schedule"] is None
+    assert after["config"]["defaultRestMinutes"] == 5
+
+
+def test_venue_structural_fields_still_lock(client):
+    # The old _STRUCTURAL_CONFIG guard is subsumed, not lost.
+    created = client.post("/tournaments", json={"name": "L5"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule())
+
+    edited = _state_with_schedule()
+    edited["config"]["courtCount"] = 8
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 409
+    assert r.json()["detail"]["fields"] == ["courtCount"]
+
+
+def test_clear_schedule_flag_atomic_rollback_on_write_failure(client, monkeypatch):
+    """If the single commit that would clear+apply fails mid-way, the
+    prior schedule must survive intact — no half-cleared state.
+
+    We force the failure inside ``upsert_data`` (after the in-memory
+    ``row.data`` mutation but before its ``session.commit()``) by making
+    the sync-outbox staging step raise. Since nothing commits, the DB
+    row is untouched and a fresh read must show the original schedule
+    and config, not a partially-applied edit.
+    """
+    from services.sync_service import SyncService
+
+    created = client.post("/tournaments", json={"name": "L6"}).json()
+    tid = created["id"]
+    original = _state_with_schedule()
+    assert client.put(f"/tournaments/{tid}/state", json=original).status_code == 200
+
+    def _boom(session, tournament):
+        raise RuntimeError("simulated failure between mutation and commit")
+
+    monkeypatch.setattr(SyncService, "enqueue_tournament", staticmethod(_boom))
+
+    edited = _state_with_schedule()
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 500
+
+    # Undo the monkeypatch so the verifying GET (and repo internals) work.
+    monkeypatch.undo()
+
+    after = client.get(f"/tournaments/{tid}/state").json()
+    assert after["schedule"] is not None
+    assert after["schedule"]["assignments"] == original["schedule"]["assignments"]
+    # The other half of atomicity: the edit must not leak through either.
+    assert after["config"]["defaultRestMinutes"] == original["config"]["defaultRestMinutes"]
+
+
+# ---- Bracket joins the schedule lock (Plan C, Task 4) --------------------
+
+
+def _seed_bracket_schedule(tid: str, *, started: bool = False) -> None:
+    """Plant a bracket event + a ``bracket_session`` assignments blob
+    directly through the repository (the bracket routers aren't mounted
+    in this module's ``app``).
+
+    Uses ``database.session.SessionLocal`` directly — the same pattern
+    ``test_shared_row_keeps_original_owner_name`` uses above — rather
+    than a nonexistent ``get_repository_factory`` seam, so the write
+    lands in the same per-test SQLite file the ``client`` fixture bound
+    via ``isolate_test_database``.
+    """
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        t_uuid = _uuid.UUID(tid)
+        repo.brackets.create_event(
+            t_uuid,
+            "MS",
+            discipline="MS",
+            format="se",
+            duration_slots=2,
+            status="started" if started else "generated",
+        )
+        row = repo.tournaments.get_by_id(t_uuid)
+        data = dict(row.data or {})
+        data["bracket_session"] = {
+            "total_slots": 128,
+            "assignments": [
+                {"play_unit_id": "MS-R1-M1", "slot_id": 0, "court_id": 1,
+                 "duration_slots": 2}
+            ],
+        }
+        repo.tournaments.upsert_data(t_uuid, data)
+    finally:
+        session.close()
+
+
+def test_bracket_assignments_lock_scheduling_fields(client):
+    created = client.post("/tournaments", json={"name": "B1"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("B1"))
+    _seed_bracket_schedule(tid)
+
+    edited = _basic_state("B1")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["code"] == "CONFIG_LOCKED"
+    assert detail["schedules"] == ["bracket"]
+
+
+def test_config_locked_lists_both_schedules_when_both_committed(client):
+    """When BOTH the meet and bracket schedules are committed, the
+    CONFIG_LOCKED 409 payload must disclose both — the frontend confirm
+    modal relies on ``schedules`` to warn the operator the bracket
+    schedule will also be cleared."""
+    created = client.post("/tournaments", json={"name": "B6"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule("B6"))
+    _seed_bracket_schedule(tid)
+
+    edited = _state_with_schedule("B6")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state", json=edited)
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["code"] == "CONFIG_LOCKED"
+    assert detail["schedules"] == ["meet", "bracket"]
+
+
+def test_clear_schedule_flag_clears_both_when_both_committed(client):
+    """The sanctioned clearSchedule=true PUT clears BOTH schedules
+    atomically when both are committed — the combined case the audit
+    flagged as uncovered."""
+    created = client.post("/tournaments", json={"name": "B7"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule("B7"))
+    _seed_bracket_schedule(tid)
+
+    edited = _state_with_schedule("B7")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 200
+    after = client.get(f"/tournaments/{tid}/state").json()
+    assert after["schedule"] is None
+    assert after["config"]["defaultRestMinutes"] == 5
+
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        data = repo.tournaments.get_by_id(_uuid.UUID(tid)).data
+    finally:
+        session.close()
+    assert data["bracket_session"].get("assignments") in (None, [])
+
+
+def test_clear_schedule_strips_bracket_assignments(client):
+    created = client.post("/tournaments", json={"name": "B2"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("B2"))
+    _seed_bracket_schedule(tid)
+
+    edited = _basic_state("B2")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 200
+
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        data = repo.tournaments.get_by_id(_uuid.UUID(tid)).data
+    finally:
+        session.close()
+    assert data["bracket_session"].get("assignments") in (None, [])
+    # The rest of the session blob survives (total_slots untouched).
+    assert data["bracket_session"]["total_slots"] == 128
+
+
+def test_started_draw_does_not_block_meet_only_clear(client):
+    """A started bracket event with NO committed bracket assignments must
+    not freeze the meet's own clearSchedule path. The DRAW_STARTED hard
+    lock protects clearing an in-play bracket schedule — it must not
+    fire when there is nothing bracket-side to clear."""
+    created = client.post("/tournaments", json={"name": "B5"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_state_with_schedule("B5"))
+
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        repo.brackets.create_event(
+            _uuid.UUID(tid),
+            "MS",
+            discipline="MS",
+            format="se",
+            duration_slots=2,
+            status="started",
+        )
+        # No bracket_session assignments seeded — nothing bracket-side
+        # to clear.
+    finally:
+        session.close()
+
+    edited = _state_with_schedule("B5")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 200
+    after = client.get(f"/tournaments/{tid}/state").json()
+    assert after["schedule"] is None
+    assert after["config"]["defaultRestMinutes"] == 5
+
+
+def test_started_draw_is_hard_locked_even_with_flag(client):
+    created = client.post("/tournaments", json={"name": "B3"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("B3"))
+    _seed_bracket_schedule(tid, started=True)
+
+    edited = _basic_state("B3")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "DRAW_STARTED"
+
+
+def test_bracket_clear_atomic_rollback_on_write_failure(client, monkeypatch):
+    """Mirrors ``test_clear_schedule_flag_atomic_rollback_on_write_failure``
+    for the bracket side: if the single commit that would clear bracket
+    assignments + apply the edit fails mid-way, the prior assignments
+    must survive intact — no half-cleared state."""
+    from services.sync_service import SyncService
+
+    created = client.post("/tournaments", json={"name": "B4"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("B4"))
+    _seed_bracket_schedule(tid)
+
+    def _boom(session, tournament):
+        raise RuntimeError("simulated failure between mutation and commit")
+
+    monkeypatch.setattr(SyncService, "enqueue_tournament", staticmethod(_boom))
+
+    edited = _basic_state("B4")
+    edited["config"]["defaultRestMinutes"] = 5
+    r = client.put(f"/tournaments/{tid}/state?clearSchedule=true", json=edited)
+    assert r.status_code == 500
+
+    monkeypatch.undo()
+
+    import uuid as _uuid
+
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        data = repo.tournaments.get_by_id(_uuid.UUID(tid)).data
+    finally:
+        session.close()
+    assert data["bracket_session"]["assignments"] == [
+        {"play_unit_id": "MS-R1-M1", "slot_id": 0, "court_id": 1,
+         "duration_slots": 2}
+    ]
+    # The config edit must not have applied either (atomic all-or-nothing).
+    assert data["config"]["defaultRestMinutes"] == 30

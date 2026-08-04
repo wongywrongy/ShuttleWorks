@@ -14,16 +14,25 @@ escalate it before making any further code change.
 
 - **Program started:** 2026-06-30
 - **Baseline tag:** `pre-refactor-20260630` (commit `6d8d6e8`)
-- **Current phase:** DONE — Phases 1–4 (bounded program) + Phase 5 (practice install) + Phase 6 (doc consolidation), 2026-06-30/07-01
-- **Status:** COMPLETE. Program summary: `docs/audits/04-refactor-program-summary.md`;
-  **authoritative current snapshot: `docs/audits/06-state-of-codebase.md` — read that first.**
-  depcruise 17→11, dead files 18→3 (kept), tests 1289→1333, all gates green.
+- **Current phase:** Phases 1–4 (bounded program) + Phase 5 (practice install) +
+  Phase 6 (doc consolidation) + **Phase 7 (cover-before-modify, locked functions)**,
+  2026-06-30/07-01
+- **Status:** bounded program COMPLETE; **Phase 7 (CODE_HEALTH Part-2 application)
+  COMPLETE** — both engine locked functions characterized (30 tests) AND decomposed
+  (`solve` E37→A5, `build` C19→A2); 2 latent bugs found + fixed; independent review
+  verified behavior-equivalence. Program summary:
+  `docs/audits/04-refactor-program-summary.md`;
+  **authoritative current snapshot: `docs/audits/08-state-of-codebase.md`
+  (post-SP-CLOUD, 2026-08-04; 06 is the historical pre-cloud record) — read that first.**
+  depcruise 17→11, dead files 18→3 (kept), tests 1289→**1363**, all gates green.
   **Phase 5** installed the code-health discipline (`CODE_HEALTH.md` + `docs/audits/debt-log.md`).
-  **Phase 6** consolidated the docs + swept staleness (9 canonical docs fixed, historical
-  trees banner-labeled) and produced the state record. The live backlog is the
-  **debt-log**; remaining items are design/coverage calls (F-ARCH-3, 3 operations→bracket
-  edges, engine 19%-coverage locked functions, broad ruff, frontend complexity). Resume
-  feature work from here, under `CODE_HEALTH.md`.
+  **Phase 6** consolidated the docs + swept staleness. **Phase 7** covered the two
+  engine locked functions (`GreedyBackend.solve` 19→97%, `bridge.build` 19→96%) →
+  no longer locked; decomposition **held** as decompose-when-touched (both have zero
+  in-repo callers). The live backlog is the **debt-log**; remaining items are
+  design/coverage calls (F-ARCH-3, 3 operations→bracket edges, the held engine
+  decomposition, broad ruff, frontend complexity). Resume feature work from here,
+  under `CODE_HEALTH.md`.
 
 ## Phase log
 
@@ -179,12 +188,167 @@ escalate it before making any further code change.
   first, per CODE_HEALTH Part 2) before any engine refactor. Then the 3 operations→bracket
   edges + F-ARCH-3 (design calls).
 
+### Phase 7 — Cover-and-modify: engine locked functions
+- Status: **COMPLETE (2026-07-01).** Steps 1–6 all done: measure → understand →
+  cover → (initial hold, then Kyle-reversed) seam/decompose → re-measure + review.
+  `GreedyBackend.solve` **E37→A5**, `SchedulingProblemBuilder.build` **C19→A2**.
+- Scope: exactly `GreedyBackend.solve` (backends.py) + `SchedulingProblemBuilder.build`
+  (bridge.py) — the two functions flagged locked (high complexity **and** 19% cov).
+- **Step 1–2 (measure + understand):** `docs/audits/07-locked-functions.md`. Complexity
+  unchanged (E37 / C19); coverage 19%/19% (method bodies 0%). **Call-graph reframe
+  (codanna `analyze_impact` + grep):** both are **public library surface with no
+  in-repo production caller** — `GreedyBackend` is isolated (live path uses
+  `CPSATBackend`); `build` is reached only by `live_ops.reschedule`, itself
+  in-repo-unused. **Corrected the debt-log claim** that `build` "guards every schedule
+  build" (the Meet/Bracket paths build `ScheduleRequest` directly — `api/schedule.py:111`,
+  `services/bracket/adapter.py:89`). Both are library-internal-unused, **not** deletable
+  dead code (exported API) → characterize, don't delete.
+- **Step 3 (cover):** 30 characterization tests (commits `caf5275` + `ccfe57d`,
+  **test-only, zero non-test files**): `test_backends_greedy_characterization.py` +
+  `test_bridge_build_characterization.py`. Coverage **19→97%** (backends) / **19→96%**
+  (bridge); the 6 unhit lines are defensive-unreachable branches. Full backend suite
+  **620 passed** (+30), ruff-F clean. Both functions are **no longer locked** (now
+  high-complexity-but-*covered*). An **independent fresh-context review** (CODE_HEALTH
+  #4) verified no vacuous assertions, both latent-bug claims, all call-graph claims,
+  and unreachable-branch soundness; its 3 nits were folded in as tripwires (`ccfe57d`).
+- **Two latent bugs found during characterization, then FIXED (Kyle: "fix the bugs"):**
+  (a) `build`'s config rebuild hand-listed fields → silently dropped newer `ScheduleConfig`
+  fields on any freeze/rolling override → **fixed** by switching both rebuilds to
+  `dataclasses.replace` (`bridge.py:118–137`, prior art `handle_court_outage`); the
+  tripwire tests were flipped to preservation regression-guards. No production impact
+  (override path had no in-repo caller). (b) stale `examples/badminton_event_setup.py`
+  (imported the cut `PoolGenerationPolicy`/`CompetitionGraph`) → **rewritten** to the
+  current manual-PlayUnits→bridge→CPSAT API, verified runnable. Audit confirmed the
+  copy-and-override bug class exists nowhere else. Full suite 620 green. See `debt-log.md` Cleared.
+- **Steps 4–5 DONE (`d09396c` + `1534756`):** initially held (recommendation:
+  decompose-when-touched, since zero in-repo callers = low value), then **reversed on
+  Kyle's call** ("finish the last part"). Seam == decomposition (both are pure functions
+  of their args — no DB/shared state to inject). Decomposed along intake → engine → emit:
+  `GreedyBackend.solve` **E37→A5** (extracted `_GreedyPlacer` engine + `_locked_match_ids`
+  intake + `_result` emit); `SchedulingProblemBuilder.build` **C19→A2** (extracted
+  `_select_unit_ids`/`_apply_horizon`/`_build_players`/`_build_matches`/`_build_previous_assignments`).
+  Complexity dropped **and distributed** (largest new unit B9, not relabeled); coverage held
+  (backends 99%, bridge 97%); characterization net green after every extraction.
+- **Step 6 DONE:** full backend suite **620 green**, full ruff-F clean; complexity re-measured
+  (confirmed the score dropped, not moved); an **independent fresh-context review** verified
+  behavior-equivalence line-by-line (iteration order, occupancy-mutation timing, the guard
+  swaps, `moved_count`, config-field preservation, None-side coercion — all confirmed, no divergence).
+- Executed inline (single session) under `CODE_HEALTH.md` Part 2, not a workflow.
+- **Post-SP-CLOUD-1 re-baseline note (2026-08-03):** `scheduler_core` changed after
+  Phase 7's characterization work — SP-CLOUD-1 added (user-approved, additive only)
+  `SolverOptions.max_deterministic_time` + a guarded parameter assignment in
+  `CPSATScheduler.solve` (13 insertions, 2 files; neither `GreedyBackend.solve`
+  nor `bridge.build` touched). Any future characterization or engine-determinism
+  work (e.g. the debt-log's sorted-iteration fix in `_player_matches`) must
+  baseline against the **post-SP-CLOUD-1** state of `scheduler_core`, not the
+  Phase-7-era tree. The existing characterization suites remain green against it.
+
+### SP-D7 — Unify Meet/Bracket Roster & Matches — §2 AUDIT (2026-07-02)
+- Status: **PROGRAM COMPLETE (2026-07-02).** Audit → Kyle's §2.5 decisions (see the
+  resolved stop below) → 6 commits: `e1d5c49` audit, `8bf39bc` S1 (shared
+  DetailPanel/AvailabilityControl/EventsControl/BandedTable + Meet port,
+  Ranks→Events), `dc02d45` S2 (bracket per-player availability+rest CP-SAT channel),
+  `996ff0a` S3 (bracket roster: full multi-event entry incl. doubles pairing,
+  overflow delete, XLSX export), `61607c1` S4 (clickable Matches rows → shared match
+  DetailPanel, canonical write-through, BandedTable ports), + S5 sweep (this commit:
+  `make check` green — 720 backend / 910 frontend, live Playwright pass A–G all
+  PASS with no blockers, 2 live findings fixed: EventsControl typed-entry category
+  attribution, entered-mark on locked draws; 2 polish items → debt-log). Plan file:
+  `~/.claude/plans/sp-d7-roster-matches-unification.md`. Zero Alembic migrations;
+  zero engine changes; `archive/` untouched.
+- **Stop-condition 1 (rest consumed by CP-SAT): YES, for Meet.**
+  `PlayerDTO.minRestMinutes` (`backend/app/schemas.py:161`, default =
+  `TournamentConfig.defaultRestMinutes`) → `adapters/badminton.py:253-263`
+  (`minutes // intervalMinutes` → `Player.rest_slots`, `rest_is_hard=True`) →
+  `scheduler_core/engine/constraints/rest.py` (`RestBetweenMatches`, hard pairwise
+  min-gap between a player's matches; always registered via
+  `EngineConfig.from_legacy`, `engine/config.py:70-77`). Also read by the
+  drag-validate path (`engine/validation.py:270` `find_conflicts`). Removing it is
+  a scheduling-semantics change, not a relabel.
+- **Bracket `restSlots` is a DEAD field.** `BracketPlayerDTO.restSlots`
+  (`schemas.py:174`) has zero backend consumers; `services/bracket/adapter.py
+  build_players` never sets `rest_slots` (falls to engine default 1) and passes
+  `availability` only as a uniform per-round window (the layered-scheduling
+  mechanism, `adapter.py:121-148`) — no per-participant channel exists on the
+  Bracket side. Removing `restSlots` loses nothing functionally.
+- **Stop-condition 2 (bracket roster 1:1 with events): YES at the SQL layer,
+  NO at the roster layer.** `bracket_participants` rows are structurally
+  single-event (`bracket_event_id` in the composite PK + FK,
+  `database/models.py:466-500`, migration `f7a3c9b2e8d4`); a multi-event human =
+  duplicate rows sharing member/player ids. But the frontend bracket *roster*
+  (`TournamentStateDTO.bracketPlayers`, JSON blob) has no event linkage, and its
+  Events column is already **derived** from `play_units`
+  (`BracketRosterTab.tsx:52-80`) — multi-event *display* exists today. Editable
+  multi-event entry from a roster panel would collide with the per-event
+  `ParticipantPicker` flow (doubles require pairing a partner — a per-player chip
+  can't express that) → bigger backend/UX change than the mockups implied.
+- **Key semantics finding: min-rest (relative gap) and unavailable-periods
+  (absolute blackout) are orthogonal, not substitutable.** No translation layer
+  can derive one from the other (spec §4.2(a) is impossible); replacing rest with
+  blackouts silently drops the pairwise-rest constraint — the exact regression
+  §4.2 forbids. However Meet already has per-player **positive availability
+  windows** wired to the solver (`PlayerDTO.availability` →
+  `engine/constraints/availability.py` `AddAllowedAssignments`) with **no editor
+  anywhere in the UI** — the mockups' `AvailabilityControl` can ship as an editor
+  over this existing field with zero solver change.
+- **Ranks finding:** Meet ranks are flat assignment codes (`ranks: ["MS1","MD2"]`),
+  exclusive across players (taken/blocked chip states via `useRankValidation`).
+  There is no primary/secondary concept in the data model → per spec §3.3's own
+  fallback, the none→primary→secondary cycle cannot be stored; keep existing
+  assignment semantics inside the new categorized/collapsible chrome.
+- **Spec-vs-current corrections** (spec written against a stale snapshot):
+  Meet's detail panel is already a right-side drawer (`PlayerDetailPanel.tsx
+  DetailDrawer`), not bottom; Meet min-rest is a number input (minutes), not a
+  dropdown; bracket roster rows have **no avatar** (nothing to remove) and **no
+  export** (CSV export lives on the bracket *Matches* tab, `/bracket/export.csv`);
+  Meet Matches tab is an inline-edit spreadsheet without clickable rows; bracket
+  Status column is a read-only computed label, not a control; both rest fields
+  persist inside `PUT /tournaments/{tid}/state` (no dedicated endpoints); the Meet
+  roster is a JSON blob (**no Alembic migration needed Meet-side** — spec §4.4
+  half-applies); a new `bracket_participants` column would also touch the sync
+  mirror payload (`sync_service.py:465-478`) unless it rides the already-synced
+  `meta` JSON; spec §8's gates ("526+ pass", psycopg2 baseline) are stale — the
+  live gates are `make check` (backend 692, frontend 814 as of 2026-07-02).
+- Shared-chrome baseline (what §3 builds on): banded-list vocabulary already
+  shared (`components/control-plane/BandedList.tsx`: `ColumnHeaderRow`,
+  `GroupBandHeader`, `BANDED_ROW_CLASSES`); `ActionsBar` already shared; **no**
+  shared DetailPanel exists (5 module-local panels enumerated in the audit).
+
 ## Open questions / stops
 <Anything a prior session flagged as a STOP condition and hasn't been
 resolved yet goes here, with a link to the relevant docs/audits/*.md
 file. A new session must read this before touching code — an unresolved
 stop here means pick up the conversation with Kyle, not the keyboard.>
 
+- **[RESOLVED 2026-07-01 — HOLD, then reversed → DONE] Phase-7 Step-3→4 checkpoint
+  (decomposition of the two engine locked functions)** — Kyle initially chose HOLD
+  (decompose-when-touched; a value call, since both have zero in-repo callers), then
+  **reversed** ("finish the last part"). Both were decomposed (solve E37→A5, build
+  C19→A2), gate green, behavior-equivalence independently verified. Nothing left open.
+  See `docs/audits/07-locked-functions.md §7`.
+- **[RESOLVED 2026-07-02 — Kyle decided, program shipped] SP-D7 §2.5 STOP**
+  (findings in the SP-D7 section above). Kyle's calls: (1) availability = editor
+  over the existing solver-wired positive windows with unavailable-periods UX;
+  (2) Meet min-rest KEPT with config-default placeholder, bracket `restSlots`
+  WIRED instead of removed; (3) bracket Events = FULL multi-event entry;
+  (4) real bracket per-player solver channel; (5) net-new XLSX export.
+  Original options for the record: (1) **Availability semantics** —
+  ship `AvailabilityControl` as an editor over the existing solver-wired
+  `PlayerDTO.availability` positive windows (recommended; zero solver change), or
+  introduce a new negative `unavailable_periods` field + constraint. (2) **Meet
+  min-rest fate** — recommended KEEP (it's a live hard CP-SAT constraint,
+  orthogonal to blackout windows; only Bracket's dead `restSlots` is safely
+  removable). Spec §4.1 "replace min-rest with unavailable_periods" would be a
+  real scheduling regression as written. (3) **Bracket Events editing scope** —
+  categorized display badges only (cheap), vs. full multi-event entry from the
+  roster panel (requires redesigning the per-event participant + doubles-pairing
+  flow). (4) **Bracket per-player availability** — wire a real per-participant
+  channel to the solver (new plumbing that must *intersect* the round-window
+  mechanism in `adapter.build_players`), or Meet-only for now. (5) **Primary/
+  secondary rank cycle** — confirm cut to existing exclusive-assignment semantics
+  per spec §3.3's fallback. (6) **Bracket roster export** — spec assumes a CSV
+  export to standardize to XLSX; none exists on the roster (net-new feature, or
+  drop from scope).
 - **F-ARCH-3 (matchStateStore ownership)** — pre-flagged STOP for Phase 2. The
   prior "move it to Operations" would create new `no-cross-product` violations
   from Meet (3 files) + Bracket (`LiveView`), since the store is cross-cutting,

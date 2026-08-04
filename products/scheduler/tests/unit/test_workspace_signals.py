@@ -97,3 +97,167 @@ def test_collaboration_counts():
     sig = build_signals(_row(status="active"), mods, RowCounts(members=3, active_invites=2))
     assert sig.collaboration.memberCount == 3
     assert sig.collaboration.activeInviteCount == 2
+
+
+# ---- match metrics + next-up (redesign) -----------------------------------
+
+
+def _meet_mods():
+    return [_mod("meet", "enabled"), _mod("display", "enabled"), _mod("bracket", "available")]
+
+
+def test_meet_match_metrics_and_next_up_from_data_blob():
+    # The persisted meet data blob is camelCase (ScheduleAssignment: matchId/
+    # slotId/courtId; MatchDTO: id/eventCode/matchNumber; config: dayStart/
+    # intervalMinutes). Everything computes from row.data — no new query.
+    data = {
+        "config": {"courtCount": 4, "dayStart": "09:00", "dayEnd": "18:00",
+                   "intervalMinutes": 30},
+        "players": [{"id": "p1"}],
+        "matches": [
+            {"id": "m1", "eventCode": "MS1", "matchNumber": 1},
+            {"id": "m2", "eventCode": "WD2", "matchNumber": 2},
+            {"id": "m3", "eventCode": "XD1", "matchNumber": 3},
+        ],
+        "schedule": {"assignments": [
+            {"matchId": "m1", "slotId": 0, "courtId": 1, "durationSlots": 1},
+            {"matchId": "m2", "slotId": 0, "courtId": 2, "durationSlots": 1},
+            {"matchId": "m3", "slotId": 2, "courtId": 3, "durationSlots": 1},
+        ]},
+    }
+    sig = build_signals(_row(data=data), _meet_mods(), RowCounts())
+    assert sig.matches.total == 3
+    assert sig.matches.scheduled == 3
+    assert sig.matches.toDo == len(sig.attention)
+    assert [n.code for n in sig.nextUp] == ["MS1", "WD2", "XD1"]  # slot asc, cap 3
+    first = sig.nextUp[0]
+    assert first.timeLabel == "09:00"          # dayStart + slot0*30m
+    assert first.courtLabel == "Court 1"
+    assert sig.nextUp[2].timeLabel == "10:00"  # slot2 → +60m
+    assert all(n.status == "scheduled" for n in sig.nextUp)
+
+
+def test_meet_next_up_falls_back_to_match_number_when_no_event_code():
+    data = {
+        "config": {"dayStart": "08:00", "intervalMinutes": 20},
+        "matches": [{"id": "m1", "matchNumber": 7}],
+        "schedule": {"assignments": [{"matchId": "m1", "slotId": 3, "courtId": 2}]},
+    }
+    sig = build_signals(_row(data=data), _meet_mods(), RowCounts())
+    assert sig.matches.scheduled == 1
+    assert sig.nextUp[0].code == "M7"
+    assert sig.nextUp[0].timeLabel == "09:00"   # 08:00 + 3*20m
+    assert sig.nextUp[0].courtLabel == "Court 2"
+
+
+def _bracket_mods():
+    return [_mod("bracket", "enabled"), _mod("meet", "coming_soon"), _mod("display", "coming_soon")]
+
+
+def test_bracket_match_metrics_and_next_up_from_session_blob():
+    # Bracket assignments live in data["bracket_session"]["assignments"]
+    # (snake_case: play_unit_id/slot_id/court_id) with start_time (ISO) +
+    # interval_minutes. Total is the already-grouped bracket_matches count.
+    data = {"bracket_session": {
+        "start_time": "2026-07-12T09:00:00", "interval_minutes": 30,
+        "assignments": [
+            {"play_unit_id": "MS-R1-2", "slot_id": 1, "court_id": 1},
+            {"play_unit_id": "MS-R1-1", "slot_id": 0, "court_id": 1},
+        ],
+    }}
+    counts = RowCounts(bracket_matches=8)
+    sig = build_signals(_row(kind="bracket", data=data), _bracket_mods(), counts)
+    assert sig.matches.total == 8               # from RowCounts, not the blob
+    assert sig.matches.scheduled == 2           # from session assignments
+    assert [n.code for n in sig.nextUp] == ["MS-R1-1", "MS-R1-2"]  # slot asc
+    assert sig.nextUp[0].courtLabel == "Court 1"
+    assert sig.nextUp[0].timeLabel == "09:00"   # start_time time-of-day + slot0
+    assert sig.nextUp[1].timeLabel == "09:30"   # slot1 → +30m
+
+
+def test_bracket_next_up_excludes_finished_units():
+    # Bracket assignments carry actual_end_slot in the session blob, so a
+    # finished unit is cheaply dropped from Next-up (meet can't — its blob has
+    # no per-match finished state). `scheduled` still counts every assignment.
+    data = {"bracket_session": {
+        "start_time": "2026-07-12T09:00:00", "interval_minutes": 30,
+        "assignments": [
+            {"play_unit_id": "MS-R1-1", "slot_id": 0, "court_id": 1, "actual_end_slot": 1},
+            {"play_unit_id": "MS-R1-2", "slot_id": 1, "court_id": 1, "actual_end_slot": None},
+        ],
+    }}
+    sig = build_signals(_row(kind="bracket", data=data), _bracket_mods(),
+                        RowCounts(bracket_matches=8))
+    assert sig.matches.scheduled == 2                    # both have a slot
+    assert [n.code for n in sig.nextUp] == ["MS-R1-2"]   # finished MS-R1-1 dropped
+
+
+def test_bracket_next_up_none_time_when_no_start_time():
+    data = {"bracket_session": {
+        "interval_minutes": 30,
+        "assignments": [{"play_unit_id": "WS-R1-1", "slot_id": 0, "court_id": 2}],
+    }}
+    sig = build_signals(_row(kind="bracket", data=data), _bracket_mods(),
+                        RowCounts(bracket_matches=4))
+    assert sig.matches.scheduled == 1
+    assert sig.nextUp[0].timeLabel is None      # unanchored session → no time
+    assert sig.nextUp[0].courtLabel == "Court 2"
+
+
+def test_undated_workspace_has_empty_next_up():
+    sig = build_signals(_row(kind="meet", status="draft", data={"matches": []}),
+                        [_mod("meet", "enabled")], RowCounts())
+    assert sig.matches.total == 0
+    assert sig.nextUp == []
+
+
+# ---- lifecycle phase (2026-07-10 review fixes) ---------------------------
+
+
+def _played_meet_data():
+    """Two matches, both scheduled; helper for phase tests."""
+    return {
+        "config": {"courtCount": 2, "dayStart": "09:00", "dayEnd": "17:00"},
+        "players": [{"id": "p1"}],
+        "matches": [{"id": "m1"}, {"id": "m2"}],
+        "schedule": {
+            "assignments": [
+                {"matchId": "m1", "slotId": 0, "courtId": 1},
+                {"matchId": "m2", "slotId": 1, "courtId": 2},
+            ]
+        },
+    }
+
+
+def test_phase_meet_ready_live_complete():
+    data = _played_meet_data()
+    # nothing played -> ready
+    sig = build_signals(_row(data=data), _meet_mods(), RowCounts())
+    assert sig.phase == "ready"
+    # one match called -> live
+    counts = RowCounts(match_status_by_id={"m1": "called"})
+    assert build_signals(_row(data=data), _meet_mods(), counts).phase == "live"
+    # everything terminal -> complete
+    counts = RowCounts(match_status_by_id={"m1": "finished", "m2": "retired"})
+    assert build_signals(_row(data=data), _meet_mods(), counts).phase == "complete"
+
+
+def test_phase_meet_unscheduled_matches_block_complete():
+    """Review finding: matches in the blob but NOT in assignments (solver
+    unscheduledMatches / added after the solve) must block 'complete'."""
+    data = _played_meet_data()
+    data["matches"].append({"id": "m3"})  # never scheduled, never played
+    counts = RowCounts(match_status_by_id={"m1": "finished", "m2": "finished"})
+    sig = build_signals(_row(data=data), _meet_mods(), counts)
+    assert sig.phase == "live"  # not complete — m3 unplayed
+
+
+def test_phase_bracket_swiss_pending_blocks_complete():
+    """Review finding: in a Swiss inter-round lull every EXISTING match has a
+    result (counts equal) — swiss_pending must keep the phase 'live'."""
+    mods = [_mod("bracket", "enabled")]
+    row = _row(kind="bracket", status="active")
+    lull = RowCounts(bracket_matches=8, bracket_results=8, swiss_pending=True)
+    assert build_signals(row, mods, lull).phase == "live"
+    done = RowCounts(bracket_matches=24, bracket_results=24, swiss_pending=False)
+    assert build_signals(row, mods, done).phase == "complete"

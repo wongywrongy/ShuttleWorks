@@ -134,7 +134,7 @@ export function RegenerateMenu() {
 
   const infoLine = !canGenerate
     ? ranks.length === 0
-      ? 'No event ranks configured — set them in Configuration.'
+      ? 'No events configured — set them in Configuration.'
       : groups.length < 2
         ? 'Need at least 2 schools to generate matches.'
         : 'No feasible pairings with the current roster.'
@@ -152,7 +152,7 @@ export function RegenerateMenu() {
         aria-haspopup="dialog"
         aria-expanded={open}
         data-testid="regenerate-toggle"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded bg-accent px-2.5 text-xs font-semibold text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
       >
         <ArrowsClockwise aria-hidden="true" className="h-3.5 w-3.5" />
         Regenerate from roster
@@ -163,7 +163,7 @@ export function RegenerateMenu() {
           aria-label="Regenerate matches from roster"
           className="motion-enter absolute right-0 top-full z-overlay mt-1 w-72 rounded-sm border border-border bg-popover p-3 text-popover-foreground shadow-lg"
         >
-          <div className="mb-1 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="mb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Regenerate from roster
           </div>
           <p className="text-xs text-muted-foreground">{infoLine}</p>

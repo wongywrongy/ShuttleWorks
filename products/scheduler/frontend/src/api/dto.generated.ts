@@ -14,19 +14,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Generate Schedule
-         * @description Generate optimized schedule for matches.
-         *
-         *     This is a stateless endpoint - all data is provided in the request,
-         *     and the schedule is returned without persistence.
-         *
-         *     Args:
-         *         request: Contains tournament config, players, and matches
-         *
-         *     Returns:
-         *         Optimized schedule with match assignments
+         * Generate Schedule Gone
+         * @deprecated
+         * @description 410 — the solve is a job now (see module docstring).
          */
-        post: operations["generate_schedule_schedule_post"];
+        post: operations["generate_schedule_gone_schedule_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -43,24 +35,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Generate Schedule Stream
-         * @description Generate schedule with real-time progress updates via Server-Sent Events.
-         *
-         *     Event types streamed (JSON after ``data:`` prefix):
-         *
-         *     - ``{type: 'model_built', numMatches, numIntervals, numNoOverlap, numVariables, ...}``
-         *       emitted once, after ``scheduler.build()`` completes.
-         *     - ``{type: 'phase', phase: 'presolve' | 'search' | 'proving'}``
-         *       emitted on phase transitions (see below).
-         *     - ``{type: 'progress', ...}`` — each intermediate solution.
-         *     - ``{type: 'complete', result: ScheduleDTO}`` — final result.
-         *     - ``{type: 'error', message: str}`` — on solver exception.
-         *     - ``{type: 'done'}`` — always the last event; stream terminator.
-         *
-         *     Phase state machine: presolve → search (on first solution) → proving
-         *     (on optimal final status).
+         * Generate Schedule Stream Gone
+         * @deprecated
+         * @description 410 — SSE solve progress retired with the synchronous path.
          */
-        post: operations["generate_schedule_stream_schedule_stream_post"];
+        post: operations["generate_schedule_stream_gone_schedule_stream_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -85,6 +64,71 @@ export interface paths {
          *     hard constraint. Target latency: <50 ms.
          */
         post: operations["validate_schedule_move_schedule_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/solve-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Solve Jobs */
+        get: operations["list_solve_jobs_tournaments__tournament_id__solve_jobs_get"];
+        put?: never;
+        /**
+         * Submit Solve Job
+         * @description Enqueue one solve. 202 always means "accepted, poll the job".
+         *
+         *     A replayed ``Idempotency-Key`` returns the original job (200-shaped
+         *     body, still 202 status for uniformity); a different key while a job
+         *     is active is a 409 with the active job's id in the error detail.
+         */
+        post: operations["submit_solve_job_tournaments__tournament_id__solve_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/solve-jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Solve Job */
+        get: operations["get_solve_job_tournaments__tournament_id__solve_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/solve-jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Solve Job
+         * @description Cancel a job. Queued → cancelled immediately; claimed/running →
+         *     cancelled now, and the worker kills the solve subprocess on its
+         *     next heartbeat poll. Cancelling a terminal job is a no-op replay of
+         *     its final state (idempotent).
+         */
+        post: operations["cancel_solve_job_tournaments__tournament_id__solve_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -131,7 +175,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/schedule/advisories": {
+    "/tournaments/{tournament_id}/schedule/advisories": {
         parameters: {
             query?: never;
             header?: never;
@@ -142,16 +186,15 @@ export interface paths {
          * Get Schedule Advisories
          * @description Return current advisories computed from tournament + match state.
          *
-         *     Reads both files via the existing helpers in tournament_state /
-         *     match_state. Returns ``[]`` when nothing actionable is detected (or
-         *     when the tournament hasn't been configured yet).
+         *     Returns ``[]`` when nothing actionable is detected, or when the
+         *     tournament's state is still empty / the row doesn't exist.
          *
-         *     Also posts REPAIR triggers to the SuggestionsWorker for any advisory
+         *     Posts REPAIR triggers to the SuggestionsWorker for any advisory
          *     whose suggestedAction.kind is 'repair', and attaches a ``suggestionId``
          *     to advisories that already have a pre-baked suggestion stamped by the
          *     worker.
          */
-        get: operations["get_schedule_advisories_schedule_advisories_get"];
+        get: operations["get_schedule_advisories_tournaments__tournament_id__schedule_advisories_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -160,7 +203,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/schedule/proposals/warm-restart": {
+    "/tournaments/{tournament_id}/schedule/proposals/warm-restart": {
         parameters: {
             query?: never;
             header?: never;
@@ -173,14 +216,14 @@ export interface paths {
          * Create Warm Restart Proposal
          * @description Run a stay-close warm-restart and stash the result as a proposal.
          */
-        post: operations["create_warm_restart_proposal_schedule_proposals_warm_restart_post"];
+        post: operations["create_warm_restart_proposal_tournaments__tournament_id__schedule_proposals_warm_restart_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/schedule/proposals/repair": {
+    "/tournaments/{tournament_id}/schedule/proposals/repair": {
         parameters: {
             query?: never;
             header?: never;
@@ -199,14 +242,14 @@ export interface paths {
          *     onto the closed court. Commit persists both schedule + config
          *     atomically.
          */
-        post: operations["create_repair_proposal_schedule_proposals_repair_post"];
+        post: operations["create_repair_proposal_tournaments__tournament_id__schedule_proposals_repair_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/schedule/proposals/manual-edit": {
+    "/tournaments/{tournament_id}/schedule/proposals/manual-edit": {
         parameters: {
             query?: never;
             header?: never;
@@ -222,14 +265,14 @@ export interface paths {
          *     The drag-and-drop UX feeds this endpoint. Other matches only move
          *     when the pinned target makes their existing positions infeasible.
          */
-        post: operations["create_manual_edit_proposal_schedule_proposals_manual_edit_post"];
+        post: operations["create_manual_edit_proposal_tournaments__tournament_id__schedule_proposals_manual_edit_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/schedule/proposals/{proposal_id}": {
+    "/tournaments/{tournament_id}/schedule/proposals/{proposal_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -240,20 +283,20 @@ export interface paths {
          * Get Proposal
          * @description Re-fetch a proposal by id (e.g., after a page reload).
          */
-        get: operations["get_proposal_schedule_proposals__proposal_id__get"];
+        get: operations["get_proposal_tournaments__tournament_id__schedule_proposals__proposal_id__get"];
         put?: never;
         post?: never;
         /**
          * Cancel Proposal
          * @description Discard a proposal without committing.
          */
-        delete: operations["cancel_proposal_schedule_proposals__proposal_id__delete"];
+        delete: operations["cancel_proposal_tournaments__tournament_id__schedule_proposals__proposal_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/schedule/proposals/{proposal_id}/commit": {
+    "/tournaments/{tournament_id}/schedule/proposals/{proposal_id}/commit": {
         parameters: {
             query?: never;
             header?: never;
@@ -274,14 +317,14 @@ export interface paths {
          *     prevents a second concurrent commit on the same proposal id from
          *     seeing it exist, advancing the version, and double-committing.
          */
-        post: operations["commit_proposal_schedule_proposals__proposal_id__commit_post"];
+        post: operations["commit_proposal_tournaments__tournament_id__schedule_proposals__proposal_id__commit_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/schedule/director-action": {
+    "/tournaments/{tournament_id}/schedule/director-action": {
         parameters: {
             query?: never;
             header?: never;
@@ -303,14 +346,14 @@ export interface paths {
          *     actions can solve in parallel — they only serialize when storing
          *     the proposal.
          */
-        post: operations["create_director_action_schedule_director_action_post"];
+        post: operations["create_director_action_tournaments__tournament_id__schedule_director_action_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/schedule/suggestions": {
+    "/tournaments/{tournament_id}/schedule/suggestions": {
         parameters: {
             query?: never;
             header?: never;
@@ -319,12 +362,12 @@ export interface paths {
         };
         /**
          * List Suggestions
-         * @description Active suggestions, sorted by severity then creation time.
+         * @description Active suggestions for this tournament, sorted by severity then time.
          *
          *     Drops expired entries before returning. The frontend polls this
          *     endpoint every ~8s and rebuilds the rail from the response.
          */
-        get: operations["list_suggestions_schedule_suggestions_get"];
+        get: operations["list_suggestions_tournaments__tournament_id__schedule_suggestions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -333,7 +376,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/schedule/suggestions/{suggestion_id}/apply": {
+    "/tournaments/{tournament_id}/schedule/suggestions/{suggestion_id}/apply": {
         parameters: {
             query?: never;
             header?: never;
@@ -345,19 +388,15 @@ export interface paths {
         /**
          * Apply Suggestion
          * @description Commit the proposal underlying a suggestion.
-         *
-         *     Drops the suggestion before invoking commit so a 409 (stale
-         *     version) doesn't leave a dead entry in the inbox — the
-         *     frontend's next poll will reconcile.
          */
-        post: operations["apply_suggestion_schedule_suggestions__suggestion_id__apply_post"];
+        post: operations["apply_suggestion_tournaments__tournament_id__schedule_suggestions__suggestion_id__apply_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/schedule/suggestions/{suggestion_id}/dismiss": {
+    "/tournaments/{tournament_id}/schedule/suggestions/{suggestion_id}/dismiss": {
         parameters: {
             query?: never;
             header?: never;
@@ -370,14 +409,14 @@ export interface paths {
          * Dismiss Suggestion
          * @description Drop a suggestion and cancel its underlying proposal.
          */
-        post: operations["dismiss_suggestion_schedule_suggestions__suggestion_id__dismiss_post"];
+        post: operations["dismiss_suggestion_tournaments__tournament_id__schedule_suggestions__suggestion_id__dismiss_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/match-states": {
+    "/tournaments/{tournament_id}/match-states": {
         parameters: {
             query?: never;
             header?: never;
@@ -386,9 +425,9 @@ export interface paths {
         };
         /**
          * Get All Match States
-         * @description Get all match states.
+         * @description Get all match states for the tournament.
          */
-        get: operations["get_all_match_states_match_states_get"];
+        get: operations["get_all_match_states_tournaments__tournament_id__match_states_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -397,7 +436,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/match-states/{match_id}": {
+    "/tournaments/{tournament_id}/match-states/{match_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -407,25 +446,53 @@ export interface paths {
         /**
          * Get Match State
          * @description Get a single match state, or a default `scheduled` if unseen.
+         *
+         *     Step D: the response carries ``ETag: "<matches.version>"`` so the
+         *     client has the current version to send back on its next write.
+         *     Unseen matches return ``ETag: "0"`` — the implicit pre-write
+         *     version that the first ``If-Match`` write should reference.
          */
-        get: operations["get_match_state_match_states__match_id__get"];
+        get: operations["get_match_state_tournaments__tournament_id__match_states__match_id__get"];
         /**
          * Update Match State
          * @description Update a match state.
+         *
+         *     Step D: the request must carry an ``If-Match`` header whose value
+         *     matches the current ``matches.version`` (``"0"`` for a brand-new
+         *     match). Missing or stale headers return 412 Precondition Failed.
+         *
+         *     Enforces the state-machine transition guard against the canonical
+         *     ``matches.status`` before writing. A ``ConflictError`` bubbles up
+         *     to the FastAPI handler in ``app.main`` and surfaces as HTTP 409.
+         *     The legacy ``match_states`` table and the new ``matches`` row are
+         *     updated together so neither side drifts. The response carries
+         *     ``ETag: "<new_version>"`` so the client has the value to send
+         *     back on the next write.
          */
-        put: operations["update_match_state_match_states__match_id__put"];
+        put: operations["update_match_state_tournaments__tournament_id__match_states__match_id__put"];
         post?: never;
         /**
          * Delete Match State
          * @description Remove a match state (reset to default).
+         *
+         *     Step D: the request must carry an ``If-Match`` header whose
+         *     value matches the current ``matches.version``. This stops a
+         *     stale client from rolling a match it didn't observe back to
+         *     ``scheduled``.
+         *
+         *     Admin override on the transition side: bypasses the transition
+         *     guard so an operator can unblock a stuck terminal state. Also
+         *     resets the canonical ``matches.status`` to ``scheduled`` so
+         *     subsequent transitions start from a clean baseline. The
+         *     response's ``ETag`` reflects the post-reset version.
          */
-        delete: operations["delete_match_state_match_states__match_id__delete"];
+        delete: operations["delete_match_state_tournaments__tournament_id__match_states__match_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/match-states/reset": {
+    "/tournaments/{tournament_id}/match-states/reset": {
         parameters: {
             query?: never;
             header?: never;
@@ -436,16 +503,19 @@ export interface paths {
         put?: never;
         /**
          * Reset All Match States
-         * @description Clear all match states (empty the file).
+         * @description Clear all match states for the tournament.
+         *
+         *     Admin override: bypasses the transition guard. Every canonical
+         *     ``matches.status`` resets to ``scheduled`` (the new arc's default).
          */
-        post: operations["reset_all_match_states_match_states_reset_post"];
+        post: operations["reset_all_match_states_tournaments__tournament_id__match_states_reset_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/match-states/export/download": {
+    "/tournaments/{tournament_id}/match-states/export/download": {
         parameters: {
             query?: never;
             header?: never;
@@ -454,9 +524,9 @@ export interface paths {
         };
         /**
          * Export Match States
-         * @description Download the match_states.json file.
+         * @description Download the match states as a JSON file in the legacy shape.
          */
-        get: operations["export_match_states_match_states_export_download_get"];
+        get: operations["export_match_states_tournaments__tournament_id__match_states_export_download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -465,7 +535,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/match-states/import/upload": {
+    "/tournaments/{tournament_id}/match-states/import/upload": {
         parameters: {
             query?: never;
             header?: never;
@@ -476,16 +546,16 @@ export interface paths {
         put?: never;
         /**
          * Import Match States
-         * @description Upload and import a match_states.json file.
+         * @description Upload a match_states.json file and replace the current contents.
          */
-        post: operations["import_match_states_match_states_import_upload_post"];
+        post: operations["import_match_states_tournaments__tournament_id__match_states_import_upload_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/match-states/import-bulk": {
+    "/tournaments/{tournament_id}/match-states/import-bulk": {
         parameters: {
             query?: never;
             header?: never;
@@ -496,16 +566,657 @@ export interface paths {
         put?: never;
         /**
          * Import Match States Bulk
-         * @description Merge a dict of match states into the existing file.
+         * @description Merge a dict of match states into the current set.
          */
-        post: operations["import_match_states_bulk_match_states_import_bulk_post"];
+        post: operations["import_match_states_bulk_tournaments__tournament_id__match_states_import_bulk_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/tournament/state": {
+    "/tournaments/{tournament_id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Command
+         * @description Apply or reject an operator command idempotently.
+         *
+         *     The route translates the wire-format ``action`` string into the
+         *     target ``MatchStatus`` and delegates the five-step pipeline
+         *     (idempotency / duplicate-rejection / version / transition guard /
+         *     apply) to ``repo.process_command``. Rejections raise
+         *     ``ConflictError`` (mapped to 409 by ``app.main``); applies and
+         *     idempotent replays return 200 with the current match state.
+         */
+        post: operations["submit_command_tournaments__tournament_id__commands_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Bracket
+         * @description Read the full bracket state.
+         *
+         *     Served from a short-TTL in-process cache (``response_cache``) when
+         *     fresh — the frontend polls this route every 2.5 s and refetches on
+         *     every bracket-surface re-entry, so an unconditional rebuild on every
+         *     request is the last measured tab-latency hot path. See
+         *     ``services/bracket/response_cache.py`` for the staleness bound and
+         *     the fail-safety property.
+         */
+        get: operations["get_bracket_tournaments__tournament_id__bracket_get"];
+        put?: never;
+        /**
+         * Create Bracket
+         * @description Create the bracket session + events for this tournament.
+         *
+         *     Mirrors the tournament product's ``POST /tournament``: takes the
+         *     full session config + an events list, generates the draws via
+         *     ``generate_single_elimination`` / ``generate_round_robin``, and
+         *     persists the result. Returns the full state for the client to
+         *     bind to (no second round-trip needed for the create-then-read
+         *     flow).
+         *
+         *     409 if a bracket session already exists for this tournament — the
+         *     client must ``DELETE /bracket`` first to recreate.
+         */
+        post: operations["create_bracket_tournaments__tournament_id__bracket_post"];
+        /** Delete Bracket */
+        delete: operations["delete_bracket_tournaments__tournament_id__bracket_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/schedule-next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Schedule Next Round
+         * @description Run the CP-SAT solver on the next ready wave of PlayUnits.
+         *
+         *     Persists newly-produced ``TournamentAssignment`` records into the
+         *     session blob so subsequent reads see the schedule.
+         */
+        post: operations["schedule_next_round_tournaments__tournament_id__bracket_schedule_next_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/schedule-next/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Schedule Next Round Stream
+         * @description Solve the next ready wave with real-time progress over SSE.
+         *
+         *     Mirrors the meet's ``POST /schedule/stream`` shape exactly:
+         *
+         *     - ``{type: 'model_built', ...}``  — once, after ``build()``.
+         *     - ``{type: 'phase', phase: 'presolve' | 'search' | 'proving'}``
+         *     - ``{type: 'progress', ...}``      — each intermediate solution.
+         *     - ``{type: 'complete', result: ScheduleNextRoundOut}`` — carries the
+         *       candidate pool the operator chooses from.
+         *     - ``{type: 'error', message: str}``
+         *     - ``{type: 'done'}``               — always last; stream terminator.
+         *
+         *     Unlike the batch ``/schedule-next``, this route does **not** write or
+         *     persist assignments — the operator picks a candidate first, then
+         *     ``/schedule-next/commit`` persists the chosen one (Task F2's
+         *     candidate-selection-before-commit step).
+         */
+        post: operations["schedule_next_round_stream_tournaments__tournament_id__bracket_schedule_next_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/schedule-next/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Next Round
+         * @description Persist the operator-chosen candidate's assignments for a round.
+         *
+         *     The streaming solve returns a candidate pool but writes nothing; the
+         *     client posts the chosen candidate's assignment cells here to commit
+         *     them. Each cell must reference a ready (unassigned, unplayed,
+         *     sides-resolved) PlayUnit so a stale/foreign payload can't pin a
+         *     played or already-scheduled match.
+         */
+        post: operations["commit_next_round_tournaments__tournament_id__bracket_schedule_next_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/events/{event_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upsert Event
+         * @description Create or replace one bracket event row + its participants.
+         *
+         *     Status of the event is forced to ``'draft'``. Existing
+         *     ``bracket_matches`` for this event are wiped (an upsert is a
+         *     Draft-state operation; Generated/Started events must go
+         *     through DELETE→upsert→generate).
+         *
+         *     409 if the event is 'started' (matches with recorded results cannot
+         *     be replaced).
+         */
+        post: operations["upsert_event_tournaments__tournament_id__bracket_events__event_id__post"];
+        /**
+         * Delete Event Route
+         * @description Delete a bracket event.
+         *
+         *     Only 'draft' events may be deleted. 'generated' and 'started' events
+         *     must be explicitly demoted via upsert (with the understanding that
+         *     upsert only allows demotion on 'generated') before deletion.
+         */
+        delete: operations["delete_event_route_tournaments__tournament_id__bracket_events__event_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Event Config
+         * @description Edit a DRAFT draw's configuration without touching participants.
+         *
+         *     The upsert route replaces the whole event (wiping participants); this
+         *     config-only PATCH is what the Draws card's "Configure" affordance
+         *     uses. 404 for an unknown event; 409 unless the event is still draft
+         *     (re-configure a generated draw by re-generating; a started draw is
+         *     locked).
+         */
+        patch: operations["patch_event_config_tournaments__tournament_id__bracket_events__event_id__patch"];
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/events/{event_id}/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Event Route
+         * @description Generate (or re-generate) one event's draws + schedule.
+         *
+         *     - Draft → builds the event's draw via the format generator,
+         *       then runs ``TournamentDriver.generate_event(event_id)`` so the
+         *       new matches receive assignments around any OTHER events'
+         *       already-locked assignments. Sets status='generated'.
+         *     - Generated with ``wipe=true`` → wipes existing assignments
+         *       in-memory first, then re-generates.
+         *     - Started → 409.
+         *     - Solver infeasible → 409 with reason (DB untouched — nothing is
+         *       persisted until after a successful solve).
+         */
+        post: operations["generate_event_route_tournaments__tournament_id__bracket_events__event_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/events/{event_id}/rounds/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Next Round Route
+         * @description Append the next round of a progressive (Swiss) draw.
+         *
+         *     Pairs the new round from live standings (``compute_standings`` →
+         *     ``pair_swiss_round``: score groups, no rematches, bye rotates to the
+         *     lowest-standing never-byed) and persists it APPEND-ONLY — existing
+         *     match rows, results, and versions are untouched; there is no wipe
+         *     and NO solver call. The new units are dependency-free, so
+         *     ``find_ready_play_units`` picks them up for the existing
+         *     schedule-next flow.
+         *
+         *     Gates: 404 unknown event; 409 non-progressive format / draft status
+         *     / current round incomplete / all K rounds already generated.
+         */
+        post: operations["generate_next_round_route_tournaments__tournament_id__bracket_events__event_id__rounds_next_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Match Result
+         * @description Record a result and advance the bracket.
+         *
+         *     ``record_result`` (pure-Python) mutates the in-memory state +
+         *     downstream draw slots; we persist the bracket_matches rows that
+         *     changed and the bracket_results row for the recorded match.
+         */
+        post: operations["record_match_result_tournaments__tournament_id__bracket_results_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Bracket Command
+         * @description Record a bracket result (and advance the bracket) via a command.
+         *
+         *     Differs from POST /results in two ways:
+         *       (a) carries a client-generated ``id`` UUID used as an idempotency key —
+         *           resubmitting the same id returns 200 without re-running advancement.
+         *       (b) the replay check runs BEFORE the ``seen_version`` guard so a
+         *           re-delivered command never produces a 409 stale_version even when
+         *           the match version has advanced since the original send (SP-G1 Seam C).
+         */
+        post: operations["submit_bracket_command_tournaments__tournament_id__bracket_commands_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/match-action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match Action
+         * @description Toggle ``actual_start_slot`` / ``actual_end_slot`` on an assignment.
+         *
+         *     Mirrors the prototype's start/finish/reset semantics: ``start``
+         *     sets ``actual_start_slot`` (from ``body.slot`` or the assigned
+         *     slot); ``finish`` sets ``actual_end_slot``; ``reset`` clears both.
+         */
+        post: operations["match_action_tournaments__tournament_id__bracket_match_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Bracket Move Route
+         * @description Cheap (pure-Python) feasibility check for a drag-to-reschedule
+         *     move on the bracket Schedule Gantt.
+         *
+         *     No CP-SAT invocation — splices the proposed ``(slot_id, court_id)``
+         *     for ``play_unit_id`` into the session's current assignment set and
+         *     runs ``validate_bracket_move``. A *locked* (played / started / past)
+         *     PlayUnit is not draggable: it returns ``feasible: false`` with a
+         *     ``locked`` conflict rather than running the full check.
+         */
+        post: operations["validate_bracket_move_route_tournaments__tournament_id__bracket_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pin Bracket Match
+         * @description Re-pin one already-scheduled PlayUnit and re-solve the
+         *     already-scheduled set around it via the shared CP-SAT engine.
+         *
+         *     Partitions ``state.assignments`` into locked / pinned / free,
+         *     re-solves with ``current_slot`` unchanged, writes the resulting
+         *     assignments back, persists, and returns the serialized session
+         *     (same shape ``/results`` and ``/match-action`` return).
+         *
+         *     A *locked* (played / started / past) ``play_unit_id`` is rejected
+         *     with ``409 {"error": "locked"}`` **before** the partition. A
+         *     solver INFEASIBLE / UNKNOWN result (including timeout) is reported
+         *     as ``409 {"error": "infeasible"}`` — surfaced to the operator, not
+         *     a crash.
+         */
+        post: operations["pin_bracket_match_tournaments__tournament_id__bracket_pin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign Bracket Court
+         * @description Directly place a play unit on a court+slot — NO solver, NO 409 for
+         *     unscheduled units.
+         *
+         *     Unlike ``/bracket/pin``, this endpoint does NOT re-run the CP-SAT
+         *     solver and does NOT require the play unit to already have an
+         *     assignment.  It is the bracket analog of the meet's ``assign_court``
+         *     command, intended for the live Operations Run surface where the
+         *     operator places queued bracket matches by hand.
+         *
+         *     Behaviour:
+         *       - Creates the assignment if the unit is unscheduled (no 409).
+         *       - Overwrites the existing assignment if one already exists.
+         *       - Does NOT touch any other unit's assignment (read-modify-write
+         *         through ``_hydrate_session`` + ``_persist_session_metadata``).
+         *       - Returns the full serialized tournament snapshot (same shape as
+         *         ``/results`` and ``/match-action``).
+         *
+         *     404 when the play unit is not found; 404 when no bracket is
+         *     configured for this tournament.
+         */
+        post: operations["assign_bracket_court_tournaments__tournament_id__bracket_assign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/unassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unassign Bracket Court
+         * @description Return a play unit to the queue by removing its court assignment.
+         *
+         *     Unlike ``matchAction('reset')``, this endpoint removes the assignment
+         *     entirely (back to the queue) rather than clearing start/end slots.
+         *     It does NOT alter the play unit's result, does NOT call the solver,
+         *     and is a no-op when the unit has no assignment.
+         *
+         *     Other play units' assignments are untouched (read-modify-write
+         *     through ``_hydrate_session`` + ``_persist_session_metadata``).
+         *
+         *     Returns the full serialized tournament snapshot.  Always 200 — even
+         *     when the unit was already unassigned.
+         */
+        post: operations["unassign_bracket_court_tournaments__tournament_id__bracket_unassign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Tournament Json
+         * @description Import a pre-paired bracket (JSON).
+         *
+         *     Uses ``parse_json_payload`` from the moved bracket package. Wipes
+         *     any existing bracket for this tournament before installing the
+         *     imported one — same destructive semantics as the prototype's
+         *     POST /tournament/import.
+         */
+        post: operations["import_tournament_json_tournaments__tournament_id__bracket_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/import.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Tournament Csv
+         * @description Import a pre-paired bracket (CSV).
+         *
+         *     Mirrors the prototype's ``POST /tournament/import.csv``: the body
+         *     is the raw CSV; session config comes in as query params.
+         */
+        post: operations["import_tournament_csv_tournaments__tournament_id__bracket_import_csv_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/export.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Tournament Json
+         * @description Alias for GET /tournaments/{tid}/bracket — same body shape.
+         */
+        get: operations["export_tournament_json_tournaments__tournament_id__bracket_export_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Tournament Csv
+         * @description Order-of-play CSV export.
+         */
+        get: operations["export_tournament_csv_tournaments__tournament_id__bracket_export_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/bracket/export.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Tournament Ics
+         * @description iCalendar feed for the bracket schedule.
+         */
+        get: operations["export_tournament_ics_tournaments__tournament_id__bracket_export_ics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tournaments
+         * @description Newest-first list, filtered to tournaments the caller is a member
+         *     of. Each row carries the caller's role on that tournament so the
+         *     Step 6 dashboard can split owned vs shared without an extra
+         *     request.
+         */
+        get: operations["list_tournaments_tournaments_get"];
+        put?: never;
+        /**
+         * Create Tournament
+         * @description Create an empty tournament. The current user is stamped as the
+         *     owner — both on the ``tournaments.owner_id`` column and as a
+         *     ``tournament_members`` row with ``role='owner'`` — so the same
+         *     user can immediately read / write / delete the new tournament via
+         *     the role-checked endpoints. ``owner_email`` is denormalised here
+         *     so Step 6's "Shared with You" dashboard rows can show who the
+         *     tournament belongs to without a Supabase auth join.
+         */
+        post: operations["create_tournament_tournaments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tournament
+         * @description Return the summary row (id + denormalised metadata).
+         *
+         *     The full ``TournamentStateDTO`` payload is served by
+         *     ``GET /tournaments/{id}/state`` to keep this endpoint cheap for
+         *     dashboard polling. ``role`` is included so the frontend can hide
+         *     owner-only affordances without a separate request.
+         */
+        get: operations["get_tournament_tournaments__tournament_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Tournament
+         * @description Delete the tournament and CASCADE its match_states + backups +
+         *     members + invite_links.
+         */
+        delete: operations["delete_tournament_tournaments__tournament_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Tournament
+         * @description Partial update of name / status / tournament_date.
+         *
+         *     The wire-format DTO uses camelCase ``tournamentDate``; we translate
+         *     to the snake_case column name here.
+         */
+        patch: operations["update_tournament_tournaments__tournament_id__patch"];
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/state": {
         parameters: {
             query?: never;
             header?: never;
@@ -514,21 +1225,54 @@ export interface paths {
         };
         /**
          * Get Tournament State
-         * @description Return the persisted tournament state.
+         * @description Return the persisted ``TournamentStateDTO`` blob.
          *
-         *     204 No Content when no state has been saved yet. Payload gains a
-         *     ``recoveredFromBackup`` field when a corrupt file was auto-repaired.
+         *     ``204 No Content`` when the tournament exists but its data is still
+         *     empty (newly created, never PUT). 404 when the tournament itself
+         *     doesn't exist.
+         *
+         *     ``standings`` is computed fresh on every call (Task 2) rather than
+         *     read from the blob — see ``_meet_standings_for``. It's deliberately
+         *     NOT part of the persisted payload; ``put_tournament_state`` strips it
+         *     before committing so a stale value never gets written back.
          */
-        get: operations["get_tournament_state_tournament_state_get"];
+        get: operations["get_tournament_state_tournaments__tournament_id__state_get"];
         /**
          * Put Tournament State
-         * @description Overwrite the tournament state atomically.
+         * @description Overwrite the tournament data blob.
          *
-         *     Backup of the previous live file is rotated before the new state is
-         *     written. The server stamps ``updatedAt`` so two tabs can agree on
-         *     ordering.
+         *     Snapshots the prior content to ``tournament_backups`` first (unless
+         *     the row was freshly created with empty data) and rotates the backup
+         *     pool to the configured retention (``LocalRepository.BACKUP_KEEP``).
+         *
+         *     ``standings`` is excluded from what gets persisted — it's a derived
+         *     field the GET route recomputes on every read (see
+         *     ``_meet_standings_for``); persisting a client-sent snapshot of it
+         *     would let a stale value linger in the blob.
+         *
+         *     Locked-settings guards (Phase 0a — the backend mirrors of the
+         *     frontend locks; a frontend-only lock is bypassable by any stale tab
+         *     or direct API client):
+         *
+         *     - **CONFIG_LOCKED (409):** ANY scheduling-relevant config key (see
+         *       ``services.config_lock.changed_scheduling_fields`` — fail-closed:
+         *       everything except the shared non-scheduling-keys exemption list)
+         *       may not change in a blob that RETAINS a committed schedule — those
+         *       are the fields the engine solved against, and changing them under
+         *       a live schedule silently invalidates every court/slot assignment.
+         *       The structural venue fields (courtCount / intervalMinutes /
+         *       dayStart / dayEnd) are a subset of this — the old venue-only guard
+         *       is subsumed, not replaced. The sanctioned unlock path either clears
+         *       the schedule in the same PUT (passes unconditionally) or retries
+         *       with ``?clearSchedule=true``, which atomically nulls the schedule
+         *       and applies the edit in the same commit. Non-scheduling config
+         *       (scoringFormat, tv*, …) stays freely writable.
+         *     - **ROSTER_LOCKED (409):** ``bracketPlayers`` entries referenced by a
+         *       GENERATED draw (participant ids + member_ids of non-draft events)
+         *       may not be removed; deleting them silently invalidates the draw's
+         *       placements. Draft draws don't block.
          */
-        put: operations["put_tournament_state_tournament_state_put"];
+        put: operations["put_tournament_state_tournaments__tournament_id__state_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -536,18 +1280,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tournament/state/backups": {
+    "/tournaments/{tournament_id}/state/backups": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Tournament Backups
-         * @description Return the rolling-backup list, newest first.
-         */
-        get: operations["list_tournament_backups_tournament_state_backups_get"];
+        /** List Tournament Backups */
+        get: operations["list_tournament_backups_tournaments__tournament_id__state_backups_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -556,7 +1297,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tournament/state/backup": {
+    "/tournaments/{tournament_id}/state/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Tournament Backup */
+        post: operations["create_tournament_backup_tournaments__tournament_id__state_backup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/state/restore/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Tournament Backup */
+        post: operations["restore_tournament_backup_tournaments__tournament_id__state_restore__filename__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/plan-finalized": {
         parameters: {
             query?: never;
             header?: never;
@@ -566,17 +1341,156 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Tournament Backup
-         * @description Manually snapshot the current live file into the backup pool.
+         * Set Plan Finalized
+         * @description Toggle the ``planFinalized`` flag stored in the tournament data blob.
+         *
+         *     Read-modify-writes the existing blob so all other state (config,
+         *     players, matches, schedule …) is preserved.  The flag is a pure
+         *     persisted boolean — no server-side derivation; the Run surface
+         *     derives "what's missing" client-side.
          */
-        post: operations["create_tournament_backup_tournament_state_backup_post"];
+        post: operations["set_plan_finalized_tournaments__tournament_id__plan_finalized_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/tournament/state/restore/{filename}": {
+    "/tournaments/{tournament_id}/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invite Links
+         * @description List every invite (active + revoked + expired) for a tournament.
+         *
+         *     Owner-only. The Step 7 Settings → Share UI uses this to render the
+         *     "Active links" + revoke-button list.
+         */
+        get: operations["list_invite_links_tournaments__tournament_id__invites_get"];
+        put?: never;
+        /**
+         * Create Invite Link
+         * @description Generate an invite link granting ``body.role`` on the tournament.
+         *
+         *     Returns the token + a relative URL (``/invite/{token}``) the
+         *     frontend joins with ``window.location.origin`` to produce a
+         *     copy-able link.
+         */
+        post: operations["create_invite_link_tournaments__tournament_id__invites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tournament Members
+         * @description All members of a tournament. Viewer-level so any member can see
+         *     who else has access; owner-only management actions stay gated.
+         */
+        get: operations["list_tournament_members_tournaments__tournament_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/modules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Modules
+         * @description Return the workspace's module rows (seeding them from ``kind`` if
+         *     absent).
+         */
+        get: operations["list_modules_tournaments__tournament_id__modules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/modules/{module_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Module
+         * @description Update a module's status / config, enforcing the control-plane rules.
+         *
+         *     Rules (each a 409 with a stable error code):
+         *     - ``coming_soon`` modules are immutable.
+         *     - Enabling ``display`` requires ≥1 enabled operational module.
+         *     - A module with data (meet→matches, bracket→bracket_events) cannot be
+         *       disabled (destructive-disable guard — blocked this slice).
+         *     - The last enabled operational module cannot be disabled.
+         *     Only status / config are writable; omitted fields are preserved.
+         */
+        patch: operations["patch_module_tournaments__tournament_id__modules__module_id__patch"];
+        trace?: never;
+    };
+    "/invites/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve Invite
+         * @description Public lookup. Returns the tournament's display name + the role
+         *     the invite grants + a ``valid`` flag.
+         *
+         *     Intentionally does not 404 on missing tokens — an attacker probing
+         *     random UUIDs gets the same shape (with ``valid: false``) as a
+         *     revoked or expired invite. We only fast-path 404 when the invite
+         *     truly doesn't exist; the recipient page treats both as "invalid
+         *     link" without exposing the distinction in the UI.
+         */
+        get: operations["resolve_invite_invites__token__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Invite
+         * @description Stamp ``revoked_at`` on the invite. Idempotent: revoking an
+         *     already-revoked invite preserves the original timestamp and still
+         *     returns 204.
+         */
+        delete: operations["revoke_invite_invites__token__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/{token}/accept": {
         parameters: {
             query?: never;
             header?: never;
@@ -586,10 +1500,16 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Restore Tournament Backup
-         * @description Replace the live file with the chosen backup, atomically.
+         * Accept Invite
+         * @description Add the current user to the tournament with the invite's role.
+         *
+         *     Idempotent: if the caller is already a member, the existing role
+         *     is preserved when it's >= the invite's role (no downgrade), and
+         *     upgraded when the invite grants a higher role. Owner is never
+         *     overwritten. Returns ``alreadyMember`` so the UI can branch on
+         *     "joined" vs "promoted" vs "no-op".
          */
-        post: operations["restore_tournament_backup_tournament_state_restore__filename__post"];
+        post: operations["accept_invite_invites__token__accept_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -679,6 +1599,38 @@ export interface components {
             /** Detectedat */
             detectedAt: string;
         };
+        /** AssignmentOut */
+        AssignmentOut: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Slot Id */
+            slot_id: number;
+            /** Court Id */
+            court_id: number;
+            /** Duration Slots */
+            duration_slots: number;
+            /** Actual Start Slot */
+            actual_start_slot?: number | null;
+            /** Actual End Slot */
+            actual_end_slot?: number | null;
+            /**
+             * Started
+             * @default false
+             */
+            started: boolean;
+            /**
+             * Finished
+             * @default false
+             */
+            finished: boolean;
+        };
+        /** AttentionReasonDTO */
+        AttentionReasonDTO: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+        };
         /** AvailabilityWindow */
         AvailabilityWindow: {
             /** Start */
@@ -707,13 +1659,210 @@ export interface components {
             /** Backups */
             backups: components["schemas"]["BackupEntryDTO"][];
         };
-        /** Body_import_match_states_match_states_import_upload_post */
-        Body_import_match_states_match_states_import_upload_post: {
-            /**
-             * File
-             * Format: binary
-             */
+        /** Body_import_match_states_tournaments__tournament_id__match_states_import_upload_post */
+        Body_import_match_states_tournaments__tournament_id__match_states_import_upload_post: {
+            /** File */
             file: string;
+        };
+        /**
+         * BracketAssignIn
+         * @description Body for POST /bracket/assign — direct (non-solver) court placement.
+         */
+        BracketAssignIn: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Court Id */
+            court_id: number;
+            /** Slot Id */
+            slot_id: number;
+        };
+        /**
+         * BracketAssignmentIn
+         * @description One solver-produced (or operator-chosen) assignment cell.
+         */
+        BracketAssignmentIn: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Slot Id */
+            slot_id: number;
+            /** Court Id */
+            court_id: number;
+            /**
+             * Duration Slots
+             * @default 1
+             */
+            duration_slots: number;
+        };
+        /**
+         * BracketCommandRequest
+         * @description Body of ``POST /tournaments/{tournament_id}/bracket/commands``.
+         *
+         *     ``id`` is the client-generated UUID used as the idempotency key.
+         *     Resubmitting the same id always returns 200 with the current bracket
+         *     snapshot — advancement is NOT re-run (SP-G1 Seam C).
+         *
+         *     ``kind`` is the operation type; currently only ``"record_result"`` is
+         *     supported. ``seen_version`` is an optional optimistic-concurrency token
+         *     mirroring ``RecordResultIn.seen_version`` (SP-F3): the server rejects
+         *     with 409 ``stale_version`` when present and stale.  The replay check
+         *     always runs BEFORE the version guard so a re-delivered command whose
+         *     version has advanced is still accepted.
+         *     ``reason`` annotates contingency results (walkover/retired/forfeit).
+         */
+        BracketCommandRequest: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "record_result";
+            /** Play Unit Id */
+            play_unit_id: string;
+            /**
+             * Winner Side
+             * @enum {string}
+             */
+            winner_side: "A" | "B";
+            /** Seen Version */
+            seen_version?: number | null;
+            /** Finished At Slot */
+            finished_at_slot?: number | null;
+            /**
+             * Walkover
+             * @default false
+             */
+            walkover: boolean;
+            /** Score */
+            score?: {
+                [key: string]: unknown;
+            } | null;
+            /** Reason */
+            reason?: ("walkover" | "retired" | "forfeit") | null;
+        };
+        /**
+         * BracketPinIn
+         * @description A single proposed drag target committed by /bracket/pin.
+         */
+        BracketPinIn: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Slot Id */
+            slot_id: number;
+            /** Court Id */
+            court_id: number;
+        };
+        /**
+         * BracketPlayerDTO
+         * @description Roster entry for bracket-kind tournaments.
+         *
+         *     ``id`` is the stable slug produced by the frontend ``playerSlug()``
+         *     helper; matches ``bracket_participants.member_ids`` after migration.
+         *
+         *     ``availability`` holds POSITIVE (allowed) HH:mm windows — empty
+         *     means available all day. ``restSlots`` overrides the session's
+         *     ``defaultRestSlots`` for this player. Both feed the CP-SAT solve
+         *     path via ``services.bracket.player_constraints`` (SP-D7 S2).
+         */
+        BracketPlayerDTO: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Notes */
+            notes?: string | null;
+            /** Restslots */
+            restSlots?: number | null;
+            /** Availability */
+            availability?: components["schemas"]["AvailabilityWindow"][];
+        };
+        /**
+         * BracketScheduleCandidate
+         * @description One near-optimal alternative the solver kept while improving.
+         *
+         *     Mirrors the meet's ``ScheduleCandidate`` (SP-F1) in the bracket's
+         *     snake_case wire dialect: the operator can pick any of the captured
+         *     candidates before committing the round (Task F2's
+         *     candidate-selection-before-commit step). ``candidates[0]`` is the
+         *     best one found.
+         */
+        BracketScheduleCandidate: {
+            /** Solution Id */
+            solution_id: string;
+            /**
+             * Objective Score
+             * @default 0
+             */
+            objective_score: number;
+            /**
+             * Found At Seconds
+             * @default 0
+             */
+            found_at_seconds: number;
+            /** Assignments */
+            assignments?: components["schemas"]["BracketAssignmentIn"][];
+        };
+        /** BracketSlotOut */
+        BracketSlotOut: {
+            /** Participant Id */
+            participant_id?: string | null;
+            /** Feeder Play Unit Id */
+            feeder_play_unit_id?: string | null;
+            /** Feeder Take */
+            feeder_take?: string | null;
+        };
+        /**
+         * BracketUnassignIn
+         * @description Body for POST /bracket/unassign — remove a play unit's court assignment.
+         */
+        BracketUnassignIn: {
+            /** Play Unit Id */
+            play_unit_id: string;
+        };
+        /**
+         * BracketValidateIn
+         * @description A single proposed drag target evaluated by /bracket/validate.
+         */
+        BracketValidateIn: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Slot Id */
+            slot_id: number;
+            /** Court Id */
+            court_id: number;
+        };
+        /**
+         * BracketValidationConflictOut
+         * @description One reason a proposed bracket move is infeasible.
+         *
+         *     Snake-case sibling of the meet's ``ValidationConflict`` — the
+         *     bracket API surface is snake_case throughout.
+         */
+        BracketValidationConflictOut: {
+            /** Type */
+            type: string;
+            /** Description */
+            description: string;
+            /** Play Unit Id */
+            play_unit_id?: string | null;
+            /** Other Play Unit Id */
+            other_play_unit_id?: string | null;
+            /** Player Id */
+            player_id?: string | null;
+            /** Court Id */
+            court_id?: number | null;
+            /** Slot Id */
+            slot_id?: number | null;
+        };
+        /** BracketValidationOut */
+        BracketValidationOut: {
+            /** Feasible */
+            feasible: boolean;
+            /** Conflicts */
+            conflicts?: components["schemas"]["BracketValidationConflictOut"][];
         };
         /** BreakWindow */
         BreakWindow: {
@@ -722,13 +1871,96 @@ export interface components {
             /** End */
             end: string;
         };
+        /** CollaborationDTO */
+        CollaborationDTO: {
+            /**
+             * Membercount
+             * @default 0
+             */
+            memberCount: number;
+            /**
+             * Activeinvitecount
+             * @default 0
+             */
+            activeInviteCount: number;
+        };
+        /**
+         * CommandRequest
+         * @description Body of ``POST /tournaments/{tournament_id}/commands``.
+         *
+         *     ``id`` is the *client-generated* UUID used as the idempotency key.
+         *     The same id resubmitted gets the original outcome (200 on a
+         *     previously-applied command, 409 on a previously-rejected one).
+         *     ``seen_version`` is the ``matches.version`` the client observed
+         *     when it composed the command — the processor rejects with 409
+         *     ``stale_version`` if the row has moved on.
+         *
+         *     ``action`` is typed as ``MatchAction`` so Pydantic validates the
+         *     string at the parse boundary; unknown values yield a 422 before
+         *     the route handler runs.
+         */
+        CommandRequest: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Match Id */
+            match_id: string;
+            action: components["schemas"]["MatchAction"];
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Seen Version */
+            seen_version: number;
+        };
+        /**
+         * CommandResponse
+         * @description 200 body for a successful apply or an idempotent replay.
+         *
+         *     Carries the *current* match state, not the post-original-apply
+         *     state. On a replay where another operator moved the match in the
+         *     interim, the response reflects current reality — that's the
+         *     contract the operator UX wants ("here's the canonical state
+         *     after your action; render from this").
+         */
+        CommandResponse: {
+            /**
+             * Command Id
+             * Format: uuid
+             */
+            command_id: string;
+            /** Match Id */
+            match_id: string;
+            /** Status */
+            status: string;
+            /** Version */
+            version: number;
+            /** Court Id */
+            court_id?: number | null;
+            /** Time Slot */
+            time_slot?: number | null;
+            /** Applied At */
+            applied_at: string;
+            /** Replay */
+            replay: boolean;
+        };
         /**
          * CommitResponse
          * @description Response payload from a successful proposal commit.
          */
         CommitResponse: {
-            state: components["schemas"]["TournamentStateDTO-Output"];
-            historyEntry: components["schemas"]["ScheduleHistoryEntry-Output"];
+            state: components["schemas"]["TournamentStateDTO"];
+            historyEntry: components["schemas"]["ScheduleHistoryEntry"];
+        };
+        /**
+         * CommitRoundIn
+         * @description Persist the operator-chosen candidate's assignments for a round.
+         */
+        CommitRoundIn: {
+            /** Assignments */
+            assignments: components["schemas"]["BracketAssignmentIn"][];
         };
         /**
          * CourtClosure
@@ -751,6 +1983,38 @@ export interface components {
             toTime?: string | null;
             /** Reason */
             reason?: string | null;
+        };
+        /** CreateTournamentIn */
+        CreateTournamentIn: {
+            /**
+             * Courts
+             * @default 2
+             */
+            courts: number;
+            /**
+             * Total Slots
+             * @default 128
+             */
+            total_slots: number;
+            /**
+             * Rest Between Rounds
+             * @default 1
+             */
+            rest_between_rounds: number;
+            /**
+             * Interval Minutes
+             * @default 30
+             */
+            interval_minutes: number;
+            /**
+             * Time Limit Seconds
+             * @default 5
+             */
+            time_limit_seconds: number;
+            /** Start Time */
+            start_time?: string | null;
+            /** Events */
+            events: components["schemas"]["EventIn"][];
         };
         /**
          * DirectorAction
@@ -788,7 +2052,7 @@ export interface components {
             players: components["schemas"]["PlayerDTO"][];
             /** Matches */
             matches: components["schemas"]["MatchDTO"][];
-            originalSchedule: components["schemas"]["ScheduleDTO-Input"];
+            originalSchedule: components["schemas"]["ScheduleDTO"];
             /**
              * Matchstates
              * @default {}
@@ -832,8 +2096,146 @@ export interface components {
             reason?: string | null;
         };
         /**
+         * EventConfigPatchIn
+         * @description Body of PATCH /bracket/events/{event_id} — edit a DRAFT draw's
+         *     configuration without touching its participants (the upsert route
+         *     wipes them; a config-only patch must not).
+         */
+        EventConfigPatchIn: {
+            /** Format */
+            format?: string | null;
+            /** Bracket Size */
+            bracket_size?: number | null;
+            /** Seeded Count */
+            seeded_count?: number | null;
+            /** Rr Rounds */
+            rr_rounds?: number | null;
+            /** Duration Slots */
+            duration_slots?: number | null;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** EventIn */
+        EventIn: {
+            /** Id */
+            id: string;
+            /**
+             * Discipline
+             * @description MS/WS/MD/WD/XD or short code.
+             * @default GEN
+             */
+            discipline: string;
+            /**
+             * Format
+             * @default se
+             */
+            format: string;
+            /** Participants */
+            participants: components["schemas"]["ParticipantIn"][];
+            /** Seeded Count */
+            seeded_count?: number | null;
+            /** Bracket Size */
+            bracket_size?: number | null;
+            /**
+             * Rr Rounds
+             * @default 1
+             */
+            rr_rounds: number;
+            /**
+             * Duration Slots
+             * @default 1
+             */
+            duration_slots: number;
+            /**
+             * Randomize
+             * @default false
+             */
+            randomize: boolean;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            };
+        };
+        /** EventOut */
+        EventOut: {
+            /** Id */
+            id: string;
+            /** Discipline */
+            discipline: string;
+            /** Format */
+            format: string;
+            /** Bracket Size */
+            bracket_size?: number | null;
+            /** Participant Count */
+            participant_count: number;
+            /** Rounds */
+            rounds: string[][];
+            /** Segments */
+            segments?: components["schemas"]["SegmentOut"][] | null;
+            /** Standings */
+            standings?: components["schemas"]["StandingRowOut"][] | null;
+            /** Status */
+            status?: string | null;
+            /** Seeded Count */
+            seeded_count?: number | null;
+            /** Rr Rounds */
+            rr_rounds?: number | null;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            };
+            /** Participants */
+            participants?: components["schemas"]["ParticipantOut"][];
+        };
+        /**
+         * EventUpsertIn
+         * @description Body of POST /bracket/events/{event_id} — upsert one event.
+         */
+        EventUpsertIn: {
+            /** Discipline */
+            discipline: string;
+            /**
+             * Format
+             * @default se
+             */
+            format: string;
+            /** Bracket Size */
+            bracket_size?: number | null;
+            /**
+             * Seeded Count
+             * @default 0
+             */
+            seeded_count: number;
+            /**
+             * Rr Rounds
+             * @default 1
+             */
+            rr_rounds: number;
+            /**
+             * Duration Slots
+             * @default 1
+             */
+            duration_slots: number;
+            /** Participants */
+            participants?: components["schemas"]["ParticipantIn"][];
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            };
+        };
+        /** GenerateEventIn */
+        GenerateEventIn: {
+            /**
+             * Wipe
+             * @default false
+             */
+            wipe: boolean;
+        };
+        /**
          * GenerateScheduleRequest
-         * @description Request to generate a schedule - includes all data needed.
+         * @description The complete solver input — includes all data needed.
          */
         GenerateScheduleRequest: {
             config: components["schemas"]["TournamentConfig"];
@@ -843,6 +2245,8 @@ export interface components {
             matches: components["schemas"]["MatchDTO"][];
             /** Previousassignments */
             previousAssignments?: components["schemas"]["PreviousAssignmentDTO"][] | null;
+            /** Closedcourtwindows */
+            closedCourtWindows?: number[][] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -876,13 +2280,166 @@ export interface components {
              */
             clockShiftMinutesDelta: number;
         };
+        /** ImportEventIn */
+        ImportEventIn: {
+            /** Id */
+            id: string;
+            /**
+             * Discipline
+             * @default GEN
+             */
+            discipline: string;
+            /**
+             * Format
+             * @default se
+             */
+            format: string;
+            /** Participants */
+            participants: components["schemas"]["ParticipantIn"][];
+            /** Rounds */
+            rounds: components["schemas"]["ImportPlayUnitIn"][][];
+        };
+        /** ImportPlayUnitIn */
+        ImportPlayUnitIn: {
+            /** Id */
+            id: string;
+            /** Side A */
+            side_a?: string[] | null;
+            /** Side B */
+            side_b?: string[] | null;
+            /** Feeder A */
+            feeder_a?: string | null;
+            /** Feeder B */
+            feeder_b?: string | null;
+            /**
+             * Duration Slots
+             * @default 1
+             */
+            duration_slots: number;
+        };
+        /** ImportTournamentIn */
+        ImportTournamentIn: {
+            /** Courts */
+            courts: number;
+            /** Total Slots */
+            total_slots: number;
+            /**
+             * Rest Between Rounds
+             * @default 1
+             */
+            rest_between_rounds: number;
+            /**
+             * Interval Minutes
+             * @default 30
+             */
+            interval_minutes: number;
+            /**
+             * Time Limit Seconds
+             * @default 5
+             */
+            time_limit_seconds: number;
+            /** Start Time */
+            start_time?: string | null;
+            /** Events */
+            events: components["schemas"]["ImportEventIn"][];
+        };
+        /** InviteAcceptedDTO */
+        InviteAcceptedDTO: {
+            /** Tournamentid */
+            tournamentId: string;
+            /** Role */
+            role: string;
+            /** Alreadymember */
+            alreadyMember: boolean;
+        };
+        /**
+         * InviteCreateDTO
+         * @description Body for ``POST /tournaments/{id}/invites``.
+         */
+        InviteCreateDTO: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "operator" | "viewer";
+        };
+        /**
+         * InviteCreatedDTO
+         * @description Wire shape returned by ``POST /tournaments/{id}/invites``.
+         *
+         *     ``url`` is a relative path (``/invite/{token}``) — the frontend
+         *     prepends ``window.location.origin`` to produce a copy-able link.
+         *     Keeping the join client-side avoids hard-coding the deployment
+         *     origin in backend config.
+         */
+        InviteCreatedDTO: {
+            /** Token */
+            token: string;
+            /** Url */
+            url: string;
+            /** Tournamentid */
+            tournamentId: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "operator" | "viewer";
+            /** Createdat */
+            createdAt: string;
+        };
+        /**
+         * InviteResolveDTO
+         * @description Wire shape returned by the public ``GET /invites/{token}``.
+         */
+        InviteResolveDTO: {
+            /** Token */
+            token: string;
+            /** Tournamentid */
+            tournamentId: string;
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "operator" | "viewer";
+            /** Valid */
+            valid: boolean;
+            /** Expiresat */
+            expiresAt?: string | null;
+            /** Revokedat */
+            revokedAt?: string | null;
+        };
+        /**
+         * InviteSummaryDTO
+         * @description Wire shape for active-invite listings on Settings → Share.
+         */
+        InviteSummaryDTO: {
+            /** Token */
+            token: string;
+            /** Tournamentid */
+            tournamentId: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "operator" | "viewer";
+            /** Createdat */
+            createdAt: string;
+            /** Expiresat */
+            expiresAt?: string | null;
+            /** Revokedat */
+            revokedAt?: string | null;
+            /** Valid */
+            valid: boolean;
+        };
         /**
          * ManualEditRequest
          * @description Drag-pin a single match to a new slot/court and warm-restart with a
          *     high stay-close weight so nothing else moves unless feasibility forces it.
          */
         ManualEditRequest: {
-            originalSchedule: components["schemas"]["ScheduleDTO-Input"];
+            originalSchedule: components["schemas"]["ScheduleDTO"];
             config: components["schemas"]["TournamentConfig"];
             /** Players */
             players: components["schemas"]["PlayerDTO"][];
@@ -906,6 +2463,37 @@ export interface components {
             pinnedSlotId: number;
             /** Pinnedcourtid */
             pinnedCourtId: number;
+        };
+        /**
+         * MatchAction
+         * @description Operator-facing names for the legal state transitions.
+         *
+         *     Each value maps to exactly one target ``MatchStatus`` via
+         *     :data:`ACTION_TO_TARGET_STATUS`. The command processor reads the
+         *     target from the map, then calls ``assert_valid_transition`` to
+         *     verify the move is legal from the current status — the caller
+         *     does *not* specify ``next_status`` directly.
+         *
+         *     ``ASSIGN_COURT`` and ``POSTPONE_MATCH`` are non-solver commands:
+         *     they mutate ``court_id`` / ``time_slot`` on the matches row without
+         *     invoking the solver.  Both target ``SCHEDULED``; when the match is
+         *     already SCHEDULED this is a self-transition that the processor
+         *     short-circuits before calling ``assert_valid_transition`` (see
+         *     ``_SELF_NOOP_ACTIONS`` in ``repositories/local.py``).
+         * @enum {string}
+         */
+        MatchAction: "call_to_court" | "start_match" | "finish_match" | "retire_match" | "uncall" | "assign_court" | "postpone_match";
+        /** MatchActionIn */
+        MatchActionIn: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "start" | "finish" | "reset";
+            /** Slot */
+            slot?: number | null;
         };
         /** MatchDTO */
         MatchDTO: {
@@ -935,6 +2523,27 @@ export interface components {
             preferredCourt?: number | null;
             /** Tags */
             tags?: string[] | null;
+        };
+        /**
+         * MatchMetricsDTO
+         * @description The inspector's metric triplet. ``toDo`` = attention-reason count.
+         */
+        MatchMetricsDTO: {
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Scheduled
+             * @default 0
+             */
+            scheduled: number;
+            /**
+             * Todo
+             * @default 0
+             */
+            toDo: number;
         };
         /**
          * MatchMove
@@ -992,6 +2601,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * MeetStandingRowDTO
+         * @description One group's school-vs-school pool record.
+         *
+         *     Computed fresh on every ``GET /tournaments/{id}/state`` by
+         *     ``services.meet.standings.compute_meet_standings`` from the
+         *     already-loaded ``matches``/``groups``/``players`` plus a
+         *     ``match_states`` read — never persisted, so this is NOT written back
+         *     on PUT (see ``api/tournaments.py`` — the route excludes it from the
+         *     blob it commits). Empty when the Meet module isn't enabled for the
+         *     workspace or there's no finished, scored pool play yet.
+         */
+        MeetStandingRowDTO: {
+            /** Groupid */
+            groupId: string;
+            /** Groupname */
+            groupName: string;
+            /** Matchesplayed */
+            matchesPlayed: number;
+            /** Wins */
+            wins: number;
+            /** Losses */
+            losses: number;
+        };
+        /**
          * MetricDelta
          * @description Signed differences between proposed and committed schedules.
          *
@@ -1027,6 +2660,114 @@ export interface components {
              * @default 0
              */
             unscheduledMatchesDelta: number;
+        };
+        /** ModuleCountsDTO */
+        ModuleCountsDTO: {
+            /**
+             * Enabled
+             * @default 0
+             */
+            enabled: number;
+            /**
+             * Available
+             * @default 0
+             */
+            available: number;
+            /**
+             * Disabled
+             * @default 0
+             */
+            disabled: number;
+            /**
+             * Comingsoon
+             * @default 0
+             */
+            comingSoon: number;
+        };
+        /**
+         * NextMatchDTO
+         * @description One upcoming match for the inspector's "Next up" list.
+         *
+         *     ``status`` is schedule-derivable only (``"scheduled"``): live called/started
+         *     state lives in the ``match_states`` table, not the loaded ``data`` blob, so
+         *     surfacing it would break the list endpoint's no-per-row-query guarantee.
+         */
+        NextMatchDTO: {
+            /** Code */
+            code: string;
+            /** Timelabel */
+            timeLabel?: string | null;
+            /** Courtlabel */
+            courtLabel?: string | null;
+            /**
+             * Status
+             * @default scheduled
+             */
+            status: string;
+        };
+        /** ParticipantIn */
+        ParticipantIn: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Members
+             * @description If present, this participant is a TEAM and these are the individual player ids (e.g. doubles pair).
+             */
+            members?: string[] | null;
+            /**
+             * Seed
+             * @description Optional seed number (1=top seed). Participants are sorted by ascending seed for placement; unseeded entries trail.
+             */
+            seed?: number | null;
+        };
+        /** ParticipantOut */
+        ParticipantOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Members */
+            members?: string[] | null;
+            /** Seed */
+            seed?: number | null;
+        };
+        /** PlanFinalizedDTO */
+        PlanFinalizedDTO: {
+            /** Finalized */
+            finalized: boolean;
+        };
+        /** PlayUnitOut */
+        PlayUnitOut: {
+            /** Id */
+            id: string;
+            /** Event Id */
+            event_id: string;
+            /** Round Index */
+            round_index: number;
+            /** Match Index */
+            match_index: number;
+            /** Side A */
+            side_a?: string[] | null;
+            /** Side B */
+            side_b?: string[] | null;
+            /** Duration Slots */
+            duration_slots: number;
+            /**
+             * Dependencies
+             * @default []
+             */
+            dependencies: string[];
+            slot_a: components["schemas"]["BracketSlotOut"];
+            slot_b: components["schemas"]["BracketSlotOut"];
+            /** Segment */
+            segment?: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /** PlayerDTO */
         PlayerDTO: {
@@ -1098,7 +2839,7 @@ export interface components {
             /** Id */
             id: string;
             kind: components["schemas"]["ProposalKind"];
-            proposedSchedule: components["schemas"]["ScheduleDTO-Output"];
+            proposedSchedule: components["schemas"]["ScheduleDTO"];
             proposedConfig?: components["schemas"]["TournamentConfig"] | null;
             impact: components["schemas"]["Impact"];
             /** Summary */
@@ -1127,9 +2868,32 @@ export interface components {
             /** Courtid */
             courtId: number;
         };
+        /** RecordResultIn */
+        RecordResultIn: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /**
+             * Winner Side
+             * @enum {string}
+             */
+            winner_side: "A" | "B";
+            /** Finished At Slot */
+            finished_at_slot?: number | null;
+            /**
+             * Walkover
+             * @default false
+             */
+            walkover: boolean;
+            /** Score */
+            score?: {
+                [key: string]: unknown;
+            } | null;
+            /** Seen Version */
+            seen_version?: number | null;
+        };
         /** RepairRequest */
         RepairRequest: {
-            originalSchedule: components["schemas"]["ScheduleDTO-Input"];
+            originalSchedule: components["schemas"]["ScheduleDTO"];
             config: components["schemas"]["TournamentConfig"];
             /** Players */
             players: components["schemas"]["PlayerDTO"][];
@@ -1150,9 +2914,29 @@ export interface components {
         };
         /** RepairResponse */
         RepairResponse: {
-            schedule: components["schemas"]["ScheduleDTO-Output"];
+            schedule: components["schemas"]["ScheduleDTO"];
             /** Repairedmatchids */
             repairedMatchIds: string[];
+        };
+        /** ResultOut */
+        ResultOut: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Winner Side */
+            winner_side: string;
+            /**
+             * Walkover
+             * @default false
+             */
+            walkover: boolean;
+            /** Finished At Slot */
+            finished_at_slot?: number | null;
+            /** Score */
+            score?: {
+                [key: string]: unknown;
+            } | null;
+            /** Reason */
+            reason?: string | null;
         };
         /** RosterGroupDTO */
         RosterGroupDTO: {
@@ -1203,27 +2987,7 @@ export interface components {
             foundAtSeconds: number;
         };
         /** ScheduleDTO */
-        "ScheduleDTO-Input": {
-            /** Assignments */
-            assignments?: components["schemas"]["ScheduleAssignment"][];
-            /** Unscheduledmatches */
-            unscheduledMatches?: string[];
-            /** Softviolations */
-            softViolations?: components["schemas"]["SoftViolation"][];
-            /** Objectivescore */
-            objectiveScore?: number | null;
-            /** Infeasiblereasons */
-            infeasibleReasons?: string[];
-            status: components["schemas"]["SolverStatus"];
-            /** Solverseed */
-            solverSeed?: number | null;
-            /** Candidates */
-            candidates?: components["schemas"]["ScheduleCandidate"][];
-            /** Activecandidateindex */
-            activeCandidateIndex?: number | null;
-        };
-        /** ScheduleDTO */
-        "ScheduleDTO-Output": {
+        ScheduleDTO: {
             /** Assignments */
             assignments?: components["schemas"]["ScheduleAssignment"][];
             /** Unscheduledmatches */
@@ -1251,7 +3015,7 @@ export interface components {
          *     server-side (oldest dropped first) so the persisted state file stays
          *     bounded.
          */
-        "ScheduleHistoryEntry-Input": {
+        ScheduleHistoryEntry: {
             /** Version */
             version: number;
             /** Committedat */
@@ -1260,27 +3024,28 @@ export interface components {
             trigger?: string | null;
             /** Summary */
             summary?: string | null;
-            schedule?: components["schemas"]["ScheduleDTO-Input"] | null;
+            schedule?: components["schemas"]["ScheduleDTO"] | null;
         };
-        /**
-         * ScheduleHistoryEntry
-         * @description Snapshot of a prior committed schedule, kept for revert + audit.
-         *
-         *     Appended whenever a proposal is committed; the entry captures the
-         *     schedule that was *replaced*, not the new one. Capped at 5 entries
-         *     server-side (oldest dropped first) so the persisted state file stays
-         *     bounded.
-         */
-        "ScheduleHistoryEntry-Output": {
-            /** Version */
-            version: number;
-            /** Committedat */
-            committedAt: string;
-            /** Trigger */
-            trigger?: string | null;
-            /** Summary */
-            summary?: string | null;
-            schedule?: components["schemas"]["ScheduleDTO-Output"] | null;
+        /** ScheduleNextRoundOut */
+        ScheduleNextRoundOut: {
+            /** Status */
+            status: string;
+            /** Play Unit Ids */
+            play_unit_ids: string[];
+            /** Started At Current Slot */
+            started_at_current_slot: number;
+            /**
+             * Runtime Ms
+             * @default 0
+             */
+            runtime_ms: number;
+            /**
+             * Infeasible Reasons
+             * @default []
+             */
+            infeasible_reasons: string[];
+            /** Candidates */
+            candidates?: components["schemas"]["BracketScheduleCandidate"][];
         };
         /**
          * SchoolImpact
@@ -1293,6 +3058,27 @@ export interface components {
             groupName?: string | null;
             /** Matchcount */
             matchCount: number;
+        };
+        /**
+         * SegmentOut
+         * @description One named sub-bracket of a multi-segment draw (DE/Monrad/compass).
+         *
+         *     ``rounds`` is SEGMENT-LOCAL round-major play-unit ids (the event's
+         *     top-level ``rounds`` stays the global dependency-wave axis).
+         *     ``positions`` is the classification range a Monrad bracket decides
+         *     (``[5, 8]`` for the "5–8" bracket); None elsewhere.
+         */
+        SegmentOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Order */
+            order: number;
+            /** Rounds */
+            rounds: string[][];
+            /** Positions */
+            positions?: number[] | null;
         };
         /** SoftViolation */
         SoftViolation: {
@@ -1308,10 +3094,100 @@ export interface components {
             penaltyIncurred: number;
         };
         /**
+         * SolveJobDTO
+         * @description One asynchronous solve — submit returns it, the client polls it.
+         *
+         *     ``status`` vocabulary: queued | claimed | running | succeeded |
+         *     failed | infeasible | cancelled. ``infeasible`` is a domain outcome
+         *     with its detail in ``result`` (a ScheduleDTO whose status is
+         *     ``infeasible``), never in ``error``.
+         */
+        SolveJobDTO: {
+            /** Id */
+            id: string;
+            /** Tournamentid */
+            tournamentId: string;
+            /** Type */
+            type: string;
+            /** Status */
+            status: string;
+            /** Attempts */
+            attempts: number;
+            /** Maxattempts */
+            maxAttempts: number;
+            /** Progress */
+            progress?: {
+                [key: string]: unknown;
+            } | null;
+            result?: components["schemas"]["ScheduleDTO"] | null;
+            error?: components["schemas"]["SolveJobErrorDTO"] | null;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+            /** Createdat */
+            createdAt: string;
+            /** Startedat */
+            startedAt?: string | null;
+            /** Finishedat */
+            finishedAt?: string | null;
+        };
+        /**
+         * SolveJobErrorDTO
+         * @description Structured run-time error carried INSIDE the job resource.
+         *
+         *     Errors that prevent a job from *starting* are normal HTTP errors at
+         *     submit; anything after 202 lives here (AIP-151's dividing line).
+         */
+        SolveJobErrorDTO: {
+            /** Code */
+            code: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Detail */
+            detail?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** SolveJobListDTO */
+        SolveJobListDTO: {
+            /** Jobs */
+            jobs?: components["schemas"]["SolveJobDTO"][];
+        };
+        /**
          * SolverStatus
          * @enum {string}
          */
         SolverStatus: "optimal" | "feasible" | "infeasible" | "unknown";
+        /**
+         * StandingRowOut
+         * @description One participant's line in a computed standings table (mirrors
+         *     ``services.bracket.standings.StandingRow`` — the BWF chain: wins →
+         *     games ratio → points ratio → head-to-head → id).
+         */
+        StandingRowOut: {
+            /** Participant Id */
+            participant_id: string;
+            /** Played */
+            played: number;
+            /** Wins */
+            wins: number;
+            /** Losses */
+            losses: number;
+            /** Games Won */
+            games_won: number;
+            /** Games Lost */
+            games_lost: number;
+            /** Points Won */
+            points_won: number;
+            /** Points Lost */
+            points_lost: number;
+            /** Position */
+            position: number;
+        };
         /**
          * SuggestedAction
          * @description A pre-filled action the UI can offer as a one-click resolve.
@@ -1460,6 +3336,12 @@ export interface components {
             tvCardSize?: ("auto" | "compact" | "comfortable" | "large") | null;
             /** Tvshowscores */
             tvShowScores?: boolean | null;
+            /** Courtorder */
+            courtOrder?: number[] | null;
+            /** Hiddencourts */
+            hiddenCourts?: number[] | null;
+            /** Standingsmode */
+            standingsMode?: ("off" | "side" | "rotate") | null;
             /** Eventorder */
             eventOrder?: string[] | null;
             /** Eventvisible */
@@ -1483,6 +3365,60 @@ export interface components {
              * @default 0
              */
             clockShiftMinutes: number | null;
+            /**
+             * Restbetweenrounds
+             * @default 1
+             */
+            restBetweenRounds: number;
+        };
+        /** TournamentCreateDTO */
+        TournamentCreateDTO: {
+            /** Name */
+            name?: string | null;
+            /**
+             * Kind
+             * @default meet
+             */
+            kind: string;
+            /** Tournamentdate */
+            tournamentDate?: string | null;
+            /** Modules */
+            modules?: components["schemas"]["WorkspaceModuleSeedDTO"][] | null;
+        };
+        /**
+         * TournamentMemberDTO
+         * @description Wire shape for the Step 7 Settings → Share "Members" list.
+         */
+        TournamentMemberDTO: {
+            /** Userid */
+            userId: string;
+            /** Role */
+            role: string;
+            /** Joinedat */
+            joinedAt: string;
+        };
+        /** TournamentOut */
+        TournamentOut: {
+            /** Courts */
+            courts: number;
+            /** Total Slots */
+            total_slots: number;
+            /** Rest Between Rounds */
+            rest_between_rounds: number;
+            /** Interval Minutes */
+            interval_minutes: number;
+            /** Start Time */
+            start_time?: string | null;
+            /** Events */
+            events: components["schemas"]["EventOut"][];
+            /** Participants */
+            participants: components["schemas"]["ParticipantOut"][];
+            /** Play Units */
+            play_units: components["schemas"]["PlayUnitOut"][];
+            /** Assignments */
+            assignments: components["schemas"]["AssignmentOut"][];
+            /** Results */
+            results: components["schemas"]["ResultOut"][];
         };
         /**
          * TournamentStateDTO
@@ -1492,7 +3428,7 @@ export interface components {
          *     PUT to /tournament/state. Server stamps `updatedAt` on write; the
          *     client's value is ignored.
          */
-        "TournamentStateDTO-Input": {
+        TournamentStateDTO: {
             /**
              * Version
              * @default 1
@@ -1507,7 +3443,7 @@ export interface components {
             players?: components["schemas"]["PlayerDTO"][];
             /** Matches */
             matches?: components["schemas"]["MatchDTO"][];
-            schedule?: components["schemas"]["ScheduleDTO-Input"] | null;
+            schedule?: components["schemas"]["ScheduleDTO"] | null;
             /** Schedulestats */
             scheduleStats?: {
                 [key: string]: unknown;
@@ -1523,48 +3459,72 @@ export interface components {
              */
             scheduleVersion: number;
             /** Schedulehistory */
-            scheduleHistory?: components["schemas"]["ScheduleHistoryEntry-Input"][];
-        };
-        /**
-         * TournamentStateDTO
-         * @description Authoritative persisted state for one tournament.
-         *
-         *     Writes come as a single blob: frontend Zustand state snapshotted and
-         *     PUT to /tournament/state. Server stamps `updatedAt` on write; the
-         *     client's value is ignored.
-         */
-        "TournamentStateDTO-Output": {
+            scheduleHistory?: components["schemas"]["ScheduleHistoryEntry"][];
+            /** Bracketplayers */
+            bracketPlayers?: components["schemas"]["BracketPlayerDTO"][];
+            /** Bracketrostermigrated */
+            bracketRosterMigrated?: boolean | null;
             /**
-             * Version
-             * @default 1
-             */
-            version: number;
-            /** Updatedat */
-            updatedAt?: string | null;
-            config?: components["schemas"]["TournamentConfig"] | null;
-            /** Groups */
-            groups?: components["schemas"]["RosterGroupDTO"][];
-            /** Players */
-            players?: components["schemas"]["PlayerDTO"][];
-            /** Matches */
-            matches?: components["schemas"]["MatchDTO"][];
-            schedule?: components["schemas"]["ScheduleDTO-Output"] | null;
-            /** Schedulestats */
-            scheduleStats?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Scheduleisstale
+             * Planfinalized
              * @default false
              */
-            scheduleIsStale: boolean;
+            planFinalized: boolean;
+            /** Standings */
+            standings?: components["schemas"]["MeetStandingRowDTO"][];
+        };
+        /**
+         * TournamentSummaryDTO
+         * @description Dashboard row shape — light enough to render dozens without loading
+         *     the full payload.
+         *
+         *     Step 6 added ``role`` (the requesting user's role on this
+         *     tournament; always non-null in the list response because the list
+         *     is filtered to memberships) and ``ownerName`` (the owner's email,
+         *     denormalised at create time — see ``Tournament.owner_email``).
+         *
+         *     Backend-merge follow-up added ``kind`` so the frontend can render
+         *     different chrome for meets vs brackets (a meet's TabBar shows
+         *     Setup/Roster/Matches/Schedule/Live/TV; a bracket-kind tournament
+         *     hides the strip and renders BracketTab directly).
+         */
+        TournamentSummaryDTO: {
+            /** Id */
+            id: string;
+            /** Name */
+            name?: string | null;
             /**
-             * Scheduleversion
-             * @default 0
+             * Status
+             * @default draft
+             * @enum {string}
              */
-            scheduleVersion: number;
-            /** Schedulehistory */
-            scheduleHistory?: components["schemas"]["ScheduleHistoryEntry-Output"][];
+            status: "draft" | "active" | "archived";
+            /**
+             * Kind
+             * @default meet
+             */
+            kind: string;
+            /** Tournamentdate */
+            tournamentDate?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Role */
+            role?: string | null;
+            /** Ownername */
+            ownerName?: string | null;
+            /** Modules */
+            modules?: components["schemas"]["WorkspaceModuleDTO"][];
+            signals?: components["schemas"]["WorkspaceSignalsDTO"] | null;
+        };
+        /** TournamentUpdateDTO */
+        TournamentUpdateDTO: {
+            /** Name */
+            name?: string | null;
+            /** Status */
+            status?: ("draft" | "active" | "archived") | null;
+            /** Tournamentdate */
+            tournamentDate?: string | null;
         };
         /**
          * ValidateMoveRequest
@@ -1610,6 +3570,10 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
         /** ValidationResponseDTO */
         ValidationResponseDTO: {
@@ -1620,7 +3584,7 @@ export interface components {
         };
         /** WarmRestartRequest */
         WarmRestartRequest: {
-            originalSchedule: components["schemas"]["ScheduleDTO-Input"];
+            originalSchedule: components["schemas"]["ScheduleDTO"];
             config: components["schemas"]["TournamentConfig"];
             /** Players */
             players: components["schemas"]["PlayerDTO"][];
@@ -1645,9 +3609,87 @@ export interface components {
         };
         /** WarmRestartResponse */
         WarmRestartResponse: {
-            schedule: components["schemas"]["ScheduleDTO-Output"];
+            schedule: components["schemas"]["ScheduleDTO"];
             /** Movedmatchids */
             movedMatchIds: string[];
+        };
+        /**
+         * WorkspaceModuleDTO
+         * @description Wire shape for one persisted per-workspace module row.
+         *
+         *     ``moduleId`` is one of ``meet`` / ``bracket`` / ``display``;
+         *     ``status`` is one of ``enabled`` / ``available`` / ``disabled``. (The legacy
+         *     ``coming_soon`` is retired — all modules are built; migrations convert any
+         *     existing such rows to ``available`` and seeding it is rejected.) ``config`` is
+         *     the module's catch-all settings blob (``None`` until set).
+         */
+        WorkspaceModuleDTO: {
+            /** Moduleid */
+            moduleId: string;
+            /** Status */
+            status: string;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * WorkspaceModulePatchDTO
+         * @description Body of ``PATCH /tournaments/{id}/modules/{moduleId}``.
+         *
+         *     Both fields optional; ``exclude_unset`` at the call site means an
+         *     omitted field is left untouched (no-data-loss). ``status`` must be a
+         *     member of the module status vocabulary; ``config`` replaces the
+         *     module's settings blob.
+         */
+        WorkspaceModulePatchDTO: {
+            /** Status */
+            status?: string | null;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** WorkspaceModuleSeedDTO */
+        WorkspaceModuleSeedDTO: {
+            /** Moduleid */
+            moduleId: string;
+            /** Status */
+            status: string;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * WorkspaceSignalsDTO
+         * @description Control-plane signals for one workspace (see ``build_signals``).
+         *
+         *     Vocabulary the frontend can rely on:
+         *     - ``health``: ``"archived" | "draft" | "attention" | "good"``.
+         *     - ``attention[].code``: ``NO_MODULES_ENABLED | DISPLAY_NO_SOURCE | NO_BRACKET |
+         *       NO_ROSTER | NOT_SCHEDULED``.
+         *     - ``setup``: a ``dict[str, bool]`` readiness checklist whose keys vary by kind.
+         */
+        WorkspaceSignalsDTO: {
+            /** Health */
+            health: string;
+            /** Attention */
+            attention: components["schemas"]["AttentionReasonDTO"][];
+            modules: components["schemas"]["ModuleCountsDTO"];
+            /** Setup */
+            setup: {
+                [key: string]: unknown;
+            };
+            collaboration: components["schemas"]["CollaborationDTO"];
+            matches?: components["schemas"]["MatchMetricsDTO"];
+            /** Nextup */
+            nextUp?: components["schemas"]["NextMatchDTO"][];
+            /**
+             * Phase
+             * @default setup
+             */
+            phase: string;
         };
     };
     responses: never;
@@ -1658,51 +3700,14 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    generate_schedule_schedule_post: {
+    generate_schedule_gone_schedule_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerateScheduleRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduleDTO-Output"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    generate_schedule_stream_schedule_stream_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerateScheduleRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -1713,13 +3718,24 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
-            /** @description Validation Error */
-            422: {
+        };
+    };
+    generate_schedule_stream_gone_schedule_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": unknown;
                 };
             };
         };
@@ -1744,6 +3760,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ValidationResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_solve_jobs_tournaments__tournament_id__solve_jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolveJobListDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_solve_job_tournaments__tournament_id__solve_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolveJobDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_solve_job_tournaments__tournament_id__solve_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolveJobDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_solve_job_tournaments__tournament_id__solve_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolveJobDTO"];
                 };
             };
             /** @description Validation Error */
@@ -1823,11 +3971,13 @@ export interface operations {
             };
         };
     };
-    get_schedule_advisories_schedule_advisories_get: {
+    get_schedule_advisories_tournaments__tournament_id__schedule_advisories_get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -1841,13 +3991,24 @@ export interface operations {
                     "application/json": components["schemas"]["Advisory"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    create_warm_restart_proposal_schedule_proposals_warm_restart_post: {
+    create_warm_restart_proposal_tournaments__tournament_id__schedule_proposals_warm_restart_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -1876,11 +4037,13 @@ export interface operations {
             };
         };
     };
-    create_repair_proposal_schedule_proposals_repair_post: {
+    create_repair_proposal_tournaments__tournament_id__schedule_proposals_repair_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -1909,11 +4072,13 @@ export interface operations {
             };
         };
     };
-    create_manual_edit_proposal_schedule_proposals_manual_edit_post: {
+    create_manual_edit_proposal_tournaments__tournament_id__schedule_proposals_manual_edit_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -1942,12 +4107,13 @@ export interface operations {
             };
         };
     };
-    get_proposal_schedule_proposals__proposal_id__get: {
+    get_proposal_tournaments__tournament_id__schedule_proposals__proposal_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 proposal_id: string;
+                tournament_id: string;
             };
             cookie?: never;
         };
@@ -1973,12 +4139,13 @@ export interface operations {
             };
         };
     };
-    cancel_proposal_schedule_proposals__proposal_id__delete: {
+    cancel_proposal_tournaments__tournament_id__schedule_proposals__proposal_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 proposal_id: string;
+                tournament_id: string;
             };
             cookie?: never;
         };
@@ -2006,12 +4173,13 @@ export interface operations {
             };
         };
     };
-    commit_proposal_schedule_proposals__proposal_id__commit_post: {
+    commit_proposal_tournaments__tournament_id__schedule_proposals__proposal_id__commit_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 proposal_id: string;
+                tournament_id: string;
             };
             cookie?: never;
         };
@@ -2037,11 +4205,13 @@ export interface operations {
             };
         };
     };
-    create_director_action_schedule_director_action_post: {
+    create_director_action_tournaments__tournament_id__schedule_director_action_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -2070,11 +4240,13 @@ export interface operations {
             };
         };
     };
-    list_suggestions_schedule_suggestions_get: {
+    list_suggestions_tournaments__tournament_id__schedule_suggestions_get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2088,14 +4260,24 @@ export interface operations {
                     "application/json": components["schemas"]["Suggestion"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    apply_suggestion_schedule_suggestions__suggestion_id__apply_post: {
+    apply_suggestion_tournaments__tournament_id__schedule_suggestions__suggestion_id__apply_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 suggestion_id: string;
+                tournament_id: string;
             };
             cookie?: never;
         };
@@ -2121,12 +4303,13 @@ export interface operations {
             };
         };
     };
-    dismiss_suggestion_schedule_suggestions__suggestion_id__dismiss_post: {
+    dismiss_suggestion_tournaments__tournament_id__schedule_suggestions__suggestion_id__dismiss_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 suggestion_id: string;
+                tournament_id: string;
             };
             cookie?: never;
         };
@@ -2154,11 +4337,13 @@ export interface operations {
             };
         };
     };
-    get_all_match_states_match_states_get: {
+    get_all_match_states_tournaments__tournament_id__match_states_get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2174,14 +4359,24 @@ export interface operations {
                     };
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    get_match_state_match_states__match_id__get: {
+    get_match_state_tournaments__tournament_id__match_states__match_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 match_id: string;
+                tournament_id: string;
             };
             cookie?: never;
         };
@@ -2207,12 +4402,13 @@ export interface operations {
             };
         };
     };
-    update_match_state_match_states__match_id__put: {
+    update_match_state_tournaments__tournament_id__match_states__match_id__put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 match_id: string;
+                tournament_id: string;
             };
             cookie?: never;
         };
@@ -2242,12 +4438,13 @@ export interface operations {
             };
         };
     };
-    delete_match_state_match_states__match_id__delete: {
+    delete_match_state_tournaments__tournament_id__match_states__match_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 match_id: string;
+                tournament_id: string;
             };
             cookie?: never;
         };
@@ -2273,11 +4470,13 @@ export interface operations {
             };
         };
     };
-    reset_all_match_states_match_states_reset_post: {
+    reset_all_match_states_tournaments__tournament_id__match_states_reset_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2291,13 +4490,24 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    export_match_states_match_states_export_download_get: {
+    export_match_states_tournaments__tournament_id__match_states_export_download_get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2311,18 +4521,29 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    import_match_states_match_states_import_upload_post: {
+    import_match_states_tournaments__tournament_id__match_states_import_upload_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_import_match_states_match_states_import_upload_post"];
+                "multipart/form-data": components["schemas"]["Body_import_match_states_tournaments__tournament_id__match_states_import_upload_post"];
             };
         };
         responses: {
@@ -2346,11 +4567,13 @@ export interface operations {
             };
         };
     };
-    import_match_states_bulk_match_states_import_bulk_post: {
+    import_match_states_bulk_tournaments__tournament_id__match_states_import_bulk_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -2381,36 +4604,18 @@ export interface operations {
             };
         };
     };
-    get_tournament_state_tournament_state_get: {
+    submit_command_tournaments__tournament_id__commands_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
+            path: {
+                tournament_id: string;
             };
-        };
-    };
-    put_tournament_state_tournament_state_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TournamentStateDTO-Input"];
+                "application/json": components["schemas"]["CommandRequest"];
             };
         };
         responses: {
@@ -2420,7 +4625,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TournamentStateDTO-Output"];
+                    "application/json": components["schemas"]["CommandResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2434,11 +4639,1009 @@ export interface operations {
             };
         };
     };
-    list_tournament_backups_tournament_state_backups_get: {
+    get_bracket_tournaments__tournament_id__bracket_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_bracket_tournaments__tournament_id__bracket_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTournamentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_bracket_tournaments__tournament_id__bracket_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    schedule_next_round_tournaments__tournament_id__bracket_schedule_next_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleNextRoundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    schedule_next_round_stream_tournaments__tournament_id__bracket_schedule_next_stream_post: {
+        parameters: {
+            query?: {
+                candidate_pool_size?: number | null;
+            };
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_next_round_tournaments__tournament_id__bracket_schedule_next_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitRoundIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_event_tournaments__tournament_id__bracket_events__event_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventUpsertIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_event_route_tournaments__tournament_id__bracket_events__event_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_event_config_tournaments__tournament_id__bracket_events__event_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventConfigPatchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_event_route_tournaments__tournament_id__bracket_events__event_id__generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateEventIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_next_round_route_tournaments__tournament_id__bracket_events__event_id__rounds_next_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_match_result_tournaments__tournament_id__bracket_results_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordResultIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_bracket_command_tournaments__tournament_id__bracket_commands_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BracketCommandRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    match_action_tournaments__tournament_id__bracket_match_action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MatchActionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_bracket_move_route_tournaments__tournament_id__bracket_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BracketValidateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BracketValidationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pin_bracket_match_tournaments__tournament_id__bracket_pin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BracketPinIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_bracket_court_tournaments__tournament_id__bracket_assign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BracketAssignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unassign_bracket_court_tournaments__tournament_id__bracket_unassign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BracketUnassignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_tournament_json_tournaments__tournament_id__bracket_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportTournamentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_tournament_csv_tournaments__tournament_id__bracket_import_csv_post: {
+        parameters: {
+            query?: {
+                courts?: number;
+                total_slots?: number;
+                interval_minutes?: number;
+                rest_between_rounds?: number;
+                time_limit_seconds?: number;
+                duration_slots?: number;
+            };
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_tournament_json_tournaments__tournament_id__bracket_export_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_tournament_csv_tournaments__tournament_id__bracket_export_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_tournament_ics_tournaments__tournament_id__bracket_export_ics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tournaments_tournaments_get: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentSummaryDTO"][];
+                };
+            };
+        };
+    };
+    create_tournament_tournaments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TournamentCreateDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentSummaryDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tournament_tournaments__tournament_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentSummaryDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_tournament_tournaments__tournament_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_tournament_tournaments__tournament_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TournamentUpdateDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentSummaryDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tournament_state_tournaments__tournament_id__state_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_tournament_state_tournaments__tournament_id__state_put: {
+        parameters: {
+            query?: {
+                /** @description Sanction the edit by clearing the committed schedule(s) it invalidates, atomically with the write. Refused (409 DRAW_STARTED) while any bracket draw is started. */
+                clearSchedule?: boolean;
+            };
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TournamentStateDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentStateDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tournament_backups_tournaments__tournament_id__state_backups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2452,13 +5655,24 @@ export interface operations {
                     "application/json": components["schemas"]["BackupListDTO"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    create_tournament_backup_tournament_state_backup_post: {
+    create_tournament_backup_tournaments__tournament_id__state_backup_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tournament_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2472,14 +5686,24 @@ export interface operations {
                     "application/json": components["schemas"]["BackupCreatedDTO"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    restore_tournament_backup_tournament_state_restore__filename__post: {
+    restore_tournament_backup_tournaments__tournament_id__state_restore__filename__post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 filename: string;
+                tournament_id: string;
             };
             cookie?: never;
         };
@@ -2492,6 +5716,296 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_plan_finalized_tournaments__tournament_id__plan_finalized_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanFinalizedDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_invite_links_tournaments__tournament_id__invites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteSummaryDTO"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invite_link_tournaments__tournament_id__invites_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCreateDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteCreatedDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tournament_members_tournaments__tournament_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentMemberDTO"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_modules_tournaments__tournament_id__modules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceModuleDTO"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_module_tournaments__tournament_id__modules__module_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                module_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceModulePatchDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceModuleDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_invite_invites__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteResolveDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invite_invites__token__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_invite_invites__token__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteAcceptedDTO"];
                 };
             };
             /** @description Validation Error */

@@ -90,12 +90,18 @@ def tid(repo) -> uuid.UUID:
 
 
 def test_valid_transitions_match_prompt_specification():
-    """Pinned mapping — any divergence from the prompt must be intentional."""
+    """Pinned mapping — any divergence from the prompt must be intentional.
+
+    Intentional divergence (interaction audit, finding A1): ``FINISHED`` gained
+    one outgoing edge, back to ``PLAYING``, so the Run surface's "Undo finish"
+    can correct a live-day mis-tap instead of 409-ing behind a misleading
+    "version mismatch" toast. ``RETIRED`` remains terminal.
+    """
     assert VALID_TRANSITIONS == {
         MatchStatus.SCHEDULED: [MatchStatus.CALLED],
         MatchStatus.CALLED: [MatchStatus.PLAYING, MatchStatus.SCHEDULED],
         MatchStatus.PLAYING: [MatchStatus.FINISHED, MatchStatus.RETIRED, MatchStatus.SCHEDULED],
-        MatchStatus.FINISHED: [],
+        MatchStatus.FINISHED: [MatchStatus.PLAYING],
         MatchStatus.RETIRED: [],
     }
 
@@ -125,11 +131,13 @@ def test_every_valid_transition_succeeds(current, next_status):
         # Going backwards from played-out state.
         (MatchStatus.CALLED, MatchStatus.FINISHED),
         (MatchStatus.PLAYING, MatchStatus.CALLED),
-        # Re-opening a terminal state.
+        # Re-opening a finished match is allowed ONLY back to PLAYING (the
+        # operator's undo — see test_finished_can_return_to_playing_to_undo_a_mistap
+        # in test_match_state_transitions.py). Every other exit stays closed.
         (MatchStatus.FINISHED, MatchStatus.SCHEDULED),
         (MatchStatus.FINISHED, MatchStatus.CALLED),
-        (MatchStatus.FINISHED, MatchStatus.PLAYING),
         (MatchStatus.FINISHED, MatchStatus.RETIRED),
+        # RETIRED is fully terminal.
         (MatchStatus.RETIRED, MatchStatus.SCHEDULED),
         (MatchStatus.RETIRED, MatchStatus.PLAYING),
     ],
@@ -197,9 +205,10 @@ def test_locked_status_values_returns_strings():
     assert set(values) == {"called", "playing", "finished", "retired"}
 
 
-def test_all_valid_transitions_for_terminal_states_is_empty():
-    assert list(all_valid_transitions_for(MatchStatus.FINISHED)) == []
+def test_retired_is_the_only_fully_terminal_state():
+    """FINISHED is re-openable (undo → PLAYING); RETIRED is a dead end."""
     assert list(all_valid_transitions_for(MatchStatus.RETIRED)) == []
+    assert list(all_valid_transitions_for(MatchStatus.FINISHED)) == [MatchStatus.PLAYING]
 
 
 def test_locked_statuses_set_excludes_scheduled():

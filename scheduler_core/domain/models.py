@@ -139,6 +139,13 @@ class SolverOptions:
     # CP-SAT only guarantees deterministic output (same input + same seed
     # → byte-identical schedule) under a single search worker.
     deterministic: bool = False
+    # Deterministic-time budget (CP-SAT internal work units, roughly
+    # seconds on a reference machine). Unlike ``time_limit_seconds``, a
+    # solve stopped by this limit halts at the same search point on any
+    # host, so the result stays reproducible across machines of
+    # different speeds. When set, ``time_limit_seconds`` still applies
+    # as an outer wall-clock backstop. None = wall-clock limit only.
+    max_deterministic_time: Optional[float] = None
 
 
 @dataclass

@@ -19,6 +19,7 @@ folder. The convention: anything used by ≥2 features lives here.
 | `useSmoothedAssignments.ts` | Smooth out solver-progress flicker when many partial solutions arrive in quick succession. |
 | `useLockGuard.ts` | Block destructive actions while a tournament is locked. |
 | `useSearchParamState.ts` | URL-backed local state with debounced history-replace; used by inline search/filter widgets. |
+| `useContainerWidth.ts` | ResizeObserver-measured width of an element's PARENT; drives `DetailDock`'s docked/overlay fallback. |
 | `useAppliedTheme.ts` | Read theme preference, resolve `system` against `prefers-color-scheme`, toggle `.dark` on `<html>`. |
 | `useAppliedDensity.ts` | Reflect density preference onto `<html>` via `data-density`; mount alongside `useAppliedTheme`. |
 | `useAnimatedNumber.ts` | Tween a number for the HUD counters. |

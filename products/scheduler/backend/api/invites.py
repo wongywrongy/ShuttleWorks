@@ -41,8 +41,14 @@ InviteRole = Literal["operator", "viewer"]
 
 
 class InviteCreateDTO(BaseModel):
-    """Body for ``POST /tournaments/{id}/invites``."""
+    """Body for ``POST /tournaments/{id}/invites``.
+
+    ``email`` (SP-CLOUD-2) turns this into an email invite: the link is
+    delivered via the email seam and the invite expires. Omitted =
+    local link-style invite (copy the URL yourself).
+    """
     role: InviteRole
+    email: Optional[str] = None
 
 
 class InviteSummaryDTO(BaseModel):
@@ -54,6 +60,7 @@ class InviteSummaryDTO(BaseModel):
     expiresAt: Optional[str] = None
     revokedAt: Optional[str] = None
     valid: bool
+    email: Optional[str] = None
 
 
 class InviteCreatedDTO(BaseModel):
@@ -102,6 +109,7 @@ def _to_summary(invite: InviteLink) -> InviteSummaryDTO:
         createdAt=invite.created_at.isoformat() if invite.created_at else "",
         expiresAt=invite.expires_at.isoformat() if invite.expires_at else None,
         revokedAt=invite.revoked_at.isoformat() if invite.revoked_at else None,
+        email=invite.email,
         valid=is_invite_valid(invite),
     )
 
@@ -170,6 +178,8 @@ def resolve_invite(
         valid=is_invite_valid(invite),
         expiresAt=invite.expires_at.isoformat() if invite.expires_at else None,
         revokedAt=invite.revoked_at.isoformat() if invite.revoked_at else None,
+        # NOTE: deliberately no ``email`` here — this endpoint is
+        # public, and the invitee's address must not be probeable.
     )
 
 
@@ -214,6 +224,11 @@ def accept_invite(
     existing_role = repo.members.get_role(invite.tournament_id, user_uuid)
 
     if existing_role is None:
+        # tournament_members.user_id now FKs users (SP-CLOUD-2) —
+        # materialize a users row for bearer-era identities first.
+        from services.auth import ensure_user
+
+        ensure_user(repo.session, user_uuid, user.email)
         repo.members.add_member(invite.tournament_id, user_uuid, target_role)
         final_role = target_role
         already_member = False

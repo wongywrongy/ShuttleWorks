@@ -1,72 +1,98 @@
 /**
- * Bracket Roster tab — flat list + detail panel below. Slimmer than
- * the meet's RosterTab (no schools/positions). Player events are a
- * derived read-only display sourced from the Draws participants.
+ * Bracket Roster tab — BandedTable list + right-docked DetailPanel
+ * (SP-D7 S3). Slimmer than the meet's RosterTab (no schools/positions),
+ * but a full editing surface: notes, per-player min rest (slots),
+ * availability (unavailable-periods UX over the solver-wired positive
+ * windows), and FULL multi-event entry — singles toggle-in/out and
+ * doubles/mixed inline partner pairing, writing through `eventUpsert`
+ * with the draw's config echoed (draft draws only; generated draws
+ * render locked).
+ *
+ * Events badges derive from `events[].participants` (works pre-generate)
+ * — see rosterEvents.ts. Row delete lives in a per-row overflow menu.
  */
-import { useState, useMemo, useContext } from 'react';
-import { MagnifyingGlass } from '@phosphor-icons/react';
+import { useCallback, useContext, useMemo, useState } from 'react';
+import { Download, MagnifyingGlass } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-import { ActionsBar } from '../../components/control-plane';
-import { BracketApiContext } from '../../api/bracketClient';
+import {
+  ActionsBar,
+  BandedTable,
+  DetailDock,
+  DetailPanel,
+  EventBadge,
+  OverflowMenu,
+  type BandedTableColumn,
+  type OverflowItem,
+} from '../../components/control-plane';
+import { BracketApiContext, useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
+import { lockedPlayerIds, ROSTER_LOCKED_REASON } from './lockedPlayers';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
+import type { BracketPlayerDTO } from '../../api/dto';
 import { playerSlug } from '../../lib/playerSlug';
+import { badgesByPlayerId, type BadgeEntry } from './rosterEvents';
+import {
+  BracketAvailabilityEventsFields,
+  FIELD_INPUT_CLASSES,
+  FIELD_LABEL_CLASSES,
+  type CommitEventFn,
+} from './BracketPlayerFields';
+import { exportBracketRosterXlsx } from './exports/xlsxExports';
+
+/** Column set for the roster table — canonical px-5 banded rhythm. */
+const ROSTER_COLUMNS: BandedTableColumn[] = [
+  { label: 'Player', className: 'min-w-0 flex-1' },
+  { label: 'Events', className: 'min-w-0 flex-1' },
+  { label: 'Min rest', subLabel: 'slots', className: 'w-16 shrink-0 text-right', priority: 2 },
+  { label: '', className: 'w-8 shrink-0' },
+];
 
 export function BracketRosterTab() {
   // Use context presence check to determine if we're inside a provider.
   // When rendered in tests (no BracketApiProvider), bracket is null.
   const hasProvider = useContext(BracketApiContext) !== null;
 
-  return hasProvider ? <BracketRosterTabInner /> : <BracketRosterTabCore bracketData={null} />;
+  return hasProvider ? (
+    <BracketRosterTabInner />
+  ) : (
+    <BracketRosterTabCore bracketData={null} onCommitEvent={null} />
+  );
 }
 
 /** Rendered when inside a BracketApiProvider — can safely call useBracket. */
 function BracketRosterTabInner() {
-  const { data: bracket } = useBracket();
-  return <BracketRosterTabCore bracketData={bracket} />;
+  const { data: bracket, setData } = useBracket();
+  const api = useBracketApi();
+  const commitEvent = useCallback<CommitEventFn>(
+    async (eventId, body) => {
+      const next = await api.eventUpsert(eventId, body);
+      setData(next);
+    },
+    [api, setData],
+  );
+  return <BracketRosterTabCore bracketData={bracket} onCommitEvent={commitEvent} />;
 }
 
-/** Core roster list + detail panel. Accepts nullable bracket data so it can
- *  render in tests (no provider) with events badges simply omitted. */
-function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentDTO | null }) {
+/** Core roster table + detail panel. Accepts nullable bracket data so it
+ *  can render in tests (no provider) with events simply omitted. */
+function BracketRosterTabCore({
+  bracketData,
+  onCommitEvent,
+}: {
+  bracketData: BracketTournamentDTO | null;
+  onCommitEvent: CommitEventFn | null;
+}) {
   const players = useTournamentStore((s) => s.bracketPlayers);
   const addPlayer = useTournamentStore((s) => s.addBracketPlayer);
   const updatePlayer = useTournamentStore((s) => s.updateBracketPlayer);
   const deletePlayer = useTournamentStore((s) => s.deleteBracketPlayer);
 
-  // Derived view: which event discipline(s) does each player appear in?
-  // We look up participant IDs in play_units to find which event they
-  // are scheduled in, then resolve the event discipline label for display.
-  const eventsByPlayerId = useMemo(() => {
-    const out = new Map<string, string[]>();
-    if (!bracketData) return out;
-    const disciplineById = Object.fromEntries(
-      bracketData.events.map((e) => [e.id, e.discipline]),
-    );
-    for (const part of bracketData.participants) {
-      // Collect event disciplines this participant appears in via play_units.
-      const disciplines = Array.from(
-        new Set(
-          bracketData.play_units
-            .filter(
-              (pu) =>
-                pu.side_a?.includes(part.id) || pu.side_b?.includes(part.id),
-            )
-            .map((pu) => disciplineById[pu.event_id] ?? pu.event_id),
-        ),
-      );
-      if (disciplines.length === 0) continue;
-      // For doubles teams, member slugs share the same event badges.
-      const ids =
-        part.members && part.members.length > 0 ? part.members : [part.id];
-      for (const id of ids) {
-        const arr = out.get(id) ?? [];
-        out.set(id, Array.from(new Set([...arr, ...disciplines])));
-      }
-    }
-    return out;
-  }, [bracketData]);
+  // Derived view: player id → sorted badge codes, from each event's own
+  // participants (draft draws included — no play_units dependency).
+  const badgesById = useMemo(() => badgesByPlayerId(bracketData), [bracketData]);
+  // Players a GENERATED draw is using: the server won't let them be deleted.
+  const locked = useMemo(() => lockedPlayerIds(bracketData), [bracketData]);
 
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
@@ -94,6 +120,28 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
     addPlayer({ id, name });
     setAdding(false);
     setDraft('');
+  };
+
+  const rowOverflowItems = (p: BracketPlayerDTO): OverflowItem[] => {
+    // The server refuses to delete a player a generated draw is using. Offering
+    // the action anyway didn't just fail — the rejected delete stayed in the
+    // store, and because the roster persists as a whole blob, EVERY later edit
+    // re-sent it and 409'd too (audit A3). Lock the action instead.
+    const isLocked = locked.has(p.id);
+    return [
+      {
+        key: 'delete',
+        label: 'Delete',
+        destructive: true,
+        testId: `roster-delete-${p.id}`,
+        disabled: isLocked,
+        disabledReason: ROSTER_LOCKED_REASON,
+        onSelect: () => {
+          deletePlayer(p.id);
+          if (selectedId === p.id) setSelectedId(null);
+        },
+      },
+    ];
   };
 
   return (
@@ -129,123 +177,184 @@ function BracketRosterTabCore({ bracketData }: { bracketData: BracketTournamentD
         </div>
         <button
           type="button"
+          onClick={() => void exportBracketRosterXlsx(players, badgesById)}
+          disabled={players.length === 0}
+          data-testid="export-bracket-roster"
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
+        >
+          <Download aria-hidden="true" className="h-3.5 w-3.5" />
+          Export XLSX
+        </button>
+        <button
+          type="button"
           onClick={() => setAdding(true)}
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
         >
           ＋ Add player
         </button>
       </ActionsBar>
 
-      {/* Column-label row — same vocabulary as the meet's flat tables. */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-muted/40 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-        <span className="flex-1">Player</span>
-        <span className="flex-1">Events</span>
-        <span className="w-16 text-right">Actions</span>
-      </div>
-
-      <ul className="min-h-0 flex-1 overflow-auto divide-y divide-border">
-        {filtered.map((p) => (
-          <li
-            key={p.id}
-            className={`flex cursor-pointer items-center gap-3 px-4 py-2 hover:bg-muted/30 ${
-              selectedId === p.id ? 'bg-muted/40' : ''
-            }`}
-            onClick={() => setSelectedId(p.id)}
-          >
-            <span className="flex-1 text-sm text-foreground">{p.name}</span>
-            <span className="flex-1 text-2xs font-mono uppercase tracking-[0.18em] text-muted-foreground">
-              {(eventsByPlayerId.get(p.id) ?? []).join(' · ')}
-            </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                deletePlayer(p.id);
-                if (selectedId === p.id) setSelectedId(null);
-              }}
-              aria-label="Delete"
-              className="w-16 text-right text-2xs text-destructive hover:underline"
-            >
-              Delete
-            </button>
-          </li>
-        ))}
-        {adding && (
-          <li className="px-4 py-2">
-            <input
-              autoFocus
-              type="text"
-              placeholder="New player name…"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitAdd}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitAdd();
-                if (e.key === 'Escape') {
-                  setAdding(false);
-                  setDraft('');
-                }
-              }}
-              className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </li>
-        )}
-        {filtered.length === 0 && !adding && (
-          <li className="px-4 py-6 text-sm text-muted-foreground">
-            {players.length === 0
-              ? 'No players yet — add the first one.'
-              : 'No players match the search.'}
-          </li>
-        )}
-      </ul>
-
-      {selected && (
-        <section className="border-t border-border bg-card px-4 py-3">
-          <h2 className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-3">
-            Player detail · {selected.name}
-          </h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Notes
-              </span>
+      {/* Flex ROW: table column + docked detail pane. The pane is a real
+          layout column (DetailDock) — the table reflows beside it via the
+          @container/table column priorities instead of being covered.
+          `relative` anchors the dock's narrow-viewport overlay fallback. */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
+          <BandedTable
+            columns={ROSTER_COLUMNS}
+            rows={filtered}
+            rowId={(p) => p.id}
+            onRowClick={(p) =>
+              setSelectedId((prev) => (prev === p.id ? null : p.id))
+            }
+            selectedId={selectedId}
+            rowClassName={() => 'group'}
+            rowTestId={(p) => `roster-row-${p.id}`}
+            renderRow={(p) => (
+              <>
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                  {p.name}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                  {(badgesById.get(p.id) ?? []).map((b) => (
+                    <EventBadge key={b.code} code={b.code} />
+                  ))}
+                </span>
+                <span className="w-16 shrink-0 text-right text-xs text-muted-foreground sw-num hidden @2xl/table:block">
+                  {p.restSlots ?? '—'}
+                </span>
+                <span
+                  className="flex w-8 shrink-0 justify-end opacity-0 transition-opacity duration-fast ease-brand focus-within:opacity-100 group-hover:opacity-100"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <OverflowMenu
+                    label={`Actions for ${p.name}`}
+                    items={rowOverflowItems(p)}
+                  />
+                </span>
+              </>
+            )}
+          />
+          {adding && (
+            <div className="border-b border-border px-5 py-2">
               <input
-                key={selected.id + '-notes'}
+                autoFocus
                 type="text"
-                defaultValue={selected.notes ?? ''}
-                onBlur={(e) => {
-                  if (e.target.value !== (selected.notes ?? '')) {
-                    updatePlayer(selected.id, { notes: e.target.value });
+                placeholder="New player name…"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commitAdd}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitAdd();
+                  if (e.key === 'Escape') {
+                    setAdding(false);
+                    setDraft('');
                   }
                 }}
-                className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className={FIELD_INPUT_CLASSES}
               />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Rest constraint (slots)
-              </span>
-              <input
-                key={selected.id + '-rest'}
-                type="number"
-                min={0}
-                defaultValue={selected.restSlots ?? 0}
-                onBlur={(e) => {
-                  const next = Number(e.target.value);
-                  if (next !== (selected.restSlots ?? 0)) {
-                    updatePlayer(selected.id, { restSlots: next });
-                  }
-                }}
-                className="w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            </div>
+          )}
+          {filtered.length === 0 && !adding && (
+            <p className="px-5 py-6 text-sm text-muted-foreground">
+              {players.length === 0
+                ? 'No players yet — add the first one.'
+                : 'No players match the search.'}
+            </p>
+          )}
+        </div>
+
+        <DetailDock open={selected != null}>
+          {selected && (
+            <DetailPanel
+              variant="docked"
+              label="Player"
+              value={selected.name || '(unnamed)'}
+              onClose={() => setSelectedId(null)}
+              testId="bracket-player-detail"
+            >
+              <PlayerDetailFields
+                key={selected.id}
+                player={selected}
+                roster={players}
+                bracketData={bracketData}
+                badges={badgesById.get(selected.id) ?? []}
+                onUpdate={updatePlayer}
+                onCommitEvent={onCommitEvent}
               />
-            </label>
-          </div>
-          <p className="mt-3 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Events:{' '}
-            {(eventsByPlayerId.get(selected.id) ?? []).join(', ') || '—'}
-          </p>
-        </section>
-      )}
+            </DetailPanel>
+          )}
+        </DetailDock>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+ * PlayerDetailFields — the panel body: notes, min rest (slots), then the
+ * shared Availability + Events blocks (BracketAvailabilityEventsFields —
+ * the same implementation the Matches panel's player cards expand to).
+ * ========================================================================= */
+function PlayerDetailFields({
+  player,
+  roster,
+  bracketData,
+  badges,
+  onUpdate,
+  onCommitEvent,
+}: {
+  player: BracketPlayerDTO;
+  roster: BracketPlayerDTO[];
+  bracketData: BracketTournamentDTO | null;
+  badges: BadgeEntry[];
+  onUpdate: (id: string, updates: Partial<BracketPlayerDTO>) => void;
+  onCommitEvent: CommitEventFn | null;
+}) {
+  return (
+    <div className="flex flex-col gap-3 px-3 py-3">
+      <label className="flex flex-col gap-1">
+        <span className={FIELD_LABEL_CLASSES}>Notes</span>
+        <input
+          key={player.id + '-notes'}
+          type="text"
+          defaultValue={player.notes ?? ''}
+          onBlur={(e) => {
+            if (e.target.value !== (player.notes ?? '')) {
+              onUpdate(player.id, { notes: e.target.value });
+            }
+          }}
+          className={FIELD_INPUT_CLASSES}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className={FIELD_LABEL_CLASSES}>Min rest (slots)</span>
+        <input
+          key={player.id + '-rest'}
+          type="number"
+          min={0}
+          defaultValue={player.restSlots != null ? String(player.restSlots) : ''}
+          placeholder="default (1)"
+          aria-label="Min rest (slots)"
+          onBlur={(e) => {
+            const raw = e.target.value;
+            const next = raw === '' ? undefined : Math.max(0, Number(raw) || 0);
+            if (next !== player.restSlots) {
+              onUpdate(player.id, { restSlots: next });
+            }
+          }}
+          className={`${FIELD_INPUT_CLASSES} sw-num`}
+        />
+      </label>
+
+      <BracketAvailabilityEventsFields
+        player={player}
+        roster={roster}
+        bracketData={bracketData}
+        badges={badges}
+        onUpdate={onUpdate}
+        onCommitEvent={onCommitEvent}
+      />
     </div>
   );
 }

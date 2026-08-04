@@ -18,35 +18,38 @@ interface StatItemProps {
   value: string;
   testId: string;
   tone?: string;
+  /** Seamed-surface status signal: a 2px TOP accent bar (never a full colored
+   *  border on a flush cell — handoff "Seamed, not gapped" rule). Pass a
+   *  border-top color class; defaults to transparent (bar reserved, invisible). */
+  topBar?: string;
   /** data attribute placed on the value span for targeted CSS / test assertions */
   valueMeta?: Record<string, string>;
 }
 
-function StatItem({ label, value, testId, tone = 'text-foreground', valueMeta = {} }: StatItemProps) {
+function StatItem({
+  label,
+  value,
+  testId,
+  tone = 'text-foreground',
+  topBar = 'border-t-transparent',
+  valueMeta = {},
+}: StatItemProps) {
   const metaAttrs = Object.fromEntries(
     Object.entries(valueMeta).map(([k, v]) => [`data-${k}`, v]),
   );
   return (
-    <span
+    <div
       data-testid={testId}
-      className="inline-flex items-baseline gap-1.5"
+      className={`flex flex-1 flex-col gap-0.5 border-r border-t-2 border-border px-4 py-2 last:border-r-0 ${topBar}`}
     >
-      <span
-        className={`text-sm font-semibold tabular-nums ${tone}`}
-        {...metaAttrs}
-      >
+      <span className={`text-lg font-bold leading-none sw-num ${tone}`} {...metaAttrs}>
         {value}
       </span>
-      <span className="text-2xs uppercase tracking-[0.16em] text-muted-foreground">
+      <span className="text-3xs uppercase tracking-[0.06em] text-ink-faint">
         {label}
       </span>
-    </span>
+    </div>
   );
-}
-
-/** Thin rule separator between stats (matches the LiveStatusBar visual rhythm). */
-function Sep() {
-  return <span className="h-3 w-px self-center bg-border" aria-hidden />;
 }
 
 export function RunSummaryBand({ summary }: Props) {
@@ -56,7 +59,7 @@ export function RunSummaryBand({ summary }: Props) {
     <div
       role="status"
       aria-label="Run summary"
-      className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-border bg-muted/30 px-4 py-2"
+      className="flex items-stretch border-b border-border bg-surface-band/40"
     >
       <StatItem
         testId="run-band-done"
@@ -64,26 +67,25 @@ export function RunSummaryBand({ summary }: Props) {
         value={`${done} / ${total}`}
         tone={done === total && total > 0 ? 'text-status-done' : 'text-foreground'}
       />
-      <Sep />
       <StatItem
         testId="run-band-playing"
         label="playing"
         value={String(playing)}
-        tone={playing > 0 ? 'text-status-started' : 'text-muted-foreground'}
+        tone={playing > 0 ? 'text-status-live' : 'text-muted-foreground'}
+        topBar={playing > 0 ? 'border-t-status-live/55' : 'border-t-transparent'}
       />
-      <Sep />
       <StatItem
         testId="run-band-courts-free"
         label="courts free"
         value={String(courtsFree)}
-        tone={courtsFree > 0 ? 'text-status-done' : 'text-muted-foreground'}
+        tone={courtsFree > 0 ? 'text-foreground' : 'text-muted-foreground'}
       />
-      <Sep />
       <StatItem
         testId="run-band-late"
         label="late"
         value={String(late)}
         tone={late > 0 ? 'text-status-warning' : 'text-muted-foreground'}
+        topBar={late > 0 ? 'border-t-status-warning/60' : 'border-t-transparent'}
         valueMeta={late > 0 ? { 'late-value': 'true' } : {}}
       />
     </div>

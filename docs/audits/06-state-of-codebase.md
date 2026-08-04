@@ -1,5 +1,10 @@
 # 06 — State of the Codebase (SP-REFACTOR Phase 6 snapshot)
 
+> **SUPERSEDED 2026-08-04 by [`08-state-of-codebase.md`](08-state-of-codebase.md)**
+> (post-SP-CLOUD: solve-job rail, dual-mode runtime, self-hosted auth,
+> org tenancy, capability display link). Read that instead; this file is
+> the historical pre-cloud record.
+
 **As of:** 2026-07-01 · **Branch:** `dev/workspace-suite` · **Baseline tag:**
 `pre-refactor-20260630` (`6d8d6e8`).
 

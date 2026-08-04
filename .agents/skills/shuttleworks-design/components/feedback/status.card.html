@@ -1,0 +1,17 @@
+<!-- @dsCard group="Components" viewport="700x130" name="Status pills & dots" subtitle="Ready / Live / Called / Drawn + health dots" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{margin:0;background:var(--surface-screen);padding:20px;font-family:var(--font-sans)}#r{display:flex;align-items:center;gap:12px;flex-wrap:wrap}</style></head>
+<body><div id="r"></div>
+<script type="text/babel">
+function findNS(names){for(const k of Object.keys(window)){const v=window[k];if(v&&typeof v==='object'&&names.every(n=>typeof v[n]==='function'))return v;}return {};}
+const NS=findNS(['StatusPill','HealthDot']); const { StatusPill, HealthDot } = NS;
+ReactDOM.createRoot(document.getElementById('r')).render(<>
+  <StatusPill status="ready"/><StatusPill status="live"/><StatusPill status="called"/><StatusPill status="drawn"/>
+  <span style={{width:1,height:16,background:'var(--border-1)'}}/>
+  <HealthDot tone="live" pulse/><HealthDot tone="called"/><HealthDot tone="scheduled"/><HealthDot tone="idle"/>
+</>);
+</script></body></html>

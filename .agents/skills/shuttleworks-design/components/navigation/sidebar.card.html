@@ -1,0 +1,22 @@
+<!-- @dsCard group="Components" viewport="700x420" name="Workspace sidebar" subtitle="Module-grouped nav rail — the shell spine" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{margin:0;background:var(--surface-screen);font-family:var(--font-sans)}#r{display:flex;height:420px}</style></head>
+<body><div id="r"></div>
+<script type="text/babel">
+function findNS(names){for(const k of Object.keys(window)){const v=window[k];if(v&&typeof v==='object'&&names.every(n=>typeof v[n]==='function'))return v;}return {};}
+const { WorkspaceSidebar } = findNS(['WorkspaceSidebar']);
+ReactDOM.createRoot(document.getElementById('r')).render(
+  <WorkspaceSidebar
+    modules={[
+      { name:'Meet', role:'ENG', open:true, active:'Matches', pages:['Roster','Matches','Configuration'] },
+      { name:'Operations', role:'SHR' },
+      { name:'Display', role:'OUT' },
+    ]}
+    workspaceLinks={['Members','Sharing','Settings']}
+  />
+);
+</script></body></html>

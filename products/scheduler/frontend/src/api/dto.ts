@@ -88,6 +88,10 @@ export interface TournamentConfig {
   // Whether to show the live score on the public display. Off when
   // the venue prefers to keep scores private until the match ends.
   tvShowScores?: boolean;
+  // Display layout configuration (UI-only; all optional).
+  courtOrder?: number[] | null;
+  hiddenCourts?: number[] | null;
+  standingsMode?: 'off' | 'side' | 'rotate' | null;
   // Optional event-column ordering and visibility for the Roster
   // position grid. Defaults to the canonical MD / WD / XD / WS / MS
   // sequence. Hidden columns are stored as ``false`` per rank.
@@ -277,7 +281,12 @@ export interface BracketPlayerDTO {
   id: string;
   name: string;
   notes?: string;
+  /** Per-player rest override in slots; unset = session `defaultRestSlots`. */
   restSlots?: number;
+  /** POSITIVE (allowed) HH:mm windows — empty/unset means available all
+   *  day. Mirrors the backend `BracketPlayerDTO.availability` (SP-D7 S2),
+   *  which threads it into the CP-SAT solve via player_constraints. */
+  availability?: AvailabilityWindow[];
 }
 
 // Match Type - used for UI selection mode and match categorization
@@ -333,6 +342,54 @@ export interface SolverPhaseEvent {
   phase: SolverPhaseName;
 }
 
+// ---- Solve jobs (SP-CLOUD-1 async solve rail) --------------------------
+// Mirrors backend/app/schemas.py SolveJobDTO / SolveJobErrorDTO.
+
+export type SolveJobStatus =
+  | 'queued'
+  | 'claimed'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'infeasible'
+  | 'cancelled';
+
+export const SOLVE_JOB_TERMINAL_STATUSES: ReadonlySet<SolveJobStatus> = new Set([
+  'succeeded',
+  'failed',
+  'infeasible',
+  'cancelled',
+]);
+
+export interface SolveJobErrorDTO {
+  code: string;
+  message?: string;
+  detail?: Record<string, unknown> | null;
+}
+
+export interface SolveJobDTO {
+  id: string;
+  tournamentId: string;
+  type: string;
+  status: SolveJobStatus;
+  attempts: number;
+  maxAttempts: number;
+  /** Worker heartbeat metadata (best-effort; absent until first beat). */
+  progress?: Record<string, unknown> | null;
+  /** ScheduleDTO on succeeded AND on infeasible (its status field says which). */
+  result?: ScheduleDTO | null;
+  error?: SolveJobErrorDTO | null;
+  /** Persisted solver params — reproducibility record. */
+  params: Record<string, unknown>;
+  createdAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+export interface SolveJobListDTO {
+  jobs: SolveJobDTO[];
+}
+
 // Drag-to-reschedule types matching /schedule/validate.
 export interface ProposedMove {
   matchId: string;
@@ -353,6 +410,21 @@ interface ValidationConflictDTO {
 export interface ValidationResponseDTO {
   feasible: boolean;
   conflicts: ValidationConflictDTO[];
+}
+
+/** One group's school-vs-school pool record. Computed fresh server-side on
+ *  every `GET /tournaments/{id}/state` (see `services.meet.standings` on the
+ *  backend) — never sent back on PUT, and any client-sent value is ignored
+ *  (the backend strips it before persisting). Empty when the Meet module
+ *  isn't enabled for the workspace or there's no finished, scored pool play
+ *  yet. Replaces the client-side `groupScores` computation that used to
+ *  live in MeetDisplayPage.tsx. */
+export interface MeetStandingRowDTO {
+  groupId: string;
+  groupName: string;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
 }
 
 // Whole-tournament persistence DTO (server-side JSON file at data/tournament.json).
@@ -378,6 +450,9 @@ export interface TournamentStateDTO {
   bracketRosterMigrated?: boolean;
   /** SP-G1: set true once the operations plan has been finalised by the director. */
   planFinalized?: boolean;
+  /** Authoritative Meet pool standings (Display redesign, Task 2) — derived,
+   *  read-only. Absent/empty for bracket-kind or Meet-disabled workspaces. */
+  standings?: MeetStandingRowDTO[];
 }
 
 // ---- Proposal pipeline (two-phase commit) -------------------------------
@@ -512,7 +587,7 @@ export interface BackupCreatedDTO {
 // Multi-tournament CRUD (Step 2; widened in Step 6)
 export type TournamentStatus = 'draft' | 'active' | 'archived';
 
-type TournamentRole = 'owner' | 'operator' | 'viewer';
+export type TournamentRole = 'owner' | 'operator' | 'viewer';
 
 /** Top-level kind of event a tournament row represents. ``meet`` is
  *  the intercollegiate dual / tri-meet workflow (Setup / Roster /
@@ -554,6 +629,23 @@ interface CollaborationDTO {
   activeInviteCount: number;
 }
 
+/** The inspector's metric triplet (`to do` = attention-reason count). */
+interface MatchMetricsDTO {
+  total: number;
+  scheduled: number;
+  toDo: number;
+}
+
+/** One upcoming match for the inspector's "Next up" list. `status` is
+ *  schedule-derivable only ("scheduled") — live called/started state is not
+ *  surfaced on the Hub (it lives in match_states; Operations Run is live). */
+export interface NextMatchDTO {
+  code: string;
+  timeLabel: string | null;
+  courtLabel: string | null;
+  status: string;
+}
+
 export interface WorkspaceSignalsDTO {
   health: 'good' | 'attention' | 'draft' | 'archived';
   attention: AttentionReasonDTO[];
@@ -561,6 +653,14 @@ export interface WorkspaceSignalsDTO {
   /** Per-kind readiness checklist (keys vary by kind), e.g. `{ roster: true }`. */
   setup: Record<string, boolean>;
   collaboration: CollaborationDTO;
+  /** Per-workspace match metrics (redesign). Optional for older payloads. */
+  matches?: MatchMetricsDTO;
+  /** Next ≤3 upcoming matches (finished/on-court ones are filtered
+   *  server-side since the 2026-07-09 audit). Optional / empty when none. */
+  nextUp?: NextMatchDTO[];
+  /** Lifecycle phase derived from real play state (2026-07-09 audit):
+   *  setup → ready → live → complete. Optional for older payloads. */
+  phase?: 'setup' | 'ready' | 'live' | 'complete';
 }
 
 export interface TournamentSummaryDTO {
@@ -600,11 +700,34 @@ export interface TournamentUpdateDTO {
   tournamentDate?: string | null;
 }
 
+// ---- Auth (self-hosted cookie sessions, SP-CLOUD-2) ----------------------
+
+/** The signed-in identity from ``/auth/*``. In local mode this is the
+ *  bootstrap identity (``isBootstrap: true``) — the no-login-wall path. */
+export interface UserDTO {
+  id: string;
+  email: string;
+  displayName?: string | null;
+  emailVerified: boolean;
+  isBootstrap: boolean;
+  authMode: 'local' | 'cloud';
+}
+
+/** The workspace's public display capability link (owner-gated mint/rotate).
+ *  ``url`` is a relative path — frontend prepends ``window.location.origin``. */
+export interface DisplayTokenDTO {
+  token: string;
+  url: string;
+}
+
 // Invite links (Step 7)
 export type InviteRole = 'operator' | 'viewer';
 
 export interface InviteCreateDTO {
   role: InviteRole;
+  /** SP-CLOUD-2: when set, this becomes an email invite — the link is
+   *  delivered via the email seam and the invite expires. */
+  email?: string;
 }
 
 export interface InviteCreatedDTO {
@@ -614,6 +737,8 @@ export interface InviteCreatedDTO {
   tournamentId: string;
   role: InviteRole;
   createdAt: string;
+  /** Recipient address for email invites; null for bare links. */
+  email?: string | null;
 }
 
 export interface InviteSummaryDTO {
@@ -624,6 +749,8 @@ export interface InviteSummaryDTO {
   expiresAt: string | null;
   revokedAt: string | null;
   valid: boolean;
+  /** Recipient address for email invites; null for bare links. */
+  email?: string | null;
 }
 
 export interface InviteResolveDTO {
@@ -646,6 +773,10 @@ export interface TournamentMemberDTO {
   userId: string;
   role: string;
   joinedAt: string;
+  /** SP-CLOUD-2: real identity from the users table. ``email`` is null
+   *  for pre-account placeholder identities (unmigrated rows). */
+  email?: string | null;
+  displayName?: string | null;
 }
 
 // ---- Operator commands (Step F of the architecture-adjustment arc) -------

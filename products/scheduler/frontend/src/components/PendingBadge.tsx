@@ -12,8 +12,8 @@
  * layout when there's no in-flight command.
  *
  * The amber matches the "called" traffic-light hue elsewhere in the
- * app (Tailwind ``amber-500``); the pulse is the standard
- * ``animate-pulse`` utility. Tooltip is a native ``title`` attribute
+ * app (``status-warning`` token); the pulse is the brand
+ * ``sw-pulse`` utility. Tooltip is a native ``title`` attribute
  * for accessibility without dragging in a Radix Tooltip — the badge
  * is decoration, not an interactive primary surface.
  */
@@ -44,8 +44,8 @@ export const PendingBadge = forwardRef<HTMLSpanElement, PendingBadgeProps>(
         title={tooltip}
         data-testid="pending-badge"
         className={
-          `inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse ` +
-          `shadow-sm shadow-amber-500/40 ${className}`
+          `inline-block h-2 w-2 rounded-full bg-status-warning sw-pulse ` +
+          `shadow-sm shadow-status-warning/40 ${className}`
         }
       />
     );

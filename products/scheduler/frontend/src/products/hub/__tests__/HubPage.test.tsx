@@ -1,7 +1,8 @@
 /**
- * Hub navigation + the time-oriented control plane. Open and the post-Create
- * handler must target /bracket-setup for bracket tournaments (was /bracket
- * pre-Bundle-3). The Hub groups workspaces by event date, not status.
+ * Hub navigation + the control plane. Open and the post-Create handler must
+ * target /bracket-setup for bracket tournaments (was /bracket pre-Bundle-3).
+ * The Hub filters workspaces by status facet (All / Active / Draft / Shared /
+ * Needs attention) and shows them as one time-sorted flat list.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -95,10 +96,23 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.queryByRole('button', { name: /new event/i })).not.toBeInTheDocument();
   });
 
-  it('groups workspaces chronologically (Upcoming section present)', async () => {
+  it('offers the status-facet strip (All / Active / Draft / Shared / Needs attention)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    expect(screen.getByText('[ UPCOMING ]')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^All\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Active\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Draft\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Shared\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Needs attention/ })).toBeInTheDocument();
+  });
+
+  it('a status facet filters the flat list (Active hides both drafts)', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
+    // Both seeded workspaces are status:'draft', so the Active facet empties the list.
+    fireEvent.click(screen.getByRole('button', { name: /^Active\b/ }));
+    expect(screen.queryByText('Bracket A')).not.toBeInTheDocument();
+    expect(screen.queryByText('Meet A')).not.toBeInTheDocument();
   });
 
   it('search filters the workspace list by name', async () => {
@@ -115,17 +129,37 @@ describe('HubPage time-oriented control plane', () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Meet A'));
-    expect(screen.getByText('[ MODULES ]')).toBeInTheDocument();
+    expect(screen.getByText('MODULES')).toBeInTheDocument();
   });
 
-  it('module chips show only enabled modules (one per row, kind-derived)', async () => {
+  it('rows carry a Modules column (dashboard redesign)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    // Enabled-only: a meet workspace shows just Meet; a bracket workspace just
-    // Bracket. Available/disabled modules are not shown in the row.
-    expect(screen.getAllByTestId('chip-meet')).toHaveLength(1);
-    expect(screen.getAllByTestId('chip-bracket')).toHaveLength(1);
-    expect(screen.queryAllByTestId('chip-display')).toHaveLength(0);
+    // The redesign re-adds a Modules column: one cell per row. The seeded
+    // workspaces have no enabled modules → a dashed kind-default glyph (M for
+    // the meet, B for the bracket).
+    expect(screen.getAllByTestId('row-modules')).toHaveLength(2);
+    expect(screen.getByTestId('row-module-meet')).toBeInTheDocument();
+    expect(screen.getByTestId('row-module-bracket')).toBeInTheDocument();
+  });
+
+  it('shows a footer summary bar with workspace + attention counts', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
+    const footer = screen.getByTestId('hub-footer');
+    // Both seeded workspaces are owner-drafts → both need attention.
+    expect(footer).toHaveTextContent('2 workspaces');
+    expect(footer).toHaveTextContent('2 need attention');
+  });
+
+  it('counts archived workspaces in the footer', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      { id: 'a', name: 'Done Cup', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: null, status: 'archived' as const },
+    ] as never);
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Done Cup')).toBeInTheDocument());
+    expect(screen.getByTestId('hub-footer')).toHaveTextContent('1 archived');
   });
 
   it('"New workspace" navigates to the dedicated /new surface', async () => {
@@ -136,7 +170,7 @@ describe('HubPage time-oriented control plane', () => {
     expect(loc.current).toBe('/new');
   });
 
-  it('module chips read the real modules[] DTO when present (not only kind)', async () => {
+  it('the inspector module map reads the real modules[] DTO when present (not only kind)', async () => {
     vi.mocked(apiClient.listTournaments).mockResolvedValue([
       {
         id: 'x1', name: 'X Workspace', kind: 'meet' as const, role: 'owner' as const,
@@ -149,10 +183,13 @@ describe('HubPage time-oriented control plane', () => {
     ] as never);
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('X Workspace')).toBeInTheDocument());
-    // Display enabled in the DTO (a kind=meet default would NOT enable it) → its
-    // chip shows; bracket is not enabled → no chip.
-    expect(screen.getByTestId('chip-meet')).toBeInTheDocument();
-    expect(screen.getByTestId('chip-display')).toBeInTheDocument();
-    expect(screen.queryAllByTestId('chip-bracket')).toHaveLength(0);
+    // Select the row → the inspector's module map reflects the DTO: Display
+    // enabled (a kind=meet default would NOT enable it) alongside Meet.
+    fireEvent.click(screen.getByText('X Workspace'));
+    expect(screen.getByText('MODULES')).toBeInTheDocument();
+    const displayRow = screen.getByText('Display').closest('li')!;
+    expect(displayRow.textContent).toMatch(/enabled/i);
+    const meetRow = screen.getByText('Meet').closest('li')!;
+    expect(meetRow.textContent).toMatch(/enabled/i);
   });
 });

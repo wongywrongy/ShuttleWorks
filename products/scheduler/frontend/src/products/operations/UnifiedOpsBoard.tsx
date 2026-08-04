@@ -42,7 +42,7 @@ import { buildPlanChips, type BoardChip } from './runtime/boardPlacements';
 import type { MatchDTO, ScheduleDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { OpsBlock } from './opsBlock';
-import { parseOpsKey, packBlockLanes } from './opsBlock';
+import { parseOpsKey, packBlockLanes, chipLanePx } from './opsBlock';
 
 interface Conflict { description: string }
 interface Validation { feasible: boolean; conflicts: Conflict[] }
@@ -140,9 +140,9 @@ export function UnifiedOpsBoard({
     if (placed.length === 0) return 1;
     const maxLanes = Math.max(1, ...[...lanes.values()].map((l) => l.laneCount));
     const longest = placed.reduce((m, b) => Math.max(m, b.label.length), 0);
-    // Width one lane needs to read the longest label at text-2xs, plus the
-    // block's horizontal padding + inset (~24px). Generous so nothing clips.
-    const neededLanePx = Math.max(56, longest * 8 + 24);
+    // Shared basis with the Run board (chipLanePx) so Plan and Run cells are
+    // the SAME size at Auto fit; lane splits multiply the per-lane need.
+    const neededLanePx = chipLanePx(longest);
     return Math.min(3, Math.max(1, (neededLanePx * maxLanes) / GANTT_GEOMETRY.standard.slot));
   }, [placed, lanes]);
   const timeZoom = auto ? autoZoom : manualZoom;
@@ -322,7 +322,10 @@ export function UnifiedOpsBoard({
   );
 
   const zoomBar = (
-    <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/40 px-3 py-1 text-2xs">
+    // No border-t: the grid's last court row already carries a `border-b`
+    // hairline (GanttTimeline), so a border-t here would double it on the
+    // Plan board (Run is scrollbar-separated, so it keeps its own border-t).
+    <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1 text-2xs">
       <span className="text-muted-foreground">Time</span>
       <button
         type="button"
@@ -340,7 +343,10 @@ export function UnifiedOpsBoard({
   );
 
   return (
-    <div data-testid="unified-ops-board" data-mode="courts" className="shrink-0 overflow-x-auto border-b border-border">
+    // No border-b: the list below opens with a section band that carries its
+    // own border-t — one hairline per seam (seamed, not gapped), never two
+    // adjacent 1px borders.
+    <div data-testid="unified-ops-board" data-mode="courts" className="shrink-0 overflow-x-auto">
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
         {grid}
         {zoomBar}

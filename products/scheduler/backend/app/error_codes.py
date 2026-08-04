@@ -11,7 +11,7 @@ means adding it here first so the frontend can predict the set.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
@@ -38,6 +38,12 @@ class ErrorCode(str, Enum):
     BACKUP_NOT_FOUND = "BACKUP_NOT_FOUND"
     BACKUP_RESTORE_FAILED = "BACKUP_RESTORE_FAILED"
 
+    # Locked settings (Phase 0a — backend mirrors of the frontend locks;
+    # a frontend-only lock is a suggestion, not a lock)
+    CONFIG_LOCKED = "CONFIG_LOCKED"
+    ROSTER_LOCKED = "ROSTER_LOCKED"
+    DRAW_STARTED = "DRAW_STARTED"
+
     # Generic input validation (deeper than schema — raised when a
     # converter sees a malformed value that slipped past Pydantic).
     INVALID_INPUT = "INVALID_INPUT"
@@ -46,6 +52,11 @@ class ErrorCode(str, Enum):
     SOLVE_FAILED = "SOLVE_FAILED"
     SOLVE_INFEASIBLE = "SOLVE_INFEASIBLE"
     SOLVE_TIMEOUT = "SOLVE_TIMEOUT"
+
+    # Solve jobs (SP-CLOUD-1 async solve rail)
+    SOLVE_JOB_NOT_FOUND = "SOLVE_JOB_NOT_FOUND"
+    SOLVE_JOB_ACTIVE = "SOLVE_JOB_ACTIVE"
+    SOLVE_ENDPOINT_GONE = "SOLVE_ENDPOINT_GONE"
 
     # Schedule operations
     WARM_RESTART_FAILED = "WARM_RESTART_FAILED"
@@ -65,23 +76,50 @@ class ErrorCode(str, Enum):
     MODULE_LAST_OPERATIONAL = "MODULE_LAST_OPERATIONAL"
     MODULE_HAS_DATA = "MODULE_HAS_DATA"
 
+    # Tenancy (SP-CLOUD-2) — the uniform cross-tenant answer. A caller
+    # without membership can never learn whether the workspace exists.
+    TOURNAMENT_NOT_FOUND = "TOURNAMENT_NOT_FOUND"
+
+    # Auth & sessions (SP-CLOUD-2)
+    AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"
+    AUTH_THROTTLED = "AUTH_THROTTLED"
+    AUTH_EMAIL_TAKEN = "AUTH_EMAIL_TAKEN"
+    AUTH_WEAK_PASSWORD = "AUTH_WEAK_PASSWORD"
+    AUTH_INVALID_EMAIL = "AUTH_INVALID_EMAIL"
+    AUTH_NOT_SIGNED_IN = "AUTH_NOT_SIGNED_IN"
+    AUTH_RESET_INVALID = "AUTH_RESET_INVALID"
+    AUTH_CSRF_REQUIRED = "AUTH_CSRF_REQUIRED"
+
     # Generic fallback
     INTERNAL = "INTERNAL"
 
 
-def http_error(status: int, code: ErrorCode, message: str) -> HTTPException:
+def http_error(
+    status: int,
+    code: ErrorCode,
+    message: str,
+    extra: Optional[Dict[str, Any]] = None,
+) -> HTTPException:
     """Build an ``HTTPException`` whose detail is a structured payload.
 
     The frontend axios interceptor reads ``detail.code`` for the toast
     title and ``detail.message`` for the body. Older callers that
     raise ``HTTPException(detail="…")`` still work — the interceptor
-    falls back to treating ``detail`` as the message.
+    falls back to treating ``detail`` as the message. ``extra`` keys are
+    merged into the payload for machine-readable context (e.g.
+    CONFIG_LOCKED's offending ``fields`` and the ``schedules`` a clear
+    would remove).
     """
     return HTTPException(
         status_code=status,
-        detail=_payload(code, message),
+        detail=_payload(code, message, extra),
     )
 
 
-def _payload(code: ErrorCode, message: str) -> Dict[str, Any]:
-    return {"code": code.value, "message": message}
+def _payload(
+    code: ErrorCode, message: str, extra: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    out: Dict[str, Any] = {"code": code.value, "message": message}
+    if extra:
+        out.update(extra)
+    return out

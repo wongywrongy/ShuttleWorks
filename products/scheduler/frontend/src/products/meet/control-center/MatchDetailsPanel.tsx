@@ -14,6 +14,8 @@ import { buildGroupIndex, getPlayerSchoolAccent } from '../../../lib/schoolAccen
 import { SchoolDot } from '../../../components/SchoolDot';
 import { ScoreEditor } from './ScoreEditor';
 import { StatusPill } from '../../../components/StatusPill';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { indexById } from '../../../lib/indexById';
 import { LIGHT_LABEL, expandRankLabel, getPlayerRestTime } from './matchDetails/helpers';
 
@@ -101,6 +103,15 @@ export function MatchDetailsPanel({
     else setInternalMode(next);
   };
   const [updating, setUpdating] = useState(false);
+  // A viewer may not drive the live day (audit A2). Folded into the existing
+  // in-flight flag so every action button in this panel carries the `disabled`
+  // vocabulary — which blocks pointer AND keyboard — from one place. `updating`
+  // still drives the spinners; `locked` drives activation.
+  const canEditWorkspace = useCanEdit();
+  const locked = updating || !canEditWorkspace;
+  // Explains a `locked` control when the reason is the ROLE rather than an
+  // in-flight write — the latter is self-evident from the spinner.
+  const disabledReason = !canEditWorkspace ? READ_ONLY_MESSAGE : undefined;
   // Which player row, if any, is currently expanded into a substitute
   // picker. ``null`` = no row expanded. The picker drops down below
   // the player row so the rest of the panel stays in place.
@@ -209,12 +220,14 @@ export function MatchDetailsPanel({
     }
   };
 
-  const handleResetCalled = async () => {
+  const handleUndoStart = async () => {
     if (!onUpdateStatus) return;
     setUpdating(true);
     try {
       onUndoStart?.(match.id);
-      await onUpdateStatus(match.id, 'called', { actualStartTime: undefined });
+      // Back to `scheduled`, not `called`: the server has no playing→called
+      // edge, so the old target always 409'd (audit A1).
+      await onUpdateStatus(match.id, 'scheduled', { actualStartTime: undefined });
     } finally {
       setUpdating(false);
     }
@@ -240,11 +253,14 @@ export function MatchDetailsPanel({
     `disabled:cursor-not-allowed disabled:opacity-50`;
   const primaryActionBtn =
     `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded ` +
-    `bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground ` +
-    `hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50`;
+    `bg-accent px-2 py-1 text-2xs font-medium text-accent-ink shadow-glow ` +
+    `transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
 
   return (
-    <div className="h-full overflow-auto p-2">
+    // Keyed by the selected match id so switching selection re-mounts the
+    // rail body and re-triggers `sw-panel-in`; poll re-renders (fresh
+    // matchState/schedule objects) keep the same key so it never re-fires.
+    <div key={match.id} className="h-full overflow-auto p-2 sw-panel-in">
       {/* Header */}
       <div className="mb-3">
         <div className="text-sm font-bold text-foreground mb-0.5">
@@ -286,7 +302,7 @@ export function MatchDetailsPanel({
         return (
           <div className="mb-3 border-t border-border pt-2 text-xs text-foreground">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Done
               </span>
               {onUpdateStatus && mode === 'idle' && (
@@ -310,7 +326,7 @@ export function MatchDetailsPanel({
                   <span className="font-semibold text-status-started">{winnerNames}</span>
                 </span>
                 {score && (
-                  <span className="font-mono text-sm font-bold tabular-nums text-foreground">
+                  <span className="sw-num text-sm font-bold tabular-nums text-foreground">
                     {score.sideA}–{score.sideB}
                     <span className="ml-1 text-3xs font-medium text-muted-foreground">sets</span>
                   </span>
@@ -326,7 +342,7 @@ export function MatchDetailsPanel({
                   return (
                     <div
                       key={i}
-                      className="flex items-center justify-between rounded bg-card px-1.5 py-0.5 font-mono text-2xs"
+                      className="flex items-center justify-between rounded bg-card px-1.5 py-0.5 sw-num text-2xs"
                     >
                       <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
                         Set {i + 1}
@@ -337,7 +353,7 @@ export function MatchDetailsPanel({
                         >
                           {s.sideA}
                         </span>
-                        <span className="mx-0.5 text-muted-foreground/70">–</span>
+                        <span className="mx-0.5 text-muted-foreground">–</span>
                         <span
                           className={setWinner === 'B' ? 'font-bold text-foreground' : 'text-muted-foreground'}
                         >
@@ -383,7 +399,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={handleCall}
-                  disabled={updating || light === 'red'}
+                  disabled={locked || light === 'red'}
                   className={primaryActionBtn}
                   title={light === 'red' ? trafficLight?.reason ?? 'Blocked' : 'Call match — players head to court'}
                 >
@@ -392,7 +408,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={handlePostpone}
-                  disabled={updating}
+                  disabled={locked}
                   className={actionBtn}
                   title={matchState?.postponed ? 'Restore match' : 'Postpone match'}
                 >
@@ -405,7 +421,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={handleStart}
-                  disabled={updating}
+                  disabled={locked}
                   className={primaryActionBtn}
                   title="Start match — court is now in play"
                 >
@@ -414,7 +430,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={() => setMode('score')}
-                  disabled={updating}
+                  disabled={locked}
                   className={actionBtn}
                   title="Skip ahead — record final score"
                 >
@@ -427,7 +443,7 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={() => setMode('score')}
-                  disabled={updating}
+                  disabled={locked}
                   className={primaryActionBtn}
                   title="Record final score"
                 >
@@ -435,10 +451,10 @@ export function MatchDetailsPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={handleResetCalled}
-                  disabled={updating}
+                  onClick={handleUndoStart}
+                  disabled={locked}
                   className={actionBtn}
-                  title="Step back to Called"
+                  title="Undo start — returns the match to the queue"
                 >
                   Undo start
                 </button>
@@ -547,7 +563,7 @@ export function MatchDetailsPanel({
                       <button
                         type="button"
                         onClick={() => handleConfirmPlayer(playerId)}
-                        disabled={updating}
+                        disabled={locked}
                         title={confirmed ? 'Mark as not checked in' : 'Check in'}
                         aria-label={confirmed ? 'Mark as not checked in' : 'Check in'}
                         className={`inline-flex items-center justify-center rounded h-4 w-4 text-3xs ${
@@ -578,12 +594,13 @@ export function MatchDetailsPanel({
                       <button
                         type="button"
                         onClick={() => setSubPickingFor(isPicking ? null : playerId)}
-                        className={`rounded border border-border bg-card px-1 text-3xs font-medium ${
+                        disabled={locked}
+                        className={`rounded border border-border bg-card px-1 text-3xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                           isPicking
                             ? 'bg-muted/40 text-foreground'
                             : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                         }`}
-                        title="Substitute player"
+                        title={locked && !canEditWorkspace ? READ_ONLY_MESSAGE : 'Substitute player'}
                         aria-label={`Substitute ${name}`}
                         aria-expanded={isPicking}
                       >
@@ -606,15 +623,18 @@ export function MatchDetailsPanel({
                             setConfirmRemoveFor(null);
                             onRemovePlayer?.(match.id, playerId);
                           }}
-                          className={
+                          disabled={locked}
+                          className={`disabled:cursor-not-allowed disabled:opacity-50 ${
                             armed
-                              ? 'rounded border border-destructive bg-destructive px-1 text-3xs font-semibold text-destructive-foreground motion-safe:animate-pulse'
+                              ? 'rounded border border-destructive bg-destructive px-1 text-3xs font-semibold text-destructive-foreground sw-pulse'
                               : 'rounded border border-destructive/40 bg-status-blocked-bg px-1 text-3xs text-status-blocked hover:bg-status-blocked-bg/70'
-                          }
+                          }`}
                           title={
-                            armed
-                              ? `Click again to remove ${name} from the match`
-                              : `Remove ${name} from this match (click twice to confirm)`
+                            locked && !canEditWorkspace
+                              ? READ_ONLY_MESSAGE
+                              : armed
+                                ? `Click again to remove ${name} from the match`
+                                : `Remove ${name} from this match (click twice to confirm)`
                           }
                           aria-label={armed ? `Confirm remove ${name}` : `Remove ${name}`}
                         >
@@ -656,12 +676,12 @@ export function MatchDetailsPanel({
             );
           };
           // Team-name header — matches the SectionHeader vocabulary used
-          // elsewhere (2xs uppercase tracking-[0.18em] muted). Acts as the
+          // elsewhere (2xs uppercase tracking-[0.08em] muted). Acts as the
           // implicit separator between teams, replacing the old "vs" line
           // and the colored SchoolDot indicators.
           const teamHeader = (label: string | undefined) =>
             label ? (
-              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 {label}
               </div>
             ) : null;
@@ -801,15 +821,16 @@ export function MatchDetailsPanel({
         <div className="px-3 py-2 border-t border-border/60 bg-muted/30 space-y-2">
           {onRequestMove && assignment && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Reschedule
               </div>
               <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
                   onClick={() => onRequestMove(match.id)}
-                  className="rounded border border-status-started/40 bg-status-started-bg px-2 py-0.5 text-2xs text-status-started hover:bg-status-started-bg/70"
-                  title="Re-anchor this match to a new time or court. Other matches stay put."
+                  disabled={locked}
+                  className="rounded border border-status-started/40 bg-status-started-bg px-2 py-0.5 text-2xs text-status-started hover:bg-status-started-bg/70 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={disabledReason ?? 'Re-anchor this match to a new time or court. Other matches stay put.'}
                 >
                   Move / postpone…
                 </button>
@@ -818,7 +839,7 @@ export function MatchDetailsPanel({
           )}
           {onRequestDisruption && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Disruption
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -826,8 +847,9 @@ export function MatchDetailsPanel({
                   <button
                     type="button"
                     onClick={() => onRequestDisruption('overrun', match.id)}
-                    className="rounded border border-status-warning/40 bg-status-warning-bg px-2 py-0.5 text-2xs text-status-warning hover:bg-status-warning-bg/70"
-                    title="Mark overrun — keeps this match playing, slides successors back to absorb the delay."
+                    disabled={locked}
+                    className="rounded border border-status-warning/40 bg-status-warning-bg px-2 py-0.5 text-2xs text-status-warning hover:bg-status-warning-bg/70 disabled:cursor-not-allowed disabled:opacity-50"
+                    title={disabledReason ?? 'Mark overrun — keeps this match playing, slides successors back to absorb the delay.'}
                   >
                     Mark overrun
                   </button>
@@ -835,8 +857,9 @@ export function MatchDetailsPanel({
                 <button
                   type="button"
                   onClick={() => onRequestDisruption('cancellation', match.id)}
-                  className="rounded border border-destructive/40 bg-status-blocked-bg px-2 py-0.5 text-2xs text-status-blocked hover:bg-status-blocked-bg/70"
-                  title="Cancel match — removes it entirely and frees the slot for later use."
+                  disabled={locked}
+                  className="rounded border border-destructive/40 bg-status-blocked-bg px-2 py-0.5 text-2xs text-status-blocked hover:bg-status-blocked-bg/70 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={disabledReason ?? 'Cancel match — removes it entirely and frees the slot for later use.'}
                 >
                   Cancel match
                 </button>
@@ -844,8 +867,12 @@ export function MatchDetailsPanel({
                   <button
                     type="button"
                     onClick={() => onRequestDisruption('court_closed', match.id)}
-                    className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-muted/40"
-                    title={`Close court ${assignment.courtId} — closes it for the rest of the day; remaining matches on it are re-routed.`}
+                    disabled={locked}
+                    className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    title={
+                      disabledReason ??
+                      `Close court ${assignment.courtId} — closes it for the rest of the day; remaining matches on it are re-routed.`
+                    }
                   >
                     Close court {assignment.courtId}
                   </button>

@@ -5,7 +5,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { useBracketDisplaySync } from '../useBracketDisplaySync';
 import { apiClient } from '../../../../api/client';
 
-vi.mock('../../../../api/client', () => ({ apiClient: { getBracket: vi.fn() } }));
+vi.mock('../../../../api/client', () => ({
+  apiClient: { getBracket: vi.fn(), getDisplayBracket: vi.fn() },
+}));
 
 const wrap =
   (id: string) =>
@@ -27,7 +29,10 @@ const emptyBracket = {
 };
 
 describe('useBracketDisplaySync', () => {
-  beforeEach(() => vi.mocked(apiClient.getBracket).mockReset());
+  beforeEach(() => {
+    vi.mocked(apiClient.getBracket).mockReset();
+    vi.mocked(apiClient.getDisplayBracket).mockReset();
+  });
 
   it('polls getBracket and exposes the data + live status', async () => {
     vi.mocked(apiClient.getBracket).mockResolvedValue(emptyBracket as never);
@@ -48,8 +53,21 @@ describe('useBracketDisplaySync', () => {
       wrapper: wrapNoId,
     });
     await waitFor(() =>
-      expect(result.current.syncError).toMatch(/Missing \?id=/),
+      expect(result.current.syncError).toMatch(/Missing \?token=/),
     );
+    expect(apiClient.getBracket).not.toHaveBeenCalled();
+  });
+
+  it('token mode reads the public projection via getDisplayBracket', async () => {
+    vi.mocked(apiClient.getDisplayBracket).mockResolvedValue(emptyBracket as never);
+    const wrapToken = ({ children }: { children: React.ReactNode }) => (
+      <MemoryRouter initialEntries={['/display?token=tok-abc']}>{children}</MemoryRouter>
+    );
+    const { result } = renderHook(() => useBracketDisplaySync(new Date(0)), {
+      wrapper: wrapToken,
+    });
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    expect(apiClient.getDisplayBracket).toHaveBeenCalledWith('tok-abc');
     expect(apiClient.getBracket).not.toHaveBeenCalled();
   });
 });

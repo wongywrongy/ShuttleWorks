@@ -26,6 +26,7 @@ import type { MatchStateDTO } from '../api/dto';
 import { useTournamentId } from './useTournamentId';
 import { getMatchPlayerIds as getPlayerIdsFromMatch } from '../utils/trafficLight';
 import { timeToSlot, slotToTime } from '../lib/time';
+import { bracketOccupiedWindows } from '../lib/bracketOccupancy';
 
 export interface ImpactAnalysis {
   matchId: string;
@@ -233,7 +234,20 @@ export function useLiveOperations() {
         return state?.status === 'started' || state?.status === 'finished';
       });
 
-      const result = await apiClient.generateSchedule({
+      // Cross-engine coordination: a live meet re-solve must schedule
+      // around the bracket's occupied courts too (lib/bracketOccupancy).
+      // Best-effort — a failed bracket fetch never blocks the re-solve.
+      let closedCourtWindows: number[][] = [];
+      try {
+        closedCourtWindows = bracketOccupiedWindows(await apiClient.getBracket(tid));
+      } catch {
+        /* meet-only workspace or bracket fetch failure — solve unblocked */
+      }
+
+      // Async solve rail: submit a job and poll it to completion. The
+      // one-active-job rule means a concurrent Schedule-page solve
+      // surfaces as a 409 here rather than racing it.
+      const result = await apiClient.runSolveJob(tid, {
         config: {
           ...config,
           freezeHorizonSlots: Math.max(config.freezeHorizonSlots, 2),
@@ -246,6 +260,7 @@ export function useLiveOperations() {
           courtId: a.courtId,
           locked: true,
         })),
+        ...(closedCourtWindows.length > 0 ? { closedCourtWindows } : {}),
       });
 
       setSchedule(result);
@@ -255,7 +270,7 @@ export function useLiveOperations() {
     } finally {
       setIsReoptimizing(false);
     }
-  }, [config, schedule, matches, players, matchStates, setSchedule]);
+  }, [config, schedule, matches, players, matchStates, setSchedule, tid]);
 
   // Helper to get current slot based on time (handles overnight schedules)
   const getCurrentSlot = useCallback((): number => {

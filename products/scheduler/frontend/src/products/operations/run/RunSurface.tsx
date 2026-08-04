@@ -49,6 +49,9 @@ export interface RunSurfaceProps {
   planFinalized?: boolean;
   /** Wall-clock label for a slot (operators think in time, not slot indices). */
   formatSlot?: (slotId: number) => string;
+  /** Minutes per slot (config.intervalMinutes) — enables the playing-chip
+   *  elapsed stamp on the live board. */
+  slotMinutes?: number;
 }
 
 // ── pure auto-pull helper (exported so tests can verify without hooks) ────
@@ -103,6 +106,7 @@ export function RunSurface({
   currentSlot,
   planFinalized,
   formatSlot,
+  slotMinutes,
 }: RunSurfaceProps) {
   // ── seam hooks: owns the seam hooks for the Run (live) surface ───────────
   const pushToast = useUiStore((s) => s.pushToast);
@@ -180,13 +184,25 @@ export function RunSurface({
     [matches, courtCount, planFinalized, currentSlot],
   );
   const queue = useMemo(() => deriveQueue(matches), [matches]);
+  // Bracket "called" is Operations-local (no persisted status), overlaid onto
+  // `matches` by toRunMatches — but the BOARD renders from raw blocks, so
+  // without this overlay a called bracket chip would stay painted 'scheduled'
+  // while the queue/inspector already say Called. Board == inspector.
+  const liveBlocks = useMemo(() => {
+    if (calledBracketIds.size === 0) return blocks;
+    return blocks.map((b) =>
+      b.source === 'bracket' && b.status === 'scheduled' && calledBracketIds.has(b.id)
+        ? { ...b, status: 'called' as const }
+        : b,
+    );
+  }, [blocks, calledBracketIds]);
   // Re-build the live chips here purely to count `late` for the summary band so
   // it equals what RunLiveBoard renders (band == board). We can't lift the chips
   // out of RunLiveBoard — its prop contract is KEEP-unchanged — so this pure,
-  // cheap re-derive from the SAME raw `blocks`/`currentSlot` is deliberate.
+  // cheap re-derive from the SAME `liveBlocks`/`currentSlot` is deliberate.
   const liveChips = useMemo(
-    () => buildLiveChips(blocks, currentSlot ?? 0, !!planFinalized),
-    [blocks, currentSlot, planFinalized],
+    () => buildLiveChips(liveBlocks, currentSlot ?? 0, !!planFinalized),
+    [liveBlocks, currentSlot, planFinalized],
   );
   const summary = useMemo(() => deriveSummary(matches, lanes, liveChips), [matches, lanes, liveChips]);
 
@@ -240,6 +256,29 @@ export function RunSurface({
       });
     },
     [seams],
+  );
+
+  // ── queue affordances (LATE badge + quick-send) ───────────────────────────
+  /** Queue rows past their planned slot, once the floor is running. */
+  const lateKeys = useMemo((): ReadonlySet<string> => {
+    return new Set(
+      queue
+        .filter(
+          (m) => !!planFinalized && m.plannedSlot != null && (currentSlot ?? 0) > m.plannedSlot,
+        )
+        .map((m) => m.key),
+    );
+  }, [queue, planFinalized, currentSlot]);
+
+  /** "↵ send": assign the row's match to the first free court, no inspector. */
+  const sendFromQueue = useCallback(
+    (key: string) => {
+      const m = matches.find((x) => x.key === key);
+      const court = lanes.find((l) => l.now == null)?.court;
+      if (!m || court == null) return;
+      fireAssign(m, court, slotForAssign(court, matches, currentSlot ?? 0));
+    },
+    [matches, lanes, currentSlot, fireAssign],
   );
 
   // ── selection + role resolution ───────────────────────────────────────────
@@ -344,21 +383,30 @@ export function RunSurface({
         <div className="flex min-w-0 flex-1 flex-col overflow-auto">
           {/* Board — the live court×time hero (GanttTimeline + MatchChip) */}
           <RunLiveBoard
-            blocks={blocks}
+            blocks={liveBlocks}
             courtCount={courtCount}
             currentSlot={currentSlot}
             running={!!planFinalized}
             formatSlot={formatSlot}
+            slotMinutes={slotMinutes}
             selectedKey={selectedKey}
             onSelect={setSelectedKey}
           />
 
-          {/* Queue — below the board */}
-          <div className="border-t border-border">
-            <div className="px-4 pb-1 pt-3 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          {/* Queue — below the board. No border-t here: the board's own
+              border-b IS the board→queue seam (seamed, not gapped — one
+              hairline per seam, never two adjacent 1px borders). */}
+          <div>
+            <div className="px-4 pb-1 pt-3 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
               Queue
             </div>
-            <RunQueue queue={queue} selectedKey={selectedKey} onSelect={setSelectedKey} />
+            <RunQueue
+              queue={queue}
+              selectedKey={selectedKey}
+              onSelect={setSelectedKey}
+              lateKeys={lateKeys}
+              onSend={sendFromQueue}
+            />
           </div>
         </div>
 

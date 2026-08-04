@@ -1,6 +1,9 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye } from '@phosphor-icons/react';
+import { Notice } from '@scheduler/design-system';
 import { useUiStore } from '../store/uiStore';
+import { canEdit, roleLabel, READ_ONLY_MESSAGE } from '../platform/domain/permissions';
 import { useTournamentState } from '../hooks/useTournamentState';
 import { useAdvisories } from '../hooks/useAdvisories';
 import { useSuggestions } from '../hooks/useSuggestions';
@@ -201,6 +204,7 @@ export function AppShell() {
         onBackToHub={() => navigate('/')}
         statusSlot={<AppStatusPopover />}
       >
+        <ReadOnlyBannerSlot />
         <UnsavedBannerSlot />
         <main id="main" className="min-h-0 flex-1 overflow-hidden">
           {SHELL_SEGMENTS.has(activeTab) ? (
@@ -268,6 +272,29 @@ function UnsavedBannerSlot() {
   return (
     <div className="empty:hidden border-b border-border bg-background px-4 py-1.5">
       <UnsavedBanner />
+    </div>
+  );
+}
+
+/** Read-only notice for a viewer (audit A2). Without it the editing UI simply
+ *  refused to work with no explanation — every control looked live, and the
+ *  only feedback was a 403 toast after the fact. Rendered once, above the
+ *  surface, so it reads as a property of the workspace rather than of one
+ *  control. */
+function ReadOnlyBannerSlot() {
+  const role = useUiStore((s) => s.activeTournamentRole);
+  // Only once the role is KNOWN and is read-only — never during the load
+  // window, or every workspace entry would flash a banner at its owner.
+  if (role === null || canEdit(role)) return null;
+  return (
+    <div className="border-b border-border bg-background px-4 py-1.5">
+      <Notice
+        tone="info"
+        icon={<Eye aria-hidden="true" />}
+        title={`${roleLabel(role)} access`}
+      >
+        {READ_ONLY_MESSAGE}
+      </Notice>
     </div>
   );
 }

@@ -262,7 +262,7 @@ export function ScheduleDiffView({
 
       {/* One-line headline + metric pills inline */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-        <span className="font-medium text-fg">
+        <span className="font-medium text-foreground">
           {summaryParts.join(' • ') || 'No changes'}
         </span>
         {hasMetricPills && (
@@ -286,7 +286,7 @@ export function ScheduleDiffView({
       {/* "Who do I tell?" — compact chip row. One chip per player. */}
       {affectedPlayerRows.length > 0 && (
         <section>
-          <div className="flex items-center gap-1 mb-1 text-2xs uppercase tracking-wide font-semibold text-fg-muted">
+          <div className="flex items-center gap-1 mb-1 text-2xs uppercase tracking-wide font-semibold text-muted-foreground">
             <Users aria-hidden="true" className="h-3 w-3" />
             Notify ({affectedPlayerRows.length})
           </div>
@@ -294,13 +294,13 @@ export function ScheduleDiffView({
             {affectedPlayerRows.map((p) => (
               <span
                 key={p.playerId}
-                className="inline-flex items-center gap-1 rounded border border-border bg-bg-subtle px-1.5 py-0.5 text-xs text-fg"
+                className="inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-xs text-foreground"
                 title={`${p.groupName} · ${pluralize(p.matchCount, 'match', 'matches')}`}
               >
                 <SchoolDot color={p.groupColor} />
                 <span className="font-medium">{p.name}</span>
                 {p.matchCount > 1 && (
-                  <span className="text-fg-muted">×{p.matchCount}</span>
+                  <span className="text-muted-foreground">×{p.matchCount}</span>
                 )}
               </span>
             ))}
@@ -312,7 +312,7 @@ export function ScheduleDiffView({
           "#5 MS1 · Alice (A) vs Bob (B) · 09:00·c1 → 11:00·c2 · +2h" */}
       {enrichedMoves.length > 0 && (
         <section>
-          <div className="text-2xs uppercase tracking-wide font-semibold text-fg-muted mb-1">
+          <div className="text-2xs uppercase tracking-wide font-semibold text-muted-foreground mb-1">
             Changes ({enrichedMoves.length})
           </div>
           <ul className="rounded border border-border max-h-64 overflow-auto divide-y divide-border">
@@ -335,7 +335,7 @@ export function ScheduleDiffView({
           open={schoolsOpen}
           onToggle={(e) => setSchoolsOpen((e.currentTarget as HTMLDetailsElement).open)}
         >
-          <summary className="cursor-pointer select-none flex items-center gap-1 text-fg-muted hover:text-fg">
+          <summary className="cursor-pointer select-none flex items-center gap-1 text-muted-foreground hover:text-foreground">
             {schoolsOpen ? (
               <CaretDown className="h-3 w-3" aria-hidden="true" />
             ) : (
@@ -349,8 +349,8 @@ export function ScheduleDiffView({
                 key={s.groupId}
                 className="flex items-center justify-between"
               >
-                <span className="text-fg">{s.groupName ?? s.groupId}</span>
-                <span className="font-mono text-fg-muted">
+                <span className="text-foreground">{s.groupName ?? s.groupId}</span>
+                <span className="sw-num text-muted-foreground">
                   {pluralize(s.matchCount, 'match', 'matches')}
                 </span>
               </li>
@@ -389,17 +389,17 @@ function MoveRow({
 
   // Players line — names with school dot prefix per side.
   const playerLine = (
-    <span className="text-fg">
+    <span className="text-foreground">
       <SideInline members={move.sideA} />
       {move.sideB.length > 0 && (
         <>
-          <span className="mx-1 text-fg-muted">v</span>
+          <span className="mx-1 text-muted-foreground">v</span>
           <SideInline members={move.sideB} />
         </>
       )}
       {move.sideC.length > 0 && (
         <>
-          <span className="mx-1 text-fg-muted">v</span>
+          <span className="mx-1 text-muted-foreground">v</span>
           <SideInline members={move.sideC} />
         </>
       )}
@@ -408,7 +408,7 @@ function MoveRow({
 
   return (
     <li
-      className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 px-2 py-1 text-xs hover:bg-bg-subtle"
+      className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 px-2 py-1 text-xs hover:bg-muted"
       title={
         move.eventRank
           ? `Match #${move.matchNumber ?? '?'} · ${move.eventRank}`
@@ -416,20 +416,20 @@ function MoveRow({
       }
     >
       {/* Match # + event tag */}
-      <span className="font-mono text-fg-muted whitespace-nowrap">
+      <span className="sw-num text-muted-foreground whitespace-nowrap">
         {move.matchNumber != null ? `#${move.matchNumber}` : move.matchId.slice(0, 4)}
         {move.eventRank && (
-          <span className="ml-1 text-fg">{move.eventRank}</span>
+          <span className="ml-1 text-foreground">{move.eventRank}</span>
         )}
       </span>
       {/* Players (truncates if too long) */}
       <span className="truncate">{playerLine}</span>
       {/* From → To inline */}
-      <span className="font-mono text-fg-muted whitespace-nowrap">
+      <span className="sw-num text-muted-foreground whitespace-nowrap">
         {formatSlot(move.fromSlotId)}
         {move.fromCourtId != null && `·c${move.fromCourtId}`}
         <span className="mx-1">→</span>
-        <span className="text-fg">
+        <span className="text-foreground">
           {formatSlot(move.toSlotId)}
           {move.toCourtId != null && `·c${move.toCourtId}`}
         </span>
@@ -443,7 +443,7 @@ function MoveRow({
 }
 
 function SideInline({ members }: { members: PartyMember[] }) {
-  if (members.length === 0) return <span className="text-fg-muted italic">—</span>;
+  if (members.length === 0) return <span className="text-muted-foreground italic">—</span>;
   const names = members.map((m) => m.name).join(' & ');
   const school = members[0];
   return (

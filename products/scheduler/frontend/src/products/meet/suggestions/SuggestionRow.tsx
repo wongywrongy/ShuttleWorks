@@ -18,7 +18,7 @@ import { INTERACTIVE_BASE } from '../../../lib/utils';
 
 const KIND_DOT: Record<Suggestion['kind'], string> = {
   repair: 'bg-status-warning',
-  director: 'bg-status-info',
+  director: 'bg-status-info-fg',
   optimize: 'bg-status-idle',
   candidate: 'bg-status-idle',
 };
@@ -47,14 +47,14 @@ export function SuggestionRow({
     <div
       role="group"
       aria-label={`${KIND_EYEBROW[s.kind]} suggestion: ${s.title}`}
-      className="grid items-center gap-2 px-3 py-1.5 hover:bg-bg-subtle transition-colors"
+      className="grid items-center gap-2 px-3 py-1.5 hover:bg-muted transition-colors"
       style={{ gridTemplateColumns: 'auto auto 1fr auto auto auto' }}
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${KIND_DOT[s.kind]}`}
         aria-hidden="true"
       />
-      <span className="text-2xs font-semibold uppercase tracking-wider text-fg-muted whitespace-nowrap">
+      <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
         {KIND_EYEBROW[s.kind]}
       </span>
       <button
@@ -62,11 +62,11 @@ export function SuggestionRow({
         onClick={onToggleExpanded}
         title={s.title}
         aria-expanded={expanded}
-        className={`${INTERACTIVE_BASE} truncate text-left text-sm font-medium text-fg`}
+        className={`${INTERACTIVE_BASE} truncate text-left text-sm font-medium text-foreground`}
       >
         {s.title}
       </button>
-      <span className="whitespace-nowrap text-xs text-fg-muted tabular-nums">
+      <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
         {s.metric}
       </span>
       <button
@@ -82,7 +82,7 @@ export function SuggestionRow({
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss suggestion"
-        className={`${INTERACTIVE_BASE} rounded p-0.5 text-fg-muted hover:bg-bg-subtle hover:text-fg`}
+        className={`${INTERACTIVE_BASE} rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground`}
       >
         <X className="h-4 w-4" aria-hidden="true" />
       </button>

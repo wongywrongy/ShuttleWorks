@@ -155,10 +155,12 @@ class _LocalTournamentRepo:
         tournament_date: Optional[str] = None,
         owner_id: Optional[uuid.UUID] = None,
         owner_email: Optional[str] = None,
+        org_id: Optional[uuid.UUID] = None,
     ) -> Tournament:
         row = Tournament(
             owner_id=owner_id,
             owner_email=owner_email,
+            org_id=org_id,
             name=name,
             kind=kind,
             tournament_date=tournament_date,
@@ -254,6 +256,26 @@ class _LocalMatchRepo:
                 .order_by(Match.id.asc())
             )
         )
+
+    def statuses_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, str]]:
+        """``{tournament_id: {match_id: status}}`` for every match row NOT in
+        the default ``scheduled`` state — one grouped query. Feeds the
+        workspace-signal lifecycle derivation (live / complete) without a
+        per-row lookup (same batching contract as ``count_by_tournament``)."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(Match.tournament_id, Match.id, Match.status).where(
+                Match.tournament_id.in_(tournament_ids),
+                Match.status != MatchStatus.SCHEDULED.value,
+            )
+        ).all()
+        out: dict[uuid.UUID, dict[str, str]] = {}
+        for tid, mid, status in rows:
+            out.setdefault(tid, {})[mid] = status
+        return out
 
     def get_by_statuses(
         self,
@@ -529,6 +551,47 @@ class _LocalBracketRepo:
             status=status,
         )
         self.session.add(row)
+        self.session.flush()
+        SyncService.enqueue_bracket_event(self.session, row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def update_event_config(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        *,
+        format: Optional[str] = None,
+        bracket_size: Optional[int] = None,
+        seeded_count: Optional[int] = None,
+        rr_rounds: Optional[int] = None,
+        duration_slots: Optional[int] = None,
+        config: Optional[dict] = None,
+    ) -> Optional[BracketEvent]:
+        """Patch a DRAFT event's configuration in place.
+
+        Participants and matches are untouched — this is the config-only
+        sibling of the upsert route (which wipes participants). Only the
+        provided (non-None) fields change. Stages an outbox row; returns
+        None if the event does not exist. Callers gate on status.
+        """
+        row = self.get_event(tournament_id, event_id)
+        if row is None:
+            return None
+        if format is not None:
+            row.format = format
+        if bracket_size is not None:
+            row.bracket_size = bracket_size
+        if seeded_count is not None:
+            row.seeded_count = seeded_count
+        if rr_rounds is not None:
+            row.rr_rounds = rr_rounds
+        if duration_slots is not None:
+            row.duration_slots = duration_slots
+        if config is not None:
+            row.config = dict(config)
+        row.version = row.version + 1
         self.session.flush()
         SyncService.enqueue_bracket_event(self.session, row)
         self.session.commit()
@@ -821,6 +884,102 @@ class _LocalBracketRepo:
         ).all()
         return {tid: int(c) for tid, c in rows}
 
+    def player_ids_referenced_by_generated(
+        self, tournament_id: uuid.UUID
+    ) -> set[str]:
+        """Roster player ids that a GENERATED (non-draft) draw references.
+
+        Union of participant ids and their ``member_ids`` across every
+        non-draft event. Feeds the Phase-0a ROSTER_LOCKED guard: deleting a
+        bracket roster player who is placed in a generated draw silently
+        invalidates the draw's placements, so the state PUT 409s instead.
+        """
+        rows = self.session.execute(
+            select(BracketParticipant.id, BracketParticipant.member_ids)
+            .join(
+                BracketEvent,
+                (BracketEvent.tournament_id == BracketParticipant.tournament_id)
+                & (BracketEvent.id == BracketParticipant.bracket_event_id),
+            )
+            .where(
+                BracketParticipant.tournament_id == tournament_id,
+                BracketEvent.status != "draft",
+            )
+        ).all()
+        out: set[str] = set()
+        for pid, member_ids in rows:
+            out.add(pid)
+            for mid in member_ids or []:
+                out.add(mid)
+        return out
+
+    def resolved_unit_ids_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, set[str]]:
+        """``{tournament_id: {play_unit_id with a recorded result}}`` — one
+        grouped query. Feeds the workspace-signal "next up" filter: results
+        recorded straight from the draw board (record-winner / walkover)
+        never touch the assignment's ``actual_end_slot``, so result
+        membership — not the match-action clock — is what says a unit is
+        no longer upcoming."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketResult.tournament_id, BracketResult.bracket_match_id)
+            .where(BracketResult.tournament_id.in_(tournament_ids))
+        ).all()
+        out: dict[uuid.UUID, set[str]] = {}
+        for tid, unit_id in rows:
+            out.setdefault(tid, set()).add(unit_id)
+        return out
+
+    def swiss_pending_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, bool]:
+        """``{tournament_id: True}`` when any generated Swiss event still has
+        rounds left to append. Two grouped queries.
+
+        Swiss is progressive: rounds are generated one at a time via
+        ``rounds/next``, so in the inter-round lull every existing match has
+        a result and raw result/match counts read "complete". The persisted
+        event ``config`` carries the resolved ``swiss_rounds`` (the generate
+        path stores the normalized config); generated rounds are counted as
+        distinct ``round_index`` values on the event's match rows. A Swiss
+        event whose config is missing ``swiss_rounds`` (shouldn't happen for
+        generated draws) is treated as pending — conservatively never
+        "complete" rather than falsely complete.
+        """
+        if not tournament_ids:
+            return {}
+        swiss_events = self.session.execute(
+            select(BracketEvent.tournament_id, BracketEvent.id, BracketEvent.config)
+            .where(
+                BracketEvent.tournament_id.in_(tournament_ids),
+                BracketEvent.format == "swiss",
+                BracketEvent.status != "draft",
+            )
+        ).all()
+        if not swiss_events:
+            return {}
+        rounds_generated = self.session.execute(
+            select(
+                BracketMatch.tournament_id,
+                BracketMatch.bracket_event_id,
+                func.count(func.distinct(BracketMatch.round_index)),
+            )
+            .where(BracketMatch.tournament_id.in_({tid for tid, _, _ in swiss_events}))
+            .group_by(BracketMatch.tournament_id, BracketMatch.bracket_event_id)
+        ).all()
+        generated = {(tid, eid): int(c) for tid, eid, c in rounds_generated}
+        out: dict[uuid.UUID, bool] = {}
+        for tid, eid, config in swiss_events:
+            total = (config or {}).get("swiss_rounds")
+            have = generated.get((tid, eid), 0)
+            pending = not isinstance(total, int) or have < total
+            if pending:
+                out[tid] = True
+        return out
+
     def record_result(
         self,
         tournament_id: uuid.UUID,
@@ -831,6 +990,7 @@ class _LocalBracketRepo:
         score: Optional[dict] = None,
         finished_at_slot: Optional[int] = None,
         walkover: bool = False,
+        reason: Optional[str] = None,
     ) -> BracketResult:
         """Insert (or replace) the result row for a bracket match.
 
@@ -849,6 +1009,7 @@ class _LocalBracketRepo:
                 score=score,
                 finished_at_slot=finished_at_slot,
                 walkover=walkover,
+                reason=reason,
             )
             self.session.add(row)
         else:
@@ -856,6 +1017,7 @@ class _LocalBracketRepo:
             existing.score = score
             existing.finished_at_slot = finished_at_slot
             existing.walkover = walkover
+            existing.reason = reason
             row = existing
         self.session.flush()
         SyncService.enqueue_bracket_result(self.session, row)
@@ -1120,11 +1282,15 @@ class _LocalInviteLinkRepo:
         tournament_id: uuid.UUID,
         role: str,
         created_by: uuid.UUID,
+        email: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
     ) -> InviteLink:
         row = InviteLink(
             tournament_id=tournament_id,
             role=role,
             created_by=created_by,
+            email=email,
+            expires_at=expires_at,
         )
         self.session.add(row)
         self.session.commit()
@@ -1401,6 +1567,8 @@ class LocalRepository:
         self,
         tournament_id: uuid.UUID,
         payload: dict,
+        *,
+        clear_bracket_assignments: bool = False,
     ) -> Tournament:
         """Snapshot the prior state into a backup, then write the new one.
 
@@ -1437,6 +1605,10 @@ class LocalRepository:
             for key in ("bracket_session",):
                 if key in prior.data and key not in merged:
                     merged[key] = prior.data[key]
+        if clear_bracket_assignments and isinstance(merged.get("bracket_session"), dict):
+            session = dict(merged["bracket_session"])
+            session.pop("assignments", None)
+            merged["bracket_session"] = session
         result = self.tournaments.upsert_data(tournament_id, merged)
         self._project_matches_from_payload(tournament_id, payload)
         return result
@@ -1718,6 +1890,41 @@ class LocalRepository:
             match.time_slot = None
 
         match.version = match.version + 1
+
+        # Mirror the transition into the legacy ``match_states`` row — the
+        # live Run surface polls GET /match-states, and the PUT/DELETE
+        # routes there dual-write in the other direction. Without this
+        # write a command-applied call/start is invisible after reload:
+        # the board re-reads ``scheduled`` while the transition guard
+        # holds the canonical status, so the retried command 409s
+        # forever. Same transaction, same single commit below.
+        # ``retired`` has no legacy spelling; the floor reads it as
+        # ``finished`` (the match is over either way).
+        _canonical_to_legacy = {
+            MatchStatus.SCHEDULED: "scheduled",
+            MatchStatus.CALLED: "called",
+            MatchStatus.PLAYING: "started",
+            MatchStatus.FINISHED: "finished",
+            MatchStatus.RETIRED: "finished",
+        }
+        state_row = self.session.get(MatchState, (tournament_id, match_id))
+        if state_row is None:
+            state_row = MatchState(tournament_id=tournament_id, match_id=match_id)
+            self.session.add(state_row)
+        state_row.status = _canonical_to_legacy[target_status]
+        _stamp = now_iso()
+        if target_status == MatchStatus.CALLED:
+            state_row.called_at = _stamp
+        elif target_status == MatchStatus.PLAYING:
+            state_row.actual_start_time = state_row.actual_start_time or _stamp
+        elif target_status in (MatchStatus.FINISHED, MatchStatus.RETIRED):
+            state_row.actual_end_time = state_row.actual_end_time or _stamp
+        else:
+            # uncall / postpone / assign land back on ``scheduled`` —
+            # clear live timing so the match re-enters the queue clean.
+            state_row.called_at = None
+            state_row.actual_start_time = None
+            state_row.actual_end_time = None
 
         if command_row is None:
             command_row = Command(

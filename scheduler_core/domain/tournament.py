@@ -88,6 +88,17 @@ class Result:
     score: Optional[Dict[str, Any]] = None
     finished_at_slot: Optional[int] = None
     walkover: bool = False
+    # ``walkover``/``retired``/``forfeit``/``None``. BYE-downstream-only
+    # policy (decision 2026-07-15): a ``retired``/``forfeit`` reason makes
+    # the LOSER unable to continue into a ``feeder_take='loser'`` slot —
+    # that slot becomes a BYE, same as a walkover — but ``walkover`` is
+    # NOT set for retired/forfeit results; the distinction (a retirement
+    # is not a walkover) survives in the data. Winner advancement is
+    # unaffected. No automatic cross-draw withdrawal — that remains a
+    # manual, per-draw operator decision. See
+    # ``services.bracket.advancement.loser_cannot_continue`` for the
+    # single predicate that implements this (docs/audits/debt-log.md).
+    reason: Optional[str] = None
 
 
 @dataclass

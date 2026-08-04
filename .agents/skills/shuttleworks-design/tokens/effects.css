@@ -1,0 +1,33 @@
+/* ============================================================
+   ShuttleWorks — Radii, elevation, glow
+   Warmed-B: rounded corners + gentle elevation + luminous glow.
+   ============================================================ */
+
+:root {
+  /* Corner radii */
+  --radius-xs: 4px;    /* micro tags, source-initial squares */
+  --radius-sm: 6px;    /* status pills, small controls */
+  --radius-md: 8px;    /* buttons, chips, inputs */
+  --radius-lg: 9px;    /* primary buttons, nav rows */
+  --radius-xl: 12px;   /* cards, metric tiles */
+  --radius-2xl: 14px;  /* screen frame */
+
+  /* Elevation (dark) — soft, low-contrast */
+  --shadow-frame: 0 24px 60px rgba(0,0,0,.5);   /* the screen card */
+  --shadow-card: 0 2px 8px rgba(0,0,0,.35);      /* raised element */
+
+  /* Glow — the signature. Applied to primary actions + live signals. */
+  --glow-accent: 0 0 22px var(--accent-glow);        /* primary buttons */
+  --glow-accent-lg: 0 0 28px rgba(91,157,255,.16);   /* selected cards */
+  --glow-live: 0 0 8px rgba(52,211,153,.6);          /* live status dot */
+
+  /* Focus ring */
+  --ring: 0 0 0 3px var(--accent-tint);
+}
+
+[data-theme="light"] {
+  --shadow-frame: 0 24px 60px rgba(16,24,40,.14);
+  --shadow-card: 0 1px 2px rgba(16,24,40,.08);
+  --glow-accent: 0 0 22px rgba(37,99,235,.22);
+  --glow-accent-lg: 0 6px 18px rgba(37,99,235,.16);
+}

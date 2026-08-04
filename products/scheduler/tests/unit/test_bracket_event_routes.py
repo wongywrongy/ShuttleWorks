@@ -142,6 +142,64 @@ def test_upsert_event_replaces_participants(client, tid):
     assert ms_event["participant_count"] == 2
 
 
+def test_upsert_event_serializes_per_event_participants(client, tid):
+    """Draft events carry their OWN participants on EventOut (SP-D7 S3).
+
+    The flat ``TournamentOut.participants`` list cannot attribute a draft
+    singles entry to its event (no play units yet, and the participant id
+    is just the player slug), so the roster surface reads
+    ``events[].participants``.
+    """
+    _minimal_bracket(tid, client)
+    r = client.post(
+        _event_url(tid, "MS"),
+        json=_upsert_body(
+            [
+                {"id": "p-alex", "name": "Alex"},
+                {"id": "MS-T1", "name": "Ben / Cam", "members": ["p-ben", "p-cam"]},
+            ]
+        ),
+    )
+    assert r.status_code == 200, r.text
+    ms_event = next(e for e in r.json()["events"] if e["id"] == "MS")
+    by_id = {p["id"]: p for p in ms_event["participants"]}
+    assert set(by_id) == {"p-alex", "MS-T1"}
+    assert by_id["p-alex"]["members"] is None
+    assert by_id["MS-T1"]["members"] == ["p-ben", "p-cam"]
+
+
+def test_upsert_event_preserves_seeds_through_echo(client, tid):
+    """Seeds survive a create-or-replace echo: ``ParticipantOut`` serializes
+    ``seed``, so echoing an event's own participants back through the upsert
+    no longer silently resets imported seeds (SP-D7 debt)."""
+    _minimal_bracket(tid, client)
+    # The default body seeds P1..P4 with seed=1..4.
+    r1 = client.post(_event_url(tid, "MS"), json=_upsert_body())
+    assert r1.status_code == 200, r1.text
+    ms1 = next(e for e in r1.json()["events"] if e["id"] == "MS")
+    assert {p["id"]: p["seed"] for p in ms1["participants"]} == {
+        "P1": 1, "P2": 2, "P3": 3, "P4": 4,
+    }
+
+    # Echo the returned participants straight back through the upsert —
+    # the seed-drop bug lived exactly here (ParticipantOut omitted `seed`).
+    echoed = [
+        {
+            "id": p["id"],
+            "name": p["name"],
+            **({"members": p["members"]} if p.get("members") else {}),
+            **({"seed": p["seed"]} if p.get("seed") is not None else {}),
+        }
+        for p in ms1["participants"]
+    ]
+    r2 = client.post(_event_url(tid, "MS"), json=_upsert_body(echoed))
+    assert r2.status_code == 200, r2.text
+    ms2 = next(e for e in r2.json()["events"] if e["id"] == "MS")
+    assert {p["id"]: p["seed"] for p in ms2["participants"]} == {
+        "P1": 1, "P2": 2, "P3": 3, "P4": 4,
+    }
+
+
 def test_upsert_event_404_on_missing_tournament(client):
     """Upsert 404s on an unknown tournament."""
     fake_tid = str(uuid.uuid4())

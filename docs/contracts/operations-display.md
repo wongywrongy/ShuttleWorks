@@ -11,6 +11,8 @@ the floor-to-screen boundary.
 | **Payload** | `MatchStateDTO` (plus `TournamentStateDTO`, `BracketTournamentDTO`) |
 | **Transport today** | Display's own dual poll: ~5 s match-state + ~10 s tournament-state |
 | **Status** | **wired** |
+| **Criticality** | **Medium** — Display is a read-only projection. If it lags or fails, the public TV goes stale but nothing operational breaks and no data is at risk; strictly degrade-gracefully. |
+| **Risk / fragility** | Dual-poll staleness (~5 s / ~10 s) — the public token board polls the same way, so a spectator view is at most one poll interval behind. The load-bearing guarantee — Display can never become a **writer** — is contract-pinned (`displayContract.emits === []`), so this seam cannot grow a back-channel without the test failing. |
 
 ## What crosses the boundary
 
@@ -34,9 +36,12 @@ match-state write — `matchStateChanged`.
 | `TournamentStateDTO` (`/state`) | **Control plane** | shared; Display consumes |
 | `BracketTournamentDTO` (`/bracket`) | **Bracket** | Display consumes |
 | The public TV rendering | **Display** | `displayContract.consumedEndpoints = [getTournamentState, getMatchStates, getBracket]`; `produces = []`, `emits = []` |
+| `/display/{token}/*` projection routes | **Display** | `displayContract.ownedEndpoints = [getDisplaySummary, getDisplayState, getDisplayMatchStates, getDisplayBracket]` — the public capability-token read path (SP-CLOUD-2) |
 
-Display declares `reactsTo: ['matchStateChanged']` and `emits: []` — the read-only output module. It
-owns **no backend route**.
+Display declares `reactsTo: ['matchStateChanged']` and `emits: []` — the read-only output module.
+Since SP-CLOUD-2 it *owns* the public `/display/{token}/*` projection routes (every route `GET`,
+strict field allowlist, token minted/rotated by the owner at `…/display-token`); everything else
+it reads is a poll of endpoints other modules own.
 
 ## What the current implementation does
 
@@ -45,9 +50,10 @@ owns **no backend route**.
 2. Display runs **two independent polling loops of its own** — ~5 s for `GET …/match-states`
    (`useLiveTracking`) and ~10 s for `GET …/state` (`useDisplaySync`) — plus a read of `…/bracket`
    for bracket events. It never subscribes to another module's Zustand store; it polls the API.
-3. In **cloud-mirror mode**, the public `/display` page instead reads **Supabase Realtime** (the
-   outbox mirrors the match/bracket writes), with the poll as fallback. Either way the data
-   originates from the Operations-owned match state.
+3. For **public spectators** (SP-CLOUD-2), the board runs at `/display?token=…` and the same
+   polling hooks switch to the unauthenticated `/display/{token}/{state,match-states,bracket}`
+   projection routes — token mode makes every mutator inert, so the spectator board never
+   writes. Either way the data originates from the Operations-owned match state.
 
 ## What the intended clean interface looks like
 

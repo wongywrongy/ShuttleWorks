@@ -54,7 +54,10 @@ domain/models.SolverOptions          # add the field + default
     → frontend/src/api/dto.ts        # the TypeScript twin
 ```
 
-`backend/api/schedule.py` maps the frontend tournament config onto `SolverOptions`.
+`backend/adapters/badminton.py` (`solver_options_for`) maps the frontend tournament config onto
+`SolverOptions` — and for the meet job rail, `services/solve_child.py` builds `SolverOptions` from
+the job's persisted `params` (seed, `num_workers`, `max_deterministic_time`), so a new knob must
+also flow through `services/solve_jobs.default_solve_params` if jobs should carry it.
 
 ## 5 · Test it
 

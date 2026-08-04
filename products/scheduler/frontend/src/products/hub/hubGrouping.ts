@@ -65,3 +65,28 @@ export function groupWorkspaces(
     { id: 'past', label: 'Past', items: past },
   ];
 }
+
+/**
+ * Which temporal bucket a single workspace falls in, relative to `todayKey`
+ * (today counts as upcoming). The Hub body is now one flat list (facet-
+ * filtered), not date sections — but the per-row CTA still keys off time
+ * ("Set date" / "View results" / "Open workspace"), so `WorkspaceRow` and
+ * the inspector derive each row's group with this.
+ */
+export function temporalGroupOf(t: TournamentSummaryDTO, todayKey: string): HubGroupId {
+  if (!t.tournamentDate) return 'undated';
+  return dayKey(t.tournamentDate) >= todayKey ? 'upcoming' : 'past';
+}
+
+/**
+ * One operational sort for the flat Hub list: upcoming first (soonest first),
+ * then undated (most-recently updated), then past (most recent first) — the
+ * same time-ordering the sectioned view used, flattened into a single list so
+ * the status facets (hubFacets) can filter across it. Pure; `today`-injected.
+ */
+export function sortWorkspaces(
+  list: TournamentSummaryDTO[],
+  todayKey: string,
+): TournamentSummaryDTO[] {
+  return groupWorkspaces(list, todayKey).flatMap((g) => g.items);
+}

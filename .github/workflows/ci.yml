@@ -31,6 +31,26 @@ jobs:
     # Required gate. The 3 previously-flaky tests (repository ordering ×2 +
     # a stale route-registration assertion) are fixed and the suite is
     # deterministically green, so this blocks like the frontend job.
+    #
+    # The postgres service exists for the dual-dialect solve-job queue
+    # suite (SP-CLOUD-1): tests/unit/test_solve_jobs.py runs its whole
+    # parametrized matrix against SQLite always and against this
+    # service when TEST_POSTGRES_URL is set. Local-first parity is a
+    # product rule — the queue must behave identically on both.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: scheduler
+          POSTGRES_PASSWORD: scheduler
+          POSTGRES_DB: scheduler
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U scheduler"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,4 +65,104 @@ jobs:
       - name: Lint (ruff)
         run: ruff check products/scheduler scheduler_core
       - name: Unit tests (pytest)
+        env:
+          TEST_POSTGRES_URL: postgresql://scheduler:scheduler@localhost:5433/scheduler
         run: pytest products/scheduler/tests
+
+  interaction-smoke:
+    name: Interaction smoke (pressing the UI must not break it)
+    runs-on: ubuntu-latest
+    # The layer the unit suite structurally cannot provide: unit tests mock the
+    # handlers and the stores, so they validate LOGIC, never that pressing the
+    # real UI works. A fully green 1100-test suite coexisted with a viewer who
+    # could not edit anything, Run-view Undo buttons that 409'd on every press,
+    # and a rejected roster delete that killed all further saving.
+    # See products/scheduler/e2e/README.md and design-plan/INTERACTION_FINDINGS.md.
+    #
+    # Unlike the older e2e specs this does NOT boot the Docker stack — it runs a
+    # preview build against a local uvicorn + SQLite, which is why it can be a
+    # required gate without the flakiness the lean-gate philosophy warns about.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          npm ci
+          python -m pip install --upgrade pip
+          pip install ./scheduler_core
+          pip install -r products/scheduler/backend/requirements.txt
+
+      - name: Start backend
+        working-directory: products/scheduler/backend
+        env:
+          DATABASE_URL: sqlite:///./smoke.db
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8600 --log-level warning &
+          for i in $(seq 1 40); do
+            curl -sf http://127.0.0.1:8600/health && break
+            sleep 1
+          done
+
+      # Two workspaces: one the caller owns, one the caller only views. The seed
+      # script prints `tid=` / `viewerTid=` lines straight into $GITHUB_OUTPUT.
+      - name: Seed the smoke workspaces
+        id: seed
+        run: node products/scheduler/e2e/interaction-sweep/seed-smoke.mjs http://127.0.0.1:8600 >> "$GITHUB_OUTPUT"
+
+      # No HTTP path to a viewer role exists (the creator is always written as
+      # `owner`), so the fixture writes the row the API won't. Without this the
+      # viewer-gating test skips and audit finding A2 goes unguarded.
+      - name: Demote the viewer workspace
+        run: |
+          python products/scheduler/e2e/interaction-sweep/make-viewer.py \
+            products/scheduler/backend/smoke.db \
+            "${{ steps.seed.outputs.viewerTid }}"
+
+      # The suite asserts on the error harness, so it must be compiled in — that
+      # is what lets a failure name the button that broke.
+      - name: Build the app WITH the error harness
+        working-directory: products/scheduler/frontend
+        env:
+          VITE_ERROR_HARNESS: "1"
+        run: npm run build
+
+      - name: Serve the production build
+        working-directory: products/scheduler/frontend
+        env:
+          VITE_API_PROXY_TARGET: http://127.0.0.1:8600
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:4173/ && break
+            sleep 1
+          done
+
+      - name: Install Chromium
+        working-directory: products/scheduler/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Interaction smoke
+        working-directory: products/scheduler/e2e
+        env:
+          E2E_BASE_URL: http://127.0.0.1:4173
+          E2E_MANAGE_STACK: "0"
+          SMOKE_TID: ${{ steps.seed.outputs.tid }}
+          SMOKE_VIEWER_TID: ${{ steps.seed.outputs.viewerTid }}
+        run: npx playwright test tests/interaction-smoke.spec.ts
+
+      - name: Upload the failure trace
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interaction-smoke-report
+          path: products/scheduler/e2e/playwright-report/
+          retention-days: 7

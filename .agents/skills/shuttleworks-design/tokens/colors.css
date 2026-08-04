@@ -1,0 +1,122 @@
+/* ============================================================
+   ShuttleWorks — Color system
+   Dark-first "warmed-B blue-glow". Light theme via [data-theme="light"].
+   Base ramp -> semantic aliases. Consume the semantic aliases.
+   ============================================================ */
+
+:root {
+  /* ---- Brand: luminous azure ---- */
+  --sw-blue-500: #5B9DFF;          /* primary accent (dark) */
+  --sw-blue-600: #2563EB;          /* primary accent (light) */
+  --sw-blue-ink: #08192E;          /* text ON accent buttons */
+  --sw-blue-glow: rgba(91,157,255,.35);
+
+  /* ---- Neutral substrate ramp (dark) ---- */
+  --sw-bg:        #050507;          /* page / app background */
+  --sw-sidebar:   #0B0C0F;          /* rails, inspectors */
+  --sw-panel:     #0E0F13;          /* screen surface */
+  --sw-raised:    #16181D;          /* cards, inputs, chips-at-rest */
+  --sw-raised-2:  #131519;          /* table group bands, court gutter */
+  --sw-active:    #1B1E24;          /* active nav row */
+  --sw-chip-tag:  #1E2128;          /* source-initial squares */
+
+  /* ---- Borders / hairlines ---- */
+  --sw-border:      #23262D;        /* structural dividers, card edges */
+  --sw-border-soft: #1F2229;        /* in-table row dividers */
+  --sw-border-2:    #2E323B;        /* control borders */
+  --sw-border-3:    #3A3F49;        /* wordmark frame, emphasis */
+
+  /* ---- Text ramp (dark) — raised contrast on the lower steps ---- */
+  --sw-text:       #F7F8FA;         /* headings, primary values */
+  --sw-text-2:     #EAECF0;         /* body */
+  --sw-text-3:     #D8DCE2;         /* secondary label */
+  --sw-text-muted: #A8ADB7;         /* meta, inactive nav */
+  --sw-text-faint: #767B87;         /* captions, table headers, disabled */
+
+  /* ---- Status ramp (muted-solid "3b" chip system) ---- */
+  --sw-live:        #34D399;        /* live dot / accent */
+  --sw-live-solid:  #1D7D5C;        /* muted-solid live chip fill */
+  --sw-live-border: #1B7455;
+  --sw-live-ink:    #DBF1E8;        /* text on live fill */
+
+  --sw-called:        #E0B24A;      /* called accent / late marker */
+  --sw-called-solid:  #A5822F;      /* muted-solid called chip fill */
+  --sw-called-border: #9A7A2C;
+  --sw-called-ink:    #FBF3DF;      /* text on called fill */
+
+  --sw-scheduled: #38BDF8;          /* scheduled / Meet source hue */
+  --sw-bracket:   #A78BFA;          /* Bracket source hue */
+
+  /* ---- Module identity ---- */
+  --sw-mod-meet:    #5B9DFF;
+  --sw-mod-bracket: #A78BFA;
+  --sw-mod-ops:     #34D399;
+  --sw-mod-display: #38BDF8;
+
+  /* ---- Semantic aliases (consume these) ---- */
+  --surface-page:    var(--sw-bg);
+  --surface-rail:    var(--sw-sidebar);
+  --surface-screen:  var(--sw-panel);
+  --surface-card:    var(--sw-raised);
+  --surface-band:    var(--sw-raised-2);
+  --surface-active:  var(--sw-active);
+
+  --border-1: var(--sw-border);
+  --border-row: var(--sw-border-soft);
+  --border-control: var(--sw-border-2);
+
+  --text-1: var(--sw-text);
+  --text-2: var(--sw-text-2);
+  --text-3: var(--sw-text-3);
+  --text-muted: var(--sw-text-faint);
+  --text-meta: var(--sw-text-muted);
+  --text-faint: var(--sw-text-faint);   /* faintest step: disabled / inactive labels */
+
+  --accent: var(--sw-blue-500);
+  --accent-ink: var(--sw-blue-ink);
+  --accent-glow: var(--sw-blue-glow);
+  --accent-tint: rgba(91,157,255,.14);
+  --accent-border: rgba(91,157,255,.30);
+
+  --status-live: var(--sw-live);
+  --status-called: var(--sw-called);
+
+  /* Ambient page glow used behind app surfaces */
+  --page-glow: radial-gradient(1100px 480px at 72% -6%, rgba(91,157,255,.13), transparent 62%); /* @kind other */
+}
+
+/* ============================================================
+   LIGHT THEME — daylight gyms. Public Display stays dark by design.
+   ============================================================ */
+[data-theme="light"] {
+  --sw-bg:        #E5E9EF;
+  --sw-sidebar:   #F8F9FB;
+  --sw-panel:     #FFFFFF;
+  --sw-raised:    #F5F7FA;
+  --sw-raised-2:  #F0F2F6;
+  --sw-active:    #E5EDFB;
+  --sw-chip-tag:  #E7EAEF;
+
+  --sw-border:      #DCE2EA;
+  --sw-border-soft: #E9ECF1;
+  --sw-border-2:    #CBD1DB;
+  --sw-border-3:    #C2CCDA;
+
+  --sw-text:       #080D18;
+  --sw-text-2:     #12151B;
+  --sw-text-3:     #222C3C;
+  --sw-text-muted: #495264;
+  --sw-text-faint: #6B7789;
+
+  --accent: var(--sw-blue-600);
+  --accent-ink: #FFFFFF;
+  --accent-glow: rgba(37,99,235,.22);
+  --accent-tint: rgba(37,99,235,.12);
+  --accent-border: rgba(37,99,235,.30);
+
+  --sw-live-solid: #16A34A;  --sw-live-border:#15803D; --sw-live-ink:#EAF8F2;
+  --sw-called-solid:#B45309; --sw-called-border:#9A6208; --sw-called-ink:#FFF7ED;
+  --sw-scheduled:#0284C7; --sw-bracket:#7C3AED;
+
+  --page-glow: radial-gradient(1100px 480px at 72% -6%, rgba(37,99,235,.08), transparent 62%); /* @kind other */
+}

@@ -10,8 +10,15 @@
  *  - click-select, animatedIds state-change pulse
  *  - closed-court row/cell shading
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DoorOpen } from '@phosphor-icons/react';
+import {
+  LIFECYCLE_STYLES,
+  SELECTION_RING,
+  exceptionFor,
+  lifecycleOf,
+} from '../timelineEncoding';
+import { TimelineKey } from '../TimelineKey';
 import {
   GanttTimeline,
   type Placement,
@@ -47,20 +54,9 @@ interface GanttChartProps {
   onRequestReopenCourt?: (courtId: number) => void;
 }
 
-// Status → block fill. Wired to the semantic status-* tokens.
-const STATUS_STYLES: Record<
-  'scheduled' | 'called' | 'started' | 'finished',
-  { bg: string; border: string; text: string }
-> = {
-  scheduled: { bg: 'bg-status-idle-bg', border: 'border-status-idle/40', text: 'text-foreground' },
-  called: { bg: 'bg-status-called-bg', border: 'border-status-called/60', text: 'text-status-called' },
-  started: {
-    bg: 'bg-status-live-bg shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.5)]',
-    border: 'border-status-live/60',
-    text: 'text-status-live',
-  },
-  finished: { bg: 'bg-status-done-bg', border: 'border-status-done/30', text: 'text-muted-foreground' },
-};
+// Lifecycle-by-intensity styles + the exception vocabulary live in the
+// shared ../timelineEncoding module so Plan's DragGantt paints the same
+// language (SPEC_AMENDMENT_timeline_encoding; Phase-4 build-for-both).
 
 function getMatchLabel(match: MatchDTO): string {
   if (match.eventRank) return match.eventRank;
@@ -68,7 +64,8 @@ function getMatchLabel(match: MatchDTO): string {
   return match.id.slice(0, 6);
 }
 
-export function GanttChart({
+
+function GanttChartImpl({
   schedule,
   matches,
   matchStates,
@@ -81,22 +78,19 @@ export function GanttChart({
   onRequestReopenCourt,
 }: GanttChartProps) {
   const matchMap = useMemo(() => indexById(matches), [matches]);
+  // Planned slot per match, indexed once — renderBlock previously did a
+  // linear `.find` over all assignments per block (O(N²) across the grid,
+  // re-run on every 5s sync). PERF_FINDINGS.md §2 FIX B.
+  const assignmentSlotById = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of schedule.assignments) m.set(a.matchId, a.slotId);
+    return m;
+  }, [schedule.assignments]);
   const impactedSet = useMemo(() => new Set(impactedMatchIds), [impactedMatchIds]);
   const totalSlots = calculateTotalSlots(config);
 
   const [animatedIds, setAnimatedIds] = useState<Set<string>>(new Set());
   const prevStatesRef = useRef<Record<string, string>>({});
-
-  const { minSlot, maxSlot } = useMemo(() => {
-    if (schedule.assignments.length === 0) return { minSlot: 0, maxSlot: Math.min(12, totalSlots) };
-    const slots = schedule.assignments.map((a) => a.slotId);
-    const endSlots = schedule.assignments.map((a) => a.slotId + a.durationSlots);
-    return {
-      minSlot: Math.max(0, Math.min(...slots) - 1),
-      maxSlot: Math.min(totalSlots, Math.max(...endSlots) + 1),
-    };
-  }, [schedule.assignments, totalSlots]);
-  const slotCount = maxSlot - minSlot;
 
   const courts = useMemo(
     () => Array.from({ length: config.courtCount }, (_, i) => i + 1),
@@ -134,6 +128,38 @@ export function GanttChart({
     return byCourt;
   }, [schedule.assignments, config, matchStates]);
 
+  // Axis extent covers BOTH the planned slots and the live render slots.
+  // Render slots come from wall-clock actual start/end times (getRenderSlot),
+  // so a match played later than planned used to land PAST maxSlot and paint
+  // in unlabeled space right of the grid; the axis must follow reality.
+  //
+  // Bounded, though: getRenderSlot's duration is uncapped (a Finish pressed
+  // hours late, or a restored row with a next-day actualEndTime, yields a
+  // 50–100-slot span), and an unbounded axis would shrink every real chip to
+  // a sliver. The live extension is capped a few hours past the configured
+  // day; anything beyond is dirty data, and placements are clamped into the
+  // capped extent below so a chip can never render off-grid either way.
+  const EXTENT_OVERRUN_SLOTS = 8;
+  const { minSlot, maxSlot } = useMemo(() => {
+    if (schedule.assignments.length === 0) return { minSlot: 0, maxSlot: Math.min(12, totalSlots) };
+    const cap = totalSlots + EXTENT_OVERRUN_SLOTS;
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = 0;
+    for (const a of schedule.assignments) {
+      lo = Math.min(lo, a.slotId);
+      hi = Math.max(hi, a.slotId + a.durationSlots);
+    }
+    hi = Math.min(totalSlots, hi + 1); // planned range: clamp to the day, +1 pad
+    courtRows.forEach((rows) => {
+      for (const { renderSlotId, renderSpan } of rows) {
+        lo = Math.min(lo, renderSlotId);
+        hi = Math.max(hi, Math.min(cap, renderSlotId + renderSpan));
+      }
+    });
+    return { minSlot: Math.max(0, lo - 1), maxSlot: hi };
+  }, [schedule.assignments, courtRows, totalSlots]);
+  const slotCount = maxSlot - minSlot;
+
   // Horizontal sub-lane packing. Each block's laneCount = max
   // concurrent blocks on its court during its lifetime; lane = lowest
   // free horizontal lane at placement time.
@@ -161,15 +187,19 @@ export function GanttChart({
     return { laneByMatchId, laneCountByMatchId };
   }, [courtRows]);
 
-  // DTO → placements (render slot + packing applied).
+  // DTO → placements (render slot + packing applied). Clamped into the
+  // capped axis extent — a dirty multi-hour render span shows as a chip
+  // pinned at the grid's right edge instead of blowing past it.
   const placements = useMemo<Placement[]>(() => {
     const out: Placement[] = [];
     courtRows.forEach((rows, courtId) => {
       for (const { assignment, renderSlotId, renderSpan } of rows) {
+        const startSlot = Math.min(renderSlotId, Math.max(minSlot, maxSlot - 1));
+        const span = Math.max(1, Math.min(renderSpan, maxSlot - startSlot));
         out.push({
           courtIndex: courtId - 1,
-          startSlot: renderSlotId,
-          span: renderSpan,
+          startSlot,
+          span,
           laneIndex: packing.laneByMatchId.get(assignment.matchId) ?? 0,
           laneCount: packing.laneCountByMatchId.get(assignment.matchId) ?? 1,
           key: assignment.matchId,
@@ -177,7 +207,7 @@ export function GanttChart({
       }
     });
     return out;
-  }, [courtRows, packing]);
+  }, [courtRows, packing, minSlot, maxSlot]);
 
   // State-change pulse: a block whose status flips scales up briefly.
   useEffect(() => {
@@ -228,7 +258,7 @@ export function GanttChart({
             slotClosed
               ? 'bg-muted/50'
               : slotId === currentSlot
-                ? 'bg-status-live/10'
+                ? 'bg-accent/10'
                 : ''
           }`}
           title={slotClosed ? `Court ${courtId} closed` : undefined}
@@ -244,7 +274,7 @@ export function GanttChart({
       const fullyClosed = isCourtFullyClosed(closedWindows, courtId, minSlot, maxSlot);
       if (!fullyClosed) return null;
       return (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-2xs uppercase tracking-wider text-muted-foreground/80">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-2xs uppercase tracking-wider text-muted-foreground">
           closed
         </div>
       );
@@ -291,54 +321,72 @@ export function GanttChart({
       const matchId = placement.key;
       const match = matchMap.get(matchId);
       const state = matchStates[matchId];
-      const status = state?.status || 'scheduled';
-      const styles = STATUS_STYLES[status];
+      const status = lifecycleOf(state);
+      const styles = LIFECYCLE_STYLES[status];
       const isSelected = selectedMatchId === matchId;
       const isAnimated = animatedIds.has(matchId);
-      const assignmentSlot = schedule.assignments.find((a) => a.matchId === matchId)?.slotId ?? 0;
+      const assignmentSlot = assignmentSlotById.get(matchId) ?? 0;
       const isLate =
         currentSlot > assignmentSlot && (status === 'scheduled' || status === 'called');
       const isPostponed = state?.postponed === true;
       const isInProgress = status === 'started';
+      // impacted = a match the PENDING repair proposal would move (bound to
+      // the P2 banner, cleared on apply/dismiss) — NOT the selected match's
+      // shared-player set anymore (§3).
       const isImpacted = impactedSet.has(matchId);
       const traffic = trafficLights?.get(matchId);
       const conflictActionable =
         traffic && (status === 'scheduled' || status === 'called');
-      const isBlocked = conflictActionable && traffic.status === 'red';
-      const isResting = conflictActionable && traffic.status === 'yellow';
+      const isBlocked = !!conflictActionable && traffic!.status === 'red';
+      const isResting = !!conflictActionable && traffic!.status === 'yellow';
 
-      // Ring priority: selected > blocked > impacted > postponed > resting > late.
-      let ringClass = '';
-      // Ring hues are drawn from the semantic token palette (6 distinct
-      // hues). impacted → accent ("related, attention"); postponed →
-      // status-idle ("parked"); resting + late both → status-warning
-      // (both are amber time-cautions and never share a block — ring
-      // priority shows only one).
-      if (isSelected) ringClass = 'ring-2 ring-inset ring-status-started';
-      else if (isBlocked) ringClass = 'ring-2 ring-inset ring-status-blocked';
-      else if (isImpacted) ringClass = 'ring-2 ring-inset ring-accent';
-      else if (isPostponed) ringClass = 'ring-2 ring-inset ring-status-idle';
-      else if (isResting) ringClass = 'ring-2 ring-inset ring-status-warning';
-      else if (isLate) ringClass = 'ring-2 ring-inset ring-status-warning';
+      // ONE exception hue, paired with a glyph (never colour alone) —
+      // shared vocabulary. resting is evicted from the block (tooltip only).
+      const {
+        border: exceptionBorder,
+        extra: exceptionExtra,
+        Glyph: ExceptionGlyph,
+        glyphTone,
+      } = exceptionFor({ isBlocked, isPostponed, isLate, baseBorder: styles.border });
+
+      // Selection is INTERACTION, not data → the neutral canon focus ring,
+      // separate from the exception hues.
+      const selectionRing = isSelected ? SELECTION_RING : '';
 
       const multiLane = (placement.laneCount ?? 1) > 1;
+
+      const lateMin = isLate
+        ? Math.max(0, currentSlot - assignmentSlot) * (config.intervalMinutes ?? 0)
+        : 0;
+      const title = [
+        match ? getMatchLabel(match) : '?',
+        `C${placement.courtIndex + 1}`,
+        status,
+        isLate && lateMin > 0 ? `${lateMin}m late` : null,
+        isPostponed ? 'postponed' : null,
+        isBlocked && traffic?.reason ? `blocked: ${traffic.reason}` : null,
+        isResting && traffic?.reason ? `resting: ${traffic.reason}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
 
       return (
         <div
           onClick={() => onMatchSelect(matchId)}
           className={`absolute inset-x-0 top-0.5 rounded border cursor-pointer
-            ${styles.bg} ${styles.border}
+            ${styles.bg} ${exceptionBorder} ${exceptionExtra}
             transition-[transform,box-shadow,filter] duration-fast ease-brand
             ${isAnimated ? 'scale-105' : ''}
-            ${ringClass}
+            ${selectionRing}
             ${isInProgress ? 'shadow-sm' : ''}
             hover:brightness-95`}
           style={{ height: box.height - 4 }}
-          title={
-            (match ? getMatchLabel(match) : '?') +
-            (traffic?.reason && conflictActionable ? ` — ${traffic.reason}` : '')
-          }
+          title={title}
         >
+          {/* impacted: dashed accent overlay, only while a proposal is pending. */}
+          {isImpacted && (
+            <div className="pointer-events-none absolute inset-0 rounded border-2 border-dashed border-accent" />
+          )}
           <div
             className={`h-full flex flex-col justify-center overflow-hidden leading-tight ${
               multiLane ? 'px-0 items-center' : 'px-2 items-start'
@@ -350,6 +398,13 @@ export function GanttChart({
               {match ? getMatchLabel(match) : '?'}
             </span>
           </div>
+          {ExceptionGlyph && (
+            <ExceptionGlyph
+              aria-hidden="true"
+              weight="fill"
+              className={`pointer-events-none absolute right-0.5 top-0.5 h-3 w-3 ${glyphTone}`}
+            />
+          )}
         </div>
       );
     },
@@ -361,13 +416,15 @@ export function GanttChart({
       currentSlot,
       impactedSet,
       trafficLights,
-      schedule.assignments,
+      assignmentSlotById,
       onMatchSelect,
+      config,
     ],
   );
 
   return (
-    <div className="overflow-hidden">
+    <div className="relative overflow-hidden">
+      <TimelineKey />
       <GanttTimeline
         courts={courts}
         minSlot={minSlot}
@@ -384,3 +441,9 @@ export function GanttChart({
     </div>
   );
 }
+
+// Memoized: with props stabilized upstream (impactedMatchIds/onRequestReopenCourt
+// hoisted in MatchControlCenterPage, matchStates now referentially stable when
+// unchanged — PERF_FINDINGS.md FIX C/F), the Gantt skips re-render on the 5s
+// no-op sync and on unrelated parent state (details toggle, dialogs).
+export const GanttChart = memo(GanttChartImpl);

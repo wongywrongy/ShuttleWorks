@@ -1,4 +1,4 @@
-.PHONY: build run rebuild stop logs clean dev help test-e2e test-e2e-rebuild test-e2e-dev test-e2e-install generate-api
+.PHONY: build run rebuild stop logs clean dev help test-e2e test-e2e-rebuild test-e2e-dev test-e2e-install generate-api sim sim-ephemeral sim-all sim-test
 
 # Default target
 help:
@@ -24,6 +24,12 @@ help:
 	@echo "API contract:"
 	@echo "  make generate-api      - Regenerate frontend/src/api/dto.generated.ts from FastAPI OpenAPI"
 	@echo ""
+	@echo "Tournament simulator (internal dev tool — see simulator/README.md):"
+	@echo "  make sim               - Run a scenario vs a running backend (SCENARIO=, SEED=, SIM_URL=)"
+	@echo "  make sim-ephemeral     - Same, against an isolated throwaway backend"
+	@echo "  make sim-all           - Every scenario + all 6 bracket formats (ephemeral)"
+	@echo "  make sim-test          - The simulator's own pytest (boundary guard + smoke)"
+	@echo ""
 
 # === Production Commands ===
 
@@ -37,6 +43,7 @@ run:
 	@echo "  Frontend: http://localhost"
 	@echo "  Backend:  http://localhost:8000"
 	@echo "  API Docs: http://localhost:8000/docs"
+	@echo "  Docs:     http://localhost:8081"
 	@echo ""
 	@echo "Run 'make logs' to view logs"
 
@@ -52,6 +59,7 @@ rebuild:
 	@echo "Fresh rebuild complete."
 	@echo "  Frontend: http://localhost  (hard-refresh the browser: Cmd+Shift+R)"
 	@echo "  Backend:  http://localhost:8000"
+	@echo "  Docs:     http://localhost:8081"
 	@echo ""
 
 stop:
@@ -91,6 +99,36 @@ test-e2e-rebuild:
 
 test-e2e-dev:
 	cd e2e && npm install --silent && E2E_BASE_URL=http://localhost:5173 E2E_MANAGE_STACK=0 npx playwright test
+
+# === Tournament simulator (internal dev tool) ===
+# Full-tournament workflow simulation over the real HTTP API. NOT part of
+# 'make check' or CI — see simulator/README.md for the boundary rules.
+
+SCENARIO ?= small-meet
+SEED ?= 42
+SIM_URL ?= http://localhost:8600
+FORMAT ?= se
+
+sim:
+	PYTHONPATH=simulator python -m tournament_sim run --scenario $(SCENARIO) --seed $(SEED) --base-url $(SIM_URL) --format $(FORMAT)
+
+sim-ephemeral:
+	PYTHONPATH=simulator python -m tournament_sim run --scenario $(SCENARIO) --seed $(SEED) --ephemeral --format $(FORMAT)
+
+sim-all:
+	PYTHONPATH=simulator python -m tournament_sim run --scenario small-meet --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario full-meet --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format se --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format rr --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format swiss --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format monrad --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format compass --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format de --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario mixed --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario chaos --seed $(SEED) --ephemeral
+
+sim-test:
+	cd simulator && pytest
 
 # === API contract generation ===
 

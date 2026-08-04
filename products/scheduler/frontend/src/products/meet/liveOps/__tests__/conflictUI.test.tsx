@@ -30,8 +30,8 @@ describe('PendingBadge', () => {
     render(<PendingBadge isPending={true} />);
     const badge = screen.getByTestId('pending-badge');
     expect(badge).toBeInTheDocument();
-    expect(badge.className).toContain('animate-pulse');
-    expect(badge.className).toContain('bg-amber-500');
+    expect(badge.className).toContain('sw-pulse');
+    expect(badge.className).toContain('bg-status-warning');
   });
 
   it('renders nothing when isPending is false', () => {

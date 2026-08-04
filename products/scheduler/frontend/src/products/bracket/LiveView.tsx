@@ -11,6 +11,7 @@ import { useBracketCurrentSlot } from './bracketTime';
 import { useUiStore } from '../../store/uiStore';
 import { BracketEmptyState } from './BracketEmptyState';
 import { MatchDetailPanel } from './MatchDetailPanel';
+import { DetailDock } from '../../components/control-plane';
 import { LiveMatchList } from './LiveMatchList';
 
 // ---- State-ring vocabulary ------------------------------------------------
@@ -162,7 +163,7 @@ export function LiveView({ data, onChange }: Props) {
             }
           }}
         >
-          <div className="text-2xs font-mono truncate tracking-[0.18em]">{pu?.id}</div>
+          <div className="text-2xs sw-num truncate">{pu?.id}</div>
         </div>
       );
     },
@@ -176,11 +177,18 @@ export function LiveView({ data, onChange }: Props) {
     // a bracket with no play units at all gets the empty state.
     if (data.play_units.length > 0) {
       return (
-        <div className="flex h-full min-h-0">
+        <div className="relative flex h-full min-h-0">
           <div className="flex min-w-0 flex-1 flex-col overflow-auto">
             <LiveMatchList data={data} onChange={onChange} />
           </div>
-          <MatchDetailPanel data={data} onChange={onChange} />
+          {/* Always-open dock: the rail (or its empty-state hint) is part of
+              the Live layout — operators expect it pinned. minContentWidth=0
+              forces DOCKED at every width: the rail has no close affordance,
+              so the overlay fallback would cover the list undismissably;
+              squeezing (the old w-72 rail behavior) keeps the list usable. */}
+          <DetailDock open width={288} minContentWidth={0}>
+            <MatchDetailPanel data={data} onChange={onChange} />
+          </DetailDock>
         </div>
       );
     }
@@ -194,7 +202,7 @@ export function LiveView({ data, onChange }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="relative flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col overflow-auto">
         <ChipStateLegend />
         <div className="shrink-0 overflow-x-auto p-4">
@@ -212,15 +220,19 @@ export function LiveView({ data, onChange }: Props) {
             operator runs the day (mirrors the meet Live list). */}
         <LiveMatchList data={data} onChange={onChange} />
       </div>
-      <MatchDetailPanel data={data} onChange={onChange} />
+      {/* minContentWidth=0: always docked — see the sibling mount's note. */}
+      <DetailDock open width={288} minContentWidth={0}>
+        <MatchDetailPanel data={data} onChange={onChange} />
+      </DetailDock>
     </div>
   );
 }
 
 /**
- * Compact ring-state legend — mirrors the meet Live tab's GanttLegend
- * strip (same eyebrow + swatch vocabulary) for the bracket's chip
- * lifecycle rings. Fills are event colors here, so only the ring
+ * Compact ring-state legend for the bracket's chip lifecycle rings.
+ * (The meet Live tab dropped its legend strip in favour of a "?" key +
+ * rich tooltips; the bracket board keeps this until its own migration.)
+ * Fills are event colors here, so only the ring
  * states need explaining.
  */
 function ChipStateLegend() {
@@ -232,7 +244,7 @@ function ChipStateLegend() {
   ];
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-1.5">
-      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         Status
       </span>
       {items.map((item) => (

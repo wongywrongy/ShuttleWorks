@@ -21,7 +21,9 @@
  */
 import { DISCIPLINE_NAMES } from '../../../../lib/disciplineNames';
 
-export const EVENT_ORDER = ['MD', 'WD', 'XD', 'WS', 'MS'] as const;
+// Canonical order lives in lib/eventColors (shared with the bracket's
+// matches list); re-exported here for the meet's existing import sites.
+export { DISCIPLINE_ORDER as EVENT_ORDER } from '../../../../lib/eventColors';
 
 export const EVENT_LABEL: Record<
   string,

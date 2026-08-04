@@ -41,17 +41,18 @@ import time
 import uuid
 from collections import defaultdict
 from datetime import datetime
-from typing import AsyncGenerator, Dict, List, Literal, Optional, Set, Tuple
+from typing import Annotated, AsyncGenerator, Dict, List, Literal, Optional, Sequence, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
+from adapters.badminton import schedule_config_for_bracket
 from app.dependencies import (
     require_tournament_access,
 )
 from app.exceptions import ConflictError
-from app.schemas import BracketCommandRequest
+from app.schemas import BracketCommandRequest, BracketPlayerDTO, TournamentConfig
 from repositories import LocalRepository, get_repository
 from scheduler_core.domain.models import (
     SolverOptions,
@@ -72,16 +73,29 @@ from scheduler_core.domain.tournament import (
 from services.bracket import (
     BracketSlot,
     Draw,
+    DrawSegment,
     TournamentDriver,
-    generate_round_robin,
-    generate_single_elimination,
     record_result,
+)
+from services.bracket import response_cache
+from services.bracket.formats import (
+    FORMAT_REGISTRY,
+    build_swiss_round,
+    get_format,
+    pair_swiss_round,
+    segment_label,
+    segment_positions,
 )
 from services.bracket.io.export_schedule import to_csv, to_ics
 from services.bracket.io.import_matches import (
     parse_csv_payload,
     parse_json_payload,
 )
+from services.bracket.player_constraints import (
+    PlayerExtras,
+    build_player_extras,
+)
+from services.bracket.standings import compute_standings
 from services.bracket.state import (
     BracketSession,
     EventMeta,
@@ -90,6 +104,7 @@ from services.bracket.state import (
     register_draw,
 )
 from services.bracket.validation import BracketConflict, validate_bracket_move
+from services.determinism import warn_if_unpinned
 from services.scheduling.params import SchedulingParams, build_schedule_config
 
 router = APIRouter(
@@ -118,6 +133,59 @@ _DEFAULT_CANDIDATE_POOL_SIZE = 5
 # ---------------------------------------------------------------------------
 
 
+def _require_known_format(value: str) -> str:
+    """Validate a wire ``format`` id against the format registry.
+
+    Plain ``str`` + registry check (not a ``Literal``) so adding a format
+    is one ``FORMAT_REGISTRY`` entry with zero DTO churn. Unknown ids fail
+    Pydantic validation → HTTP 422.
+    """
+    if value not in FORMAT_REGISTRY:
+        known = ", ".join(FORMAT_REGISTRY)
+        raise ValueError(f"unknown draw format {value!r}; known formats: {known}")
+    return value
+
+
+FormatId = Annotated[str, AfterValidator(_require_known_format)]
+
+
+def _generate_draw(
+    format_id: str,
+    participants: Sequence,
+    *,
+    event_id: str,
+    seeded_count: Optional[int],
+    bracket_size: Optional[int],
+    rr_rounds: Optional[int],
+    duration_slots: int,
+    config: Optional[dict] = None,
+) -> Draw:
+    """Dispatch draw generation through the format registry.
+
+    The single seam both the create-tournament and generate-event routes
+    use; generator ``ValueError``/``NotImplementedError`` surfaces as 400.
+    """
+    spec = get_format(format_id)
+    if spec is None:
+        raise HTTPException(
+            status_code=400, detail=f"unknown draw format {format_id!r}"
+        )
+    try:
+        resolved = spec.normalize_config(dict(config or {}), len(participants))
+        return spec.generate(
+            participants,
+            event_id=event_id,
+            play_unit_id_prefix=event_id,
+            duration_slots=duration_slots,
+            seeded_count=seeded_count,
+            bracket_size=bracket_size,
+            rr_rounds=rr_rounds,
+            config=resolved,
+        )
+    except (ValueError, NotImplementedError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 class ParticipantIn(BaseModel):
     id: str
     name: str
@@ -140,13 +208,15 @@ class ParticipantIn(BaseModel):
 class EventIn(BaseModel):
     id: str
     discipline: str = Field("GEN", description="MS/WS/MD/WD/XD or short code.")
-    format: Literal["se", "rr"] = "se"
+    format: FormatId = "se"
     participants: List[ParticipantIn]
     seeded_count: Optional[int] = None
     bracket_size: Optional[int] = None
     rr_rounds: int = Field(1, ge=1)
     duration_slots: int = Field(1, ge=1)
     randomize: bool = False
+    # Format-specific knobs (validated by the format's normalize_config).
+    config: dict = Field(default_factory=dict)
 
 
 class CreateTournamentIn(BaseModel):
@@ -163,11 +233,19 @@ class ParticipantOut(BaseModel):
     id: str
     name: str
     members: Optional[List[str]] = None
+    # Seed number (1 = top seed) from participant metadata; None = unseeded.
+    # Serialized so a flow that echoes participants back through the
+    # create-or-replace upsert doesn't silently drop imported seeds.
+    seed: Optional[int] = None
 
 
 class BracketSlotOut(BaseModel):
     participant_id: Optional[str] = None
     feeder_play_unit_id: Optional[str] = None
+    # "loser" when this slot takes the FEEDER'S LOSER (consolation
+    # routing — DE losers bracket, Monrad plates, compass). None/absent
+    # means the historical winner-take semantics.
+    feeder_take: Optional[str] = None
 
 
 class PlayUnitOut(BaseModel):
@@ -181,6 +259,9 @@ class PlayUnitOut(BaseModel):
     dependencies: List[str] = []
     slot_a: BracketSlotOut
     slot_b: BracketSlotOut
+    # Segment id for multi-segment formats ('W', 'L', 'GF', 'P5_8', …) —
+    # from the unit's metadata; None for single-bracket formats (se/rr).
+    segment: Optional[str] = None
     # Optimistic-concurrency token (SP-F3): the client echoes this back as
     # ``seen_version`` when recording a result so concurrent writes from a
     # second operator are rejected with a stale-version conflict. Defaults to
@@ -206,6 +287,41 @@ class ResultOut(BaseModel):
     finished_at_slot: Optional[int] = None
     # Opaque set-by-set score JSON (Sets mode). None for winner-only results.
     score: Optional[dict] = None
+    # Contingency annotation only (spec 2026-07-14 §1); does not drive
+    # advancement/BYE-sweep routing.
+    reason: Optional[str] = None
+
+
+class SegmentOut(BaseModel):
+    """One named sub-bracket of a multi-segment draw (DE/Monrad/compass).
+
+    ``rounds`` is SEGMENT-LOCAL round-major play-unit ids (the event's
+    top-level ``rounds`` stays the global dependency-wave axis).
+    ``positions`` is the classification range a Monrad bracket decides
+    (``[5, 8]`` for the "5–8" bracket); None elsewhere.
+    """
+
+    id: str
+    label: str
+    order: int
+    rounds: List[List[str]]
+    positions: Optional[List[int]] = None
+
+
+class StandingRowOut(BaseModel):
+    """One participant's line in a computed standings table (mirrors
+    ``services.bracket.standings.StandingRow`` — the BWF chain: wins →
+    games ratio → points ratio → head-to-head → id)."""
+
+    participant_id: str
+    played: int
+    wins: int
+    losses: int
+    games_won: int
+    games_lost: int
+    points_won: int
+    points_lost: int
+    position: int
 
 
 class EventOut(BaseModel):
@@ -215,9 +331,28 @@ class EventOut(BaseModel):
     bracket_size: Optional[int] = None
     participant_count: int
     rounds: List[List[str]]
+    # Present only for multi-segment formats; se/rr stay None (additive —
+    # old clients and fixtures unaffected).
+    segments: Optional[List[SegmentOut]] = None
+    # Computed standings, embedded only for ``has_standings`` formats
+    # (round robin, Swiss) — rides the existing poll so Display gets it
+    # free and Swiss pairing consumes the same numbers the client sees.
+    standings: Optional[List[StandingRowOut]] = None
     # Per-event lifecycle status: 'draft' | 'generated' | 'started'.
     # Drives the Draws-page status pill + Generate/Open affordances.
     status: Optional[str] = None
+    # Per-draw configuration echoes (all optional — additive, old clients
+    # and fixtures unaffected). ``config`` carries format-specific knobs.
+    seeded_count: Optional[int] = None
+    rr_rounds: Optional[int] = None
+    config: dict = Field(default_factory=dict)
+    # This event's own participant rows (SP-D7 S3, additive). The flat
+    # ``TournamentOut.participants`` list cannot attribute a DRAFT singles
+    # entry to its event (the participant id is just the player slug and
+    # drafts have no play units), so the roster surface needs the per-event
+    # list to derive Events badges pre-generate and to echo an event's
+    # current participants through ``upsert_event`` safely.
+    participants: List[ParticipantOut] = Field(default_factory=list)
 
 
 class TournamentOut(BaseModel):
@@ -324,12 +459,26 @@ class BracketUnassignIn(BaseModel):
 class EventUpsertIn(BaseModel):
     """Body of POST /bracket/events/{event_id} — upsert one event."""
     discipline: str
-    format: Literal["se", "rr"] = "se"
+    format: FormatId = "se"
     bracket_size: Optional[int] = None
     seeded_count: int = 0
     rr_rounds: int = Field(1, ge=1)
     duration_slots: int = Field(1, ge=1)
     participants: List[ParticipantIn] = Field(default_factory=list)
+    # Format-specific knobs (validated by the format's normalize_config).
+    config: dict = Field(default_factory=dict)
+
+
+class EventConfigPatchIn(BaseModel):
+    """Body of PATCH /bracket/events/{event_id} — edit a DRAFT draw's
+    configuration without touching its participants (the upsert route
+    wipes them; a config-only patch must not)."""
+    format: Optional[FormatId] = None
+    bracket_size: Optional[int] = None
+    seeded_count: Optional[int] = None
+    rr_rounds: Optional[int] = Field(None, ge=1)
+    duration_slots: Optional[int] = Field(None, ge=1)
+    config: Optional[dict] = None
 
 
 class GenerateEventIn(BaseModel):
@@ -368,7 +517,7 @@ class ImportPlayUnitIn(BaseModel):
 class ImportEventIn(BaseModel):
     id: str
     discipline: str = "GEN"
-    format: Literal["se", "rr"] = "se"
+    format: FormatId = "se"
     participants: List[ParticipantIn]
     rounds: List[List[ImportPlayUnitIn]]
 
@@ -410,6 +559,48 @@ def _pick(camel_cfg: dict, session_cfg: dict, camel_key: str, legacy_key: str, d
     return session_cfg.get(legacy_key, default)
 
 
+def _load_bracket_player_extras(
+    data_blob: dict,
+    *,
+    start_time: Optional[datetime],
+    interval_minutes: int,
+    total_slots: int,
+) -> Dict[str, PlayerExtras]:
+    """Per-roster-player availability + rest extras for the solve path.
+
+    Reads ``tournaments.data.bracketPlayers`` (the same JSON blob the
+    ``PUT /tournaments/{tid}/state`` roster writes land in) and converts
+    each entry's HH:mm windows / ``restSlots`` to slot-native
+    ``PlayerExtras`` via ``services.bracket.player_constraints``.
+    ``defaultRestSlots`` follows the standard config pick: camelCase
+    TournamentConfig key first, legacy ``bracket_session`` snake_case
+    second, default 1. Malformed roster entries are skipped with a
+    warning — a bad blob must never take the solve path down.
+    """
+    camel_cfg = data_blob.get("config") or {}
+    session_cfg = data_blob.get("bracket_session") or {}
+    default_rest_slots = int(
+        _pick(camel_cfg, session_cfg, "defaultRestSlots", "default_rest_slots", 1)
+    )
+
+    players: List[BracketPlayerDTO] = []
+    for entry in data_blob.get("bracketPlayers") or []:
+        try:
+            players.append(BracketPlayerDTO.model_validate(entry))
+        except ValidationError:
+            log.warning("skipping malformed bracketPlayers entry: %r", entry)
+    if not players:
+        return {}
+
+    return build_player_extras(
+        players,
+        start_time=start_time,
+        interval_minutes=interval_minutes,
+        total_slots=total_slots,
+        default_rest_slots=default_rest_slots,
+    )
+
+
 def _meet_occupied_windows(
     data_blob: dict, court_count: int
 ) -> List[Tuple[int, int, int]]:
@@ -439,6 +630,89 @@ def _meet_occupied_windows(
     return out
 
 
+def _segments_from_match_meta(
+    format_id: str, match_rows
+) -> Optional[List[DrawSegment]]:
+    """Rebuild ``Draw.segments`` from persisted per-match meta.
+
+    Segment formats stamp ``segment`` / ``segment_order`` / ``round`` /
+    ``match_index`` (and, for Monrad classification brackets,
+    ``positions``) into every unit's metadata, which persistence stores
+    in the match ``meta`` JSON column. Grouping those keys back is the
+    exact inverse of generation; labels come from the shared
+    ``segment_label`` vocabulary. Returns ``None`` when no match carries
+    segment meta (se/rr draws — their DTO shape is unchanged).
+    """
+    buckets: Dict[str, dict] = {}
+    for m in match_rows:
+        meta = m.meta or {}
+        seg_id = meta.get("segment")
+        if seg_id is None:
+            continue
+        bucket = buckets.setdefault(
+            seg_id,
+            {
+                "order": int(meta.get("segment_order", 0)),
+                "rounds": defaultdict(list),
+                "positions": None,
+            },
+        )
+        bucket["rounds"][int(meta.get("round", 0))].append(
+            (int(meta.get("match_index", 0)), m.id)
+        )
+        if bucket["positions"] is None:
+            bucket["positions"] = segment_positions(seg_id, meta)
+    if not buckets:
+        return None
+
+    segments: List[DrawSegment] = []
+    for seg_id, bucket in sorted(
+        buckets.items(), key=lambda kv: (kv[1]["order"], kv[0])
+    ):
+        seg_rounds = [
+            [pu_id for _, pu_id in sorted(bucket["rounds"][r])]
+            for r in sorted(bucket["rounds"].keys())
+        ]
+        metadata = (
+            {"positions": bucket["positions"]} if bucket["positions"] else {}
+        )
+        segments.append(
+            DrawSegment(
+                id=seg_id,
+                label=segment_label(format_id, seg_id, metadata),
+                order=bucket["order"],
+                rounds=seg_rounds,
+                metadata=metadata,
+            )
+        )
+    return segments
+
+
+def _bracket_solver_options(
+    time_limit_seconds: float, camel_cfg: dict
+) -> SolverOptions:
+    """Bracket ``SolverOptions``: per-request time budget (bracket-owned,
+    default 5 s) + the shared deterministic/seed knobs from the engine
+    config.
+
+    ``config.solverTimeLimitSeconds`` deliberately does NOT apply here —
+    unlike the meet path (``solver_options_for``), the bracket's solve
+    budget is a request/session parameter (``time_limit_seconds``,
+    persisted on ``bracket_session``), and that precedence is
+    intentionally unchanged by this wiring.
+    """
+    if camel_cfg.get("deterministic"):
+        warn_if_unpinned("bracket.solver_options")
+        return SolverOptions(
+            time_limit_seconds=time_limit_seconds,
+            num_workers=1,
+            random_seed=int(camel_cfg.get("randomSeed") or 42),
+            log_progress=False,
+            deterministic=True,
+        )
+    return SolverOptions(time_limit_seconds=time_limit_seconds, log_progress=False)
+
+
 def _hydrate_session(
     repo: LocalRepository, tournament_id: uuid.UUID
 ) -> Optional[BracketSession]:
@@ -461,19 +735,29 @@ def _hydrate_session(
     total_slots = int(session_cfg.get("total_slots", 128))
     rest = int(_pick(camel_cfg, session_cfg, "restBetweenRounds", "rest_between_rounds", 1))
 
-    # Built through the shared scheduling-parameter builder so courts /
-    # time window / slot duration are read into a ``ScheduleConfig`` the
-    # same way the meet path reads them (see
-    # ``services/scheduling/params.py``).
-    config = build_schedule_config(
-        SchedulingParams(
-            court_count=court_count,
-            total_slots=total_slots,
-            interval_minutes=interval_minutes,
-            # Hybrid coordination: schedule bracket matches AROUND the meet
-            # schedule so the two engines never double-book a court.
-            closed_court_windows=_meet_occupied_windows(data_blob, court_count),
-        )
+    # Full shared assembly (rest / freeze / breaks / objective weights),
+    # with the session-owned structural overrides on top. camel_cfg may be
+    # sparse on old blobs — merge over the same defaults the meet uses.
+    cfg_model = TournamentConfig.model_validate(
+        {
+            "intervalMinutes": interval_minutes,
+            "dayStart": "09:00",
+            "dayEnd": "18:00",
+            "breaks": [],
+            "courtCount": court_count,
+            "defaultRestMinutes": 0,
+            "freezeHorizonSlots": 0,
+            **{k: v for k, v in camel_cfg.items() if v is not None},
+        }
+    )
+    config = schedule_config_for_bracket(
+        cfg_model,
+        court_count=court_count,
+        total_slots=total_slots,
+        interval_minutes=interval_minutes,
+        # Hybrid coordination: schedule bracket matches AROUND the meet
+        # schedule so the two engines never double-book a court.
+        closed_court_windows=_meet_occupied_windows(data_blob, court_count),
     )
 
     start_time_iso = session_cfg.get("start_time")
@@ -481,6 +765,17 @@ def _hydrate_session(
         datetime.fromisoformat(start_time_iso)
         if isinstance(start_time_iso, str) and start_time_iso
         else None
+    )
+
+    # SP-D7 S2: roster availability windows + per-player rest, converted
+    # to slot-native extras here (the one place that knows the session's
+    # wall-clock base + slot geometry) and threaded into every solve via
+    # ``TournamentDriver(player_extras=...)``.
+    player_extras = _load_bracket_player_extras(
+        data_blob,
+        start_time=start_time,
+        interval_minutes=interval_minutes,
+        total_slots=total_slots,
     )
 
     state = TournamentState()
@@ -559,6 +854,7 @@ def _hydrate_session(
             play_units=event_play_units,
             slots=slots,
             rounds=rounds,
+            segments=_segments_from_match_meta(event_row.format, match_rows),
         )
 
         events_meta[event_row.id] = EventMeta(
@@ -569,6 +865,9 @@ def _hydrate_session(
             bracket_size=event_row.bracket_size,
             participant_count=len(participant_rows),
             status=event_row.status or "draft",
+            seeded_count=event_row.seeded_count,
+            rr_rounds=event_row.rr_rounds,
+            config=dict(event_row.config or {}),
         )
 
         # Results.
@@ -579,6 +878,7 @@ def _hydrate_session(
                 score=r.score,
                 finished_at_slot=r.finished_at_slot,
                 walkover=r.walkover,
+                reason=r.reason,
             )
 
     # Assignments live in tournaments.data["bracket_session"]["assignments"]
@@ -613,6 +913,7 @@ def _hydrate_session(
         events=events_meta,
         match_versions=match_versions,
         applied_command_ids=applied_command_ids,
+        player_extras=player_extras,
     )
 
 
@@ -783,14 +1084,51 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                         slot_a=BracketSlotOut(
                             participant_id=slot_a.participant_id,
                             feeder_play_unit_id=slot_a.feeder_play_unit_id,
+                            feeder_take=(
+                                "loser"
+                                if slot_a.feeder_play_unit_id is not None
+                                and slot_a.feeder_take == "loser"
+                                else None
+                            ),
                         ),
                         slot_b=BracketSlotOut(
                             participant_id=slot_b.participant_id,
                             feeder_play_unit_id=slot_b.feeder_play_unit_id,
+                            feeder_take=(
+                                "loser"
+                                if slot_b.feeder_play_unit_id is not None
+                                and slot_b.feeder_take == "loser"
+                                else None
+                            ),
                         ),
                         version=session.match_versions.get(pu_id, 1),
+                        segment=(
+                            pu.metadata.get("segment") if pu.metadata else None
+                        ),
                     )
                 )
+        # Standings ride the poll for has_standings formats (rr, swiss).
+        # compute_standings is one pass over the results + a sort, so the
+        # per-request cost stays negligible.
+        spec = get_format(meta.format) if meta else None
+        standings_out: Optional[List[StandingRowOut]] = None
+        if spec is not None and spec.has_standings:
+            standings_out = [
+                StandingRowOut(
+                    participant_id=row.participant_id,
+                    played=row.played,
+                    wins=row.wins,
+                    losses=row.losses,
+                    games_won=row.games_won,
+                    games_lost=row.games_lost,
+                    points_won=row.points_won,
+                    points_lost=row.points_lost,
+                    position=row.position,
+                )
+                for row in compute_standings(
+                    draw.play_units, state.results, list(draw.participants)
+                )
+            ]
         events_out.append(
             EventOut(
                 id=event_id,
@@ -799,7 +1137,36 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                 bracket_size=meta.bracket_size if meta else None,
                 participant_count=meta.participant_count if meta else 0,
                 rounds=list(draw.rounds),
+                segments=(
+                    [
+                        SegmentOut(
+                            id=seg.id,
+                            label=seg.label,
+                            order=seg.order,
+                            rounds=[list(r) for r in seg.rounds],
+                            positions=segment_positions(seg.id, seg.metadata),
+                        )
+                        for seg in draw.segments
+                    ]
+                    if draw.segments
+                    else None
+                ),
+                standings=standings_out,
                 status=meta.status if meta else None,
+                seeded_count=meta.seeded_count if meta else None,
+                rr_rounds=meta.rr_rounds if meta else None,
+                config=dict(meta.config) if meta else {},
+                participants=[
+                    ParticipantOut(
+                        id=p.id,
+                        name=p.name,
+                        members=list(p.member_ids)
+                        if p.type == ParticipantType.TEAM and p.member_ids
+                        else None,
+                        seed=p.metadata.get("seed"),
+                    )
+                    for p in draw.participants.values()
+                ],
             )
         )
 
@@ -824,6 +1191,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
             walkover=r.walkover,
             finished_at_slot=r.finished_at_slot,
             score=r.score,
+            reason=r.reason,
         )
         for pu_id, r in state.results.items()
     ]
@@ -835,6 +1203,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
             members=list(p.member_ids)
             if p.type == ParticipantType.TEAM and p.member_ids
             else None,
+            seed=p.metadata.get("seed"),
         )
         for p in state.participants.values()
     ]
@@ -887,11 +1256,19 @@ def _bracket_locked_play_unit_ids(
 
 
 def _slot_to_dict(slot: BracketSlot) -> dict:
-    """Encode a BracketSlot for JSON storage."""
-    return {
+    """Encode a BracketSlot for JSON storage.
+
+    ``feeder_take`` is emitted ONLY for loser feeds — winner-take slots
+    keep the exact historical dict shape, so every persisted draw (and
+    its Supabase mirror) stays byte-identical.
+    """
+    out = {
         "participant_id": slot.participant_id,
         "feeder_play_unit_id": slot.feeder_play_unit_id,
     }
+    if slot.feeder_play_unit_id is not None and slot.feeder_take == "loser":
+        out["feeder_take"] = "loser"
+    return out
 
 
 def _dict_to_slot(raw) -> BracketSlot:
@@ -901,6 +1278,7 @@ def _dict_to_slot(raw) -> BracketSlot:
     return BracketSlot(
         participant_id=raw.get("participant_id"),
         feeder_play_unit_id=raw.get("feeder_play_unit_id"),
+        feeder_take=raw.get("feeder_take") or "winner",
     )
 
 
@@ -975,6 +1353,7 @@ def _persist_result_advancement(
         score=recorded.score,
         finished_at_slot=recorded.finished_at_slot,
         walkover=recorded.walkover,
+        reason=recorded.reason,
     )
     # First result on a Generated event flips its status to 'started'.
     ev_row = repo.brackets.get_event(tournament_id, pu.event_id)
@@ -1013,6 +1392,7 @@ def _persist_result_advancement(
                 score=r.score,
                 finished_at_slot=r.finished_at_slot,
                 walkover=r.walkover,
+                reason=r.reason,
             )
 
 
@@ -1090,45 +1470,40 @@ def create_bracket(
         # every event mints identical ids and the second event's
         # ``register_draw`` raises on the shared TournamentState — see
         # register_draw's "callers should namespace per event" contract.
-        if ev.format == "se":
-            try:
-                draw = generate_single_elimination(
-                    participants,
-                    event_id=ev.id,
-                    play_unit_id_prefix=ev.id,
-                    seeded_count=ev.seeded_count,
-                    bracket_size=ev.bracket_size,
-                    duration_slots=ev.duration_slots,
-                    randomize=ev.randomize,
-                )
-            except (ValueError, NotImplementedError) as exc:
-                raise HTTPException(status_code=400, detail=str(exc))
-        else:
-            try:
-                draw = generate_round_robin(
-                    participants,
-                    rounds=ev.rr_rounds,
-                    event_id=ev.id,
-                    play_unit_id_prefix=ev.id,
-                    duration_slots=ev.duration_slots,
-                )
-            except (ValueError, NotImplementedError) as exc:
-                raise HTTPException(status_code=400, detail=str(exc))
+        if ev.randomize and ev.format == "se":
+            # Preserved pre-registry behaviour: only SE ever consumed
+            # ``randomize`` (raising NotImplementedError → 400); other
+            # formats silently ignored it.
+            raise HTTPException(
+                status_code=400, detail="randomize=True is not implemented"
+            )
+        draw = _generate_draw(
+            ev.format,
+            participants,
+            event_id=ev.id,
+            seeded_count=ev.seeded_count,
+            bracket_size=ev.bracket_size,
+            rr_rounds=ev.rr_rounds,
+            duration_slots=ev.duration_slots,
+            config=ev.config,
+        )
 
         register_draw(state, draw)
         draws[ev.id] = draw
 
-        bracket_size = (
-            len(draw.rounds[0]) * 2 if draw.rounds else None
-        ) if ev.format == "se" else None
         events_meta[ev.id] = EventMeta(
             id=ev.id,
             discipline=ev.discipline,
             format=ev.format,
             duration_slots=ev.duration_slots,
-            bracket_size=bracket_size,
+            # Generators that size a bracket record it in parameters
+            # (SE pads to the next power of two; RR leaves it unset).
+            bracket_size=draw.event.parameters.get("bracket_size"),
             participant_count=len(ev.participants),
             status="draft",
+            seeded_count=ev.seeded_count,
+            rr_rounds=ev.rr_rounds,
+            config=dict(ev.config or {}),
         )
 
     session_obj = BracketSession(
@@ -1159,7 +1534,8 @@ def create_bracket(
             draw=draw,
             state=state,
             seeded_count=ev.seeded_count or 0,
-            rr_rounds=ev.rr_rounds if ev.format == "rr" else None,
+            rr_rounds=ev.rr_rounds,
+            config=dict(ev.config or {}),
         )
     # Persist auto-walkover results (R1 BYE byes recorded by register_draw).
     for pu_id, result in state.results.items():
@@ -1172,6 +1548,7 @@ def create_bracket(
             score=result.score,
             finished_at_slot=result.finished_at_slot,
             walkover=result.walkover,
+            reason=result.reason,
         )
     # Persist session config last so a partial failure earlier leaves
     # nothing for ``_hydrate_session`` to rehydrate.
@@ -1182,6 +1559,7 @@ def create_bracket(
         time_limit_seconds=body.time_limit_seconds,
     )
 
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session_obj)
 
 
@@ -1190,13 +1568,27 @@ def get_bracket(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ) -> TournamentOut:
+    """Read the full bracket state.
+
+    Served from a short-TTL in-process cache (``response_cache``) when
+    fresh — the frontend polls this route every 2.5 s and refetches on
+    every bracket-surface re-entry, so an unconditional rebuild on every
+    request is the last measured tab-latency hot path. See
+    ``services/bracket/response_cache.py`` for the staleness bound and
+    the fail-safety property.
+    """
     _ensure_tournament_exists(repo, tournament_id)
+    cached = response_cache.get(tournament_id)
+    if cached is not None:
+        return cached
     session = _hydrate_session(repo, tournament_id)
     if session is None:
         raise HTTPException(
             status_code=404, detail="no bracket configured for this tournament"
         )
-    return _serialize_session(session)
+    payload = _serialize_session(session)
+    response_cache.put(tournament_id, payload)
+    return payload
 
 
 @router.delete("", dependencies=[_OPERATOR])
@@ -1206,6 +1598,7 @@ def delete_bracket(
 ) -> Dict[str, bool]:
     _ensure_tournament_exists(repo, tournament_id)
     _clear_bracket(repo, tournament_id)
+    response_cache.invalidate(tournament_id)
     return {"ok": True}
 
 
@@ -1234,24 +1627,25 @@ def schedule_next_round(
     # bracket-session blob; the lightweight BracketSession dataclass
     # doesn't carry it (parser variants don't need it).
     tournament = repo.tournaments.get_by_id(tournament_id)
-    session_cfg = (
-        (tournament.data or {}).get("bracket_session") if tournament else None
-    ) or {}
+    data_blob = (tournament.data or {}) if tournament else {}
+    session_cfg = data_blob.get("bracket_session") or {}
     time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
 
     driver = TournamentDriver(
         state=session.state,
         config=session.config,
-        solver_options=SolverOptions(
-            time_limit_seconds=time_limit_seconds,
+        solver_options=_bracket_solver_options(
+            time_limit_seconds, data_blob.get("config") or {}
         ),
         rest_between_rounds=session.rest_between_rounds,
+        player_extras=session.player_extras,
     )
     perf_start = time.perf_counter()
     result = driver.schedule_next_round()
     runtime_ms = (time.perf_counter() - perf_start) * 1000.0
     # Persist the new assignments into the session blob.
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
 
     return ScheduleNextRoundOut(
         status=result.status.value,
@@ -1336,18 +1730,20 @@ async def schedule_next_round_stream(
         )
 
     tournament = repo.tournaments.get_by_id(tournament_id)
-    session_cfg = (
-        (tournament.data or {}).get("bracket_session") if tournament else None
-    ) or {}
+    data_blob = (tournament.data or {}) if tournament else {}
+    session_cfg = data_blob.get("bracket_session") or {}
     time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
     pool_size = _resolve_candidate_pool_size(session_cfg, candidate_pool_size)
-    solver_options = SolverOptions(time_limit_seconds=time_limit_seconds)
+    solver_options = _bracket_solver_options(
+        time_limit_seconds, data_blob.get("config") or {}
+    )
 
     driver = TournamentDriver(
         state=session.state,
         config=session.config,
         solver_options=solver_options,
         rest_between_rounds=session.rest_between_rounds,
+        player_extras=session.player_extras,
     )
     prepared = driver.prepare_next_round_problem()
 
@@ -1530,6 +1926,7 @@ def commit_next_round(
         )
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -1579,6 +1976,18 @@ def upsert_event(
                 session.state.assignments.pop(pu_id, None)
             _persist_session_metadata(repo, tournament_id, session=session)
 
+    # Validate + default the format-specific config before persisting so a
+    # bad blob fails loudly at upsert time, not at generate time.
+    spec = get_format(body.format)
+    if spec is None:  # unreachable — FormatId validated; defensive
+        raise HTTPException(status_code=400, detail=f"unknown format {body.format!r}")
+    try:
+        normalized_config = spec.normalize_config(
+            dict(body.config or {}), len(body.participants)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     repo.brackets.delete_event(tournament_id, event_id)
     repo.brackets.create_event(
         tournament_id,
@@ -1588,8 +1997,8 @@ def upsert_event(
         duration_slots=body.duration_slots,
         bracket_size=body.bracket_size,
         seeded_count=body.seeded_count,
-        rr_rounds=body.rr_rounds if body.format == "rr" else None,
-        config={},
+        rr_rounds=body.rr_rounds,
+        config=normalized_config,
         status="draft",
     )
     if body.participants:
@@ -1613,6 +2022,76 @@ def upsert_event(
         raise HTTPException(
             status_code=404, detail="no bracket session for this tournament"
         )
+    response_cache.invalidate(tournament_id)
+    return _serialize_session(session)
+
+
+@router.patch(
+    "/events/{event_id}",
+    response_model=TournamentOut,
+    dependencies=[_OPERATOR],
+)
+def patch_event_config(
+    body: EventConfigPatchIn,
+    tournament_id: uuid.UUID = Path(...),
+    event_id: str = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Edit a DRAFT draw's configuration without touching participants.
+
+    The upsert route replaces the whole event (wiping participants); this
+    config-only PATCH is what the Draws card's "Configure" affordance
+    uses. 404 for an unknown event; 409 unless the event is still draft
+    (re-configure a generated draw by re-generating; a started draw is
+    locked).
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    existing = repo.brackets.get_event(tournament_id, event_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"unknown event {event_id!r}")
+    if (existing.status or "draft") != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=f"event {event_id!r} is {existing.status}; only draft draws can be reconfigured",
+        )
+
+    # Validate the (possibly new) format's config against the current
+    # participant count so a bad blob fails here, not at generate time.
+    target_format = body.format or existing.format
+    spec = get_format(target_format)
+    if spec is None:
+        raise HTTPException(
+            status_code=400, detail=f"unknown draw format {target_format!r}"
+        )
+    normalized_config: Optional[dict] = None
+    if body.config is not None or body.format is not None:
+        participant_count = len(
+            repo.brackets.list_participants(tournament_id, event_id)
+        )
+        try:
+            normalized_config = spec.normalize_config(
+                dict(body.config if body.config is not None else existing.config or {}),
+                participant_count,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    repo.brackets.update_event_config(
+        tournament_id,
+        event_id,
+        format=body.format,
+        bracket_size=body.bracket_size,
+        seeded_count=body.seeded_count,
+        rr_rounds=body.rr_rounds,
+        duration_slots=body.duration_slots,
+        config=normalized_config,
+    )
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail="no bracket session for this tournament"
+        )
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -1687,30 +2166,19 @@ def generate_event_route(
         for p in participant_rows
     ]
 
-    # Build the draw in memory (no DB writes yet).
-    if existing.format == "se":
-        try:
-            draw = generate_single_elimination(
-                participants,
-                event_id=event_id,
-                play_unit_id_prefix=event_id,
-                seeded_count=existing.seeded_count or 0,
-                bracket_size=existing.bracket_size,
-                duration_slots=existing.duration_slots,
-            )
-        except (ValueError, NotImplementedError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
-    else:
-        try:
-            draw = generate_round_robin(
-                participants,
-                rounds=existing.rr_rounds or 1,
-                event_id=event_id,
-                play_unit_id_prefix=event_id,
-                duration_slots=existing.duration_slots,
-            )
-        except (ValueError, NotImplementedError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+    # Build the draw in memory (no DB writes yet). Registry-dispatched;
+    # the format's normalize_config resolves per-draw knobs (Monrad depth,
+    # Swiss rounds, …) against the actual participant count.
+    draw = _generate_draw(
+        existing.format,
+        participants,
+        event_id=event_id,
+        seeded_count=existing.seeded_count or 0,
+        bracket_size=existing.bracket_size,
+        rr_rounds=existing.rr_rounds or 1,
+        duration_slots=existing.duration_slots,
+        config=dict(existing.config or {}),
+    )
 
     # Build a fresh in-memory state for this generation run.
     # Remove old play_units and assignments for this event from the
@@ -1734,17 +2202,25 @@ def generate_event_route(
     # iterates the freshly-built draw (not the empty placeholder that
     # _hydrate_session loaded from the DB for a draft event).
     session.draws[event_id] = draw
-    bracket_size = (
-        len(draw.rounds[0]) * 2 if draw.rounds else None
-    ) if existing.format == "se" else None
+    # The RESOLVED config (normalize_config output) is what the draw was
+    # actually built with — persist/echo it so the client can render e.g.
+    # Swiss "Round k of K" from concrete values.
+    resolved_config = dict(
+        draw.event.parameters.get("resolved_config")
+        or existing.config
+        or {}
+    )
     session.events[event_id] = EventMeta(
         id=event_id,
         discipline=existing.discipline,
         format=existing.format,
         duration_slots=existing.duration_slots,
-        bracket_size=bracket_size,
+        bracket_size=draw.event.parameters.get("bracket_size"),
         participant_count=len(participant_rows),
         status="generated",
+        seeded_count=existing.seeded_count,
+        rr_rounds=existing.rr_rounds,
+        config=resolved_config,
     )
 
     # Run the solver (in memory only — no DB writes until success).
@@ -1752,6 +2228,7 @@ def generate_event_route(
         state=session.state,
         config=session.config,
         rest_between_rounds=session.rest_between_rounds,
+        player_extras=session.player_extras,
     )
     try:
         result = driver.generate_event(event_id, wipe=False)
@@ -1763,13 +2240,15 @@ def generate_event_route(
             result.schedule_result.infeasible_reasons
             if result.schedule_result else []
         )
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"solver returned {result.status.value}: "
-                f"{'; '.join(reasons) or 'no reason'}"
-            ),
+        # Operator-facing wording: "solver returned infeasible: no reason"
+        # reads as a malfunction. Say what happened and what to try.
+        detail = (
+            "The draw's matches don't fit the current day plan"
+            + (f" ({'; '.join(reasons)})" if reasons else "")
+            + ". Free up court time — widen the day window, add courts, or "
+            "reduce other events — then generate again."
         )
+        raise HTTPException(status_code=409, detail=detail)
 
     # Solve succeeded — now persist to DB.
     # 1. Delete the old event row (cascades participants + matches).
@@ -1784,7 +2263,9 @@ def generate_event_route(
         bracket_size=existing.bracket_size,
         seeded_count=existing.seeded_count or 0,
         rr_rounds=existing.rr_rounds,
-        config=dict(existing.config or {}),
+        # Persist the RESOLVED config the draw was generated with (e.g.
+        # Swiss rounds defaulted from the participant count).
+        config=resolved_config,
         status="generated",
     )
     # 3. Re-persist participants.
@@ -1850,9 +2331,188 @@ def generate_event_route(
             score=result.score,
             finished_at_slot=result.finished_at_slot,
             walkover=result.walkover,
+            reason=result.reason,
         )
     # 6. Persist assignments (session.state.assignments updated by solver).
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
+    return _serialize_session(session)
+
+
+@router.post(
+    "/events/{event_id}/rounds/next",
+    response_model=TournamentOut,
+    dependencies=[_OPERATOR],
+)
+def generate_next_round_route(
+    tournament_id: uuid.UUID = Path(...),
+    event_id: str = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> TournamentOut:
+    """Append the next round of a progressive (Swiss) draw.
+
+    Pairs the new round from live standings (``compute_standings`` →
+    ``pair_swiss_round``: score groups, no rematches, bye rotates to the
+    lowest-standing never-byed) and persists it APPEND-ONLY — existing
+    match rows, results, and versions are untouched; there is no wipe
+    and NO solver call. The new units are dependency-free, so
+    ``find_ready_play_units`` picks them up for the existing
+    schedule-next flow.
+
+    Gates: 404 unknown event; 409 non-progressive format / draft status
+    / current round incomplete / all K rounds already generated.
+    """
+    _ensure_tournament_exists(repo, tournament_id)
+    existing = repo.brackets.get_event(tournament_id, event_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="event not found")
+    spec = get_format(existing.format)
+    if spec is None or not spec.progressive:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"format {existing.format!r} is not progressive; "
+                "its rounds are generated upfront"
+            ),
+        )
+    if (existing.status or "draft") == "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=f"event {event_id!r} is draft; generate the draw first",
+        )
+
+    session = _hydrate_session(repo, tournament_id)
+    if session is None:
+        raise HTTPException(status_code=500, detail="hydration failed")
+    draw = session.draws.get(event_id)
+    meta = session.events.get(event_id)
+    if draw is None or meta is None:
+        raise HTTPException(status_code=404, detail="event not found")
+
+    pending = [
+        pu_id
+        for pu_id in draw.play_units
+        if pu_id not in session.state.results
+    ]
+    if pending:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"current round incomplete: {len(pending)} match(es) still "
+                "need results before the next round can be paired"
+            ),
+        )
+
+    # Total round count K from the RESOLVED per-draw config persisted at
+    # generate time (normalize re-derives the default if the key is
+    # somehow absent — same clamp, same participant count).
+    try:
+        resolved_cfg = spec.normalize_config(
+            dict(meta.config or {}), meta.participant_count
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    total_rounds = int(resolved_cfg.get("swiss_rounds", 0))
+    if len(draw.rounds) >= total_rounds:
+        raise HTTPException(
+            status_code=409,
+            detail=f"all {total_rounds} rounds generated",
+        )
+
+    # ── Pair the new round from live standings + pairing history. ─────
+    standings = compute_standings(
+        draw.play_units, session.state.results, list(draw.participants)
+    )
+    prior_pairings: Set[frozenset] = set()
+    bye_history: Set[str] = set()
+    for pu_id, pu in draw.play_units.items():
+        result = session.state.results.get(pu_id)
+        if result is None or result.winner_side == WinnerSide.NONE:
+            continue
+        side_a = pu.side_a[0] if pu.side_a else None
+        side_b = pu.side_b[0] if pu.side_b else None
+        if side_a is not None and side_b is not None:
+            prior_pairings.add(frozenset((side_a, side_b)))
+        elif result.walkover:
+            # Walkover win over an empty side = a bye taken.
+            winner = side_a if side_a is not None else side_b
+            if winner is not None:
+                bye_history.add(winner)
+
+    pairs, bye_pid = pair_swiss_round(standings, prior_pairings, bye_history)
+
+    round_index = len(draw.rounds)
+    new_units, new_slots, new_round_ids = build_swiss_round(
+        pairs,
+        bye_pid,
+        event_id=event_id,
+        # Same prefix contract as the generate routes: ids are
+        # ``{event_id}-R{k}-{m}``.
+        play_unit_id_prefix=event_id,
+        round_index=round_index,
+        duration_slots=meta.duration_slots,
+    )
+
+    # Append in memory: draw + engine state. NOT register_draw — the
+    # draw is already registered; only the new units join, and the only
+    # new result is the bye walkover, recorded directly.
+    draw.play_units.update(new_units)
+    draw.slots.update(new_slots)
+    draw.rounds.append(list(new_round_ids))
+    for pu_id, pu in new_units.items():
+        session.state.play_units[pu_id] = pu
+
+    bye_unit_id: Optional[str] = None
+    if bye_pid is not None:
+        bye_unit_id = new_round_ids[-1]  # build appends the bye last
+        record_result(
+            session.state,
+            session.draws,
+            bye_unit_id,
+            WinnerSide.A,
+            finished_at_slot=None,
+            walkover=True,
+        )
+
+    # ── Persist APPEND-ONLY: new match rows (+ the bye walkover). ─────
+    match_dicts: List[dict] = []
+    for match_index, pu_id in enumerate(new_round_ids):
+        pu = new_units[pu_id]
+        slot_a, slot_b = new_slots[pu_id]
+        match_dicts.append(
+            {
+                "id": pu.id,
+                "round_index": round_index,
+                "match_index": match_index,
+                "kind": pu.kind.value.upper(),
+                "slot_a": _slot_to_dict(slot_a),
+                "slot_b": _slot_to_dict(slot_b),
+                "side_a": list(pu.side_a) if pu.side_a else [],
+                "side_b": list(pu.side_b) if pu.side_b else [],
+                "dependencies": list(pu.dependencies),
+                "expected_duration_slots": pu.expected_duration_slots,
+                "duration_variance_slots": pu.duration_variance_slots,
+                "child_unit_ids": list(pu.child_unit_ids or []),
+                "meta": dict(pu.metadata or {}),
+            }
+        )
+    repo.brackets.bulk_create_matches(tournament_id, event_id, match_dicts)
+    if bye_unit_id is not None:
+        recorded = session.state.results[bye_unit_id]
+        repo.brackets.record_result(
+            tournament_id,
+            event_id,
+            bye_unit_id,
+            winner_side=recorded.winner_side.value,
+            score=recorded.score,
+            finished_at_slot=recorded.finished_at_slot,
+            walkover=recorded.walkover,
+            reason=recorded.reason,
+        )
+    # Session blob (assignments etc.) is unchanged in content but kept in
+    # the same write rhythm as the other mutating routes.
+    _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -1882,6 +2542,7 @@ def delete_event_route(
             detail=f"event status is {existing.status!r}; only draft can be deleted",
         )
     repo.brackets.delete_event(tournament_id, event_id)
+    response_cache.invalidate(tournament_id)
     return Response(status_code=204)
 
 
@@ -1969,6 +2630,7 @@ def record_match_result(
     # tokens so the returned DTO carries the authoritative versions (SP-F3).
     session.match_versions = _load_match_versions(repo, tournament_id)
 
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2033,6 +2695,7 @@ def submit_bracket_command(
             finished_at_slot=body.finished_at_slot,
             walkover=body.walkover,
             score=body.score,
+            reason=body.reason,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -2053,6 +2716,10 @@ def submit_bracket_command(
     # Refresh match versions so the returned DTO carries authoritative tokens.
     session.match_versions = _load_match_versions(repo, tournament_id)
 
+    # CRITICAL: this is the one user-visible staleness case — the command
+    # queue does POST-then-immediate-GET, so a stale cache hit here would
+    # show an unrecorded result. Must invalidate before returning.
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2124,6 +2791,7 @@ def match_action(
         assignment.actual_end_slot = None
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2195,6 +2863,7 @@ def validate_bracket_move_route(
         play_unit_id=body.play_unit_id,
         slot_id=body.slot_id,
         court_id=body.court_id,
+        player_extras=session.player_extras,
     )
     return BracketValidationOut(
         feasible=not conflicts,
@@ -2266,18 +2935,18 @@ def pin_bracket_match(
         )
 
     tournament = repo.tournaments.get_by_id(tournament_id)
-    session_cfg = (
-        (tournament.data or {}).get("bracket_session") if tournament else None
-    ) or {}
+    data_blob = (tournament.data or {}) if tournament else {}
+    session_cfg = data_blob.get("bracket_session") or {}
     time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
 
     driver = TournamentDriver(
         state=session.state,
         config=session.config,
-        solver_options=SolverOptions(
-            time_limit_seconds=time_limit_seconds,
+        solver_options=_bracket_solver_options(
+            time_limit_seconds, data_blob.get("config") or {}
         ),
         rest_between_rounds=session.rest_between_rounds,
+        player_extras=session.player_extras,
     )
     try:
         result = driver.repin_and_resolve(
@@ -2315,6 +2984,7 @@ def pin_bracket_match(
         )
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2371,6 +3041,7 @@ def assign_bracket_court(
     )
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2404,6 +3075,7 @@ def unassign_bracket_court(
     session.state.assignments.pop(body.play_unit_id, None)
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2473,6 +3145,7 @@ def import_tournament_json(
             score=result.score,
             finished_at_slot=result.finished_at_slot,
             walkover=result.walkover,
+            reason=result.reason,
         )
     _persist_session_metadata(
         repo,
@@ -2480,6 +3153,7 @@ def import_tournament_json(
         session=session,
         time_limit_seconds=body.time_limit_seconds,
     )
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
@@ -2562,6 +3236,7 @@ async def import_tournament_csv(
             score=result.score,
             finished_at_slot=result.finished_at_slot,
             walkover=result.walkover,
+            reason=result.reason,
         )
     _persist_session_metadata(
         repo,
@@ -2569,6 +3244,7 @@ async def import_tournament_csv(
         session=session,
         time_limit_seconds=time_limit_seconds,
     )
+    response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 

@@ -6,6 +6,13 @@ _Last updated: 2026-05-13 (post backend-merge arc)_
 > module model (`workspace_modules`), per-workspace signals, and backup endpoints. For the
 > current architecture see the design record in
 > [`superpowers/specs/`](./superpowers/specs) (the 2026-06 SP-A…SP-D specs).
+>
+> **Note (2026-08, SP-CLOUD-1/2):** two decisions below are superseded. **Auth is no longer
+> Supabase Auth** — identity is self-hosted (Argon2id + cookie sessions, `AUTH_MODE=local|cloud`);
+> the Supabase env vars now feed only the data mirror. And the **meet batch solve is no longer a
+> synchronous request** — it is an async job on the DB-backed `solve_jobs` queue with a worker
+> subprocess (`POST /schedule` answers 410). See
+> [Backend structure](./architecture/backend-structure) and `products/scheduler/backend/README.md`.
 
 This file describes the system as it stands at the end of the
 backend-merge arc (PRs 1–4 of T-A through T-H). The arc folded the

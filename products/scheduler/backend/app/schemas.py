@@ -1,7 +1,7 @@
 """Pydantic schemas for API requests/responses - simplified for school sparring."""
 import uuid
 from typing import Annotated, List, Literal, Optional, Dict, Any
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from enum import Enum
 from app.time_utils import now_iso
 
@@ -103,6 +103,10 @@ class TournamentConfig(BaseModel):
     tvGridColumns: Optional[int] = Field(None, ge=1, le=4)
     tvCardSize: Optional[Literal["auto", "compact", "comfortable", "large"]] = None
     tvShowScores: Optional[bool] = None
+    # Display layout configuration (UI-only; all optional).
+    courtOrder: Optional[list[int]] = None
+    hiddenCourts: Optional[list[int]] = None
+    standingsMode: Optional[Literal["off", "side", "rotate"]] = None
     # Roster position-grid event-column order + visibility (UI-only).
     eventOrder: Optional[List[str]] = None
     eventVisible: Optional[Dict[str, bool]] = None
@@ -167,11 +171,17 @@ class BracketPlayerDTO(BaseModel):
 
     ``id`` is the stable slug produced by the frontend ``playerSlug()``
     helper; matches ``bracket_participants.member_ids`` after migration.
+
+    ``availability`` holds POSITIVE (allowed) HH:mm windows — empty
+    means available all day. ``restSlots`` overrides the session's
+    ``defaultRestSlots`` for this player. Both feed the CP-SAT solve
+    path via ``services.bracket.player_constraints`` (SP-D7 S2).
     """
     id: str = Field(..., min_length=1)
     name: str = Field(..., min_length=1)
     notes: Optional[str] = None
     restSlots: Optional[int] = Field(default=None, ge=0)
+    availability: List[AvailabilityWindow] = Field(default_factory=list)
 
 
 class RosterImportDTO(BaseModel):
@@ -271,6 +281,47 @@ class ScheduleDTO(BaseModel):
     # pool is non-empty; older clients ignore both fields.
     candidates: List[ScheduleCandidate] = Field(default_factory=list)
     activeCandidateIndex: Optional[int] = None
+
+
+# ---- Solve jobs (SP-CLOUD-1 long-running-operation resource) ----------
+
+class SolveJobErrorDTO(BaseModel):
+    """Structured run-time error carried INSIDE the job resource.
+
+    Errors that prevent a job from *starting* are normal HTTP errors at
+    submit; anything after 202 lives here (AIP-151's dividing line)."""
+    code: str
+    message: str = ""
+    detail: Optional[dict] = None
+
+
+class SolveJobDTO(BaseModel):
+    """One asynchronous solve — submit returns it, the client polls it.
+
+    ``status`` vocabulary: queued | claimed | running | succeeded |
+    failed | infeasible | cancelled. ``infeasible`` is a domain outcome
+    with its detail in ``result`` (a ScheduleDTO whose status is
+    ``infeasible``), never in ``error``."""
+    id: str
+    tournamentId: str
+    type: str
+    status: str
+    attempts: int
+    maxAttempts: int
+    # Worker-written coarse progress (phase/heartbeat metadata); best-
+    # effort, absent until the first heartbeat.
+    progress: Optional[dict] = None
+    result: Optional[ScheduleDTO] = None
+    error: Optional[SolveJobErrorDTO] = None
+    # Persisted solver params — lets an operator reproduce the solve.
+    params: dict = Field(default_factory=dict)
+    createdAt: str
+    startedAt: Optional[str] = None
+    finishedAt: Optional[str] = None
+
+
+class SolveJobListDTO(BaseModel):
+    jobs: List[SolveJobDTO] = Field(default_factory=list)
 
 
 # ---- Schedule impact (proposal pipeline) ------------------------------
@@ -498,6 +549,24 @@ class ScheduleHistoryEntry(BaseModel):
     schedule: Optional[ScheduleDTO] = None          # full snapshot so the entry can be restored
 
 
+class MeetStandingRowDTO(BaseModel):
+    """One group's school-vs-school pool record.
+
+    Computed fresh on every ``GET /tournaments/{id}/state`` by
+    ``services.meet.standings.compute_meet_standings`` from the
+    already-loaded ``matches``/``groups``/``players`` plus a
+    ``match_states`` read — never persisted, so this is NOT written back
+    on PUT (see ``api/tournaments.py`` — the route excludes it from the
+    blob it commits). Empty when the Meet module isn't enabled for the
+    workspace or there's no finished, scored pool play yet.
+    """
+    groupId: str
+    groupName: str
+    matchesPlayed: int
+    wins: int
+    losses: int
+
+
 class TournamentStateDTO(BaseModel):
     """Authoritative persisted state for one tournament.
 
@@ -525,6 +594,10 @@ class TournamentStateDTO(BaseModel):
     # SP-G1 Plan→Run handoff: operator marks plan as ready before running.
     # Stored in the tournament.data JSON blob; no Alembic migration needed.
     planFinalized: bool = False
+    # Authoritative Meet pool standings (Display redesign, Task 2). Derived,
+    # never persisted — GET computes it fresh from live match_states each
+    # time; PUT strips it before committing (see api/tournaments.py).
+    standings: List[MeetStandingRowDTO] = Field(default_factory=list)
 
 
 class SolverOptionsDTO(BaseModel):
@@ -602,6 +675,7 @@ class BracketCommandRequest(BaseModel):
     with 409 ``stale_version`` when present and stale.  The replay check
     always runs BEFORE the version guard so a re-delivered command whose
     version has advanced is still accepted.
+    ``reason`` annotates contingency results (walkover/retired/forfeit).
     """
 
     id: uuid.UUID
@@ -612,6 +686,17 @@ class BracketCommandRequest(BaseModel):
     finished_at_slot: Optional[int] = None
     walkover: bool = False
     score: Optional[Dict[str, Any]] = None
+    # Contingency annotation (spec 2026-07-14 §1): why the result was
+    # awarded without (full) play. ``walkover`` keeps its existing BYE
+    # routing; ``retired``/``forfeit`` currently ride the same result
+    # path — distinct routing semantics are deferred (debt-log).
+    reason: Optional[Literal["walkover", "retired", "forfeit"]] = None
+
+    @model_validator(mode="after")
+    def _walkover_reason_implies_flag(self) -> "BracketCommandRequest":
+        if self.reason == "walkover":
+            self.walkover = True
+        return self
 
 
 class MatchStateOut(BaseModel):

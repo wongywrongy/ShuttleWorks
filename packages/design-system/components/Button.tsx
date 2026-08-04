@@ -7,22 +7,18 @@ import { cn } from '../lib/utils';
 /**
  * Button — the canonical button primitive.
  *
- * Variants follow BRAND.md §3 (radii=sm on interactive only, brand-orange
- * focus ring via `--ring`). The shadcn-style API is preserved for swap
- * compatibility — scheduler's existing `<Button variant="ghost">` etc.
- * call-sites work without modification when they migrate to import from
- * `@scheduler/design-system`.
- *
- * Note: the `accent` Tailwind class still means LEGACY surface-hover gray
- * during migration (see DESIGN.md §1.11). The `ghost`/`outline` variants
- * below intentionally use `hover:bg-accent` to keep scheduler hovers
- * looking the same. Phase 6 swaps these to `hover:bg-muted` and remaps
- * `accent` to the brand orange.
+ * "Warmed-B blue-glow" language: THE primary action carries the signature
+ * azure glow (`default`/`brand` — accent fill + accent-ink + shadow-glow);
+ * secondary actions are quiet (outline / secondary / ghost / toolbar). Glow
+ * marks intent, not decoration, so reserve `default`/`brand` for the single
+ * primary action on a surface. The shadcn-style API is preserved for swap
+ * compatibility — existing `<Button variant="ghost">` call-sites are unchanged.
+ * Focus ring is the accent via `--ring`.
  */
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm text-sm font-medium ' +
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded text-sm font-medium ' +
     'ring-offset-background ' +
-    'transition-[background-color,color,box-shadow,transform,opacity] duration-150 ease-brand ' +
+    'transition-[background-color,color,box-shadow,transform,opacity,filter] duration-150 ease-brand ' +
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ' +
     'active:scale-[0.97] ' +
     'disabled:pointer-events-none disabled:opacity-50 ' +
@@ -31,25 +27,21 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        // Primary = the azure glow button (accent fill, dark ink, signature glow).
+        default: 'bg-accent text-accent-ink shadow-glow hover:brightness-110',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline:
-          'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+          'border border-border-control bg-card text-foreground hover:bg-muted/40',
         secondary:
           'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
-        // `link` variant uses the brand accent (Signal Orange) so links
-        // stand out from body. `text-primary` (shadcn default) would
-        // resolve to --ink and render the same color as paragraph text.
+        ghost: 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+        // `link` uses the accent so links stand out from body text.
         link: 'text-accent underline-offset-4 hover:underline',
-        // NEW variant for brand emphasis (Signal Orange).
-        // Use sparingly — only for THE primary action on a surface.
-        brand: 'bg-brand text-brand-ink hover:bg-brand/90',
-        // Toolbar chip used by the Schedule + Live page headers — same
-        // hairline + bg-card chrome on both surfaces so action buttons
-        // (Export, Director, Disruption, Re-optimize, Generate) share
-        // one visual vocabulary instead of diverging per page.
+        // `brand` — alias of the primary glow button (explicit intent).
+        brand: 'bg-brand text-brand-ink shadow-glow hover:brightness-110',
+        // Toolbar chip — hairline + bg-card chrome shared across page headers
+        // (Export, Director, Disruption, Re-optimize, Generate).
         toolbar:
           'border border-border bg-card text-card-foreground hover:bg-muted/40 hover:text-foreground',
       },
@@ -59,8 +51,8 @@ const buttonVariants = cva(
         // while touch / pointer targets meet WCAG 2.5.5 (Level AAA).
         xs: "relative h-7 rounded-sm px-2 text-xs gap-1 [&_svg]:size-3.5 before:absolute before:-inset-2 before:content-['']",
         default: 'h-10 px-4 py-2',
-        sm: 'h-9 rounded-sm px-3',
-        lg: 'h-11 rounded-sm px-8',
+        sm: 'h-9 rounded px-3',
+        lg: 'h-11 rounded-md px-8',
         icon: 'h-10 w-10',
         'icon-sm':
           "relative h-8 w-8 [&_svg]:size-4 before:absolute before:-inset-2 before:content-['']",

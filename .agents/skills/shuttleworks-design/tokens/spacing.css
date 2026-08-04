@@ -1,0 +1,30 @@
+/* ============================================================
+   ShuttleWorks — Spacing & layout rhythm
+   Dense-for-ops / roomy-for-setup. 2px base step.
+   ============================================================ */
+
+:root {
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 6px;
+  --sp-4: 8px;
+  --sp-5: 10px;
+  --sp-6: 12px;
+  --sp-8: 16px;   /* table gutter, standard row padding-x */
+  --sp-10: 20px;
+  --sp-12: 24px;  /* setup-surface padding */
+  --sp-16: 32px;
+
+  /* Structural dimensions */
+  --topbar-h: 48px;      /* workspace identity bar */
+  --topbar-h-lg: 52px;   /* hub/settings header */
+  --actionbar-h: 48px;   /* content action bar */
+  --sidebar-w: 216px;    /* module-grouped nav rail */
+  --inspector-w: 280px;  /* right inspector */
+  --content-max: 1280px; /* screen frame max width (fluid below) */
+  --form-max: 640px;     /* setup form column */
+
+  --row-py: 8px;         /* table row vertical padding (dense) */
+  --group-py: 7px;       /* table group-band padding */
+  --col-header-py: 9px;
+}

@@ -115,6 +115,22 @@ def _scheduled_match_start_dt(
     )
 
 
+def _match_label(match: "MatchDTO | None", match_id: str) -> str:
+    """Operator-facing match name for advisory copy.
+
+    Prefer the eventRank code (``MS1``) — the name every board/chip/list in
+    the app displays — over the bare ``#matchNumber`` ordinal, which forced
+    operators to mentally join a third naming dialect. Falls back to the
+    ordinal, then a truncated id.
+    """
+    if match is not None:
+        if match.eventRank:
+            return match.eventRank
+        if match.matchNumber is not None:
+            return f"#{match.matchNumber}"
+    return match_id[:6]
+
+
 # ---------- heuristics -----------------------------------------------------
 
 
@@ -142,9 +158,7 @@ def detect_overruns(
             continue
         # Severity ladders: 5–10 min over = warn, > 10 min = critical.
         severity = "critical" if delay > 10 else "warn"
-        ordinal = (
-            f"#{match.matchNumber}" if match.matchNumber is not None else match.id[:6]
-        )
+        ordinal = _match_label(match, match.id)
         out.append(
             Advisory(
                 id=f"overrun:{match_id}",
@@ -188,11 +202,7 @@ def detect_no_shows(
         if idle_min < NO_SHOW_THRESHOLD_MINUTES:
             continue
         match = matches_by_id.get(match_id)
-        ordinal = (
-            f"#{match.matchNumber}"
-            if match and match.matchNumber is not None
-            else match_id[:6]
-        )
+        ordinal = _match_label(match, match_id)
         severity = "critical" if idle_min > 5 else "warn"
         out.append(
             Advisory(
@@ -393,10 +403,7 @@ def detect_approaching_blackout(
             ).total_seconds() / 60.0
             if overlap_min < 1:
                 continue
-            ordinal = (
-                f"#{match.matchNumber}"
-                if match.matchNumber is not None else match_id[:6]
-            )
+            ordinal = _match_label(match, match_id)
             out.append(
                 Advisory(
                     id=f"approaching_blackout:{match_id}:{blackout.start}",

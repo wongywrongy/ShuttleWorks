@@ -1,38 +1,115 @@
 /* ============================================================================
  * @scheduler/design-system — tokens.css
  *
- * Implements design/BRAND.md §1 (palette), §2 (typography), §4 (spacing),
- * §5 (motion budget), §6 (shadow/elevation). Two substrates: Swiss
- * Industrial Print (light) and Tactical Telemetry (dark). Same brutalist
- * grammar across both; only substrate vars and texture overlays differ.
+ * TWO-LAYER TOKEN SYSTEM (2026-07 color refactor — see DESIGN_COLOR.md)
  *
- * All values are HSL triplets (space-separated, no commas) so consumers
- * can do `hsl(var(--token))` and `hsl(var(--token) / 0.5)` for alpha.
- * Hex equivalents noted inline for human review.
+ *   1. PRIMITIVES  — raw scales (--gray-0…13, --blue-1…10, --green/--amber/
+ *                    --red/--sky/--violet-…). Purely descriptive. NEVER
+ *                    referenced by component code; they exist to be mapped.
+ *   2. SEMANTIC    — intent-named tokens (surface / text / border / action /
+ *                    status). The ONLY layer components (and the Tailwind
+ *                    preset) may consume. Light and dark are two MAPPINGS of
+ *                    this one layer — themes switch via `.dark` /
+ *                    `[data-theme="dark"]` on <html>.
  *
- * NEW canonical tokens follow BRAND.md naming: --bg, --ink, --rule,
- * --accent, etc. LEGACY aliases (--background, --foreground, --primary…)
- * remap to the canonical layer so scheduler's existing components don't
- * break during migration; Phase 6 strips the legacy aliases.
+ * THE RULES (binding — enforced by review, stated once here):
+ *   • Elevation = luminance. Dark ladder: sunken 7% < base 10% < raised 16%
+ *     < overlay 22% lightness (+5–8% per step). Anything floating (rail,
+ *     menu, dialog, card) sits on a LIGHTER surface than its backdrop; dark
+ *     shadows are secondary. No pure black anywhere.
+ *   • One accent. --action-primary (azure) is the only interactive hue:
+ *     primary buttons, links, selection, focus. Nothing decorative uses it.
+ *   • Green means success/complete (and the live/playing match state — the
+ *     one sanctioned operational green). Counts, idle states, and module
+ *     identity are NOT green.
+ *   • Dark accents/status are desaturated 10–25% vs light; no light hex is
+ *     reused as-is on dark.
+ *   • Text ramps come from the gray scale (not opacity); every text token
+ *     must clear 4.5:1 on every surface step it appears on (scripted check:
+ *     scripts/check-contrast.mjs).
+ *
+ * All color values are HSL triplets (space-separated) so consumers can do
+ * `hsl(var(--token))` and `hsl(var(--token) / 0.5)`. Hex noted for review.
+ *
+ * LEGACY note: the pre-refactor canonical names (--bg/--ink/--rule/--accent,
+ * --surface-rail/…, --status-*) and the older shadcn-style aliases
+ * (--background/--card/…) are kept as ALIASES of the semantic layer so every
+ * existing component restyles automatically. New code should prefer the
+ * semantic names.
  * ========================================================================= */
 
 @layer base {
+  /* ==================================================== PRIMITIVES ======
+   * Raw scales. Theme-independent. DO NOT use in components.
+   * ====================================================================== */
   :root {
-    color-scheme: light;
+    /* Cool gray ramp (hue ~220). 0 = white … 13 = near-black ink. */
+    --gray-0:  0 0% 100%;     /* #FFFFFF */
+    --gray-1:  216 24% 98%;   /* #F9FAFB */
+    --gray-2:  216 22% 95%;   /* #EFF2F5 */
+    --gray-3:  216 20% 91%;   /* #E3E7EC */
+    --gray-4:  217 16% 84%;   /* #D1D7DE */
+    --gray-5:  217 13% 71%;   /* #ACB4C0 */
+    --gray-6:  218 11% 55%;   /* #7E8798 — lightest gray that clears 3:1 on white */
+    --gray-7:  219 11% 42%;   /* #5F6877 */
+    --gray-8:  220 12% 34%;   /* #4C5361 */
+    --gray-9:  220 12% 26%;   /* #3A404A */
+    --gray-10: 220 12% 22%;   /* #313640 — dark overlay */
+    --gray-11: 221 13% 16%;   /* #23272E — dark raised */
+    --gray-12: 223 14% 10%;   /* #16181D — dark base */
+    --gray-13: 224 15% 7%;    /* #0F1114 — dark sunken / light ink */
 
-    /* ----- Canonical substrate (Swiss Industrial Print) ------------------- */
-    --bg:           60 13% 95%;    /* #F4F4F0 unbleached documentation paper */
-    --bg-elev:       0  0% 100%;   /* #FFFFFF crisp white sheet (elevated)   */
-    --ink:          40  7%  13%;   /* #24221D soft carbon (dialed back from #0A0A0A) */
-    --ink-muted:    60  1%  29%;   /* #4A4A48 secondary text                  */
-    --ink-faint:    60  1%  60%;   /* #9A9A98 disabled, ghost                 */
-    --rule:         38  6%  24%;   /* #423E37 softened divider/border (was #0A0A0A) */
-    --rule-soft:    45 11%  83%;   /* #D8D6D0 inner divider in dense tables  */
-    --accent:       22 100% 55%;   /* #FF6B1A Signal Orange (single accent)   */
-    --accent-bg:    25 100% 95%;   /* #FFF1E8 tinted callout surface          */
-    --accent-ink:    0  0% 100%;   /* #FFFFFF text on accent fill             */
+    /* Azure (brand/action). 7 = light-theme action, 5 = dark-theme action
+     * (desaturated 83→68). */
+    --blue-1:  221 70% 96%;   /* #ECF1FC selected-bg (light) */
+    --blue-2:  220 66% 90%;   /* #D4E0F7 */
+    --blue-3:  219 68% 80%;   /* #A9C2F0 */
+    --blue-4:  216 68% 74%;   /* #90B1EC dark hover */
+    --blue-5:  216 68% 66%;   /* #6D9BE4 dark action */
+    --blue-6:  220 76% 58%;   /* #4370E5 */
+    --blue-7:  221 83% 53%;   /* #2563EB light action */
+    --blue-8:  222 78% 44%;   /* #1949C7 light hover */
+    --blue-9:  222 65% 30%;   /* #1B347E */
+    --blue-10: 218 50% 16%;   /* #14213D dark selected-bg */
+    --blue-ink: 218 55% 12%;  /* #0E1A2F text on dark accent */
 
-    /* ----- Spacing ladder (BRAND.md §4) ---------------------------------- */
+    /* Green — success / complete / live-match only. */
+    --green-1: 145 55% 94%;   /* #E7F8EE light bg tint */
+    --green-2: 148 48% 85%;   /* #C7EBD5 */
+    --green-4: 152 45% 62%;   /* #72CA9F dark fg (desat 65→45) */
+    --green-5: 155 47% 30%;   /* #28714F dark solid */
+    --green-6: 150 62% 28%;   /* #1B7343 light solid */
+    --green-7: 152 65% 26%;   /* #176D42 light fg */
+    --green-9: 150 40% 15%;   /* #173524 dark bg tint */
+
+    /* Amber — warning / called. */
+    --amber-1: 40 85% 93%;    /* #FCF0D9 */
+    --amber-2: 40 80% 85%;    /* #F7E0B4 */
+    --amber-4: 42 62% 60%;    /* #D8B15A dark fg (desat 92→62) */
+    --amber-5: 40 62% 30%;    /* #7C611D dark solid */
+    --amber-6: 34 90% 31%;    /* #964F08 light solid */
+    --amber-7: 32 92% 33%;    /* #A25907 light fg */
+    --amber-9: 42 45% 15%;    /* #383015 dark bg tint */
+
+    /* Red — danger / blocked / destructive. */
+    --red-1:  0 75% 96%;      /* #FDEDED */
+    --red-2:  0 70% 90%;      /* #F7D4D4 */
+    --red-4:  0 60% 68%;      /* #DE7C7C dark fg (desat 72→60) */
+    --red-6:  0 66% 50%;      /* #D42B2B */
+    --red-7:  0 70% 41%;      /* #B21F1F light fg */
+    --red-9:  0 45% 16%;      /* #3B1616 dark bg tint */
+
+    /* Sky — informational / scheduled-state. */
+    --sky-1:  199 80% 94%;    /* #E3F3FC */
+    --sky-4:  200 60% 62%;    /* #64AFD9 dark fg (desat 98→60) */
+    --sky-7:  201 90% 32%;    /* #08689B light fg */
+    --sky-9:  202 50% 16%;    /* #14293D dark bg tint */
+
+    /* Violet — bracket-module identity (categorical, non-interactive). */
+    --violet-4: 255 65% 75%;  /* #A78BF3 dark */
+    --violet-7: 262 60% 48%;  /* #6A31C4 light */
+
+    /* ----- Spacing ladder ------------------------------------------------- */
     --space-0:    0;
     --space-1:    2px;
     --space-2:    4px;
@@ -45,27 +122,37 @@
     --space-9:   64px;
     --space-10:  96px;
 
-    /* ----- Radii (dialed back — gently rounded, keeps the grid honest) --- */
-    --radius:    6px;      /* default surface corner (cards, panels)         */
-    --radius-sm: 4px;      /* interactive controls (buttons, inputs)         */
-    --radius-md: 8px;      /* larger cards / grouped surfaces                */
-    --radius-lg: 12px;     /* modals / prominent surfaces                    */
+    /* ----- Radii (warmed — rounded corners + gentle elevation) ----------- */
+    --radius-xs: 4px;      /* micro tags, source-initial squares             */
+    --radius-sm: 6px;      /* status pills, small controls                   */
+    --radius:    8px;      /* default: buttons, chips, inputs                */
+    --radius-md: 9px;      /* primary buttons, nav rows (handoff radius-lg)  */
+    --radius-lg: 12px;     /* cards, metric tiles, modals                    */
+    --radius-xl: 14px;     /* screen frame                                   */
 
     /* ----- Easing (canonical app curves) -------------------------------- */
     --ease-brand:      cubic-bezier(0.22, 1, 0.36, 1);
     --ease-out-quick:  cubic-bezier(0.32, 0.72, 0, 1);   /* iOS-sheet curve */
     --ease-linear:     linear;                            /* continuous solver-theatre only */
 
-    /* ----- Motion duration scale (see packages/design-system/MOTION.md) -
-     * Reach for the next-fastest tier when in doubt. 180ms feels more
-     * responsive than 400ms (Emil Kowalski). */
+    /* ----- Motion duration scale (see packages/design-system/MOTION.md) - */
     --motion-instant:  0ms;
     --motion-fast:     120ms;
     --motion-standard: 200ms;
     --motion-moderate: 300ms;
     --motion-slow:     450ms;
 
-    /* ----- Density (inherited from scheduler — comfortable defaults) ----- */
+    /* ----- Handoff motion vocabulary ------------------------------------ */
+    --ease:         cubic-bezier(0.4, 0, 0.2, 1);
+    --dur-fast:     var(--motion-fast);      /* 120ms */
+    --dur:          var(--motion-standard);  /* 200ms */
+    --dur-slow:     320ms;                   /* mount / rail / panel / drawer */
+    --dur-xslow:    480ms;                   /* go-live wipe */
+    --pulse-dur:    1.6s;                    /* live breathe */
+    --nudge-dur:    2s;                      /* late throb */
+    --stagger-step: 40ms;                    /* per-child mount delay */
+
+    /* ----- Density (comfortable defaults) -------------------------------- */
     --density-row-h:        36px;
     --density-cell-py:       8px;
     --density-cell-px:      12px;
@@ -73,7 +160,7 @@
     --density-section-gap:  24px;
     --density-badge-h:      22px;
 
-    /* ----- Type ladder px (BRAND.md §2 — strict 10/11/12/14/16/18/24) --- */
+    /* ----- Type ladder px (strict 10/11/12/14/16/18/24) ----------------- */
     --text-3xs:  0.625rem;  /* 10px footnote / status pill / micro-stamp     */
     --text-2xs:  0.6875rem; /* 11px overline / eyebrow / SectionHeader       */
     --text-xs:   0.75rem;   /* 12px metadata / mono ids                      */
@@ -82,18 +169,9 @@
     --text-lg:   1.125rem;  /* 18px                                          */
     --text-2xl:  1.5rem;    /* 24px card titles                              */
 
-    /* ----- Type stacks (BRAND.md §2) -------------------------------------
-     * The fallback chain matters per product:
-     *   • Scheduler self-hosts @fontsource-variable/geist + jetbrains-mono.
-     *     Both register as `Geist Variable` / `JetBrains Mono Variable`.
-     *   • Tournament currently loads Inter via the rsms.me CDN, which
-     *     registers as `Inter` (NOT `Inter Variable`). The chain must
-     *     include plain `'Inter'` or tournament falls all the way through
-     *     to system-ui — which is exactly the bug Phase 2b(ii.b)
-     *     introduced. Plain `'Inter'` stays in every chain. */
-    --font-display: 'Inter', 'Archivo Black', 'Monument Extended',
-                    -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                    sans-serif;
+    /* ----- Type stacks --------------------------------------------------- */
+    --font-display: 'Geist Variable', 'Inter', -apple-system, BlinkMacSystemFont,
+                    'Segoe UI', sans-serif;
     --font-sans:    'Geist Variable', 'Inter Variable', 'Inter',
                     -apple-system, BlinkMacSystemFont, 'Segoe UI',
                     'Roboto', 'Helvetica Neue', sans-serif;
@@ -102,87 +180,169 @@
                     Menlo, Monaco, Consolas, 'Liberation Mono',
                     'Courier New', monospace;
 
-    /* ----- Semantic type roles (kept from scheduler for compatibility) -- */
+    /* ----- Semantic type roles ------------------------------------------ */
     --h1-size: 1.5rem;     --h1-weight: 600; --h1-tracking: -0.01em;
     --h2-size: 1.125rem;   --h2-weight: 600; --h2-tracking: -0.005em;
     --h3-size: 1rem;       --h3-weight: 600;
     --p-size:  0.875rem;   --p-weight:  400; --p-leading: 1.5;
     --label-size:   0.75rem;    --label-weight:   500;
-    --eyebrow-size: 0.6875rem;  --eyebrow-weight: 600; --eyebrow-tracking: 0.06em;
+    --eyebrow-size: 0.625rem;   --eyebrow-weight: 600; --eyebrow-tracking: 0.08em;
 
-    /* ----- Display type — heavy and tight, but eased off the full wall --- */
-    --display-tracking: -0.022em;
-    --display-leading:  0.96;
+    /* ----- Display type -------------------------------------------------- */
+    --display-tracking: -0.03em;
+    --display-leading:  1.0;
     --display-min:      clamp(2.5rem, 6vw, 6rem);
     --display-section:  clamp(1.5rem, 3vw, 2.5rem);
 
-    /* ----- Shadow (soft elevation; hard offset kept as an opt-in token) -- */
-    --shadow-none: none;
-    --shadow-hard: 0 3px 0 hsl(var(--rule));            /* opt-in hard offset */
-    --shadow-sm: 0 1px 2px hsl(var(--ink) / 0.08);
-    --shadow-md: 0 2px 8px hsl(var(--ink) / 0.10);
-    --shadow-lg: 0 10px 28px hsl(var(--ink) / 0.12);
-
-    /* ----- Z-index scale ------------------------------------------------- */
-    /* Popovers sit ABOVE modals so dropdowns/tooltips opened inside a
-     * dialog render in front of the dialog body (the standard a11y
-     * expectation). The earlier hierarchy put popover below modal,
-     * which clipped Select menus inside DisruptionDialog/MoveMatchDialog.
-     */
+    /* ----- Z-index scale -------------------------------------------------- */
     --z-hud:      10;
     --z-chrome:   20;
     --z-overlay:  40;
     --z-modal:    50;
     --z-popover:  60;
+  }
 
-    /* ----- Status palette (inherited from scheduler, unchanged) ---------- */
-    /* Status colors live in their own semantic namespace and are NEVER
-     * brand accents (BRAND.md §1). Light values: saturated hue + 38-50%L.
-     */
-    --status-live:        142 71% 38%;
-    --status-live-bg:     142 71% 92%;
-    --status-called:       38 92% 42%;
-    --status-called-bg:    38 92% 92%;
-    --status-started:     199 89% 38%;
-    --status-started-bg:  199 89% 93%;
-    --status-blocked:       0 72% 45%;
-    --status-blocked-bg:    0 72% 95%;
-    --status-warning:      38 92% 42%;
-    --status-warning-bg:   38 92% 92%;
-    --status-idle:        220  9% 46%;
-    --status-idle-bg:     220 14% 92%;
-    --status-done:        220 13% 50%;
-    --status-done-bg:     220 14% 94%;
+  /* ============================================== SEMANTIC — LIGHT ======
+   * Light is its own logic, not an inversion: near-white base, subtle gray
+   * sunken wells, white raised/overlay surfaces carried by hairline+shadow.
+   * (The old blue-gray page wash is now the EXPLICIT --surface-sunken.)
+   * ====================================================================== */
+  :root,
+  [data-theme="light"] {
+    color-scheme: light;
 
-    /* ----- Legacy aliases (scheduler compat — stripped in Phase 6) ------- *
-     * Existing scheduler components reference these names. They remap to  *
-     * the canonical layer so the visual palette swap is automatic without *
-     * touching every component.                                            */
-    --background:           var(--bg);
-    --foreground:           var(--ink);
-    --card:                 var(--bg-elev);
-    --card-foreground:      var(--ink);
-    --popover:              var(--bg-elev);
-    --popover-foreground:   var(--ink);
-    --primary:              var(--ink);        /* scheduler used primary as text/ink */
-    --primary-foreground:   var(--bg-elev);
-    --secondary:           60  8% 90%;          /* light gray surface */
-    --secondary-foreground: var(--ink);
-    --muted:               60  8% 90%;
-    --muted-foreground:     var(--ink-muted);
-    --destructive:           0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border:               var(--rule-soft);
+    /* Surfaces — the elevation ladder */
+    --surface-sunken:  var(--gray-2);   /* #EFF2F5 wells / bands / backdrops */
+    --surface-base:    var(--gray-1);   /* #F9FAFB the page                  */
+    --surface-raised:  var(--gray-0);   /* #FFFFFF cards / rails / inputs    */
+    --surface-overlay: var(--gray-0);   /* #FFFFFF menus / dialogs (+shadow) */
+
+    /* Text ramp (gray scale, never opacity) */
+    --text-primary:    var(--gray-13);  /* #0F1114 */
+    --text-secondary:  var(--gray-8);   /* #4C5361 */
+    --text-muted:      var(--gray-7);   /* #5F6877 */
+    --text-on-accent:  var(--gray-0);   /* #FFFFFF */
+
+    /* Interaction washes (Phase 0a) — hover/selected must be VISIBLE on
+     * every surface step in both themes (old bg-muted/40 washes were no-ops
+     * on dark raised surfaces). Opaque tokens; apply as bg. */
+    --surface-hover:         var(--gray-2);   /* #EFF2F5 */
+    --surface-selected-wash: var(--blue-1);   /* #ECF1FC */
+
+    /* Borders */
+    --border-hairline: var(--gray-3);   /* #E3E7EC dividers (decorative)     */
+    --border-strong:   var(--gray-6);   /* #7E8798 inputs/controls — ≥3:1    */
+    --border-focus:    var(--blue-7);   /* focus ring                        */
+
+    /* Action — THE one accent */
+    --action-primary:       var(--blue-7);
+    --action-primary-hover: var(--blue-8);
+    --action-selected-bg:   var(--blue-1);
+
+    /* Status — fg/bg pairs. fg clears 4.5:1 on white AND on its bg tint. */
+    --status-success-fg: var(--green-7);
+    --status-success-bg: var(--green-1);
+    --status-warning-fg: var(--amber-7);
+    --status-warning-bg: var(--amber-1);
+    --status-danger-fg:  var(--red-7);
+    --status-danger-bg:  var(--red-1);
+    --status-info-fg:    var(--sky-7);
+    --status-info-bg:    var(--sky-1);
+
+    /* ---------------- Canonical aliases (legacy names → semantic) -------- */
+    --bg:           var(--surface-base);
+    --bg-elev:      var(--surface-raised);
+    --ink:          var(--text-primary);
+    --ink-2:        221 30% 12%;              /* #161B26 body                */
+    --ink-3:        var(--text-secondary);
+    --ink-muted:    var(--text-muted);
+    --ink-faint:    var(--text-muted);
+    --rule:         var(--border-hairline);
+    --rule-soft:    216 20% 93%;              /* #E8ECF0 in-table divider    */
+    --accent:       var(--action-primary);
+    --accent-bg:    var(--action-selected-bg);
+    --accent-ink:   var(--text-on-accent);
+
+    --surface-rail:   var(--surface-raised);
+    --surface-screen: var(--surface-raised);
+    --surface-band:   var(--surface-sunken);
+    --surface-active: var(--action-selected-bg);
+    --chip-tag:       var(--gray-3);
+
+    --border-control: var(--gray-6);
+    /* legacy --border-strong name kept via the semantic token above */
+
+    /* ----- Shadows (raised/overlay carry hairline + shadow in light) ----- */
+    --shadow-none: none;
+    --shadow-hard: 0 3px 0 hsl(var(--rule));
+    --shadow-sm: 0 1px 2px hsl(var(--gray-13) / 0.08);
+    --shadow-md: 0 2px 8px hsl(var(--gray-13) / 0.10);
+    --shadow-lg: 0 10px 28px hsl(var(--gray-13) / 0.12);
+    --shadow-frame: 0 24px 60px hsl(var(--gray-13) / 0.14);
+    --shadow-card:  0 1px 2px hsl(var(--gray-13) / 0.08);
+
+    /* ----- Glow — primary actions + live signals only -------------------- */
+    --glow-accent:    0 0 22px hsl(var(--accent) / 0.22);
+    --glow-accent-lg: 0 6px 18px hsl(var(--accent) / 0.16);
+    --glow-live:      0 0 8px hsl(var(--status-live) / 0.6);
+    --page-glow: radial-gradient(1100px 480px at 72% -6%,
+                   hsl(var(--accent) / 0.06), transparent 62%);
+
+    /* ----- Operational status (match-state vocabulary) -------------------
+     * live=green(success family) called/warning=amber blocked=red(danger)
+     * started=sky(info) idle/done=neutral gray. The -solid/-border/-ink
+     * triplets drive the muted-solid board chips. */
+    --status-live:         var(--status-success-fg);
+    --status-live-bg:      var(--status-success-bg);
+    --status-live-solid:   var(--green-6);
+    --status-live-border:  var(--green-7);
+    --status-live-ink:     var(--green-1);
+    --status-called:        var(--status-warning-fg);
+    --status-called-bg:     var(--status-warning-bg);
+    --status-called-solid:  var(--amber-6);
+    --status-called-border: var(--amber-7);
+    --status-called-ink:    var(--amber-1);
+    --status-started:      var(--status-info-fg);
+    --status-started-bg:   var(--status-info-bg);
+    --status-blocked:      var(--status-danger-fg);
+    --status-blocked-bg:   var(--status-danger-bg);
+    --status-warning:      var(--status-warning-fg);
+    --status-idle:         var(--text-muted);
+    --status-idle-bg:      var(--surface-sunken);
+    --status-done:         var(--text-muted);
+    --status-done-bg:      var(--surface-sunken);
+
+    /* ----- Module identity (categorical; NOT for badges/decoration) ------ */
+    --module-meet:    var(--blue-7);
+    --module-bracket: var(--violet-7);
+    --module-ops:     var(--green-7);
+    --module-display: var(--sky-7);
+
+    /* ----- Legacy shadcn-style aliases ----------------------------------- */
+    --background:           var(--surface-base);
+    --foreground:           var(--text-primary);
+    --card:                 var(--surface-raised);
+    --card-foreground:      var(--text-primary);
+    --popover:              var(--surface-overlay);
+    --popover-foreground:   var(--text-primary);
+    --primary:              var(--text-primary);
+    --primary-foreground:   var(--surface-raised);
+    --secondary:            var(--surface-sunken);
+    --secondary-foreground: var(--text-primary);
+    --muted:                var(--surface-sunken);
+    --muted-foreground:     var(--text-muted);
+    --destructive:          var(--red-6);
+    --destructive-foreground: var(--gray-0);
+    --border:               var(--border-hairline);
     --input:                var(--rule-soft);
-    --ring:                 var(--accent);     /* focus ring = brand accent */
+    --ring:                 var(--border-focus);
 
-    /* Semantic data colors (kept for compatibility) */
-    --success:           142 71% 45%;
-    --success-foreground:  0  0% 98%;
-    --warning:            38 92% 50%;
-    --warning-foreground:  0  0% 98%;
-    --info:              199 89% 48%;
-    --info-foreground:     0  0% 98%;
+    --success:           var(--status-success-fg);
+    --success-foreground: var(--gray-0);
+    --warning:            var(--status-warning-fg);
+    --warning-foreground: var(--gray-0);
+    --info:              var(--status-info-fg);
+    --info-foreground:    var(--gray-0);
   }
 
   /* ----- Compact density (toggle via [data-density="compact"]) ------------ */
@@ -195,59 +355,132 @@
     --density-badge-h:     18px;
   }
 
-  /* ============================================================== DARK ==
-   * Tactical Telemetry substrate. Same brutalist grammar; same single
-   * accent; substrate flips. .dark class on <html> triggers it (matches
-   * scheduler's existing AppearanceSettings toggle).
+  /* =============================================== SEMANTIC — DARK ======
+   * Elevation = luminance: sunken 7% < base 10% < raised 16% < overlay 22%.
+   * No pure black. Accents/status desaturated vs light. Shadows secondary.
+   * Triggered by `.dark` OR `[data-theme="dark"]` on <html>.
    * ====================================================================== */
-  .dark {
+  .dark,
+  [data-theme="dark"] {
     color-scheme: dark;
 
-    --bg:           0  0%   4%;    /* #0A0A0A deactivated CRT (NEVER pure black) */
-    --bg-elev:      0  0%   8%;    /* #141414 elevated panel                      */
-    --ink:          0  0%  92%;    /* #EAEAEA white phosphor (NEVER pure white)   */
-    --ink-muted:    0  0%  60%;    /* #9A9A9A secondary                            */
-    --ink-faint:    0  0%  33%;    /* #555555 disabled                             */
-    --rule:         0  0%  70%;    /* softened phosphor line (was 92%)             */
-    --rule-soft:    0  0%  16%;    /* #2A2A2A inner divider                        */
-    --accent:      22 100% 55%;    /* same orange both modes (brutalist rule)      */
-    --accent-bg:   22  70% 10%;    /* #2A1808 tinted callout on dark substrate     */
-    --accent-ink:   0  0%   4%;    /* #0A0A0A text on accent fill                  */
+    /* Surfaces — the elevation ladder (the load-bearing dark-mode fix) */
+    --surface-sunken:  var(--gray-13);  /* #0F1114 wells / bands             */
+    --surface-base:    var(--gray-12);  /* #16181D the page — NOT black      */
+    --surface-raised:  var(--gray-11);  /* #23272E cards / rails / inputs    */
+    --surface-overlay: var(--gray-10);  /* #313640 menus / dialogs           */
 
-    /* Shadow rule on dark: none; elevation via --bg-elev contrast only */
+    /* Text ramp — off-white, never #FFF body text */
+    --text-primary:    220 20% 95%;     /* #F0F2F5 */
+    --text-secondary:  var(--gray-4);   /* #D1D7DE */
+    --text-muted:      var(--gray-5);   /* #ACB4C0 — clears 4.5 on overlay   */
+    --text-on-accent:  var(--blue-ink); /* #0E1A2F navy on the light accent  */
+
+    /* Interaction washes — dark values visible on raised (16%): hover
+     * lightens toward overlay; selected uses the deep azure. */
+    --surface-hover:         var(--gray-10);  /* #313640 */
+    --surface-selected-wash: var(--blue-10);  /* #14213D */
+
+    /* Borders */
+    --border-hairline: 221 13% 20%;     /* #2C313B divider on base/raised    */
+    --border-strong:   var(--gray-6);   /* #7E8798 inputs — ≥3:1 on raised   */
+    --border-focus:    var(--blue-5);
+
+    /* Action — desaturated + lightened for dark (S 83→68) */
+    --action-primary:       var(--blue-5);   /* #6D9BE4 */
+    --action-primary-hover: var(--blue-4);   /* #90B1EC */
+    --action-selected-bg:   var(--blue-10);  /* #14213D */
+
+    /* Status — desaturated fg on deep tints */
+    --status-success-fg: var(--green-4);
+    --status-success-bg: var(--green-9);
+    --status-warning-fg: var(--amber-4);
+    --status-warning-bg: var(--amber-9);
+    --status-danger-fg:  var(--red-4);
+    --status-danger-bg:  var(--red-9);
+    --status-info-fg:    var(--sky-4);
+    --status-info-bg:    var(--sky-9);
+
+    /* ---------------- Canonical aliases ---------------------------------- */
+    --bg:           var(--surface-base);
+    --bg-elev:      var(--surface-raised);
+    --ink:          var(--text-primary);
+    --ink-2:        218 16% 90%;              /* #E1E5EA body                */
+    --ink-3:        var(--text-secondary);
+    --ink-muted:    var(--text-muted);
+    --ink-faint:    var(--text-muted);
+    --rule:         var(--border-hairline);
+    --rule-soft:    222 13% 17%;              /* #262A31 in-table divider    */
+    --accent:       var(--action-primary);
+    --accent-bg:    var(--action-selected-bg);
+    --accent-ink:   var(--text-on-accent);
+
+    --surface-rail:   var(--surface-raised);  /* rails now sit ABOVE the page */
+    --surface-screen: var(--surface-base);
+    --surface-band:   var(--surface-sunken);
+    --surface-active: var(--action-selected-bg);
+    --chip-tag:       var(--gray-10);
+
+    --border-control: var(--gray-6);
+
+    /* ----- Shadows (surface color carries elevation; shadows soften) ----- */
     --shadow-sm:   none;
-    --shadow-md:   none;
     --shadow-hard: none;
-    --shadow-lg:   none;
+    --shadow-frame: 0 24px 60px hsl(var(--gray-13) / 0.55);
+    --shadow-card:  0 2px 8px hsl(var(--gray-13) / 0.4);
+    --shadow-md:   var(--shadow-card);
+    --shadow-lg:   var(--shadow-frame);
 
-    /* Status palette — desaturated text + lower-lightness backgrounds */
-    --status-live:        142 71% 60%;
-    --status-live-bg:     142 71% 25%;
-    --status-called:       38 92% 65%;
-    --status-called-bg:    38 92% 25%;
-    --status-started:     199 89% 65%;
-    --status-started-bg:  199 89% 25%;
-    --status-blocked:       0 72% 65%;
-    --status-blocked-bg:    0 72% 25%;
-    --status-warning:      38 92% 65%;
-    --status-warning-bg:   38 92% 25%;
-    --status-idle:          0  0% 60%;
-    --status-idle-bg:       0  0% 16%;
-    --status-done:          0  0% 50%;
-    --status-done-bg:       0  0% 14%;
+    /* Glow reads stronger on the dark substrate */
+    --glow-accent:    0 0 22px hsl(var(--accent) / 0.3);
+    --glow-accent-lg: 0 0 28px hsl(var(--accent) / 0.14);
 
-    /* Semantic data colors */
-    --success:           142 71% 55%;
-    --success-foreground:  0  0% 10%;
-    --warning:            38 92% 58%;
-    --warning-foreground:  0  0% 10%;
-    --info:              199 89% 60%;
-    --info-foreground:     0  0% 10%;
-    --destructive:         0 72% 60%;
-    --destructive-foreground: 0 0% 98%;
+    /* ----- Operational status --------------------------------------------- */
+    --status-live:         var(--status-success-fg);
+    --status-live-bg:      var(--status-success-bg);
+    --status-live-solid:   var(--green-5);
+    --status-live-border:  var(--green-4);
+    --status-live-ink:     var(--green-1);
+    --status-called:        var(--status-warning-fg);
+    --status-called-bg:     var(--status-warning-bg);
+    --status-called-solid:  var(--amber-5);
+    --status-called-border: var(--amber-4);
+    --status-called-ink:    var(--amber-1);
+    --status-started:      var(--status-info-fg);
+    --status-started-bg:   var(--status-info-bg);
+    --status-blocked:      var(--status-danger-fg);
+    --status-blocked-bg:   var(--status-danger-bg);
+    --status-warning:      var(--status-warning-fg);
+    --status-idle:         var(--text-muted);
+    --status-idle-bg:      var(--gray-10);
+    --status-done:         var(--text-muted);
+    --status-done-bg:      var(--gray-10);
 
-    /* Legacy surface tokens — gray surfaces become charcoal */
-    --secondary:           0  0% 14%;
-    --muted:               0  0% 14%;
+    /* ----- Module identity ------------------------------------------------ */
+    --module-meet:    var(--blue-5);
+    --module-bracket: var(--violet-4);
+    --module-ops:     var(--green-4);
+    --module-display: var(--sky-4);
+
+    /* ----- Legacy aliases -------------------------------------------------- */
+    /* Phase 0a fix (audit §3.G): dark --muted/--secondary aliased the RAISED
+     * surface, so every bg-muted/* wash and solid muted panel on a card was
+     * pixel-identical to the card — invisible hover/selected states,
+     * vanished header bands. --muted now maps to the SUNKEN gray (solids
+     * read recessed; alpha washes visibly darken on every surface step);
+     * --secondary (solid control fills) maps one step ABOVE raised so
+     * secondary buttons are visible on cards. */
+    --secondary:          var(--gray-10);
+    --muted:              var(--gray-13);
+    --destructive:        var(--red-4);
+    --destructive-foreground: var(--gray-13);
+    --input:              var(--rule-soft);
+
+    --success:           var(--status-success-fg);
+    --success-foreground: var(--gray-13);
+    --warning:            var(--status-warning-fg);
+    --warning-foreground: var(--gray-13);
+    --info:              var(--status-info-fg);
+    --info-foreground:    var(--gray-13);
   }
 }

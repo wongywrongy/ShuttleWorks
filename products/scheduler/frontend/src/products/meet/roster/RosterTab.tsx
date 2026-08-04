@@ -42,9 +42,13 @@ import { EVENT_LABEL, isDoublesRank } from './positionGrid/helpers';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
 import { DetailDrawer } from './PlayerDetailPanel';
+import { DetailDock, PickerPopover } from '../../../components/control-plane';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
+import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 
 export function RosterTab() {
   const groups = useTournamentStore((s) => s.groups);
@@ -287,8 +291,10 @@ export function RosterTab() {
             activeSchoolId={activeSchoolId}
             onSelect={setActiveSchoolId}
           />
-          {/* `relative` so the detail drawer can float over the grid's
-              right edge as a layer on top (the grid keeps full width). */}
+          {/* Flex ROW: list · grid · docked detail drawer. The drawer is a
+              real layout column (DetailDock) so the grid reflows beside it;
+              `relative` anchors the dock's narrow-viewport overlay
+              fallback. minContentWidth accounts for the 260px left aside. */}
           <div className="relative flex min-h-0 flex-1 overflow-hidden">
             {/* LEFT — filter + player list */}
             <aside
@@ -338,8 +344,12 @@ export function RosterTab() {
               </div>
             </main>
 
-            {/* DETAIL DRAWER — floats over the grid. A clicked position
+            {/* DETAIL DRAWER — docked beside the grid. A clicked position
                 (its 1–2 occupants) or a clicked list player. */}
+            <DetailDock
+              open={selectedRank != null || selectedPlayer != null}
+              minContentWidth={820}
+            >
             {selectedRank ? (
               <DetailDrawer
                 eyebrow="Position"
@@ -368,6 +378,7 @@ export function RosterTab() {
                 onClose={closeDrawer}
               />
             ) : null}
+            </DetailDock>
           </div>
         </div>
       </div>
@@ -425,7 +436,7 @@ function SchoolTabs({
           >
             <span className="max-w-[14rem] truncate">{g.name}</span>
             <span
-              className={`tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground/60'}`}
+              className={`tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground'}`}
             >
               {counts.get(g.id) ?? 0}
             </span>
@@ -441,18 +452,11 @@ function SchoolTabs({
  * to name a new school. Enter commits; Esc / outside-click cancels.
  * ========================================================================= */
 function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void }) {
+  // Building the roster is a mutation — a viewer may not (audit A2-followup).
+  const canEditWorkspace = useCanEdit();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const click = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', click);
-    return () => document.removeEventListener('mousedown', click);
-  }, [open]);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
 
   const commit = () => {
     const name = draft.trim();
@@ -462,61 +466,62 @@ function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void })
   };
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        data-testid="school-add-button"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
-      >
-        ＋ Add school
-      </button>
-      {open ? (
-        <div
-          role="dialog"
-          aria-label="Add school"
-          className="motion-enter absolute right-0 top-full z-overlay mt-1 w-64 rounded-sm border border-border bg-popover p-2 text-popover-foreground shadow-lg"
-        >
-          <input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commit();
-              else if (e.key === 'Escape') {
-                setDraft('');
-                setOpen(false);
-              }
-            }}
-            placeholder="School name"
-            data-testid="school-add-input"
-            className="h-7 w-full rounded-sm border border-border bg-bg-elev px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setDraft('');
-                setOpen(false);
-              }}
-              className="rounded-sm border border-border px-2 py-0.5 text-xs hover:bg-muted/40"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={commit}
-              disabled={!draft.trim()}
-              className="rounded-sm bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-            >
-              Add
-            </button>
-          </div>
+    <PickerPopover open={open} onOpenChange={setOpen}>
+      <PickerPopover.Anchor asChild>
+        <div ref={anchorRef}>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            disabled={!canEditWorkspace}
+            title={!canEditWorkspace ? READ_ONLY_MESSAGE : undefined}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            data-testid="school-add-button"
+            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            ＋ Add school
+          </button>
         </div>
-      ) : null}
-    </div>
+      </PickerPopover.Anchor>
+      <PickerPopover.Panel
+        aria-label="Add school"
+        align="end"
+        guardRef={anchorRef}
+      >
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            else if (e.key === 'Escape') setDraft('');
+          }}
+          placeholder="School name"
+          data-testid="school-add-input"
+          className="h-7 w-full rounded-sm border border-border bg-bg-elev px-2 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+        />
+        <div className="mt-2 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setDraft('');
+              setOpen(false);
+            }}
+            className="rounded-sm border border-border px-2 py-0.5 text-xs hover:bg-muted/40"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={commit}
+            disabled={!draft.trim()}
+            className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow hover:brightness-110 disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+      </PickerPopover.Panel>
+    </PickerPopover>
   );
 }
 
@@ -534,23 +539,7 @@ function BulkImportMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const click = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', click);
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('mousedown', click);
-      document.removeEventListener('keydown', key);
-    };
-  }, [open]);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
 
   const parseNames = (input: string): string[] =>
     input
@@ -567,65 +556,75 @@ function BulkImportMenu({
     setOpen(false);
   };
 
-  const disabled = !schoolId;
+  const canEditWorkspace = useCanEdit();
+  const disabled = !schoolId || !canEditWorkspace;
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        disabled={disabled}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        data-testid="bulk-import-toggle"
-        title={disabled ? 'Select a school first' : 'Bulk-import players'}
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+    <PickerPopover open={open && !disabled} onOpenChange={setOpen}>
+      <PickerPopover.Anchor asChild>
+        <div ref={anchorRef}>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            disabled={disabled}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            data-testid="bulk-import-toggle"
+            title={
+              !canEditWorkspace
+                ? READ_ONLY_MESSAGE
+                : disabled
+                  ? 'Select a school first'
+                  : 'Bulk-import players'
+            }
+            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            ＋ Bulk import
+          </button>
+        </div>
+      </PickerPopover.Anchor>
+      <PickerPopover.Panel
+        aria-label="Bulk-import players"
+        align="end"
+        className="w-72 max-h-none"
+        guardRef={anchorRef}
       >
-        ＋ Bulk import
-      </button>
-      {open && !disabled ? (
-        <div
-          role="dialog"
-          aria-label="Bulk-import players"
-          className="motion-enter absolute right-0 top-full z-overlay mt-1 w-72 rounded-sm border border-border bg-popover p-2 text-popover-foreground shadow-lg"
-        >
-          <textarea
-            autoFocus
-            rows={5}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={'Paste names, one per line.\nToan Le\nKyle Wong'}
-            data-testid="bulk-import-textarea"
-            className="w-full resize-y rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          <div className="mt-1.5 flex items-center justify-between">
-            <span className="text-2xs tabular-nums text-muted-foreground">
-              {names.length} name{names.length === 1 ? '' : 's'}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setDraft('');
-                  setOpen(false);
-                }}
-                className="rounded-sm border border-border px-2 py-0.5 text-xs hover:bg-muted/40"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={commit}
-                disabled={names.length === 0}
-                data-testid="bulk-import-commit"
-                className="rounded-sm bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-              >
-                Add {names.length || ''}
-              </button>
-            </div>
+        <textarea
+          autoFocus
+          rows={5}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={'Paste names, one per line.\nToan Le\nKyle Wong'}
+          data-testid="bulk-import-textarea"
+          className="w-full resize-y rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+        />
+        <div className="mt-1.5 flex items-center justify-between">
+          <span className="text-2xs tabular-nums text-muted-foreground">
+            {names.length} name{names.length === 1 ? '' : 's'}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDraft('');
+                setOpen(false);
+              }}
+              className="rounded-sm border border-border px-2 py-0.5 text-xs hover:bg-muted/40"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={commit}
+              disabled={names.length === 0}
+              data-testid="bulk-import-commit"
+              className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow hover:brightness-110 disabled:opacity-50"
+            >
+              Add {names.length || ''}
+            </button>
           </div>
         </div>
-      ) : null}
-    </div>
+      </PickerPopover.Panel>
+    </PickerPopover>
   );
 }
 
@@ -701,19 +700,13 @@ function PlayerListSection({
             <span className="min-w-0 flex-1">
               <DraggablePlayerChip player={p} schoolId={schoolId} />
             </span>
-            <button
-              type="button"
-              data-no-select="true"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeletePlayer(p.id);
-              }}
-              title={`Remove ${p.name}`}
-              aria-label={`Remove ${p.name}`}
-              className="shrink-0 rounded-sm p-0.5 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-            >
-              ×
-            </button>
+            {/* Two-click arm: this used to delete a player outright on one
+                hover-revealed click, with no confirm and no undo (audit F1). */}
+            <ConfirmDeleteButton
+              label={p.name}
+              onConfirm={() => onDeletePlayer(p.id)}
+              testId={`roster-remove-${p.id}`}
+            />
           </li>
         );
       })}

@@ -8,7 +8,8 @@ place a match before then.
 """
 from __future__ import annotations
 
-from typing import Iterable, List, Sequence
+import logging
+from typing import Iterable, List, Mapping, Optional, Sequence
 
 from scheduler_core.domain.models import (
     Match,
@@ -24,6 +25,14 @@ from scheduler_core.domain.tournament import (
     TournamentState,
 )
 
+from .player_constraints import (
+    PlayerExtras,
+    intersect_window_lists,
+    intersect_windows,
+)
+
+logger = logging.getLogger("scheduler.bracket.adapter")
+
 
 def build_problem(
     state: TournamentState,
@@ -32,6 +41,7 @@ def build_problem(
     config: ScheduleConfig,
     solver_options: SolverOptions | None = None,
     previous_assignments: List[PreviousAssignment] | None = None,
+    player_extras: Optional[Mapping[str, PlayerExtras]] = None,
 ) -> ScheduleRequest:
     """Assemble a SchedulingProblem for the engine.
 
@@ -44,6 +54,10 @@ def build_problem(
     re-pin solve (see `TournamentDriver.repin_and_resolve`); when
     `None` it defaults to `[]`, preserving the append-only
     `schedule_next_round` behaviour.
+
+    `player_extras` (SP-D7 S2) carries per-roster-player availability
+    windows + rest_slots keyed by player id; `None` preserves the
+    uniform round-window behaviour exactly.
     """
     if not ready_play_unit_ids:
         raise ValueError("no ready play units to schedule")
@@ -84,6 +98,7 @@ def build_problem(
         referenced_player_ids,
         state.participants,
         availability_window=availability_window,
+        extras=player_extras,
     )
 
     return ScheduleRequest(
@@ -123,6 +138,7 @@ def build_players(
     participants: dict,
     *,
     availability_window: tuple[int, int],
+    extras: Optional[Mapping[str, PlayerExtras]] = None,
 ) -> List[Player]:
     """Build engine Players for a round.
 
@@ -131,21 +147,115 @@ def build_players(
     engine refuses to place this round's matches before
     `current_slot`. This is the simplest way to honor layered
     scheduling without modifying the engine.
+
+    `extras` (SP-D7 S2) carries per-roster-player allowed windows +
+    rest_slots. When `None` (or when a player id has no entry) the
+    output is exactly the pre-extras shape. When a player has windows,
+    their availability becomes the INTERSECTION of those windows with
+    the round window — never a replacement, so layered scheduling
+    still holds. If that intersection is empty the player falls back
+    to the plain round window with a warning (a data-entry mistake
+    must never make the solve infeasible). TEAM participants aggregate
+    members: availability = intersection of members' windows, rest =
+    max of members' rest.
     """
     start, end = availability_window
     if start < 0 or end <= start:
-        availability: List[tuple[int, int]] = []
+        round_window: List[tuple[int, int]] = []
     else:
-        availability = [(start, end)]
+        round_window = [(start, end)]
 
     out: List[Player] = []
     for pid in sorted(player_ids):
         p = participants.get(pid)
-        if p is not None:
-            out.append(Player(id=pid, name=p.name, availability=list(availability)))
-        else:
-            out.append(Player(id=pid, name=pid, availability=list(availability)))
+        name = p.name if p is not None else pid
+
+        resolved = (
+            _resolve_extras(pid, p, extras) if extras is not None else None
+        )
+        if resolved is None:
+            out.append(
+                Player(id=pid, name=name, availability=list(round_window))
+            )
+            continue
+
+        windows, rest_slots = resolved
+        availability = list(round_window)
+        if windows and round_window:
+            clipped = intersect_windows(windows, (start, end))
+            if clipped:
+                availability = clipped
+            else:
+                logger.warning(
+                    "bracket player %s: availability windows %s do not "
+                    "intersect the round window (%s, %s); falling back "
+                    "to the round window so the solve stays feasible",
+                    pid,
+                    windows,
+                    start,
+                    end,
+                )
+        out.append(
+            Player(
+                id=pid,
+                name=name,
+                availability=availability,
+                rest_slots=rest_slots,
+                rest_is_hard=True,
+            )
+        )
     return out
+
+
+def _resolve_extras(
+    pid: str,
+    participant: Participant | None,
+    extras: Mapping[str, PlayerExtras],
+) -> tuple[List[tuple[int, int]], int] | None:
+    """Effective ``(windows, rest_slots)`` for one engine player id.
+
+    Singles ids map straight onto roster entries. TEAM participants
+    (doubles — normally pre-expanded to member ids by ``expand_side``,
+    but reachable when a caller passes a team id directly) aggregate
+    their members: availability = intersection of every member's
+    windows (a member without windows is unrestricted — identity for
+    intersection), rest = max of members' rest. Returns ``None`` when
+    no roster extras apply, so the caller keeps today's defaults.
+    """
+    if (
+        participant is not None
+        and participant.type == ParticipantType.TEAM
+        and participant.member_ids
+    ):
+        member_extras = [
+            extras[m] for m in participant.member_ids if m in extras
+        ]
+        if not member_extras:
+            return None
+        windows: List[tuple[int, int]] | None = None
+        for e in member_extras:
+            if not e.availability_slots:
+                continue  # unrestricted member
+            windows = (
+                list(e.availability_slots)
+                if windows is None
+                else intersect_window_lists(windows, e.availability_slots)
+            )
+        if windows is not None and not windows:
+            logger.warning(
+                "bracket team %s: members' availability windows are "
+                "mutually exclusive; treating the team as unrestricted "
+                "so the solve stays feasible",
+                pid,
+            )
+            windows = None
+        rest = max(e.rest_slots for e in member_extras)
+        return (windows or [], rest)
+
+    entry = extras.get(pid)
+    if entry is None:
+        return None
+    return (list(entry.availability_slots), entry.rest_slots)
 
 
 def advance_current_slot(

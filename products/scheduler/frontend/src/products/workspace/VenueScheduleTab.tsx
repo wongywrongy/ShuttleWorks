@@ -15,6 +15,8 @@
  */
 import { useTournamentStore } from '../../store/tournamentStore';
 import type { TournamentConfig } from '../../api/dto';
+import { useLockGuard } from '../../hooks/useLockGuard';
+import { LockRibbon } from '../../components/status/LockRibbon';
 import {
   Row,
   SectionHeader,
@@ -36,12 +38,20 @@ const FALLBACK_CONFIG: TournamentConfig = {
 export function VenueScheduleTab() {
   const config = useTournamentStore((s) => s.config);
   const setConfig = useTournamentStore((s) => s.setConfig);
+  const { confirmUnlock } = useLockGuard();
 
+  // These fields autosave per edit — no Save step to guard — so the FIRST
+  // edit under a meet schedule lock routes through the confirm-unlock modal
+  // (same flow as the engine Configuration forms; on confirm the schedule
+  // clears and later edits flow freely). Without this, the ribbon promised
+  // a confirmation the surface never gave.
   const set = <K extends keyof TournamentConfig>(
     key: K,
     value: TournamentConfig[K],
   ) => {
-    setConfig({ ...(config ?? FALLBACK_CONFIG), [key]: value });
+    void confirmUnlock('change venue or day-window settings').then((ok) => {
+      if (ok) setConfig({ ...(config ?? FALLBACK_CONFIG), [key]: value });
+    });
   };
 
   return (
@@ -53,6 +63,12 @@ export function VenueScheduleTab() {
           schedule against these.
         </p>
       </div>
+
+      {/* These are the MOST scheduling-structural fields in the product —
+          the same CONFIG_LOCKED contract that guards the engine forms
+          guards them. Same ribbon as Configuration so the operator learns
+          one lock vocabulary (reads the meet store flag). */}
+      <LockRibbon tier="soft" />
 
       <section>
         <SectionHeader>Venue</SectionHeader>

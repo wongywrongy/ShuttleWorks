@@ -9,6 +9,9 @@ describe('GANTT_GEOMETRY', () => {
   it('compact tier is 48×32 with a 56px label column', () => {
     expect(GANTT_GEOMETRY.compact).toEqual({ slot: 48, row: 32, label: 56 });
   });
+  it('roomy tier is 80×64 with a 56px label column', () => {
+    expect(GANTT_GEOMETRY.roomy).toEqual({ slot: 80, row: 64, label: 56 });
+  });
 });
 
 describe('placementBox', () => {
@@ -76,6 +79,29 @@ describe('placementBox', () => {
     );
     expect(box.left).toBe(40); // clamped to lane 1: 0 + 1 * 40
   });
+
+  it('vertical orientation splits row height and keeps the full time span', () => {
+    const box = placementBox(
+      p({ courtIndex: 1, startSlot: 0, span: 12, laneIndex: 1, laneCount: 2 }),
+      0,
+      GANTT_GEOMETRY.roomy,
+      'vertical',
+    );
+    expect(box.width).toBe(960); // full 12-slot span, NOT halved
+    expect(box.height).toBe(32); // 64 / 2 lanes
+    expect(box.top).toBe(96); // court 1 * 64 + lane 1 * 32
+    expect(box.left).toBe(0);
+  });
+
+  it('vertical orientation leaves a 1-lane block at full row height', () => {
+    const box = placementBox(
+      p({ span: 2 }),
+      0,
+      GANTT_GEOMETRY.roomy,
+      'vertical',
+    );
+    expect(box).toEqual({ left: 0, top: 0, width: 160, height: 64 });
+  });
 });
 
 // ─── Rendering tests ────────────────────────────────────────────────
@@ -142,5 +168,25 @@ describe('<GanttTimeline /> block positioning', () => {
       />,
     );
     expect(screen.getAllByTestId(/^b-/)).toHaveLength(4);
+  });
+
+  it('draws the now-line at the currentSlot column edge, and omits it out of range', () => {
+    const props = {
+      courts: [1, 2],
+      minSlot: 2,
+      slotCount: 4,
+      density: 'standard' as const,
+      placements: [] as PlacementType[],
+      renderBlock: () => null,
+    };
+    const { container, rerender } = render(<GanttTimeline {...props} currentSlot={4} />);
+    // In range: hairline at (currentSlot - minSlot) * slot = (4 - 2) * 80.
+    const line = container.querySelector('.bg-accent\\/50') as HTMLElement | null;
+    expect(line).not.toBeNull();
+    expect(line!.style.left).toBe('160px');
+
+    // Out of range (past the visible window): no line.
+    rerender(<GanttTimeline {...props} currentSlot={6} />);
+    expect(container.querySelector('.bg-accent\\/50')).toBeNull();
   });
 });

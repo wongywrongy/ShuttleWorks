@@ -19,7 +19,10 @@ import { Select } from '@scheduler/design-system/components';
  * Row — the only layout primitive in the Setup form.
  * ========================================================================= */
 interface RowProps {
-  label: string;
+  /** Usually a plain string; a ReactNode is allowed for labels that carry
+   *  an inline accent code (e.g. discipline name + azure event code). The
+   *  layout contract above is unchanged. */
+  label: ReactNode;
   control: ReactNode;
   last?: boolean;
 }
@@ -45,7 +48,7 @@ export function Row({ label, control, last }: RowProps) {
  * ========================================================================= */
 export function SectionHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="pt-6 pb-2 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+    <div className="pt-6 pb-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
       {children}
     </div>
   );
@@ -64,16 +67,21 @@ export function Seg<T extends string | number>({
   value,
   onChange,
   ariaLabel,
+  disabled = false,
 }: {
   options: readonly SegOption<T>[];
   value: T;
   onChange: (v: T) => void;
   ariaLabel?: string;
+  /** Real per-button `disabled` — a wrapper's `pointer-events-none` only
+   *  blocks the mouse; the buttons would stay keyboard-operable. */
+  disabled?: boolean;
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={ariaLabel}
+      aria-disabled={disabled || undefined}
       className="inline-flex overflow-hidden border border-border"
     >
       {options.map((opt) => {
@@ -84,6 +92,7 @@ export function Seg<T extends string | number>({
             type="button"
             role="radio"
             aria-checked={isActive}
+            disabled={disabled}
             onClick={() => onChange(opt.value)}
             className={[
               // MOTION.md §6 Seg: explicit duration-fast + ease-brand

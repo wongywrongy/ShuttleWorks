@@ -7,9 +7,13 @@ import { useState } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { DisplayLayoutEditor } from './displayConfig/DisplayLayoutEditor';
+import { DisplayPreview } from './displayConfig/DisplayPreview';
 
 export function DisplayConfig({ tid, modules }: { tid: string; modules: WorkspaceModule[] }) {
   const [copied, setCopied] = useState(false);
+  const config = useTournamentStore((s) => s.config);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const publicUrl = `${origin}/display?id=${tid}`;
   const isOn = (id: string) => modules.some((m) => m.id === id && m.status === 'enabled');
@@ -86,6 +90,31 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
         </div>
         <p className="text-xs text-muted-foreground">View-only. Anyone with the link can watch — no sign-in required.</p>
       </section>
+
+      {/* tv* fields only drive MeetDisplayPage (the bracket board never
+          reads them) — scope the editor + preview to Meet-enabled
+          workspaces so a bracket-only workspace isn't shown controls
+          that would have no visible effect. */}
+      {isOn('meet') && (
+        <>
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground">Board layout</h3>
+            <p className="text-xs text-muted-foreground">
+              How the public board lays out courts. Changes apply immediately — no save step.
+            </p>
+            <DisplayLayoutEditor tid={tid} />
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground">Preview</h3>
+            <p className="text-xs text-muted-foreground">
+              A scaled mock of the board&rsquo;s courts layout with sample matches — reflects your
+              edits above as you make them.
+            </p>
+            <DisplayPreview config={config} />
+          </section>
+        </>
+      )}
     </div>
   );
 }

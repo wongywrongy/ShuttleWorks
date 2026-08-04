@@ -643,6 +643,12 @@ class CPSATScheduler:
         solver.parameters.num_search_workers = effective_workers
         solver.parameters.random_seed = effective_seed
         solver.parameters.log_search_progress = self.solver_options.log_progress
+        if self.solver_options.max_deterministic_time is not None:
+            # Host-speed-independent stopping point; the wall-clock limit
+            # above remains as an outer safety backstop.
+            solver.parameters.max_deterministic_time = (
+                self.solver_options.max_deterministic_time
+            )
 
         # We instantiate the callback whenever EITHER an external
         # progress callback was supplied, a candidate pool was

@@ -12,7 +12,7 @@ import logging
 import uuid
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, Path, Response
+from fastapi import APIRouter, Depends, Path, Query, Response
 from pydantic import BaseModel, Field
 
 from app.dependencies import (
@@ -21,9 +21,12 @@ from app.dependencies import (
     require_tournament_access,
 )
 from app.error_codes import ErrorCode, http_error
-from app.schemas import TournamentStateDTO, WorkspaceModuleDTO
+from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO
 from database.models import Tournament, normalize_module_seed, display_dependency_satisfied
 from repositories import LocalRepository, get_repository
+from services.bracket import response_cache
+from services.config_lock import changed_scheduling_fields
+from services.meet.standings import compute_meet_standings
 from api.invites import (
     InviteCreateDTO,
     InviteCreatedDTO,
@@ -137,6 +140,64 @@ def _modules_for(row: Tournament, repo: LocalRepository) -> List[WorkspaceModule
     ]
 
 
+def _meet_standings_for(
+    row: Tournament, repo: LocalRepository
+) -> List[MeetStandingRowDTO]:
+    """Authoritative Meet pool standings for the ``/state`` GET payload.
+
+    ``[]`` when the Meet module isn't enabled for this workspace, or the
+    persisted blob has no matches/groups yet (e.g. a just-created
+    tournament). Otherwise pulls ``matches``/``groups``/``players``
+    straight out of the already-loaded ``row.data`` blob (no query — it's
+    the same dict this route already returns) but reads ``match_states``
+    fresh from the DB, because live finished/score data is never part of
+    that blob (it lives in the separate ``match_states`` table owned by
+    ``api/match_state.py`` — see ``services.meet.standings`` and the
+    Task 2 report for why this one extra read is an intentional, flagged
+    deviation from a "no new query" ask that assumed a payload shape this
+    route doesn't actually have).
+    """
+    modules = _modules_for(row, repo)
+    meet_enabled = any(m.moduleId == "meet" and m.status == "enabled" for m in modules)
+    if not meet_enabled:
+        return []
+    data = row.data or {}
+    matches = data.get("matches") or []
+    groups = data.get("groups") or []
+    players = data.get("players") or []
+    if not matches or not groups:
+        return []
+    state_rows = repo.match_states.list_for_tournament(row.id)
+    match_states = {
+        s.match_id: {
+            "status": s.status,
+            "scoreSideA": s.score_side_a,
+            "scoreSideB": s.score_side_b,
+        }
+        for s in state_rows
+    }
+    # Standings intentionally count every finished, scored match regardless
+    # of current schedule membership. The client's original UI only saw
+    # matches within schedule.assignments (incidental filtering), but the
+    # authoritative backend standings reflect all recorded results.
+    standing_rows = compute_meet_standings(
+        matches=matches,
+        match_states=match_states,
+        groups=groups,
+        players=players,
+    )
+    return [
+        MeetStandingRowDTO(
+            groupId=r.groupId,
+            groupName=r.groupName,
+            matchesPlayed=r.matchesPlayed,
+            wins=r.wins,
+            losses=r.losses,
+        )
+        for r in standing_rows
+    ]
+
+
 def _counts_for(
     ids: List[uuid.UUID], repo: LocalRepository
 ) -> dict[uuid.UUID, RowCounts]:
@@ -151,6 +212,13 @@ def _counts_for(
     bmatches = repo.brackets.count_matches_by_tournament(ids)
     bresults = repo.brackets.count_results_by_tournament(ids)
     mstates = repo.match_states.count_by_tournament(ids)
+    # {tid: {match_id: status}} for matches that left ``scheduled`` — the
+    # lifecycle-phase + live-aware-nextUp input (7th grouped query).
+    mstatuses = repo.matches.statuses_by_tournament(ids)
+    # Bracket-side phase/nextUp inputs: resolved play-unit ids (8th) and the
+    # Swiss rounds-still-pending flag (9th — two small queries internally).
+    bresolved = repo.brackets.resolved_unit_ids_by_tournament(ids)
+    swiss_pending = repo.brackets.swiss_pending_by_tournament(ids)
     return {
         tid: RowCounts(
             members=members.get(tid, 0),
@@ -159,6 +227,9 @@ def _counts_for(
             bracket_matches=bmatches.get(tid, 0),
             bracket_results=bresults.get(tid, 0),
             match_states=mstates.get(tid, 0),
+            match_status_by_id=mstatuses.get(tid, {}),
+            bracket_resolved_ids=bresolved.get(tid, set()),
+            swiss_pending=swiss_pending.get(tid, False),
         )
         for tid in ids
     }
@@ -264,15 +335,27 @@ def create_tournament(
     else:
         seed_rows = None
 
+    # SP-CLOUD-2: fail closed — an identity that can't own a membership
+    # row must not be able to create a workspace nobody can ever access
+    # (the pre-tenancy code tolerated this and produced orphans).
+    if user_uuid is None:
+        raise http_error(
+            401, ErrorCode.AUTH_NOT_SIGNED_IN, "A signed-in identity is required"
+        )
+    # Workspaces belong to orgs: materialize the caller's users row +
+    # personal org if this identity predates the account system.
+    from services.auth import ensure_user, personal_org_id
+
+    ensure_user(repo.session, user_uuid, user.email)
     row = repo.tournaments.create(
         name=body.name,
         kind=body.kind,
         tournament_date=body.tournamentDate,
         owner_id=user_uuid,
         owner_email=user.email,
+        org_id=personal_org_id(repo.session, user_uuid),
     )
-    if user_uuid is not None:
-        repo.members.add_member(row.id, user_uuid, role="owner")
+    repo.members.add_member(row.id, user_uuid, role="owner")
 
     # Explicit module seed (control-plane templates / custom create). When
     # present, persist before any module read so ensure_modules is a no-op.
@@ -428,11 +511,20 @@ def get_tournament_state(
     ``204 No Content`` when the tournament exists but its data is still
     empty (newly created, never PUT). 404 when the tournament itself
     doesn't exist.
+
+    ``standings`` is computed fresh on every call (Task 2) rather than
+    read from the blob — see ``_meet_standings_for``. It's deliberately
+    NOT part of the persisted payload; ``put_tournament_state`` strips it
+    before committing so a stale value never gets written back.
     """
     row = _resolve_tournament(tournament_id, repo)
     if not row.data:
         return Response(status_code=204)
-    return row.data
+    payload = dict(row.data)
+    payload["standings"] = [
+        s.model_dump() for s in _meet_standings_for(row, repo)
+    ]
+    return payload
 
 
 @router.put(
@@ -443,6 +535,14 @@ def get_tournament_state(
 def put_tournament_state(
     state: TournamentStateDTO,
     tournament_id: uuid.UUID = Path(...),
+    clearSchedule: bool = Query(
+        False,
+        description=(
+            "Sanction the edit by clearing the committed schedule(s) it "
+            "invalidates, atomically with the write. Refused (409 "
+            "DRAW_STARTED) while any bracket draw is started."
+        ),
+    ),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Overwrite the tournament data blob.
@@ -450,10 +550,138 @@ def put_tournament_state(
     Snapshots the prior content to ``tournament_backups`` first (unless
     the row was freshly created with empty data) and rotates the backup
     pool to the configured retention (``LocalRepository.BACKUP_KEEP``).
+
+    ``standings`` is excluded from what gets persisted — it's a derived
+    field the GET route recomputes on every read (see
+    ``_meet_standings_for``); persisting a client-sent snapshot of it
+    would let a stale value linger in the blob.
+
+    Locked-settings guards (Phase 0a — the backend mirrors of the
+    frontend locks; a frontend-only lock is bypassable by any stale tab
+    or direct API client):
+
+    - **CONFIG_LOCKED (409):** ANY scheduling-relevant config key (see
+      ``services.config_lock.changed_scheduling_fields`` — fail-closed:
+      everything except the shared non-scheduling-keys exemption list)
+      may not change in a blob that RETAINS a committed schedule — those
+      are the fields the engine solved against, and changing them under
+      a live schedule silently invalidates every court/slot assignment.
+      The structural venue fields (courtCount / intervalMinutes /
+      dayStart / dayEnd) are a subset of this — the old venue-only guard
+      is subsumed, not replaced. The sanctioned unlock path either clears
+      the schedule in the same PUT (passes unconditionally) or retries
+      with ``?clearSchedule=true``, which atomically nulls the schedule
+      and applies the edit in the same commit. Non-scheduling config
+      (scoringFormat, tv*, …) stays freely writable.
+    - **ROSTER_LOCKED (409):** ``bracketPlayers`` entries referenced by a
+      GENERATED draw (participant ids + member_ids of non-draft events)
+      may not be removed; deleting them silently invalidates the draw's
+      placements. Draft draws don't block.
     """
-    _resolve_tournament(tournament_id, repo)  # 404 if missing
+    row_prior = _resolve_tournament(tournament_id, repo)  # 404 if missing
+    incoming = state.model_dump(exclude={"standings"})
+    prior = dict(row_prior.data or {})
+
+    prior_schedule = prior.get("schedule")
+    prior_assignments = (
+        prior_schedule.get("assignments") if isinstance(prior_schedule, dict) else None
+    )
+    incoming_schedule = incoming.get("schedule")
+    incoming_assignments = (
+        incoming_schedule.get("assignments")
+        if isinstance(incoming_schedule, dict)
+        else None
+    )
+    prior_cfg = prior.get("config") if isinstance(prior.get("config"), dict) else None
+    incoming_cfg = incoming.get("config") if isinstance(incoming.get("config"), dict) else None
+
+    bracket_session = prior.get("bracket_session")
+    bracket_assignments = (
+        bracket_session.get("assignments")
+        if isinstance(bracket_session, dict)
+        else None
+    )
+
+    fields = changed_scheduling_fields(prior_cfg, incoming_cfg)
+    locked_schedules: list[str] = []
+    if fields and prior_assignments and incoming_assignments:
+        locked_schedules.append("meet")
+    if fields and bracket_assignments:
+        locked_schedules.append("bracket")
+
+    if locked_schedules and not clearSchedule:
+        raise http_error(
+            409,
+            ErrorCode.CONFIG_LOCKED,
+            "Schedule locked: "
+            f"{', '.join(fields)} cannot change while a committed schedule "
+            "exists. Retry with ?clearSchedule=true to clear it and apply "
+            "the edit.",
+            extra={"fields": fields, "schedules": locked_schedules},
+        )
+
+    clear_bracket = False
+    if clearSchedule and fields:
+        # The hard lock only protects a bracket schedule actually being
+        # cleared — a started draw with no committed assignments has
+        # nothing bracket-side for this clear to touch, so it must not
+        # freeze a meet-only clearSchedule.
+        started = (
+            [
+                ev.id
+                for ev in repo.brackets.list_events(tournament_id)
+                if (ev.status or "draft") == "started"
+            ]
+            if bracket_assignments
+            else []
+        )
+        if started:
+            raise http_error(
+                409,
+                ErrorCode.DRAW_STARTED,
+                "Draws in play cannot have their schedule cleared: "
+                f"{', '.join(started)}. Finish or reset those draws first.",
+                extra={"events": started},
+            )
+        # Atomic clear-and-apply: the same single upsert persists both.
+        incoming["schedule"] = None
+        incoming["scheduleIsStale"] = False
+        clear_bracket = bool(bracket_assignments)
+
+    prior_roster = {
+        p.get("id")
+        for p in (prior.get("bracketPlayers") or [])
+        if isinstance(p, dict) and p.get("id")
+    }
+    incoming_roster = {
+        p.get("id")
+        for p in (incoming.get("bracketPlayers") or [])
+        if isinstance(p, dict) and p.get("id")
+    }
+    removed = prior_roster - incoming_roster
+    if removed:
+        referenced = repo.brackets.player_ids_referenced_by_generated(tournament_id)
+        blocked = sorted(removed & referenced)
+        if blocked:
+            raise http_error(
+                409,
+                ErrorCode.ROSTER_LOCKED,
+                "These players are placed in a generated draw and cannot be "
+                f"removed: {', '.join(blocked[:5])}"
+                f"{' …' if len(blocked) > 5 else ''}. Re-generate or reset the "
+                "draw first.",
+            )
+
     try:
-        row = repo.commit_tournament_state(tournament_id, state.model_dump())
+        row = repo.commit_tournament_state(
+            tournament_id, incoming, clear_bracket_assignments=clear_bracket
+        )
+        if clear_bracket:
+            # clearSchedule just nulled the committed bracket assignments —
+            # a cached GET /bracket payload would still show them until the
+            # TTL expires. Invalidate now so a poll or re-entry right after
+            # this write sees the cleared schedule immediately.
+            response_cache.invalidate(tournament_id)
     except KeyError:
         raise http_error(
             404,
@@ -588,11 +816,45 @@ def create_invite_link(
             ErrorCode.STATE_CORRUPT,
             "user id is not a UUID",
         )
+    email = None
+    expires_at = None
+    if body.email:
+        # Email invite (SP-CLOUD-2): validated address, bounded lifetime,
+        # delivered via the email seam (console backend in local mode).
+        from datetime import datetime, timedelta, timezone
+
+        from app.config import settings
+        from services.auth import AuthError, normalize_email
+
+        try:
+            email = normalize_email(body.email)
+        except AuthError as exc:
+            raise http_error(400, ErrorCode.INVALID_INPUT, exc.message)
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            days=settings.invite_ttl_days
+        )
     invite = repo.invite_links.create(
         tournament_id=tournament_id,
         role=body.role,
         created_by=user_uuid,
+        email=email,
+        expires_at=expires_at,
     )
+    if email:
+        from app.config import settings
+        from services.email import send_email
+
+        tournament = repo.tournaments.get_by_id(tournament_id)
+        origin = settings.public_app_origin.rstrip("/")
+        send_email(
+            to=email,
+            subject=f"You're invited to {tournament.name or 'a ShuttleWorks workspace'}",
+            body=(
+                f"You've been invited as {invite.role}.\n\n"
+                f"Accept here: {origin}/invite/{invite.id}\n\n"
+                f"This invite expires {expires_at:%Y-%m-%d}."
+            ),
+        )
     return InviteCreatedDTO(
         token=str(invite.id),
         url=f"/invite/{invite.id}",
@@ -624,10 +886,15 @@ def list_invite_links(
 
 
 class TournamentMemberDTO(BaseModel):
-    """Wire shape for the Step 7 Settings → Share "Members" list."""
+    """Wire shape for the Step 7 Settings → Share "Members" list.
+
+    ``email``/``displayName`` (SP-CLOUD-2) come from the users table;
+    ``email`` is None for pre-account placeholder identities."""
     userId: str
     role: str
     joinedAt: str
+    email: Optional[str] = None
+    displayName: Optional[str] = None
 
 
 @router.get(
@@ -640,13 +907,39 @@ def list_tournament_members(
     repo: LocalRepository = Depends(get_repository),
 ):
     """All members of a tournament. Viewer-level so any member can see
-    who else has access; owner-only management actions stay gated."""
+    who else has access; owner-only management actions stay gated.
+
+    SP-CLOUD-2: rows carry real identity (email/display name from the
+    users table) — People & Access finally shows people, not UUIDs.
+    Placeholder ``@unmigrated.local`` addresses (pre-account era) are
+    withheld so the UI falls back to its short-id rendering.
+    """
+    from database.models import User
+
     members = repo.members.list_for_tournament(tournament_id)
-    return [
-        TournamentMemberDTO(
-            userId=str(m.user_id),
-            role=m.role,
-            joinedAt=m.joined_at.isoformat() if m.joined_at else "",
+    users = {
+        u.id: u
+        for u in repo.session.query(User)
+        .filter(User.id.in_([m.user_id for m in members]))
+        .all()
+    } if members else {}
+
+    def _identity(m):
+        u = users.get(m.user_id)
+        if u is None or u.email.endswith("@unmigrated.local"):
+            return None, (u.display_name if u else None)
+        return u.email, u.display_name
+
+    out = []
+    for m in members:
+        email, display = _identity(m)
+        out.append(
+            TournamentMemberDTO(
+                userId=str(m.user_id),
+                role=m.role,
+                joinedAt=m.joined_at.isoformat() if m.joined_at else "",
+                email=email,
+                displayName=display,
+            )
         )
-        for m in members
-    ]
+    return out

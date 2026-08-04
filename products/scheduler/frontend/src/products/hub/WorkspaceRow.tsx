@@ -1,73 +1,89 @@
 /**
- * A single workspace row in the time-oriented Hub list. The event date is the
- * anchor (left, prominent); then the workspace name, its module chips, and a
- * single plain-language next action. The health indicator is secondary (a small
- * dot by the name), not the lead. Destructive actions live in an overflow menu
- * that reveals on hover/focus — never inline on the row surface.
- *
- * Deliberately omits owner/identity, raw status badges, and aggregate metrics:
- * the time section + health dot carry that, and the detail lives in the
- * inspector.
+ * A single workspace row in the Hub's dense list — the handoff prototype's
+ * "Hub — workspace dashboard" table grammar: a tabular DATE column, the
+ * workspace NAME (health dot secondary), and one plain-language NEXT ACTION
+ * as quiet text (amber when it needs input). Nothing else rides the row —
+ * the old stacked calendar block, per-row module chips and per-row action
+ * buttons were extraneous chrome (2026-07-02 redesign); modules/metrics/
+ * buttons live in the inspector. Destructive actions stay in an overflow
+ * menu that reveals on hover/focus — never inline on the row surface.
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
-import { Button } from '@scheduler/design-system';
 import { HealthDot, OverflowMenu, type OverflowItem } from '../../components/control-plane';
-import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
 import { workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, type HubGroupId } from './hubGrouping';
+import { moduleGlyphs, type ModuleGlyphId } from './moduleGlyphs';
 
-/** Calendar-style date anchor: month / big day / year. Undated reads as a muted
- *  placeholder so the column still aligns. */
-function DateAnchor({ iso, receded }: { iso: string | null; receded: boolean }) {
+/** Static per-module glyph classes (Tailwind can't scan dynamic names — these
+ *  arbitrary-value strings carry the 16%-tint fill + the module hue). */
+/* Color budget (2026-07): module identity is carried by the LETTER, not a
+ * hue — the M/D/B rainbow was decoration. Enabled modules read as neutral
+ * filled chips, available ones as dashed outlines. */
+const GLYPH_CLASS: Record<ModuleGlyphId, string> = {
+  meet: 'bg-surface-chip text-text-secondary',
+  display: 'bg-surface-chip text-text-secondary',
+  bracket: 'bg-surface-chip text-text-secondary',
+};
+
+/** The row's Modules column — enabled modules as solid tinted glyphs, or a
+ *  single dashed kind-default when nothing is enabled (see moduleGlyphs). */
+function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
+  const glyphs = moduleGlyphs(tournament.modules ?? [], tournament.kind);
+  return (
+    <span data-testid="row-modules" className="flex w-[108px] shrink-0 items-center gap-1">
+      {glyphs.map((g) => (
+        <span
+          key={g.id}
+          data-testid={`row-module-${g.id}`}
+          title={`${g.letter === 'M' ? 'Meet' : g.letter === 'D' ? 'Display' : 'Bracket'} — ${g.enabled ? 'enabled' : 'available'}`}
+          className={[
+            'inline-flex h-[18px] w-[18px] items-center justify-center rounded text-[10px] font-semibold',
+            g.enabled
+              ? GLYPH_CLASS[g.id]
+              : 'border border-dashed border-border text-muted-foreground',
+          ].join(' ')}
+        >
+          {g.letter}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Tabular date cell — "Jul 12" (year only when it isn't this year); undated
+ *  reads as a muted em-dash so the column still aligns. */
+function DateCell({ iso }: { iso: string | null }) {
   if (!iso) {
     return (
-      <div className="w-14 shrink-0 text-center font-mono text-2xs uppercase text-muted-foreground/50">
-        No date
-      </div>
+      <span className="w-14 shrink-0 text-2xs sw-num text-muted-foreground">—</span>
     );
   }
   const d = eventDate(iso);
   const valid = !Number.isNaN(d.getTime());
-  const mon = valid ? d.toLocaleDateString(undefined, { month: 'short' }) : '';
-  const day = valid ? d.toLocaleDateString(undefined, { day: 'numeric' }) : iso.slice(0, 10);
-  const year = valid ? d.toLocaleDateString(undefined, { year: 'numeric' }) : '';
+  const sameYear = valid && d.getFullYear() === new Date().getFullYear();
+  const label = valid
+    ? d.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        ...(sameYear ? {} : { year: '2-digit' }),
+      })
+    : iso.slice(0, 10);
   return (
-    <div className={`w-14 shrink-0 text-center ${receded ? 'text-muted-foreground' : ''}`}>
-      <div className="font-mono text-2xs uppercase tracking-[0.06em] text-muted-foreground">{mon}</div>
-      <div className="text-xl font-semibold leading-none tabular-nums">{day}</div>
-      <div className="font-mono text-2xs tabular-nums text-muted-foreground/70">{year}</div>
-    </div>
-  );
-}
-
-/** Only the *enabled* modules — the row reflects what is actually active in the
- *  workspace, nothing more. Available/disabled modules are not shown. */
-function ModuleChips({ tournament }: { tournament: TournamentSummaryDTO }) {
-  const all = tournament.modules
-    ? modulesFromDto(tournament.modules)
-    : modulesForWorkspace(tournament.kind);
-  const chips = all.filter((m) => m.status === 'enabled');
-  if (chips.length === 0) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-1">
-      {chips.map((m) => (
-        <span
-          key={m.id}
-          data-testid={`chip-${m.id}`}
-          className="inline-flex items-center gap-1 rounded-sm bg-accent/10 px-1.5 py-0.5 text-2xs font-medium text-accent"
-        >
-          <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-accent" />
-          {m.label}
-        </span>
-      ))}
-    </div>
+    <span
+      className="w-14 shrink-0 text-2xs sw-num text-muted-foreground"
+    >
+      {label}
+    </span>
   );
 }
 
 interface RowProps {
   tournament: TournamentSummaryDTO;
   group: HubGroupId;
+  /** False when NO visible row has a date — the whole column is hidden
+   *  instead of rendering a rail of muted em-dashes (2026-07 cleanup). */
+  showDate?: boolean;
   selected: boolean;
   onSelect: () => void;
   onOpen: () => void;
@@ -79,6 +95,7 @@ interface RowProps {
 export function WorkspaceRow({
   tournament,
   group,
+  showDate = true,
   selected,
   onSelect,
   onOpen,
@@ -89,6 +106,9 @@ export function WorkspaceRow({
   const health = workspaceHealth(tournament);
   const action = rowActionFor(tournament, group);
   const receded = group === 'past';
+  // "Set date" (and any reason-coded setup step) is the attention-y next
+  // action — it warms to amber; Open/View results stay quiet.
+  const attention = action.kind === 'set-date';
 
   const overflowItems: OverflowItem[] = [
     { key: 'settings', label: 'Settings', onSelect: onSettings },
@@ -100,39 +120,48 @@ export function WorkspaceRow({
   return (
     // A plain clickable region for selecting the row (populates the inspector).
     // Not a role=button/option: it embeds interactive children (the action
-    // button + overflow menu), which ARIA forbids inside a widget role.
+    // text-button + overflow menu), which ARIA forbids inside a widget role.
     <div
       onClick={onSelect}
       className={[
-        'group flex cursor-pointer items-center gap-4 px-4 py-3 text-sm',
-        receded ? 'opacity-60 hover:opacity-100' : '',
-        selected ? 'bg-accent/5' : 'hover:bg-muted/40',
+        'group flex min-h-[40px] cursor-pointer items-center gap-3 px-4 py-2 text-sm',
+        'transition-colors duration-fast ease-brand',
+        receded ? 'opacity-80 hover:opacity-100' : '',
+        selected
+          ? 'bg-bg-elev shadow-[inset_2px_0_0_hsl(var(--accent))]'
+          : 'hover:bg-muted/40',
       ].join(' ')}
     >
-      <DateAnchor iso={tournament.tournamentDate} receded={receded} />
+      {showDate ? <DateCell iso={tournament.tournamentDate} /> : null}
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate font-medium text-foreground">
-            {tournament.name || 'Untitled'}
-          </span>
-          <HealthDot health={health} />
-        </div>
-        <div className="mt-1">
-          <ModuleChips tournament={tournament} />
-        </div>
-      </div>
+      <span className="flex min-w-0 flex-1 items-center gap-2.5">
+        <HealthDot health={health} />
+        <span className="truncate font-medium text-foreground">
+          {tournament.name || 'Untitled'}
+        </span>
+      </span>
 
-      <Button
-        variant={receded ? 'ghost' : action.kind === 'open' ? 'outline' : 'ghost'}
+      <ModulesCell tournament={tournament} />
+
+      {/* NEXT ACTION — quiet text, not a boxed button. Still a real button
+          (same accessible name + click behavior as before the redesign). */}
+      <button
+        type="button"
         onClick={(e) => {
           e.stopPropagation();
           if (action.kind === 'set-date') onSetDate();
           else onOpen();
         }}
+        className={[
+          'w-40 shrink-0 truncate text-left text-xs',
+          'transition-colors duration-fast ease-brand',
+          attention
+            ? 'text-status-warning hover:brightness-110'
+            : 'text-muted-foreground hover:text-accent',
+        ].join(' ')}
       >
         {action.label}
-      </Button>
+      </button>
 
       <span className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <OverflowMenu items={overflowItems} />

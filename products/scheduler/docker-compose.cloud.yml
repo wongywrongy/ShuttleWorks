@@ -1,0 +1,118 @@
+# Cloud-mode stack (SP-CLOUD-1): api + postgres + N standalone solve
+# workers — the same topology the SaaS deployment uses, runnable on a
+# dev machine for verification.
+#
+#   docker compose -f docker-compose.cloud.yml up -d --build
+#   docker compose -f docker-compose.cloud.yml up -d --scale worker=2
+#   docker compose -f docker-compose.cloud.yml down          # keeps pgdata
+#
+# Division of labour:
+# - `backend` runs the API with EMBEDDED_WORKER=false and is the ONLY
+#   service that applies Alembic migrations (in its lifespan) —
+#   exactly-once schema ownership.
+# - `worker` runs the identical image with the `python -m worker` entry;
+#   it WAITS for the schema to appear instead of racing migrations, and
+#   scales horizontally (`--scale worker=N`). One solve per worker
+#   (WORKER_CONCURRENCY=1) — a CP-SAT solve owns its CPU allocation.
+# - `postgres` is pinned to major 16 with a NAMED volume (the DB is the
+#   source of truth here, unlike local mode's bind-mounted SQLite).
+#
+# AUTH: SP-CLOUD-2 — AUTH_MODE=cloud (real accounts + cookie sessions;
+# no bootstrap identity). ENVIRONMENT stays `local` here because the
+# `cloud` startup validator additionally demands SESSION_COOKIE_SECURE
+# (HTTPS-only cookies), which a plain-HTTP localhost smoke stack can't
+# satisfy — a real deployment sets ENVIRONMENT=cloud +
+# SESSION_COOKIE_SECURE=true behind TLS. EMAIL_BACKEND=console keeps
+# invite/reset mail visible via `docker compose logs backend`.
+#
+# The frontend is intentionally absent — drive it with curl (see
+# docs) or point a Vite dev server's proxy at the API port.
+
+name: btp-cloud
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=scheduler
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-scheduler}
+      - POSTGRES_DB=scheduler
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: products/scheduler/backend/Dockerfile
+    # Host 8000 sits in a Windows-reserved port range on some dev boxes,
+    # so the default host port is 8600 (same convention as local dev).
+    ports:
+      - "${BACKEND_HOST_PORT:-8600}:8000"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATA_DIR=/app/data
+      - DATABASE_URL=postgresql://scheduler:${POSTGRES_PASSWORD:-scheduler}@postgres:5432/scheduler
+      - EMBEDDED_WORKER=false
+      # SP-CLOUD-2: real accounts required; no bootstrap identity.
+      - AUTH_MODE=cloud
+      - EMAIL_BACKEND=console
+      - PUBLIC_APP_ORIGIN=${PUBLIC_APP_ORIGIN:-http://localhost:8600}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      # Runtime-artifact dir (health probe checks writability). The real
+      # store is Postgres — nothing durable lives here in cloud mode.
+      - /app/data:uid=1001,gid=1001
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/health/deep', timeout=5); sys.exit(0 if __import__('json').load(r).get('status')=='healthy' else 1)\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: products/scheduler/backend/Dockerfile
+    command: ["python", "-m", "worker"]
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATABASE_URL=postgresql://scheduler:${POSTGRES_PASSWORD:-scheduler}@postgres:5432/scheduler
+      - WORKER_CONCURRENCY=1
+      # Per-solve child memory cap (enforced via RLIMIT_AS on Linux).
+      - SOLVE_MEMORY_LIMIT_MB=1024
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/data:uid=1001,gid=1001
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1536M
+
+volumes:
+  pgdata:

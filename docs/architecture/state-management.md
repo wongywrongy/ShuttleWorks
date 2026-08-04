@@ -1,21 +1,22 @@
 # State management
 
 How the scheduler frontend holds state and writes it back to the server. For frontend
-contributors adding stores, hooks, or surfaces. The state is split across **four Zustand stores**,
+contributors adding stores, hooks, or surfaces. The state is split across **five Zustand stores**,
 divided by lifetime and persistence; the rule across all of them is that **components never call
 the API directly** — they call a hook, the hook calls `apiClient`, the hook updates the store. That
 keeps optimistic updates and rollback in one place.
 
-## The four stores
+## The five stores
 
-Four stores live under `products/scheduler/frontend/src/store/`, each aligned with a persistence
+Five stores live under `products/scheduler/frontend/src/store/`, each aligned with a persistence
 boundary so a mutation can never accidentally cross one.
 
 | Store | File | Persistence | What it owns |
 | --- | --- | --- | --- |
 | **Tournament** | `tournamentStore.ts` | server snapshot — debounced (`500 ms`) `PUT /tournaments/{id}/state` via `useTournamentState` | config, roster (meet + bracket), matches, schedule, lock + two-phase-commit version state, plan-finalized flag |
 | **Match state** | `matchStateStore.ts` | `PUT …/match-states/{id}` per transition + `POST …/commands` per optimistic command (no debounce) | live match transitions, optimistic command state, conflict records, canonical versions |
-| **UI** | `uiStore.ts` | none — ephemeral, cleared on refresh | active tab + tournament context, solver HUD, toasts, drag/validate, persist status, review pipeline |
+| **UI** | `uiStore.ts` | none — ephemeral, cleared on refresh | active tab + tournament context (incl. `activeTournamentRole`), solver HUD, toasts, drag/validate, persist status, review pipeline |
+| **Alert** | `alertStore.ts` | none — ephemeral, local (no backend event table) | the Alerts & Activity rail: live `conditions` (poll advisories, keyed by id) + a ring-buffered `activity` audit trail (resolutions logged, not dropped) |
 | **Preferences** | `preferencesStore.ts` | `localStorage` (`scheduler-app-preferences`) | theme + density |
 
 The split is deliberate: tournament state moves between machines via import/export and a server
@@ -74,11 +75,14 @@ Ephemeral shell + interaction state, never serialised. A refresh always lands th
 clean slate, which is deliberate. It holds:
 
 - **Shell + tournament context** — `activeTab`, plus `activeTournamentId`, `activeTournamentKind`
-  (`meet | bracket`), `activeTournamentStatus` (`draft | active | archived`), and `bracketDataReady`.
+  (`meet | bracket`), `activeTournamentStatus` (`draft | active | archived`), `activeTournamentRole`
+  (the caller's role on this workspace — the field the write gate reads), and `bracketDataReady`.
   These are stamped on mount by `useTournamentState` and `useTournamentKind` / `BracketTab`, and let
   module-level helpers and the shell chrome reason about the active tournament without React Router params.
 - **Solver HUD + logs** — `solverHud`, `solverLogs`, and the generation lifecycle
-  (`isGenerating`, `generationProgress`, `generationError`, `scheduleStats`).
+  (`isGenerating`, `generationProgress`, `generationError`, `scheduleStats`). Since the
+  SP-CLOUD-1 async rail, `SolverPhase` gains a `'queued'` value (the solve job is waiting for a
+  worker) ahead of the solve phases `presolve | search | proving`.
 - **Drag-validate** — `pendingPin`, `lastValidation`.
 - **Persist status** — `persistStatus` (`idle | dirty | saving | error`), `lastSavedAt`, `lastSaveError`.
 - **Toasts** — `toasts` (`pushToast` returns the id so callers can dismiss later).
@@ -119,6 +123,37 @@ hydrates the tournament store on mount and debounces the PUT back; `useLiveTrack
 `useLiveOperations` round-trip the match-state store against `/match-states` immediately on every
 transition. Read-only composition hooks (e.g. `useTrafficLights`, …) live here
 too when they do non-trivial memoisation.
+
+Two hooks changed shape with the SP-CLOUD programs:
+
+- **`useSchedule` drives the async solve rail.** Generate / pin-and-resolve / reoptimize all go
+  through one submit-and-poll driver (`apiClient.runSolveJob`): `POST …/solve-jobs` with a
+  client-minted `Idempotency-Key`, then poll to a terminal status (~0.5–2 s backoff — honest,
+  coarse progress; the SSE stream client is gone). On mount it **adopts an orphaned active job**
+  (`listSolveJobs` → `pollSolveJob`), so a solve survives a reload; the abort controller lives at
+  module scope so the HUD's Cancel works from its own hook instance and also requests a
+  server-side cancel. `infeasible` / `failed` / `cancelled` render through the existing store
+  error states.
+- **`useLiveTracking` has a token mode** (SP-CLOUD-2): with no tournament id but a `?token=`,
+  match-state *reads* come from the unauthenticated `/display/{token}/match-states` projection
+  and every mutator is inert — the spectator board never writes.
+
+### The write gate
+
+`hooks/useCanEdit.ts` is the single client-side write gate (audit finding **A2**). It reads
+`uiStore.activeTournamentRole` through `platform/domain/permissions.ts` (`canEdit`, which **fails
+closed** on an unknown role) and comes in three shapes:
+
+- `useCanEdit(): boolean` — surfaces call this to disable controls with the standard `disabled`
+  vocabulary.
+- `assertCanEdit(): boolean` — the backstop the mutation seams (`useTournamentState`'s blob PUT,
+  `useLiveTracking`'s status writes) call imperatively: a viewer's press **no-ops client-side** with
+  one deduped "view-only" toast instead of firing a request that 403s and leaves the board showing a
+  state the server rejected.
+- `guardMutation(fn)` — wraps a mutating call whose caller needs a return value; the refusal is
+  shaped like the server's 403, so call sites behave exactly as they do against a real one, minus the
+  round-trip. `useLockGuard()` (the schedule-lock confirm/unlock flow) is the config-write analog —
+  see [Unified configuration § Schedule lock](/architecture/unified-configuration#schedule-lock).
 
 ## Optimistic command queues
 

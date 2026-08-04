@@ -147,7 +147,7 @@ export function WorkflowPanel({
         <div className="flex-shrink-0 border-b border-border/60">
           <div className="px-2 py-1.5 flex items-center justify-between border-b border-border/60">
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-status-live animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-status-live sw-pulse" />
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 In Progress
               </span>
@@ -182,7 +182,7 @@ export function WorkflowPanel({
               onClick={() => setActiveTab('up_next')}
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
                 activeTab === 'up_next'
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-accent text-accent-ink shadow-glow hover:brightness-110'
                   : 'bg-muted text-muted-foreground hover:bg-muted/40 hover:text-foreground'
               }`}
             >
@@ -193,7 +193,7 @@ export function WorkflowPanel({
               onClick={() => setActiveTab('finished')}
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
                 activeTab === 'finished'
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-accent text-accent-ink shadow-glow hover:brightness-110'
                   : 'bg-muted text-muted-foreground hover:bg-muted/40 hover:text-foreground'
               }`}
             >

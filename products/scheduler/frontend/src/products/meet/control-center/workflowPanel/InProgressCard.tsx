@@ -8,7 +8,9 @@ import { CircleNotch } from '@phosphor-icons/react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO } from '../../../../api/dto';
 import { ElapsedTimer } from '../../../../components/common/ElapsedTimer';
 import { getMatchLabel } from '../../../../utils/matchUtils';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../../lib/selectableRow';
 import { ACTION_BTN } from './styles';
+import { useCanEdit } from '../../../../hooks/useCanEdit';
 
 export function InProgressCard({
   assignment,
@@ -36,6 +38,11 @@ export function InProgressCard({
   onRequestScore?: (matchId: string) => void;
 }) {
   const [updating, setUpdating] = useState(false);
+  // A viewer may not drive the live day (audit A2): fold the permission into
+  // the in-flight flag so every action button here carries the `disabled`
+  // vocabulary, which blocks pointer AND keyboard.
+  const canEditWorkspace = useCanEdit();
+  const locked = updating || !canEditWorkspace;
 
   if (!match) return null;
 
@@ -47,22 +54,28 @@ export function InProgressCard({
     setUpdating(true);
     try {
       if (onUndoStart) onUndoStart(assignment.matchId);
-      await onUpdateStatus(assignment.matchId, 'called', { actualStartTime: undefined });
+      // Undo returns the match to `scheduled`, not `called`: the server has no
+      // playing→called edge, so the old target always 409'd (audit A1). The
+      // match drops back into the queue to be called again.
+      await onUpdateStatus(assignment.matchId, 'scheduled', { actualStartTime: undefined });
     } finally {
       setUpdating(false);
     }
   };
 
+  // != null (not !== undefined): the DTO serializes these as explicit
+  // ``null`` on every row, so the undefined-check branded EVERY in-progress
+  // match "(moved)" once its match-state row existed.
   const wasMoved =
-    matchState?.originalSlotId !== undefined ||
-    matchState?.originalCourtId !== undefined;
+    matchState?.originalSlotId != null || matchState?.originalCourtId != null;
 
   return (
     <div
-      onClick={onSelect}
+      {...selectableRowProps(onSelect, isSelected)}
       style={{ gridTemplateColumns: 'auto auto auto 1fr auto' }}
       className={[
         'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
+        SELECTABLE_ROW_FOCUS,
         isSelected
           ? 'border-l-status-started bg-status-started-bg'
           : 'border-l-status-live bg-status-live-bg/40 hover:bg-status-live-bg/60',
@@ -90,8 +103,8 @@ export function InProgressCard({
               e.stopPropagation();
               onRequestScore(assignment.matchId);
             }}
-            disabled={updating}
-            className={`${ACTION_BTN} bg-primary text-primary-foreground hover:brightness-110 !px-2 !py-0.5 !text-2xs`}
+            disabled={locked}
+            className={`${ACTION_BTN} bg-accent text-accent-ink shadow-glow hover:brightness-110 !px-2 !py-0.5 !text-2xs`}
             title="Enter score — opens score editor in the rail"
             aria-label="Enter score"
           >
@@ -103,9 +116,9 @@ export function InProgressCard({
             e.stopPropagation();
             handleUndo();
           }}
-          disabled={updating}
+          disabled={locked}
           className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
-          title="Undo to called"
+          title="Undo start — returns the match to the queue"
           aria-label="Undo started match"
         >
           {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}

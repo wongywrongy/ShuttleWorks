@@ -1,18 +1,26 @@
 # Bracket
 
-**Tier-1, user-enableable module.** Bracket is the draw engine: BWF-conformant single-elimination
-and round-robin tournaments with seeding, draw generation, intra-bracket advancement, schedule-next
-via the shared CP-SAT engine, and import/export. This page is for engineers working on the bracket
-surface or anything that reads its snapshot; it explains what Bracket owns, how a result is now
-recorded, and where it draws the line between its own concerns and Operations'.
+**Tier-1, user-enableable module.** Bracket is the draw engine: BWF-conformant draws across **six
+formats** (single-elimination, round-robin, double-elimination, Monrad, compass, Swiss — the
+`FORMAT_REGISTRY`) with seeding, draw generation, intra-bracket advancement, schedule-next via the
+shared CP-SAT engine, and import/export. This page is for engineers working on the bracket surface or
+anything that reads its snapshot; it explains what Bracket owns, how a result is now recorded, and
+where it draws the line between its own concerns and Operations'. For the format catalog and the
+loser-routing / `feeder_take` mechanics, see [Draw formats](/architecture/draw-formats).
 
 ## What it does
 
-- Build **events** (disciplines), add participants (players/teams), seed, and generate **draws** —
-  single-elimination or round-robin. An event *is* a draw: one row on the Draws tab per event.
+- Build **events** (disciplines), add participants (players/teams), seed, and generate **draws** in
+  any of the six registry formats. An event *is* a draw: one row on the Draws tab per event.
 - **Record results and advance winners.** Advancement is **intra-bracket** — recording a result
   resolves the downstream play-unit's slots locally; nothing cross-module is consulted. The result
-  write now flows through an idempotent **command** path (see below).
+  write now flows through an idempotent **command** path (see below). A result carries a `reason`
+  (`walkover` / `retired` / `forfeit`); a **retired or forfeit loser is routed to BYE downstream**
+  (its consolation / `feeder_take='loser'` slot becomes a BYE, exactly like a walkover for the loser
+  feed) while the stored result keeps `walkover=False` — the single predicate
+  `services/bracket/advancement.py::loser_cannot_continue` gates it. Winner advancement is unchanged,
+  and there is deliberately **no** automatic withdrawal from the player's other draws (the operator
+  decides that per draw).
 - **Schedule the next ready round** through the shared CP-SAT engine, with drag-validation and
   pinning; the streaming variant returns a candidate pool the operator commits.
 - **Import/export:** JSON and CSV import of pre-paired draws; export to JSON, an order-of-play CSV,
@@ -70,9 +78,11 @@ points its Plan/Run surfaces at the active engine. See [Operations](/modules/ope
 ## The draw canvas
 
 `DrawView` renders an event's draw on a pan/zoom canvas (`PanZoomCanvas`), branching on the event's
-`format`: a single-elimination tree for `se`, a round-robin grid for `rr`. Each play-unit side
-resolves to a confirmed participant, a feeder reference ("Winner of MS QF2") while the upstream match
-is unplayed, or "Bye" — via `sideLabel` in `products/bracket/bracketLabels.ts`.
+`format`: a single-elimination tree for `se`, a round-robin grid for `rr`, and the multi-segment
+(double-elim / Monrad / compass), Swiss-round, and standings views for the other registry formats.
+Each play-unit side resolves to a confirmed participant, a feeder reference ("Winner of MS QF2")
+while the upstream match is unplayed, or "Bye" — via `sideLabel` in
+`products/bracket/bracketLabels.ts`.
 
 Seeding is **BWF-conformant.** `bwf.ts::bwfPositions(size)` is the client-side mirror of the
 backend's `_bwf_positions` (`services/bracket/formats/single_elimination`): it maps each bracket
@@ -92,7 +102,12 @@ unplayed, and sides-resolved — `find_ready_play_units` gates it so a played or
 match can't be re-pinned.
 
 The engine is the same `TournamentDriver` / CP-SAT core Meet uses, fed snake-case bracket inputs —
-see [Scheduling unification](/architecture/scheduling-unification). Two refinements wrap the batch route:
+see [Scheduling unification](/architecture/scheduling-unification). Bracket solves also **consume the
+shared engine config**: `schedule_config_for_bracket` (`adapters/badminton.py`)
+reuses the full meet config mapping so the same rest, freeze-horizon, breaks, and solver objective
+weights apply to both engines (only `solverTimeLimitSeconds` is withheld — bracket runs on a
+per-request budget). See [Unified configuration](/architecture/unified-configuration). Two
+refinements wrap the batch route:
 
 ```text
 POST /bracket/schedule-next          # batch: solve + persist the next wave
@@ -101,9 +116,10 @@ POST /bracket/schedule-next/stream   # SSE: solve with live progress, returns a 
 POST /bracket/schedule-next/commit   # persist the operator-chosen candidate's assignment cells
 ```
 
-The streaming route mirrors Meet's `POST /schedule/stream` event shape (`model_built` → `phase` →
-`progress` → `complete` → `done`) and lets the operator pick among near-optimal candidates before
-committing — see [Bracket schedule streaming](/architecture/bracket-schedule-streaming). Interactive
+The streaming route keeps the classic SSE event shape (`model_built` → `phase` →
+`progress` → `complete` → `done`) — it is now the **only** SSE solve surface, since Meet's
+`POST /schedule/stream` was retired for the async job rail (SP-CLOUD-1) — and lets the operator
+pick among near-optimal candidates before committing — see [Bracket schedule streaming](/architecture/bracket-schedule-streaming). Interactive
 edits on the resulting schedule use `validate` (drag-feasibility) and `pin` (commit a move);
 `assign` / `unassign` place or queue a unit **without** re-solving and are driven by the Operations
 Run board.
@@ -152,10 +168,17 @@ Bracket's inputs are its own create/seed/result shapes — **`BracketCreateIn`, 
   earlier "commandQueue integration deferred" note is resolved for *recording*. The other live
   actions (`match-action` start/finish/reset, `assign` / `unassign`, `pin`) still use direct API
   calls plus a ~2.5 s polling hook (`hooks/useBracket.ts`), parallel to Meet's optimistic queue.
-- **Ported backend, heavy hydration.** `api/brackets.py` was ported from the standalone tournament
-  backend; the N+1 hydration loop and full-tournament re-serialisation flagged in the audit live in
-  this file. Retiring the legacy serialisation path is a prerequisite for Bracket becoming a fully
-  clean installable module.
+- **Ported backend, heavy hydration — now cache-bounded.** `api/brackets.py` was ported from the
+  standalone tournament backend; the N+1 hydration loop and full-tournament re-serialisation flagged
+  in the audit still live in this file. The per-request cost is now bounded by a **short-TTL
+  in-process response cache** (`services/bracket/response_cache.py`): `GET …/bracket` serves the
+  cached serialized `TournamentOut` when younger than `TTL_SECONDS` (2.0 s — below the frontend's
+  ~2.5 s poll, so staleness never exceeds existing poll latency) and rebuilds via `_hydrate_session`
+  on a miss. Every mutating bracket route (and a `clearSchedule` bracket-clear) calls
+  `response_cache.invalidate(tid)` before returning, so a missed invalidation self-heals within the
+  TTL rather than sticking. It assumes the single uvicorn process the deploy runs (no cross-process
+  coherence). Retiring the legacy serialisation path entirely is still a prerequisite for Bracket
+  becoming a fully clean installable module.
 - **Two different "Seam C"s — don't conflate them.** The data-flow **Seam C** (feeding a
   bracket-origin match finish into advancement *via* Operations) is intentionally **unwired**:
   advancement stays bracket-owned. That is distinct from the SP-G1 code-comment "Seam C command

@@ -85,12 +85,13 @@ describe('boardPlacements — buildLiveChips', () => {
     expect(buildLiveChips(blocks, 1, true)[0].late).toBe(false);
   });
 
-  it('called chip is span=1 at the planned slot and can be late (when running)', () => {
+  it('an overdue called chip projects to the now-line (it cannot start in the past)', () => {
     const [c] = buildLiveChips([blk({ id: 'c', court: 1, slot: 2, status: 'called' })], 4, true);
     expect(c.state).toBe('called');
     expect(c.placement.span).toBe(1);
-    expect(c.placement.startSlot).toBe(2);
-    expect(c.late).toBe(true);
+    expect(c.placement.startSlot).toBe(4); // max(planned 2, now 4)
+    expect(c.pushedSlots).toBe(2);         // the visible delay
+    expect(c.late).toBe(true);             // the data flag is untouched
   });
 
   it('missing actual timing falls back to the planned slot/span (never throws)', () => {
@@ -122,5 +123,92 @@ describe('boardPlacements — buildLiveChips', () => {
     expect(chips.map((c) => c.key)).toEqual(['bracket:pu']);
     expect(chips[0].source).toBe('bracket');
     expect(chips[0].placement.courtIndex).toBe(2);  // court 3 → index 2
+  });
+});
+
+/* A court plays ONE match at a time: a long-running match pushes what's
+ * behind it on the court to after its live end (visible delay), instead of
+ * growing underneath it into a stacked lane (feature fix, 2026-07-02). */
+describe('boardPlacements — court pushback (visible delay)', () => {
+  it('a grown playing chip pushes the next scheduled chip to its live end', () => {
+    const chips = buildLiveChips(
+      [
+        // playing since slot 0, clock at 3 → occupies [0, 3)
+        blk({ id: 'p', court: 1, slot: 0, span: 1, status: 'started', started: true, actualStartSlot: 0 }),
+        // planned at slot 1 — inside the playing chip's grown span
+        blk({ id: 's', court: 1, slot: 1, status: 'scheduled' }),
+      ],
+      3,
+      true,
+    );
+    const s = chips.find((c) => c.key === 'meet:s')!;
+    expect(s.placement.startSlot).toBe(3); // pushed to the playing chip's end
+    expect(s.pushedSlots).toBe(2);         // visibly delayed 2 slots
+    const p = chips.find((c) => c.key === 'meet:p')!;
+    expect(p.placement.startSlot).toBe(0); // the fact never moves
+    expect(p.pushedSlots).toBe(0);
+  });
+
+  it('pushes cascade down the court, in original array order', () => {
+    const chips = buildLiveChips(
+      [
+        blk({ id: 'p', court: 1, slot: 0, span: 1, status: 'started', started: true, actualStartSlot: 0 }),
+        blk({ id: 's1', court: 1, slot: 1, status: 'scheduled' }),
+        blk({ id: 's2', court: 1, slot: 2, status: 'called' }),
+      ],
+      4,
+      true,
+    );
+    // p occupies [0,4); s1 → 4 (+3); s2 → 5 (+3, behind s1)
+    expect(chips.map((c) => c.key)).toEqual(['meet:p', 'meet:s1', 'meet:s2']);
+    expect(chips[1].placement.startSlot).toBe(4);
+    expect(chips[1].pushedSlots).toBe(3);
+    expect(chips[2].placement.startSlot).toBe(5);
+    expect(chips[2].pushedSlots).toBe(3);
+  });
+
+  it('facts never move: overlapping playing/done chips keep their actual slots', () => {
+    const chips = buildLiveChips(
+      [
+        blk({ id: 'd', court: 1, slot: 0, span: 1, status: 'finished', done: true, actualStartSlot: 0, actualEndSlot: 3 }),
+        // second match actually started while the first was still recorded playing
+        blk({ id: 'p', court: 1, slot: 2, span: 1, status: 'started', started: true, actualStartSlot: 2 }),
+      ],
+      4,
+      true,
+    );
+    expect(chips[0].placement.startSlot).toBe(0);
+    expect(chips[1].placement.startSlot).toBe(2); // factual overlap preserved
+    expect(chips.every((c) => c.pushedSlots === 0)).toBe(true);
+  });
+
+  it('the now-floor applies on every court; future chips are not pushed', () => {
+    const chips = buildLiveChips(
+      [
+        blk({ id: 'p', court: 1, slot: 0, span: 1, status: 'started', started: true, actualStartSlot: 0 }),
+        blk({ id: 'otherCourt', court: 2, slot: 1, status: 'scheduled' }),
+        blk({ id: 'after', court: 1, slot: 5, status: 'scheduled' }),
+      ],
+      3,
+      true,
+    );
+    // Overdue on a FREE court still projects to now (it can't start at 1
+    // anymore) — the delay is visible on every court, not just busy ones.
+    const other = chips.find((c) => c.key === 'meet:otherCourt')!;
+    expect(other.placement.startSlot).toBe(3);
+    expect(other.pushedSlots).toBe(2);
+    // A chip planned in the FUTURE stays exactly where the plan puts it.
+    const after = chips.find((c) => c.key === 'meet:after')!;
+    expect(after.placement.startSlot).toBe(5);
+    expect(after.pushedSlots).toBe(0);
+  });
+
+  it('the plan board never pushes (it shows the PLAN)', () => {
+    const chips = buildPlanChips([
+      blk({ id: 'a', court: 1, slot: 0, span: 3, status: 'started', started: true }),
+      blk({ id: 'b', court: 1, slot: 1, status: 'scheduled' }),
+    ]);
+    expect(chips[1].placement.startSlot).toBe(1);
+    expect(chips.every((c) => c.pushedSlots === 0)).toBe(true);
   });
 });

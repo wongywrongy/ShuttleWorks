@@ -1,0 +1,26 @@
+<!-- @dsCard group="Components" viewport="700x210" name="Match chips & tags" subtitle="3b court-board chips + compact code tags" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{margin:0;background:var(--surface-screen);padding:20px;font-family:var(--font-sans)}
+#r{display:flex;flex-direction:column;gap:14px}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cap{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);width:64px;flex-shrink:0}</style></head>
+<body><div id="r"></div>
+<script type="text/babel">
+function findNS(names){for(const k of Object.keys(window)){const v=window[k];if(v&&typeof v==='object'&&names.every(n=>typeof v[n]==='function'))return v;}return {};}
+const NS = findNS(['MatchChip','Tag']); const { MatchChip, Tag } = NS;
+ReactDOM.createRoot(document.getElementById('r')).render(<>
+  <div className="row"><span className="cap">Chips</span>
+    <div style={{width:150}}><MatchChip code="MS1" players="Chen v Webb" state="live" meta="14:32"/></div>
+    <div style={{width:120}}><MatchChip code="XD1" source="B" state="called"/></div>
+    <div style={{width:150}}><MatchChip code="WD2" players="Kim v Tan" state="live" lateBy="2"/></div>
+    <div style={{width:120}}><MatchChip code="MS4" players="Rivera v Ng" state="scheduled"/></div>
+    <div style={{width:120}}><MatchChip code="MS3" state="done"/></div>
+  </div>
+  <div className="row"><span className="cap">Tags</span>
+    <Tag>MS1</Tag><Tag tone="bracket">QF1</Tag><Tag>SEED 1</Tag><Tag dashed>unseeded</Tag>
+  </div>
+</>);
+</script></body></html>

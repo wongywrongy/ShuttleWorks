@@ -50,6 +50,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -85,8 +86,15 @@ class Tournament(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     # Step 4 backfills this from the Supabase JWT subject. Nullable so
-    # rows created before auth lands aren't rejected.
+    # rows created before auth lands aren't rejected. Since SP-CLOUD-2
+    # this is provenance only — authorization reads memberships.
     owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    # SP-CLOUD-2: the owning org. Nullable at the column level so the
+    # backfill migration can populate it; the application always sets
+    # it (creator's personal org) and the migration leaves no NULLs.
+    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("orgs.id", ondelete="RESTRICT"), nullable=True
+    )
     # Denormalised name pulled out of ``data["config"]["tournamentName"]``
     # for the Step 6 dashboard list. Nullable to mirror the existing
     # behaviour where ``tournamentName`` is optional.
@@ -369,13 +377,19 @@ class TournamentMember(Base):
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    # SP-CLOUD-2: real users now — the raw-UUID era ended with the
+    # backfill migration seeding a users row for every historical id.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
 
     tournament: Mapped[Tournament] = relationship(back_populates="members")
+
+    __table_args__ = (Index("ix_tournament_members_user", "user_id"),)
 
 
 class InviteLink(Base):
@@ -394,6 +408,9 @@ class InviteLink(Base):
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
     )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
+    # SP-CLOUD-2 Phase 3: cloud invites are email-addressed (delivery
+    # via the email seam). NULL = local link-style invite.
+    email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
@@ -582,6 +599,12 @@ class BracketResult(Base):
     score: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     finished_at_slot: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     walkover: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Contingency annotation only (spec 2026-07-14 §1): why the result was
+    # awarded without (full) play — 'walkover' | 'retired' | 'forfeit' | None.
+    # Does NOT drive advancement/BYE-sweep routing; that stays keyed off
+    # ``walkover`` alone. Distinct routing for retired/forfeit is deferred
+    # (debt-log).
+    reason: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -743,4 +766,286 @@ class WorkspaceModule(Base):
         UniqueConstraint(
             "tournament_id", "module_id", name="uq_workspace_modules_tournament_module"
         ),
+    )
+
+
+class SolveJobStatus(str, enum.Enum):
+    """Lifecycle of a solve job (SP-CLOUD-1 job boundary).
+
+    ``QUEUED``     — enqueued, waiting for a worker.
+    ``CLAIMED``    — a worker owns the lease, child not yet running.
+    ``RUNNING``    — solve subprocess executing, heartbeats expected.
+    ``SUCCEEDED``  — terminal; ``result`` holds the ScheduleDTO.
+    ``FAILED``     — terminal; infrastructure/validation failure after
+                     retries, ``error`` holds the structured reason.
+    ``INFEASIBLE`` — terminal; the solver *proved* there is no feasible
+                     schedule (or exhausted its budget without one).
+                     A domain outcome, never retried, never a 500.
+    ``CANCELLED``  — terminal; user-requested.
+    """
+
+    QUEUED = "queued"
+    CLAIMED = "claimed"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    INFEASIBLE = "infeasible"
+    CANCELLED = "cancelled"
+
+
+# Shared WHERE fragment for the active-job partial unique index. String
+# literal (not bound params) because partial-index predicates must be
+# constant expressions on both dialects.
+_ACTIVE_SOLVE_JOB_PREDICATE = text(
+    "status IN ('queued', 'claimed', 'running')"
+)
+
+
+class SolveJob(Base):
+    """One asynchronous CP-SAT solve — the long-running-operation record.
+
+    The HTTP layer enqueues (in the same transaction as any related
+    business writes) and polls; workers claim, execute in a child
+    subprocess, heartbeat, and complete. ``params`` and
+    ``input_snapshot`` are captured at submit time so the worker never
+    reads live tournament tables and a job stays reproducible after the
+    tournament is edited.
+
+    Two distinct dedup mechanisms (do not conflate):
+    - ``uq_solve_jobs_idempotency_key`` — client retry safety (Stripe
+      semantics): a resubmit with the same key returns the original job.
+    - ``uq_solve_jobs_active`` — business rule: at most one *active*
+      job per ``(tournament_id, type)``, enforced declaratively by a
+      partial unique index (works on both SQLite and Postgres; no
+      advisory locks).
+    """
+
+    __tablename__ = "solve_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
+    )
+    type: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), default=SolveJobStatus.QUEUED.value, nullable=False
+    )
+    # Solver parameters persisted at submit (random_seed, num_workers,
+    # max_deterministic_time, wall-clock ceiling, candidate_pool_size…).
+    # The worker reads ONLY from here — never from live settings — so a
+    # re-run reproduces the original solve.
+    params: Mapped[dict] = mapped_column(JSON, nullable=False)
+    # Full solver input (the stateless GenerateScheduleRequest shape).
+    input_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
+    # Terminal payloads. ``result`` holds the ScheduleDTO for both
+    # ``succeeded`` and ``infeasible`` (the DTO carries status +
+    # infeasibleReasons); ``error`` is structured {code, message, detail}.
+    result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    error: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Coarse live progress written on worker heartbeats (phase,
+    # solutionCount, objective…) for the polling UI. Never authoritative.
+    progress: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Lower = sooner. Claim order is (priority ASC, created_at ASC).
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    claimed_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    heartbeat_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_solve_jobs_idempotency_key",
+            "idempotency_key",
+            unique=True,
+        ),
+        Index(
+            "uq_solve_jobs_active",
+            "tournament_id",
+            "type",
+            unique=True,
+            sqlite_where=_ACTIVE_SOLVE_JOB_PREDICATE,
+            postgresql_where=_ACTIVE_SOLVE_JOB_PREDICATE,
+        ),
+        # Claim hot path: workers only ever scan queued rows, so
+        # terminal-job accumulation never slows the claim query.
+        Index(
+            "ix_solve_jobs_claimable",
+            "priority",
+            "created_at",
+            sqlite_where=text("status = 'queued'"),
+            postgresql_where=text("status = 'queued'"),
+        ),
+    )
+
+
+# ---- Identity & sessions (SP-CLOUD-2 Phase 1) ------------------------
+
+
+class User(Base):
+    """A real account row — the end of the bare-UUID identity era.
+
+    ``password_hash`` is nullable on purpose: the local bootstrap
+    operator and identities migrated from the Supabase-JWT era have no
+    password until they set one (cloud: via the reset flow).
+    ``email_verified`` exists from day one; the verification *flow* is
+    cloud-only. Email uniqueness is case-insensitive via a functional
+    unique index on ``lower(email)`` — portable to both dialects — while
+    the stored value keeps the user's original casing.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    # Argon2id PHC string (contains its own salt + parameters).
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Password-reset token (SHA-256 of the mailed token; single active
+    # token per user, overwritten on re-request, cleared on use).
+    reset_token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    reset_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("uq_users_email_lower", text("lower(email)"), unique=True),
+    )
+
+
+class DisplayToken(Base):
+    """Capability token behind the public spectator display (Rule 8).
+
+    One row per workspace; the token is a random urlsafe string stored
+    RAW (unlike sessions) because the Sharing tab must re-display the
+    link and the capability it grants is read-only projection data —
+    revocation is rotation (new token) or row deletion. The public
+    ``/display/{token}/*`` routes resolve through this table only;
+    the raw tournament UUID never becomes a public capability.
+    """
+
+    __tablename__ = "display_tokens"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    token: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    __table_args__ = (Index("uq_display_tokens_token", "token", unique=True),)
+
+
+class Org(Base):
+    """The owning entity for workspaces (club / program).
+
+    Every user gets a personal org at creation (GitHub/Stripe pattern)
+    so the UI can ignore orgs entirely while the data model never hangs
+    workspaces directly off users — retrofitting an org layer later is
+    the migration everyone regrets.
+    """
+
+    __tablename__ = "orgs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class OrgMember(Base):
+    """User ↔ org membership. Roles stay minimal: owner | member."""
+
+    __tablename__ = "org_members"
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("orgs.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="owner")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    __table_args__ = (Index("ix_org_members_user", "user_id"),)
+
+
+class AuthSession(Base):
+    """Server-side session record backing the auth cookie.
+
+    The cookie carries an opaque random token; only its SHA-256 lands
+    here, so a leaked DB dump can't be replayed as live sessions.
+    Revocation is a timestamp (not a delete) so audit/debugging keeps
+    the row until retention pruning.
+    """
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("uq_auth_sessions_token_hash", "token_hash", unique=True),
+        Index("ix_auth_sessions_user", "user_id"),
+    )
+
+
+class AuthThrottle(Base):
+    """Credential-endpoint backoff counters (per account and per IP).
+
+    DB-backed (no Redis) and dual-dialect; one row per throttle key
+    (``account:<lower-email>`` or ``ip:<addr>``). Enough to blunt
+    credential stuffing — general rate limiting is out of scope.
+    """
+
+    __tablename__ = "auth_throttle"
+
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    failures: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    locked_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )

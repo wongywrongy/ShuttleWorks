@@ -18,7 +18,7 @@ export function BracketEmptyState({
   return (
     <section className="mx-auto flex min-h-[280px] max-w-3xl flex-col justify-center px-6 py-10">
       <div className="border-t border-border pt-5">
-        <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {eyebrow}
         </p>
         <h2 className="mt-2 text-xl font-semibold tracking-tight text-foreground">

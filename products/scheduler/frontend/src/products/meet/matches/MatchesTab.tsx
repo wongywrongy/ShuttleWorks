@@ -17,8 +17,18 @@ import { RegenerateMenu } from './RegenerateMenu';
 import { EmptyState } from '../../../components/control-plane';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { useTournamentId } from '../../../hooks/useTournamentId';
+import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
 
 export function MatchesTab() {
+  const tid = useTournamentId();
+  // The Status column (Pending/Ready/Live/Done) reads matchStateStore, but
+  // nothing else mounted on this surface hydrates it — an operator who opens
+  // Matches directly (without ever visiting Schedule/Operations/Display)
+  // would see a stale/empty store and a lying status. One mount keeps it
+  // converged the same way SchedulePage does (initial load + 5s poll).
+  useMatchStateSync(tid);
   const matches = useTournamentStore((s) => s.matches);
   const players = useTournamentStore((s) => s.players);
   const groups = useTournamentStore((s) => s.groups);
@@ -50,7 +60,10 @@ export function MatchesTab() {
     }).length;
   }, [matches, searchQuery, playerById]);
 
-  const canAddRow = players.length >= 2;
+  // A viewer may not build the match list (audit A2-followup). Folded into the
+  // existing precondition so every Add-match entry point inherits it.
+  const canEditWorkspace = useCanEdit();
+  const canAddRow = players.length >= 2 && canEditWorkspace;
   const addEmptyRow = () => {
     const id = uuid();
     addMatch({
@@ -124,24 +137,30 @@ export function MatchesTab() {
         <RegenerateMenu />
       </MeetActionsBar>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      {/* Flex ROW: the match list + the docked match DetailPanel (both
+          rendered by MatchesSpreadsheet — its scroll column and DetailDock
+          are fragment children of this container). `relative` anchors the
+          dock's narrow-viewport overlay fallback. */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {matches.length === 0 ? (
-          <EmptyState
-            title="No matches yet"
-            body="Matches are generated from the position grid. Use Regenerate from roster in the bar above to build them, then schedule in Operations → Courts. You can also add a custom match by hand."
-            action={
-              <button
-                type="button"
-                onClick={addEmptyRow}
-                disabled={!canAddRow}
-                data-testid="empty-add-match"
-                title={canAddRow ? 'Add match row' : 'Need at least 2 players'}
-                className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-3 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
-              >
-                ＋ Add match by hand
-              </button>
-            }
-          />
+          <div className="min-h-0 flex-1 overflow-auto">
+            <EmptyState
+              title="No matches yet"
+              body="Matches are generated from the position grid. Use Regenerate from roster in the bar above to build them, then schedule in Operations → Courts. You can also add a custom match by hand."
+              action={
+                <button
+                  type="button"
+                  onClick={addEmptyRow}
+                  disabled={!canAddRow}
+                  data-testid="empty-add-match"
+                  title={canAddRow ? 'Add match row' : 'Need at least 2 players'}
+                  className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-3 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  ＋ Add match by hand
+                </button>
+              }
+            />
+          </div>
         ) : (
           <MatchesSpreadsheet
             pendingFocusId={pendingFocusId}

@@ -23,21 +23,25 @@ import { useCommandQueue } from '../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
+import { useMatchStateSync } from '../../hooks/useMatchStateSync';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { slotToTime } from '../../lib/time';
+import { bracketOccupiedWindows } from '../../lib/bracketOccupancy';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { BracketScheduleModal } from '../bracket/BracketScheduleModal';
 import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from './opsBlock';
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
 import { OpsDetailRail } from './OpsDetailRail';
+import { DetailDock } from '../../components/control-plane';
 import { RunSurface } from './run/RunSurface';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
+import { useAction } from '../../hooks/useAction';
 
 const schedBtn =
-  `${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-primary px-2.5 text-xs ` +
-  `font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`;
+  `${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs ` +
+  `font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
 
 export function OperationsProduct() {
   const tid = useTournamentId();
@@ -49,9 +53,17 @@ export function OperationsProduct() {
 }
 
 function OperationsBody() {
+  const tid = useTournamentId();
   const activeTab = useUiStore((s) => s.activeTab);
   const pushToast = useUiStore((s) => s.pushToast);
   const isLive = isLiveSegment(activeTab);
+
+  // Keep meet match-states converged with the backend while ANY Operations
+  // surface is open. Without this the store went stale here (nothing on this
+  // surface loaded it), so the board painted 'scheduled' over playing matches
+  // and the inspector offered state-machine-illegal actions → user-visible
+  // "Cannot transition …" 409s.
+  useMatchStateSync(tid);
 
   // ---- Meet blocks (global stores) ----
   const config = useTournamentStore((s) => s.config);
@@ -77,13 +89,11 @@ function OperationsBody() {
   // Cross-engine coordination: the courts the bracket already occupies, as
   // [court, fromSlot, toSlot] windows, so a meet re-solve schedules around
   // them (no double-booking). The bracket side coordinates server-side.
+  // Passing the polled snapshot's windows here (rather than letting
+  // useSchedule fetch its own) keeps the solve in lockstep with what this
+  // surface is rendering.
   const bracketWindows = useMemo<number[][]>(
-    () =>
-      (data?.assignments ?? []).map((a) => [
-        a.court_id,
-        a.slot_id,
-        a.slot_id + a.duration_slots,
-      ]),
+    () => bracketOccupiedWindows(data),
     [data],
   );
   // Bracket play-units ready to schedule: both sides known, no court yet, no
@@ -117,19 +127,27 @@ function OperationsBody() {
   }, [config?.courtCount, data?.courts, blocks]);
 
   // ---- planFinalized — Plan-side "ready to run" toggle (Task 17) ----
-  const tid = useTournamentId();
   const planFinalized = useTournamentStore((s) => s.planFinalized);
   const setPlanFinalized = useTournamentStore((s) => s.setPlanFinalized);
 
-  const handlePlanFinalizeToggle = useCallback(async () => {
-    const newVal = !planFinalized;
-    setPlanFinalized(newVal); // optimistic
-    try {
-      await apiClient.setPlanFinalized(tid, newVal);
-    } catch {
-      setPlanFinalized(!newVal); // revert on failure
-    }
-  }, [planFinalized, setPlanFinalized, tid]);
+  // Wrapped in `useAction`: a rapid double-press used to fire TWO
+  // `POST /plan-finalized` (audit C1), and the failure path was an empty catch
+  // that reverted the toggle with no explanation (audit B). The wrapper gives a
+  // synchronous in-flight lock and a visible failure; the revert stays here
+  // because only this component knows what to revert to.
+  const planFinalizeAction = useAction(
+    useCallback(async () => {
+      const newVal = !planFinalized;
+      setPlanFinalized(newVal); // optimistic
+      try {
+        await apiClient.setPlanFinalized(tid, newVal);
+      } catch (err) {
+        setPlanFinalized(!newVal); // revert
+        throw err; // ...and let the wrapper surface it
+      }
+    }, [planFinalized, setPlanFinalized, tid]),
+    { errorMessage: 'Could not update the plan-ready state' },
+  );
 
   // ---- Courts-only selection (Live uses RunSurface's own selection) ----
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -190,8 +208,8 @@ function OperationsBody() {
     <div className="relative flex h-full min-h-0 flex-col bg-card">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{title}</span>
-          <span className="text-xs text-muted-foreground/70">{subtitle}</span>
+          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</span>
+          <span className="text-xs text-muted-foreground">{subtitle}</span>
         </div>
         {/* Plan is the planning surface: build / adjust the plan. Run runs
             what Plan produced — no scheduling actions there. */}
@@ -219,7 +237,9 @@ function OperationsBody() {
             <button
               type="button"
               className={schedBtn}
-              onClick={() => void handlePlanFinalizeToggle()}
+              onClick={() => void planFinalizeAction.run()}
+              disabled={planFinalizeAction.pending}
+              aria-busy={planFinalizeAction.pending}
               data-testid="ops-plan-finalize-toggle"
             >
               {planFinalized ? 'Plan ready ✓' : 'Mark plan ready to run'}
@@ -232,7 +252,7 @@ function OperationsBody() {
             {planFinalized ? (
               <span
                 data-testid="run-plan-finalized"
-                className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:text-green-400"
+                className="inline-flex items-center rounded-full border border-status-done/30 bg-status-done/10 px-2.5 py-0.5 text-xs font-medium text-status-done"
               >
                 Plan finalized · ready to run
               </span>
@@ -262,13 +282,16 @@ function OperationsBody() {
               currentSlot={currentSlot}
               planFinalized={planFinalized}
               formatSlot={formatSlot}
+              slotMinutes={config?.intervalMinutes}
             />
           ) : (
             // COURTS = planning surface. Drag board + the matches overview list
-            // + a detail-rail overlay. Selection and the OpsDetailRail overlay
-            // live entirely inside this branch.
-            <div className="relative h-full min-h-0">
-              <div className="h-full min-h-0 overflow-auto">
+            // + a docked detail rail. The rail is a real layout column
+            // (DetailDock) — the board reflows beside it; on narrow
+            // viewports the dock falls back to an overlay by itself, which
+            // replaces the hand-rolled overlay workaround that lived here.
+            <div className="relative flex h-full min-h-0">
+              <div className="h-full min-h-0 min-w-0 flex-1 overflow-auto">
                 <UnifiedOpsBoard
                   blocks={blocks}
                   courtCount={courtCount}
@@ -282,19 +305,17 @@ function OperationsBody() {
                 <UnifiedOpsList blocks={blocks} selectedKey={selectedKey} onSelect={setSelectedKey} />
               </div>
 
-              {/* Detail rail OVERLAYS the content so it never steals layout
-                  width (the source of the text cutoff at narrower viewports). */}
-              {selectedBlock ? (
-                <div className="absolute inset-y-0 right-0 z-20 flex bg-card shadow-xl">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedKey(null)}
-                    aria-label="Close details"
-                    className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                  >
-                    ✕
-                  </button>
-                  <div className="min-h-0 w-80 max-w-[88vw] overflow-auto">
+              <DetailDock open={selectedBlock != null} width={320}>
+                {selectedBlock ? (
+                  <div className="relative h-full min-h-0">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedKey(null)}
+                      aria-label="Close details"
+                      className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    >
+                      ✕
+                    </button>
                     <OpsDetailRail
                       block={selectedBlock}
                       data={data}
@@ -303,8 +324,8 @@ function OperationsBody() {
                       live={false}
                     />
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </DetailDock>
             </div>
           )}
         </div>

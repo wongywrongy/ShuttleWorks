@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUiStore, type SolverPhase } from '../store/uiStore';
+import { useTournamentStore } from '../store/tournamentStore';
 import { useSchedule } from '../hooks/useSchedule';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 
@@ -13,27 +14,34 @@ type PhaseStyle = {
 
 // Phase pills route through the semantic ``--status-*`` palette so the
 // HUD reads on the same hue ladder as Gantt blocks, toast borders, and
-// the TabBar app-status chip. ``ring`` is the rgba expansion of the
-// matching token at the saturated lightness — used by the phase-glow
-// keyframe (which can't read CSS custom properties directly).
+// the TabBar app-status chip. ``ring`` feeds the phase-glow keyframe via
+// the --phase-ring custom property; expressed in tokens so it desaturates
+// with the theme instead of pinning light-mode hues onto dark.
 const PHASES: Record<NonNullable<SolverPhase>, PhaseStyle> = {
+  queued: {
+    label: 'Queued',
+    ring: 'hsl(var(--muted-foreground) / 0.4)',
+    pill: 'bg-muted/40 text-muted-foreground border-border',
+    dot: 'bg-muted-foreground',
+    loop: true,
+  },
   presolve: {
     label: 'Presolve',
-    ring: 'hsla(38, 92%, 42%, 0.55)',
+    ring: 'hsl(var(--status-warning-fg) / 0.55)',
     pill: 'bg-status-called-bg text-status-called border-status-called/40',
     dot: 'bg-status-called',
     loop: true,
   },
   search: {
     label: 'Searching',
-    ring: 'hsla(199, 89%, 38%, 0.55)',
+    ring: 'hsl(var(--status-info-fg) / 0.55)',
     pill: 'bg-status-started-bg text-status-started border-status-started/40',
     dot: 'bg-status-started',
     loop: true,
   },
   proving: {
     label: 'Proving optimal',
-    ring: 'hsla(142, 71%, 38%, 0.55)',
+    ring: 'hsl(var(--status-success-fg) / 0.55)',
     pill: 'bg-status-live-bg text-status-live border-status-live/40',
     dot: 'bg-status-live',
     loop: false,
@@ -44,6 +52,10 @@ export function SolverHud() {
   const hud = useUiStore((s) => s.solverHud);
   const isGenerating = useUiStore((s) => s.isGenerating);
   const activeTab = useUiStore((s) => s.activeTab);
+  // Persisted schedule, not scheduleStats — stats live only for the solver
+  // session, so after a reload they're null while a schedule very much
+  // exists (and may be mid-play).
+  const hasSchedule = useTournamentStore((s) => s.schedule != null);
 
   // Track whether a final "complete" sheen should play this render.
   const [celebrate, setCelebrate] = useState(false);
@@ -86,7 +98,11 @@ export function SolverHud() {
       <footer className="sticky bottom-0 z-hud flex items-center justify-between border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-border" aria-hidden />
-          Solver idle — click Generate to begin.
+          {/* With a schedule in place, "click Generate to begin" read as an
+              invitation to re-solve a possibly-live day — name the stakes. */}
+          {hasSchedule
+            ? 'Solver idle — schedule in place. Generate replaces it.'
+            : 'Solver idle — click Generate to begin.'}
         </span>
       </footer>
     );

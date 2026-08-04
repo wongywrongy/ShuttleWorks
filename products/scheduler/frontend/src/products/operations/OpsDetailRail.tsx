@@ -23,10 +23,12 @@ const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card ` +
   `px-2 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`;
 const primaryBtn =
-  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-primary px-2 py-1 ` +
-  `text-2xs font-medium text-primary-foreground hover:opacity-90`;
+  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-accent px-2 py-1 ` +
+  `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
 
-const RAIL = 'w-72 flex-shrink-0 space-y-3 overflow-auto border-l border-border p-4';
+// Pure rail content — geometry (width, border) is owned by the DetailDock
+// host the rail mounts into.
+const RAIL = 'h-full w-full space-y-3 overflow-auto p-4';
 
 interface Props {
   block: OpsBlock | null;
@@ -42,12 +44,12 @@ function Identity({ block }: { block: OpsBlock }) {
     <>
       <div className="flex items-center gap-2">
         <SourceChip source={block.source} />
-        <span className="font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground">{block.label}</span>
+        <span className="sw-num text-2xs uppercase tracking-[0.08em] text-muted-foreground">{block.label}</span>
       </div>
-      <div className="font-mono text-sm">{block.court != null ? `Court C${block.court} · slot ${block.slot}` : 'Not scheduled'}</div>
+      <div className="sw-num text-sm">{block.court != null ? `Court C${block.court} · slot ${block.slot}` : 'Not scheduled'}</div>
       <div className="space-y-1">
         <div className="text-sm">{block.sideA}</div>
-        <div className="text-2xs uppercase tracking-[0.18em] text-muted-foreground">vs</div>
+        <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
         <div className="text-sm">{block.sideB}</div>
       </div>
     </>
@@ -66,10 +68,13 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: 
   }
 
   return (
-    <aside className={RAIL}>
+    // Keyed by the match key so switching selection re-mounts the rail and
+    // re-triggers `sw-panel-in`; a background poll re-render keeps the same
+    // key (block identity may change, its key doesn't) so it never re-fires.
+    <aside key={block.key} className={`${RAIL} sw-panel-in`}>
       <Identity block={block} />
       {block.done ? (
-        <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-status-done">Done</div>
+        <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-done">Done</div>
       ) : live && block.source === 'meet' ? (
         <div className="flex flex-wrap gap-2">
           {block.started ? (
@@ -90,7 +95,7 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: 
           )}
         </div>
       ) : (
-        <div className="text-2xs uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
           {block.started ? 'In progress' : block.court != null ? 'Scheduled' : 'Awaiting court'}
         </div>
       )}

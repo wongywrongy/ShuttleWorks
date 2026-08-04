@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Operations · Run board" description="Keystone live court-board screen — identity bar, module rail, summary tiles, court×time board, queue and inspector." -->
+<helmet>
+<script src="./ds-base.js"></script>
+<style>
+  html,body{margin:0}
+  *{box-sizing:border-box}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="min-height:100%;background:var(--page-glow),var(--surface-page);font-family:var(--font-sans);color:var(--text-2);-webkit-font-smoothing:antialiased;padding:24px">
+  <div style="width:100%;max-width:var(--content-max);height:720px;margin:0 auto;border:1px solid var(--border-1);border-radius:var(--radius-2xl);background:var(--surface-screen);overflow:hidden;box-shadow:var(--shadow-frame);display:flex;flex-direction:column">
+
+    <!-- identity bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;height:var(--topbar-h);border-bottom:1px solid var(--border-1);padding:0 16px;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="color:var(--text-muted)">‹</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text-1)">Bay Area HS Invitational</span>
+        <span class="sw-num" style="font-size:10px;color:var(--text-muted)">SUN JUL 12 · 4C</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="sw-num" style="font-size:11px;color:var(--status-live)">10:04</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;border:1px solid var(--accent-border);background:var(--accent-tint);border-radius:var(--radius-sm);padding:2px 8px;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--status-live)">
+          <span class="sw-pulse" style="width:5px;height:5px;border-radius:9999px;background:var(--status-live);box-shadow:var(--glow-live)"></span>Live
+        </span>
+      </div>
+    </div>
+
+    <div style="display:flex;min-height:0;flex:1">
+      <!-- module rail (real WorkspaceSidebar component) -->
+      <x-import component-from-global-scope="ShuttleWorksDesignSystem_4e21fb.WorkspaceSidebar" dc-props="{{ sidebar }}" hint-size="216px,100%"></x-import>
+
+      <div style="flex:1;min-width:0;display:flex">
+        <!-- main — seamed, not gapped: one continuous plane divided by hairlines -->
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+          <!-- summary strip -->
+          <div style="display:flex;border-bottom:1px solid var(--border-1)">
+            <div style="flex:1;padding:11px 16px;border-right:1px solid var(--border-1);border-top:2px solid transparent">
+              <div class="sw-num" style="font-size:18px;font-weight:700;color:var(--text-1)">3<span style="color:var(--text-muted)">/12</span></div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">done</div>
+            </div>
+            <div style="flex:1;padding:11px 16px;border-right:1px solid var(--border-1);border-top:2px solid color-mix(in srgb,var(--status-live) 55%,transparent)">
+              <div class="sw-num" style="font-size:18px;font-weight:700;color:var(--status-live)">3</div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">playing</div>
+            </div>
+            <div style="flex:1;padding:11px 16px;border-right:1px solid var(--border-1);border-top:2px solid transparent">
+              <div class="sw-num" style="font-size:18px;font-weight:700;color:var(--text-1)">1</div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">courts free</div>
+            </div>
+            <div style="flex:1;padding:11px 16px;border-top:2px solid color-mix(in srgb,var(--status-called) 60%,transparent)">
+              <div class="sw-num" style="font-size:18px;font-weight:700;color:var(--status-called)">1</div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">late</div>
+            </div>
+          </div>
+
+          <!-- court × time board -->
+          <div style="border-bottom:1px solid var(--border-1);overflow:hidden">
+            <div style="display:flex;border-bottom:1px solid var(--border-1)">
+              <div style="width:44px;flex-shrink:0;border-right:1px solid var(--border-1)"></div>
+              <div style="flex:1;position:relative;height:22px">
+                <b style="position:absolute;top:5px;left:6px;font-size:10px;color:var(--text-muted);font-weight:400">09:00</b>
+                <b style="position:absolute;top:5px;left:50%;font-size:10px;color:var(--text-muted);font-weight:400">10:00</b>
+                <span style="position:absolute;left:50%;top:0;bottom:-208px;width:1px;background:var(--accent);z-index:5"></span>
+              </div>
+            </div>
+            <!-- C1 -->
+            <div style="display:flex;height:52px;border-bottom:1px solid var(--border-row)">
+              <div class="sw-num" style="width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border-1);background:var(--surface-band);font-size:11px;font-weight:600;color:var(--text-meta)">C1</div>
+              <div style="flex:1;position:relative">
+                <div style="position:absolute;top:6px;left:calc(12.5% + 3px);width:calc(37.5% - 6px);height:40px;border-radius:var(--radius-md);padding:0 10px;display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;background:var(--sw-live-solid);border:1px solid var(--sw-live-border)">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span class="sw-num" style="width:14px;height:14px;border-radius:var(--radius-xs);display:inline-flex;align-items:center;justify-content:center;font-size:9px;background:rgba(0,0,0,.2);color:var(--sw-live-ink)">M</span>
+                    <span class="sw-num" style="font-size:11px;font-weight:600;color:var(--sw-live-ink)">MS1</span>
+                    <span class="sw-num" style="margin-left:auto;font-size:9px;color:var(--sw-live-ink)">14:32</span>
+                  </div>
+                  <span style="font-size:10px;color:var(--sw-live-ink)">Chen v Webb</span>
+                </div>
+                <div style="position:absolute;top:6px;left:calc(50% + 3px);width:calc(12.5% - 6px);height:40px;border-radius:var(--radius-md);padding:0 10px;display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;background:var(--surface-card);border:1px solid var(--border-1)">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span class="sw-num" style="width:14px;height:14px;border-radius:var(--radius-xs);display:inline-flex;align-items:center;justify-content:center;font-size:9px;background:var(--sw-chip-tag);color:var(--text-muted)">M</span>
+                    <span class="sw-num" style="font-size:11px;font-weight:600;color:var(--text-3)">WD1</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- C2 -->
+            <div style="display:flex;height:52px;border-bottom:1px solid var(--border-row)">
+              <div class="sw-num" style="width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border-1);background:var(--surface-band);font-size:11px;font-weight:600;color:var(--text-meta)">C2</div>
+              <div style="flex:1;position:relative">
+                <div style="position:absolute;top:6px;left:calc(37.5% + 3px);width:calc(13.5% - 6px);height:40px;border-radius:var(--radius-md);padding:0 10px;display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;background:var(--sw-called-solid);border:1px solid var(--sw-called-border)">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span class="sw-num" style="width:14px;height:14px;border-radius:var(--radius-xs);display:inline-flex;align-items:center;justify-content:center;font-size:9px;background:rgba(0,0,0,.2);color:var(--sw-called-ink)">B</span>
+                    <span class="sw-num" style="font-size:11px;font-weight:600;color:var(--sw-called-ink)">XD1</span>
+                  </div>
+                  <span style="font-size:9px;font-weight:600;text-transform:uppercase;color:var(--sw-called-ink)">Called</span>
+                </div>
+              </div>
+            </div>
+            <!-- C3 -->
+            <div style="display:flex;height:52px;border-bottom:1px solid var(--border-row)">
+              <div class="sw-num" style="width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border-1);background:var(--surface-band);font-size:11px;font-weight:600;color:var(--text-meta)">C3</div>
+              <div style="flex:1;position:relative">
+                <div style="position:absolute;top:6px;left:3px;width:calc(25% - 6px);height:40px;border-radius:var(--radius-md);padding:0 10px;display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;background:var(--surface-band);border:1px solid var(--border-1);opacity:.62">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span class="sw-num" style="width:14px;height:14px;border-radius:var(--radius-xs);display:inline-flex;align-items:center;justify-content:center;font-size:9px;background:var(--sw-chip-tag);color:var(--text-muted)">M</span>
+                    <span class="sw-num" style="font-size:11px;font-weight:600;color:var(--text-muted);text-decoration:line-through">MS3</span>
+                  </div>
+                </div>
+                <div style="position:absolute;top:6px;left:calc(25% + 3px);width:calc(37.5% - 6px);height:40px;border-radius:var(--radius-md);padding:0 10px;display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;background:var(--sw-live-solid);border:1px solid var(--sw-called-border)">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span class="sw-num" style="width:14px;height:14px;border-radius:var(--radius-xs);display:inline-flex;align-items:center;justify-content:center;font-size:9px;background:rgba(0,0,0,.2);color:var(--sw-live-ink)">M</span>
+                    <span class="sw-num" style="font-size:11px;font-weight:600;color:var(--sw-live-ink)">WD2</span>
+                    <span class="sw-num" style="margin-left:auto;font-size:9px;font-weight:600;color:var(--accent-ink);background:var(--sw-called);border-radius:3px;padding:1px 5px">+2</span>
+                  </div>
+                  <span style="font-size:10px;color:var(--sw-live-ink)">Kim v Tan</span>
+                  <span style="position:absolute;inset:0 0 0 auto;width:16%;background:rgba(224,178,74,.2);border-left:1px solid var(--sw-called)"></span>
+                </div>
+              </div>
+            </div>
+            <!-- C4 -->
+            <div style="display:flex;height:52px">
+              <div class="sw-num" style="width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border-1);background:var(--surface-band);font-size:11px;font-weight:600;color:var(--text-faint)">C4</div>
+              <div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center">
+                <span style="font-size:10px;color:var(--text-muted)">court free</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- queue -->
+          <div style="flex:1;overflow:hidden">
+            <div style="padding:10px 16px 6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)">Queue · 9</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:7px 16px;border-top:1px solid var(--border-row)">
+              <span class="sw-num" style="width:18px;font-size:10px;color:var(--text-muted)">1</span>
+              <span class="sw-num" style="width:13px;height:13px;font-size:8px;border-radius:3px;background:var(--sw-chip-tag);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center">M</span>
+              <span class="sw-num" style="width:44px;font-size:11px;color:var(--text-3)">MS2</span>
+              <span style="flex:1;font-size:13px;color:var(--text-2)">Park v Ortiz</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:7px 16px;border-top:1px solid var(--border-row)">
+              <span class="sw-num" style="width:18px;font-size:10px;color:var(--text-muted)">2</span>
+              <span class="sw-num" style="width:13px;height:13px;font-size:8px;border-radius:3px;background:var(--sw-chip-tag);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center">B</span>
+              <span class="sw-num" style="width:44px;font-size:11px;color:var(--text-3)">R2-3</span>
+              <span style="flex:1;font-size:13px;color:var(--text-2)">Diaz v Cruz</span>
+              <span class="sw-num" style="font-size:9px;font-weight:600;color:var(--accent-ink);background:var(--sw-called);border-radius:3px;padding:1px 5px">LATE</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:7px 16px;border-top:1px solid var(--border-row)">
+              <span class="sw-num" style="width:18px;font-size:10px;color:var(--text-muted)">3</span>
+              <span class="sw-num" style="width:13px;height:13px;font-size:8px;border-radius:3px;background:var(--sw-chip-tag);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center">M</span>
+              <span class="sw-num" style="width:44px;font-size:11px;color:var(--text-3)">XD2</span>
+              <span style="flex:1;font-size:13px;color:var(--text-2)">Cruz/Lee v Fox/Obi</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- inspector -->
+        <aside style="width:var(--inspector-w);flex-shrink:0;border-left:1px solid var(--border-1);background:var(--surface-rail);padding:16px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="sw-num" style="width:15px;height:15px;border-radius:4px;background:var(--sw-chip-tag);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;font-size:9px">M</span>
+            <span class="sw-num" style="font-size:11px;color:var(--text-muted)">MS1</span>
+            <span style="margin-left:auto;font-size:9px;font-weight:600;text-transform:uppercase;color:var(--status-live);background:var(--accent-tint);border-radius:5px;padding:2px 7px">Playing</span>
+          </div>
+          <div class="sw-num" style="font-size:12px;color:var(--text-muted)">C1 · 09:30 · 14:32 elapsed</div>
+          <div style="border:1px solid var(--border-1);border-radius:var(--radius-lg);background:var(--surface-screen);padding:12px;display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:14px;font-weight:600;color:var(--text-1)">Alex Chen <span style="font-size:11px;color:var(--text-muted);font-weight:400">Lincoln</span></div>
+            <div style="font-size:10px;color:var(--text-muted)">VS</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text-1)">Marcus Webb <span style="font-size:11px;color:var(--text-muted);font-weight:400">Roosevelt</span></div>
+          </div>
+          <button style="height:40px;border:none;border-radius:var(--radius-lg);background:var(--accent);color:var(--accent-ink);box-shadow:var(--glow-accent);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer">Record result</button>
+          <button style="height:36px;border:1px solid var(--border-control);border-radius:var(--radius-lg);background:var(--surface-card);color:var(--text-meta);font-size:13px;font-family:inherit;cursor:pointer">Postpone</button>
+        </aside>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:768},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      theme: this.props.theme ?? 'dark',
+      sidebar: {
+        modules: [
+          { name: 'Meet', role: 'ENG', open: false },
+          { name: 'Operations', role: 'SHR', open: true, active: 'Run', pages: ['Plan', 'Run'] },
+          { name: 'Display', role: 'OUT', open: false },
+        ],
+        workspaceLinks: ['Members', 'Settings'],
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

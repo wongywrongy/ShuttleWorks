@@ -1,5 +1,6 @@
 /**
- * MeetStructureForm — the "Meet" tab of Configuration.
+ * MeetStructureForm — the "Events" tab of Configuration (URL section
+ * value 'meet').
  *
  * Owns the two meet-specific structural choices: the meet type (Dual /
  * Tri) and the lineup position **counts** per discipline (`rankCounts`,

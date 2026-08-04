@@ -71,6 +71,13 @@ COPY --chown=app:app products/scheduler/backend/database/     ./database/
 COPY --chown=app:app products/scheduler/backend/repositories/ ./repositories/
 COPY --chown=app:app products/scheduler/backend/alembic/      ./alembic/
 COPY --chown=app:app products/scheduler/backend/alembic.ini   ./alembic.ini
+# Standalone solve-worker entry (cloud mode: `python -m worker`). The
+# same image serves as API and worker; compose picks the command.
+COPY --chown=app:app products/scheduler/backend/worker.py     ./worker.py
+# Backend/frontend shared contract data. services/config_lock.py resolves
+# it as backend/../shared on the host, which maps to /shared when the
+# backend tree lives at /app.
+COPY --chown=app:app products/scheduler/shared/               /shared/
 
 # Healthcheck hits /health/deep so we catch "backend is up but can't
 # persist or can't import the solver" failure modes, not just liveness.

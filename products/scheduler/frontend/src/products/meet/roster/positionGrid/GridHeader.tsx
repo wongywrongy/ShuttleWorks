@@ -63,7 +63,7 @@ function SortableHeaderCell({
         onClick={() => onHide(ev.prefix)}
         aria-label={`Hide ${ev.prefix} column`}
         title={`Hide ${ev.prefix}`}
-        className="absolute right-1 top-1 rounded p-0.5 text-muted-foreground/50 opacity-0 transition-opacity duration-fast ease-brand hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+        className="absolute right-1 top-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:text-foreground focus:opacity-100 group-hover:opacity-100"
       >
         <EyeSlash aria-hidden className="h-3 w-3" />
       </button>
@@ -92,7 +92,7 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
                 onClick={() => toggleVisible(p)}
                 aria-label={`Show ${p} column`}
                 title={`Show ${p}`}
-                className="rounded border border-dashed border-border px-1 font-mono text-3xs lowercase text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
+                className="rounded border border-dashed border-border px-1 text-3xs sw-num lowercase text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
               >
                 {p}
               </button>
@@ -103,7 +103,7 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
                 onClick={resetColumns}
                 aria-label="Reset columns"
                 title="Reset column order &amp; visibility"
-                className="rounded p-0.5 text-muted-foreground/60 transition-colors duration-fast ease-brand hover:text-foreground"
+                className="rounded p-0.5 text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground"
               >
                 <ArrowCounterClockwise aria-hidden className="h-3 w-3" />
               </button>

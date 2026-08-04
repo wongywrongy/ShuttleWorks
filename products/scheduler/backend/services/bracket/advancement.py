@@ -48,6 +48,7 @@ def record_result(
     finished_at_slot: Optional[int],
     walkover: bool = False,
     score: Optional[dict] = None,
+    reason: Optional[str] = None,
 ) -> List[PlayUnitId]:
     """Store a Result for ``play_unit_id`` and propagate the winner forward.
 
@@ -82,6 +83,7 @@ def record_result(
         finished_at_slot=finished_at_slot,
         walkover=walkover,
         score=score,
+        reason=reason,
     )
     swept = _sweep_walkovers(state, draw_map)
     # Return the FULL frontier of changed units, not just the recorded
@@ -143,6 +145,7 @@ def _record_and_propagate(
     finished_at_slot: Optional[int],
     walkover: bool,
     score: Optional[dict],
+    reason: Optional[str] = None,
 ) -> List[PlayUnitId]:
     """Store the result and update downstream slots. Does NOT sweep."""
     state.results[play_unit_id] = Result(
@@ -150,9 +153,13 @@ def _record_and_propagate(
         score=score,
         finished_at_slot=finished_at_slot,
         walkover=walkover,
+        reason=reason,
     )
 
     winner = _winner_participant_id(draw, play_unit_id, winner_side)
+    loser = _loser_participant_id(
+        draw, play_unit_id, winner_side, walkover=walkover, reason=reason
+    )
     resolved: List[PlayUnitId] = []
     for downstream_id, downstream in draw.play_units.items():
         if play_unit_id not in downstream.dependencies:
@@ -160,12 +167,14 @@ def _record_and_propagate(
         slot_a, slot_b = draw.slots[downstream_id]
         changed = False
         if slot_a.feeder_play_unit_id == play_unit_id:
-            new_slot = BracketSlot.of_participant(winner or BYE)
+            fed = winner if slot_a.feeder_take == "winner" else loser
+            new_slot = BracketSlot.of_participant(fed or BYE)
             draw.slots[downstream_id] = (new_slot, slot_b)
             slot_a = new_slot
             changed = True
         if slot_b.feeder_play_unit_id == play_unit_id:
-            new_slot = BracketSlot.of_participant(winner or BYE)
+            fed = winner if slot_b.feeder_take == "winner" else loser
+            new_slot = BracketSlot.of_participant(fed or BYE)
             draw.slots[downstream_id] = (slot_a, new_slot)
             slot_b = new_slot
             changed = True
@@ -242,6 +251,58 @@ def _winner_participant_id(
     if winner_side == WinnerSide.B:
         return pu.side_b[0] if pu.side_b else None
     return None  # WinnerSide.NONE — double-bye / dead branch
+
+
+# Reasons that make a loser unable to continue downstream, even though
+# the result itself is NOT a walkover (the winner_side is real and the
+# match was actually played/started). BYE-downstream-only policy,
+# decision 2026-07-15: the loser's consolation/plate/feeder_take slot
+# becomes a BYE, exactly like a walkover, but the stored Result keeps
+# walkover=False — a retirement/forfeit is not a walkover and must not
+# be reported as one. No automatic withdrawal from the player's OTHER
+# draws; that stays a manual, per-draw operator decision.
+_LOSER_CANNOT_CONTINUE_REASONS = frozenset({"retired", "forfeit"})
+
+
+def loser_cannot_continue(*, walkover: bool, reason: Optional[str]) -> bool:
+    """True when the loser must NOT be fed into a ``feeder_take='loser'``
+
+    slot: either a real walkover, or a ``retired``/``forfeit`` reason
+    (BYE-downstream-only policy, decision 2026-07-15). Centralizes the
+    predicate so the rule is written once.
+    """
+    return walkover or reason in _LOSER_CANNOT_CONTINUE_REASONS
+
+
+def _loser_participant_id(
+    draw: Draw,
+    play_unit_id: PlayUnitId,
+    winner_side: WinnerSide,
+    *,
+    walkover: bool,
+    reason: Optional[str] = None,
+) -> Optional[str]:
+    """The participant a ``feeder_take='loser'`` slot receives.
+
+    POLICY: a walkover has no real loser. A bye "loses" its R1 match and
+    a withdrawn player "loses" theirs, but neither may advance into a
+    consolation bracket — the loser feed is ``None`` (→ BYE), and the
+    normal ``_sweep_walkovers`` cascade hollows the plate match. This is
+    the documented bye-hazard rule for double elimination / Monrad /
+    compass (docs/architecture/draw-formats.md).
+
+    A ``retired``/``forfeit`` reason gets the SAME BYE treatment for the
+    loser feed only (see ``loser_cannot_continue``) — the result itself
+    stays a real (non-walkover) result.
+    """
+    if loser_cannot_continue(walkover=walkover, reason=reason):
+        return None
+    pu = draw.play_units[play_unit_id]
+    if winner_side == WinnerSide.A:
+        return pu.side_b[0] if pu.side_b else None
+    if winner_side == WinnerSide.B:
+        return pu.side_a[0] if pu.side_a else None
+    return None  # WinnerSide.NONE — no winner, no loser
 
 
 def _refresh_play_unit_sides(draw: Draw, play_unit_id: PlayUnitId) -> None:

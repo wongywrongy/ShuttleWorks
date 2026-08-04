@@ -12,16 +12,33 @@
  * subscribes to the same `?q=` search param as the page header so the
  * URL is the shared source of truth.
  */
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { CaretRight, Check, Warning } from '@phosphor-icons/react';
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { Check, Warning } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
+import {
+  BandedTable,
+  ColumnHeaderRow,
+  DetailDock,
+  MATCH_CELL,
+  MATCH_LIST_COLUMNS,
+  PickerPopover,
+  STATUS_CLASS,
+  STATUS_LABEL,
+  type BandedTableGroup,
+  type MatchListStatus,
+} from '../../../components/control-plane';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { useMatchStateStore } from '../../../store/matchStateStore';
 import { usePlayerMap } from '../../../store/selectors';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../../hooks/useSearchParamState';
 import { useDisruptions } from './useDisruptions';
 import { EVENT_LABEL, EVENT_ORDER, isDoublesRank } from '../roster/positionGrid/helpers';
+import { MatchDetailPanel } from './MatchDetailPanel';
+import { meetMatchStatus } from './meetMatchStatus';
 import { maxSeverity, type MatchIssue } from './validateMatch';
+import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
+import { getActiveAssignments } from '../../../lib/getActiveAssignments';
 
 /** Side capacity derived from the event rank. Singles = 1, doubles =
  *  2, unknown rank = 2 (let the operator fill it; validation will flag
@@ -57,6 +74,12 @@ export function MatchesSpreadsheet({
   const groups = useTournamentStore((s) => s.groups);
   const updateMatch = useTournamentStore((s) => s.updateMatch);
   const deleteMatch = useTournamentStore((s) => s.deleteMatch);
+  const schedule = useTournamentStore((s) => s.schedule);
+  const matchStates = useMatchStateStore((s) => s.matchStates);
+  const assignedIds = useMemo(
+    () => new Set(getActiveAssignments(schedule).map((a) => a.matchId)),
+    [schedule],
+  );
 
   // Subscribes to the same URL-backed search the page header writes to.
   const [searchQuery] = useSearchParamState('q', '');
@@ -111,16 +134,16 @@ export function MatchesSpreadsheet({
   const config = useTournamentStore((s) => s.config);
   const disruptions = useDisruptions();
 
-  // Per-event collapse state. Keyed by event prefix (MS, WS, …) or the
-  // '—' sentinel for the unassigned group; default all-expanded.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const toggleGroup = (key: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  // Selected match — a click on a row's background/# cell (not its inline
+  // editors) opens the right-docked match DetailPanel. Derived find so a
+  // deleted match auto-dismisses the panel. Memoized so a re-render that
+  // doesn't touch `matches`/`selectedId` doesn't re-scan the full match
+  // array every time.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedMatch = useMemo(
+    () => matches.find((m) => m.id === selectedId) ?? null,
+    [matches, selectedId],
+  );
 
   // Configured event ranks — derived from `config.rankCounts`. Memoized so every
   // row gets a STABLE `configuredRanks` reference (the React Compiler is not
@@ -136,6 +159,40 @@ export function MatchesSpreadsheet({
     return ranks;
   }, [config?.rankCounts]);
 
+  // Group the filtered matches by event prefix so each discipline gets
+  // its own collapsible section. Section order follows EVENT_ORDER; any
+  // match with no/unknown rank collects into a trailing "Unassigned"
+  // group keyed by the '—' sentinel. Collapse state lives inside the
+  // shared BandedTable shell (default all-expanded, as before). Memoized
+  // (with the regex-per-match grouping pass) so an unrelated re-render
+  // doesn't rebuild these on every render — only when `filteredMatches`
+  // actually changes.
+  const tableGroups = useMemo<BandedTableGroup<MatchDTO>[]>(() => {
+    const groupsByPrefix = new Map<string, MatchDTO[]>();
+    for (const m of filteredMatches) {
+      const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
+      const key = prefix || '—';
+      if (!groupsByPrefix.has(key)) groupsByPrefix.set(key, []);
+      groupsByPrefix.get(key)!.push(m);
+    }
+    const orderedKeys = [
+      ...EVENT_ORDER.filter((p) => groupsByPrefix.has(p)),
+      ...[...groupsByPrefix.keys()].filter(
+        (k) => !(EVENT_ORDER as readonly string[]).includes(k),
+      ),
+    ];
+    return orderedKeys.map((key) => {
+      const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
+      return {
+        key,
+        label,
+        code: key === '—' ? undefined : key,
+        items: groupsByPrefix.get(key)!,
+        testId: `match-group-${label}`,
+      };
+    });
+  }, [filteredMatches]);
+
   if (matches.length === 0) {
     return (
       <div className="px-5 py-10 text-center text-sm text-muted-foreground">
@@ -143,132 +200,83 @@ export function MatchesSpreadsheet({
       </div>
     );
   }
-  if (filteredMatches.length === 0) {
-    return (
-      <>
-        <ColumnHeaderRow />
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-          No matches match the current search.
-        </div>
-      </>
-    );
-  }
 
-  // Group the filtered matches by event prefix so each discipline gets
-  // its own collapsible section. Section order follows EVENT_ORDER; any
-  // match with no/unknown rank collects into a trailing "Unassigned"
-  // group keyed by the '—' sentinel.
-  const groupsByPrefix = new Map<string, MatchDTO[]>();
-  for (const m of filteredMatches) {
-    const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
-    const key = prefix || '—';
-    if (!groupsByPrefix.has(key)) groupsByPrefix.set(key, []);
-    groupsByPrefix.get(key)!.push(m);
-  }
-  const orderedKeys = [
-    ...EVENT_ORDER.filter((p) => groupsByPrefix.has(p)),
-    ...[...groupsByPrefix.keys()].filter(
-      (k) => !(EVENT_ORDER as readonly string[]).includes(k),
-    ),
-  ];
+  const issuesFor = (m: MatchDTO) =>
+    disruptions.byMatch.get(m.id) ?? EMPTY_ISSUES;
+  const stripeFor = (m: MatchDTO) => {
+    const severity = maxSeverity(issuesFor(m));
+    return severity === 'error'
+      ? 'shadow-[inset_3px_0_0_hsl(var(--destructive))]'
+      : severity === 'warning'
+        ? 'shadow-[inset_3px_0_0_hsl(var(--status-warning))]'
+        : '';
+  };
 
   return (
     <>
-      <ColumnHeaderRow />
-      {orderedKeys.map((key) => {
-        const rows = groupsByPrefix.get(key)!;
-        const isCollapsed = collapsed.has(key);
-        const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
-        return (
-          <div key={key}>
-            <GroupHeader
-              label={label}
-              count={rows.length}
-              collapsed={isCollapsed}
-              onToggle={() => toggleGroup(key)}
-            />
-            {!isCollapsed
-              ? rows.map((m) => (
-                  <MatchRow
-                    key={m.id}
-                    match={m}
-                    index={matches.indexOf(m)}
-                    players={players}
-                    groups={groups}
-                    configuredRanks={configuredRanks}
-                    issues={disruptions.byMatch.get(m.id) ?? EMPTY_ISSUES}
-                    autoFocus={m.id === pendingFocusId}
-                    onFocusConsumed={onFocusConsumed}
-                    onUpdate={updateMatch}
-                    onDelete={deleteMatch}
-                  />
-                ))
-              : null}
-          </div>
-        );
-      })}
+      {/* @container/table: the column-priority classes in MATCH_CELL query
+          THIS wrapper's width, so columns collapse as the detail dock takes
+          room — not just when the window shrinks. */}
+      <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
+        {filteredMatches.length === 0 ? (
+          <>
+            <ColumnHeaderRow columns={MATCH_LIST_COLUMNS} />
+            <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+              No matches match the current search.
+            </div>
+          </>
+        ) : (
+          <BandedTable
+            columns={MATCH_LIST_COLUMNS}
+            groups={tableGroups}
+            rowId={(m) => m.id}
+            onRowClick={(m) =>
+              setSelectedId((prev) => (prev === m.id ? null : m.id))
+            }
+            selectedId={selectedId}
+            rowClassName={(m) => ['group', stripeFor(m)].filter(Boolean).join(' ')}
+            rowTestId={(m) => `match-row-${m.id}`}
+            rowAttrs={(m) => ({
+              'data-severity': maxSeverity(issuesFor(m)) ?? 'none',
+            })}
+            renderRow={(m) => (
+              <MatchRow
+                match={m}
+                index={matches.indexOf(m)}
+                status={meetMatchStatus(m.id, assignedIds, matchStates)}
+                players={players}
+                groups={groups}
+                configuredRanks={configuredRanks}
+                issues={issuesFor(m)}
+                autoFocus={m.id === pendingFocusId}
+                onFocusConsumed={onFocusConsumed}
+                onUpdate={updateMatch}
+                onDelete={deleteMatch}
+              />
+            )}
+          />
+        )}
+      </div>
+      <DetailDock open={selectedMatch != null}>
+        {selectedMatch ? (
+          <MatchDetailPanel
+            key={selectedMatch.id}
+            match={selectedMatch}
+            status={meetMatchStatus(selectedMatch.id, assignedIds, matchStates)}
+            onClose={() => setSelectedId(null)}
+          />
+        ) : null}
+      </DetailDock>
     </>
   );
 }
 
 /* =========================================================================
- * GroupHeader — collapsible per-event section header. Caret + event
- * label + match count, hairline-separated like the rows it groups.
- * ========================================================================= */
-function GroupHeader({
-  label,
-  count,
-  collapsed,
-  onToggle,
-}: {
-  label: string;
-  count: number;
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={!collapsed}
-      data-testid={`match-group-${label}`}
-      className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-5 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/60"
-    >
-      <CaretRight
-        aria-hidden
-        weight="bold"
-        className={[
-          'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-fast ease-brand',
-          collapsed ? '' : 'rotate-90',
-        ].join(' ')}
-      />
-      <span className="text-2xs font-semibold uppercase tracking-[0.18em] text-foreground">
-        {label}
-      </span>
-      <span className="text-2xs tabular-nums text-muted-foreground">{count}</span>
-    </button>
-  );
-}
-
-/* =========================================================================
- * ColumnHeaderRow — `padding: 6px 20px`, border-b only, no background.
- * ========================================================================= */
-function ColumnHeaderRow() {
-  return (
-    <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-5 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-      <span className="w-4" aria-hidden />
-      <span className="w-8">#</span>
-      <span className="w-20">Event</span>
-      <span className="min-w-0 flex-[3]">Side A</span>
-      <span className="min-w-0 flex-[3]">Side B</span>
-      <span className="w-14">Slots</span>
-      <span className="w-8" aria-hidden />
-    </div>
-  );
-}
-
-/* =========================================================================
- * MatchRow — `padding: 0 20px`, `min-height: 44px`, border-b only.
+ * MatchRow — the CELLS of one match row. The row shell (the canonical
+ * banded row classes, `group` hover reveals, the disruption accent
+ * stripe, click-to-select) is owned by the BandedTable shell in the
+ * parent; every inline editor here stops click propagation so editing
+ * never opens the match detail panel.
  * ========================================================================= */
 // Memoized: with many rows, a search keystroke (or any store write) re-renders
 // the parent; without memo every row re-rendered in full. Props are stable
@@ -277,6 +285,7 @@ function ColumnHeaderRow() {
 const MatchRow = memo(function MatchRow({
   match,
   index,
+  status,
   players,
   groups,
   configuredRanks,
@@ -288,6 +297,7 @@ const MatchRow = memo(function MatchRow({
 }: {
   match: MatchDTO;
   index: number;
+  status: MatchListStatus;
   players: PlayerDTO[];
   groups: RosterGroupDTO[];
   /** Ranks defined in `config.rankCounts` — the select populates from
@@ -304,18 +314,10 @@ const MatchRow = memo(function MatchRow({
   onUpdate: (id: string, patch: Partial<MatchDTO>) => void;
   onDelete: (id: string) => void;
 }) {
-  const [durationDraft, setDurationDraft] = useState(
-    String(match.durationSlots ?? 1),
-  );
   // Ref typed loosely — the event field may render as a Radix Select
   // trigger (button, configured ranks present) or an input (free-text
   // fallback). Both inherit `focus()` from HTMLElement.
   const eventFieldRef = useRef<HTMLButtonElement | HTMLInputElement | null>(null);
-
-  useEffect(
-    () => setDurationDraft(String(match.durationSlots ?? 1)),
-    [match.durationSlots],
-  );
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -326,11 +328,6 @@ const MatchRow = memo(function MatchRow({
     // changes its callback identity).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocus]);
-
-  const commitDuration = () => {
-    const d = Math.max(1, Number(durationDraft) || 1);
-    if (d !== match.durationSlots) onUpdate(match.id, { durationSlots: d });
-  };
 
   // The current rank may be (a) blank, (b) one of `configuredRanks`,
   // or (c) a legacy free-text value no longer in the configured list.
@@ -348,25 +345,10 @@ const MatchRow = memo(function MatchRow({
   const severity = maxSeverity(issues);
   const sideCapacity = capacityForRank(match.eventRank);
 
-  const accentStripe =
-    severity === 'error'
-      ? 'shadow-[inset_3px_0_0_hsl(var(--destructive))]'
-      : severity === 'warning'
-        ? 'shadow-[inset_3px_0_0_hsl(var(--status-warning))]'
-        : '';
-
   return (
-    <div
-      data-testid={`match-row-${match.id}`}
-      data-severity={severity ?? 'none'}
-      className={[
-        'group flex min-h-[40px] items-center gap-3 border-b border-border px-5',
-        'transition-colors duration-fast ease-brand hover:bg-muted/30',
-        accentStripe,
-      ].join(' ')}
-    >
+    <>
       <span
-        className="flex w-4 shrink-0 items-center justify-center"
+        className={`flex ${MATCH_CELL.warnGutter} shrink-0 items-center justify-center`}
         aria-hidden={issues.length === 0}
         title={
           issues.length > 0
@@ -385,29 +367,34 @@ const MatchRow = memo(function MatchRow({
           />
         ) : null}
       </span>
-      <span className="w-8 text-xs text-muted-foreground tabular-nums">
+      <span className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}>
         {match.matchNumber ?? index + 1}
       </span>
       {configuredRanks.length > 0 ? (
-        <Select
-          triggerRef={eventFieldRef as React.RefObject<HTMLButtonElement>}
-          value={currentRank}
-          onValueChange={(v) =>
-            onUpdate(match.id, { eventRank: v || undefined })
-          }
-          options={[
-            ...configuredRanks.map((r) => ({ value: r, label: r })),
-            // Surface legacy/unknown current value so it doesn't vanish.
-            ...(!rankInConfigured && currentRank
-              ? [{ value: currentRank, label: `${currentRank} (legacy)` }]
-              : []),
-          ]}
-          clearable
-          mono
-          size="sm"
-          ariaLabel="Event rank"
-          triggerClassName="w-20 border-transparent px-1.5 py-0.5 hover:border-border/60 focus:bg-card"
-        />
+        // `display: contents` wrapper — layout-transparent, but catches
+        // clicks from the Select trigger AND its portaled options (React
+        // events bubble through the component tree) so picking an event
+        // never opens the row's detail panel.
+        <span className="contents" onClick={(e) => e.stopPropagation()}>
+          <Select
+            triggerRef={eventFieldRef as React.RefObject<HTMLButtonElement>}
+            value={currentRank}
+            onValueChange={(v) =>
+              onUpdate(match.id, { eventRank: v || undefined })
+            }
+            options={[
+              ...configuredRanks.map((r) => ({ value: r, label: r })),
+              // Surface legacy/unknown current value so it doesn't vanish.
+              ...(!rankInConfigured && currentRank
+                ? [{ value: currentRank, label: `${currentRank} (legacy)` }]
+                : []),
+            ]}
+            clearable
+            size="sm"
+            ariaLabel="Event"
+            triggerClassName={`${MATCH_CELL.event} border-transparent px-1.5 py-0.5 text-accent font-semibold sw-num hover:border-border/60 focus:bg-card`}
+          />
+        </span>
       ) : (
         <input
           ref={eventFieldRef as React.RefObject<HTMLInputElement>}
@@ -415,10 +402,12 @@ const MatchRow = memo(function MatchRow({
           onChange={(e) =>
             onUpdate(match.id, { eventRank: e.target.value || undefined })
           }
+          onClick={(e) => e.stopPropagation()}
           placeholder="MS1, WD2…"
-          aria-label="Event rank"
+          aria-label="Event"
           className={[
-            'w-20 rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-mono tabular-nums outline-none',
+            MATCH_CELL.event,
+            'rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-semibold text-accent sw-num outline-none',
             'transition-colors duration-fast ease-brand',
             'hover:border-border/60 focus:border-accent focus:bg-card',
           ].join(' ')}
@@ -442,24 +431,21 @@ const MatchRow = memo(function MatchRow({
         capacity={sideCapacity}
         eligibleForRank={match.eventRank}
       />
-      <input
-        type="number"
-        min={1}
-        value={durationDraft}
-        onChange={(e) => setDurationDraft(e.target.value)}
-        onBlur={commitDuration}
-        className="w-14 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-sm tabular-nums outline-none transition-colors duration-fast ease-brand hover:border-border/60 focus:border-accent focus:bg-card"
-      />
-      <button
-        type="button"
-        onClick={() => onDelete(match.id)}
-        className="w-8 rounded-sm p-1 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-        title="Delete match"
-        aria-label="Delete match"
+      <span
+        data-testid={`match-status-${match.id}`}
+        className={`${MATCH_CELL.status} text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
       >
-        ×
-      </button>
-    </div>
+        {STATUS_LABEL[status]}
+      </span>
+      {/* Two-click arm: deleting a match used to take one hover-revealed click,
+          with no confirm and no undo (audit F1). */}
+      <ConfirmDeleteButton
+        label={match.eventRank ? `match ${match.eventRank}` : 'this match'}
+        onConfirm={() => onDelete(match.id)}
+        className={MATCH_CELL.actionGutter}
+        testId={`match-delete-${match.id}`}
+      />
+    </>
   );
 });
 
@@ -528,7 +514,7 @@ function PlayerCellEditor({
   eligibleForRank?: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
+  const cellRef = useRef<HTMLDivElement | null>(null);
   const selectedPlayers = useMemo(
     () =>
       selected
@@ -537,22 +523,6 @@ function PlayerCellEditor({
     [selected, players],
   );
   const atCapacity = selected.length >= capacity;
-
-  useEffect(() => {
-    if (!open) return;
-    const click = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', click);
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('mousedown', click);
-      document.removeEventListener('keydown', key);
-    };
-  }, [open]);
 
   const toggle = (id: string) => {
     if (selected.includes(id)) {
@@ -601,7 +571,26 @@ function PlayerCellEditor({
   }, [players, eligible]);
 
   return (
-    <div ref={ref} className="relative min-w-0 flex-[3]">
+    // Clicks on the cell's INTERACTIVE content (name buttons, ×, ＋ add,
+    // the picker dropdown) must never bubble to the row's open-detail-panel
+    // handler — but the cell wrapper is much wider than its content, and a
+    // click on its EMPTY space is a row-background click and SHOULD open
+    // the panel (SP-D7 live finding: a 536px-wide swallow-all made most of
+    // the row read as click-dead). While the picker is open, every click in
+    // the cell is editor interaction.
+    <div
+      ref={cellRef}
+      data-testid={`player-cell-${side.replace(/\s+/g, '-').toLowerCase()}`}
+      className={`relative ${MATCH_CELL.side}`}
+      onClick={(e: ReactMouseEvent<HTMLElement>) => {
+        const target = e.target as HTMLElement;
+        if (open || target.closest('button, input, [data-player-picker]')) {
+          e.stopPropagation();
+        }
+      }}
+    >
+      <PickerPopover open={open} onOpenChange={setOpen}>
+      <PickerPopover.Anchor asChild>
       <div className="flex flex-wrap items-baseline gap-x-1 text-sm leading-relaxed">
         {selectedPlayers.length === 0 ? (
           <button
@@ -612,7 +601,17 @@ function PlayerCellEditor({
             ＋ add player
           </button>
         ) : (
-          selectedPlayers.map((p, i) => (
+          selectedPlayers.map((p, i) => {
+            const groupName = groups.find((g) => g.id === p.groupId)?.name ?? '';
+            // Doubles partners are (almost) always same-school — repeating
+            // the school per name is noise. When every selected player
+            // shares one school, show it once, after the last name.
+            const uniformSchool =
+              selectedPlayers.length > 1 &&
+              selectedPlayers.every((sp) => sp.groupId === selectedPlayers[0].groupId);
+            const showSchool =
+              groupName !== '' && (!uniformSchool || i === selectedPlayers.length - 1);
+            return (
             <span key={p.id} className="inline-flex items-baseline">
               <button
                 type="button"
@@ -621,6 +620,9 @@ function PlayerCellEditor({
                 title={`Click to edit ${side}`}
               >
                 {p.name || '—'}
+                {showSchool ? (
+                  <span className="ml-1 text-2xs text-muted-foreground">{groupName}</span>
+                ) : null}
               </button>
               <button
                 type="button"
@@ -629,7 +631,9 @@ function PlayerCellEditor({
                   toggle(p.id);
                 }}
                 aria-label={`Remove ${p.name}`}
-                className="ml-0.5 text-muted-foreground/60 opacity-0 transition-opacity duration-fast ease-brand hover:text-destructive group-hover:opacity-100"
+                // Zero width at rest so the trailing comma hugs the name
+                // ("Kim, Novak" not "Kim , Novak"); expands on row hover.
+                className="w-0 overflow-hidden text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:text-destructive group-hover:ml-0.5 group-hover:w-auto group-hover:opacity-100"
               >
                 ×
               </button>
@@ -637,21 +641,23 @@ function PlayerCellEditor({
                 <span className="text-muted-foreground">,</span>
               ) : null}
             </span>
-          ))
+            );
+          })
         )}
         {selectedPlayers.length > 0 && !atCapacity ? (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-label={`Add player to ${side}`}
-            className="text-xs italic text-muted-foreground/70 transition-colors duration-fast ease-brand hover:text-accent"
+            className="text-xs italic text-muted-foreground transition-colors duration-fast ease-brand hover:text-accent"
           >
             ＋ add
           </button>
         ) : null}
       </div>
-      {open ? (
-        <div className="motion-enter absolute left-0 top-full z-overlay mt-1 max-h-64 w-64 overflow-y-auto rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+      </PickerPopover.Anchor>
+      <PickerPopover.Panel data-player-picker guardRef={cellRef}>
+        <>
           {/* Eligible-for-rank section — these are the players the
               Roster page has configured for this match's event. Top
               of the picker so the natural candidate is one click
@@ -720,8 +726,9 @@ function PlayerCellEditor({
               No players. Add some in the Roster tab.
             </div>
           ) : null}
-        </div>
-      ) : null}
+        </>
+      </PickerPopover.Panel>
+      </PickerPopover>
     </div>
   );
 }

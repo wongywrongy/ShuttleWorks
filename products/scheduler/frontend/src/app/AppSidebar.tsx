@@ -9,7 +9,7 @@
  * Per-workspace settings live inside the workspace; this rail never carries them.
  */
 import { Link, useLocation } from 'react-router-dom';
-import { GearSix, House } from '@phosphor-icons/react';
+import { GearSix, House, SignOut } from '@phosphor-icons/react';
 import { useAuth } from '../context/AuthContext';
 
 function railItemClass(active: boolean): string {
@@ -23,10 +23,15 @@ function railItemClass(active: boolean): string {
 
 export function AppSidebar() {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, signOut, isBootstrap, authMode } = useAuth();
   const onSettings = location.pathname === '/settings';
   const onHub = location.pathname === '/';
-  const initial = (user?.email ?? 'L').trim().charAt(0).toUpperCase() || 'L';
+  // Prefer the display name; fall back to email; 'L' for the local bootstrap.
+  const identity = user?.displayName?.trim() || user?.email || 'Local';
+  const initial = identity.trim().charAt(0).toUpperCase() || 'L';
+  // The local bootstrap identity has no session to end — signing out would
+  // just re-probe back into the same identity, so hide the affordance.
+  const showSignOut = !(isBootstrap && authMode === 'local');
 
   return (
     <nav
@@ -60,12 +65,24 @@ export function AppSidebar() {
       {/* Account */}
       <Link
         to="/settings?section=profile"
-        title={user?.email ?? 'Account'}
+        title={identity}
         aria-label="Account"
         className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-2xs font-semibold text-muted-foreground hover:text-foreground"
       >
         {initial}
       </Link>
+      {showSignOut ? (
+        <button
+          type="button"
+          title="Sign out"
+          aria-label="Sign out"
+          data-testid="sidebar-sign-out"
+          onClick={() => void signOut()}
+          className={railItemClass(false)}
+        >
+          <SignOut className="h-5 w-5" aria-hidden />
+        </button>
+      ) : null}
     </nav>
   );
 }

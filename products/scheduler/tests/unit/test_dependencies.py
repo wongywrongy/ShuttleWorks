@@ -1,169 +1,71 @@
-"""Auth-dependency unit tests for Step 4.
+"""Identity-dependency unit tests (SP-CLOUD-2 — Supabase Auth retired).
 
-Two modes:
-- ``SUPABASE_URL`` blank → ``get_current_user`` returns the synthetic
-  local-dev user (no token needed). Lets pytest + local desktop keep
-  working without a real Supabase project.
-- ``SUPABASE_URL`` configured → the dependency hits the Supabase
-  client to verify the JWT; invalid / missing tokens surface as 401.
-  Live Supabase calls are mocked here; the production verification path
-  is exercised in deployment Step 8.
+``get_current_user`` resolves: session cookie → local bootstrap
+(AUTH_MODE=local) → 401 (AUTH_MODE=cloud). The cookie path itself is
+exercised end-to-end in tests/test_auth_endpoints.py; here we pin the
+mode split and the fallthrough rules against the real app.
 """
 from __future__ import annotations
 
-import importlib
-from types import SimpleNamespace
-
 import pytest
-from fastapi import Depends, FastAPI
-from fastapi.testclient import TestClient
+
+from tests._helpers import isolate_test_database
 
 
-def _fresh_module(monkeypatch, **env):
-    """Reload app.config + app.dependencies with a fresh env mapping."""
-    for key, value in env.items():
-        monkeypatch.setenv(key, value)
-    import app.config as cfg
-    importlib.reload(cfg)
-    import app.dependencies as deps
-    importlib.reload(deps)
-    deps.reset_supabase_client()
-    return deps
-
-
-def _client_with_protected_route(deps_module) -> TestClient:
-    """Mini FastAPI app: one route guarded by ``get_current_user``."""
-    app = FastAPI()
-
-    @app.get("/me")
-    def me(user=Depends(deps_module.get_current_user)):
-        return {"id": user.id, "email": user.email}
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    isolate_test_database(tmp_path, monkeypatch)
+    from fastapi.testclient import TestClient
+    from app.main import app
 
     return TestClient(app)
 
 
-# ---- Local-dev (no Supabase) mode -------------------------------------
-
-
-def test_local_dev_mode_returns_synthetic_user_without_token(monkeypatch):
-    monkeypatch.delenv("SUPABASE_URL", raising=False)
-    deps = _fresh_module(monkeypatch)
-    client = _client_with_protected_route(deps)
-    r = client.get("/me")
+def test_local_mode_resolves_bootstrap_without_credentials(client):
+    r = client.get("/auth/me")
     assert r.status_code == 200
     body = r.json()
-    # Step 5: synthetic user is a stable UUID so it can hold member rows.
-    assert body["id"] == str(deps.LOCAL_DEV_USER_UUID)
-    assert body["email"] == "local@dev"
+    assert body["id"] == "00000000-0000-0000-0000-000000000000"
+    assert body["isBootstrap"] is True
 
 
-def test_local_dev_mode_ignores_supplied_token(monkeypatch):
-    monkeypatch.delenv("SUPABASE_URL", raising=False)
-    deps = _fresh_module(monkeypatch)
-    client = _client_with_protected_route(deps)
-    r = client.get("/me", headers={"Authorization": "Bearer literally-anything"})
+def test_local_mode_ignores_stray_bearer_header(client):
+    """The bearer path is GONE — a legacy Authorization header is inert
+    (neither authenticates nor errors) and local mode still bootstraps."""
+    r = client.get(
+        "/auth/me", headers={"Authorization": "Bearer literally-anything"}
+    )
     assert r.status_code == 200
-    assert r.json()["id"] == str(deps.LOCAL_DEV_USER_UUID)
+    assert r.json()["isBootstrap"] is True
 
 
-# ---- Configured (real Supabase) mode -----------------------------------
-
-
-def _install_fake_supabase(deps, *, raise_on_call: bool = False, user=None):
-    """Bypass real client construction; route ``get_user`` at a fake."""
-    class _FakeAuth:
-        def get_user(self, token: str):
-            if raise_on_call:
-                raise RuntimeError("invalid jwt")
-            return SimpleNamespace(user=user)
-
-    class _FakeClient:
-        auth = _FakeAuth()
-
-    # Skip _get_supabase_client's real ``create_client`` call.
-    deps._supabase_client = _FakeClient()
-
-
-def test_configured_mode_rejects_missing_token(monkeypatch):
-    deps = _fresh_module(
-        monkeypatch,
-        SUPABASE_URL="https://example.supabase.co",
-        SUPABASE_ANON_KEY="anon-key",
-    )
-    _install_fake_supabase(deps, user=SimpleNamespace(id="u1", email="a@b.com"))
-    client = _client_with_protected_route(deps)
-    r = client.get("/me")
-    assert r.status_code == 401
-
-
-def test_configured_mode_rejects_invalid_token(monkeypatch):
-    deps = _fresh_module(
-        monkeypatch,
-        SUPABASE_URL="https://example.supabase.co",
-        SUPABASE_ANON_KEY="anon-key",
-    )
-    _install_fake_supabase(deps, raise_on_call=True)
-    client = _client_with_protected_route(deps)
-    r = client.get("/me", headers={"Authorization": "Bearer bogus"})
-    assert r.status_code == 401
-
-
-def test_configured_mode_accepts_valid_token(monkeypatch):
-    deps = _fresh_module(
-        monkeypatch,
-        SUPABASE_URL="https://example.supabase.co",
-        SUPABASE_ANON_KEY="anon-key",
-    )
-    _install_fake_supabase(
-        deps,
-        user=SimpleNamespace(id="user-123", email="alice@example.com"),
-    )
-    client = _client_with_protected_route(deps)
-    r = client.get("/me", headers={"Authorization": "Bearer good-token"})
+def test_dead_cookie_falls_through_to_bootstrap_in_local_mode(client):
+    client.cookies.set("sw_session", "stale-token-from-old-db")
+    r = client.get("/auth/me")
     assert r.status_code == 200
-    body = r.json()
-    assert body["id"] == "user-123"
-    assert body["email"] == "alice@example.com"
+    assert r.json()["isBootstrap"] is True
 
 
-def test_configured_mode_handles_missing_email(monkeypatch):
-    """Supabase users can lack an email until verification — the
-    dependency must accept that gracefully rather than 500."""
-    deps = _fresh_module(
-        monkeypatch,
-        SUPABASE_URL="https://example.supabase.co",
-        SUPABASE_ANON_KEY="anon-key",
-    )
-    _install_fake_supabase(deps, user=SimpleNamespace(id="user-no-email"))
-    client = _client_with_protected_route(deps)
-    r = client.get("/me", headers={"Authorization": "Bearer good-token"})
-    assert r.status_code == 200
-    body = r.json()
-    assert body["id"] == "user-no-email"
-    assert body["email"] is None
-
-
-def test_configured_mode_rejects_when_provider_returns_no_user(monkeypatch):
-    """The Supabase response can have ``user is None`` for an expired
-    refresh token. That maps to 401, not a synthetic success."""
-    deps = _fresh_module(
-        monkeypatch,
-        SUPABASE_URL="https://example.supabase.co",
-        SUPABASE_ANON_KEY="anon-key",
-    )
-    _install_fake_supabase(deps, user=None)
-    client = _client_with_protected_route(deps)
-    r = client.get("/me", headers={"Authorization": "Bearer stale"})
-    assert r.status_code == 401
-
-
-@pytest.fixture(autouse=True)
-def _restore_modules():
-    """Reload back to clean defaults after each test so the rest of
-    the suite isn't polluted with the configured-Supabase env vars."""
-    yield
-    import app.config as cfg
-    importlib.reload(cfg)
+def test_cloud_mode_401_without_session(client, monkeypatch):
     import app.dependencies as deps
-    importlib.reload(deps)
-    deps.reset_supabase_client()
+
+    monkeypatch.setattr(deps.settings, "auth_mode", "cloud")
+    assert client.get("/auth/me").status_code == 401
+    # …and a valid session still works in cloud mode.
+    monkeypatch.setattr(deps.settings, "auth_mode", "local")
+    client.post(
+        "/auth/register",
+        json={"email": "c@example.com", "password": "a fine passphrase!"},
+    )
+    monkeypatch.setattr(deps.settings, "auth_mode", "cloud")
+    r = client.get("/auth/me")
+    assert r.status_code == 200
+    assert r.json()["email"] == "c@example.com"
+
+
+def test_cloud_mode_dead_cookie_is_401(client, monkeypatch):
+    import app.dependencies as deps
+
+    monkeypatch.setattr(deps.settings, "auth_mode", "cloud")
+    client.cookies.set("sw_session", "stale-token-from-old-db")
+    assert client.get("/auth/me").status_code == 401

@@ -20,28 +20,21 @@ import { useMatchStateStore } from '../store/matchStateStore';
 import { useUiStore } from '../store/uiStore';
 import { apiClient, MatchVersionMismatch } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
+import { transitionPath } from '../platform/domain/matchTransitions';
+import { assertCanEdit } from './useCanEdit';
 import { useTournamentIdOrNull } from './useTournamentId';
+import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 
-/**
- * Valid state transitions for match state machine
- * Key = current status, Value = array of valid next statuses
- */
-const VALID_TRANSITIONS: Record<MatchStateDTO['status'], MatchStateDTO['status'][]> = {
-  scheduled: ['called', 'scheduled', 'finished'], // call, stay, or record score after-the-fact
-  called: ['started', 'scheduled', 'finished'],   // start, undo, or record score after-the-fact
-  started: ['finished', 'called'],                // finish or undo to called
-  finished: ['started', 'finished'],              // undo to started OR edit score (stays finished)
-};
+// The transition table lives in `platform/domain/matchTransitions` — a mirror
+// of the backend contract, unit-tested against it. It used to be defined here
+// and had drifted into a superset of what the server accepts (audit finding A1).
 
-/**
- * Validate if a state transition is allowed
- */
-function isValidTransition(
-  currentStatus: MatchStateDTO['status'],
-  newStatus: MatchStateDTO['status']
-): boolean {
-  const validNextStates = VALID_TRANSITIONS[currentStatus];
-  return validNextStates.includes(newStatus);
+/** Operator-facing label for a match id — the display code ("Match M12")
+ *  when we know its `matchNumber`, else a short UUID prefix. Reads the store
+ *  live so conflict toasts never surface a raw UUID (see debt-log). */
+function matchLabelOf(matchId: string): string {
+  const m = useTournamentStore.getState().matches.find((mm) => mm.id === matchId);
+  return m?.matchNumber != null ? `Match M${m.matchNumber}` : `Match ${matchId.slice(0, 8)}…`;
 }
 
 export function useLiveTracking() {
@@ -54,20 +47,26 @@ export function useLiveTracking() {
   const routeTid = useTournamentIdOrNull();
   const [searchParams] = useSearchParams();
   const tid = routeTid ?? searchParams.get('id') ?? '';
+  // Public display capability link (SP-CLOUD-2): with no tournament id but a
+  // ?token=, match-state READS come from the unauthenticated
+  // /display/{token}/match-states projection and every mutator below is
+  // inert — the spectator board never writes.
+  const displayToken = !tid ? searchParams.get('token') : null;
+  const tokenMode = !tid && !!displayToken;
   const schedule = useTournamentStore((state) => state.schedule);
   const config = useTournamentStore((state) => state.config);
   const matches = useTournamentStore((state) => state.matches);
   const matchStates = useMatchStateStore((state) => state.matchStates);
-  const liveState = useMatchStateStore((state) => state.liveState);
   const setMatchStates = useMatchStateStore((state) => state.setMatchStates);
   const setMatchState = useMatchStateStore((state) => state.setMatchState);
-  const setCurrentTime = useMatchStateStore((state) => state.setCurrentTime);
   const setLastSynced = useMatchStateStore((state) => state.setLastSynced);
 
   const loadMatchStates = useCallback(async () => {
-    if (!tid) return;
+    if (!tid && !tokenMode) return;
     try {
-      const backendStates = await apiClient.getMatchStates(tid);
+      const backendStates = tokenMode
+        ? await apiClient.getDisplayMatchStates(displayToken as string)
+        : await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
 
       // Merge backend with local, preserving local-only fields
@@ -92,12 +91,14 @@ export function useLiveTracking() {
     } catch (error) {
       console.error('Failed to load match states:', error);
     }
-  }, [setMatchStates, tid]);
+  }, [setMatchStates, tid, tokenMode, displayToken]);
 
   const syncMatchStates = useCallback(async () => {
-    if (!tid) return;
+    if (!tid && !tokenMode) return;
     try {
-      const backendStates = await apiClient.getMatchStates(tid);
+      const backendStates = tokenMode
+        ? await apiClient.getDisplayMatchStates(displayToken as string)
+        : await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
 
       // Merge backend with local, preserving local-only fields
@@ -126,7 +127,7 @@ export function useLiveTracking() {
     } catch (error) {
       console.error('Failed to sync match states:', error);
     }
-  }, [setMatchStates, setLastSynced, tid]);
+  }, [setMatchStates, setLastSynced, tid, tokenMode, displayToken]);
 
   // Lifecycle wiring — declared AFTER `loadMatchStates` / `syncMatchStates`
   // so the useEffect callbacks don't hit the temporal dead zone on the
@@ -139,22 +140,20 @@ export function useLiveTracking() {
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Skip the roundtrip while the tab is hidden — nobody can see the
+      // live-tracking board update anyway.
+      if (isPageHidden()) return;
       syncMatchStates();
     }, 5000);
-    return () => clearInterval(interval);
+    // Regain: fire an immediate sync instead of waiting out the interval.
+    const unsubscribe = subscribeVisibility((hidden) => {
+      if (!hidden) syncMatchStates();
+    });
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [syncMatchStates]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date().toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-      setCurrentTime(now);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [setCurrentTime]);
 
   // Self-ref so the toast `onAction` retry can invoke the latest
   // `updateMatchStatus` without tripping React's temporal-dead-zone
@@ -169,15 +168,38 @@ export function useLiveTracking() {
     status: MatchStateDTO['status'],
     additionalData?: Partial<MatchStateDTO>
   ) => {
+    // Token-mode (public spectator board): the display never writes.
+    if (tokenMode) return;
+    // A viewer's press must never reach the wire (audit A2). Refusing here — at
+    // the seam — means a control we failed to disable still no-ops client-side
+    // instead of 403-ing and leaving the board diverged from the server.
+    if (!assertCanEdit()) return;
+
     try {
+      const startStatus =
+        useMatchStateStore.getState().matchStates[matchId]?.status || 'scheduled';
+
+      // The operator's intent may not be reachable in one hop — scoring a match
+      // that was never explicitly started asks for `called → finished`, which
+      // the server refuses. Walk the machine instead of firing a request that
+      // can only 409. Directly-legal transitions yield a single step, so the
+      // common path is unchanged.
+      const path = transitionPath(startStatus, status);
+      if (path === null) {
+        console.warn(`Invalid state transition: ${startStatus} to ${status} for match ${matchId}`);
+        throw new Error(`Invalid state transition: cannot go from '${startStatus}' to '${status}'`);
+      }
+      for (const intermediate of path.slice(0, -1)) {
+        await updateMatchStatusRef.current(matchId, intermediate);
+      }
+
       const freshMatchStates = useMatchStateStore.getState().matchStates;
       const currentState = freshMatchStates[matchId] || { matchId, status: 'scheduled' };
       const currentStatus = currentState.status || 'scheduled';
 
-      if (!isValidTransition(currentStatus, status)) {
-        console.warn(`Invalid state transition: ${currentStatus} to ${status} for match ${matchId}`);
-        throw new Error(`Invalid state transition: cannot go from '${currentStatus}' to '${status}'`);
-      }
+      // An intermediate step can fail (it surfaced its own toast and returned).
+      // Don't follow it with a write the server is guaranteed to refuse.
+      if (path.length > 1 && currentStatus !== path[path.length - 2]) return;
 
       const now = new Date().toISOString();
       const newState: MatchStateDTO = {
@@ -241,18 +263,35 @@ export function useLiveTracking() {
             // status the server will never confirm.
             useMatchStateStore.getState().applyOptimisticStatus(matchId, previousStatus);
           }
-          // Surface a sticky toast so the operator knows the change
-          // didn't land. Retry replays with the fresh version.
+          // A 409 and a 412 mean different things and must not read the same.
+          //   412 — our version was stale. Replaying with the fresh version
+          //         succeeds, so Retry is real.
+          //   409 — the server refused the TRANSITION: the match already moved
+          //         on (another device called/started/finished it). Replaying
+          //         re-sends the same illegal move and fails identically, so
+          //         offering Retry is a lie. Say what happened instead; the
+          //         refetch above already re-synced to the server's truth.
+          // (Audit finding A1: every 409 used to read "version mismatch" and
+          //  carry a Retry that could never succeed.)
+          const isTransitionConflict = apiError.status === 409;
           try {
-            useUiStore.getState().pushToast({
-              level: 'error',
-              message: `Match ${matchId.slice(0, 8)}… version mismatch`,
-              detail: apiError.message,
-              actionLabel: 'Retry',
-              onAction: () => {
-                void updateMatchStatusRef.current(matchId, status, additionalData);
-              },
-            });
+            useUiStore.getState().pushToast(
+              isTransitionConflict
+                ? {
+                    level: 'warn',
+                    message: `${matchLabelOf(matchId)} already moved on`,
+                    detail: `${apiError.message} — the board has been re-synced to the server.`,
+                  }
+                : {
+                    level: 'error',
+                    message: `${matchLabelOf(matchId)} — version mismatch`,
+                    detail: apiError.message,
+                    actionLabel: 'Retry',
+                    onAction: () => {
+                      void updateMatchStatusRef.current(matchId, status, additionalData);
+                    },
+                  },
+            );
           } catch { /* toast store unavailable */ }
           return;
         }
@@ -262,7 +301,7 @@ export function useLiveTracking() {
         try {
           useUiStore.getState().pushToast({
             level: 'error',
-            message: `Match ${matchId.slice(0, 8)}… did not save`,
+            message: `${matchLabelOf(matchId)} did not save`,
             detail,
             actionLabel: 'Retry',
             onAction: () => {
@@ -275,7 +314,7 @@ export function useLiveTracking() {
       console.error('Failed to update match status:', error);
       throw error;
     }
-  }, [setMatchState, tid]);
+  }, [setMatchState, tid, tokenMode]);
 
   // Keep the ref pointed at the latest closure so retry callbacks
   // invoke the freshest version. Assignment lives in an effect so
@@ -289,6 +328,8 @@ export function useLiveTracking() {
     score: { sideA: number; sideB: number },
     notes?: string
   ) => {
+    if (tokenMode) return; // public display: never writes
+    if (!assertCanEdit()) return;
     try {
       const store = useMatchStateStore.getState();
       let version = store.canonicalVersionsByMatchId[matchId];
@@ -318,7 +359,7 @@ export function useLiveTracking() {
       console.error('Failed to set match score:', error);
       throw error;
     }
-  }, [setMatchState, tid]);
+  }, [setMatchState, tid, tokenMode]);
 
   /**
    * Confirm a player has arrived at the court for a called match
@@ -328,6 +369,8 @@ export function useLiveTracking() {
     playerId: string,
     confirmed: boolean
   ) => {
+    if (tokenMode) return; // public display: never writes
+    if (!assertCanEdit()) return;
     try {
       const freshMatchStates = useMatchStateStore.getState().matchStates;
       const currentState = freshMatchStates[matchId] || { matchId, status: 'called' };
@@ -372,9 +415,10 @@ export function useLiveTracking() {
       console.error('Failed to confirm player:', error);
       throw error;
     }
-  }, [setMatchState, tid]);
+  }, [setMatchState, tid, tokenMode]);
 
   const exportStates = useCallback(async () => {
+    if (tokenMode) return; // public display: no operator surfaces
     try {
       const blob = await apiClient.exportMatchStates(tid);
       const url = window.URL.createObjectURL(blob);
@@ -389,9 +433,13 @@ export function useLiveTracking() {
       console.error('Failed to export match states:', error);
       throw error;
     }
-  }, []);
+  }, [tid, tokenMode]);
 
   const importStates = useCallback(async (file: File) => {
+    if (tokenMode) {
+      // public display: inert — the shape callers expect, without a write.
+      return { message: 'Read-only display', matchCount: 0 };
+    }
     try {
       const result = await apiClient.importMatchStates(tid, file);
       await loadMatchStates(); // Reload after import
@@ -400,9 +448,10 @@ export function useLiveTracking() {
       console.error('Failed to import match states:', error);
       throw error;
     }
-  }, [loadMatchStates]);
+  }, [loadMatchStates, tid, tokenMode]);
 
   const resetStates = useCallback(async () => {
+    if (tokenMode) return; // public display: never writes
     try {
       await apiClient.resetMatchStates(tid);
       setMatchStates({});
@@ -410,7 +459,7 @@ export function useLiveTracking() {
       console.error('Failed to reset match states:', error);
       throw error;
     }
-  }, [setMatchStates]);
+  }, [setMatchStates, tid, tokenMode]);
 
   // Calculate progress stats. Both numerator and denominator are
   // restricted to the current schedule's assignments — earlier we
@@ -418,9 +467,9 @@ export function useLiveTracking() {
   // whether its match was still scheduled, which let the percentage
   // exceed 100 after a cancellation/court-closure removed a played
   // match from the plan.
-  // Memoized so the per-second clock tick (setCurrentTime) doesn't re-run these
-  // filters or hand consumers fresh array references every second — they
-  // recompute only when the schedule or match states actually change.
+  // Memoized so these filters recompute only when the schedule or match
+  // states actually change, not on every render (perf pass 2 removed the
+  // 1s wall-clock tick that used to force one every second).
   const scheduledAssignments = useMemo(() => schedule?.assignments ?? [], [schedule]);
   const progressStats = useMemo(() => {
     const finished = scheduledAssignments.filter((a) => matchStates[a.matchId]?.status === 'finished').length;
@@ -454,7 +503,6 @@ export function useLiveTracking() {
     config,
     matches,
     matchStates,
-    liveState,
     progressStats,
     matchesByStatus,
     updateMatchStatus,

@@ -17,7 +17,7 @@
  * Purity: this reads no clock. `currentSlot` is injected by the caller; the
  * placement math lives in the pure `buildLiveChips` model.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   GanttTimeline,
   GANTT_GEOMETRY,
@@ -26,6 +26,7 @@ import {
 } from '@scheduler/design-system/components';
 import { MatchChip } from '../../../components/MatchChip';
 import type { OpsBlock } from '../opsBlock';
+import { packBlockLanes, chipLanePx } from '../opsBlock';
 import { buildLiveChips, type BoardChip } from '../runtime/boardPlacements';
 
 export interface RunLiveBoardProps {
@@ -39,6 +40,9 @@ export interface RunLiveBoardProps {
   running?: boolean;
   /** Wall-clock label for a slot (operators think in time, not slot indices). */
   formatSlot?: (slotId: number) => string;
+  /** Minutes per slot (config.intervalMinutes) — when provided, playing chips
+   *  carry a quiet elapsed stamp (`span × slotMinutes`). */
+  slotMinutes?: number;
   selectedKey?: string | null;
   onSelect(key: string): void;
 }
@@ -49,6 +53,7 @@ export function RunLiveBoard({
   currentSlot = 0,
   running = false,
   formatSlot,
+  slotMinutes,
   selectedKey,
   onSelect,
 }: RunLiveBoardProps) {
@@ -58,12 +63,77 @@ export function RunLiveBoard({
   );
   const chipByKey = useMemo(() => new Map(chips.map((c) => [c.key, c])), [chips]);
 
+  // ── one-shot state-flip signals (sw-call-flash / sw-go-live) ─────────────
+  // usePrevious-style detection: remember every chip's last-seen state; when a
+  // chip OBSERVED in the previous render flips to 'called' (amber flash) or
+  // 'playing' (green wipe) record a one-shot class for it. Poll ticks re-run
+  // this effect but states are unchanged, so nothing fires; the class is held
+  // in state (survives mid-animation re-renders without restarting, since the
+  // chip element itself is stable) and cleared on `animationend`. Initial
+  // mount never flashes (no previous states to compare against).
+  const [flipFlash, setFlipFlash] = useState<ReadonlyMap<string, string>>(new Map());
+  const prevStatesRef = useRef<Map<string, BoardChip['state']> | null>(null);
+  useEffect(() => {
+    const prev = prevStatesRef.current;
+    const next = new Map(chips.map((c) => [c.key, c.state]));
+    if (prev) {
+      const fired = new Map<string, string>();
+      for (const c of chips) {
+        const p = prev.get(c.key);
+        if (p === undefined || p === c.state) continue;
+        if (c.state === 'called') fired.set(c.key, 'sw-call-flash');
+        else if (c.state === 'playing') fired.set(c.key, 'sw-go-live');
+      }
+      if (fired.size > 0) {
+        setFlipFlash((old) => {
+          const merged = new Map(old);
+          fired.forEach((cls, key) => merged.set(key, cls));
+          return merged;
+        });
+      }
+    }
+    prevStatesRef.current = next;
+  }, [chips]);
+  const clearFlipFlash = useCallback((key: string) => {
+    setFlipFlash((old) => {
+      if (!old.has(key)) return old;
+      const next = new Map(old);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
   const courts = useMemo(
     () => Array.from({ length: Math.max(1, courtCount) }, (_, i) => i + 1),
     [courtCount],
   );
 
-  const placements = useMemo<Placement[]>(() => chips.map((c) => c.placement), [chips]);
+  // Lane-pack on the LIVE spans: a playing chip that grows toward `currentSlot`
+  // can cross a later chip on the same court (or meet+bracket can double-book
+  // a cell) — without packing the two render stacked in the same pixels and
+  // the lower one disappears. Same idiom as UnifiedOpsBoard, but on rendered
+  // (grown) spans rather than uniform planned ones.
+  const lanes = useMemo(
+    () =>
+      packBlockLanes(
+        chips.map((c) => ({
+          key: c.key,
+          court: c.placement.courtIndex + 1,
+          slot: c.placement.startSlot,
+          span: c.placement.span,
+        })),
+      ),
+    [chips],
+  );
+
+  const placements = useMemo<Placement[]>(
+    () =>
+      chips.map((c) => {
+        const ln = lanes.get(c.key);
+        return { ...c.placement, laneIndex: ln?.laneIndex ?? 0, laneCount: ln?.laneCount ?? 1 };
+      }),
+    [chips, lanes],
+  );
 
   const { minSlot, slotCount } = useMemo(() => {
     if (placements.length === 0) return { minSlot: 0, slotCount: 8 };
@@ -81,8 +151,10 @@ export function RunLiveBoard({
     if (chips.length === 0) return 1;
     const longest = chips.reduce((m, c) => Math.max(m, c.label.length), 0);
     // Width a span=1 cell needs to read the longest label at text-2xs plus the
-    // chip's horizontal padding + inset (~24px). Generous so nothing clips.
-    const neededPx = Math.max(56, longest * 8 + 24);
+    // chip's horizontal padding + inset + the M/B source square (~42px total).
+    // Shared basis with the Plan board (chipLanePx) — Run and Plan cells are
+    // the same size at Auto fit; the reserve includes the status stamp.
+    const neededPx = chipLanePx(longest);
     return Math.min(3, Math.max(1, neededPx / GANTT_GEOMETRY.standard.slot));
   }, [chips]);
   const timeZoom = auto ? autoZoom : manualZoom;
@@ -99,6 +171,7 @@ export function RunLiveBoard({
       // covers exactly [plannedEnd, currentSlot); its left border IS the
       // planned-end marker.
       const overFrac = c.placement.span > 0 ? Math.min(1, c.overrunSlots / c.placement.span) : 0;
+      const flashCls = flipFlash.get(c.key);
       return (
         <MatchChip
           label={c.label}
@@ -107,9 +180,21 @@ export function RunLiveBoard({
           late={c.late}
           selected={selectedKey === c.key}
           tone="state"
+          sideA={c.sideA}
+          sideB={c.sideB}
+          // Sides render only when the cell is tall enough for a second
+          // line. At the Plan-parity `standard` density (40px rows) that is
+          // never — chips stay label-height (the inspector + hover title
+          // carry the players); the guard keeps sides working if a denser
+          // tier ever changes.
+          showSides={c.state === 'playing' && box.height >= 48}
           onSelect={() => onSelect(c.key)}
           data-testid={`run-card-${c.key}`}
-          title={`${c.source === 'meet' ? 'Meet' : 'Bracket'} · ${c.label} [${c.late ? 'late' : c.state}]`}
+          title={`${c.source === 'meet' ? 'Meet' : 'Bracket'} · ${c.label} [${c.late ? 'late' : c.state}]${
+            c.pushedSlots > 0
+              ? ` — running ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'} behind plan (starts when its court is free)`
+              : ''
+          }`}
           style={{
             // Inset a 2px gutter on each side (like the Plan board) so a
             // selection ring / shadow has breathing room and never bleeds into
@@ -120,29 +205,87 @@ export function RunLiveBoard({
             width: box.width - 4,
             height: box.height - 4,
           }}
-          className="cursor-pointer px-2"
+          className={`cursor-pointer px-2${flashCls ? ` ${flashCls}` : ''}`}
+          onAnimationEnd={(e) => {
+            // Clear the one-shot flip class the moment its animation ends so a
+            // later unrelated re-render can never replay it. Guard on the
+            // animation name — the chip hosts other animated children.
+            if (e.animationName === 'sw-call-flash' || e.animationName === 'sw-go-live') {
+              clearFlipFlash(c.key);
+            }
+          }}
         >
           {c.overrunSlots > 0 && (
+            // Over-portion wash: the left border IS the planned-end marker.
+            // Its number moved into the single right-aligned stamp below so
+            // a chip never shows two competing figures.
             <span
               aria-hidden
               data-testid={`run-overrun-${c.key}`}
-              className="pointer-events-none absolute inset-y-0 right-0 border-l-2 border-status-warning bg-status-warning/20"
+              className="pointer-events-none absolute inset-y-0 right-0 border-l border-status-warning/60"
               style={{ width: `${overFrac * 100}%` }}
             />
           )}
-          {c.late && (
-            <span
-              data-testid={`run-late-${c.key}`}
-              aria-label="Late"
-              className="absolute right-1.5 top-1 text-[9px] font-semibold uppercase tracking-wide text-status-warning"
-            >
-              Late
-            </span>
-          )}
+          {/* ONE stamp per chip — right-aligned, vertically centered so it
+              shares the label's line instead of overlaying it (numbers used
+              to stack in three corners and collide on narrow cells). Unit is
+              MINUTES when the slot length is known ("+30m", "▸+15m", "45m");
+              slots otherwise. Priority: running-over > elapsed > delayed >
+              late. Meanings are spelled out in the footer legend + title.
+              Zoom-aware: when the operator zooms TIME below the auto-fit
+              width the stamp is dropped before the label (the hover title
+              keeps the information), so nothing overlaps at any scale. */}
+          {(() => {
+            if (box.width < chipLanePx(c.label.length) - 8) return null;
+            const fmtSlots = (n: number) =>
+              slotMinutes != null ? `${Math.round(n * slotMinutes)}m` : String(n);
+            if (c.state === 'playing' && c.overrunSlots > 0) {
+              return (
+                <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center">
+                  <span className="sw-late-nudge rounded-xs bg-status-warning px-1 text-[9px] font-semibold leading-4 text-background sw-num">
+                    +{fmtSlots(c.overrunSlots)}
+                  </span>
+                </span>
+              );
+            }
+            if (c.state === 'playing' && slotMinutes != null) {
+              return (
+                <span
+                  className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[9px] opacity-80 sw-num"
+                  data-testid={`run-elapsed-${c.key}`}
+                >
+                  {Math.max(0, Math.round(c.placement.span * slotMinutes))}m
+                </span>
+              );
+            }
+            if (c.pushedSlots > 0) {
+              return (
+                <span
+                  data-testid={`run-delayed-${c.key}`}
+                  aria-label={`Delayed ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'}`}
+                  className="sw-late-nudge pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[9px] font-semibold uppercase tracking-wide text-status-warning sw-num"
+                >
+                  ▸+{fmtSlots(c.pushedSlots)}
+                </span>
+              );
+            }
+            if (c.late) {
+              return (
+                <span
+                  data-testid={`run-late-${c.key}`}
+                  aria-label="Late"
+                  className="sw-late-nudge pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[9px] font-semibold uppercase tracking-wide text-status-warning"
+                >
+                  Late
+                </span>
+              );
+            }
+            return null;
+          })()}
         </MatchChip>
       );
     },
-    [chipByKey, selectedKey, onSelect],
+    [chipByKey, selectedKey, onSelect, slotMinutes, flipFlash, clearFlipFlash],
   );
 
   if (chips.length === 0) {
@@ -164,7 +307,12 @@ export function RunLiveBoard({
         courts={courts}
         minSlot={minSlot}
         slotCount={slotCount}
+        // Same cell geometry as the Plan board (UnifiedOpsBoard) — the two
+        // boards are ONE court plan and should read identically; the old
+        // `roomy` tier's 64px rows wasted vertical space on chips that are
+        // label-height anyway (feature fix, 2026-07-02).
         density="standard"
+        laneOrientation="vertical"
         slotScale={timeZoom}
         placements={placements}
         renderBlock={renderBlock}
@@ -201,6 +349,24 @@ export function RunLiveBoard({
         >
           +
         </button>
+        {/* Stamp legend — the chips carry at most ONE figure each; this line
+            says what each voice means so the numbers are never cryptic. */}
+        <span
+          data-testid="run-board-legend"
+          className="ml-auto hidden items-center gap-3 text-muted-foreground sm:flex"
+        >
+          <span>
+            <span className="font-semibold text-status-warning">+n</span> over time
+          </span>
+          <span>
+            <span className="font-semibold text-status-warning">▸n</span> late start
+          </span>
+          {slotMinutes != null && (
+            <span>
+              <span className="font-semibold text-foreground">n</span> min played
+            </span>
+          )}
+        </span>
       </div>
     </div>
   );

@@ -43,7 +43,20 @@ def _enable_sqlite_wal(engine: Engine) -> None:
             cursor.close()
 
 
+def normalize_database_url(url: str) -> str:
+    """Map bare ``postgresql://`` URLs onto the psycopg 3 driver.
+
+    SQLAlchemy still resolves ``postgresql://`` to psycopg2 by default;
+    this repo ships psycopg 3 only. Explicit ``postgresql+<driver>://``
+    URLs are respected as written.
+    """
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
+
+
 def _build_engine(url: str) -> Engine:
+    url = normalize_database_url(url)
     if url.startswith("sqlite"):
         connect_args = {"check_same_thread": False}
         if ":memory:" in url:
@@ -68,7 +81,11 @@ def _build_engine(url: str) -> Engine:
         )
         _enable_sqlite_wal(engine)
         return engine
-    return create_engine(url, future=True)
+    # Postgres (cloud mode): ``pool_pre_ping`` revalidates pooled
+    # connections so a bounced database or an idle-timeout proxy
+    # (Supabase pgbouncer) surfaces as a transparent reconnect instead
+    # of a mid-request OperationalError.
+    return create_engine(url, pool_pre_ping=True, future=True)
 
 
 engine: Engine = _build_engine(settings.database_url)

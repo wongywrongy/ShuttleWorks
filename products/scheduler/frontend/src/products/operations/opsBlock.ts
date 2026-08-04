@@ -125,12 +125,28 @@ export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
   });
 }
 
+/**
+ * Auto-fit width one chip lane needs to read a label of `longestLabel`
+ * characters at text-2xs: chip padding + inset + the M/B source square
+ * (+42px) plus the Run board's right-aligned status stamp reserve (+34px —
+ * "+30m" / "▸+15m"). ONE constant shared by BOTH operations boards so Plan
+ * and Run cells are the same size at Auto fit and never drift apart
+ * (2026-07-02: "match the cell size in plan").
+ */
+export function chipLanePx(longestLabel: number): number {
+  return Math.max(72, longestLabel * 8 + 42 + 34);
+}
+
 /** Lane assignment for one block: which sub-lane it occupies in its court,
  *  and how many lanes its overlap cluster needs. */
 export interface BlockLane {
   laneIndex: number;
   laneCount: number;
 }
+
+/** The minimal shape `packBlockLanes` needs — `OpsBlock` satisfies it, and the
+ *  Run board can feed LIVE placements (grown playing spans) instead. */
+type LanePackable = Pick<OpsBlock, 'key' | 'court' | 'slot' | 'span'>;
 
 /**
  * Lane-pack court-assigned blocks so overlapping ones render side-by-side.
@@ -142,8 +158,8 @@ export interface BlockLane {
  * free lane, and record the max concurrency as its lane count — mirroring the
  * meet GanttChart packing. Returns a map keyed by `OpsBlock.key`.
  */
-export function packBlockLanes(blocks: OpsBlock[]): Map<string, BlockLane> {
-  const byCourt = new Map<number, OpsBlock[]>();
+export function packBlockLanes(blocks: readonly LanePackable[]): Map<string, BlockLane> {
+  const byCourt = new Map<number, LanePackable[]>();
   for (const b of blocks) {
     if (b.court == null || b.slot == null) continue;
     const list = byCourt.get(b.court);

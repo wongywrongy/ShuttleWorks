@@ -1,0 +1,23 @@
+<!-- @dsCard group="Archetypes" viewport="700x300" name="App shell archetype" subtitle="Identity bar · module rail · action bar · content · inspector" -->
+<!DOCTYPE html><html data-theme="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>*{box-sizing:border-box}body{margin:0;background:var(--surface-page);font-family:var(--font-sans);color:var(--text-2);padding:16px}
+.f{border:1px solid var(--border-1);border-radius:var(--radius-2xl);overflow:hidden;background:var(--surface-screen);display:flex;flex-direction:column;height:268px}
+.bar{height:34px;border-bottom:1px solid var(--border-1);display:flex;align-items:center;padding:0 12px;gap:8px;font-size:11px;color:var(--text-muted)}
+.b{display:flex;flex:1;min-height:0}
+.rail{width:120px;border-right:1px solid var(--border-1);background:var(--surface-rail);padding:8px;font-size:10px;color:var(--text-muted);display:flex;flex-direction:column;gap:6px}
+.col{flex:1;display:flex;flex-direction:column}
+.act{height:30px;border-bottom:1px solid var(--border-1);display:flex;align-items:center;padding:0 12px;font-size:11px;color:var(--text-3)}
+.cnt{flex:1;background:var(--surface-band);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)}
+.insp{width:110px;border-left:1px solid var(--border-1);background:var(--surface-rail);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);text-align:center;padding:8px}
+.lab{background:var(--accent-tint);color:var(--accent);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600}</style></head>
+<body>
+<div class="f">
+  <div class="bar"><span class="lab">identity bar</span><span>workspace · date · status</span></div>
+  <div class="b">
+    <div class="rail"><span class="lab" style="align-self:flex-start">module rail</span>Meet · Bracket<br>Operations · Display<br>+ Workspace</div>
+    <div class="col"><div class="act"><span class="lab">action bar</span>&nbsp; title · count · actions</div><div class="cnt">content — table / board / form</div></div>
+    <div class="insp"><span class="lab">inspector</span></div>
+  </div>
+</div>
+<p style="font-size:12px;color:var(--text-muted);margin:12px 2px 0;line-height:1.5">Every workspace screen is this frame: <b style="color:var(--text-3)">identity bar</b> → <b style="color:var(--text-3)">module rail</b> → <b style="color:var(--text-3)">action bar</b> → content, with an optional right <b style="color:var(--text-3)">inspector</b>. Modules reuse the same sub-page archetypes, so navigation feels identical everywhere.</p>
+</body></html>

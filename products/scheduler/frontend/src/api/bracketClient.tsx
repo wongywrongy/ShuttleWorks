@@ -13,6 +13,7 @@
  */
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { apiClient } from './client';
+import { guardMutation } from '../hooks/useCanEdit';
 import type {
   BracketCreateIn,
   BracketTournamentDTO,
@@ -23,6 +24,7 @@ import type {
   BracketValidationOut,
   BracketEventUpsertIn,
   BracketEventGenerateIn,
+  BracketEventPatchIn,
   BracketScore,
   BracketCommitRoundIn,
   WinnerSide,
@@ -64,6 +66,14 @@ export interface BracketApi {
     action: 'start' | 'finish' | 'reset';
     slot?: number;
   }) => Promise<BracketTournamentDTO>;
+  /** Contingency result (walkover / retired / forfeit) through the
+   *  idempotent command path — never the legacy /bracket/results route. */
+  recordResultCommand: (body: {
+    play_unit_id: string;
+    winner_side: 'A' | 'B';
+    reason: 'walkover' | 'retired' | 'forfeit';
+    seen_version?: number;
+  }) => Promise<BracketTournamentDTO>;
   validateMove: (body: BracketValidateIn) => Promise<BracketValidationOut>;
   pinMatch: (body: BracketPinIn) => Promise<BracketTournamentDTO>;
   importJson: (body: unknown) => Promise<BracketTournamentDTO>;
@@ -76,6 +86,10 @@ export interface BracketApi {
   exportIcsUrl: () => string;
   eventUpsert: (eventId: string, body: BracketEventUpsertIn) => Promise<BracketTournamentDTO>;
   eventGenerate: (eventId: string, body: BracketEventGenerateIn) => Promise<BracketTournamentDTO>;
+  /** Draft-only per-draw config edit — never touches participants. */
+  eventPatch: (eventId: string, body: BracketEventPatchIn) => Promise<BracketTournamentDTO>;
+  /** Swiss: append the next round's pairings from current standings. */
+  eventNextRound: (eventId: string) => Promise<BracketTournamentDTO>;
   eventDelete: (eventId: string) => Promise<void>;
   /** SP-G1 Task 9b: directly place a play unit on a court+slot without
    *  re-running the solver.  Creates for unscheduled units (no 409); overwrites
@@ -99,36 +113,70 @@ export function BracketApiProvider({
   tournamentId: string;
   children: ReactNode;
 }) {
+  // Every bracket mutation is curried here, which makes this the ONE place the
+  // whole product's write path can be gated (audit A2-followup). Before this,
+  // the bracket product had no permission check at all: a viewer could press
+  // Record result / Generate draw / Reset bracket and the request went out, came
+  // back 403, and offered a retry that could never succeed. `guardMutation`
+  // refuses client-side with a rejection shaped like that same 403, so call
+  // sites behave identically — they just never touch the network.
+  //
+  // Reads and URL builders are deliberately NOT wrapped: a viewer must still be
+  // able to see and export the draw. `validateMove` is a preview, not a write.
   const value = useMemo<BracketApi>(
     () => ({
       get: () => apiClient.getBracket(tournamentId),
-      create: (body) => apiClient.createBracket(tournamentId, body),
-      remove: () => apiClient.deleteBracket(tournamentId),
-      scheduleNext: () => apiClient.scheduleNextBracketRound(tournamentId),
-      scheduleNextWithProgress: (callbacks, abortSignal, candidatePoolSize) =>
-        apiClient.scheduleNextBracketRoundWithProgress(
-          tournamentId,
-          callbacks,
-          abortSignal,
-          candidatePoolSize,
-        ),
-      commitRound: (body) => apiClient.commitBracketRound(tournamentId, body),
-      recordResult: (body) =>
-        apiClient.recordBracketResult(tournamentId, body),
-      matchAction: (body) => apiClient.bracketMatchAction(tournamentId, body),
+      create: guardMutation((body) => apiClient.createBracket(tournamentId, body)),
+      remove: guardMutation(() => apiClient.deleteBracket(tournamentId)),
+      scheduleNext: guardMutation(() => apiClient.scheduleNextBracketRound(tournamentId)),
+      scheduleNextWithProgress: guardMutation(
+        (callbacks, abortSignal, candidatePoolSize) =>
+          apiClient.scheduleNextBracketRoundWithProgress(
+            tournamentId,
+            callbacks,
+            abortSignal,
+            candidatePoolSize,
+          ),
+      ),
+      commitRound: guardMutation((body) => apiClient.commitBracketRound(tournamentId, body)),
+      recordResult: guardMutation((body) => apiClient.recordBracketResult(tournamentId, body)),
+      matchAction: guardMutation((body) => apiClient.bracketMatchAction(tournamentId, body)),
+      recordResultCommand: guardMutation(async (body) => {
+        await apiClient.recordBracketResultCommand(tournamentId, {
+          id: crypto.randomUUID(),
+          walkover: body.reason === 'walkover',
+          ...body,
+        });
+        const next = await apiClient.getBracket(tournamentId);
+        if (!next) throw new Error('Bracket not found after recording result');
+        return next;
+      }),
       validateMove: (body) => apiClient.validateBracketMove(tournamentId, body),
-      pinMatch: (body) => apiClient.pinBracketMatch(tournamentId, body),
-      importJson: (body) => apiClient.importBracketJson(tournamentId, body),
-      importCsv: (text, params) =>
+      pinMatch: guardMutation((body) => apiClient.pinBracketMatch(tournamentId, body)),
+      importJson: guardMutation((body) => apiClient.importBracketJson(tournamentId, body)),
+      importCsv: guardMutation((text, params) =>
         apiClient.importBracketCsv(tournamentId, text, params),
+      ),
       exportJsonUrl: () => apiClient.bracketExportJsonUrl(tournamentId),
       exportCsvUrl: () => apiClient.bracketExportCsvUrl(tournamentId),
       exportIcsUrl: () => apiClient.bracketExportIcsUrl(tournamentId),
-      eventUpsert: (eventId, body) => apiClient.bracketEventUpsert(tournamentId, eventId, body),
-      eventGenerate: (eventId, body) => apiClient.bracketEventGenerate(tournamentId, eventId, body),
-      eventDelete: (eventId) => apiClient.bracketEventDelete(tournamentId, eventId),
-      assignCourt: (body) => apiClient.assignBracketCourt(tournamentId, body),
-      unassign: (body) => apiClient.unassignBracketCourt(tournamentId, body),
+      eventUpsert: guardMutation((eventId, body) =>
+        apiClient.bracketEventUpsert(tournamentId, eventId, body),
+      ),
+      eventGenerate: guardMutation((eventId, body) =>
+        apiClient.bracketEventGenerate(tournamentId, eventId, body),
+      ),
+      eventPatch: guardMutation((eventId, body) =>
+        apiClient.bracketEventPatch(tournamentId, eventId, body),
+      ),
+      eventNextRound: guardMutation((eventId) =>
+        apiClient.bracketEventNextRound(tournamentId, eventId),
+      ),
+      eventDelete: guardMutation((eventId) =>
+        apiClient.bracketEventDelete(tournamentId, eventId),
+      ),
+      assignCourt: guardMutation((body) => apiClient.assignBracketCourt(tournamentId, body)),
+      unassign: guardMutation((body) => apiClient.unassignBracketCourt(tournamentId, body)),
     }),
     [tournamentId],
   );

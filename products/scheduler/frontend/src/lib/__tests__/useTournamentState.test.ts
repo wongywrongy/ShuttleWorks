@@ -32,8 +32,13 @@ function makePut() {
 beforeEach(() => {
   vi.useFakeTimers();
   _resetSaveStateForTests();
-  // Arm the active tournament id so forceSaveNow doesn't short-circuit.
-  useUiStore.setState({ activeTournamentId: 'test-tournament-1' });
+  // Arm the active tournament id AND an authorized role so forceSaveNow doesn't
+  // short-circuit. The write gate (audit A2) fails closed on an unknown role —
+  // these tests exercise save mechanics, so the caller must be able to save.
+  useUiStore.setState({
+    activeTournamentId: 'test-tournament-1',
+    activeTournamentRole: 'owner',
+  });
   // Seed a minimal config so the snapshot is valid.
   useTournamentStore.setState({
     config: {
@@ -58,6 +63,91 @@ afterEach(() => {
 });
 
 // ---- Tests -------------------------------------------------------------
+
+describe('forceSaveNow — the viewer write gate (audit A2)', () => {
+  it('does not PUT when the caller is a viewer — the edit never reaches the wire', async () => {
+    useUiStore.setState({ activeTournamentRole: 'viewer' });
+    const putSpy = vi
+      .spyOn(clientModule.apiClient, 'putTournamentState')
+      .mockResolvedValue(undefined as never);
+
+    await forceSaveNow();
+
+    expect(putSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not PUT while the role is still unknown (fails closed)', async () => {
+    useUiStore.setState({ activeTournamentRole: null });
+    const putSpy = vi
+      .spyOn(clientModule.apiClient, 'putTournamentState')
+      .mockResolvedValue(undefined as never);
+
+    await forceSaveNow();
+
+    expect(putSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('forceSaveNow — 409 re-sync kills the poisoned-blob cascade (audit A3)', () => {
+  /** The state PUT is all-or-nothing. Before this fix, ONE rejected edit (e.g.
+   *  deleting a player a generated draw uses) stayed in the store, so every
+   *  later save re-sent the same rejected blob and 409'd too — roster editing
+   *  was dead until the operator reloaded. */
+  function conflict() {
+    const err = new Error(
+      'These players are placed in a generated draw and cannot be removed: p1',
+    ) as Error & { response: { status: number } };
+    err.response = { status: 409 };
+    return err;
+  }
+
+  it('re-hydrates from the server after a 409 so the NEXT save is clean', async () => {
+    const putSpy = vi
+      .spyOn(clientModule.apiClient, 'putTournamentState')
+      .mockRejectedValueOnce(conflict())
+      .mockResolvedValue(undefined as never);
+    const getSpy = vi
+      .spyOn(clientModule.apiClient, 'getTournamentState')
+      .mockResolvedValue({
+        config: useTournamentStore.getState().config,
+        players: [{ id: 'p1', name: 'Restored', groupId: 'g1' }],
+      } as never);
+
+    // The rejected save.
+    await expect(forceSaveNow()).rejects.toThrow(/generated draw/);
+
+    // It re-synced from the server rather than leaving the bad value in place.
+    expect(getSpy).toHaveBeenCalledTimes(1);
+    expect(useTournamentStore.getState().players).toEqual([
+      { id: 'p1', name: 'Restored', groupId: 'g1' },
+    ]);
+    // ...and it told the operator, rather than failing silently.
+    expect(useUiStore.getState().toasts.at(-1)?.message).toMatch(/rejected/i);
+
+    // THE CASCADE: the next save now goes through instead of 409-ing forever.
+    _resetSaveStateForTests();
+    useUiStore.setState({
+      activeTournamentId: 'test-tournament-1',
+      activeTournamentRole: 'owner',
+    });
+    await forceSaveNow();
+    expect(putSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT re-sync on a transient failure — unsaved work is kept', async () => {
+    // A network error / 5xx is retryable. Discarding the operator's edits there
+    // would be data loss; only a 409 (the server rejected the CONTENT) resyncs.
+    vi.spyOn(clientModule.apiClient, 'putTournamentState').mockRejectedValue(
+      new Error('Network Error'),
+    );
+    const getSpy = vi.spyOn(clientModule.apiClient, 'getTournamentState');
+
+    await expect(forceSaveNow()).rejects.toThrow(/network/i);
+
+    expect(getSpy).not.toHaveBeenCalled();
+    expect(useUiStore.getState().persistStatus).toBe('error');
+  });
+});
 
 describe('forceSaveNow — in-flight race safety', () => {
   it('does not fire a second PUT when forceSaveNow is called while a PUT is in flight', async () => {

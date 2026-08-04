@@ -27,6 +27,18 @@ The `tournaments` row carries a `kind` column (`meet | bracket`), a `status`
 (`draft | active | archived`), the `tournament_date`, and a `data` JSON blob holding the full
 workspace state (config, roster, matches, schedule). `schema_version` defaults to `2`.
 
+### Ownership & membership (SP-CLOUD-2)
+
+Since the tenancy migration, **orgs own workspaces**: `tournaments.org_id` is a non-null FK to
+`orgs`, and every user gets a **personal org** at creation (`services/auth.ensure_personal_org`)
+so the UI can ignore orgs entirely while the data model never hangs workspaces directly off
+users. Day-to-day access stays **per-workspace** in `tournament_members`
+(`role: viewer | operator | owner`, `user_id` FK → `users`). Every workspace route is gated by
+`require_tournament_access(min_role)`, which answers a uniform 404 for non-members — see
+[Backend structure → Auth & tenancy](/architecture/backend-structure#auth-tenancy-sp-cloud-2).
+The migration was a lossless backfill: pre-existing workspaces were anchored to their owner's
+personal org (a "Local Workspace" org catches anything unowned).
+
 ## How modules are persisted
 
 Each workspace's enabled modules live in the **`workspace_modules`** table — one row per

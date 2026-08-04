@@ -31,8 +31,22 @@ engine in **`scheduler_core/`** — no HTTP, no I/O. Its shape:
 - **Repair and warm-start** (`repair.py`, `warm_start.py`) that reuse the `stay_close` penalty to
   prefer keeping the current schedule — the basis of the live proposal/repair pipeline.
 
-The FastAPI layer invokes it off the request thread (`run_in_executor`) so a long solve doesn't block
-the event loop; `/schedule` is otherwise stateless (the full problem rides in the body).
+The FastAPI layer keeps CP-SAT out of the request path. Since SP-CLOUD-1 the meet batch solve
+runs as an **async job** in a child subprocess (`services/solve_child.py`) claimed off the
+`solve_jobs` queue — a kill is the only reliable cancel for CP-SAT — while the bracket
+`schedule-next` routes still solve off the request thread. The solve input stays self-contained
+(the full problem rides in the job's `input_snapshot`).
+
+### The determinism knob (SP-CLOUD-1)
+
+The one engine change the solve rail required: `SolverOptions` gained an **additive, optional
+`max_deterministic_time`** field (`scheduler_core/domain/models.py`), and `CPSATScheduler.solve`
+sets `solver.parameters.max_deterministic_time` when — and only when — it is provided
+(`engine/cpsat_backend.py`). Deterministic time is a host-speed-independent budget: a solve
+stopped by it halts at the same search point on any machine, so the result stays reproducible
+across hosts, with `time_limit_seconds` demoted to an outer wall-clock backstop. This was a
+user-sanctioned exception to the "engine unchanged" rule of the cloud program — everything else
+in `scheduler_core` is untouched by SP-CLOUD-1/2.
 
 ## Consequences
 
@@ -43,8 +57,9 @@ the event loop; `/schedule` is otherwise stateless (the full problem rides in th
 - **Positive** — the engine being **pure Python with no I/O** makes it reusable (the scheduler is just
   the worked example) and trivially testable.
 - **Negative / cost** — CP-SAT is a heavyweight dependency and a solve can take seconds; the system is
-  built around that (SSE progress, a top-N candidate pool, async execution). It also interacts with the
-  SQLite-locking tuning noted in [ADR 0003](/decisions/0003-sqlite-as-primary-persistence).
+  built around that (the async solve-job rail with polling progress, a top-N candidate pool, SSE
+  progress on the bracket round solve, subprocess isolation so cancel is a kill). It also interacts
+  with the SQLite-locking tuning noted in [ADR 0003](/decisions/0003-sqlite-as-primary-persistence).
 
 ## See also
 

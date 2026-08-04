@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { BracketTab } from '../BracketTab';
 import { useUiStore } from '../../../store/uiStore';
@@ -177,6 +178,91 @@ function makePopulatedBracket(): BracketTournamentDTO {
   };
 }
 
+describe('BracketTab — selection survives the 2.5s poll (audit D1)', () => {
+  /** `useBracket` polls every 2.5s and replaces `data` with a NEW OBJECT each
+   *  time. A reset effect keyed on `[data]` therefore wiped the operator's
+   *  selection on every poll: clicking a chip on the Plan timeline appeared to
+   *  be a dead handler — the ring showed, then silently vanished. The effect
+   *  must compare CONTENT (is the selected unit still there?), not identity. */
+  it('keeps the selected play unit when a poll returns an equal-but-new object', async () => {
+    const user = userEvent.setup();
+    vi.mocked(useBracket).mockReturnValue({
+      data: makePopulatedBracket(),
+      setData: vi.fn(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    useUiStore.setState({ activeTab: 'bracket-schedule' });
+    const { rerender } = renderBracketTab();
+
+    const chip = document.querySelector('[data-testid="bracket-block-pu1"]');
+    expect(chip).not.toBeNull();
+    await user.click(chip!);
+    expect(
+      document.querySelector('[data-testid="bracket-block-pu1"]')?.className,
+    ).toMatch(/ring-2/);
+
+    // The poll lands: same content, brand-new object reference.
+    vi.mocked(useBracket).mockReturnValue({
+      data: makePopulatedBracket(),
+      setData: vi.fn(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    rerender(
+      <MemoryRouter initialEntries={['/tournaments/t1/bracket-schedule']}>
+        <Routes>
+          <Route path="/tournaments/:id/*" element={<BracketTab />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // Selection must still be there.
+    expect(
+      document.querySelector('[data-testid="bracket-block-pu1"]')?.className,
+    ).toMatch(/ring-2/);
+  });
+
+  it('drops the selection when the selected play unit is gone (regenerate)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(useBracket).mockReturnValue({
+      data: makePopulatedBracket(),
+      setData: vi.fn(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    useUiStore.setState({ activeTab: 'bracket-schedule' });
+    const { rerender } = renderBracketTab();
+    await user.click(document.querySelector('[data-testid="bracket-block-pu1"]')!);
+
+    // A regenerate: the draw comes back with different play units.
+    const regenerated = makePopulatedBracket();
+    regenerated.play_units[0].id = 'pu-NEW';
+    regenerated.assignments[0].play_unit_id = 'pu-NEW';
+    vi.mocked(useBracket).mockReturnValue({
+      data: regenerated,
+      setData: vi.fn(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    rerender(
+      <MemoryRouter initialEntries={['/tournaments/t1/bracket-schedule']}>
+        <Routes>
+          <Route path="/tournaments/:id/*" element={<BracketTab />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      document.querySelector('[data-testid="bracket-block-pu-NEW"]')?.className,
+    ).not.toMatch(/ring-2/);
+  });
+});
+
 describe('BracketTab — Schedule chrome (data populated)', () => {
   it('renders header + table + sidebar on bracket-schedule tab', () => {
     // Override the default null-data mock for this test only.
@@ -206,9 +292,9 @@ describe('BracketTab — Setup chrome', () => {
     // Default mock (null data) is fine — Setup doesn't depend on bracket data.
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
-    // The actions-bar Seg renders a radio per section: Engine + Structure.
+    // The actions-bar Seg renders a radio per section: Engine + Events.
     expect(screen.getByRole('radio', { name: /^Engine$/i })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /^Structure$/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^Events$/i })).toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: /^Tournament data$/i })).toBeNull();
     expect(screen.queryByRole('radio', { name: /^Share$/i })).toBeNull();
   });

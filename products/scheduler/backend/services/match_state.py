@@ -46,7 +46,12 @@ VALID_TRANSITIONS: dict[MatchStatus, list[MatchStatus]] = {
     MatchStatus.SCHEDULED: [MatchStatus.CALLED],
     MatchStatus.CALLED: [MatchStatus.PLAYING, MatchStatus.SCHEDULED],
     MatchStatus.PLAYING: [MatchStatus.FINISHED, MatchStatus.RETIRED, MatchStatus.SCHEDULED],
-    MatchStatus.FINISHED: [],
+    # FINISHED is re-openable — and only back to PLAYING. The Run surface
+    # offers "Undo finish" for the live-day mis-tap; without this edge every
+    # press 409'd behind a misleading "version mismatch" toast. Re-opening a
+    # match drops it from standings again, which is the intended correction.
+    # RETIRED stays terminal: a retirement is adjudicated, not mis-tapped.
+    MatchStatus.FINISHED: [MatchStatus.PLAYING],
     MatchStatus.RETIRED: [],
 }
 

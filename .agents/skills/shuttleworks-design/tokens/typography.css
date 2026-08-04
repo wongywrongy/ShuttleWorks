@@ -1,0 +1,41 @@
+/* ============================================================
+   ShuttleWorks — Typography
+   One family everywhere: Geist. Data/figures use tabular-nums via
+   .sw-num (not a separate mono face) so nothing reads "robotic".
+   Geist Mono is available for terminal/code-only surfaces.
+   NOTE: served from Google Fonts CDN. Swap to self-hosted binaries
+   for production if offline embedding is required. (flagged in README)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  /* Type scale (px) */
+  --text-display: 42px;   /* page hero (canvas intro) */
+  --text-h2: 20px;        /* screen title */
+  --text-lg: 15px;        /* card heading */
+  --text-md: 14px;        /* controls, body-strong */
+  --text-body: 13px;      /* table cells, body */
+  --text-sm: 12px;        /* meta */
+  --text-xs: 11px;        /* dense labels */
+  --text-2xs: 10px;       /* column headers, source tags */
+  --text-3xs: 9px;        /* micro tags on chips */
+
+  /* Weights */
+  --fw-regular: 400;  /* @kind font */
+  --fw-medium: 500;   /* @kind font */
+  --fw-semibold: 600; /* @kind font */
+  --fw-bold: 700;     /* @kind font */
+
+  /* Tracking */
+  --track-tight: -0.03em;   /* display */
+  --track-snug: -0.01em;    /* headings */
+  --track-label: 0.08em;    /* uppercase column headers */
+}
+
+/* Utility: tabular figures for any numeric/code content
+   (match codes, dates, times, scores, counts) */
+.sw-num { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }

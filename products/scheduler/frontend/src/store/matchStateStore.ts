@@ -50,7 +50,6 @@ interface MatchStateState {
 
   setMatchStates: (states: Record<string, MatchStateDTO>) => void;
   setMatchState: (matchId: string, state: MatchStateDTO) => void;
-  setCurrentTime: (time: string) => void;
   setLastSynced: (time: string) => void;
   reset: () => void;
 
@@ -69,6 +68,27 @@ interface MatchStateState {
 
   // Post-audit: canonical version tracking for the command queue.
   setMatchVersion: (matchId: string, version: number) => void;
+}
+
+/** Content equality for a match-state map. The 5s live sync rebuilds a
+ *  fresh map every tick and previously wrote it unconditionally, so an
+ *  unchanged board still re-rendered the entire control center every 5s
+ *  (PERF_FINDINGS.md §2 #1 / FIX F). This lets `setMatchStates` skip the
+ *  write when nothing changed. Staleness-free by construction: we only
+ *  skip when the store already holds equal content. Per-value stringify
+ *  covers nested `score` / `playerConfirmations`; a false "changed" (key
+ *  order differing) merely falls back to the old always-write behavior. */
+function matchStatesEqual(
+  a: Record<string, MatchStateDTO>,
+  b: Record<string, MatchStateDTO>,
+): boolean {
+  const ak = Object.keys(a);
+  if (ak.length !== Object.keys(b).length) return false;
+  for (const k of ak) {
+    if (!(k in b)) return false;
+    if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) return false;
+  }
+  return true;
 }
 
 function buildLiveState(matchStates: Record<string, MatchStateDTO>): LiveScheduleState {
@@ -92,7 +112,11 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
   canonicalVersionsByMatchId: {},
 
   setMatchStates: (matchStates) =>
-    set({ matchStates, liveState: buildLiveState(matchStates) }),
+    set((prev) =>
+      matchStatesEqual(prev.matchStates, matchStates)
+        ? prev
+        : { matchStates, liveState: buildLiveState(matchStates) },
+    ),
 
   setMatchState: (matchId, state) =>
     set((prev) => {
@@ -103,10 +127,6 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
       };
     }),
 
-  setCurrentTime: (time) =>
-    set((state) => ({
-      liveState: state.liveState ? { ...state.liveState, currentTime: time } : null,
-    })),
   setLastSynced: (time) =>
     set((state) => ({
       liveState: state.liveState ? { ...state.liveState, lastSynced: time } : null,

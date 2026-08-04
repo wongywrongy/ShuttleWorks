@@ -21,11 +21,8 @@ export {
   CardContent,
   type CardProps,
 } from './Card';
-export { Input } from './Input';
 export { Select, type SelectProps, type SelectOption } from './Select';
-export { Label } from './Label';
 export { Separator } from './Separator';
-export { PageHeader } from './PageHeader';
 export { StatusPill, type PillTone } from './StatusPill';
 export {
   StatusBar,
@@ -33,6 +30,7 @@ export {
   type StatusCountItem,
 } from './StatusBar';
 export { Modal } from './Modal';
+export { Notice, type NoticeProps, type NoticeTone } from './Notice';
 export { Hint, useHint } from './Hint';
 export { Toast, ToastStack, type ToastData, type ToastLevel } from './Toast';
 export {
@@ -40,6 +38,7 @@ export {
   GANTT_GEOMETRY,
   placementBox,
   type GanttDensity,
+  type GanttLaneOrientation,
   type GanttGeometryTier,
   type Placement,
   type GanttCell,

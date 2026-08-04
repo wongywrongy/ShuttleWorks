@@ -96,3 +96,29 @@ def _restore_modules():
     importlib.reload(app.config)
     import database.session
     importlib.reload(database.session)
+
+
+def test_cloud_mode_refuses_console_email_backend(monkeypatch):
+    """SP-CLOUD-2: the console backend logs raw reset/invite tokens --
+    cloud startup must fail closed without SMTP delivery."""
+    from app.config import Settings
+
+    with pytest.raises(Exception) as e:
+        Settings(
+            environment="cloud",
+            database_url="postgresql://u:p@db/x",
+            auth_mode="cloud",
+            session_cookie_secure=True,
+            email_backend="console",
+        )
+    assert "EMAIL_BACKEND=smtp" in str(e.value)
+
+    ok = Settings(
+        environment="cloud",
+        database_url="postgresql://u:p@db/x",
+        auth_mode="cloud",
+        session_cookie_secure=True,
+        email_backend="smtp",
+        smtp_host="smtp.example.com",
+    )
+    assert ok.email_backend == "smtp"

@@ -14,6 +14,9 @@ export interface Participant {
   id: string;
   name: string;
   members?: string[] | null;
+  /** Seed number (1 = top seed); null/absent = unseeded. Mirrors backend
+   *  `ParticipantOut.seed` so an echo through the upsert preserves seeds. */
+  seed?: number | null;
 }
 
 interface ParticipantInput {
@@ -48,6 +51,10 @@ interface CreateTournamentIn {
 interface BracketSlotDTO {
   participant_id: string | null;
   feeder_play_unit_id: string | null;
+  /** Loser routing (draw-formats program): 'loser' means the LOSER of the
+   *  feeder play unit takes this slot (double elim / Monrad / compass drops).
+   *  Winner slots omit the field entirely — back-compat by omission. */
+  feeder_take?: 'loser' | null;
 }
 
 export interface PlayUnitDTO {
@@ -65,6 +72,9 @@ export interface PlayUnitDTO {
    *  recording a result (SP-F3). Optional for older fixtures; the backend
    *  always serializes it (defaults to 1 for a freshly generated match). */
   version?: number;
+  /** Segment code for multi-segment formats (DE/Monrad/compass): 'W', 'L',
+   *  'GF', 'P5_8', compass letters… Absent/null for se/rr units. */
+  segment?: string | null;
 }
 
 export interface AssignmentDTO {
@@ -98,18 +108,66 @@ export interface ResultDTO {
   finished_at_slot: number | null;
   /** Present only when the bracket Engine runs in Sets mode. */
   score?: BracketScore | null;
+  /** Contingency annotation only — does not affect advancement/BYE
+   *  routing, which stays keyed off `walkover`. */
+  reason?: 'walkover' | 'retired' | 'forfeit' | null;
+}
+
+/** One named draw segment of a multi-segment format (DE 'W'/'L'/'GF',
+ *  Monrad plates, compass directions). Ordered for stacked rendering. */
+export interface SegmentDTO {
+  id: string;
+  label: string;
+  order: number;
+  /** Round-major play-unit ids within this segment. */
+  rounds: string[][];
+  /** Final classification positions this segment decides (Monrad). */
+  positions?: number[] | null;
+}
+
+/** One row of a standings table (RR / Swiss / group pools) — BWF tie-break
+ *  chain is applied backend-side; `position` is the resolved rank. */
+export interface StandingRowDTO {
+  participant_id: string;
+  played: number;
+  wins: number;
+  losses: number;
+  games_won: number;
+  games_lost: number;
+  points_won: number;
+  points_lost: number;
+  position: number;
 }
 
 interface EventDTO {
   id: string;
   discipline: string;
-  format: "se" | "rr";
+  /** Draw format id ('se' | 'rr' | 'de' | 'monrad' | …) — widened to string
+   *  with the format registry; unknown ids must render, not crash. */
+  format: string;
   bracket_size: number | null;
   participant_count: number;
   rounds: string[][];
   /** Per-event status sent by the backend since A.4. Optional for
    *  backwards compat — old draws without the column default to 'draft'. */
   status?: BracketEventStatus;
+  /** Per-draw configuration echoes (draw-formats program) — ALL optional so
+   *  older fixtures/snapshots stay valid. */
+  seeded_count?: number | null;
+  rr_rounds?: number | null;
+  /** Format-specific config blob (grand_final_reset, consolation,
+   *  swiss_rounds, …) as persisted on the event row. */
+  config?: Record<string, unknown>;
+  /** Multi-segment structure for DE/Monrad/compass; null/absent otherwise. */
+  segments?: SegmentDTO[] | null;
+  /** Standings for has-standings formats (rr/swiss); null/absent otherwise. */
+  standings?: StandingRowDTO[] | null;
+  /** This event's own participant rows (SP-D7 S3, additive — optional for
+   *  older fixtures). Unlike the flat `TournamentDTO.participants`, this
+   *  attributes DRAFT entries to their event, so the roster can derive
+   *  Events badges pre-generate and echo an event's current participants
+   *  through `eventUpsert` safely. */
+  participants?: Participant[];
 }
 
 export interface TournamentDTO {
@@ -215,17 +273,32 @@ export type BracketEventStatus = 'draft' | 'generated' | 'started';
 /** POST /tournaments/{tid}/bracket/events/{event_id} body. */
 export interface BracketEventUpsertIn {
   discipline: string;
-  format: 'se' | 'rr';
+  /** Registry-validated format id — widened to string (backend 422s unknowns). */
+  format: string;
   bracket_size?: number | null;
   seeded_count?: number;
   rr_rounds?: number;
   duration_slots?: number;
+  /** Format-specific config blob (target:'config' picker fields). */
+  config?: Record<string, unknown>;
   participants: Array<{
     id: string;
     name: string;
     members?: string[];
     seed?: number;
   }>;
+}
+
+/** PATCH /tournaments/{tid}/bracket/events/{event_id} body — draft-only
+ *  config edits that avoid the upsert-wipes-participants trap. Returns the
+ *  same tournament-shaped DTO as the upsert. */
+export interface BracketEventPatchIn {
+  format?: string;
+  bracket_size?: number | null;
+  seeded_count?: number;
+  rr_rounds?: number;
+  duration_slots?: number;
+  config?: Record<string, unknown>;
 }
 
 /** POST /tournaments/{tid}/bracket/events/{event_id}/generate body. */

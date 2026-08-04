@@ -98,7 +98,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
               type="button"
               onClick={handleCommit}
               disabled={loading}
-              className={`${INTERACTIVE_BASE} rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground`}
+              className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
             >
               {loading ? 'Committing…' : 'Commit replan'}
             </button>
@@ -130,7 +130,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
               onClick={() => setPick(opt.id)}
               className={`${INTERACTIVE_BASE} w-full text-left rounded border px-3 py-2 text-sm ${
                 pick === opt.id
-                  ? 'border-primary bg-primary/5'
+                  ? 'border-accent bg-accent/5'
                   : 'border-border bg-card hover:bg-muted/40'
               }`}
             >
@@ -152,7 +152,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
             type="button"
             onClick={handlePreview}
             disabled={loading}
-            className={`${INTERACTIVE_BASE} rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground`}
+            className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
           >
             {loading ? 'Solving…' : 'Preview impact'}
           </button>

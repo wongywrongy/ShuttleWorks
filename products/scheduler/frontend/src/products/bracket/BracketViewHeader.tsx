@@ -7,10 +7,18 @@ import type { BracketView } from "../../lib/bracketTabs";
 import { useTournamentId } from "../../hooks/useTournamentId";
 import { INTERACTIVE_BASE } from "../../lib/utils";
 import { ActionsBar } from "../../components/control-plane";
+import { Seg, type SegOption } from "../../platform/settings/SettingsControls";
 import { EventsFilterStrip } from "./EventsFilterStrip";
 import { SourceChip } from "../../components/SourceChip";
 import { formatLabel, disciplineLabel } from "./bracketLabels";
+import { descriptorFor } from "./formatRegistry";
 import { BracketScheduleModal } from "./BracketScheduleModal";
+import type { BracketLayoutMode } from "./DrawView";
+
+const LAYOUT_OPTIONS: readonly SegOption<BracketLayoutMode>[] = [
+  { value: "one-sided", label: "One-sided" },
+  { value: "mirrored", label: "Mirrored" },
+];
 
 interface Props {
   /** Bare view name — drives the eyebrow. Derived from ``activeTab``
@@ -25,6 +33,11 @@ interface Props {
   /** Re-fetch the bracket after a server-side mutation (schedule-next
    *  returns a solver summary, not the tournament DTO). */
   onRefresh: () => Promise<void>;
+  /** SE canvas layout (draw view only) — owned by ``BracketTabBody``
+   *  alongside ``eventId`` so the toggle survives view switches.
+   *  Session-only, no persistence. */
+  drawLayout?: BracketLayoutMode;
+  onDrawLayout?: (mode: BracketLayoutMode) => void;
 }
 
 const VIEW_LABEL: Record<Props["view"], string> = {
@@ -48,7 +61,15 @@ const VIEW_LABEL: Record<Props["view"], string> = {
  * Reset lives in Setup → Tournament data (destructive actions don't
  * ride along on every view).
  */
-export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }: Props) {
+export function BracketViewHeader({
+  view,
+  data,
+  eventId,
+  onEventId,
+  onRefresh,
+  drawLayout,
+  onDrawLayout,
+}: Props) {
   const api = useBracketApi();
   const tid = useTournamentId();
   const navigate = useNavigate();
@@ -118,6 +139,20 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
                   {eventFormatLabel}
                 </span>
               )}
+              {/* Layout toggle — bracket-renderer draws only (grid/segments/
+                  swiss own their layouts). One-sided is the classic printed
+                  cascade and the default; mirrored stays as the wall-display
+                  option. */}
+              {descriptorFor(selectedEvent?.format)?.renderer === "bracket" &&
+                drawLayout &&
+                onDrawLayout && (
+                <Seg
+                  options={LAYOUT_OPTIONS}
+                  value={drawLayout}
+                  onChange={onDrawLayout}
+                  ariaLabel="Bracket layout"
+                />
+              )}
             </>
           ) : (
             <EventsFilterStrip />
@@ -125,16 +160,14 @@ export function BracketViewHeader({ view, data, eventId, onEventId, onRefresh }:
         </>
       }
     >
-      <span className="font-mono">
-        <StatusBar
-          items={[
-            { tone: "done", label: "DONE", count: counts.done },
-            { tone: "green", label: "LIVE", count: counts.live },
-            { tone: "amber", label: "READY", count: counts.ready },
-            { tone: "idle", label: "PEND", count: counts.pending },
-          ]}
-        />
-      </span>
+      <StatusBar
+        items={[
+          { tone: "done", label: "DONE", count: counts.done },
+          { tone: "green", label: "LIVE", count: counts.live },
+          { tone: "amber", label: "READY", count: counts.ready },
+          { tone: "idle", label: "PEND", count: counts.pending },
+        ]}
+      />
       {view === "schedule" && <ExportMenu api={api} />}
       {(view === "schedule" || view === "live") && schedulableCount > 0 && (
         <button

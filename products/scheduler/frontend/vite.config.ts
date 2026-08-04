@@ -1,10 +1,17 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Bundle analysis — opt-in via ANALYZE=1 npm run build (perf diagnosis only).
+    process.env.ANALYZE
+      ? visualizer({ filename: 'dist/stats.html', template: 'treemap', gzipSize: true })
+      : null,
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -18,6 +25,24 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+    },
+    // Pre-transform the lazily-loaded module entrypoints (ModuleOutlet.tsx)
+    // + Meet's own lazy sub-pages (MeetProduct.tsx) so the FIRST tab click
+    // in dev doesn't pay cold esbuild-transform cost. Perf pass 2 (dev-UX).
+    warmup: {
+      clientFiles: [
+        './src/products/meet/MeetProduct.tsx',
+        './src/products/meet/TournamentSetupPage.tsx',
+        './src/products/meet/roster/RosterTab.tsx',
+        './src/products/meet/matches/MatchesTab.tsx',
+        './src/products/meet/SchedulePage.tsx',
+        './src/products/meet/MatchControlCenterPage.tsx',
+        './src/products/bracket/BracketProduct.tsx',
+        './src/products/bracket/BracketTab.tsx',
+        './src/products/operations/OperationsProduct.tsx',
+        './src/products/display/DisplayProduct.tsx',
+        './src/products/display/PublicDisplayPage.tsx',
+      ],
     },
   },
   build: {

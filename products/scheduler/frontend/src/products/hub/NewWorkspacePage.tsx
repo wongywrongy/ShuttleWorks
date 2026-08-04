@@ -72,7 +72,7 @@ export function NewWorkspacePage() {
         <ShuttleWorksMark />
       </header>
 
-      <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+      <div className="sw-float-in mx-auto max-w-3xl space-y-6 px-6 py-10">
         <div className="space-y-1">
           <Eyebrow framed>CONTROL PLANE</Eyebrow>
           <h1 className="text-2xl font-semibold">New workspace</h1>
@@ -110,7 +110,7 @@ export function NewWorkspacePage() {
               className={[
                 'flex flex-col gap-2 rounded-md border p-4 text-left transition-colors sm:col-span-2',
                 selected === 'custom'
-                  ? 'border-foreground bg-muted/30'
+                  ? 'border-accent bg-accent/10'
                   : 'border-dashed border-border hover:bg-muted/40',
               ].join(' ')}
             >

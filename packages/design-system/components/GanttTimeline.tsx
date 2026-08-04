@@ -28,9 +28,10 @@ import { cn } from '../lib/utils';
 // --- geometry --------------------------------------------------------------
 
 /** Density tiers. `standard` = Schedule/Live operator grid; `compact`
- *  = solver-optimization view. Single source of truth — no consumer
- *  hard-codes slot/row/label pixels. */
-export type GanttDensity = 'standard' | 'compact';
+ *  = solver-optimization view; `roomy` = the Run floor board (taller
+ *  rows fit two-line chips and readable vertical sub-lanes). Single
+ *  source of truth — no consumer hard-codes slot/row/label pixels. */
+export type GanttDensity = 'standard' | 'compact' | 'roomy';
 
 export interface GanttGeometryTier {
   /** Pixel width of one time-slot column. */
@@ -44,7 +45,16 @@ export interface GanttGeometryTier {
 export const GANTT_GEOMETRY: Record<GanttDensity, GanttGeometryTier> = {
   standard: { slot: 80, row: 40, label: 56 },
   compact: { slot: 48, row: 32, label: 56 },
+  roomy: { slot: 80, row: 64, label: 56 },
 };
+
+/** How sub-lanes split an overlapping cluster. `horizontal` (default)
+ *  divides the block's WIDTH — right for uniform span=1 boards where a
+ *  double-booked cell shows two chips side-by-side (the Plan board).
+ *  `vertical` divides the ROW HEIGHT, keeping each block's full time
+ *  span — right for live boards where a grown playing chip can cross a
+ *  later chip on the same court (the Run board). */
+export type GanttLaneOrientation = 'horizontal' | 'vertical';
 
 // --- types -----------------------------------------------------------------
 
@@ -125,6 +135,9 @@ export interface GanttTimelineProps {
    *  grow taller). Real layout (not a CSS transform), so drag hit-testing and
    *  scrolling keep working. */
   slotScale?: number;
+  /** Sub-lane split direction for overlapping blocks (default `horizontal`).
+   *  See `GanttLaneOrientation`. */
+  laneOrientation?: GanttLaneOrientation;
   /** Forwarded to the outer wrapper. */
   className?: string;
   /** Forwarded to the outer wrapper (e.g. `data-testid`). */
@@ -135,25 +148,32 @@ export interface GanttTimelineProps {
 
 /**
  * Pure (courtIndex, startSlot, span) → pixel box. Unit-tested in
- * `ganttTimeline.test.tsx`. `laneIndex`/`laneCount` apply horizontal
- * sub-lane packing: a 2-lane block is half width and offset by its
- * lane; a 1-lane block keeps full slot width. `span` is clamped to
- * >= 1 so a zero/garbage span still renders a visible block.
+ * `ganttTimeline.test.tsx`. `laneIndex`/`laneCount` apply sub-lane
+ * packing per `orientation`: `horizontal` (default) shrinks a 2-lane
+ * block to half WIDTH and offsets it by its lane; `vertical` keeps the
+ * full time span and splits the ROW HEIGHT instead. A 1-lane block is
+ * unaffected either way. `span` is clamped to >= 1 so a zero/garbage
+ * span still renders a visible block.
  */
 export function placementBox(
   placement: Placement,
   minSlot: number,
   tier: GanttGeometryTier,
+  orientation: GanttLaneOrientation = 'horizontal',
 ): GanttBlockBox {
   const laneCount = Math.max(1, placement.laneCount ?? 1);
   const laneIndex = Math.min(Math.max(0, placement.laneIndex ?? 0), laneCount - 1);
   const span = Math.max(1, placement.span);
   const fullWidth = span * tier.slot;
-  const width = laneCount > 1 ? fullWidth / laneCount : fullWidth;
   const baseLeft = (placement.startSlot - minSlot) * tier.slot;
+  const baseTop = placement.courtIndex * tier.row;
+  if (orientation === 'vertical' && laneCount > 1) {
+    const height = tier.row / laneCount;
+    return { left: baseLeft, top: baseTop + laneIndex * height, width: fullWidth, height };
+  }
+  const width = laneCount > 1 ? fullWidth / laneCount : fullWidth;
   const left = laneCount > 1 ? baseLeft + laneIndex * width : baseLeft;
-  const top = placement.courtIndex * tier.row;
-  return { left, top, width, height: tier.row };
+  return { left, top: baseTop, width, height: tier.row };
 }
 
 // --- memoized positioned block --------------------------------------------
@@ -231,6 +251,7 @@ export function GanttTimeline({
   renderCourtLabel = defaultRenderCourtLabel,
   currentSlot,
   slotScale = 1,
+  laneOrientation = 'horizontal',
   className,
   ...rest
 }: GanttTimelineProps) {
@@ -255,8 +276,12 @@ export function GanttTimeline({
   // `React.memo` bail out — the default shallow compare sees the same
   // `box` reference across renders.
   const placementsWithBoxes = useMemo(
-    () => placements.map((p) => ({ placement: p, box: placementBox(p, minSlot, tier) })),
-    [placements, minSlot, tier],
+    () =>
+      placements.map((p) => ({
+        placement: p,
+        box: placementBox(p, minSlot, tier, laneOrientation),
+      })),
+    [placements, minSlot, tier, laneOrientation],
   );
 
   return (
@@ -275,7 +300,10 @@ export function GanttTimeline({
               key={slotId}
               style={{ width: tier.slot }}
               className={cn(
-                'flex-shrink-0 border-l border-border px-1 py-1 text-center text-2xs tabular-nums',
+                // whitespace-nowrap + visible overflow: a time label ("12:00")
+                // must never wrap/clip into "12:0" when the column is narrower
+                // than the text — label-less neighbors make bleed harmless.
+                'flex-shrink-0 overflow-visible whitespace-nowrap border-l border-border px-0.5 py-1 text-center text-2xs tabular-nums',
                 slotId === currentSlot
                   ? 'bg-status-live/15 font-semibold text-status-live'
                   : 'text-muted-foreground',
@@ -345,6 +373,19 @@ export function GanttTimeline({
               bottom: 0,
             }}
           >
+            {/* Now-line — a vertical hairline at the currentSlot column's
+                leading edge, in the same mesh-relative coordinate space the
+                block boxes use (this overlay already starts after the
+                court-label column). */}
+            {currentSlot != null &&
+              currentSlot >= minSlot &&
+              currentSlot < minSlot + slotCount && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 z-10 w-px bg-accent/50"
+                  style={{ left: (currentSlot - minSlot) * tier.slot }}
+                />
+              )}
             {placementsWithBoxes.map(({ placement, box }) => (
               <PositionedBlock
                 key={placement.key}

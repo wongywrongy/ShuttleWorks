@@ -8,7 +8,7 @@ caller records results between calls.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import List, Optional, Tuple
+from typing import List, Mapping, Optional, Tuple
 
 from scheduler_core import schedule
 from scheduler_core.domain.models import (
@@ -26,6 +26,7 @@ from scheduler_core.domain.tournament import (
 )
 
 from .adapter import advance_current_slot, build_problem
+from .player_constraints import PlayerExtras
 from .state import find_ready_play_units, is_assignment_locked
 
 
@@ -60,6 +61,10 @@ class TournamentDriver:
     config: ScheduleConfig
     solver_options: Optional[SolverOptions] = None
     rest_between_rounds: int = 1
+    # SP-D7 S2: per-roster-player availability windows + rest_slots,
+    # threaded into every build_problem call. None → uniform
+    # round-window behaviour, exactly as before.
+    player_extras: Optional[Mapping[str, PlayerExtras]] = None
 
     def prepare_next_round_problem(
         self,
@@ -88,6 +93,7 @@ class TournamentDriver:
             ready,
             config=round_config,
             solver_options=self.solver_options,
+            player_extras=self.player_extras,
         )
         return ready, current_slot, problem
 
@@ -198,6 +204,7 @@ class TournamentDriver:
             config=self.config,
             solver_options=self.solver_options,
             previous_assignments=previous_assignments,
+            player_extras=self.player_extras,
         )
 
         result = schedule(problem, options=self.solver_options)
@@ -312,6 +319,7 @@ class TournamentDriver:
             config=self.config,
             solver_options=self.solver_options,
             previous_assignments=previous_assignments,
+            player_extras=self.player_extras,
         )
         result = schedule(problem, options=self.solver_options)
 

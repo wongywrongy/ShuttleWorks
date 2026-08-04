@@ -2,12 +2,13 @@ import { cn } from '../lib/utils';
 import type { PillTone } from './StatusPill';
 
 /**
- * StatusBar — a row of mono-uppercase status counts.
+ * StatusBar — a row of uppercase micro-label status counts.
  *
  * Telemetry strip for surfaces that need an at-a-glance state tally
  * (e.g. the bracket chrome's DONE / LIVE / READY / PEND counters). Each
- * cell is a `StatusCount`: a `--status-*`-coloured label next to a
- * tabular-nums count.
+ * cell is a `StatusCount`: a `--status-*`-coloured micro-label
+ * (tracking-[0.08em]) next to an `sw-num` tabular count — the one-family
+ * Geist data treatment, not a separate mono face.
  *
  * Pure presentational — the consumer maps its own domain state onto
  * `tone` / `label` / `count`. Tones route through the same `PillTone`
@@ -36,13 +37,13 @@ export function StatusCount({ tone, label, count }: StatusCountItem) {
     <span className="inline-flex items-baseline gap-1">
       <span
         className={cn(
-          'text-2xs font-semibold uppercase tracking-wider',
+          'text-2xs font-semibold uppercase tracking-[0.08em]',
           TONE_TEXT[tone]
         )}
       >
         {label}
       </span>
-      <span className="tabular-nums text-xs text-ink">{count}</span>
+      <span className="sw-num text-xs text-ink">{count}</span>
     </span>
   );
 }
@@ -54,7 +55,7 @@ interface StatusBarProps {
 
 export function StatusBar({ items, className }: StatusBarProps) {
   return (
-    <div className={cn('flex items-center gap-2 font-mono', className)}>
+    <div className={cn('flex items-center gap-2', className)}>
       {items.map((item) => (
         <StatusCount key={item.label} {...item} />
       ))}

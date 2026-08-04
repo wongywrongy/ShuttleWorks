@@ -6,7 +6,9 @@ import { useState } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
 import type { ScheduleAssignment, MatchDTO, MatchStateDTO } from '../../../../api/dto';
 import { getMatchLabel } from '../../../../utils/matchUtils';
+import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../../lib/selectableRow';
 import { ACTION_BTN } from './styles';
+import { useCanEdit } from '../../../../hooks/useCanEdit';
 
 export function FinishedCard({
   assignment,
@@ -30,6 +32,11 @@ export function FinishedCard({
   ) => Promise<void>;
 }) {
   const [updating, setUpdating] = useState(false);
+  // A viewer may not drive the live day (audit A2): fold the permission into
+  // the in-flight flag so every action button here carries the `disabled`
+  // vocabulary, which blocks pointer AND keyboard.
+  const canEditWorkspace = useCanEdit();
+  const locked = updating || !canEditWorkspace;
   if (!match) return null;
 
   const sideANames = (match.sideA || []).map((id) => playerNames.get(id) || id).join(' & ');
@@ -51,10 +58,11 @@ export function FinishedCard({
 
   return (
     <div
-      onClick={onSelect}
+      {...selectableRowProps(onSelect, isSelected)}
       style={{ gridTemplateColumns: 'auto auto 1fr auto auto' }}
       className={[
         'motion-enter grid cursor-pointer items-center gap-2 border-l-2 px-2 py-1 text-xs transition-colors',
+        SELECTABLE_ROW_FOCUS,
         isSelected
           ? 'border-l-status-started bg-status-started-bg'
           : 'border-l-status-done bg-muted/40 hover:bg-muted/60',
@@ -73,7 +81,7 @@ export function FinishedCard({
         {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
       </span>
       {score ? (
-        <span className="font-mono text-xs font-semibold tabular-nums text-status-started">
+        <span className="sw-num text-xs font-semibold tabular-nums text-status-started">
           {score.sideA}–{score.sideB}
         </span>
       ) : (
@@ -84,7 +92,7 @@ export function FinishedCard({
           e.stopPropagation();
           handleUndo();
         }}
-        disabled={updating}
+        disabled={locked}
         className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
         title="Undo finish — back to in progress"
         aria-label="Undo finish"

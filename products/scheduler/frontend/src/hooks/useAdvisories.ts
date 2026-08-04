@@ -2,20 +2,25 @@
  * Advisory polling hook.
  *
  * Polls ``GET /schedule/advisories`` on a 15-second cadence while the
- * tab is visible, dedupes by advisory id, and writes the result into
- * ``useAppStore.advisories``. On every *new* warn/critical advisory it
- * surfaces a one-line toast with a "Review" action that opens the
- * matching proposal flow.
+ * tab is visible and writes the result into ``useUiStore.advisories`` —
+ * the single alert pipeline. Advisories are classified and rendered in
+ * exactly one place by severity (decision → banner, warning/info → the
+ * Alerts & Activity rail); see ``platform/domain/alertModel``. This hook
+ * NO LONGER pushes toasts — the previous toast-per-advisory duplicated
+ * every entry that the banner already showed
+ * (SPEC_AMENDMENT_alerts_activity_panel.md §1/§3).
  *
  * Mounted at the top of ``AppShell`` so a single instance covers every
  * page (Schedule, Live, TV, etc.). The hook returns `null` — its
  * effects are entirely store-side.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
-import type { Advisory } from '../api/dto';
 import { apiClient } from '../api/client';
+import { isTerminalPollError } from '../lib/pollPolicy';
+import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { useUiStore } from '../store/uiStore';
+import { useAlertStore } from '../store/alertStore';
 import { useTournamentIdOrNull } from './useTournamentId';
 
 const POLL_MS = 15_000;
@@ -23,9 +28,6 @@ const POLL_MS = 15_000;
 export function useAdvisories(): null {
   const tid = useTournamentIdOrNull();
   const setAdvisories = useUiStore((s) => s.setAdvisories);
-  const setPendingAdvisoryReview = useUiStore((s) => s.setPendingAdvisoryReview);
-  const pushToast = useUiStore((s) => s.pushToast);
-  const seenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!tid) return;
@@ -35,34 +37,23 @@ export function useAdvisories(): null {
     const tick = async () => {
       if (cancelled) return;
       // Skip the network roundtrip when the tab is hidden — the user
-      // can't see toasts or banners anyway, and a poll-while-idle on
-      // every browser tab adds up across many open windows.
-      if (typeof document !== 'undefined' && document.hidden) return;
+      // can't see banners anyway, and a poll-while-idle on every browser
+      // tab adds up across many open windows.
+      if (isPageHidden()) return;
       try {
         const advisories = await apiClient.getAdvisories(tid);
         if (cancelled) return;
-        // Dedupe + toast for genuinely new warn/critical entries.
-        const known = seenIdsRef.current;
-        const fresh: Advisory[] = advisories.filter((a) => !known.has(a.id));
-        for (const a of fresh) {
-          if (a.severity === 'warn' || a.severity === 'critical') {
-            pushToast({
-              level: a.severity === 'critical' ? 'error' : 'warn',
-              message: a.summary,
-              detail: a.detail ?? undefined,
-              actionLabel: a.suggestedAction ? 'Review' : undefined,
-              // Sets a "review this advisory" intent on the store; the
-              // Live page (and any other page that mounts a dispatcher)
-              // observes the intent and opens the matching dialog.
-              onAction: a.suggestedAction
-                ? () => setPendingAdvisoryReview(a)
-                : undefined,
-            });
-          }
-        }
-        seenIdsRef.current = new Set(advisories.map((a) => a.id));
         setAdvisories(advisories);
+        // Feed the rail's warning/info conditions from the same poll —
+        // one ingress, no second render path.
+        useAlertStore.getState().syncAdvisories(advisories);
       } catch (err) {
+        if (isTerminalPollError(err)) {
+          // Workspace deleted / access revoked — retrying can never
+          // succeed; stop the loop instead of storming 403s forever.
+          cancelled = true;
+          return;
+        }
         // Swallow — advisor is non-critical; a failed fetch shouldn't
         // disrupt the UI. The next tick will retry.
         if (import.meta.env.DEV) {
@@ -86,19 +77,18 @@ export function useAdvisories(): null {
     // When the tab becomes visible again after being hidden, fire an
     // immediate tick so the operator sees fresh advisories without
     // waiting for the next 15s slot.
-    const onVisibilityChange = () => {
-      if (!cancelled && !document.hidden) {
+    const unsubscribe = subscribeVisibility((hidden) => {
+      if (!cancelled && !hidden) {
         void tick();
       }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
+    });
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
+      unsubscribe();
     };
-  }, [tid, pushToast, setAdvisories, setPendingAdvisoryReview]);
+  }, [tid, setAdvisories]);
 
   return null;
 }

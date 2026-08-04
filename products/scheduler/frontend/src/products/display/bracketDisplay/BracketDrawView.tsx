@@ -36,7 +36,7 @@ export function BracketDrawView({
     <div className="flex h-full gap-6 overflow-auto p-4">
       {rounds.map((roundPuIds, roundIndex) => (
         <div key={roundIndex} className="flex min-w-[18rem] flex-col justify-center gap-4">
-          <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Round {roundIndex + 1}
           </h3>
           {roundPuIds.map((puId) => {

@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .m { font-variant-numeric: tabular-nums; letter-spacing:0.01em; }
+  @keyframes lpulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .lpulse { animation:lpulse 1.6s ease-in-out infinite; }
+  @keyframes floatin { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  .tn { font-variant-numeric: tabular-nums; }
+  .kbd { font-size:10px; border:1px solid #2E323B; border-radius:5px; padding:1px 5px; color:#8A8F98; background:#16181D; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:radial-gradient(1100px 480px at 72% -6%, rgba(91,157,255,.13), transparent 62%), #050507; padding:44px 26px 96px; font-family:'Geist',-apple-system,sans-serif; color:#E6E8EC; -webkit-font-smoothing:antialiased;">
+  <div style="max-width:1280px; margin:0 auto; display:flex; flex-direction:column; gap:12px;">
+
+    <!-- INTRO -->
+    <div style="display:flex; flex-direction:column; gap:14px; padding-bottom:16px;">
+      <span style="display:inline-flex; width:fit-content; align-items:center; gap:8px; font-size:12px; font-weight:600; letter-spacing:0.02em; text-transform:uppercase; color:#5B9DFF;"><span style="width:8px;height:8px;border-radius:9999px;background:#5B9DFF;"></span>Final Direction · Warmed-B · Vitest-green · 3b chips</span>
+      <h1 style="margin:0; font-size:42px; font-weight:700; letter-spacing:-0.03em; line-height:1.0; color:#F4F5F7;">The full page set, one language</h1>
+      <p style="margin:0; max-width:800px; font-size:15px; line-height:1.6; color:#8A8F98;">Direction B's dense command-plane, warmed with A's rounder corners and gentle elevation, a vivid Vitest-green accent, terminal-crisp mono data, and the locked <b style="color:#C7CBD1;">3b muted-solid</b> chips. All five keystone screens in the dark base. Light pairing is the next pass.</p>
+    </div>
+
+    <!-- ========================================================= HUB -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:28px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">01</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Hub — workspace dashboard</h2></div>
+    <div style="width:100%; max-width:1280px; height:640px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5);">
+      <div style="display:flex; align-items:center; gap:14px; height:52px; border-bottom:1px solid #23262D; padding:0 16px;">
+        <span style="display:inline-flex; align-items:center; height:24px; border:1px solid #3A3F49; border-radius:6px; padding:0 10px; font-size:13px; font-weight:600; letter-spacing:-0.005em; color:#F4F5F7;">ShuttleWorks</span>
+        <div style="flex:1; display:flex; justify-content:center;"><div style="display:flex; align-items:center; gap:8px; width:100%; max-width:420px; height:32px; border:1px solid #23262D; border-radius:9px; background:#16181D; padding:0 12px;"><span style="color:#565B66; font-size:13px;">⌕</span><span style="flex:1; font-size:13px; color:#565B66;">Search or jump to…</span><span class="kbd">⌘K</span></div></div>
+        <button style="display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 14px; border:none; border-radius:9px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;">＋ New workspace</button>
+        <span style="width:30px;height:30px;border-radius:9999px;background:#5B9DFF;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;">L</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:2px; height:40px; border-bottom:1px solid #23262D; padding:0 14px;">
+        <span style="font-size:12px; font-weight:500; color:#E6E8EC; background:#1B1E24; border-radius:7px; padding:5px 11px;">All <span style="color:#565B66;" class="tn">6</span></span>
+        <span style="font-size:12px; color:#8A8F98; padding:5px 11px;">Active <span style="color:#565B66;" class="tn">3</span></span>
+        <span style="font-size:12px; color:#8A8F98; padding:5px 11px;">Draft <span style="color:#565B66;" class="tn">1</span></span>
+        <span style="font-size:12px; color:#8A8F98; padding:5px 11px;">Shared <span style="color:#565B66;" class="tn">2</span></span>
+        <span style="font-size:12px; color:#8A8F98; padding:5px 11px;">Needs attention <span style="color:#E0B24A;" class="tn">2</span></span>
+      </div>
+      <div style="display:flex; height:548px;">
+        <div style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid #23262D; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#565B66;"><span style="width:60px;">Date</span><span style="flex:1;">Workspace</span><span style="width:170px;">Next action</span></div>
+          <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; background:#16181D; border-bottom:1px solid #1F2229; cursor:pointer;"><span class="m" style="width:60px; font-size:12px; color:#8A8F98;">Jul 12</span><span style="flex:1; display:flex; align-items:center; gap:8px;"><span style="font-size:14px; font-weight:500; color:#F4F5F7;">Bay Area HS Invitational</span></span><span style="width:150px; font-size:13px; color:#8A8F98;">Finalize schedule</span></div>
+          <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid #1F2229; cursor:pointer;"><span class="m" style="width:60px; font-size:12px; color:#8A8F98;">Jul 19</span><span style="flex:1; display:flex; align-items:center; gap:8px;"><span style="font-size:14px; font-weight:500; color:#F4F5F7;">Regional Bracket Championship</span></span><span style="width:150px; font-size:13px; color:#E0B24A;">Seed 2 events</span></div>
+          <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid #1F2229; cursor:pointer;"><span class="m" style="width:60px; font-size:12px; color:#8A8F98;">Aug 03</span><span style="flex:1; display:flex; align-items:center; gap:8px;"><span style="font-size:14px; font-weight:500; color:#F4F5F7;">Summer Hybrid Cup</span></span><span style="width:150px; font-size:13px; color:#8A8F98;">Import roster</span></div>
+          <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid #1F2229; cursor:pointer;"><span class="m" style="width:60px; font-size:12px; color:#565B66;">—</span><span style="flex:1; display:flex; align-items:center; gap:8px;"><span style="font-size:14px; font-weight:500; color:#8A8F98;">Untitled meet</span></span><span style="width:150px; font-size:13px; color:#E0B24A;">Set event date</span></div>
+          <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; opacity:.5; border-bottom:1px solid #1F2229; cursor:pointer;"><span class="m" style="width:60px; font-size:12px; color:#8A8F98;">Jun 14</span><span style="flex:1; display:flex; align-items:center; gap:8px;"><span style="font-size:14px; font-weight:500; color:#E6E8EC;">Spring League Finals</span></span><span style="width:150px; font-size:13px; color:#565B66;">Archived</span></div>
+        </div>
+        <aside style="width:322px; flex-shrink:0; border-left:1px solid #23262D; background:#0B0C0F; padding:18px; display:flex; flex-direction:column; gap:16px;">
+          <div><div style="display:flex; align-items:center; gap:8px;"><h3 style="margin:0; font-size:15px; font-weight:600; color:#F4F5F7;">Bay Area HS Invitational</h3></div><p class="m" style="margin:6px 0 0; font-size:11px; color:#8A8F98;">SUN JUL 12 2026 · 4 COURTS</p></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:#23262D; border:1px solid #23262D; border-radius:10px; overflow:hidden;">
+            <div style="background:#0E0F13; padding:11px;"><div class="tn" style="font-size:18px; font-weight:700; color:#F4F5F7;">48</div><div style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#565B66;">matches</div></div>
+            <div style="background:#0E0F13; padding:11px;"><div class="tn" style="font-size:18px; font-weight:700; color:#34D399;">36</div><div style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#565B66;">scheduled</div></div>
+            <div style="background:#0E0F13; padding:11px;"><div class="tn" style="font-size:18px; font-weight:700; color:#E0B24A;">2</div><div style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#565B66;">to do</div></div>
+          </div>
+          <div><div style="font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:#565B66; margin-bottom:8px;">To do</div><div style="display:flex; flex-direction:column; gap:7px;"><div style="display:flex; gap:8px; font-size:12px; color:#E6E8EC;"><span style="color:#E0B24A;">›</span>Assign courts to 12 matches</div><div style="display:flex; gap:8px; font-size:12px; color:#E6E8EC;"><span style="color:#E0B24A;">›</span>Invite 2 assistant operators</div></div></div>
+          <div><div style="font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:#565B66; margin-bottom:8px;">Modules</div><div style="display:flex; flex-direction:column; gap:6px;"><div style="display:flex; justify-content:space-between; font-size:12px;"><span>Meet</span><span class="m" style="font-size:10px; color:#5B9DFF;">ENABLED</span></div><div style="display:flex; justify-content:space-between; font-size:12px;"><span>Display</span><span class="m" style="font-size:10px; color:#5B9DFF;">ENABLED</span></div><div style="display:flex; justify-content:space-between; font-size:12px; color:#8A8F98;"><span>Bracket</span><span class="m" style="font-size:10px; color:#565B66;">AVAILABLE</span></div></div></div>
+          <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;"><button style="height:38px; border:none; border-radius:9px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;">Open workspace →</button><button style="height:38px; border:1px solid #2E323B; border-radius:9px; background:#16181D; color:#E6E8EC; font-size:13px; font-weight:500; font-family:inherit; cursor:pointer;">Settings</button></div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ========================================================= RUN -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">02</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Operations — Run</h2><span style="font-size:13px; color:#565B66;">3b muted-solid chips on the live board</span></div>
+    <div style="width:100%; max-width:1280px; height:700px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#565B66; font-size:14px;">‹</span><span style="font-size:13px; font-weight:600; color:#F4F5F7;">Bay Area HS Invitational</span><span class="m" style="font-size:10px; color:#565B66;">SUN JUL 12 · 4C</span></div>
+        <div style="display:flex; align-items:center; gap:10px;"><span class="m" style="font-size:11px; color:#34D399;">10:04</span><span style="display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(52,211,153,.3); background:rgba(52,211,153,.1); border-radius:6px; padding:2px 8px;"><span class="lpulse" style="width:5px;height:5px;border-radius:9999px;background:#34D399;box-shadow:0 0 8px rgba(52,211,153,.6);"></span><span class="m" style="font-size:10px; font-weight:600; color:#34D399;">LIVE</span></span></div>
+      </div>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:216px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:10px; overflow:hidden;">
+          <div style="padding:7px 12px; font-size:12px; color:#8A8F98;">Overview</div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Meet</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">ENG</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Operations</span><span style="font-size:9px; font-weight:600; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); border-radius:4px; padding:0 4px;">SHR</span></span><span style="font-size:10px; color:#565B66; transform:rotate(90deg);">›</span></div>
+            <div style="margin-left:12px; border-left:1px solid #23262D; padding-left:8px; display:flex; flex-direction:column; gap:2px;"><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Plan</div><div style="position:relative; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:500; color:#F4F5F7; background:#1B1E24;"><span style="position:absolute; left:-9px; top:6px; bottom:6px; width:2px; border-radius:2px; background:#5B9DFF;"></span>Run</div></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Display</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">OUT</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+          </div>
+          <div style="margin:10px 0; border-top:1px solid #23262D;"></div>
+          <div style="padding:0 12px 4px; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Workspace</div>
+          <div style="display:flex; flex-direction:column; gap:2px;"><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Venue &amp; schedule</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Members</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Settings</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; display:flex;">
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column; padding:14px 16px 14px 0; gap:12px;">
+            <div style="display:flex; gap:20px; border-bottom:1px solid #23262D; padding-bottom:2px;">
+              <div style="flex:1; padding:10px 18px 10px 0; border-right:1px solid #23262D;"><div class="tn" style="font-size:18px; font-weight:700; color:#F4F5F7;">3<span style="color:#565B66;">/12</span></div><div style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#565B66;">done</div></div>
+              <div style="flex:1; padding:10px 18px 10px 0; border-right:1px solid #23262D;"><div class="tn" style="font-size:18px; font-weight:700; color:#34D399;">3</div><div style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#565B66;">playing</div></div>
+              <div style="flex:1; padding:10px 18px 10px 0; border-right:1px solid #23262D;"><div class="tn" style="font-size:18px; font-weight:700; color:#E6E8EC;">1</div><div style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#565B66;">courts free</div></div>
+              <div style="flex:1; padding:10px 18px 10px 0;"><div class="tn" style="font-size:18px; font-weight:700; color:#E0B24A;">1</div><div style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#565B66;">late</div></div>
+            </div>
+            <div style="overflow:hidden;">
+              <div style="display:flex; border-bottom:1px solid #23262D;"><div style="width:44px; flex-shrink:0; border-right:1px solid #23262D;"></div><div style="flex:1; position:relative; height:22px;"><div class="m" style="position:absolute; left:6px; top:5px; font-size:10px; color:#565B66;">09:00</div><div class="m" style="position:absolute; left:50%; top:5px; font-size:10px; color:#565B66;">10:00</div><div style="position:absolute; left:50%; top:0; bottom:-208px; width:1px; background:#5B9DFF; z-index:5;"></div></div></div>
+              <!-- C1 -->
+              <div style="display:flex; height:52px; border-bottom:1px solid #1F2229;"><div style="width:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-right:1px solid #23262D; background:#131519;"><span class="m" style="font-size:11px; font-weight:600; color:#8A8F98;">C1</span></div><div style="flex:1; position:relative;">
+                <div style="position:absolute; left:calc(12.5% + 3px); top:6px; width:calc(37.5% - 6px); height:40px; border-radius:8px; background:#1D7D5C; border:1px solid #1B7455; padding:0 10px; display:flex; flex-direction:column; justify-content:center; gap:2px;"><div style="display:flex; align-items:center; gap:6px;"><span class="m" style="width:14px;height:14px;border-radius:4px;background:rgba(255,255,255,.16);color:#EAFBF3;display:inline-flex;align-items:center;justify-content:center;font-size:9px;">M</span><span class="m" style="font-size:11px; font-weight:600; color:#F1FAF6;">MS1</span><span class="m" style="margin-left:auto; font-size:9px; color:#CDEBDE;">14:32</span></div><span style="font-size:10px; color:#DBF1E8;">Chen v Webb</span></div>
+                <div style="position:absolute; left:calc(50% + 3px); top:6px; width:calc(12.5% - 6px); height:40px; border-radius:8px; background:#16181D; border:1px solid #23262D; display:flex; align-items:center; padding:0 8px; gap:5px;"><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">M</span><span class="m" style="font-size:11px; font-weight:600; color:#C7CBD1;">WD1</span></div>
+              </div></div>
+              <!-- C2 -->
+              <div style="display:flex; height:52px; border-bottom:1px solid #1F2229;"><div style="width:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-right:1px solid #23262D; background:#131519;"><span class="m" style="font-size:11px; font-weight:600; color:#8A8F98;">C2</span></div><div style="flex:1; position:relative;">
+                <div style="position:absolute; left:calc(37.5% + 3px); top:6px; width:calc(13.5% - 6px); height:40px; border-radius:8px; background:#A5822F; border:1px solid #9A7A2C; display:flex; flex-direction:column; justify-content:center; padding:0 9px; gap:2px;"><div style="display:flex; align-items:center; gap:5px;"><span class="m" style="width:14px;height:14px;border-radius:4px;background:rgba(0,0,0,.2);color:#F3E7C6;display:inline-flex;align-items:center;justify-content:center;font-size:9px;">B</span><span class="m" style="font-size:11px; font-weight:600; color:#FBF3DF;">XD1</span></div><span style="font-size:9px; font-weight:600; text-transform:uppercase; color:#F0E4C2;">Called</span></div>
+              </div></div>
+              <!-- C3 -->
+              <div style="display:flex; height:52px; border-bottom:1px solid #1F2229;"><div style="width:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-right:1px solid #23262D; background:#131519;"><span class="m" style="font-size:11px; font-weight:600; color:#8A8F98;">C3</span></div><div style="flex:1; position:relative;">
+                <div style="position:absolute; left:3px; top:6px; width:calc(25% - 6px); height:40px; border-radius:8px; background:#131519; border:1px solid #23262D; display:flex; align-items:center; padding:0 8px; gap:5px; opacity:.62;"><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#565B66;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">M</span><span class="m" style="font-size:11px; font-weight:600; color:#565B66; text-decoration:line-through;">MS3</span></div>
+                <div style="position:absolute; left:calc(25% + 3px); top:6px; width:calc(37.5% - 6px); height:40px; border-radius:8px; background:#1D7D5C; border:1px solid #A5822F; padding:0 10px; display:flex; flex-direction:column; justify-content:center; gap:2px;"><div style="display:flex; align-items:center; gap:6px;"><span class="m" style="width:14px;height:14px;border-radius:4px;background:rgba(255,255,255,.16);color:#EAFBF3;display:inline-flex;align-items:center;justify-content:center;font-size:9px;">M</span><span class="m" style="font-size:11px; font-weight:600; color:#F1FAF6;">WD2</span><span class="m" style="margin-left:auto; font-size:9px; font-weight:600; color:#0B0C0F; background:#C79A45; border-radius:3px; padding:1px 5px;">+2</span></div><span style="font-size:10px; color:#DBF1E8;">Kim v Tan</span></div>
+              </div></div>
+              <!-- C4 -->
+              <div style="display:flex; height:52px;"><div style="width:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-right:1px solid #23262D; background:#131519;"><span class="m" style="font-size:11px; font-weight:600; color:#565B66;">C4</span></div><div style="flex:1; display:flex; align-items:center; justify-content:center;"><span style="font-size:10px; color:#565B66;">court free</span></div></div>
+            </div>
+            <div style="flex:1; overflow:hidden;">
+              <div style="padding:10px 16px 6px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:#565B66;">Queue · 9</div>
+              <div style="display:flex; align-items:center; gap:10px; padding:7px 16px; border-top:1px solid #1F2229;"><span class="m" style="width:18px; font-size:10px; color:#565B66;">1</span><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">M</span><span class="m" style="width:44px; font-size:11px; color:#C7CBD1;">MS2</span><span style="flex:1; font-size:13px; color:#E6E8EC;">Park v Ortiz</span><span class="kbd">↵ send</span></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:7px 16px; border-top:1px solid #1F2229; background:#131519;"><span class="m" style="width:18px; font-size:10px; color:#565B66;">2</span><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">B</span><span class="m" style="width:44px; font-size:11px; color:#C7CBD1;">R2-3</span><span style="flex:1; font-size:13px; color:#E6E8EC;">Diaz v Cruz</span><span style="font-size:9px; font-weight:600; font-weight:600; color:#0B0C0F; background:#C79A45; border-radius:3px; padding:1px 5px;">LATE</span></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:7px 16px; border-top:1px solid #1F2229;"><span class="m" style="width:18px; font-size:10px; color:#565B66;">3</span><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">M</span><span class="m" style="width:44px; font-size:11px; color:#C7CBD1;">XD2</span><span style="flex:1; font-size:13px; color:#E6E8EC;">Cruz/Lee v Fox/Obi</span></div>
+            </div>
+          </div>
+          <aside style="width:280px; flex-shrink:0; border-left:1px solid #23262D; background:#0B0C0F; padding:16px; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; align-items:center; gap:8px;"><span class="m" style="width:15px;height:15px;border-radius:4px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:9px;">M</span><span class="m" style="font-size:11px; color:#8A8F98;">MS1</span><span style="margin-left:auto; font-size:9px; font-weight:600; text-transform:uppercase; color:#34D399; background:rgba(52,211,153,.14); border-radius:5px; padding:2px 7px;">Playing</span></div>
+            <div class="m" style="font-size:12px; color:#8A8F98;">C1 · 09:30 · 14:32 elapsed</div>
+            <div style="border:1px solid #23262D; border-radius:9px; background:#0E0F13; padding:12px; display:flex; flex-direction:column; gap:8px;"><div style="font-size:14px; font-weight:600; color:#F4F5F7;">Alex Chen <span style="font-size:11px; color:#565B66; font-weight:400;">Lincoln</span></div><div style="font-size:10px; color:#565B66;">VS</div><div style="font-size:14px; font-weight:600; color:#F4F5F7;">Marcus Webb <span style="font-size:11px; color:#565B66; font-weight:400;">Roosevelt</span></div></div>
+            <button style="height:40px; border:none; border-radius:9px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;">Record result <span class="kbd" style="background:rgba(255,255,255,.15); border-color:transparent; color:#fff;">R</span></button>
+            <button style="height:36px; border:1px solid #2E323B; border-radius:9px; background:#16181D; color:#8A8F98; font-size:13px; font-family:inherit; cursor:pointer;">Postpone</button>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================= MATCHES -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">03</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Meet — Matches</h2></div>
+    <div style="width:100%; max-width:1280px; height:660px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#565B66; font-size:14px;">‹</span><span style="font-size:13px; font-weight:600; color:#F4F5F7;">Bay Area HS Invitational</span><span class="m" style="font-size:10px; color:#565B66;">SUN JUL 12 · 4C</span></div>
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#8A8F98; font-size:14px;">⚙</span><span style="display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(52,211,153,.3); background:rgba(52,211,153,.1); border-radius:6px; padding:2px 8px;"><span class="lpulse" style="width:5px;height:5px;border-radius:9999px;background:#34D399;box-shadow:0 0 8px rgba(52,211,153,.6);"></span><span class="m" style="font-size:10px; font-weight:600; color:#34D399;">READY</span></span></div>
+      </div>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:216px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:10px; overflow:hidden;">
+          <div style="padding:7px 12px; font-size:12px; color:#8A8F98;">Overview</div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Meet</span><span style="font-size:9px; font-weight:600; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); border-radius:4px; padding:0 4px;">ENG</span></span><span style="font-size:10px; color:#565B66; transform:rotate(90deg);">›</span></div>
+            <div style="margin-left:12px; border-left:1px solid #23262D; padding-left:8px; display:flex; flex-direction:column; gap:2px;"><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Roster</div><div style="position:relative; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:500; color:#F4F5F7; background:#1B1E24;"><span style="position:absolute; left:-9px; top:6px; bottom:6px; width:2px; border-radius:2px; background:#5B9DFF;"></span>Matches</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Configuration</div></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Operations</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">SHR</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Display</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">OUT</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+          </div>
+          <div style="margin:10px 0; border-top:1px solid #23262D;"></div>
+          <div style="padding:0 12px 4px; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Workspace</div>
+          <div style="display:flex; flex-direction:column; gap:2px;"><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Venue &amp; schedule</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Members</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Settings</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; gap:10px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+            <span style="font-size:14px; font-weight:600; color:#F4F5F7;">Matches</span><span class="tn" style="font-size:12px; color:#565B66;">48 · from roster</span>
+            <div style="flex:1;"></div>
+            <div style="display:flex; align-items:center; gap:6px; height:30px; border:1px solid #23262D; border-radius:8px; background:#16181D; padding:0 10px;"><span style="color:#565B66; font-size:11px;">⌕</span><span style="font-size:12px; color:#565B66;">Search…</span><span class="kbd">/</span></div>
+            <button style="height:30px; padding:0 11px; border:1px solid #2E323B; border-radius:8px; background:#16181D; font-size:12px; font-family:inherit; color:#8A8F98; cursor:pointer;">＋ Add</button>
+            <button style="height:30px; padding:0 11px; border:1px solid #2E323B; border-radius:8px; background:#16181D; font-size:12px; font-family:inherit; color:#E6E8EC; cursor:pointer;">Export</button>
+            <button style="height:30px; padding:0 13px; border:none; border-radius:8px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:12px; font-weight:600; font-family:inherit; cursor:pointer;">Regenerate ▾</button>
+          </div>
+          <div style="flex:1; overflow:hidden;">
+            <div style="overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid #23262D; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#565B66;"><span style="width:28px;">#</span><span style="width:64px;">Event</span><span style="flex:3;">Side A</span><span style="flex:3;">Side B</span><span style="width:48px;">Slots</span></div>
+              <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Men's Singles</span><span class="tn" style="font-size:10px; color:#565B66;">4</span></div>
+              <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">1</span><span class="m" style="width:64px;"><span style="font-size:12px; font-weight:600; color:#5B9DFF; letter-spacing:0.02em;">MS1</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Alex Chen <span style="color:#565B66;">Lincoln</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Marcus Webb <span style="color:#565B66;">Roosevelt</span></span><span class="m tn" style="width:48px; font-size:12px; color:#8A8F98;">1</span></div>
+              <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229; box-shadow:inset 2px 0 0 #E0B24A;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">2</span><span class="m" style="width:64px;"><span style="font-size:12px; font-weight:600; color:#5B9DFF; letter-spacing:0.02em;">MS2</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Devin Park <span style="color:#565B66;">Lincoln</span></span><span style="flex:3; font-size:12px; color:#565B66;">+ add player</span><span class="m tn" style="width:48px; font-size:12px; color:#8A8F98;">1</span></div>
+              <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">3</span><span class="m" style="width:64px;"><span style="font-size:12px; font-weight:600; color:#5B9DFF; letter-spacing:0.02em;">MS3</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Sam Rivera <span style="color:#565B66;">Jefferson</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Tyler Ng <span style="color:#565B66;">Roosevelt</span></span><span class="m tn" style="width:48px; font-size:12px; color:#8A8F98;">1</span></div>
+              <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Women's Doubles</span><span class="tn" style="font-size:10px; color:#565B66;">3</span></div>
+              <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">4</span><span class="m" style="width:64px;"><span style="font-size:12px; font-weight:600; color:#5B9DFF; letter-spacing:0.02em;">WD1</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Nina Lee, Priya Shah</span><span style="flex:3; font-size:13px; color:#E6E8EC;">Kate Obi, Mia Fox</span><span class="m tn" style="width:48px; font-size:12px; color:#8A8F98;">1</span></div>
+              <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">5</span><span class="m" style="width:64px;"><span style="font-size:12px; font-weight:600; color:#5B9DFF; letter-spacing:0.02em;">WD2</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Grace Kim, Ada Ross</span><span style="flex:3; font-size:13px; color:#E6E8EC;">Jia Tan, Eve Ill</span><span class="m tn" style="width:48px; font-size:12px; color:#8A8F98;">1</span></div>
+              <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Mixed Doubles</span><span class="tn" style="font-size:10px; color:#565B66;">2</span></div>
+              <div style="display:flex; align-items:center; gap:12px; padding:8px 16px;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">6</span><span class="m" style="width:64px;"><span style="font-size:12px; font-weight:600; color:#5B9DFF; letter-spacing:0.02em;">XD1</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Leo Cruz, Nina Lee</span><span style="flex:3; font-size:13px; color:#E6E8EC;">Omar Diaz, Kate Obi</span><span class="m tn" style="width:48px; font-size:12px; color:#8A8F98;">1</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================= BRACKET -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">04</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Bracket — Draw</h2></div>
+    <div style="width:100%; max-width:1280px; height:660px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#565B66; font-size:14px;">‹</span><span style="font-size:13px; font-weight:600; color:#F4F5F7;">Regional Bracket Championship</span><span class="m" style="font-size:10px; color:#565B66;">SUN JUL 19 · 6C</span></div>
+        <span style="display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(56,189,248,.3); background:rgba(56,189,248,.1); border-radius:6px; padding:2px 8px;"><span style="width:5px;height:5px;border-radius:9999px;background:#38BDF8;"></span><span class="m" style="font-size:10px; font-weight:600; color:#38BDF8;">DRAWN</span></span>
+      </div>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:216px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:10px; overflow:hidden;">
+          <div style="padding:7px 12px; font-size:12px; color:#8A8F98;">Overview</div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Bracket</span><span style="font-size:9px; font-weight:600; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); border-radius:4px; padding:0 4px;">ENG</span></span><span style="font-size:10px; color:#565B66; transform:rotate(90deg);">›</span></div>
+            <div style="margin-left:12px; border-left:1px solid #23262D; padding-left:8px; display:flex; flex-direction:column; gap:2px;"><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Roster</div><div style="position:relative; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:500; color:#F4F5F7; background:#1B1E24;"><span style="position:absolute; left:-9px; top:6px; bottom:6px; width:2px; border-radius:2px; background:#5B9DFF;"></span>Draws</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Matches</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Configuration</div></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Operations</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">SHR</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+          </div>
+          <div style="margin:10px 0; border-top:1px solid #23262D;"></div>
+          <div style="padding:0 12px 4px; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Workspace</div>
+          <div style="display:flex; flex-direction:column; gap:2px;"><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Members</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Settings</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid #23262D; flex-shrink:0;">
+            <button style="height:30px; padding:0 13px; border:1px solid #2E323B; border-radius:8px; background:#16181D; font-size:12px; font-weight:500; font-family:inherit; color:#E6E8EC; cursor:pointer;">Edit seeding</button>
+            <span class="m" style="font-size:11px; color:#565B66;">MS · 8-DRAW</span>
+            <div style="flex:1;"></div>
+            <span class="m" style="font-size:11px; color:#8A8F98; border:1px solid #23262D; border-radius:6px; padding:3px 9px;">QF</span><span class="m" style="font-size:11px; color:#8A8F98; border:1px solid #23262D; border-radius:6px; padding:3px 9px;">SF</span><span class="m" style="font-size:11px; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); background:rgba(91,157,255,.1); border-radius:6px; padding:3px 9px;">F</span>
+          </div>
+          <div style="flex:1; overflow:auto; background:#0B0C0F; background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,.035) 1px, transparent 1.5px); background-size:22px 22px; padding:22px;">
+            <div style="display:flex; align-items:center; justify-content:center; gap:28px; min-height:100%;">
+              <div style="display:flex; flex-direction:column; gap:40px; width:176px;">
+                <div class="m" style="text-align:center; font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:#565B66;">QUARTERFINAL</div>
+                <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:10px; display:flex; flex-direction:column; gap:6px;"><div class="m" style="display:flex; justify-content:space-between; font-size:10px; color:#565B66;"><span>QF-1</span><span>C1</span></div><div style="border-radius:7px; background:#1D7D5C; padding:6px 9px; font-size:12px; font-weight:600; color:#F1FAF6; display:flex; justify-content:space-between;"><span>A. Chen</span><span class="m">21-18</span></div><div style="border-radius:7px; background:#131519; padding:6px 9px; font-size:12px; color:#565B66; text-decoration:line-through;">R. Vega</div></div>
+                <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:10px; display:flex; flex-direction:column; gap:6px;"><div class="m" style="display:flex; justify-content:space-between; font-size:10px; color:#565B66;"><span>QF-2</span><span>C2</span></div><div style="border-radius:7px; border:1px solid #23262D; background:#0E0F13; padding:6px 9px; font-size:12px; color:#E6E8EC;">S. Rivera</div><div style="border-radius:7px; border:1px solid #23262D; background:#0E0F13; padding:6px 9px; font-size:12px; color:#E6E8EC;">T. Ng</div></div>
+              </div>
+              <div style="display:flex; flex-direction:column; width:176px;">
+                <div class="m" style="text-align:center; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66; margin-bottom:12px;">SEMIFINAL</div>
+                <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:10px; display:flex; flex-direction:column; gap:6px;"><div class="m" style="display:flex; justify-content:space-between; font-size:10px; color:#565B66;"><span>SF-1</span><span>—</span></div><div style="border-radius:7px; border:1px solid #23262D; background:#0E0F13; padding:6px 9px; font-size:12px; color:#E6E8EC;">A. Chen</div><div style="border-radius:7px; border:1px dashed #2E323B; background:#0B0C0F; padding:6px 9px; font-size:12px; color:#565B66;">Winner QF-2</div></div>
+              </div>
+              <div style="display:flex; flex-direction:column; width:188px;">
+                <div class="m" style="text-align:center; font-size:10px; font-weight:600; text-transform:uppercase; color:#5B9DFF; margin-bottom:12px;">FINAL</div>
+                <div style="border:1px solid #5B9DFF; border-radius:10px; background:#16181D; padding:12px; display:flex; flex-direction:column; gap:6px; box-shadow:0 0 0 3px rgba(91,157,255,.12);"><div class="m" style="display:flex; justify-content:space-between; font-size:10px; color:#565B66;"><span>FINAL</span><span>C1</span></div><div style="border-radius:7px; border:1px dashed #2E323B; background:#0B0C0F; padding:7px 9px; font-size:12px; color:#565B66;">Winner SF-1</div><div style="border-radius:7px; border:1px dashed #2E323B; background:#0B0C0F; padding:7px 9px; font-size:12px; color:#565B66;">Winner SF-2</div></div>
+              </div>
+              <div style="display:flex; flex-direction:column; width:176px;">
+                <div class="m" style="text-align:center; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66; margin-bottom:12px;">SEMIFINAL</div>
+                <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:10px; display:flex; flex-direction:column; gap:6px;"><div class="m" style="display:flex; justify-content:space-between; font-size:10px; color:#565B66;"><span>SF-2</span><span>—</span></div><div style="border-radius:7px; border:1px dashed #2E323B; background:#0B0C0F; padding:6px 9px; font-size:12px; color:#565B66;">Winner QF-3</div><div style="border-radius:7px; border:1px dashed #2E323B; background:#0B0C0F; padding:6px 9px; font-size:12px; color:#565B66;">Winner QF-4</div></div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:40px; width:176px;">
+                <div class="m" style="text-align:center; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">QUARTERFINAL</div>
+                <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:10px; display:flex; flex-direction:column; gap:6px;"><div class="m" style="display:flex; justify-content:space-between; font-size:10px; color:#565B66;"><span>QF-3</span><span>C3</span></div><div style="border-radius:7px; border:1px solid #23262D; background:#0E0F13; padding:6px 9px; font-size:12px; color:#E6E8EC;">M. Webb</div><div style="border-radius:7px; border:1px solid #23262D; background:#0E0F13; padding:6px 9px; font-size:12px; color:#E6E8EC;">D. Park</div></div>
+                <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:10px; display:flex; flex-direction:column; gap:6px;"><div class="m" style="display:flex; justify-content:space-between; font-size:10px; color:#565B66;"><span>QF-4</span><span>C4</span></div><div style="border-radius:7px; border:1px solid #23262D; background:#0E0F13; padding:6px 9px; font-size:12px; color:#E6E8EC;">L. Cruz</div><div style="border-radius:7px; background:#0E0F13; padding:6px 9px; font-size:12px; color:#565B66;">Bye</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================= SETTINGS -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">05</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Settings</h2></div>
+    <div style="width:100%; max-width:1280px; height:540px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <header style="display:flex; align-items:center; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;"><span style="display:inline-flex; align-items:center; height:24px; border:1px solid #3A3F49; border-radius:6px; padding:0 10px; font-size:13px; font-weight:600; letter-spacing:-0.005em; color:#F4F5F7;">ShuttleWorks</span><span style="width:1px; height:14px; background:#23262D;"></span><span style="font-size:13px; font-weight:500; color:#8A8F98;">Settings</span></header>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:224px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:14px 12px; display:flex; flex-direction:column; gap:16px;">
+          <div style="display:flex; flex-direction:column; gap:3px;"><div style="padding:0 12px 5px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:#565B66;">Account</div><div style="border-radius:8px; padding:7px 12px; font-size:13px; font-weight:500; background:#1B1E24; color:#F4F5F7;">Profile</div><div style="border-radius:8px; padding:7px 12px; font-size:13px; color:#8A8F98;">Security</div><div style="border-radius:8px; padding:7px 12px; font-size:13px; color:#8A8F98;">Sessions</div></div>
+          <div style="display:flex; flex-direction:column; gap:3px;"><div style="padding:0 12px 5px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:#565B66;">Workspace defaults</div><div style="border-radius:8px; padding:7px 12px; font-size:13px; color:#8A8F98;">Modules</div></div>
+          <div style="display:flex; flex-direction:column; gap:3px;"><div style="padding:0 12px 5px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:#565B66;">Preferences</div><div style="border-radius:8px; padding:7px 12px; font-size:13px; color:#8A8F98;">Appearance</div><div style="border-radius:8px; padding:7px 12px; font-size:13px; color:#8A8F98;">Notifications</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; overflow:auto;"><div style="max-width:560px; padding:28px; display:flex; flex-direction:column; gap:24px;">
+          <div><h2 style="margin:0; font-size:18px; font-weight:600; color:#F4F5F7;">Profile</h2><p style="margin:4px 0 0; font-size:13px; color:#8A8F98;">Your name and how you appear across the app.</p></div>
+          <div style="display:flex; align-items:center; gap:16px;"><span style="width:56px;height:56px;border-radius:9999px;background:#5B9DFF;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;">L</span><div><button style="height:34px; padding:0 12px; border:1px solid #2E323B; border-radius:8px; background:#16181D; font-size:13px; font-family:inherit; color:#E6E8EC; cursor:pointer;">Change photo</button><p style="margin:5px 0 0; font-size:11px; color:#565B66;">JPG or PNG, up to 2 MB.</p></div></div>
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <label style="display:block;"><span style="display:block; margin-bottom:6px; font-size:12px; font-weight:500; color:#C7CBD1;">Full name</span><input placeholder="Your name" style="width:100%; height:40px; border:1px solid #23262D; border-radius:9px; background:#16181D; padding:0 12px; font-size:13px; font-family:inherit; color:#E6E8EC; outline:none;"></label>
+            <label style="display:block;"><span style="display:block; margin-bottom:6px; font-size:12px; font-weight:500; color:#C7CBD1;">Email</span><input value="operator@shuttleworks.app" style="width:100%; height:40px; border:1px solid #23262D; border-radius:9px; background:#16181D; padding:0 12px; font-size:13px; font-family:inherit; color:#E6E8EC; outline:none;"></label>
+          </div>
+          <div><button style="height:40px; padding:0 18px; border:none; border-radius:9px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;">Save changes</button></div>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- ========================================================= ROSTER -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">06</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Meet — Roster</h2></div>
+    <div style="width:100%; max-width:1280px; height:620px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#565B66; font-size:14px;">‹</span><span style="font-size:13px; font-weight:600; color:#F4F5F7;">Bay Area HS Invitational</span><span class="m" style="font-size:10px; color:#565B66;">SUN JUL 12 · 4C</span></div>
+        <span style="display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(91,157,255,.3); background:rgba(91,157,255,.1); border-radius:6px; padding:2px 8px;"><span style="width:5px;height:5px;border-radius:9999px;background:#5B9DFF;"></span><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#5B9DFF;">Ready</span></span>
+      </div>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:216px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:10px; overflow:hidden;">
+          <div style="padding:7px 12px; font-size:12px; color:#8A8F98;">Overview</div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Meet</span><span style="font-size:9px; font-weight:600; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); border-radius:4px; padding:0 4px;">ENG</span></span><span style="font-size:10px; color:#565B66; transform:rotate(90deg);">›</span></div>
+            <div style="margin-left:12px; border-left:1px solid #23262D; padding-left:8px; display:flex; flex-direction:column; gap:2px;"><div style="position:relative; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:500; color:#F4F5F7; background:#1B1E24;"><span style="position:absolute; left:-9px; top:6px; bottom:6px; width:2px; border-radius:2px; background:#5B9DFF;"></span>Roster</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Matches</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Configuration</div></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Operations</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">SHR</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Display</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">OUT</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+          </div>
+          <div style="margin:10px 0; border-top:1px solid #23262D;"></div>
+          <div style="padding:0 12px 4px; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Workspace</div>
+          <div style="display:flex; flex-direction:column; gap:2px;"><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Members</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Settings</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; gap:10px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+            <span style="font-size:14px; font-weight:600; color:#F4F5F7;">Roster</span><span class="tn" style="font-size:12px; color:#565B66;">42 players · 4 schools</span>
+            <div style="flex:1;"></div>
+            <button style="height:30px; padding:0 11px; border:1px solid #2E323B; border-radius:8px; background:#16181D; font-size:12px; font-family:inherit; color:#E6E8EC; cursor:pointer;">Import CSV</button>
+            <button style="height:30px; padding:0 13px; border:none; border-radius:8px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:12px; font-weight:600; font-family:inherit; cursor:pointer;">＋ Add player</button>
+          </div>
+          <div style="flex:1; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid #23262D; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#565B66;"><span style="width:28px;">#</span><span style="flex:2;">Player</span><span style="flex:1;">Grade</span><span style="width:200px;">Ranks</span></div>
+            <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Lincoln HS</span><span class="tn" style="font-size:10px; color:#565B66;">12</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">1</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Alex Chen</span><span style="flex:1; font-size:13px; color:#8A8F98;">Sr</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#5B9DFF;">MS1</span><span class="m" style="font-size:11px; font-weight:600; color:#5B9DFF;">XD1</span></span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">2</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Devin Park</span><span style="flex:1; font-size:13px; color:#8A8F98;">Jr</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#5B9DFF;">MS2</span></span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">3</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Nina Lee</span><span style="flex:1; font-size:13px; color:#8A8F98;">Sr</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#5B9DFF;">WD1</span><span class="m" style="font-size:11px; font-weight:600; color:#5B9DFF;">XD1</span></span></div>
+            <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Roosevelt HS</span><span class="tn" style="font-size:10px; color:#565B66;">10</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">4</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Marcus Webb</span><span style="flex:1; font-size:13px; color:#8A8F98;">Sr</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#5B9DFF;">MS1</span></span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">5</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Kate Obi</span><span style="flex:1; font-size:13px; color:#8A8F98;">Jr</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#5B9DFF;">WD1</span><span class="m" style="font-size:11px; font-weight:600; color:#565B66; border:1px dashed #2E323B; border-radius:4px; padding:0 5px;">＋</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================= PLAN -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">07</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Operations — Plan</h2><span style="font-size:13px; color:#565B66;">drag-to-schedule court board</span></div>
+    <div style="width:100%; max-width:1280px; height:600px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#565B66; font-size:14px;">‹</span><span style="font-size:13px; font-weight:600; color:#F4F5F7;">Bay Area HS Invitational</span><span class="m" style="font-size:10px; color:#565B66;">SUN JUL 12 · 4C</span></div>
+        <span style="display:inline-flex; align-items:center; gap:5px; border:1px solid #2E323B; background:#16181D; border-radius:6px; padding:2px 8px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#8A8F98;">Draft plan</span></span>
+      </div>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:216px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:10px; overflow:hidden;">
+          <div style="padding:7px 12px; font-size:12px; color:#8A8F98;">Overview</div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Meet</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">ENG</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Operations</span><span style="font-size:9px; font-weight:600; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); border-radius:4px; padding:0 4px;">SHR</span></span><span style="font-size:10px; color:#565B66; transform:rotate(90deg);">›</span></div>
+            <div style="margin-left:12px; border-left:1px solid #23262D; padding-left:8px; display:flex; flex-direction:column; gap:2px;"><div style="position:relative; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:500; color:#F4F5F7; background:#1B1E24;"><span style="position:absolute; left:-9px; top:6px; bottom:6px; width:2px; border-radius:2px; background:#5B9DFF;"></span>Plan</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Run</div></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Display</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">OUT</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+          </div>
+          <div style="margin:10px 0; border-top:1px solid #23262D;"></div>
+          <div style="padding:0 12px 4px; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Workspace</div>
+          <div style="display:flex; flex-direction:column; gap:2px;"><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Members</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Settings</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; gap:10px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+            <span class="tn" style="font-size:12px; color:#8A8F98;"><b style="color:#5B9DFF;">36</b> of 48 placed</span>
+            <div style="flex:1;"></div>
+            <button style="height:30px; padding:0 11px; border:1px solid #2E323B; border-radius:8px; background:#16181D; font-size:12px; font-family:inherit; color:#E6E8EC; cursor:pointer;">Re-optimize</button>
+            <button style="height:30px; padding:0 13px; border:none; border-radius:8px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:12px; font-weight:600; font-family:inherit; cursor:pointer;">Generate schedule</button>
+          </div>
+          <div style="flex:1; overflow:auto;">
+            <div style="display:flex; border-bottom:1px solid #23262D;"><div style="width:44px; flex-shrink:0; border-right:1px solid #23262D;"></div><div style="flex:1; position:relative; height:22px;"><div class="m" style="position:absolute; left:6px; top:5px; font-size:10px; color:#565B66;">09:00</div><div class="m" style="position:absolute; left:33%; top:5px; font-size:10px; color:#565B66;">09:45</div><div class="m" style="position:absolute; left:66%; top:5px; font-size:10px; color:#565B66;">10:30</div></div></div>
+            <!-- 4 courts, scheduled outline chips -->
+            <div style="display:flex; height:50px; border-bottom:1px solid #1F2229;"><div style="width:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-right:1px solid #23262D; background:#131519;"><span class="m" style="font-size:11px; font-weight:600; color:#8A8F98;">C1</span></div><div style="flex:1; position:relative; background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,.04) 1px, transparent 1.5px); background-size:26px 10px;">
+              <div style="position:absolute; left:2px; top:6px; width:calc(25% - 4px); height:38px; border-radius:8px; background:#16181D; border:1px solid #2E323B; display:flex; align-items:center; padding:0 8px; gap:5px;"><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">M</span><span class="m" style="font-size:11px; font-weight:600; color:#C7CBD1;">MS1</span></div>
+              <div style="position:absolute; left:calc(25% + 2px); top:6px; width:calc(25% - 4px); height:38px; border-radius:8px; background:#16181D; border:1px solid #2E323B; display:flex; align-items:center; padding:0 8px; gap:5px;"><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">M</span><span class="m" style="font-size:11px; font-weight:600; color:#C7CBD1;">WD1</span></div>
+            </div></div>
+            <div style="display:flex; height:50px; border-bottom:1px solid #1F2229;"><div style="width:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-right:1px solid #23262D; background:#131519;"><span class="m" style="font-size:11px; font-weight:600; color:#8A8F98;">C2</span></div><div style="flex:1; position:relative; background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,.04) 1px, transparent 1.5px); background-size:26px 10px;">
+              <div style="position:absolute; left:calc(12.5% + 2px); top:6px; width:calc(37.5% - 4px); height:38px; border-radius:8px; background:#16181D; border:1px solid #2E323B; border-style:dashed; display:flex; align-items:center; padding:0 8px; gap:5px;"><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">B</span><span class="m" style="font-size:11px; font-weight:600; color:#C7CBD1;">R2-3</span><span style="margin-left:auto; font-size:9px; color:#565B66;">drag</span></div>
+            </div></div>
+            <div style="display:flex; height:50px; border-bottom:1px solid #1F2229;"><div style="width:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-right:1px solid #23262D; background:#131519;"><span class="m" style="font-size:11px; font-weight:600; color:#8A8F98;">C3</span></div><div style="flex:1; position:relative; background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,.04) 1px, transparent 1.5px); background-size:26px 10px;">
+              <div style="position:absolute; left:calc(50% + 2px); top:6px; width:calc(25% - 4px); height:38px; border-radius:8px; background:#16181D; border:1px solid #2E323B; display:flex; align-items:center; padding:0 8px; gap:5px;"><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">M</span><span class="m" style="font-size:11px; font-weight:600; color:#C7CBD1;">XD1</span></div>
+            </div></div>
+            <div style="display:flex; height:50px;"><div style="width:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-right:1px solid #23262D; background:#131519;"><span class="m" style="font-size:11px; font-weight:600; color:#8A8F98;">C4</span></div><div style="flex:1; position:relative; background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,.04) 1px, transparent 1.5px); background-size:26px 10px;">
+              <div style="position:absolute; left:2px; top:6px; width:calc(37.5% - 4px); height:38px; border-radius:8px; background:#16181D; border:1px solid #2E323B; display:flex; align-items:center; padding:0 8px; gap:5px;"><span class="m" style="width:13px;height:13px;border-radius:3px;background:#1E2128;color:#8A8F98;display:inline-flex;align-items:center;justify-content:center;font-size:8px;">M</span><span class="m" style="font-size:11px; font-weight:600; color:#C7CBD1;">WD2</span></div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================= PUBLIC DISPLAY -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">08</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Display — Public TV view</h2><span style="font-size:13px; color:#565B66;">read-only · gym projection</span></div>
+    <div style="width:100%; max-width:1280px; height:720px; border:1px solid #23262D; border-radius:14px; background:#08090B; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:24px 32px; border-bottom:1px solid #1A1C22;">
+        <div style="display:flex; align-items:center; gap:16px;"><span style="display:inline-flex; align-items:center; height:32px; border:1px solid #3A3F49; border-radius:7px; padding:0 12px; font-size:16px; font-weight:600; color:#F4F5F7;">ShuttleWorks</span><span style="font-size:20px; font-weight:700; color:#F4F5F7; letter-spacing:-0.01em;">Bay Area HS Invitational</span></div>
+        <div style="display:flex; align-items:center; gap:14px;"><span style="display:inline-flex; align-items:center; gap:7px; border-radius:9999px; background:rgba(91,157,255,.12); padding:6px 14px;"><span class="lpulse" style="width:7px;height:7px;border-radius:9999px;background:#5B9DFF;box-shadow:0 0 10px rgba(91,157,255,.7);"></span><span style="font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#5B9DFF;">Live</span></span><span class="m" style="font-size:22px; font-weight:600; color:#F4F5F7;">10:04</span></div>
+      </div>
+      <div style="flex:1; padding:28px 32px; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:20px;">
+        <!-- court card -->
+        <div style="border:1px solid #1F2229; border-radius:16px; background:#0E1013; padding:22px 26px; display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;"><span class="m" style="font-size:40px; font-weight:700; color:#5B9DFF; line-height:1;">C1</span><span style="display:inline-flex; align-items:center; gap:7px; border-radius:9999px; background:rgba(91,157,255,.12); padding:5px 12px;"><span style="width:6px;height:6px;border-radius:9999px;background:#5B9DFF;"></span><span style="font-size:12px; font-weight:700; text-transform:uppercase; color:#5B9DFF;">Playing</span></span></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;"><span style="font-size:26px; font-weight:700; color:#F4F5F7;">Alex Chen</span><span class="m" style="font-size:30px; font-weight:700; color:#F4F5F7;">21</span></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;"><span style="font-size:26px; font-weight:700; color:#8A8F98;">Marcus Webb</span><span class="m" style="font-size:30px; font-weight:700; color:#8A8F98;">18</span></div>
+          <div class="m" style="margin-top:auto; font-size:13px; color:#565B66;">MS1 · Men's Singles</div>
+        </div>
+        <div style="border:1px solid #1F2229; border-radius:16px; background:#0E1013; padding:22px 26px; display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;"><span class="m" style="font-size:40px; font-weight:700; color:#5B9DFF; line-height:1;">C3</span><span style="display:inline-flex; align-items:center; gap:7px; border-radius:9999px; background:rgba(91,157,255,.12); padding:5px 12px;"><span style="width:6px;height:6px;border-radius:9999px;background:#5B9DFF;"></span><span style="font-size:12px; font-weight:700; text-transform:uppercase; color:#5B9DFF;">Playing</span></span></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;"><span style="font-size:24px; font-weight:700; color:#F4F5F7;">Kim / Ross</span><span class="m" style="font-size:30px; font-weight:700; color:#F4F5F7;">19</span></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;"><span style="font-size:24px; font-weight:700; color:#F4F5F7;">Tan / Ill</span><span class="m" style="font-size:30px; font-weight:700; color:#F4F5F7;">21</span></div>
+          <div class="m" style="margin-top:auto; font-size:13px; color:#565B66;">WD2 · Women's Doubles</div>
+        </div>
+        <div style="border:1px solid #1F2229; border-radius:16px; background:#0E1013; padding:22px 26px; display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;"><span class="m" style="font-size:40px; font-weight:700; color:#C79A45; line-height:1;">C2</span><span style="display:inline-flex; align-items:center; gap:7px; border-radius:9999px; background:rgba(199,154,69,.14); padding:5px 12px;"><span style="width:6px;height:6px;border-radius:9999px;background:#C79A45;"></span><span style="font-size:12px; font-weight:700; text-transform:uppercase; color:#C79A45;">Called</span></span></div>
+          <div style="font-size:24px; font-weight:700; color:#F4F5F7;">Cruz / Lee</div>
+          <div style="font-size:24px; font-weight:700; color:#F4F5F7;">Diaz / Obi</div>
+          <div class="m" style="margin-top:auto; font-size:13px; color:#565B66;">XD1 · report to court</div>
+        </div>
+        <div style="border:1px solid #1F2229; border-radius:16px; background:#0C0D10; padding:22px 26px; display:flex; flex-direction:column; gap:10px; justify-content:center; align-items:center;">
+          <span class="m" style="font-size:40px; font-weight:700; color:#2E323B; line-height:1;">C4</span><span style="font-size:15px; color:#565B66;">Court open</span>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:16px; padding:16px 32px; border-top:1px solid #1A1C22; background:#0B0C0F;">
+        <span style="font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#565B66;">Up next</span>
+        <span class="m" style="font-size:14px; color:#C7CBD1;">MS2 Park v Ortiz</span><span style="color:#2E323B;">·</span><span class="m" style="font-size:14px; color:#C7CBD1;">R2-3 Diaz v Cruz</span><span style="color:#2E323B;">·</span><span class="m" style="font-size:14px; color:#C7CBD1;">XD2 Cruz/Lee v Fox/Obi</span>
+      </div>
+    </div>
+
+    <!-- ========================================================= MEET · CONFIGURATION -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">09</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Meet — Configuration</h2></div>
+    <div style="width:100%; max-width:1280px; height:600px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#565B66; font-size:14px;">‹</span><span style="font-size:13px; font-weight:600; color:#F4F5F7;">Bay Area HS Invitational</span><span class="m" style="font-size:10px; color:#565B66;">SUN JUL 12 · 4C</span></div>
+        <span style="display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(91,157,255,.3); background:rgba(91,157,255,.1); border-radius:6px; padding:2px 8px;"><span class="lpulse" style="width:5px;height:5px;border-radius:9999px;background:#5B9DFF;box-shadow:0 0 8px rgba(91,157,255,.7);"></span><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#5B9DFF;">Ready</span></span>
+      </div>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:216px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:10px; overflow:hidden;">
+          <div style="padding:7px 12px; font-size:12px; color:#8A8F98;">Overview</div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Meet</span><span style="font-size:9px; font-weight:600; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); border-radius:4px; padding:0 4px;">ENG</span></span><span style="font-size:10px; color:#565B66; transform:rotate(90deg);">›</span></div>
+            <div style="margin-left:12px; border-left:1px solid #23262D; padding-left:8px; display:flex; flex-direction:column; gap:2px;"><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Roster</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Matches</div><div style="position:relative; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:500; color:#F4F5F7; background:#1B1E24;"><span style="position:absolute; left:-9px; top:6px; bottom:6px; width:2px; border-radius:2px; background:#5B9DFF;"></span>Configuration</div></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Operations</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">SHR</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Display</span><span style="font-size:9px; font-weight:600; color:#565B66; border:1px solid #2E323B; border-radius:4px; padding:0 4px;">OUT</span></span><span style="font-size:10px; color:#565B66;">›</span></div>
+          </div>
+          <div style="margin:10px 0; border-top:1px solid #23262D;"></div>
+          <div style="padding:0 12px 4px; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Workspace</div>
+          <div style="display:flex; flex-direction:column; gap:2px;"><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Members</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Settings</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; overflow:auto;"><div style="max-width:640px; padding:24px; display:flex; flex-direction:column; gap:24px;">
+          <div>
+            <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#5B9DFF; margin-bottom:10px;">Events &amp; ranks</div>
+            <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px;">
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">MS</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">4</div></div>
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">WS</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">4</div></div>
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">MD</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">3</div></div>
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">WD</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">3</div></div>
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">XD</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">2</div></div>
+            </div>
+          </div>
+          <div style="display:flex; gap:24px;">
+            <label style="flex:1;"><span style="display:block; margin-bottom:6px; font-size:12px; font-weight:500; color:#C7CBD1;">Courts</span><input value="4" style="width:100%; height:40px; border:1px solid #23262D; border-radius:9px; background:#16181D; padding:0 12px; font-size:13px; font-family:inherit; color:#E6E8EC; outline:none;"></label>
+            <label style="flex:1;"><span style="display:block; margin-bottom:6px; font-size:12px; font-weight:500; color:#C7CBD1;">Slot length</span><input value="30 min" style="width:100%; height:40px; border:1px solid #23262D; border-radius:9px; background:#16181D; padding:0 12px; font-size:13px; font-family:inherit; color:#E6E8EC; outline:none;"></label>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#5B9DFF; margin-bottom:10px;">Scoring</div>
+            <div style="display:flex; gap:8px;"><span style="border-radius:8px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); padding:8px 14px; font-size:13px; font-weight:600;">Badminton · best of 3</span><span style="border-radius:8px; border:1px solid #2E323B; background:#16181D; color:#8A8F98; padding:8px 14px; font-size:13px;">Simple</span></div>
+          </div>
+          <div><button style="height:40px; padding:0 18px; border:none; border-radius:9px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;">Save configuration</button></div>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- ========================================================= BRACKET · ROSTER -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">10</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Bracket — Roster</h2></div>
+    <div style="width:100%; max-width:1280px; height:560px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#565B66; font-size:14px;">‹</span><span style="font-size:13px; font-weight:600; color:#F4F5F7;">Regional Bracket Championship</span><span class="m" style="font-size:10px; color:#565B66;">SUN JUL 19 · 6C</span></div>
+      </div>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:216px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:10px; overflow:hidden;">
+          <div style="padding:7px 12px; font-size:12px; color:#8A8F98;">Overview</div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Bracket</span><span style="font-size:9px; font-weight:600; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); border-radius:4px; padding:0 4px;">ENG</span></span><span style="font-size:10px; color:#565B66; transform:rotate(90deg);">›</span></div>
+            <div style="margin-left:12px; border-left:1px solid #23262D; padding-left:8px; display:flex; flex-direction:column; gap:2px;"><div style="position:relative; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:500; color:#F4F5F7; background:#1B1E24;"><span style="position:absolute; left:-9px; top:6px; bottom:6px; width:2px; border-radius:2px; background:#5B9DFF;"></span>Roster</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Draws</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Matches</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Configuration</div></div>
+          </div>
+          <div style="margin:10px 0; border-top:1px solid #23262D;"></div>
+          <div style="padding:0 12px 4px; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Workspace</div>
+          <div style="display:flex; flex-direction:column; gap:2px;"><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Members</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Settings</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; gap:10px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+            <span style="font-size:14px; font-weight:600; color:#F4F5F7;">Roster</span><span class="tn" style="font-size:12px; color:#565B66;">16 players · Men's Singles</span>
+            <div style="flex:1;"></div>
+            <button style="height:30px; padding:0 11px; border:1px solid #2E323B; border-radius:8px; background:#16181D; font-size:12px; font-family:inherit; color:#E6E8EC; cursor:pointer;">Import CSV</button>
+            <button style="height:30px; padding:0 13px; border:none; border-radius:8px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:12px; font-weight:600; font-family:inherit; cursor:pointer;">＋ Add player</button>
+          </div>
+          <div style="flex:1; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid #23262D; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#565B66;"><span style="width:28px;">#</span><span style="flex:2;">Player</span><span style="flex:1;">Club</span><span style="width:200px;">Seed</span></div>
+            <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Lincoln HS</span><span class="tn" style="font-size:10px; color:#565B66;">6</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">1</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Alex Chen</span><span style="flex:1; font-size:13px; color:#8A8F98;">Lincoln HS</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#5B9DFF;">SEED 1</span></span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">2</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Devin Park</span><span style="flex:1; font-size:13px; color:#8A8F98;">Lincoln HS</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#565B66; border:1px dashed #2E323B; border-radius:4px; padding:0 5px;">unseeded</span></span></div>
+            <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Roosevelt HS</span><span class="tn" style="font-size:10px; color:#565B66;">6</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">3</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Marcus Webb</span><span style="flex:1; font-size:13px; color:#8A8F98;">Roosevelt HS</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#5B9DFF;">SEED 2</span></span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">4</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Tyler Ng</span><span style="flex:1; font-size:13px; color:#8A8F98;">Roosevelt HS</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#565B66; border:1px dashed #2E323B; border-radius:4px; padding:0 5px;">unseeded</span></span></div>
+            <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Jefferson HS</span><span class="tn" style="font-size:10px; color:#565B66;">4</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">5</span><span style="flex:2; font-size:13px; color:#E6E8EC;">Sam Rivera</span><span style="flex:1; font-size:13px; color:#8A8F98;">Jefferson HS</span><span style="width:200px; display:flex; gap:4px;"><span class="m" style="font-size:11px; font-weight:600; color:#565B66; border:1px dashed #2E323B; border-radius:4px; padding:0 5px;">unseeded</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================= NEW WORKSPACE -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">11</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">New Workspace</h2></div>
+    <div style="width:100%; max-width:1280px; height:600px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; gap:14px; height:52px; border-bottom:1px solid #23262D; padding:0 16px;">
+        <span style="color:#565B66; font-size:14px;">‹</span><span style="display:inline-flex; align-items:center; height:24px; border:1px solid #3A3F49; border-radius:6px; padding:0 10px; font-size:13px; font-weight:600; color:#F4F5F7;">ShuttleWorks</span><span style="font-size:14px; font-weight:500; color:#8A8F98;">New workspace</span>
+      </div>
+      <div style="flex:1; overflow:auto; padding:32px; display:flex; flex-direction:column; gap:24px; align-items:center;">
+        <div style="width:100%; max-width:720px; display:flex; flex-direction:column; gap:20px;">
+          <label><span style="display:block; margin-bottom:8px; font-size:13px; font-weight:600; color:#F4F5F7;">Workspace name</span><input placeholder="e.g. Fall Regional Championship" style="width:100%; height:44px; border:1px solid #23262D; border-radius:10px; background:#16181D; padding:0 14px; font-size:14px; font-family:inherit; color:#E6E8EC; outline:none;"></label>
+          <div>
+            <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#565B66; margin-bottom:12px;">Start from a template</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div style="border:1.5px solid #5B9DFF; border-radius:12px; background:#16181D; padding:16px; box-shadow:0 0 28px rgba(91,157,255,.16);"><div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:14px; font-weight:600; color:#F4F5F7;">Meet Day</span><span style="width:16px;height:16px;border-radius:9999px;border:5px solid #5B9DFF;"></span></div><p style="margin:6px 0 0; font-size:12px; color:#8A8F98; line-height:1.5;">Roster · CP-SAT court scheduling · live scoring · public display.</p></div>
+              <div style="border:1px solid #23262D; border-radius:12px; background:#16181D; padding:16px;"><div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:14px; font-weight:600; color:#F4F5F7;">Bracket Tournament</span><span style="width:16px;height:16px;border-radius:9999px;border:1px solid #2E323B;"></span></div><p style="margin:6px 0 0; font-size:12px; color:#8A8F98; line-height:1.5;">Seeded draws · advancement · schedule rounds on the shared engine.</p></div>
+              <div style="border:1px solid #23262D; border-radius:12px; background:#16181D; padding:16px;"><div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:14px; font-weight:600; color:#F4F5F7;">Hybrid</span><span style="width:16px;height:16px;border-radius:9999px;border:1px solid #2E323B;"></span></div><p style="margin:6px 0 0; font-size:12px; color:#8A8F98; line-height:1.5;">Both engines in one workspace — meet + bracket sharing courts.</p></div>
+              <div style="border:1px solid #23262D; border-radius:12px; background:#16181D; padding:16px;"><div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:14px; font-weight:600; color:#F4F5F7;">Blank / Custom</span><span style="width:16px;height:16px;border-radius:9999px;border:1px solid #2E323B;"></span></div><p style="margin:6px 0 0; font-size:12px; color:#8A8F98; line-height:1.5;">Pick your own module mix and enable them as you go.</p></div>
+            </div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:10px;"><button style="height:44px; padding:0 18px; border:1px solid #2E323B; border-radius:10px; background:#16181D; color:#E6E8EC; font-size:14px; font-family:inherit; cursor:pointer;">Cancel</button><button style="height:44px; padding:0 22px; border:none; border-radius:10px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:14px; font-weight:600; font-family:inherit; cursor:pointer;">Create workspace →</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================= BRACKET · MATCHES (shared archetype) -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">12</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Bracket — Matches</h2><span style="font-size:13px; color:#565B66;">same table archetype as Meet · Matches</span></div>
+    <div style="width:100%; max-width:1280px; height:600px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#565B66; font-size:14px;">‹</span><span style="font-size:13px; font-weight:600; color:#F4F5F7;">Regional Bracket Championship</span><span class="m" style="font-size:10px; color:#565B66;">SUN JUL 19 · 6C</span></div>
+        <span style="display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(56,189,248,.3); background:rgba(56,189,248,.1); border-radius:6px; padding:2px 8px;"><span style="width:5px;height:5px;border-radius:9999px;background:#38BDF8;"></span><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#38BDF8;">Drawn</span></span>
+      </div>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:216px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:10px; overflow:hidden;">
+          <div style="padding:7px 12px; font-size:12px; color:#8A8F98;">Overview</div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Bracket</span><span style="font-size:9px; font-weight:600; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); border-radius:4px; padding:0 4px;">ENG</span></span><span style="font-size:10px; color:#565B66; transform:rotate(90deg);">›</span></div>
+            <div style="margin-left:12px; border-left:1px solid #23262D; padding-left:8px; display:flex; flex-direction:column; gap:2px;"><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Roster</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Draws</div><div style="position:relative; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:500; color:#F4F5F7; background:#1B1E24;"><span style="position:absolute; left:-9px; top:6px; bottom:6px; width:2px; border-radius:2px; background:#5B9DFF;"></span>Matches</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Configuration</div></div>
+          </div>
+          <div style="margin:10px 0; border-top:1px solid #23262D;"></div>
+          <div style="padding:0 12px 4px; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Workspace</div>
+          <div style="display:flex; flex-direction:column; gap:2px;"><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Members</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Settings</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; gap:10px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+            <span style="font-size:14px; font-weight:600; color:#F4F5F7;">Matches</span><span class="tn" style="font-size:12px; color:#565B66;">14 · from draws</span>
+            <div style="flex:1;"></div>
+            <div style="display:flex; align-items:center; gap:6px; height:30px; border:1px solid #23262D; border-radius:8px; background:#16181D; padding:0 10px;"><span style="color:#565B66; font-size:11px;">⌕</span><span style="font-size:12px; color:#565B66;">Search…</span><span class="kbd">/</span></div>
+            <button style="height:30px; padding:0 13px; border:none; border-radius:8px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:12px; font-weight:600; font-family:inherit; cursor:pointer;">Advance winners ▾</button>
+          </div>
+          <div style="flex:1; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid #23262D; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#565B66;"><span style="width:28px;">#</span><span style="width:64px;">Round</span><span style="flex:3;">Side A</span><span style="flex:3;">Side B</span><span style="width:64px;">Score</span></div>
+            <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Quarterfinal</span><span class="tn" style="font-size:10px; color:#565B66;">4</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">1</span><span class="m" style="width:64px;"><span style="font-size:11px; font-weight:600; color:#5B9DFF; background:rgba(91,157,255,.14); border-radius:5px; padding:2px 7px;">QF1</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Alex Chen <span style="color:#565B66;">Lincoln</span></span><span style="flex:3; font-size:13px; color:#565B66; text-decoration:line-through;">R. Vega</span><span class="m tn" style="width:64px; font-size:12px; color:#8A8F98;">21-18</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">2</span><span class="m" style="width:64px;"><span style="font-size:11px; font-weight:600; color:#5B9DFF; background:rgba(91,157,255,.14); border-radius:5px; padding:2px 7px;">QF2</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Sam Rivera <span style="color:#565B66;">Jefferson</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Tyler Ng <span style="color:#565B66;">Roosevelt</span></span><span class="m tn" style="width:64px; font-size:12px; color:#565B66;">—</span></div>
+            <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Semifinal</span><span class="tn" style="font-size:10px; color:#565B66;">2</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid #1F2229;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">3</span><span class="m" style="width:64px;"><span style="font-size:11px; font-weight:600; color:#5B9DFF; background:rgba(91,157,255,.14); border-radius:5px; padding:2px 7px;">SF1</span></span><span style="flex:3; font-size:13px; color:#E6E8EC;">Alex Chen <span style="color:#565B66;">Lincoln</span></span><span style="flex:3; font-size:13px; color:#565B66; font-style:italic;">Winner QF2</span><span class="m tn" style="width:64px; font-size:12px; color:#565B66;">—</span></div>
+            <div style="display:flex; align-items:center; gap:8px; padding:7px 16px; background:#131519; border-bottom:1px solid #1F2229;"><span style="font-size:11px; font-weight:600; color:#C7CBD1;">Final</span><span class="tn" style="font-size:10px; color:#565B66;">1</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:8px 16px;"><span class="m" style="width:28px; font-size:11px; color:#565B66;">4</span><span class="m" style="width:64px;"><span style="font-size:11px; font-weight:600; color:#5B9DFF; background:rgba(91,157,255,.14); border-radius:5px; padding:2px 7px;">F</span></span><span style="flex:3; font-size:13px; color:#565B66; font-style:italic;">Winner SF1</span><span style="flex:3; font-size:13px; color:#565B66; font-style:italic;">Winner SF2</span><span class="m tn" style="width:64px; font-size:12px; color:#565B66;">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================= BRACKET · CONFIGURATION (shared archetype) -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin-top:40px;"><span class="m" style="font-size:12px; font-weight:600; color:#565B66;">13</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#F4F5F7;">Bracket — Configuration</h2><span style="font-size:13px; color:#565B66;">same form archetype as Meet · Configuration</span></div>
+    <div style="width:100%; max-width:1280px; height:600px; border:1px solid #23262D; border-radius:14px; background:#0E0F13; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; border-bottom:1px solid #23262D; padding:0 16px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="color:#565B66; font-size:14px;">‹</span><span style="font-size:13px; font-weight:600; color:#F4F5F7;">Regional Bracket Championship</span><span class="m" style="font-size:10px; color:#565B66;">SUN JUL 19 · 6C</span></div>
+        <span style="display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(56,189,248,.3); background:rgba(56,189,248,.1); border-radius:6px; padding:2px 8px;"><span style="width:5px;height:5px;border-radius:9999px;background:#38BDF8;"></span><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#38BDF8;">Drawn</span></span>
+      </div>
+      <div style="display:flex; min-height:0; flex:1;">
+        <nav style="width:216px; flex-shrink:0; border-right:1px solid #23262D; background:#0B0C0F; padding:10px; overflow:hidden;">
+          <div style="padding:7px 12px; font-size:12px; color:#8A8F98;">Overview</div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px;"><span style="display:flex; align-items:center; gap:6px;"><span style="font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Bracket</span><span style="font-size:9px; font-weight:600; color:#5B9DFF; border:1px solid rgba(91,157,255,.3); border-radius:4px; padding:0 4px;">ENG</span></span><span style="font-size:10px; color:#565B66; transform:rotate(90deg);">›</span></div>
+            <div style="margin-left:12px; border-left:1px solid #23262D; padding-left:8px; display:flex; flex-direction:column; gap:2px;"><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Roster</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Draws</div><div style="border-radius:7px; padding:6px 12px; font-size:12px; color:#8A8F98;">Matches</div><div style="position:relative; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:500; color:#F4F5F7; background:#1B1E24;"><span style="position:absolute; left:-9px; top:6px; bottom:6px; width:2px; border-radius:2px; background:#5B9DFF;"></span>Configuration</div></div>
+          </div>
+          <div style="margin:10px 0; border-top:1px solid #23262D;"></div>
+          <div style="padding:0 12px 4px; font-size:10px; font-weight:600; text-transform:uppercase; color:#565B66;">Workspace</div>
+          <div style="display:flex; flex-direction:column; gap:2px;"><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Members</div><div style="padding:6px 12px; font-size:12px; color:#8A8F98;">Settings</div></div>
+        </nav>
+        <div style="flex:1; min-width:0; overflow:auto;"><div style="max-width:640px; padding:24px; display:flex; flex-direction:column; gap:24px;">
+          <div>
+            <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#5B9DFF; margin-bottom:10px;">Draws &amp; sizes</div>
+            <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px;">
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">MS</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">16</div></div>
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">WS</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">16</div></div>
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">MD</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">8</div></div>
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">WD</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">8</div></div>
+              <div style="border:1px solid #23262D; border-radius:10px; background:#16181D; padding:12px; text-align:center;"><div class="m" style="font-size:11px; color:#8A8F98;">XD</div><div class="tn" style="font-size:22px; font-weight:700; color:#F4F5F7;">8</div></div>
+            </div>
+          </div>
+          <div style="display:flex; gap:24px;">
+            <label style="flex:1;"><span style="display:block; margin-bottom:6px; font-size:12px; font-weight:500; color:#C7CBD1;">Format</span><input value="Single elimination" style="width:100%; height:40px; border:1px solid #23262D; border-radius:9px; background:#16181D; padding:0 12px; font-size:13px; font-family:inherit; color:#E6E8EC; outline:none;"></label>
+            <label style="flex:1;"><span style="display:block; margin-bottom:6px; font-size:12px; font-weight:500; color:#C7CBD1;">Seeds per draw</span><input value="4" style="width:100%; height:40px; border:1px solid #23262D; border-radius:9px; background:#16181D; padding:0 12px; font-size:13px; font-family:inherit; color:#E6E8EC; outline:none;"></label>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#5B9DFF; margin-bottom:10px;">Scoring</div>
+            <div style="display:flex; gap:8px;"><span style="border-radius:8px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); padding:8px 14px; font-size:13px; font-weight:600;">Badminton · best of 3</span><span style="border-radius:8px; border:1px solid #2E323B; background:#16181D; color:#8A8F98; padding:8px 14px; font-size:13px;">Simple</span></div>
+          </div>
+          <div><button style="height:40px; padding:0 18px; border:none; border-radius:9px; background:#5B9DFF; color:#08192E; box-shadow:0 0 22px rgba(91,157,255,.35); font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;">Save configuration</button></div>
+        </div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
