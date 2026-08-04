@@ -30,8 +30,10 @@
  * remount). Existence-checking inherently needs one request that may
  * 404; the goal is to eliminate the *repeated* noise, which this does.
  *
- * Push-based realtime remains a deliberate
- * follow-up; this hook still polls once a draw exists.
+ * Polling is the design, not a stopgap. The product is single-store
+ * with no replication layer (ADR 0012), so there is no push channel to
+ * subscribe to — and an event has to keep working with the internet
+ * down all day, which a push channel would not.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useBracketApi } from '../api/bracketClient';

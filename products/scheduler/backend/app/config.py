@@ -1,6 +1,6 @@
 """Application settings loaded from environment variables.
 
-Per ``docs/shuttleworks-tech-stack.md``: a Pydantic ``BaseSettings`` model
+Per ``docs/tech-stack.md``: a Pydantic ``BaseSettings`` model
 that reads ``DATABASE_URL`` / ``ENVIRONMENT`` / ``CORS_ORIGINS`` and
 friends from the process environment, falling back to a ``.env`` file in
 the working directory.

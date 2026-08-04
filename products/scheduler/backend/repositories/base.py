@@ -42,10 +42,11 @@ class TournamentRepository(Protocol):
         """Insert an empty tournament row.
 
         ``data`` starts as ``{}``; the first ``PUT /tournaments/{id}/state``
-        fills it. ``owner_id`` is populated from Step 4's Supabase JWT;
-        ``owner_email`` is denormalised from the same auth context so
-        Step 6's dashboard can show "Shared with You" rows without
-        joining across Supabase's auth schema.
+        fills it. ``owner_id`` comes from the authenticated session
+        (``users.id``); ``owner_email`` is denormalised from the same
+        auth context so the Hub can show "Shared with You" rows without
+        a join. Since SP-CLOUD-2 both are provenance — authorization
+        reads ``tournament_members``.
         """
         ...
 

@@ -23,11 +23,12 @@ Tables back the routes that used to read and write JSON files:
   app-managed (see ``TournamentBackupRepository.rotate``).
 
 Design notes:
-- ``Uuid`` cross-DB type maps to native UUID on Postgres (Supabase) and
-  to a CHAR(32) hex string on SQLite (local dev).
+- ``Uuid`` cross-DB type maps to native UUID on Postgres (cloud mode)
+  and to a CHAR(32) hex string on SQLite (local mode).
 - ``JSON`` is the portable type — native JSONB on Postgres, TEXT on
   SQLite. We don't query inside the blob today; if we ever need to,
-  switch to ``JSONB`` on the Supabase side via a separate Alembic step.
+  switch to ``JSONB`` for the Postgres dialect via a separate Alembic
+  step.
 - All ``datetime`` columns store timezone-aware UTC values. We never
   rely on the database's session timezone.
 """
@@ -85,9 +86,9 @@ class Tournament(Base):
     __tablename__ = "tournaments"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    # Step 4 backfills this from the Supabase JWT subject. Nullable so
-    # rows created before auth lands aren't rejected. Since SP-CLOUD-2
-    # this is provenance only — authorization reads memberships.
+    # The creating user (``users.id``). Nullable so rows created before
+    # auth landed aren't rejected. Since SP-CLOUD-2 this is provenance
+    # only — authorization reads memberships.
     owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
     # SP-CLOUD-2: the owning org. Nullable at the column level so the
     # backfill migration can populate it; the application always sets
@@ -100,10 +101,10 @@ class Tournament(Base):
     # behaviour where ``tournamentName`` is optional.
     name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     # Denormalised owner email captured at create time from the
-    # authenticated user. Step 6 surfaces it as ``ownerName`` in the
-    # dashboard's "Shared with You" section. We don't store it in the
-    # Supabase ``auth.users`` table directly because that schema
-    # isn't reachable from our DB; this column is a one-way cache.
+    # authenticated user, surfaced as ``ownerName`` in the Hub's
+    # "Shared with You" section. A one-way cache: it is not kept in sync
+    # with ``users.email``, so a user who changes their address keeps the
+    # old one on workspaces they already created.
     owner_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
     # ``draft`` / ``active`` / ``archived`` — used by the Step 6 status
     # pill. Stored as plain string for ease of evolution; enforcement

@@ -552,8 +552,8 @@ class _LocalBracketRepo:
 
         Participants and matches are untouched — this is the config-only
         sibling of the upsert route (which wipes participants). Only the
-        provided (non-None) fields change. Stages an outbox row; returns
-        None if the event does not exist. Callers gate on status.
+        provided (non-None) fields change. Returns None if the event does
+        not exist. Callers gate on status.
         """
         row = self.get_event(tournament_id, event_id)
         if row is None:

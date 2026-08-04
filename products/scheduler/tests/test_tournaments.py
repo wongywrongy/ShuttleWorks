@@ -756,11 +756,15 @@ def test_clear_schedule_flag_atomic_rollback_on_write_failure(client, monkeypatc
     """If the single commit that would clear+apply fails mid-way, the
     prior schedule must survive intact — no half-cleared state.
 
-    We force the failure inside ``upsert_data`` (after the in-memory
-    ``row.data`` mutation but before its ``session.commit()``) by making
-    the sync-outbox staging step raise. Since nothing commits, the DB
-    row is untouched and a fresh read must show the original schedule
-    and config, not a partially-applied edit.
+    We force the failure inside ``upsert_data`` — after the in-memory
+    ``row.data`` mutation, before the write lands — by making
+    ``session.commit()`` itself raise. Since nothing commits, the DB row
+    is untouched and a fresh read must show the original schedule and
+    config, not a partially-applied edit.
+
+    (This used to fire by making the sync-outbox staging step raise. The
+    outbox is gone — ADR 0012 — so the commit is patched directly; the
+    property under test is unchanged.)
     """
     created = client.post("/tournaments", json={"name": "L6"}).json()
     tid = created["id"]

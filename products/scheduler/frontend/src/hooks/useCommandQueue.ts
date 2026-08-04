@@ -262,9 +262,10 @@ export function useCommandQueue() {
             }
           } catch {
             // Refetch failed (transient). Roll back the optimistic
-            // apply explicitly so the operator UX doesn't show a
-            // wrong status that the next Realtime push might never
-            // arrive to correct.
+            // apply explicitly: nothing else will correct it. State
+            // reaches this client by polling, so a wrong status would
+            // simply sit there until the next successful poll — and if
+            // the failure persists, until the operator reloads.
             applyOptimisticStatus(matchId, previousStatus);
           }
           break;

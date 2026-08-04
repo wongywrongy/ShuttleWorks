@@ -879,9 +879,9 @@ def _hydrate_session(
             )
 
     # Assignments live in tournaments.data["bracket_session"]["assignments"]
-    # — they're not normalised into their own table in PR 1; PR 3 may
-    # promote them to ``bracket_assignments`` if granular Realtime
-    # ordering becomes useful.
+    # rather than a normalised ``bracket_assignments`` table. Nothing
+    # queries inside them, so the blob is enough; promote them only if
+    # something needs to filter or order on individual assignments.
     for a in session_cfg.get("assignments") or []:
         if not isinstance(a, dict) or "play_unit_id" not in a:
             continue
@@ -985,10 +985,10 @@ def _persist_event(
 ) -> None:
     """Persist one event's full shape (event row + participants + matches).
 
-    Called from create / import flows. The repo enqueues outbox rows
-    for the event + each match in the same transaction; results from
-    auto-walkover-on-BYE are persisted separately by the caller after
-    this returns (the matches must exist before results can FK them).
+    Called from create / import flows. The event and its matches are
+    written in one transaction; results from auto-walkover-on-BYE are
+    persisted separately by the caller after this returns (the matches
+    must exist before results can FK them).
     """
     repo.brackets.create_event(
         tournament_id,

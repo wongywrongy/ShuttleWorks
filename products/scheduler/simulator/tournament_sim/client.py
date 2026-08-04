@@ -74,9 +74,10 @@ class SimClient:
 
     ``base_url`` points straight at the backend (``http://localhost:8600``)
     or at the nginx prefix (``http://localhost/api``) — paths are joined
-    verbatim either way. Local dev needs no auth (blank SUPABASE_URL =
-    synthetic user); ``auth_token`` exists so a future authed environment
-    needs no refactor.
+    verbatim either way. Local dev needs no auth (``AUTH_MODE=local``
+    resolves credential-less requests to the bootstrap operator);
+    ``auth_token`` exists so pointing this at an ``AUTH_MODE=cloud``
+    deployment needs no refactor.
     """
 
     #: transport-level retries (connect refused during server warmup etc.)
@@ -88,7 +89,10 @@ class SimClient:
         *,
         stats: Optional[ApiStats] = None,
         auth_token: Optional[str] = None,
-        timeout: float = 60.0,  # /schedule solves synchronously
+        # Generous because the interactive solves (repair, warm restart,
+        # bracket) still run in-request; the meet batch solve is a job
+        # and returns immediately.
+        timeout: float = 60.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.stats = stats if stats is not None else ApiStats()

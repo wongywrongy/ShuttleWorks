@@ -185,7 +185,8 @@ archive/
 examples/                      engine usage examples (product-agnostic)
 docs/                          project planning artifacts
 ├── tech-stack.md              post-merge architecture + data model + flows
-├── deploy/cloud.md            Tauri sidecar + Supabase deploy guide
+├── how-to/install-*.md        the deploy runbooks (local / self-host / worker)
+├── deploy/cloud.md            HISTORICAL — the retired Supabase-era guide
 ├── architectural-roadmap.md   the backend-merge arc roadmap (historical)
 ├── superpowers/specs|plans/   per-slice design record (incl. the 2026-06 workspace-suite
 │                              control-plane redesign: SP-A backend → SP-D Settings/Dock)
@@ -199,10 +200,10 @@ Makefile                       top-level chooser (this is what most people use)
 ## Tech stack
 
 - **Engine** — Python 3.11 · Google OR-Tools (CP-SAT) · pure dataclasses
-- **Backend** — FastAPI (sync via threadpool) · SQLAlchemy 2.0 · Alembic · SQLite (canonical) · Supabase Postgres (mirror via outbox) · Supabase Auth · SSE for solver progress
-- **Frontend** — React 19 · TypeScript · Vite · Zustand · Tailwind · dnd-kit · Radix · IndexedDB command queue · Supabase Realtime (subscribe + polling fallback) · Vitest + jsdom + RTL
-- **Shell** — Docker Compose today (`make scheduler`); Tauri packaging is a known follow-up
-- **Deployment** — Docker Compose on the director's laptop · Vercel for the public TV display · Supabase project (Auth + Postgres + Realtime)
+- **Backend** — FastAPI (sync via threadpool) · SQLAlchemy 2.0 · Alembic · single store: SQLite (local mode) or Postgres 16 (cloud mode) · cookie sessions + Argon2id · DB-backed solve-job queue · SSE for bracket solver progress
+- **Frontend** — React 19 · TypeScript · Vite · Zustand · Tailwind · dnd-kit · Radix · IndexedDB command queue · polling (no push channel by design) · Vitest + jsdom + RTL
+- **Shell** — Docker Compose (`make scheduler`); Tauri packaging is a known follow-up
+- **Deployment** — Docker Compose. Local: one container set on the director's laptop. Cloud: self-hosted SPA + API + Postgres + worker behind a Cloudflare Tunnel, optionally with remote worker hosts over a tailnet
 
 ---
 
@@ -211,8 +212,8 @@ Makefile                       top-level chooser (this is what most people use)
 - [`products/scheduler/README.md`](./products/scheduler/README.md) — scheduler features, dev workflow, proposal pipeline, suggestions inbox
 - [`products/scheduler/BACKEND.md`](./products/scheduler/BACKEND.md) — FastAPI routes, request lifecycle, how to add an endpoint or a constraint
 - [`products/scheduler/FRONTEND.md`](./products/scheduler/FRONTEND.md) — shell + tabs, store split, theme system
-- [`docs/tech-stack.md`](./docs/tech-stack.md) — full architecture + 12-table data model + state machine + command + sync flows + conflict UX
-- [`docs/deploy/cloud.md`](./docs/deploy/cloud.md) — Tauri sidecar setup, Supabase migration prerequisites, smoke test, rollback plan
+- [`docs/tech-stack.md`](./docs/tech-stack.md) — full architecture + data model + state machine + command flows + conflict UX
+- **Deploying?** [`docs/how-to/install-local.md`](./docs/how-to/install-local.md) (one machine) or [`docs/how-to/install-selfhost.md`](./docs/how-to/install-selfhost.md) (cloud, Cloudflare Tunnel) — plus [`add-a-worker.md`](./docs/how-to/add-a-worker.md) for a second compute host. **Not** `docs/deploy/cloud.md`: that is the retired Supabase-era guide, kept for history and marked DO NOT FOLLOW.
 - [`docs/superpowers/specs/`](./docs/superpowers/specs) — per-slice design record, incl. the workspace-suite control-plane redesign (`2026-06-23-workspace-suite-architecture-design.md` → the SP-A…SP-D specs)
 - [`docs/architectural-roadmap.md`](./docs/architectural-roadmap.md) — the (historical) backend-merge arc roadmap
 - [`docs/changes/`](./docs/changes/) — dated decision log
