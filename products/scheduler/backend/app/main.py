@@ -253,9 +253,13 @@ async def close_repository_middleware(request: Request, call_next):
 
 
 # Step 4 — every data router is guarded by ``get_current_user``. The
-# The ``/health*`` endpoints are intentionally excluded so probes don't
-# require a token. They carry operational detail (worker ids, queue
-# shape), so the tunnel must not publish them — scrape over the tailnet.
+# ``/health*`` endpoints are excluded from *that* dependency because a
+# probe has no session, but they are not ungoverned: ``/health`` is
+# deliberately public (liveness must answer without a credential) while
+# ``/health/ready|deep|metrics`` carry their own ``OPS_TOKEN`` guard —
+# see ``api/health.py``. Until 2026-08-04 this comment claimed the
+# tunnel would keep them private; the tunnel publishes a hostname, not a
+# route list, so it never did.
 _AUTH_DEP = [Depends(get_current_user)]
 
 app.include_router(schedule.router, dependencies=_AUTH_DEP)

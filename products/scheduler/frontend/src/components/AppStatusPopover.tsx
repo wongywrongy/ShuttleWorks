@@ -25,7 +25,12 @@ export function AppStatusPopover() {
   const pushToast = useUiStore((s) => s.pushToast);
 
   const [open, setOpen] = useState(false);
-  const { health, error: healthError, refresh: refreshHealth } = useDeepHealth();
+  const {
+    health,
+    error: healthError,
+    restricted: healthRestricted,
+    refresh: refreshHealth,
+  } = useDeepHealth();
   const { createBackup, busy: backingUp } = useCreateBackup();
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -151,6 +156,11 @@ export function AppStatusPopover() {
                 <span className={health.status === 'healthy' ? 'text-status-success-fg' : 'text-status-danger-fg'}>
                   {health.status} · v{health.version}
                 </span>
+              ) : healthRestricted ? (
+                // Not a failure: this deployment keeps operational
+                // detail off the browser. Saying "unreachable" here
+                // would report an outage that isn't happening.
+                <span className="text-muted-foreground">not published</span>
               ) : healthError ? (
                 <span className="text-status-danger-fg">unreachable</span>
               ) : (

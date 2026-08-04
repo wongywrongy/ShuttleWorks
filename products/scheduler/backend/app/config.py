@@ -80,6 +80,27 @@ class Settings(BaseSettings):
     # bypass. Same JSON-list-or-comma-separated parsing as CORS_ORIGINS.
     trusted_proxy_ips: Annotated[list[str], NoDecode] = []
 
+    # ---- Operational endpoints ----------------------------------------
+    # Shared secret guarding /health/ready, /health/deep and
+    # /health/metrics. NOT /health — liveness must stay credential-free
+    # or a probe failure becomes indistinguishable from a dead process,
+    # and an orchestrator kills a container it should have left alone.
+    #
+    # Those three carry operational detail: worker identities, live job
+    # ids, queue depth, the deployed schema revision. None of it is a
+    # credential, all of it is a free map of the private topology for
+    # anyone who asks. The module docstring in ``api/health.py`` used to
+    # say "must not be published through the tunnel" — but the shipped
+    # ingress publishes one hostname wholesale, so the only thing
+    # enforcing that sentence was the sentence. This is the enforcement.
+    #
+    # Blank = guard disabled, which is correct for local mode (one
+    # operator, one laptop, no ingress) and for the plain-HTTP compose
+    # stacks whose Docker HEALTHCHECKs curl /health/deep. The cloud API
+    # profile requires it (see ``_enforce_cloud_secrets``).
+    # ``OPS_TOKEN_FILE`` is supported, like every other secret here.
+    ops_token: str = ""
+
     # ---- Filesystem ----------------------------------------------------
     # Writable directory for runtime artifacts (SQLite when the URL
     # points at a relative file, future upload caches, etc.). The
@@ -261,6 +282,11 @@ class Settings(BaseSettings):
             missing.append("EMAIL_BACKEND=smtp (console would log live tokens)")
         elif not self.smtp_host:
             missing.append("SMTP_HOST")
+        # A cloud API is behind an ingress, and an ingress publishes a
+        # hostname, not a route list. Without this the operational health
+        # endpoints are open to the internet.
+        if not self.ops_token:
+            missing.append("OPS_TOKEN (guards /health/ready|deep|metrics)")
         if missing:
             raise ValueError(
                 "ENVIRONMENT=cloud requires: "

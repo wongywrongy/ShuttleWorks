@@ -113,6 +113,10 @@ def test_cloud_mode_refuses_console_email_backend(monkeypatch):
         )
     assert "EMAIL_BACKEND=smtp" in str(e.value)
 
+    # Positive control: an otherwise-complete cloud config still boots.
+    # ``ops_token`` joined the cloud requirements on 2026-08-04 (it guards
+    # the operational health endpoints) — it is fixture data here, not
+    # the subject of this test.
     ok = Settings(
         environment="cloud",
         database_url="postgresql://u:p@db/x",
@@ -120,5 +124,6 @@ def test_cloud_mode_refuses_console_email_backend(monkeypatch):
         session_cookie_secure=True,
         email_backend="smtp",
         smtp_host="smtp.example.com",
+        ops_token="an-ops-token",
     )
     assert ok.email_backend == "smtp"

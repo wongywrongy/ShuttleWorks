@@ -22,9 +22,21 @@ check that cannot fail is worse than none: it converts an outage into a
 *silent* outage. ``/health/deep`` is kept as an alias for the existing
 Docker HEALTHCHECK and compose files, but now performs the real check.
 
-**Access.** These carry operational detail (worker ids, queue shape) and
-must not be published through the tunnel. The Cloudflare ingress rule
-exposes the application only; scrape these over the tailnet.
+**Access.** ``/health`` is public: liveness must answer without a
+credential, or a probe cannot distinguish "unauthorized" from "dead"
+and an orchestrator restarts a container it should have left alone.
+
+The other three carry operational detail — worker identities, live job
+ids, queue depth, the deployed schema revision — and require
+``X-ShuttleWorks-Ops-Token`` whenever ``OPS_TOKEN`` is set (mandatory in
+the cloud API profile, blank and therefore off in local mode).
+
+This used to be a sentence saying they "must not be published through
+the tunnel". It was not true: the self-host ingress routes one public
+hostname to the API wholesale, with no path filter, so the entire tree
+was internet-reachable and the only thing enforcing the rule was the
+rule. Found in the 2026-08-04 audit. A comment is not an access control;
+prefer the ingress ALSO filter these paths, but never rely on it.
 
 **Metrics format.** Plain JSON rather than a Prometheus exposition
 format: the collector on the monitoring host ingests OTLP, nothing in
@@ -36,11 +48,12 @@ this shape maps onto it without changing the endpoint.
 from __future__ import annotations
 
 import logging
+import secrets as _secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select, text
 
 from app.config import settings
@@ -54,6 +67,41 @@ router = APIRouter(tags=["health"])
 log = logging.getLogger("scheduler.health")
 
 _VERSION = "2.0.0"
+
+OPS_TOKEN_HEADER = "X-ShuttleWorks-Ops-Token"
+
+
+def require_ops_token(request: Request) -> None:
+    """Gate the operational health endpoints on ``OPS_TOKEN``.
+
+    Blank token → no guard. That is deliberate, not a hole: local mode
+    is one operator on one laptop with no ingress, and the plain-HTTP
+    compose stacks run Docker HEALTHCHECKs that curl ``/health/deep``
+    without credentials. The cloud API profile refuses to boot without a
+    token (``_enforce_cloud_secrets``), which is where the exposure is
+    real.
+
+    403 rather than 401: there is no challenge-response flow to advertise
+    and no ``WWW-Authenticate`` scheme to name — a caller either carries
+    the operational token or has no business here.
+
+    ``compare_digest`` rather than ``==``: token comparison is the one
+    place a timing oracle is worth the two extra characters.
+
+    Read from ``settings`` at request time rather than captured at import
+    so tests (and a future reload) see the current value.
+    """
+    expected = settings.ops_token
+    if not expected:
+        return
+    supplied = request.headers.get(OPS_TOKEN_HEADER, "")
+    if not _secrets.compare_digest(supplied, expected):
+        raise HTTPException(status_code=403, detail="ops token required")
+
+
+# Applied to readiness/metrics but never to liveness — see the module
+# docstring for why that asymmetry is the whole point.
+_OPS_DEP = [Depends(require_ops_token)]
 
 
 def _expected_revision() -> Optional[str]:
@@ -79,7 +127,7 @@ async def health_check():
     return {"status": "healthy", "version": _VERSION, "role": settings.process_role}
 
 
-@router.get("/health/ready")
+@router.get("/health/ready", dependencies=_OPS_DEP)
 def health_ready(response: Response, repo: LocalRepository = Depends(get_repository)):
     """Readiness: database reachable AND schema current.
 
@@ -102,7 +150,14 @@ def health_ready(response: Response, repo: LocalRepository = Depends(get_reposit
         revision = row[0] if row else None
         db_ok = True
     except Exception as exc:
-        db_error = f"{type(exc).__name__}: {exc}"
+        # Class name only. A connection failure's ``str()`` carries the
+        # DSN — host, port, user, sometimes the password — and this body
+        # is served to whoever holds the ops token, logged by whatever
+        # scrapes it, and (before the guard above) was reachable from the
+        # internet. The operator needs to know the database is down; the
+        # detail that says *which* database belongs in the log.
+        db_error = type(exc).__name__
+        log.warning("readiness database check failed", exc_info=True)
 
     expected = _expected_revision()
     # Only judge the revision when we could read both sides; an
@@ -127,7 +182,7 @@ def health_ready(response: Response, repo: LocalRepository = Depends(get_reposit
 # ``/health/deep``. Kept as an alias so they keep working, but it now
 # performs the real readiness check rather than the old
 # writability-and-imports probe that could not fail on a database outage.
-@router.get("/health/deep")
+@router.get("/health/deep", dependencies=_OPS_DEP)
 def health_deep(
     request: Request, response: Response, repo: LocalRepository = Depends(get_repository)
 ):
@@ -145,7 +200,10 @@ def health_deep(
         probe.unlink()
         data_dir_writable = True
     except OSError as e:
-        data_error = str(e)
+        # Class name only, as above: ``str()`` on an OSError names the
+        # container path it failed on.
+        data_error = type(e).__name__
+        log.warning("data-dir writability check failed", exc_info=True)
 
     solver_loaded = False
     solver_error: str | None = None
@@ -154,7 +212,8 @@ def health_deep(
 
         solver_loaded = True
     except Exception as e:  # pragma: no cover - import should never fail in prod
-        solver_error = str(e)
+        solver_error = type(e).__name__
+        log.warning("solver import check failed", exc_info=True)
 
     healthy = (
         body["status"] == "ready" and data_dir_writable and solver_loaded
@@ -180,7 +239,7 @@ def health_deep(
     return body
 
 
-@router.get("/health/metrics")
+@router.get("/health/metrics", dependencies=_OPS_DEP)
 def health_metrics(repo: LocalRepository = Depends(get_repository)):
     """Queue shape and worker liveness, from ``solve_jobs`` alone.
 

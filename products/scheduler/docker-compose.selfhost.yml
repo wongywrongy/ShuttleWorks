@@ -114,8 +114,15 @@ services:
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM=${SMTP_FROM}
+      # Guards /health/ready|deep|metrics, which carry worker
+      # identities, live job ids and the deployed schema revision.
+      # Required in cloud mode: the tunnel publishes a HOSTNAME, not a
+      # route list, so without this the operational endpoints are open
+      # to the internet. Same file-injection pattern as the DB password.
+      - OPS_TOKEN_FILE=/run/secrets/ops_token
     secrets:
       - database_url
+      - ops_token
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,7 +133,12 @@ services:
     healthcheck:
       # /health/deep is a REAL readiness check since SP-CLOUD-3 — it
       # fails when the database is unreachable or the schema is behind.
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/health/deep', timeout=5); sys.exit(0 if __import__('json').load(r).get('status')=='healthy' else 1)\""]
+      #
+      # It now also requires the ops token, so the probe reads the same
+      # secret file the API does. One source of truth: a token pasted
+      # into this line as a literal would be the drift that the
+      # DATABASE_URL comment above already learned about the hard way.
+      test: ["CMD-SHELL", "python -c \"import urllib.request,json,sys; t=open('/run/secrets/ops_token').read().strip(); r=urllib.request.urlopen(urllib.request.Request('http://localhost:8000/health/deep', headers={'X-ShuttleWorks-Ops-Token': t}), timeout=5); sys.exit(0 if json.load(r).get('status')=='healthy' else 1)\""]
       interval: 30s
       timeout: 10s
       start_period: 20s
@@ -159,9 +171,11 @@ services:
           memory: 256M
 
 secrets:
-  # Both files are created by the install runbook and chmod 600. Neither
-  # is committed — ./secrets/.gitignore excludes everything in here.
+  # All three files are created by the install runbook and chmod 600.
+  # None is committed — ./secrets/.gitignore excludes everything in here.
   postgres_password:
     file: ./secrets/postgres_password
   database_url:
     file: ./secrets/database_url
+  ops_token:
+    file: ./secrets/ops_token

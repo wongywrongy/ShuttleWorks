@@ -43,7 +43,7 @@ aimed at the homelab, should not be able to reach the product's database.
 
 ## 2. Secrets
 
-Two files, never committed (`products/scheduler/secrets/` is gitignored):
+Three files, never committed (`products/scheduler/secrets/` is gitignored):
 
 ```bash
 cd /opt/shuttleworks/products/scheduler
@@ -51,12 +51,20 @@ mkdir -p secrets
 openssl rand -base64 32 | tr -d '\n' > secrets/postgres_password
 printf 'postgresql://scheduler:%s@postgres:5432/scheduler' "$(cat secrets/postgres_password)" \
   > secrets/database_url
+openssl rand -hex 32 | tr -d '\n' > secrets/ops_token
 chmod 600 secrets/*
 ```
 
-Both are injected as files rather than environment variables, so the password
-never appears in `docker inspect` or a process listing. The API reads
-`DATABASE_URL_FILE`; Postgres reads `POSTGRES_PASSWORD_FILE`.
+All three are injected as files rather than environment variables, so the values
+never appear in `docker inspect` or a process listing. The API reads
+`DATABASE_URL_FILE` and `OPS_TOKEN_FILE`; Postgres reads
+`POSTGRES_PASSWORD_FILE`.
+
+`ops_token` guards `/health/ready`, `/health/deep` and `/health/metrics`, which
+report worker identities, live job ids, queue depth and the deployed schema
+revision. Cloud mode refuses to start without it. `/health` (liveness) stays
+open on purpose — a probe that cannot tell "unauthorized" from "dead" gets your
+container restarted for a missing header.
 
 **One file is the source of truth for the password.** Do not also set
 `POSTGRES_PASSWORD` in `.env` — during development of this stack, having the
@@ -87,6 +95,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `PUBLIC_APP_ORIGIN` | `''` | – | **required** | not read | Emailed invite/reset links come out relative and unclickable. |
 | `CORS_ORIGINS` | localhost list | default | **your hostname** | not read | The browser blocks API calls. Never `*` — cookie auth requires an explicit allowlist. |
 | `TRUSTED_PROXY_IPS` | `[]` (trust nothing) | leave empty | **connector IP** | not read | See §6 — this is the one that locks out every user at once. |
+| `OPS_TOKEN` | `''` (guard off) | leave empty | **required** (`OPS_TOKEN_FILE`) | not read | Without it `/health/ready\|deep\|metrics` publish worker ids, live job ids and the schema revision to anyone who can reach the hostname. |
 | `PROCESS_ROLE` | `api` | – | `api` | `worker` (set automatically) | Set by `worker.py` itself; only override to be explicit. |
 | `EMBEDDED_WORKER` | `true` | `true` | `true` or `false` | n/a | `false` with no remote worker means jobs queue and never run. |
 | `WORKER_CONCURRENCY` | `1` | `1` | `1` | tune | Concurrent solves compete for RAM; RAM is the ceiling, not cores. |
@@ -208,10 +217,13 @@ process that ever does. Watch for `alembic_upgrade_head_complete`, then:
 
 ```bash
 docker compose -f docker-compose.selfhost.yml exec api \
-  python -c "import urllib.request,json; print(json.load(urllib.request.urlopen('http://localhost:8000/health/ready')))"
+  python -c "import urllib.request,json; t=open('/run/secrets/ops_token').read().strip(); \
+req=urllib.request.Request('http://localhost:8000/health/ready', headers={'X-ShuttleWorks-Ops-Token': t}); \
+print(json.load(urllib.request.urlopen(req)))"
 ```
 
 Expect `"status": "ready"` with `schemaRevision` equal to `expectedRevision`.
+Without the header this answers `403` — that is the guard working, not a fault.
 
 Then open `https://<your-hostname>`, register the first account, and create the
 first workspace. The first registered user is a normal account — there is no
