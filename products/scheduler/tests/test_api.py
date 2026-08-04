@@ -39,8 +39,22 @@ def test_health_check(client):
 
 
 def test_health_deep(client):
+    """The deep probe answers and reports its diagnostics.
+
+    SP-CLOUD-3 changed the contract deliberately: this endpoint now
+    performs a real readiness check, so it returns 503 when the database
+    is unreachable or the schema is not at head. It previously always
+    returned 200 — which was only true because it could not fail, the
+    defect Phase 3.2 fixed. This fixture binds no migrated database, so
+    503 is the correct answer here.
+
+    Full coverage of both outcomes lives in tests/test_health_surface.py.
+    """
     response = client.get("/health/deep")
-    assert response.status_code == 200
+    assert response.status_code in (200, 503)
     data = response.json()
     assert data["status"] in ("healthy", "degraded")
     assert data["solverLoaded"] is True
+    # Whatever the verdict, it is explained rather than merely asserted.
+    if response.status_code == 503:
+        assert data["databaseReachable"] is False or data["schemaCurrent"] is False

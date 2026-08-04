@@ -14,9 +14,19 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import threading
 import time
+
+# Declare the process role BEFORE anything imports ``app.config``, whose
+# module-level ``Settings()`` runs the cloud validator at import time.
+# A standalone worker validates only its database configuration — it
+# serves no HTTP, sets no cookies, and sends no mail, so requiring SMTP
+# and TLS-only cookies here would just teach operators to put fake
+# credentials in a config file. `setdefault` so an explicit
+# PROCESS_ROLE in the environment still wins.
+os.environ.setdefault("PROCESS_ROLE", "worker")
 
 
 def _wait_for_schema(timeout_seconds: float = 120.0) -> bool:

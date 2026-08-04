@@ -29,6 +29,22 @@ class Settings(BaseSettings):
     environment: str = "local"  # local | cloud
     log_level: str = "info"
 
+    # Which kind of process this is. `api` serves HTTP (and, in local
+    # mode, hosts the embedded solve worker). `worker` is the standalone
+    # `python -m worker` container, which serves no HTTP, sets no
+    # cookies, and sends no mail.
+    #
+    # It exists so `_enforce_cloud_secrets` can validate what a process
+    # actually uses. Without it a worker-only host has to carry SMTP
+    # credentials and cookie settings it will never read, purely to get
+    # past startup — and fake credentials in a config file are how real
+    # ones eventually end up there.
+    #
+    # `worker.py` sets this itself before importing config, so the
+    # compose file does not have to; setting it explicitly is supported
+    # and preferred for clarity.
+    process_role: str = "api"  # api | worker
+
     # ---- Network ------------------------------------------------------
     # ``host``/``port`` are used by the ``python -m app.main`` entry
     # point and any local dev runner; the Docker image hardcodes
@@ -174,6 +190,22 @@ class Settings(BaseSettings):
         # real database are configured.
         if self.environment != "cloud":
             return self
+
+        # A standalone worker validates only what it uses: the database.
+        # It answers no requests, so there is no session cookie to
+        # secure and no identity to resolve; it sends no mail, so SMTP
+        # is meaningless to it. Demanding those would force a
+        # worker-only host to invent credentials it never reads.
+        if self.process_role == "worker":
+            if self.database_url.startswith("sqlite"):
+                raise ValueError(
+                    "ENVIRONMENT=cloud requires: DATABASE_URL (must be a "
+                    "postgres URL). A standalone worker shares the API's "
+                    "database; SQLite is per-process and it would claim "
+                    "jobs from an empty queue forever."
+                )
+            return self
+
         missing: list[str] = []
         if self.database_url.startswith("sqlite"):
             missing.append("DATABASE_URL (must be a postgres URL)")

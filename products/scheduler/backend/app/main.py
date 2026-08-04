@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from api import (
     auth as auth_api,  # SP-CLOUD-2 — self-hosted accounts + cookie sessions
+    health as health_api,  # SP-CLOUD-3 — liveness / readiness / queue metrics
     display as display_api,  # SP-CLOUD-2 — capability-token spectator display
     schedule,
     solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
@@ -29,9 +30,6 @@ from api import (
 from app.config import settings
 from app.dependencies import get_current_user
 from app.exceptions import ConflictError, PreconditionFailedError
-from repositories.local import (
-    CURRENT_TOURNAMENT_SCHEMA_VERSION as _CURRENT_TOURNAMENT_SCHEMA_VERSION,
-)
 
 log = logging.getLogger("scheduler.app")
 
@@ -255,10 +253,9 @@ async def close_repository_middleware(request: Request, call_next):
 
 
 # Step 4 — every data router is guarded by ``get_current_user``. The
-# ``/health`` and ``/health/deep`` endpoints are intentionally excluded
-# so liveness probes don't require a token; Step 7's
-# ``GET /invites/:token`` will be added to the public set when it
-# lands.
+# The ``/health*`` endpoints are intentionally excluded so probes don't
+# require a token. They carry operational detail (worker ids, queue
+# shape), so the tunnel must not publish them — scrape over the tailnet.
 _AUTH_DEP = [Depends(get_current_user)]
 
 app.include_router(schedule.router, dependencies=_AUTH_DEP)
@@ -286,53 +283,10 @@ app.include_router(auth_api.router)
 # the manage router carries its own owner-role dependency.
 app.include_router(display_api.public_router)
 app.include_router(display_api.manage_router)
+app.include_router(health_api.router)
 
 
-@app.get("/health")
-async def health_check():
-    """Shallow liveness probe — the container is up."""
-    return {"status": "healthy", "version": "2.0.0"}
 
-
-@app.get("/health/deep")
-async def health_deep(request: Request):
-    """Deep readiness probe.
-
-    Verifies the data directory is writable and the CP-SAT solver module
-    imports successfully. Used by the Docker HEALTHCHECK so orchestrators
-    can catch "backend is up but can't persist" failure modes.
-    """
-    data_dir = Path(settings.data_dir)
-    data_dir_writable = False
-    data_error: str | None = None
-    try:
-        data_dir.mkdir(parents=True, exist_ok=True)
-        probe = data_dir / ".healthcheck.tmp"
-        probe.write_text("ok")
-        probe.unlink()
-        data_dir_writable = True
-    except OSError as e:
-        data_error = str(e)
-
-    solver_loaded = False
-    solver_error: str | None = None
-    try:
-        from ortools.sat.python import cp_model  # noqa: F401
-        solver_loaded = True
-    except Exception as e:  # pragma: no cover - defensive, import should never fail in prod
-        solver_error = str(e)
-
-    healthy = data_dir_writable and solver_loaded
-    return {
-        "status": "healthy" if healthy else "degraded",
-        "version": "2.0.0",
-        "schemaVersion": _CURRENT_TOURNAMENT_SCHEMA_VERSION,
-        "dataDirWritable": data_dir_writable,
-        "solverLoaded": solver_loaded,
-        "dataDirError": data_error,
-        "solverError": solver_error,
-        "requestId": getattr(request.state, "request_id", None),
-    }
 
 
 if __name__ == "__main__":
