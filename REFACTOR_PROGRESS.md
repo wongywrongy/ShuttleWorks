@@ -22,7 +22,8 @@ escalate it before making any further code change.
   (`solve` E37→A5, `build` C19→A2); 2 latent bugs found + fixed; independent review
   verified behavior-equivalence. Program summary:
   `docs/audits/04-refactor-program-summary.md`;
-  **authoritative current snapshot: `docs/audits/06-state-of-codebase.md` — read that first.**
+  **authoritative current snapshot: `docs/audits/08-state-of-codebase.md`
+  (post-SP-CLOUD, 2026-08-04; 06 is the historical pre-cloud record) — read that first.**
   depcruise 17→11, dead files 18→3 (kept), tests 1289→**1363**, all gates green.
   **Phase 5** installed the code-health discipline (`CODE_HEALTH.md` + `docs/audits/debt-log.md`).
   **Phase 6** consolidated the docs + swept staleness. **Phase 7** covered the two
