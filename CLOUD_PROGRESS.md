@@ -117,8 +117,8 @@ value in the working tree is blank, so nothing is currently being pushed.
 | Phase 1 — member management (5 ops) | **DONE** — 4 new + revoke already existed; last-owner invariant + negative controls | `a1030c1` / `b3a140f` / `d05bd71` |
 | 0.D — sorted iteration + re-baseline | **DONE** — fix + fingerprints re-baselined + all 3 masks removed | `38e7782` |
 | 0.E — mirror removal + ADR | **DONE** — option (c), removed entirely; ADR 0012 | `465c2ca` / `d3a46b6` / `9e677a1` |
-| Phase 3 — deployment readiness | not started | |
-| Phase 4 — install docs | not started | |
+| Phase 3 — deployment readiness | **DONE** — role-aware validator, failable health surface, least-privilege proven, lease-ownership guard, 2 compose files | `08876f2` / `ae2003e` |
+| Phase 4 — install docs | **DONE** — 4 runbooks written from the tree + backend/README | `4ddce81` |
 
 ## Scope corrections from Phase 0 (slice is smaller than drafted)
 
@@ -540,3 +540,159 @@ Docs: `architecture/backend-structure.md` corrected (it advertised the pin as a
 live mechanism); the `_player_matches` debt-log entry closed with the measured
 before/after. The 08 and 09 audits keep their original text — they are dated
 records of what was true when written.
+
+## Phases 3 & 4 — Deployment readiness + install docs: DONE (2026-08-04)
+
+Commits: `08876f2` (3.1 + 3.2) → `ae2003e` (3.3 + 3.4 + 3.6) → `4ddce81` (Phase 4).
+**SP-CLOUD-3 is complete.** What remains is infrastructure, done by hand against
+`docs/how-to/install-selfhost.md`.
+
+### 3.1 — Role-aware `_enforce_cloud_secrets`
+
+The validator was API-shaped and would have forced the worker host to carry SMTP
+credentials it never reads. Split by `PROCESS_ROLE`: the worker profile validates
+the database and nothing else, but **still refuses SQLite** — SQLite is
+per-process, so a worker on it polls an empty queue forever while jobs pile up
+elsewhere, the worst failure shape (silent).
+
+`worker.py` sets `PROCESS_ROLE` at module import, before anything pulls in
+`app.config` (whose module-level `Settings()` runs the validator at import). A
+test asserts no `app`/`services`/`database` import appears above that line —
+getting the order wrong would silently restore the API profile.
+
+### 3.2 — A health surface that can fail
+
+| Endpoint | Job |
+|---|---|
+| `/health` | liveness, dependency-free **on purpose** — killing a container whose DB is down turns a recoverable outage into a restart loop |
+| `/health/ready` | DB reachable **and** schema at the shipped Alembic head; 503 otherwise |
+| `/health/deep` | readiness + legacy fields; what the image HEALTHCHECK calls |
+| `/health/metrics` | queue depth, oldest-queued age, per-worker heartbeat age |
+
+Expected revision is read from the migration scripts, not hard-coded — a
+hard-coded head is one more thing to forget to bump, and forgetting silently
+disables the check. Metrics are plain JSON: nothing here speaks Prometheus, the
+collector ingests OTLP, and a client library to serve three numbers would be a
+dependency for its own sake.
+
+**Sanctioned behaviour change:** `test_api.py::test_health_deep` asserted 200
+unconditionally, which was only true because the endpoint could not fail.
+
+### 3.3 — Least privilege, proven
+
+API and worker already read `DATABASE_URL` independently, so the split needed no
+code — it needed *proof*, and that is done. A real solve completed end-to-end
+under a role holding only:
+
+```sql
+CREATE ROLE sw_worker LOGIN PASSWORD '…';
+GRANT CONNECT ON DATABASE scheduler TO sw_worker;
+GRANT USAGE ON SCHEMA public TO sw_worker;
+GRANT SELECT, UPDATE, DELETE ON TABLE solve_jobs TO sw_worker;
+```
+
+All **8 identity tables verified denied** (`users`, `auth_sessions`,
+`auth_throttle`, `orgs`, `org_members`, `tournament_members`, `invite_links`,
+`display_tokens`).
+
+Grants are **narrower than the Phase 0 audit predicted**: no `INSERT` (the API
+enqueues; the worker only claims/heartbeats/completes/prunes) and no
+`alembic_version` grant (the schema wait selects from `solve_jobs`). Rule 7
+re-verified: `solve_runner.py` and `solve_child.py` still have zero DB imports.
+
+### 3.4 — A real defect found
+
+`_record_outcome` checked cancellation but **never lease ownership**. The
+failure: a worker loses the DB mid-solve, heartbeats stop, the reaper requeues,
+another worker claims it — and the first worker's child (which never touches the
+DB and cannot know) finishes and writes over a job someone else is actively
+solving. `_transition` cannot catch it: `running → succeeded` is legal. What is
+illegal is *that worker* making it.
+
+Rejecting also covers the reaped-but-not-yet-reclaimed window: discarding a good
+result costs one redundant solve, accepting it risks two writers, and determinism
+means the re-run produces the same schedule.
+
+**The negative control caught a bad test first.** The initial lease tests let
+worker B *finish* before A's late write arrived — so `_transition` rejected it as
+`succeeded → succeeded` and the ownership check was never reached. Those tests
+passed with the guard removed. Rewritten with B mid-solve, removing the guard
+fails 4 tests. Same shape as Phase 1's barrier test: **two for two on tests that
+certified safety they never exercised.** Rule 3b is earning its place.
+
+### 3.6 — Compose files, booted
+
+`docker-compose.selfhost.yml` (API + Postgres + embedded worker + cloudflared)
+and `docker-compose.worker.yml` (worker only). Both **actually booted**:
+readiness green with matching schema revision, metrics live, Postgres on a
+loopback/tailnet address, and the worker container running under the restricted
+role with `ENVIRONMENT=cloud` and no SMTP config — 3.1 proven in the real
+topology, not just in unit tests.
+
+Booting surfaced two things:
+
+- **Two sources of truth for one secret.** The first draft file-injected the
+  Postgres password for `postgres` but env-injected it for the API; they drifted
+  immediately and auth failed on first boot. Fixed by adding generic
+  `<VAR>_FILE` support to `app/config.py`, so one file feeds both. The password
+  is now absent from the API container's environment entirely (verified).
+- **`initdb` fails on synced/network paths** (`could not create directory
+  .../pg_wal`). The data bind mount is parameterised via `POSTGRES_DATA_DIR`
+  with the constraint documented.
+
+Compose refuses to start without `POSTGRES_BIND_ADDR`, `TRUSTED_PROXY_IPS`,
+`PUBLIC_HOSTNAME`, `SMTP_HOST` or the tunnel token — the dangerous defaults are
+absent rather than guessed. Rules 4, 5 and 6 are stated inline where an editor
+will read them.
+
+### Phase 4 — four runbooks, written from the tree
+
+`install-local.md`, `install-selfhost.md`, `add-a-worker.md`, `operations.md`,
+plus `backend/README.md`. The `.env` table was **generated from `config.py`'s 41
+fields**, not transcribed; the grants in `add-a-worker.md` are the ones a real
+solve ran under.
+
+Each silent-failure trap gets a danger block, because silence is what makes them
+dangerous: the wildcard tunnel ingress (publishes every service on the host),
+Postgres on `0.0.0.0` (internet-reachable whatever `ufw status` says, because
+Docker writes iptables directly), and uvicorn `--proxy-headers` (the reflex fix
+that silently defeats `TRUSTED_PROXY_IPS`). Plus the day-one throttle smoke check
+and the `pg_dumpall --globals-only` warning.
+
+Sidebar gets a new **Deploying & operating** section; `docs/deploy/cloud.md`
+keeps its HISTORICAL banner.
+
+### Verification
+
+| Gate | Result |
+|---|---|
+| Backend pytest (PG leg on) | **969 passed / 1 by-design skip** (947 + 22 new) |
+| Frontend vitest | **1299 passed / 169 files** (unchanged) |
+| ruff / eslint / depcruise | clean · 0 errors · 0 errors |
+| tsc + vite build | clean |
+| docs:build (dead-link gate) | clean |
+| Simulator `sim-ephemeral small-meet` | PASS, 0 violations |
+| **Local round-trip** | PASS — bootstrap identity, no signup, embedded worker, readiness green |
+| **Cloud round-trip** | PASS — real solve under the restricted role, 8 identity tables denied |
+| **Both compose files** | boot and serve |
+| `scheduler_core/` + `archive/` since `v0.1.0` | `diagnostics.py` alone |
+
+### Negative controls performed (Rule 3b)
+
+| Guard | Broken by | Tests that failed |
+|---|---|---|
+| Readiness DB check | forcing `db_ok = True` | 1 (the genuine-outage test) |
+| Lease ownership | `if False:` | 4 — **after** the first version of those tests passed with it removed |
+
+### Environment note
+
+Mid-session the shared dev Postgres (`btp-dev-postgres-1`) died, and the
+Postgres-leg tests hung on connection attempts rather than failing fast. Not a
+code issue, but worth knowing: a dead `TEST_POSTGRES_URL` target manifests as a
+hang, not an error.
+
+### Deliberately not done
+
+Provisioning, the tunnel, Tailscale ACLs — infrastructure, by hand, next.
+Org-level member management, billing, GDPR tooling, Postgres replication/HA —
+all logged, all out of scope by design.
