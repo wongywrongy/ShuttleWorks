@@ -47,6 +47,27 @@ Everything else gets reasonable coverage, not exhaustive coverage. Favor
 defensive coding and clear failure modes over trying to prove correctness
 through test volume alone.
 
+### 3b. A safety test must be shown to fail when the safety is removed
+A test that asserts a safety property — an invariant, a permission gate, a
+guard against data loss — has to be demonstrated failing with that property
+removed. Break it deliberately, watch the test go red, put it back. Record
+the result next to the guard.
+
+This is not ceremony. Two tests in this codebase have already certified
+safety they never checked:
+
+- The **last-owner concurrency test** (SP-CLOUD-3 Phase 1) synchronised two
+  threads on a barrier and passed with the guard stubbed out. The barrier
+  only syncs thread *start*; the SQL never actually overlapped. Rewritten to
+  force a real interleave, it correctly reports `left 0 owners`.
+- Its **frontend counterpart** was verified the same way: stubbing
+  `isLastOwner` to `return false` fails exactly three tests. Had it failed
+  none, the disabled states would have been decorative.
+
+A green suite is evidence only if red was reachable. Applies to invariants,
+auth seams, lock guards, and anything whose failure mode is silent — not to
+ordinary behavioural tests, where the assertion *is* the behaviour.
+
 ### 4. Every change gets an independent review pass
 You're solo, so there's no second engineer — substitute a fresh-context review
 (a subagent, or a new session reading only the diff) before calling anything

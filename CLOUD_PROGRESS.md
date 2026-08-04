@@ -114,7 +114,7 @@ value in the working tree is blank, so nothing is currently being pushed.
 | release-compose `DATABASE_URL` | **DONE** | `feba243` |
 | 0.C — invite oracle | **DONE** | `7e62f0c` |
 | dto.generated.ts regen | **DONE** | `bb29b21` |
-| Phase 1 — member management (5 ops) | not started | |
+| Phase 1 — member management (5 ops) | **DONE** — 4 new + revoke already existed; last-owner invariant + negative controls | `a1030c1` / `b3a140f` / `d05bd71` |
 | 0.D — sorted iteration + re-baseline | not started | |
 | 0.E — mirror removal + ADR | **DONE** — option (c), removed entirely; ADR 0012 | `465c2ca` / `d3a46b6` / `9e677a1` |
 | Phase 3 — deployment readiness | not started | |
@@ -328,3 +328,116 @@ wrong: `database/session.py:88` already builds the engine with
 `pool_pre_ping=True`, which is exactly the transparent-reconnect behaviour a
 tailnet blip needs. The remaining Phase 3 work there is narrower than reported —
 the reap/re-run-exactly-once test, not adding pre-ping.
+
+## Phase 1 — Member management: DONE (2026-08-04)
+
+Commits: `a1030c1` (service + invariant) → `b3a140f` (routes + DTO regen) →
+`d05bd71` (People & Access frontend).
+
+Five operations, per the Phase 0 correction: **four new**
+(remove / change-role / transfer / leave) plus **revoke-pending-invite, which
+already existed** as `DELETE /invites/{token}`.
+
+### The last-owner invariant
+
+Enforced in `services/members.py`, not the UI. Two mechanisms, because the
+naive count-then-write is wrong on both dialects for *different* reasons:
+
+- **Postgres** (READ COMMITTED) does not serialize two "demote the other owner"
+  requests — they update different rows, so their row locks never conflict and
+  both commit. Fixed by locking the parent `tournaments` row.
+- **SQLite** permits one writer so they do serialize, but a count read before
+  the write transaction opened can be stale. Fixed by re-checking the owner
+  count *inside* the writing statement as a correlated subquery.
+
+Transfer promotes before demoting, so the workspace never passes through a
+zero-owner state. Transfer-to-self is a no-op (that is what a double-submit
+looks like). Self-removal shares `remove_member`'s path so it is not a back
+door.
+
+### Negative controls — both performed, both found real gaps
+
+This is the discipline now written into `CODE_HEALTH.md` as **rule 3b**.
+
+1. **Backend.** The first concurrency test synchronised two threads on a
+   `threading.Barrier` and **passed with `_lock_workspace` stubbed out.** The
+   barrier only syncs thread *start*; Python overhead meant the SQL never
+   overlapped. Rewritten to force a real interleave (thread A holds its write
+   open, B contends, A commits), it correctly reports
+   `[postgres] concurrent owner removals left 0 owners` when the lock is
+   removed — while **SQLite passes either way**, which is exactly why the suite
+   runs on both dialects rather than the one that happens to serialize.
+2. **Frontend.** Stubbing `isLastOwner` to `return false` fails exactly three
+   tests: the inline reason, the aria-disabled demotion, and the blocked
+   sole-owner leave. Recorded in that function's docstring.
+
+Had either been skipped, both guards would have been decorative.
+
+### Frontend design calls (open questions resolved here)
+
+- **Pessimistic, not optimistic.** Access-control writes are not the
+  high-success low-risk interactions optimistic updates are for, and briefly
+  showing someone as removed when they were not is worse than latency. Row
+  shows pending, then **one** refetch on success. Nothing is mutated locally,
+  so failure leaves no residue to roll back.
+- **Every failure path refetches**, because each one means the tab is stale:
+  409 = another owner moved underneath us, 404 = the uniform-404 seam, 403 =
+  our own role changed.
+- **`MEMBER_LAST_OWNER` renders inline, not as a toast.** The three member
+  codes join `CONFIG_LOCKED` in the interceptor's toast-suppression list — the
+  message's value is naming *which* member and *what to do instead*, context a
+  detached toast discards.
+- **Hidden ≠ disabled.** A viewer sees no management menu at all (controls they
+  could never enable are noise). Last-owner is *clearable* by promoting
+  someone, so those items stay visible and `aria-disabled` with the reason
+  rendered **inline on the row** — not only in a hover tooltip, since nobody
+  hovers a control they do not believe is live.
+  - I briefly hid all-disabled menus for "cleanliness" and reverted it: §4.3's
+    own distinction is that hiding is for what a user could *never* enable.
+    Hiding the last-owner case would have removed the explanation along with
+    the control.
+- **Confirmation scales with reversibility**: role changes apply directly (one
+  click back); remove/leave get danger dialogs; transfer gets the heaviest copy
+  because it is the only action the actor cannot reverse alone. Leave warns
+  that rejoining needs a new invite — the part people do not anticipate.
+- **`OverflowMenu` moved from `disabled` to `aria-disabled`** so blocked items
+  stay focusable and announced, with the reason folded into the accessible
+  name. All four existing consumers re-verified.
+- **No new dependency**: the design-system `Modal` already provides focus trap,
+  Escape, focus restore, `role="dialog"` and `aria-labelledby`, and is the
+  convention `DangerZoneTab` uses.
+
+### `.tsx` / `.ts` files changed (completion check)
+
+- `products/settings/PeopleAccessTab.tsx` — the surface
+- `products/settings/memberActions.ts` — **new**, pure availability logic
+- `products/settings/__tests__/PeopleAccessTab.test.tsx` — 6 → 24 tests
+- `components/control-plane/OverflowMenu.tsx` — `aria-disabled`
+- `api/client.ts` — 4 methods + member-code toast suppression
+
+### Verification
+
+- **Local mode verified against a real `AUTH_MODE=local` backend**, not
+  reasoned about: bootstrap `local@dev` is sole member and sole owner; `leave`
+  and self-demote both answer 409 `MEMBER_LAST_OWNER`; the UI blocks both
+  before the call and explains why. Pinned by a test.
+- **Cloud round-trip 11/11**: anonymous 401 → invite → accept → role change →
+  sole-owner self-demote refused → transfer → former owner can no longer
+  manage → new owner removes the first → **removed user immediately 404s on a
+  fresh session** and the workspace vanishes from their hub.
+- Isolation floor raised **61 → 67**; all four routes enumerated and answering
+  the uniform 404.
+
+### Gates
+
+Backend **949 passed / 1 by-design skip** (PG leg on); frontend **1299 passed /
+169 files** (was 1281); `npm run build` clean; eslint **0 errors** (102
+warnings); depcruise **0 errors** (17 known warnings); ruff clean.
+`git diff --stat v0.1.0..HEAD -- scheduler_core/ archive/` **empty**.
+
+### Deliberately not done
+
+Org-level member management. `orgs`/`org_members` exist in the schema but have
+**no HTTP surface at all**, and no UI addresses orgs — adding one is a slice,
+not a footnote to this one. Workspace-level People & Access is what users
+actually touch. Logged rather than silently skipped.
