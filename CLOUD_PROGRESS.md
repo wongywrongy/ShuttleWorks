@@ -55,3 +55,135 @@ Convention: read this at every session start, update at every session end (same 
 
 - **2026-08-03 (a)** — Phase 0 audit executed (4 parallel read-only explorations + solve-time/fingerprint measurements; no repo code touched). Report delivered; STOPPED pending user confirmation on C1–C4 + branch name.
 - **2026-08-03 (b)** — User confirmed all four Phase 0 recommendations and additionally directed a stack-currency pass ("check if any packages have been updated… make sure our stack is modern"). Findings: ortools 9.15.6755 already latest; sqlalchemy/alembic/pydantic/pydantic-settings/supabase current; venv fastapi+uvicorn lagged → upgraded; psycopg2-binary replaced with psycopg 3 (superior successor; this slice introduces real Postgres so the driver choice happens now); frontend current with deliberate major holds (vitest 3, dnd-kit sortable 8, uuid 13). Phase 1 implemented and verified end-to-end (see Status).
+
+---
+
+# SP-CLOUD-3 — Launch Blockers, Self-Host Deployment & Install Docs
+
+**Branch:** `dev/cloud-hardening`, off the tagged trunk merge `v0.1.0` (`ba7ac08`).
+**Phase 0 report:** `docs/audits/09-sp-cloud-3-phase0.md`.
+
+## User decisions (confirmed 2026-08-04)
+
+- **0.A — trunk.** Option 1: consolidate onto `main`. Executed as a **true
+  merge**, not a fast-forward — `origin/main` carried two commits outside the
+  stack (`0a52888` "Create LICENSE" applied via the GitHub web UI, plus the
+  PR #11 merge), so `--ff-only` correctly refused. `LICENSE` was the only file
+  at risk and the merge preserved it; verified `git diff dev/cloud-tenancy main`
+  = `LICENSE` alone. Merge commit **tagged `v0.1.0`** as the fixed rollback
+  point — first genuinely deployable state, everything after is deployment work.
+  `dev/cloud-runtime` and `dev/workspace-suite` verified by **full SHA**
+  (both `7b1a647…`, not merely similar) and deleted local + remote.
+  `dev/cloud-tenancy` retained for now (also fully merged).
+- **0.E — mirror.** Option **(c) remove entirely**, going further than the
+  audit's (a). Rationale: (a) sounds conservative but keeps the outbox writer,
+  `sync_queue`, the Supabase project, and unverifiable hand-applied policies
+  alive in local mode where nobody is watching — unowned code writing to a
+  system with unknown access controls. `tournament_backups` already ships
+  list/create/restore in-product and covers the local laptop-loss need; a
+  recovery path never exercised is one that does not work. **Prerequisite before
+  removal: audit what is actually in the Supabase project and who can read it**
+  (see Immediate action below). Not yet implemented.
+- **Rule 7 — `determinism.py`.** Confirmed delete-the-module, not
+  keep-the-warning. A warning whose own stated justification becomes false
+  trains you to ignore it. The unpinned double-solve byte-identity test is the
+  honest control.
+- **Resequencing.** Security first in case the slice is interrupted: 0.F.2 →
+  invite oracle → release-compose → reduced Phase 1 → sorted iteration →
+  rest of Phase 3 → docs.
+
+## Immediate action still outstanding (user, not code)
+
+**Audit the live Supabase project before anything else.** Policies were
+hand-applied via the dashboard, are not in version control, and were keyed on an
+`auth.uid()` that ceased to exist when SP-CLOUD-2 retired Supabase Auth. They may
+evaluate deny-all (harmless) or be permissive/disabled (real tournament data
+readable by anyone holding the anon key). This is a live exposure question
+independent of the removal decision. Repo-side check done and clean: **no
+Supabase credential or project ref has ever been committed** (`git log -S` on
+`eyJ` and `.supabase.co` — all hits are placeholders), and every `SUPABASE_*`
+value in the working tree is blank, so nothing is currently being pushed.
+
+## Phase status
+
+| Item | State | Commit |
+|---|---|---|
+| 0 — Audit (A–G) | **DONE** — report `docs/audits/09-sp-cloud-3-phase0.md` | `93d26d3` |
+| 0.A — trunk consolidation + tag | **DONE** | `ba7ac08` / `v0.1.0` |
+| 0.F.2 — client IP trust boundary | **DONE** | `5213a62` |
+| release-compose `DATABASE_URL` | **DONE** | `feba243` |
+| 0.C — invite oracle | **DONE** | `7e62f0c` |
+| dto.generated.ts regen | **DONE** | `bb29b21` |
+| Phase 1 — member management (5 ops) | not started | |
+| 0.D — sorted iteration + re-baseline | not started | |
+| 0.E — mirror removal + ADR | **blocked** on the Supabase audit above | |
+| Phase 3 — deployment readiness | not started | |
+| Phase 4 — install docs | not started | |
+
+## Scope corrections from Phase 0 (slice is smaller than drafted)
+
+Four planned items were already done, and one predicted defect does not exist:
+
+1. **0.F.1 has no defect.** Zero scheme-sensitive branches in the backend
+   (`request.url.scheme`, `X-Forwarded-Proto` — no hits). `session_cookie_secure`
+   is already config-driven and `_enforce_cloud_secrets` already requires it in
+   cloud mode, so the tunnel's "sees http while the browser leg is https"
+   problem cannot manifest. No `ENVIRONMENT=local` workaround is needed.
+2. **Revoke-pending-invite already existed** (`DELETE /invites/{token}`,
+   owner-gated). Phase 1 is **five** operations, not six.
+3. **Membership revocation was already immediate** —
+   `require_tournament_access` does a live `get_role` per request and there is
+   no membership cache anywhere. Phase 1 adds a *pinning test*, not invalidation
+   machinery. The bracket `response_cache` is keyed by tournament only and sits
+   behind the seam, so it cannot serve an ex-member.
+4. **Display tokens were already uniform** — `_resolve` answers one 404 for
+   missing/deleted/empty alike, revocation is row-deletion, tokens are 64-char.
+   Assessment only; no change.
+
+## New findings not in the program brief
+
+- **`_enforce_cloud_secrets` is API-shaped.** It fires on `ENVIRONMENT=cloud`
+  and demands `AUTH_MODE`, `SESSION_COOKIE_SECURE`, and SMTP — none of which the
+  worker reads. The neo worker would need dummy SMTP credentials just to boot,
+  and fake credentials in a config file are how real ones end up there later.
+  Phase 3 makes the validator role-aware: the worker profile validates database
+  configuration only.
+- **`/health/deep` never touches the database.** It checks data-dir writability
+  and the ortools import, so it reports `healthy` with Postgres unreachable — a
+  health check that cannot fail, which converts an outage into a silent one.
+  "Readiness actually touches the database" is an explicit Phase 3 done-condition.
+- **`dto.generated.ts` is on the honour system** — nothing gates its freshness,
+  and it had silently drifted since before SP-CLOUD-2 Phase 3 (missing every
+  `/auth/*` and `/display/{token}/*` route). Regenerated in `bb29b21`.
+- **uvicorn `--proxy-headers` must NOT be added** alongside the client-IP seam.
+  It rewrites `request.client.host` from `X-Forwarded-For`, so the peer compared
+  against `trusted_proxy_ips` would become the *claimed* client address and the
+  trust check would never match — silently reverting to the collapsed-bucket bug.
+  The two mechanisms solve the same problem; its other use (fixing
+  `request.url.scheme`) buys nothing here per finding 0.F.1.
+
+## STOP conditions — all clear
+
+- **No worker path reads an identity table.** `worker.py`,
+  `services/solve_worker.py`, and `services/solve_jobs.py` import only
+  `SolveJob`; `solve_runner.py` and `solve_child.py` have **no database imports
+  at all** (the child gets its problem as JSON via a temp file). The API writes
+  the whole solve input into `solve_jobs.payload` at submit. So `sw_worker`
+  needs exactly `SELECT/INSERT/UPDATE/DELETE ON solve_jobs` (DELETE for
+  `prune_terminal`) plus `SELECT` on `alembic_version` if the schema-wait polls
+  it. The least-privilege model is implementable exactly as specified.
+- No ABSOLUTE RULE conflicts. No org-stranding path exists yet (no member
+  mutation routes ship today), so the last-owner invariant becomes live-fire
+  only when Phase 1 lands.
+
+## Session log
+
+- **2026-08-04** — Phase 0 audit (A–G) delivered and STOPPED for the two user
+  decisions. User approved 0.A Option 1 (correcting "fast-forward" to "true
+  merge") + tag, chose 0.E option (c), confirmed the `determinism.py` deletion,
+  and resequenced security-first. Executed: trunk merge + `v0.1.0` tag + branch;
+  client-IP trust boundary (4 tests, both halves of Rule 8);
+  release-compose `DATABASE_URL`; invite oracle (6 new tests, 5 legacy contract
+  tests updated); DTO regen. Gates at session end: backend **899 passed / 37
+  skipped** (894 green + the 5 repaired), frontend **1281 passed / 169 files**,
+  tsc clean, eslint **0 errors**, ruff clean.
