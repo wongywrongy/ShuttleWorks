@@ -25,6 +25,14 @@ miss: `running -> succeeded` is a legal transition, so the state machine
 cannot catch it. What is illegal is *A* making it, once the lease is no
 longer A's.
 
+There are **two** lease-mutating writes, and both need the same
+ownership check. The completion path is above. The other is the
+heartbeat: if A's link comes back while B is still solving, A's next
+beat would refresh `heartbeat_at` on B's job. That write looks harmless
+— until B dies for real and A's ghost beats keep the lease looking
+fresh forever, so the reaper never reclaims the job. A stuck job that
+reports a healthy heartbeat is worse than one that reports a stale one.
+
 Runs on both dialects — the lease logic is shared, and Postgres is where
 it will actually run.
 """
@@ -252,6 +260,94 @@ def test_exactly_one_completion_lands_overall(db, queued_job):
             "its lease"
         )
         assert rows[0].finished_at is not None
+    finally:
+        s.close()
+
+
+def test_ghost_worker_heartbeat_does_not_refresh_the_lease(db, queued_job):
+    """The *other* lease-mutating write: the beat.
+
+    A loses its link, the lease expires, B claims the job — then A's
+    link comes back while B is still solving. A's next heartbeat must
+    not touch a lease it no longer holds.
+
+    Why this matters more than it looks: a rejected beat costs nothing,
+    but an accepted one is permanent damage. Should B die later, A's
+    periodic beats keep `heartbeat_at` fresh, `reap_expired` never sees
+    an expired lease, and the job sits in `running` forever while
+    `/health/metrics` reports a healthy `lastHeartbeatAgeSeconds`. The
+    outage becomes invisible.
+
+    Negative control (2026-08-04, CODE_HEALTH rule 3b): dropping the
+    `claimed_by` check in `solve_jobs.heartbeat` fails this test —
+    verified by removing the guard and re-running, on both dialects.
+    """
+    Session, dialect = db
+    _claim_without_finishing(Session, "worker-A", queued_job)
+    _age_out_lease(Session, queued_job)
+
+    s = Session()
+    try:
+        solve_jobs.reap_expired(s, lease_seconds=SETTINGS.job_lease_seconds)
+        s.commit()
+    finally:
+        s.close()
+
+    # B claims and is mid-solve — the window where the beat is legal for
+    # B and illegal for A.
+    _claim_without_finishing(Session, "worker-B", queued_job)
+
+    s = Session()
+    try:
+        job = s.get(SolveJob, queued_job)
+        b_heartbeat = job.heartbeat_at
+        # A's link is back; its supervise loop beats as if nothing happened.
+        status = solve_jobs.heartbeat(s, job, worker_id="worker-A")
+        s.commit()
+    finally:
+        s.close()
+
+    assert status == "running", (
+        f"[{dialect}] the ghost must still learn the live status — the cancel "
+        "signal rides this return value"
+    )
+
+    s = Session()
+    try:
+        job = s.get(SolveJob, queued_job)
+        assert job.claimed_by == "worker-B", f"[{dialect}] lease ownership moved"
+        assert job.heartbeat_at == b_heartbeat, (
+            f"[{dialect}] a worker that lost its lease extended it anyway — if "
+            "worker-B now dies, the reaper will never reclaim this job"
+        )
+    finally:
+        s.close()
+
+
+def test_owner_heartbeat_still_refreshes(db, queued_job):
+    """The guard must not break the normal beat — the lease holder
+    refreshes its own lease and records progress as usual."""
+    Session, dialect = db
+    _claim_without_finishing(Session, "worker-A", queued_job)
+
+    s = Session()
+    try:
+        job = s.get(SolveJob, queued_job)
+        job.heartbeat_at = datetime.now(timezone.utc) - timedelta(seconds=5)
+        s.commit()
+        before = job.heartbeat_at
+
+        status = solve_jobs.heartbeat(
+            s, job, worker_id="worker-A", progress={"phase": "search"}
+        )
+        s.commit()
+
+        assert status == "running"
+        assert job.heartbeat_at > before, (
+            f"[{dialect}] the ordinary beat regressed — the lease holder could "
+            "not refresh its own lease"
+        )
+        assert job.progress == {"phase": "search"}
     finally:
         s.close()
 

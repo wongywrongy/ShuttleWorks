@@ -433,6 +433,17 @@ a green 1,100-test suite. The real check is the viewer flow in
     silently dropping the session's time_limit/deterministic/seed. Size S.
   - **docker-compose.dev.yml header advertises `make dev-postgres`** which
     does not exist in any Makefile. Add the target or fix the comment. Size S.
+  - **A worker that loses its lease keeps solving to completion.** The
+    heartbeat ownership guard (2026-08-04, `solve_jobs.heartbeat`) stops a
+    ghost worker from *extending* a lease it lost, and `_record_outcome`
+    already discards its result — but nothing tells the ghost's child to stop.
+    It burns a core until it finishes, then throws the answer away. Fixing it
+    means giving the beat a return channel to the runner: `solve_runner`'s
+    `heartbeat` param is `Callable[[], None]`, so a "you lost the lease"
+    signal has nowhere to go — either widen that type or fold the check into
+    the existing `cancel_check` (which already kills the child and is called
+    on the same 2s tick). Cost of not fixing: one wasted solve per lease loss,
+    bounded and rare. Size S.
   - **api/README.md still documents an EventSource SSE flow** (now fully
     retired — solves are jobs; the meet SSE routes answer 410); and
     `unscheduledMatches` is returned by every solve but rendered nowhere. Size S.

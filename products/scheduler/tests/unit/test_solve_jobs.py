@@ -361,7 +361,7 @@ def test_cancel_running_job_flags_worker_via_heartbeat(session, tournament_id):
     job = _claim_and_run(session, tournament_id)
     solve_jobs.cancel(session, job)
     session.commit()
-    status_seen_by_worker = solve_jobs.heartbeat(session, job)
+    status_seen_by_worker = solve_jobs.heartbeat(session, job, worker_id="w1")
     assert status_seen_by_worker == "cancelled"
     # A late heartbeat must not resurrect the lease on a cancelled job.
     assert job.status == "cancelled"
@@ -379,7 +379,7 @@ def test_heartbeat_updates_lease_and_progress(session, tournament_id):
     job = _claim_and_run(session, tournament_id)
     before = job.heartbeat_at
     status = solve_jobs.heartbeat(
-        session, job, progress={"phase": "search", "solutionCount": 3}
+        session, job, worker_id="w1", progress={"phase": "search", "solutionCount": 3}
     )
     session.commit()
     assert status == "running"

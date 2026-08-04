@@ -281,14 +281,47 @@ def mark_running(session: Session, job: SolveJob) -> SolveJob:
 
 
 def heartbeat(
-    session: Session, job: SolveJob, *, progress: Optional[dict] = None
+    session: Session, job: SolveJob, *, worker_id: str, progress: Optional[dict] = None
 ) -> str:
     """Refresh the lease; returns the job's *current* status.
 
     The worker inspects the returned status each beat — seeing
     ``cancelled`` is how a kill request reaches the solve subprocess.
+
+    LEASE OWNERSHIP — the same invariant ``_record_outcome`` enforces on
+    the completion path (see the long rationale in
+    ``services/solve_worker.py``), applied to the *other* lease-mutating
+    write. A heartbeat is not a read: it extends a lease.
+
+    A worker whose database link drops mid-solve stops beating, the
+    reaper requeues the job and another worker claims it. If the first
+    worker's link then comes back *while the new owner is still
+    solving* — a flapping tailnet link, not a permanent outage — its
+    next beat would find the job ``running`` and refresh
+    ``heartbeat_at`` on a lease it no longer holds. That write is worse
+    than useless: should the real owner die later, the ghost's beats
+    keep ``heartbeat_at`` fresh forever, so ``reap_expired`` never
+    reclaims the job and ``/health/metrics`` reports a healthy
+    heartbeat for a job nobody is working on. A stuck job that looks
+    alive is the failure shape monitoring cannot see.
+
+    ``worker_id`` is required rather than optional on purpose: a guard
+    callers may omit is a guard callers will omit.
     """
     session.refresh(job)
+    if job.claimed_by != worker_id:
+        log.warning(
+            "refusing heartbeat for job %s: lease now held by %s (status=%s). "
+            "This worker lost its lease — most likely a database outage "
+            "stopped its heartbeats mid-solve.",
+            job.id,
+            job.claimed_by,
+            job.status,
+        )
+        # Still return the live status: the caller's cancel signal rides
+        # this return value, and a ghost worker learning it should stop
+        # is exactly what we want.
+        return job.status
     if job.status in (SolveJobStatus.CLAIMED.value, SolveJobStatus.RUNNING.value):
         job.heartbeat_at = _utcnow()
         if progress is not None:

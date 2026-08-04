@@ -185,7 +185,11 @@ class SolveWorker:
 
             job = session.get(SolveJob, job_id)
             if job is not None:
-                solve_jobs.heartbeat(session, job)
+                # ``worker_id`` gates the lease refresh — see the ownership
+                # note on ``solve_jobs.heartbeat``. Without it a worker that
+                # lost and regained its database link would keep a stranger's
+                # lease alive.
+                solve_jobs.heartbeat(session, job, worker_id=self.worker_id)
                 session.commit()
         except Exception:
             session.rollback()
