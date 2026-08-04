@@ -8,13 +8,20 @@ inbound port**. TLS terminates at Cloudflare's edge and the connector dials
 outward, so the host exposes nothing to the internet.
 
 ```
-Browser ──HTTPS──> Cloudflare edge ──tunnel──> cloudflared ──HTTP──> API
-                                               (this host)         (this host)
-                                                                       │
-                                                       Postgres 16 (tailnet-bound)
-                                                                       │
-                                                       tailnet ────────┴──── remote worker
+Browser ──HTTPS──> Cloudflare edge ──tunnel──> cloudflared ──HTTP──> frontend
+                                               (this host)          (nginx: SPA
+                                                                     + /api/* →)
+                                                                          │
+                                                                         API
+                                                                          │
+                                                          Postgres 16 (tailnet-bound)
+                                                                          │
+                                                          tailnet ────────┴──── remote worker
 ```
+
+The frontend is the single public origin: it serves the application and
+proxies `/api/*` to the backend over the compose network. Nothing else is
+reachable from the tunnel.
 
 For a single offline machine, use [Install: local](/how-to/install-local)
 instead — this guide is strictly more complexity.
@@ -125,12 +132,18 @@ Create a **named tunnel** in the Cloudflare dashboard (Zero Trust → Networks �
 Tunnels), copy its token into `.env` as `CLOUDFLARE_TUNNEL_TOKEN`, and add a
 public hostname.
 
-::: danger The ingress rule points at the API container and nothing else
+::: danger The ingress rule points at the frontend container and nothing else
 Set exactly one public hostname, routed to:
 
 ```
-Service:  HTTP   →   api:8000
+Service:  HTTP   →   frontend:8080
 ```
+
+Point it at `frontend`, **not** `api`. The frontend container serves the
+application and proxies `/api/*` onward to the backend over the compose
+network, so one origin serves both — which is what `CORS_ORIGINS` and
+`PUBLIC_APP_ORIGIN` assume. Routing straight to `api:8000` publishes a bare
+JSON API with no user interface.
 
 **Never route it at a shared reverse proxy, and never add a wildcard.** A
 wildcard route publishes every service the connector can reach — on a homelab
@@ -262,8 +275,15 @@ sudo systemctl daemon-reload && sudo systemctl enable --now shuttleworks
 ```bash
 sudo reboot
 # then, after it comes back:
-curl -sf https://<your-hostname>/health && echo OK
+curl -sf https://<your-hostname>/api/health && echo "API OK"
+curl -sf -o /dev/null https://<your-hostname>/ && echo "APP OK"
 ```
+
+Check `/api/health`, **not** `/health`. nginx only proxies `/api/*`; every
+other path falls through to the SPA, so `/health` would return `index.html`
+with a cheerful `200` no matter what state the backend is in. A check that
+cannot fail is worse than no check.
+
 An unverified recovery path is an assumption, and the time to discover it was
 wrong is not the morning of a tournament.
 :::

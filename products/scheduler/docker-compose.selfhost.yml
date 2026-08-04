@@ -1,5 +1,5 @@
-# Self-hosted production stack — API + Postgres 16 + embedded worker +
-# cloudflared, for the primary host.
+# Self-hosted production stack — SPA + API + Postgres 16 + embedded
+# worker + cloudflared, for the primary host.
 #
 # Deployed to /opt/shuttleworks/ (deliberately outside any homelab
 # /opt/stacks/ or /opt/infra/ tree, so a homelab-wide `docker compose
@@ -123,6 +123,15 @@ services:
     secrets:
       - database_url
       - ops_token
+    networks:
+      default:
+        aliases:
+          # `frontend`'s nginx.conf proxies to http://backend:8000 — the
+          # service name used by every other stack. This stack calls the
+          # service `api`. The alias reconciles them so ONE nginx.conf
+          # serves all stacks; a self-host-specific copy would be a
+          # second file to keep in sync, and it would not be kept in sync.
+          - backend
     depends_on:
       postgres:
         condition: service_healthy
@@ -148,13 +157,63 @@ services:
         limits:
           memory: 6G
 
+  # The SPA. nginx serves the built bundle and proxies /api/* to the
+  # backend over the compose network, which is why the tunnel points
+  # here rather than at `api`: this is the only service that serves both
+  # the application and its API on one origin.
+  #
+  # Until 2026-08-04 this stack had no frontend at all — the tunnel
+  # published the bare API, so the "self-hosted production stack" served
+  # no user interface, while CORS_ORIGINS and PUBLIC_APP_ORIGIN both
+  # pointed at a hostname that would have been the frontend if one had
+  # existed.
+  frontend:
+    build:
+      # Context = repo root: the Dockerfile copies workspace root
+      # metadata + the shared packages/design-system tree.
+      context: ../..
+      dockerfile: products/scheduler/frontend/Dockerfile
+      args:
+        # Same-origin API calls; nginx proxies /api/* to the backend.
+        - VITE_API_BASE_URL=/api
+    restart: always
+    # No `ports:` — cloudflared reaches this over the compose network.
+    # Publishing here would create the public surface the tunnel exists
+    # to avoid.
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      # nginx writes its pid + client body temp files here.
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    healthcheck:
+      # The image ships curl (verified against
+      # nginxinc/nginx-unprivileged:alpine, the Dockerfile's final stage).
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: always
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN}
     # ─────────────────────────────────────────────────────────────────
     # The tunnel's ingress rule must point at THIS service and nothing
-    # else:  <hostname> -> http://api:8000
+    # else:  <hostname> -> http://frontend:8080
+    #
+    # Point it at `frontend`, NOT at `api`. The frontend serves the SPA
+    # and proxies /api/* onward; pointing at the API publishes a bare
+    # JSON API with no user interface (which is what this stack did
+    # before 2026-08-04).
     #
     # Never point it at a shared reverse proxy, and never add a wildcard
     # route. A wildcard would publish every other service reachable from
@@ -163,7 +222,7 @@ services:
     # Cloudflare dashboard for this named tunnel.
     # ─────────────────────────────────────────────────────────────────
     depends_on:
-      api:
+      frontend:
         condition: service_healthy
     deploy:
       resources:
