@@ -1,5 +1,21 @@
 # ShuttleWorks Deployment Guide
-_Last updated: 2026-08-03 (post SP-CLOUD-1/2)_
+
+> **HISTORICAL — DO NOT FOLLOW. Superseded, and partly describing systems that no
+> longer exist.**
+>
+> Everything below about **Supabase** — the data mirror, the `sync_queue` outbox,
+> Realtime, RLS policies, schema/publication setup, and the `SUPABASE_*` env vars —
+> refers to a subsystem **removed entirely in SP-CLOUD-3**. See
+> [ADR 0012](../decisions/0012-remove-the-supabase-mirror.md). Supabase is absent
+> from the product; persistence is single-store and reads are polling.
+>
+> The current deployment story lives in `docs/how-to/`:
+> `install-local.md` (offline single machine), `install-selfhost.md` (the
+> Cloudflare-Tunnel self-host runbook), `add-a-worker.md`, and `operations.md`.
+> This file is kept only as a record of the pre-SP-CLOUD-3 arc. It is excluded
+> from the docs site build (`srcExclude`) and is not linkable from it.
+
+_Last updated: 2026-08-03 (post SP-CLOUD-1/2); superseded 2026-08-04._
 
 This document covers deploying the post-merge system: a single
 scheduler stack (FastAPI + React + SQLite) on the director's

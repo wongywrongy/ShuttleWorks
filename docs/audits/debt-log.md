@@ -460,18 +460,50 @@ a green 1,100-test suite. The real check is the viewer flow in
     caller's memberships; fine at solo scale, wrong shape for multi-tenant
     cloud. Move the membership filter into SQL (index
     `ix_tournament_members_user` now exists). Size S.
-  - **`GET /invites/{token}` is a token-existence oracle** (404 on unknown
-    vs `valid:false` on revoked/expired — its own docstring claims
-    otherwise). Cloud invite tokens are UUIDv4 so guessing is impractical,
-    but the uniform-shape claim should be made true or the docstring fixed.
-    Size S.
-  - **Supabase mirror ignores the new tenancy columns**: `_tournament_to_payload`
-    hand-lists fields, so `org_id` is silently absent from the mirror (and an
-    RLS story on the Supabase side reads a membership table nothing
-    populates). Revisit when the mirror gets its own slice. Size M.
+  - ~~**`GET /invites/{token}` is a token-existence oracle**~~ — ✅ **Fixed
+    2026-08-04 (SP-CLOUD-3, commit `7e62f0c`).** One uniform 404
+    (`INVITE_NOT_FOUND`) for unknown / revoked / expired / workspace-deleted on
+    both resolve and accept (accept's 410 collapsed in too); the public DTO
+    dropped `valid`/`expiresAt`/`revokedAt`. Timing equalized structurally — a
+    query-count probe showed 1 vs 2 queries, so the no-invite branch now does a
+    sentinel lookup. Pinned by `tests/test_invite_oracle.py`.
+  - ~~**Supabase mirror ignores the new tenancy columns** (`org_id` gap + the
+    unpopulated-RLS story)~~ — ✅ **Closed 2026-08-04 (SP-CLOUD-3 / 0.E,
+    commit `d3a46b6`).** Resolved by deletion, not by fixing: the mirror was
+    removed entirely. Both halves of this entry die with the subsystem. See
+    [ADR 0012](/decisions/0012-remove-the-supabase-mirror).
   - **VitePress docs don't yet cover SP-CLOUD-2** (auth model, tenancy seam,
     display capability link) — `backend/README.md` is the current source;
     fold into `docs/architecture/` + `contracts/` pages. Size S.
   - **Members remain unmanageable over HTTP** (no remove/demote/transfer
     endpoints) — unchanged from pre-slice, now more visible since People &
     Access shows real identities. Size M.
+
+- **2026-08-04 — SP-CLOUD-3 adjacent findings:**
+  - **No in-product off-site durability for local mode — documented as operator
+    responsibility, not an oversight.** `tournament_backups` rows live in the
+    same database as the data they protect, so a lost disk loses both. The
+    Supabase mirror nominally covered this dimension but never actually did (it
+    was one-way, restore-less, and never configured), so removing it in
+    [ADR 0012](/decisions/0012-remove-the-supabase-mirror) took away nothing
+    real. **This is a deliberate choice, recorded so a future reader doesn't
+    rediscover it as a bug:** local mode is one operator on their own machine,
+    where off-site copies are their responsibility exactly as for any desktop
+    application, and `docs/how-to/install-local.md` states that plainly. Cloud
+    mode — where it genuinely isn't optional — has a real answer in
+    `install-selfhost.md` (`pg_dump` + `pg_dumpall --globals-only`, encrypted,
+    off-host, with a monthly restore drill). Revisit only if local mode ever
+    stops being single-operator. Size — (accepted, not scheduled).
+  - **`dto.generated.ts` freshness is on the honour system.** Nothing gates it,
+    and it had silently drifted since before SP-CLOUD-2 Phase 3 (missing every
+    `/auth/*` and `/display/{token}/*` route) until regenerated in `bb29b21`. A
+    CI check that regenerates and diffs would catch it. Size S.
+  - **`_enforce_cloud_secrets` is API-shaped.** It fires on `ENVIRONMENT=cloud`
+    and demands `AUTH_MODE`, `SESSION_COOKIE_SECURE`, and SMTP — none of which
+    the standalone worker reads, so a worker-only host would need dummy SMTP
+    credentials just to boot. Make the validator role-aware. Size S.
+    *(Scheduled: SP-CLOUD-3 Phase 3.)*
+  - **`/health/deep` never touches the database** — it checks data-dir
+    writability and the ortools import, so it reports `healthy` with Postgres
+    unreachable. A health check that cannot fail turns an outage into a silent
+    outage. Size S. *(Scheduled: SP-CLOUD-3 Phase 3, 0.F.6.)*

@@ -89,43 +89,42 @@ queue** rather than direct state writes. This gives optimistic UI with safe conf
               • version     — matches.version == the seen version?
               • transition  — assert_valid_transition(current, target)
               • apply        — write the match row + insert the commands row
-                               + enqueue a sync_queue row (all in one commit)
+                               (both in one commit)
 
-3. Outbox     SyncService background thread drains sync_queue (~5 s poll)
-              → pushes entity_type/entity_id/payload to Supabase
+3. Read       operator browsers and the TV display pick the change up on their
+              next poll (the Display module's projection routes)
 
-4. Realtime   Supabase broadcasts the write to operator browsers + the TV display
-
-5. Conflict   a stale-version / illegal command is rejected; the UI shows a pending badge,
+4. Conflict   a stale-version / illegal command is rejected; the UI shows a pending badge,
               an auto-dismiss stale-version banner, and a persistent inline conflict banner
               (no modals)
 ```
 
 The `commands` table is an **audit + idempotency log** (UUID id as the idempotency key,
-`applied_at` / `rejected_at` / `rejection_reason`). It is local-only — never mirrored to Supabase.
+`applied_at` / `rejected_at` / `rejection_reason`).
 
-## The outbox and the cloud mirror
+## Persistence and the read path
 
-Persistence is **SQLite-first**; Supabase is a mirror populated by an outbox so the system is
-crash-safe and works offline.
+Persistence is **single-store**: SQLite in local mode, Postgres in cloud mode. There is no
+replication layer and no second copy — a write is durable as soon as its transaction commits.
 
-- **Outbox**: `services/sync_service.py` is a background daemon that polls the `sync_queue` table
-  (~5 s) and pushes rows to Supabase. Because the `sync_queue` row is inserted **in the same
-  transaction** as the data write, a crash can never leave a write unqueued; recovery is idempotent
-  (the next apply re-checks `version`).
-- **Entity types mirrored** (`sync_queue.entity_type`): `match`, `tournament`, `bracket_event`,
-  `bracket_match`, `bracket_result`, `bracket_participant` (plus delete variants such as
-  `bracket_event_delete`). The Supabase tables synced are `matches`, `bracket_events`,
-  `bracket_participants`, `bracket_matches`, `bracket_results`.
-- **Local-only (never mirrored)**: `commands`, `sync_queue`, `match_states`.
-- **Read path for operators / TV**: Supabase Realtime broadcasts the mirrored writes (sub-second),
-  with a polling fallback.
+- **One write path.** `repositories/local.py` owns it, and every method commits its own
+  transaction, so a returned row is always persisted.
+- **Read path for operators / TV**: polling. Operator surfaces poll the API; the public display
+  polls the Display module's capability-token projection routes (`/display/{token}/*`). There is
+  no push channel.
+- **Recovery**: `tournament_backups` (list / create / restore) holds full JSON snapshots of
+  workspace state, restorable in-product.
 
-The director's tournament can complete cleanly even if Supabase is unreachable for the entire day;
-the queue accumulates and drains when connectivity returns. See
-[ADR 0003](/decisions/0003-sqlite-as-primary-persistence).
+The tournament completes cleanly with no network at all — nothing in the write path reaches out.
+See [ADR 0003](/decisions/0003-sqlite-as-primary-persistence).
 
-Since SP-CLOUD-2 the Supabase role is **mirror-only**: its env vars feed only this outbox path.
+::: tip Removed in SP-CLOUD-3
+A `sync_queue` outbox used to mirror writes to a Supabase Postgres project, read back via Supabase
+Realtime. It was removed entirely: one-way with no restore path, its consumers already replaced by
+the polling projection routes, and never operated. See
+[ADR 0012](/decisions/0012-remove-the-supabase-mirror).
+:::
+
 Identity and sessions are self-hosted (see
 [Backend structure → Auth & tenancy](/architecture/backend-structure#auth-tenancy-sp-cloud-2)),
 and the public spectator read path is the capability-token projection (`/display/{token}/*`),

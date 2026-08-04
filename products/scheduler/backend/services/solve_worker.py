@@ -60,7 +60,7 @@ class SolveWorker:
         self._thread: Optional[threading.Thread] = None
         self._tick = 0
 
-    # ---- wiring (resolved at call time, sync_service pattern) ----------
+    # ---- wiring (resolved at call time, for testability) ---------------
 
     def _resolve_settings(self):
         if self._settings is not None:

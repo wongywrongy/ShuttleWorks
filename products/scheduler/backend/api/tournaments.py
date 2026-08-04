@@ -309,7 +309,7 @@ def create_tournament(
     user can immediately read / write / delete the new tournament via
     the role-checked endpoints. ``owner_email`` is denormalised here
     so Step 6's "Shared with You" dashboard rows can show who the
-    tournament belongs to without a Supabase auth join.
+    tournament belongs to without a second lookup.
     """
     user_uuid = user.as_uuid()
     if body.kind not in ("meet", "bracket"):

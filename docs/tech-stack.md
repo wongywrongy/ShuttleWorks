@@ -7,11 +7,15 @@ _Last updated: 2026-05-13 (post backend-merge arc)_
 > current architecture see the design record in
 > [`superpowers/specs/`](./superpowers/specs) (the 2026-06 SP-A…SP-D specs).
 >
-> **Note (2026-08, SP-CLOUD-1/2):** two decisions below are superseded. **Auth is no longer
-> Supabase Auth** — identity is self-hosted (Argon2id + cookie sessions, `AUTH_MODE=local|cloud`);
-> the Supabase env vars now feed only the data mirror. And the **meet batch solve is no longer a
-> synchronous request** — it is an async job on the DB-backed `solve_jobs` queue with a worker
-> subprocess (`POST /schedule` answers 410). See
+> **Note (2026-08, SP-CLOUD-1/2/3):** three decisions below are superseded. **Auth is no longer
+> Supabase Auth** — identity is self-hosted (Argon2id + cookie sessions, `AUTH_MODE=local|cloud`).
+> The **meet batch solve is no longer a synchronous request** — it is an async job on the
+> DB-backed `solve_jobs` queue with a worker subprocess (`POST /schedule` answers 410). And
+> **every row below mentioning Supabase, the `sync_queue` outbox, or Realtime describes a
+> subsystem that no longer exists**: the mirror was removed entirely in SP-CLOUD-3
+> ([ADR 0012](/decisions/0012-remove-the-supabase-mirror)). Persistence is single-store (SQLite
+> local / Postgres cloud), reads are polling, and Supabase is absent from the product. The tables
+> are kept as the record of what was decided at the time. See
 > [Backend structure](./architecture/backend-structure) and `products/scheduler/backend/README.md`.
 
 This file describes the system as it stands at the end of the

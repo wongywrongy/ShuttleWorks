@@ -4,8 +4,8 @@ One product for inter-school dual / tri-meet operators *and*
 bracket-draw tournaments. Runs on the tournament director's laptop
 (today via Docker Compose; a Tauri binary is the intended end-state
 — see [deploy doc](./docs/deploy/cloud.md)) with SQLite as the
-source of truth. Supabase mirrors the live state to operator
-browsers on other devices and to a public TV display.
+source of truth. Operator browsers on other devices and the public
+TV display read live state by polling the director's backend.
 
 The repo used to ship two products in parallel — a scheduler for
 meets and a separate tournament app for brackets. The
@@ -29,7 +29,7 @@ you enable **modules** — installable product systems:
 | **Meet** | engine | Single-day inter-school meet — roster, CP-SAT-optimised court assignments, proposal/repair pipeline, live SSE solver progress. **Produces** a schedule. |
 | **Bracket** | engine | BWF-conformant single-elimination + round-robin draws — seeding, draw generation, advancement, import/export (JSON / CSV / ICS), schedule-next-round via the shared CP-SAT engine. **Produces** matches. |
 | **Operations** | live-ops | The day-of control plane over both engines' matches: a **Plan** board (drag-to-reschedule) and a **Run** surface (live court board, match-state machine, idempotent command queue, inline conflict UX). |
-| **Display** | output | Read-only public TV display (live matches / draw / results), fed by Supabase Realtime — no auth. |
+| **Display** | output | Read-only public TV display (live matches / draw / results), served over a per-workspace capability-token URL — no auth. |
 
 Operations is **always-on** (a Tier-2 architectural module, no enable toggle);
 Meet, Bracket, and Display are the user-enableable modules. Create a workspace
@@ -68,7 +68,7 @@ Start here:
 | [Module contracts](./docs/contracts/index.md) | The test-enforced seams between modules |
 | [Extending ShuttleWorks](./docs/how-to/index.md) | How to add a module, surface, endpoint, constraint, or seam |
 | [Build a module (tutorial)](./docs/tutorials/build-a-module.md) | A guided, build-it-together walkthrough |
-| [Data flow](./docs/architecture/data-flow.md) | Seams, the match-state machine, the command pipeline, the outbox |
+| [Data flow](./docs/architecture/data-flow.md) | Seams, the match-state machine, the command pipeline, persistence |
 
 ### Code intelligence (codanna)
 
@@ -100,14 +100,14 @@ make stop               # stop the stack
 make help               # full target list
 ```
 
-The Compose stack uses local-only mode by default — SQLite source
-of truth, no Supabase replication, synthetic local-dev user. Drop
-a `backend/.env` with `ENVIRONMENT=cloud` + `SUPABASE_URL` +
-`SUPABASE_ANON_KEY` to flip into cloud-mirror mode (operator
-browsers read from Supabase Realtime, the outbox worker pushes
-match + bracket writes to Postgres). See
-[`docs/deploy/cloud.md`](./docs/deploy/cloud.md) for the full
-production setup.
+The Compose stack uses local mode by default — SQLite source of
+truth, the solve worker embedded in the API process, and the
+zero-friction bootstrap identity (no signup, no email, offline).
+Drop a `backend/.env` with `ENVIRONMENT=cloud` to flip into the
+multi-tenant cloud runtime (Postgres, standalone worker
+containers, real accounts); it fails closed at startup without
+Postgres, `AUTH_MODE=cloud`, HTTPS-only cookies, and SMTP. See
+[`products/scheduler/backend/README.md`](./products/scheduler/backend/README.md).
 
 ---
 
@@ -118,7 +118,7 @@ Director's laptop — Tauri desktop app (today: Docker Compose)
   ├── FastAPI sidecar (uvicorn, local port)
   │     ├── CP-SAT solver (OR-Tools)
   │     ├── SQLite via SQLAlchemy (source of truth)
-  │     └── Sync service → Supabase Postgres (background outbox)
+  │     └── Embedded solve worker (async job rail)
   │
   └── Tauri WebView (React frontend)
         ├── Meet · Bracket: roster · configuration · matches (the engines)
@@ -126,22 +126,22 @@ Director's laptop — Tauri desktop app (today: Docker Compose)
         └── Display: read-only public TV view
 
 Operators / assistants — browser on any device
-  ├── Read via Supabase Realtime (matches + bracket_* tables), polling fallback
+  ├── Read by polling the director's FastAPI
   └── Write via idempotent commands → director's FastAPI
        (meet actions: POST /commands · bracket results: POST /bracket/commands)
 
-Public TV display — Vercel
-  └── Reads Supabase Realtime (no auth required)
-
-Supabase
-  ├── Auth (identity for all users)
-  ├── Postgres (cloud mirror of SQLite, not primary)
-  └── Realtime (broadcasts writes to operators + TV)
+Public TV display — browser / projector
+  └── Polls /display/{token}/* — a per-workspace capability URL, no auth
 ```
 
-The director's SQLite is the source of truth. Supabase is a mirror
-populated by an outbox-pattern replicator; the tournament can
-complete cleanly even if Supabase is unreachable for the entire day.
+The director's SQLite is the source of truth, and there is **no
+replication layer**: nothing in the write path touches the network, so
+the tournament completes cleanly whether or not the internet does.
+In-product recovery is `tournament_backups`.
+
+> A Supabase Postgres mirror (`sync_queue` outbox + Realtime) used to sit
+> alongside this. It was removed entirely in SP-CLOUD-3 — see
+> [ADR 0012](./docs/decisions/0012-remove-the-supabase-mirror.md).
 
 Full breakdown: [`docs/tech-stack.md`](./docs/tech-stack.md).
 

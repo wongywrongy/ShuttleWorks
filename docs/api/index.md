@@ -156,7 +156,7 @@ endpoints directly via `?id=`; the token URL (`/display?token=…`) is what spec
 
 ### Auth — self-hosted accounts & sessions
 
-Self-hosted cookie-session auth (`api/auth.py`; Supabase Auth is retired). Passwords are
+Self-hosted cookie-session auth (`api/auth.py`). Passwords are
 Argon2id; the policy is NIST 800-63B length-bounds-only plus a small blocklist. Sessions are
 opaque 256-bit tokens in an `httpOnly; SameSite=Lax` cookie — only their SHA-256 lands in
 `auth_sessions`. Credential endpoints are throttled per-account and per-IP

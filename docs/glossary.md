@@ -136,8 +136,7 @@ Four modules share one anatomy — **intake → engine → emit**:
 - **Command queue** — the idempotent operator write path,
   `POST /tournaments/{id}/commands`. Each command carries a client-generated id
   used as an **idempotency key**, so an at-least-once redelivery never double-
-  applies; the UI is optimistic with inline conflict handling. The `commands`
-  table is **local-only** (never mirrored). See
+  applies; the UI is optimistic with inline conflict handling. See
   [Data flow](/architecture/data-flow#the-command-pipeline-write-path).
 - **Lane** *(court lane)* — a single court's derived **Now / Next / Later** view:
   the **Now** match is the one on court, with queued matches (**Next / Later**)
@@ -176,25 +175,24 @@ Four modules share one anatomy — **intake → engine → emit**:
 
 - **Source of truth** — the **SQLite** database on the director's laptop. Every
   write lands here first. See [Data flow](/architecture/data-flow).
-- **Outbox** — the crash-safe replication mechanism (`backend/services/sync_service.py`):
-  writes are enqueued to `sync_queue`, and a background `SyncService` worker
-  drains them to Supabase (~every 5 s). Because the outbox is local and
-  append-only, an event **completes even if the cloud is unreachable all day** —
-  the cloud just catches up later. This is what "local-first" means here.
-- **Mirror** *(Supabase)* — the cloud **Postgres + Realtime** read-mirror,
-  populated by the outbox. Operator browsers and the TV display read from it in
-  cloud mode. It is a mirror, never the source of truth.
-- **Local-only tables** — `commands`, `sync_queue`, and `match_states` are never
-  mirrored (audit log / outbox internals / live state that stays on the director's
-  machine).
-- **Local-only vs cloud mode** — set by `ENVIRONMENT`. **Local-only** (default)
-  runs entirely on SQLite with no replication — the right mode for a single-laptop
-  event. **Cloud** mode turns on the outbox + Realtime and *requires* the Supabase
-  secrets, which `_enforce_cloud_secrets` hard-fails on if missing. See
-  [Quality attributes](/architecture/quality-attributes) (deep infra detail lives
-  in the historical note `docs/deploy/cloud.md`).
-- **Realtime** — Supabase Realtime: the publication that lets operator browsers and
-  the public TV display react to `matches` / `bracket_*` writes live in cloud mode.
+- **Backups** — `tournament_backups`: full JSON snapshots of a workspace's state,
+  with list / create / restore endpoints. The in-product recovery mechanism. They
+  live in the same database as the data they protect, so off-site durability is a
+  separate concern (in local mode, the operator's — see
+  [ADR 0012](/decisions/0012-remove-the-supabase-mirror)).
+- **Local mode vs cloud mode** — set by `ENVIRONMENT` and `AUTH_MODE`. **Local**
+  (default) runs entirely on SQLite with the solve worker embedded in the API
+  process, no accounts, no email, no network — the right mode for a single-laptop
+  event. **Cloud** requires Postgres, real accounts, HTTPS-only cookies and SMTP,
+  which `_enforce_cloud_secrets` hard-fails on if missing. See
+  [Quality attributes](/architecture/quality-attributes).
+
+::: tip Retired terminology
+**Outbox**, **Mirror**, and **Realtime** described a `sync_queue` replication path
+to Supabase, removed in SP-CLOUD-3 ([ADR 0012](/decisions/0012-remove-the-supabase-mirror)).
+Meeting these terms in older documents or commit messages means a subsystem that
+no longer exists. Reads are plain polling; there is no push channel.
+:::
 
 ## Docs & decisions
 

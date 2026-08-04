@@ -72,7 +72,7 @@ feels on the floor.
    if a match is queued, the Run surface pulls it onto that court automatically.
 6. **The public screen updates.** Every match-state write is the `matchStateChanged`
    edge — **[Seam D](/contracts/operations-display)** — so [Display](/modules/display)
-   projects the change to the public TV (poll, or Supabase Realtime in cloud mode).
+   projects the change to the public TV on its next poll.
 7. **Conflicts stay unblocking.** An illegal transition or a stale version returns
    `409`; the inline ConflictBanner shows the reason and the operator keeps working —
    no modal, no lost input.

@@ -7,8 +7,7 @@ A FastAPI app that fronts a CP-SAT solver. The solver path is stateless
 per-request (every `POST /schedule` carries the full problem in the body).
 Workspace + tournament state is persisted in **SQLite via SQLAlchemy 2.0**
 (through `repositories/local.py`, the `LocalRepository`), with Alembic
-migrations; the cloud mirror (Supabase Postgres) is populated asynchronously by
-the outbox `sync_service`.
+migrations. There is no replication layer — one database is the whole story.
 
 ## Layout
 
@@ -37,7 +36,7 @@ backend/
 │   ├── local.py                  # LocalRepository + per-entity sub-repos (members, modules, brackets, backups, …)
 │   └── base.py
 ├── alembic/                      # SQLite + Postgres migrations (head: j3e7f9a1b5c8)
-├── services/                     # match_state, sync_service (outbox), bracket/, suggestions_worker, csv_importer
+├── services/                     # auth, email, match_state, bracket/, suggestions_worker, csv_importer
 ├── Dockerfile
 └── requirements.txt
 

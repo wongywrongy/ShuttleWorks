@@ -116,7 +116,7 @@ class Settings(BaseSettings):
     # a session resolve to the bootstrap local identity; no signup, no
     # email, no network. ``cloud`` — real accounts required; a request
     # without a valid session cookie is 401. Explicit mode beats the old
-    # implicit "SUPABASE_URL is blank" keying.
+    # implicit blank-secret keying it replaced.
     auth_mode: str = "local"  # local | cloud
     session_ttl_days: float = 30.0
     session_cookie_name: str = "sw_session"

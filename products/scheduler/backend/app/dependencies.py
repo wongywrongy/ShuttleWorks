@@ -1,7 +1,7 @@
 """Request-scoped auth + role-check dependencies.
 
 ``get_current_user`` is the single identity seam every protected route
-depends on (SP-CLOUD-2 — Supabase JWT auth is retired):
+depends on (SP-CLOUD-2):
 
 - **Session cookie** — an opaque token minted by ``POST /auth/login``
   and resolved against the ``auth_sessions`` table.
@@ -34,14 +34,14 @@ log = logging.getLogger("scheduler.auth")
 
 
 class AuthUser(BaseModel):
-    """Subset of the Supabase user record we actually consume."""
+    """The identity fields every route consumes."""
     id: str
     email: Optional[str] = None
 
     def as_uuid(self) -> Optional[uuid.UUID]:
         """Parse ``id`` as a UUID; ``None`` when it doesn't (shouldn't
-        happen for real Supabase users; left defensive for unforeseen
-        identity providers)."""
+        happen for real users; left defensive for unforeseen identity
+        sources)."""
         try:
             return uuid.UUID(self.id)
         except (ValueError, TypeError):

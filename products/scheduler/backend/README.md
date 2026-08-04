@@ -99,8 +99,9 @@ exercised).
 
 ## Auth & tenancy (SP-CLOUD-2)
 
-Self-hosted cookie-session auth; Supabase Auth is retired (the
-Supabase env vars now feed only the data mirror).
+Self-hosted cookie-session auth. Supabase is gone from the product
+entirely — Auth retired in SP-CLOUD-2, the data mirror removed in
+SP-CLOUD-3 (ADR 0012).
 
 | | `AUTH_MODE=local` (default) | `AUTH_MODE=cloud` |
 |---|---|---|

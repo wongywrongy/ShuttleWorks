@@ -27,7 +27,7 @@ features:
     details: The seams between modules are declared in a typed, test-enforced descriptor. Each contract page states what crosses the boundary, who owns it, and the clean interface.
     link: /contracts/
   - title: SQLite is the source of truth
-    details: The director's laptop holds the canonical state in SQLite; Supabase is a mirror populated by a crash-safe outbox. The tournament finishes even if the cloud is down all day.
+    details: The director's laptop holds the canonical state in SQLite, and nothing in the write path reaches the network. The tournament finishes whether or not the internet does.
     link: /architecture/data-flow
 ---
 

@@ -47,8 +47,9 @@ just as they do in production.
 
 ## Configuration
 
-Defaults work out of the box. The stack runs in **local-only mode**: SQLite is the source of
-truth, there is no Supabase replication, and a synthetic local-dev user is used. Copy
+Defaults work out of the box. The stack runs in **local mode**: SQLite is the source of
+truth, the solve worker runs inside the API process, and requests without a session resolve
+to the zero-friction bootstrap identity. Copy
 `.env.example` → `.env` (Compose auto-loads it from the repo root) only when you need to remap:
 
 | Variable | Default | Purpose |
@@ -57,13 +58,13 @@ truth, there is no Supabase replication, and a synthetic local-dev user is used.
 | `FRONTEND_HOST_PORT` | `80` | Host port for the nginx frontend. |
 | `BACKEND_HOST_PORT` | `8000` | Host port for the FastAPI backend. |
 
-### Cloud-mirror mode
+### Cloud mode
 
-Drop a `backend/.env` with `ENVIRONMENT=cloud` plus `SUPABASE_URL` and `SUPABASE_ANON_KEY` to
-flip into cloud-mirror mode: operator browsers read from Supabase Realtime and the outbox worker
-pushes match + bracket writes to Postgres. The director's SQLite stays canonical regardless. The
-full production setup (Tauri sidecar, Supabase project, Vercel display) is in
-`docs/deploy/cloud.md` on disk.
+Drop a `backend/.env` with `ENVIRONMENT=cloud` to flip into the multi-tenant cloud runtime:
+Postgres instead of SQLite, standalone `python -m worker` containers instead of the embedded
+worker, and real accounts instead of the bootstrap identity. It fails closed at startup without
+Postgres, `AUTH_MODE=cloud`, `SESSION_COOKIE_SECURE=true`, and SMTP — see
+`products/scheduler/docker-compose.cloud.yml` and `backend/README.md`.
 
 ## Tests
 

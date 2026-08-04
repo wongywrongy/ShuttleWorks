@@ -1,6 +1,21 @@
 # ADR 0003 — SQLite as primary persistence
 
-**Status:** Accepted (2026, architecture-adjustment arc)
+**Status:** Accepted (2026, architecture-adjustment arc) — **partially superseded by
+[ADR 0012](/decisions/0012-remove-the-supabase-mirror)** (2026-08-04).
+
+::: warning Partially superseded
+The **primary decision below still stands**: local SQLite is the canonical source
+of truth in local mode, and the day cannot stop because the network did.
+
+What no longer exists is the **Supabase mirror** — the `sync_queue` outbox,
+`services/sync_service.py`, and the Supabase Realtime read path. It was removed
+entirely in SP-CLOUD-3 / 0.E: it was one-way with no restore path, its consumers
+had already been replaced (the public display now polls capability-token
+projection routes), and it was never operated — no project was ever populated.
+See [ADR 0012](/decisions/0012-remove-the-supabase-mirror).
+
+The text below is preserved as the record of what was decided at the time.
+:::
 
 ## Context
 

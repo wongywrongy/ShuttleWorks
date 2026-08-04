@@ -2,8 +2,8 @@
 
 Launches ``uvicorn app.main:app`` as a SUBPROCESS (never an import — the
 HTTP-only boundary holds even here) with a fresh SQLite file in a temp
-dir and blank Supabase env, which gives local-dev auth (synthetic user)
-and a disabled sync worker for free. The backend's lifespan runs Alembic
+dir, which gives the local bootstrap identity for free. The backend's
+lifespan runs Alembic
 ``upgrade head`` on startup, so the schema self-provisions.
 
 Mirrors the health-poll pattern of ``e2e/global-setup.ts``.
@@ -53,8 +53,6 @@ class EphemeralServer:
             **os.environ,
             "DATABASE_URL": f"sqlite:///{db_path.as_posix()}",
             "BACKEND_DATA_DIR": self._tmpdir,
-            "SUPABASE_URL": "",
-            "SUPABASE_ANON_KEY": "",
             "ENVIRONMENT": "local",
             "LOG_LEVEL": "warning",
         }

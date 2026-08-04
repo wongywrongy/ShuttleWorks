@@ -32,10 +32,9 @@ FastAPI app + router includes are assembled in `app/main.py`.
 - No dedicated backend module today. Display reads via tournament/state endpoints.
   **Gap:** a `display`/read-model module is a future deliverable (spec Phase 6.3).
 
-## Commands / Sync (Core Platform)
+## Commands (Core Platform)
 
 - `api/commands.py` — command queue (shared).
-- `services/sync_service.py` — Supabase outbox sync.
 
 ## Core / app assembly
 

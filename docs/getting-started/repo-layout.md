@@ -16,7 +16,7 @@ products/
     │   ├── app/               app, schemas, error codes, auth deps
     │   ├── database/          SQLAlchemy models + session
     │   ├── repositories/      LocalRepository + per-entity sub-repos
-    │   └── services/          match_state, sync_service (outbox), bracket/, suggestions_worker
+    │   └── services/          auth, email, match_state, bracket/, suggestions_worker
     ├── frontend/              React 19 + Zustand + Vite
     │   └── src/
     │       ├── app/           router, AppShell, ModuleOutlet (workspace nav model lives in platform/product-shell)
@@ -92,7 +92,7 @@ because it carries GitHub-relative links and implementation scratch:
 | `docs/tech-stack.md` | The post-merge architecture + data-model reference. |
 | `docs/changes/` | Dated decision logs. |
 | `docs/audits/` | Historical UI/UX audits + screenshots. |
-| `docs/deploy/cloud.md` | Tauri sidecar + Supabase deploy guide. |
+| `docs/deploy/cloud.md` | Deployment guide (historical; superseded by the `how-to/install-*` runbooks). |
 | `docs/architectural-roadmap.md` | The historical backend-merge arc roadmap. |
 
 Nothing there is deleted — it is the archive. The curated pages here are the single source of

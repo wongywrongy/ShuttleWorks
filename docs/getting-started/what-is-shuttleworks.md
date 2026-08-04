@@ -63,11 +63,11 @@ the [Settings page](/modules/settings).
 | Role | Device | How they connect |
 | --- | --- | --- |
 | **Tournament director** (operator) | The laptop running the stack | Drives everything: roster, schedule, live ops, director time-axis tools. The laptop's SQLite is the source of truth. |
-| **Assistant operators** | Browser on any LAN device | Read live state via Supabase Realtime; write via the idempotent command queue back to the director's backend. |
-| **The public / venue TV** | Browser / projector | Reads the public `/display` view from Supabase Realtime. No login. |
+| **Assistant operators** | Browser on any LAN device | Poll live state from the director's backend; write via the idempotent command queue. |
+| **The public / venue TV** | Browser / projector | Polls the public `/display/{token}/*` capability-token projection. No login. |
 
-The director's SQLite is canonical; Supabase is a **mirror** populated by a background outbox.
-A tournament can complete cleanly even if Supabase is unreachable for the entire day — see
+The director's SQLite is canonical, and there is no replication layer: nothing in the write path
+reaches the network, so a tournament completes cleanly with the internet down all day — see
 [ADR 0003: SQLite as primary persistence](/decisions/0003-sqlite-as-primary-persistence) and the
 [data-flow](/architecture/data-flow) page.
 

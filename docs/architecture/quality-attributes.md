@@ -18,27 +18,27 @@ against how the system is meant to behave under stress.
 **Stance:** a tournament runs to completion on the director's laptop **even if the
 cloud is unreachable for the entire day.**
 
-- **SQLite is the source of truth.** Every write lands in the local SQLite database
-  first; the cloud is a mirror, never a dependency of the write path
+- **One database is the source of truth.** SQLite in local mode, Postgres in cloud
+  mode. Nothing in the write path depends on the network
   ([ADR 0003](/decisions/0003-sqlite-as-primary-persistence),
   [Data flow](/architecture/data-flow)).
-- **Crash-safe outbox.** Cloud replication goes through an append-only `sync_queue`
-  drained by a background `SyncService` worker (~every 5 s,
-  `backend/services/sync_service.py`). If Supabase is down, writes accumulate and
-  drain later; the local app keeps working. Browser operators lose *live* updates in
-  that window; the director does not.
-- **Backups.** Rolling `tournament_backups` with a one-click Setup → Backups restore
-  that bypasses the outbox and re-pushes after restore.
-- **Fail-fast on misconfiguration.** Booting in cloud mode without the Supabase
-  secrets is a hard container failure (`_enforce_cloud_secrets`), not a silent
-  degrade to a broken half-state.
+- **Backups.** Rolling `tournament_backups` with a one-click Setup → Backups
+  restore, holding full JSON snapshots of workspace state.
+- **Fail-fast on misconfiguration.** Booting in cloud mode without Postgres, real
+  accounts, HTTPS-only cookies, and SMTP is a hard container failure
+  (`_enforce_cloud_secrets`), not a silent degrade to a broken half-state.
 - **Health probes.** `GET /health` (liveness) and `GET /health/deep` (data dir
   writable **and** CP-SAT solver importable) back the operator connection indicator.
 
-**Known gap (logged, not hidden):** the canonical SQLite file can die with the
-laptop — there is **no durable off-laptop backup of `data/local.db`** yet (a
-cron-style copy is a noted follow-up in `docs/deploy/cloud.md`). Tauri packaging is
-also not yet scaffolded; Docker Compose is the production shape today.
+**Known gap (logged, not hidden):** `tournament_backups` rows live in the same
+database as the data they protect, so **local mode has no in-product off-site
+durability** — a lost disk loses both. This is deliberate: a single operator on
+their own machine owns off-site copies the way they would for any desktop
+application, and `docs/how-to/install-local.md` says so plainly. Cloud mode, where
+it is not optional, has a real answer (`pg_dump` + `pg_dumpall --globals-only`,
+encrypted and off-host, with a restore drill). See
+[ADR 0012](/decisions/0012-remove-the-supabase-mirror). Tauri packaging is also not
+yet scaffolded; Docker Compose is the production shape today.
 
 ## Security
 
@@ -52,12 +52,13 @@ touch the repo.
   `/health` probes, which declare their own access. Workspace routes additionally run
   behind `require_tournament_access`, which answers a uniform 404 for non-members.
   See [API reference → Conventions](/api/#conventions).
-- **Row-level security.** On Supabase, every synced table has an RLS `_select_member`
-  policy (reads gated by tournament membership) and **no INSERT/UPDATE/DELETE
-  policy** — only the backend's Postgres role writes, via the outbox. A leaked
-  publishable key cannot mutate cloud data.
-- **Secret hygiene.** Supabase credentials live in `backend/.env` (git-ignored; the
-  image build excludes `**/.env`) and are never committed. `CORS_ORIGINS` gates which
+- **Access control is application-layer, not database-layer.** Every workspace route
+  runs behind `require_tournament_access`; there is no RLS, because SQLite has no
+  equivalent and dual-dialect parity is a product rule — one enforcement path that
+  behaves identically on both. (A Supabase mirror once carried its own RLS policies;
+  it was removed in [ADR 0012](/decisions/0012-remove-the-supabase-mirror).)
+- **Secret hygiene.** Credentials live in `backend/.env` (git-ignored; the image
+  build excludes `**/.env`) and are never committed. `CORS_ORIGINS` gates which
   browser origins may call the director's FastAPI.
 - **Local-only caveat.** In the default local-only mode the backend seeds a synthetic
   dev user with no auth — correct for a single-laptop event, **not** for exposing the

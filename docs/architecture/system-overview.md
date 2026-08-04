@@ -100,8 +100,8 @@ Everything sits on two shared layers:
   [ADR 0004](/decisions/0004-ortools-cpsat-engine) and `scheduler_core/README.md`.
 - **SQLite via SQLAlchemy 2.0** — the canonical persistence, with Alembic migrations, fronted by
   `repositories/local.py` (`LocalRepository`); cloud mode runs the same code against Postgres 16.
-  A background outbox mirrors writes to Supabase (mirror-only — identity is self-hosted
-  cookie-session auth since SP-CLOUD-2). See
+  Single-store: there is no replication layer, and identity is self-hosted cookie-session
+  auth (SP-CLOUD-2). See
   [ADR 0003](/decisions/0003-sqlite-as-primary-persistence) and [Data flow](/architecture/data-flow).
 
 ## See also

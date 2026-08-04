@@ -1,13 +1,12 @@
 """Bracket routes — the tournament product's API surface, ported into
 the scheduler backend under ``/tournaments/{tournament_id}/bracket/*``
-with Supabase-JWT auth + role gates.
+with cookie-session auth + role gates.
 
 PR 2 (T-B + T-C + T-D) of the backend-merge arc. Mirrors the existing
 ``products/tournament/backend/main.py`` route shape so the tournament
 frontend's apiClient can swap base URLs cleanly. Persistence goes
-through ``_LocalBracketRepo`` (PR 1's schema), and every repo write
-stages an outbox row so operator browsers see live updates via
-Supabase Realtime.
+through ``_LocalBracketRepo`` (PR 1's schema); operator browsers pick up
+changes by polling.
 
 Routes (all tournament-scoped via the path's ``tournament_id``):
 
@@ -1260,7 +1259,7 @@ def _slot_to_dict(slot: BracketSlot) -> dict:
 
     ``feeder_take`` is emitted ONLY for loser feeds — winner-take slots
     keep the exact historical dict shape, so every persisted draw (and
-    its Supabase mirror) stays byte-identical.
+    the persisted row) stays byte-identical.
     """
     out = {
         "participant_id": slot.participant_id,

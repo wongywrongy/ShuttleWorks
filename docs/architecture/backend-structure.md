@@ -6,8 +6,8 @@ not a request**: `POST /tournaments/{id}/solve-jobs` snapshots the full problem 
 polls the job to a terminal status (the legacy synchronous `POST /schedule` answers `410 Gone`).
 Workspace and tournament state persist in **SQLite via SQLAlchemy 2.0** behind
 `repositories/local.py` (`LocalRepository`) — Postgres 16 in cloud mode — with Alembic
-migrations; the Supabase mirror is populated asynchronously by the outbox `sync_service`.
-Identity is self-hosted cookie-session auth (SP-CLOUD-2 — Supabase Auth is retired), and every
+migrations. There is no replication layer — one database is the whole story.
+Identity is self-hosted cookie-session auth (SP-CLOUD-2), and every
 workspace route runs behind the tenancy seam described below.
 
 ## Layout
@@ -27,7 +27,7 @@ backend/
 │   ├── local.py           LocalRepository + per-entity sub-repos
 │   └── base.py
 ├── alembic/               SQLite + Postgres migrations
-├── services/              auth, email, match_state, sync_service (outbox), bracket/, suggestions_worker,
+├── services/              auth, email, match_state, bracket/, suggestions_worker,
 │                          csv_importer, solve_jobs / solve_worker / solve_runner / solve_child (the job rail)
 └── worker.py              standalone worker entrypoint (`python -m worker`, cloud mode)
 ```
@@ -121,7 +121,6 @@ from `tournaments`) and many use composite primary keys.
 | `matches` | `(tournament_id, id)` | the meet match rows: `court_id`, `time_slot`, `status`, `version` |
 | `match_states` | `(tournament_id, match_id)` | **Operations**: live status, timestamps, score |
 | `commands` | `id` (UUID) | **Operations**: idempotent command log (`action`, `applied_at`/`rejected_at`) |
-| `sync_queue` | `id` (UUID) | the outbox: `entity_type`, `entity_id`, `payload`, `attempts` |
 | `bracket_events` | `(tournament_id, id)` | **Bracket**: `discipline`, `format`, `bracket_size`, `version` |
 | `bracket_participants` | `(tournament_id, bracket_event_id, id)` | **Bracket**: `name`, `type`, `seed` |
 | `bracket_matches` | `(tournament_id, bracket_event_id, id)` | **Bracket**: `round_index`, `match_index`, `kind`, slots, `version` |

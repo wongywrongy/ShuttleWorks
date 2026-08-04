@@ -2,16 +2,15 @@
 #
 # This file is for **developers only**, never shipped to operators. It
 # stands up a Postgres instance alongside the backend so we can exercise
-# the cloud path (Supabase Postgres) without leaving the laptop.
+# the cloud path without leaving the laptop.
 #
 #   make -C products/scheduler dev-postgres
 #   # or directly:
 #   docker compose -f products/scheduler/docker-compose.dev.yml up --build
 #
 # The backend container reads ``DATABASE_URL`` from the environment —
-# overridden here to point at the in-network Postgres service. Once
-# Step 8 lands, the same env var points at Supabase Postgres in
-# production with zero code change.
+# overridden here to point at the in-network Postgres service. The same
+# env var points at the production Postgres with zero code change.
 
 name: ${COMPOSE_PROJECT_NAME:-btp-dev}
 
