@@ -17,10 +17,13 @@
 # - `postgres` is pinned to major 16 with a NAMED volume (the DB is the
 #   source of truth here, unlike local mode's bind-mounted SQLite).
 #
-# ENVIRONMENT stays `local` in this file on purpose: `cloud` switches on
-# the Supabase-auth enforcement (real JWTs required), which is a later
-# SP-CLOUD slice. This stack verifies the queue/worker/Postgres runtime,
-# not auth.
+# AUTH: SP-CLOUD-2 — AUTH_MODE=cloud (real accounts + cookie sessions;
+# no bootstrap identity). ENVIRONMENT stays `local` here because the
+# `cloud` startup validator additionally demands SESSION_COOKIE_SECURE
+# (HTTPS-only cookies), which a plain-HTTP localhost smoke stack can't
+# satisfy — a real deployment sets ENVIRONMENT=cloud +
+# SESSION_COOKIE_SECURE=true behind TLS. EMAIL_BACKEND=console keeps
+# invite/reset mail visible via `docker compose logs backend`.
 #
 # The frontend is intentionally absent — drive it with curl (see
 # docs) or point a Vite dev server's proxy at the API port.
@@ -60,6 +63,10 @@ services:
       - DATA_DIR=/app/data
       - DATABASE_URL=postgresql://scheduler:${POSTGRES_PASSWORD:-scheduler}@postgres:5432/scheduler
       - EMBEDDED_WORKER=false
+      # SP-CLOUD-2: real accounts required; no bootstrap identity.
+      - AUTH_MODE=cloud
+      - EMAIL_BACKEND=console
+      - PUBLIC_APP_ORIGIN=${PUBLIC_APP_ORIGIN:-http://localhost:8600}
     depends_on:
       postgres:
         condition: service_healthy

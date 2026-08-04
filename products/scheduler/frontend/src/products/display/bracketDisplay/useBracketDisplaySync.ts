@@ -27,20 +27,25 @@ export interface UseBracketDisplaySyncResult {
 
 export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
   const [searchParams] = useSearchParams();
+  // Public capability link (SP-CLOUD-2): ?token= reads the unauthenticated
+  // /display/{token}/bracket projection; ?id= keeps the viewer-gated path.
+  const token = searchParams.get('token');
   const tid = searchParams.get('id');
   const [data, setData] = useState<BracketTournamentDTO | null>(null);
   const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!tid) {
-      setSyncError('Missing ?id=<tournament-id> query parameter');
+    if (!token && !tid) {
+      setSyncError('Missing ?token=<display-token> (or ?id=) query parameter');
       return;
     }
     let cancelled = false;
     const pull = async () => {
       try {
-        const remote = await apiClient.getBracket(tid);
+        const remote = token
+          ? await apiClient.getDisplayBracket(token)
+          : await apiClient.getBracket(tid as string);
         if (cancelled) return;
         if (remote) setData(remote);
         setLastSyncMs(Date.now());
@@ -56,7 +61,7 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, [tid]);
+  }, [tid, token]);
 
   const freshness: FreshnessState = useMemo(() => {
     if (lastSyncMs === null) return syncError ? 'delayed' : 'live';

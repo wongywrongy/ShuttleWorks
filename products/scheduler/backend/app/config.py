@@ -135,6 +135,21 @@ class Settings(BaseSettings):
     password_max_length: int = 128
     # Password-reset token lifetime (delivery rides the email seam).
     reset_token_ttl_minutes: float = 60.0
+    # ---- Email seam (SP-CLOUD-2 Phase 3) ------------------------------
+    # console = log the message (local default, tests); smtp = generic
+    # SMTP (cloud). No provider SDKs — Rule 3 keeps local offline.
+    email_backend: str = "console"  # console | smtp
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "ShuttleWorks <no-reply@localhost>"
+    smtp_use_tls: bool = True
+    # Public origin used to build absolute links in emails (invite /
+    # reset URLs). Blank = relative links (local mode).
+    public_app_origin: str = ""
+    # Cloud email invites expire; local link invites may be eternal.
+    invite_ttl_days: float = 14.0
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -149,16 +164,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_cloud_secrets(self) -> "Settings":
-        # In cloud mode the synthetic-user auth bypass is unacceptable
-        # — a blank ``SUPABASE_URL`` would silently log every request
-        # in as the local-dev user. Refuse to start instead.
+        # In cloud mode the bootstrap-identity fallback is unacceptable
+        # — every request would silently act as the local operator.
+        # Refuse to start unless real accounts + secure cookies + a
+        # real database are configured. (Supabase vars are now
+        # mirror-only and optional — SP-CLOUD-2 retired Supabase Auth.)
         if self.environment != "cloud":
             return self
         missing: list[str] = []
-        if not self.supabase_url:
-            missing.append("SUPABASE_URL")
-        if not self.supabase_anon_key:
-            missing.append("SUPABASE_ANON_KEY")
         if self.database_url.startswith("sqlite"):
             missing.append("DATABASE_URL (must be a postgres URL)")
         if self.auth_mode != "cloud":

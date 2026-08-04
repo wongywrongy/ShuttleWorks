@@ -816,11 +816,45 @@ def create_invite_link(
             ErrorCode.STATE_CORRUPT,
             "user id is not a UUID",
         )
+    email = None
+    expires_at = None
+    if body.email:
+        # Email invite (SP-CLOUD-2): validated address, bounded lifetime,
+        # delivered via the email seam (console backend in local mode).
+        from datetime import datetime, timedelta, timezone
+
+        from app.config import settings
+        from services.auth import AuthError, normalize_email
+
+        try:
+            email = normalize_email(body.email)
+        except AuthError as exc:
+            raise http_error(400, ErrorCode.INVALID_INPUT, exc.message)
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            days=settings.invite_ttl_days
+        )
     invite = repo.invite_links.create(
         tournament_id=tournament_id,
         role=body.role,
         created_by=user_uuid,
+        email=email,
+        expires_at=expires_at,
     )
+    if email:
+        from app.config import settings
+        from services.email import send_email
+
+        tournament = repo.tournaments.get_by_id(tournament_id)
+        origin = settings.public_app_origin.rstrip("/")
+        send_email(
+            to=email,
+            subject=f"You're invited to {tournament.name or 'a ShuttleWorks workspace'}",
+            body=(
+                f"You've been invited as {invite.role}.\n\n"
+                f"Accept here: {origin}/invite/{invite.id}\n\n"
+                f"This invite expires {expires_at:%Y-%m-%d}."
+            ),
+        )
     return InviteCreatedDTO(
         token=str(invite.id),
         url=f"/invite/{invite.id}",
@@ -852,10 +886,15 @@ def list_invite_links(
 
 
 class TournamentMemberDTO(BaseModel):
-    """Wire shape for the Step 7 Settings → Share "Members" list."""
+    """Wire shape for the Step 7 Settings → Share "Members" list.
+
+    ``email``/``displayName`` (SP-CLOUD-2) come from the users table;
+    ``email`` is None for pre-account placeholder identities."""
     userId: str
     role: str
     joinedAt: str
+    email: Optional[str] = None
+    displayName: Optional[str] = None
 
 
 @router.get(
@@ -868,13 +907,39 @@ def list_tournament_members(
     repo: LocalRepository = Depends(get_repository),
 ):
     """All members of a tournament. Viewer-level so any member can see
-    who else has access; owner-only management actions stay gated."""
+    who else has access; owner-only management actions stay gated.
+
+    SP-CLOUD-2: rows carry real identity (email/display name from the
+    users table) — People & Access finally shows people, not UUIDs.
+    Placeholder ``@unmigrated.local`` addresses (pre-account era) are
+    withheld so the UI falls back to its short-id rendering.
+    """
+    from database.models import User
+
     members = repo.members.list_for_tournament(tournament_id)
-    return [
-        TournamentMemberDTO(
-            userId=str(m.user_id),
-            role=m.role,
-            joinedAt=m.joined_at.isoformat() if m.joined_at else "",
+    users = {
+        u.id: u
+        for u in repo.session.query(User)
+        .filter(User.id.in_([m.user_id for m in members]))
+        .all()
+    } if members else {}
+
+    def _identity(m):
+        u = users.get(m.user_id)
+        if u is None or u.email.endswith("@unmigrated.local"):
+            return None, (u.display_name if u else None)
+        return u.email, u.display_name
+
+    out = []
+    for m in members:
+        email, display = _identity(m)
+        out.append(
+            TournamentMemberDTO(
+                userId=str(m.user_id),
+                role=m.role,
+                joinedAt=m.joined_at.isoformat() if m.joined_at else "",
+                email=email,
+                displayName=display,
+            )
         )
-        for m in members
-    ]
+    return out

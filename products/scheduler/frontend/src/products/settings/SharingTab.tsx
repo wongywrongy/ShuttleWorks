@@ -43,13 +43,38 @@ async function copyToClipboard(text: string): Promise<boolean> {
  *  management (create with role, list with status/expiry, copy, revoke). */
 export function SharingTab({ tid }: { tid: string }) {
   const origin = window.location.origin;
-  const displayLink = `${origin}/display?id=${tid}`;
+
+  // Public display link is a CAPABILITY link (SP-CLOUD-2): minted server-side,
+  // owner-gated, revocable by rotation. Non-owners get a 404 from the mint
+  // endpoint — hide the section rather than showing a link we can't produce.
+  const [displayToken, setDisplayToken] = useState<string | null>(null);
+  const [displayTokenDenied, setDisplayTokenDenied] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const displayLink = displayToken ? `${origin}/display?token=${displayToken}` : null;
 
   const [invites, setInvites] = useState<InviteSummaryDTO[] | null>(null);
   const [role, setRole] = useState<InviteRole>('operator');
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .getDisplayToken(tid)
+      .then((t) => {
+        if (cancelled) return;
+        setDisplayToken(t.token);
+        setDisplayTokenDenied(false);
+      })
+      .catch(() => {
+        if (!cancelled) setDisplayTokenDenied(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tid]);
 
   // A no-cancel reload used after a create/revoke mutation (user-initiated).
   const refresh = useCallback(() => {
@@ -82,10 +107,22 @@ export function SharingTab({ tid }: { tid: string }) {
     }
   }
 
+  async function rotate() {
+    setRotating(true);
+    try {
+      const t = await apiClient.rotateDisplayToken(tid);
+      setDisplayToken(t.token);
+    } finally {
+      setRotating(false);
+    }
+  }
+
   async function create() {
     setBusy(true);
     try {
-      await apiClient.createInvite(tid, { role });
+      const trimmed = email.trim();
+      await apiClient.createInvite(tid, trimmed ? { role, email: trimmed } : { role });
+      setEmail('');
       refresh();
     } finally {
       setBusy(false);
@@ -109,28 +146,53 @@ export function SharingTab({ tid }: { tid: string }) {
         </p>
       </div>
 
-      {/* Public display link — read-only, separate from collaborator invites. */}
-      <SectionCard eyebrow="PUBLIC DISPLAY LINK" testId="sharing-public">
-        <p className="mb-2 text-xs text-muted-foreground">
-          Anyone with this link can view the read-only venue display — no sign-in required.
-        </p>
-        <div className="flex items-center gap-2">
-          <input
-            readOnly
-            value={displayLink}
-            aria-label="Public display link"
-            className="min-w-0 flex-1 rounded border border-border bg-muted/30 px-2 py-1.5 font-mono text-xs text-foreground"
-          />
-          {/* xs (28px) matches the row's input + the app's control scale —
-              the default 40px Button towered over its neighbors. */}
-          <Button size="xs" variant="ghost" onClick={() => copy(displayLink, 'display')}>
-            {copied === 'display' ? 'Copied' : 'Copy'}
-          </Button>
-          <Button size="xs" variant="ghost" onClick={() => window.open(displayLink, '_blank')}>
-            Open fullscreen
-          </Button>
-        </div>
-      </SectionCard>
+      {/* Public display link — read-only, separate from collaborator invites.
+          Hidden entirely when the caller isn't the owner (mint 404s). */}
+      {!displayTokenDenied && (
+        <SectionCard eyebrow="PUBLIC DISPLAY LINK" testId="sharing-public">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Anyone with this link can view the read-only venue display — no sign-in required.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={displayLink ?? 'Loading…'}
+              aria-label="Public display link"
+              className="min-w-0 flex-1 rounded border border-border bg-muted/30 px-2 py-1.5 font-mono text-xs text-foreground"
+            />
+            {/* xs (28px) matches the row's input + the app's control scale —
+                the default 40px Button towered over its neighbors. */}
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={!displayLink}
+              onClick={() => displayLink && copy(displayLink, 'display')}
+            >
+              {copied === 'display' ? 'Copied' : 'Copy'}
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={!displayLink}
+              onClick={() => displayLink && window.open(displayLink, '_blank')}
+            >
+              Open fullscreen
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={!displayLink || rotating}
+              onClick={() => void rotate()}
+            >
+              {rotating ? 'Rotating…' : 'Rotate link'}
+            </Button>
+          </div>
+          <p className="mt-2 text-2xs text-muted-foreground">
+            Rotating the link revokes the old one immediately — re-share the new link with
+            any venue displays.
+          </p>
+        </SectionCard>
+      )}
 
       {/* Collaborator invite links. */}
       <SectionCard eyebrow="COLLABORATOR INVITES" testId="sharing-invites">
@@ -144,6 +206,14 @@ export function SharingTab({ tid }: { tid: string }) {
             options={ROLE_OPTIONS}
             ariaLabel="Invite role"
             size="sm"
+          />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email (optional)"
+            aria-label="Invite email (optional)"
+            className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
           />
           <Button size="xs" onClick={create} disabled={busy}>
             {busy ? 'Creating…' : 'Create invite'}
@@ -179,7 +249,8 @@ export function SharingTab({ tid }: { tid: string }) {
                         {STATUS_LABEL[status]}
                       </span>
                     </div>
-                    <div className="mt-0.5 text-2xs text-muted-foreground">
+                    <div className="mt-0.5 truncate text-2xs text-muted-foreground">
+                      {inv.email ? <>{inv.email} · </> : null}
                       {fmtExpiry(inv.expiresAt)}
                     </div>
                   </div>

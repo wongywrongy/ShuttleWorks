@@ -72,12 +72,15 @@ export function PeopleAccessTab({
             </li>
           ) : (
             members.map((m) => {
-              // The backend only exposes a user UUID — but the OWNER'S name
-              // is on the summary, so the owner row shows a real identity
-              // instead of a derived id chip (a zero-UUID local-dev user
-              // used to render as avatar "0" + "00000000").
+              // SP-CLOUD-2: member rows now carry real identity (displayName /
+              // email) from the users table. Prefer that; fall back to the
+              // owner's name off the summary for the owner row; and keep the
+              // short-id chip for pre-account placeholder identities (null
+              // email — unmigrated rows).
               const name =
-                m.role === 'owner' && summary?.ownerName ? summary.ownerName : null;
+                m.displayName?.trim() ||
+                m.email ||
+                (m.role === 'owner' && summary?.ownerName ? summary.ownerName : null);
               return (
                 <li
                   key={m.userId}

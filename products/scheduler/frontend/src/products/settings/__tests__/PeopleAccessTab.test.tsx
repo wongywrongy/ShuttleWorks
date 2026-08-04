@@ -39,6 +39,53 @@ describe('PeopleAccessTab', () => {
     expect(screen.queryByText(uuid)).toBeNull(); // full UUID never shown as text
   });
 
+  it('renders displayName when the member row carries a real identity', async () => {
+    vi.mocked(apiClient.listMembers).mockResolvedValue([
+      {
+        userId: 'u-1',
+        role: 'operator',
+        joinedAt: '2026-01-01T00:00:00Z',
+        email: 'sam@club.org',
+        displayName: 'Sam Ops',
+      },
+    ] as never);
+    render(<PeopleAccessTab tid="t1" summary={summary} />);
+    const row = await screen.findByTestId('member-u-1');
+    expect(row).toHaveTextContent('Sam Ops');
+    expect(row).toHaveTextContent('S'); // avatar initial from the name
+    expect(row).not.toHaveTextContent('U1'); // no short-id chip
+  });
+
+  it('falls back to email when there is no displayName', async () => {
+    vi.mocked(apiClient.listMembers).mockResolvedValue([
+      {
+        userId: 'u-2',
+        role: 'viewer',
+        joinedAt: '2026-01-01T00:00:00Z',
+        email: 'viewer@club.org',
+        displayName: null,
+      },
+    ] as never);
+    render(<PeopleAccessTab tid="t1" summary={summary} />);
+    const row = await screen.findByTestId('member-u-2');
+    expect(row).toHaveTextContent('viewer@club.org');
+  });
+
+  it('keeps the short-id chip for pre-account rows (null email)', async () => {
+    vi.mocked(apiClient.listMembers).mockResolvedValue([
+      {
+        userId: 'deadbeef-0000-1111-2222-333344445555',
+        role: 'operator',
+        joinedAt: '2026-01-01T00:00:00Z',
+        email: null,
+        displayName: null,
+      },
+    ] as never);
+    render(<PeopleAccessTab tid="t1" summary={summary} />);
+    const row = await screen.findByTestId('member-deadbeef-0000-1111-2222-333344445555');
+    expect(row).toHaveTextContent('DEADBEEF'); // shortId fallback
+  });
+
   it('shows an empty-members hint', async () => {
     vi.mocked(apiClient.listMembers).mockResolvedValue([] as never);
     render(<PeopleAccessTab tid="t1" summary={summary} />);

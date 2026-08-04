@@ -408,6 +408,9 @@ class InviteLink(Base):
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
     )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
+    # SP-CLOUD-2 Phase 3: cloud invites are email-addressed (delivery
+    # via the email seam). NULL = local link-style invite.
+    email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
@@ -929,6 +932,30 @@ class User(Base):
     __table_args__ = (
         Index("uq_users_email_lower", text("lower(email)"), unique=True),
     )
+
+
+class DisplayToken(Base):
+    """Capability token behind the public spectator display (Rule 8).
+
+    One row per workspace; the token is a random urlsafe string stored
+    RAW (unlike sessions) because the Sharing tab must re-display the
+    link and the capability it grants is read-only projection data —
+    revocation is rotation (new token) or row deletion. The public
+    ``/display/{token}/*`` routes resolve through this table only;
+    the raw tournament UUID never becomes a public capability.
+    """
+
+    __tablename__ = "display_tokens"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    token: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    __table_args__ = (Index("uq_display_tokens_token", "token", unique=True),)
 
 
 class Org(Base):

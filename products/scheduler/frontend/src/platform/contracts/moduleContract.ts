@@ -235,15 +235,22 @@ export const operationsContract: ModuleContract = {
 };
 
 /**
- * Display — the read-only output module. Owns the preview/configuration IA but
- * NO backend route; it only polls. Reacts to live match-state changes via its
- * independent poll.
+ * Display — the read-only output module. Owns the preview/configuration IA and
+ * (since SP-CLOUD-2) the token-authenticated public projection routes
+ * (`/display/{token}/*`) that serve the spectator board without a session.
+ * Everything else it reads is a poll of endpoints other modules own. Reacts to
+ * live match-state changes via its independent poll.
  */
 export const displayContract: ModuleContract = {
   id: 'display',
   enableable: true,
   ownedSegments: ['tv', 'display-config'],
-  ownedEndpoints: [],
+  ownedEndpoints: [
+    apiClient.getDisplaySummary,
+    apiClient.getDisplayState,
+    apiClient.getDisplayMatchStates,
+    apiClient.getDisplayBracket,
+  ],
   consumedEndpoints: [
     apiClient.getTournamentState,
     apiClient.getMatchStates,

@@ -700,11 +700,34 @@ export interface TournamentUpdateDTO {
   tournamentDate?: string | null;
 }
 
+// ---- Auth (self-hosted cookie sessions, SP-CLOUD-2) ----------------------
+
+/** The signed-in identity from ``/auth/*``. In local mode this is the
+ *  bootstrap identity (``isBootstrap: true``) — the no-login-wall path. */
+export interface UserDTO {
+  id: string;
+  email: string;
+  displayName?: string | null;
+  emailVerified: boolean;
+  isBootstrap: boolean;
+  authMode: 'local' | 'cloud';
+}
+
+/** The workspace's public display capability link (owner-gated mint/rotate).
+ *  ``url`` is a relative path — frontend prepends ``window.location.origin``. */
+export interface DisplayTokenDTO {
+  token: string;
+  url: string;
+}
+
 // Invite links (Step 7)
 export type InviteRole = 'operator' | 'viewer';
 
 export interface InviteCreateDTO {
   role: InviteRole;
+  /** SP-CLOUD-2: when set, this becomes an email invite — the link is
+   *  delivered via the email seam and the invite expires. */
+  email?: string;
 }
 
 export interface InviteCreatedDTO {
@@ -714,6 +737,8 @@ export interface InviteCreatedDTO {
   tournamentId: string;
   role: InviteRole;
   createdAt: string;
+  /** Recipient address for email invites; null for bare links. */
+  email?: string | null;
 }
 
 export interface InviteSummaryDTO {
@@ -724,6 +749,8 @@ export interface InviteSummaryDTO {
   expiresAt: string | null;
   revokedAt: string | null;
   valid: boolean;
+  /** Recipient address for email invites; null for bare links. */
+  email?: string | null;
 }
 
 export interface InviteResolveDTO {
@@ -746,6 +773,10 @@ export interface TournamentMemberDTO {
   userId: string;
   role: string;
   joinedAt: string;
+  /** SP-CLOUD-2: real identity from the users table. ``email`` is null
+   *  for pre-account placeholder identities (unmigrated rows). */
+  email?: string | null;
+  displayName?: string | null;
 }
 
 // ---- Operator commands (Step F of the architecture-adjustment arc) -------

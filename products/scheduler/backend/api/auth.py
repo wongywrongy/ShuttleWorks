@@ -299,17 +299,32 @@ def request_password_reset(
     if user is not None:
         token = auth_service.issue_reset_token(repo.session, user)
         repo.session.commit()
-        # Phase 3 replaces this with the email seam's console/SMTP
-        # backends. The raw token is a live credential — it may only
-        # ever touch the log in local mode; never the HTTP response.
-        if settings.auth_mode == "local":
-            log.info("password-reset token issued for %s: %s", email, token)
-        else:
-            log.info(
-                "password-reset token issued user=%s expires_at=%s",
-                user.id,
-                user.reset_token_expires_at,
+        # Delivery rides the email seam: console backend logs the full
+        # message locally; SMTP delivers in cloud. The raw token never
+        # appears in the HTTP response or the cloud application log.
+        from services.email import send_email
+
+        origin = settings.public_app_origin.rstrip("/")
+        try:
+            send_email(
+                to=email,
+                subject="Reset your ShuttleWorks password",
+                body=(
+                    "A password reset was requested for this address.\n\n"
+                    f"Reset link: {origin}/login?reset={token}\n\n"
+                    f"The link expires in {int(settings.reset_token_ttl_minutes)} "
+                    "minutes. If you didn't ask for this, ignore this message."
+                ),
             )
+        except Exception:
+            # Same 202 either way — delivery failure must not become an
+            # account-existence or infrastructure oracle.
+            log.exception("password-reset email delivery failed")
+        log.info(
+            "password-reset token issued user=%s expires_at=%s",
+            user.id,
+            user.reset_token_expires_at,
+        )
     else:
         auth_service.throttle_record_failure(repo.session, ip_key)
         repo.session.commit()

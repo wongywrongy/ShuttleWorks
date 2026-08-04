@@ -47,6 +47,12 @@ export function useLiveTracking() {
   const routeTid = useTournamentIdOrNull();
   const [searchParams] = useSearchParams();
   const tid = routeTid ?? searchParams.get('id') ?? '';
+  // Public display capability link (SP-CLOUD-2): with no tournament id but a
+  // ?token=, match-state READS come from the unauthenticated
+  // /display/{token}/match-states projection and every mutator below is
+  // inert — the spectator board never writes.
+  const displayToken = !tid ? searchParams.get('token') : null;
+  const tokenMode = !tid && !!displayToken;
   const schedule = useTournamentStore((state) => state.schedule);
   const config = useTournamentStore((state) => state.config);
   const matches = useTournamentStore((state) => state.matches);
@@ -56,9 +62,11 @@ export function useLiveTracking() {
   const setLastSynced = useMatchStateStore((state) => state.setLastSynced);
 
   const loadMatchStates = useCallback(async () => {
-    if (!tid) return;
+    if (!tid && !tokenMode) return;
     try {
-      const backendStates = await apiClient.getMatchStates(tid);
+      const backendStates = tokenMode
+        ? await apiClient.getDisplayMatchStates(displayToken as string)
+        : await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
 
       // Merge backend with local, preserving local-only fields
@@ -83,12 +91,14 @@ export function useLiveTracking() {
     } catch (error) {
       console.error('Failed to load match states:', error);
     }
-  }, [setMatchStates, tid]);
+  }, [setMatchStates, tid, tokenMode, displayToken]);
 
   const syncMatchStates = useCallback(async () => {
-    if (!tid) return;
+    if (!tid && !tokenMode) return;
     try {
-      const backendStates = await apiClient.getMatchStates(tid);
+      const backendStates = tokenMode
+        ? await apiClient.getDisplayMatchStates(displayToken as string)
+        : await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
 
       // Merge backend with local, preserving local-only fields
@@ -117,7 +127,7 @@ export function useLiveTracking() {
     } catch (error) {
       console.error('Failed to sync match states:', error);
     }
-  }, [setMatchStates, setLastSynced, tid]);
+  }, [setMatchStates, setLastSynced, tid, tokenMode, displayToken]);
 
   // Lifecycle wiring — declared AFTER `loadMatchStates` / `syncMatchStates`
   // so the useEffect callbacks don't hit the temporal dead zone on the
@@ -158,6 +168,8 @@ export function useLiveTracking() {
     status: MatchStateDTO['status'],
     additionalData?: Partial<MatchStateDTO>
   ) => {
+    // Token-mode (public spectator board): the display never writes.
+    if (tokenMode) return;
     // A viewer's press must never reach the wire (audit A2). Refusing here — at
     // the seam — means a control we failed to disable still no-ops client-side
     // instead of 403-ing and leaving the board diverged from the server.
@@ -302,7 +314,7 @@ export function useLiveTracking() {
       console.error('Failed to update match status:', error);
       throw error;
     }
-  }, [setMatchState, tid]);
+  }, [setMatchState, tid, tokenMode]);
 
   // Keep the ref pointed at the latest closure so retry callbacks
   // invoke the freshest version. Assignment lives in an effect so
@@ -316,6 +328,7 @@ export function useLiveTracking() {
     score: { sideA: number; sideB: number },
     notes?: string
   ) => {
+    if (tokenMode) return; // public display: never writes
     if (!assertCanEdit()) return;
     try {
       const store = useMatchStateStore.getState();
@@ -346,7 +359,7 @@ export function useLiveTracking() {
       console.error('Failed to set match score:', error);
       throw error;
     }
-  }, [setMatchState, tid]);
+  }, [setMatchState, tid, tokenMode]);
 
   /**
    * Confirm a player has arrived at the court for a called match
@@ -356,6 +369,7 @@ export function useLiveTracking() {
     playerId: string,
     confirmed: boolean
   ) => {
+    if (tokenMode) return; // public display: never writes
     if (!assertCanEdit()) return;
     try {
       const freshMatchStates = useMatchStateStore.getState().matchStates;
@@ -401,9 +415,10 @@ export function useLiveTracking() {
       console.error('Failed to confirm player:', error);
       throw error;
     }
-  }, [setMatchState, tid]);
+  }, [setMatchState, tid, tokenMode]);
 
   const exportStates = useCallback(async () => {
+    if (tokenMode) return; // public display: no operator surfaces
     try {
       const blob = await apiClient.exportMatchStates(tid);
       const url = window.URL.createObjectURL(blob);
@@ -418,9 +433,13 @@ export function useLiveTracking() {
       console.error('Failed to export match states:', error);
       throw error;
     }
-  }, []);
+  }, [tid, tokenMode]);
 
   const importStates = useCallback(async (file: File) => {
+    if (tokenMode) {
+      // public display: inert — the shape callers expect, without a write.
+      return { message: 'Read-only display', matchCount: 0 };
+    }
     try {
       const result = await apiClient.importMatchStates(tid, file);
       await loadMatchStates(); // Reload after import
@@ -429,9 +448,10 @@ export function useLiveTracking() {
       console.error('Failed to import match states:', error);
       throw error;
     }
-  }, [loadMatchStates]);
+  }, [loadMatchStates, tid, tokenMode]);
 
   const resetStates = useCallback(async () => {
+    if (tokenMode) return; // public display: never writes
     try {
       await apiClient.resetMatchStates(tid);
       setMatchStates({});
@@ -439,7 +459,7 @@ export function useLiveTracking() {
       console.error('Failed to reset match states:', error);
       throw error;
     }
-  }, [setMatchStates]);
+  }, [setMatchStates, tid, tokenMode]);
 
   // Calculate progress stats. Both numerator and denominator are
   // restricted to the current schedule's assignments — earlier we

@@ -1282,11 +1282,15 @@ class _LocalInviteLinkRepo:
         tournament_id: uuid.UUID,
         role: str,
         created_by: uuid.UUID,
+        email: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
     ) -> InviteLink:
         row = InviteLink(
             tournament_id=tournament_id,
             role=role,
             created_by=created_by,
+            email=email,
+            expires_at=expires_at,
         )
         self.session.add(row)
         self.session.commit()

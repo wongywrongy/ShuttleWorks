@@ -1,35 +1,28 @@
 """Request-scoped auth + role-check dependencies.
 
-``get_current_user`` is the single seam every protected route depends on.
-Behaviour depends on whether Supabase is configured:
+``get_current_user`` is the single identity seam every protected route
+depends on (SP-CLOUD-2 — Supabase JWT auth is retired):
 
-- **Configured** (``settings.supabase_url`` non-empty): verifies the JWT
-  via the Supabase client and returns the resolved user object. A bad
-  or expired token surfaces as HTTP 401.
-- **Unconfigured** (``settings.supabase_url == ""``): returns a fixed
-  synthetic local user without touching the network. This keeps the
-  pytest suite and local desktop runs working without a real Supabase
-  project — Step 8 deployment sets the env vars and real verification
-  kicks in.
+- **Session cookie** — an opaque token minted by ``POST /auth/login``
+  and resolved against the ``auth_sessions`` table.
+- **Local bootstrap** — ``AUTH_MODE=local`` only: a request with no
+  session resolves to the zero-UUID local operator (Rule 3's
+  zero-friction solo flow). ``AUTH_MODE=cloud`` → 401 instead.
 
-Step 5 layers ``require_tournament_access(min_role)`` on top: it reads
-the path's ``tournament_id``, looks up the caller's role for that
-tournament in the ``tournament_members`` table, and rejects with 403
-when missing or below the required threshold. Unlike the JWT path
-this check has **no bypass** — local-dev still records member rows so
-the role logic is exercised in tests.
-
-The Supabase client is lazy-built on first call so importing this module
-in tests (where ``SUPABASE_URL`` is blank) doesn't connect to anything.
+``require_tournament_access(min_role)`` is the TENANCY seam: it reads
+the path's ``tournament_id``, looks up the caller's role in
+``tournament_members``, and answers the uniform 404 for non-members
+(Rule 5) / 403 for members with an insufficient role. It has **no
+bypass** — local-dev records real member rows, so the same code path
+runs in both modes.
 """
 from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import Depends, HTTPException, Path, Request, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from app.config import settings
@@ -62,55 +55,20 @@ LOCAL_DEV_USER_UUID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 _LOCAL_DEV_USER = AuthUser(id=str(LOCAL_DEV_USER_UUID), email="local@dev")
 
 
-# HTTPBearer with ``auto_error=False`` so unauthenticated requests reach
-# our dependency code in local-dev mode (where the synthetic user is
-# returned even when no Authorization header is present).
-_bearer = HTTPBearer(auto_error=False)
-
-
-_supabase_client: Any = None
-
-
-def _get_supabase_client():
-    """Lazily instantiate the Supabase client.
-
-    Returns ``None`` when ``SUPABASE_URL`` is blank — caller treats that
-    as the local-dev-bypass signal. Cached at module level after first
-    successful build.
-    """
-    global _supabase_client
-    if not settings.supabase_url:
-        return None
-    if _supabase_client is None:
-        from supabase import create_client
-        _supabase_client = create_client(
-            settings.supabase_url,
-            settings.supabase_anon_key,
-        )
-    return _supabase_client
-
-
-def reset_supabase_client() -> None:
-    """Drop the cached client. Tests use this between env-var changes."""
-    global _supabase_client
-    _supabase_client = None
-
-
 def get_current_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
     repo: LocalRepository = Depends(get_repository),
 ) -> AuthUser:
     """Resolve the caller's identity. Order of precedence:
 
-    1. **Session cookie** (SP-CLOUD-2): an opaque token minted by
-       ``POST /auth/login`` and backed by the ``auth_sessions`` table.
-    2. **Supabase bearer JWT** — legacy cloud path, kept until the
-       frontend finishes migrating to cookie sessions (Phase 3).
-    3. **Local bootstrap identity** — ``AUTH_MODE=local`` only: a
-       request with no credentials resolves to the zero-UUID local
-       operator, preserving the solo zero-friction flow.
-    4. Otherwise → 401.
+    1. **Session cookie**: an opaque token minted by ``POST
+       /auth/login`` and backed by the ``auth_sessions`` table.
+    2. **Local bootstrap identity** — ``AUTH_MODE=local`` only: a
+       request with no (or a dead) session resolves to the zero-UUID
+       local operator, preserving the solo zero-friction flow. A dead
+       cookie deliberately falls through here — browsers keep stale
+       cookies across local DB resets.
+    3. Otherwise → 401.
     """
     cookie_token = request.cookies.get(settings.session_cookie_name)
     if cookie_token:
@@ -118,48 +76,14 @@ def get_current_user(
         if user_row is not None:
             repo.session.commit()  # persist the rolling last_seen touch
             return AuthUser(id=str(user_row.id), email=user_row.email)
-        # A dead cookie falls through: bearer may still authenticate,
-        # and local mode still bootstraps — mirroring browser reality
-        # where stale cookies linger after DB resets.
 
-    client = _get_supabase_client()
-    if client is None:
-        if settings.auth_mode == "local":
-            # Zero-friction solo-operator path (Rule 3). The bootstrap
-            # users row is ensured at startup; this AuthUser mirrors it.
-            return _LOCAL_DEV_USER
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not signed in",
-        )
-
-    if credentials is None or not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or empty Authorization header",
-        )
-
-    try:
-        result = client.auth.get_user(credentials.credentials)
-    except Exception as exc:  # noqa: BLE001 — Supabase raises broadly
-        log.warning("auth: token verification failed: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
-
-    user = getattr(result, "user", None)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token rejected by auth provider",
-        )
-
-    # The Supabase response object exposes attribute access; tolerate
-    # missing ``email`` (some sign-up flows omit it until verification).
-    return AuthUser(
-        id=str(getattr(user, "id", "")),
-        email=getattr(user, "email", None),
+    if settings.auth_mode == "local":
+        # Zero-friction solo-operator path (Rule 3). The bootstrap
+        # users row is ensured at startup; this AuthUser mirrors it.
+        return _LOCAL_DEV_USER
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not signed in",
     )
 
 

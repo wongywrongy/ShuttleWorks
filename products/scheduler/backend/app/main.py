@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from api import (
     auth as auth_api,  # SP-CLOUD-2 — self-hosted accounts + cookie sessions
+    display as display_api,  # SP-CLOUD-2 — capability-token spectator display
     schedule,
     solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
     match_state,
@@ -295,6 +296,11 @@ app.include_router(invites.router)
 # Auth: register/login/reset are necessarily public; /me and
 # /change-password declare ``get_current_user`` themselves.
 app.include_router(auth_api.router)
+# Display: the public projection routes are the app's only
+# unauthenticated data plane (capability token, read-only — Rule 8);
+# the manage router carries its own owner-role dependency.
+app.include_router(display_api.public_router)
+app.include_router(display_api.manage_router)
 
 
 @app.get("/health")

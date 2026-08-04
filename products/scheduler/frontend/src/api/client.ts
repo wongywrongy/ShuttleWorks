@@ -38,6 +38,8 @@ import type {
   CommandRequestDTO,
   CommandResponseDTO,
   CommandConflictDTO,
+  UserDTO,
+  DisplayTokenDTO,
 } from './dto';
 import { SOLVE_JOB_TERMINAL_STATUSES } from './dto';
 import type {
@@ -338,31 +340,136 @@ class ApiClient {
       baseURL,
       headers: {
         'Content-Type': 'application/json',
+        // CSRF double-submit shield: the backend refuses state-changing
+        // requests that carry the session cookie without this header
+        // (AUTH_CSRF_REQUIRED). Sending it on EVERY request is harmless
+        // and simpler than special-casing methods.
+        'X-ShuttleWorks-CSRF': '1',
       },
+      // Session auth is an httpOnly cookie — the browser attaches it
+      // only when credentials are enabled for cross-origin calls.
+      withCredentials: true,
       timeout: 300000, // 5 minutes for large schedules
-    });
-
-    // Attach the Supabase JWT to every outgoing request. ``getSession``
-    // returns the current cached session (Supabase handles automatic
-    // refresh, so we read at request time rather than caching here).
-    // When the Supabase client is null (no env config — local dev /
-    // pytest), the backend's ``get_current_user`` is in synthetic-user
-    // mode and doesn't need a header.
-    this.client.interceptors.request.use(async (config) => {
-      const { supabase } = await import('../lib/supabase');
-      if (!supabase) return config;
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (token) {
-        config.headers.set?.('Authorization', `Bearer ${token}`);
-      }
-      return config;
     });
 
     this.client.interceptors.response.use(
       (response) => response,
       handleApiResponseError,
     );
+  }
+
+  // ---- Auth (self-hosted cookie sessions, SP-CLOUD-2) ------------------
+
+  /** Create an account. Sets the httpOnly session cookie on success. */
+  async register(body: {
+    email: string;
+    password: string;
+    displayName?: string;
+  }): Promise<UserDTO> {
+    const r = await this.client.post<UserDTO>('/auth/register', body);
+    return r.data;
+  }
+
+  /** Email + password sign-in. Sets the httpOnly session cookie. */
+  async login(body: { email: string; password: string }): Promise<UserDTO> {
+    const r = await this.client.post<UserDTO>('/auth/login', body);
+    return r.data;
+  }
+
+  /** Clears the session cookie server-side (204). */
+  async logout(): Promise<void> {
+    await this.client.post('/auth/logout');
+  }
+
+  /**
+   * Who am I? Local mode always answers 200 with the bootstrap
+   * identity; cloud mode answers 401 when signed out — mapped to
+   * ``null`` here (NOT an error) so the AuthProvider's mount probe
+   * doesn't toast on every anonymous visit.
+   */
+  async getMe(): Promise<UserDTO | null> {
+    const r = await this.client.get<UserDTO>('/auth/me', {
+      validateStatus: (s) => s === 200 || s === 401,
+    });
+    if (r.status === 401) return null;
+    return r.data;
+  }
+
+  async changePassword(body: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<void> {
+    await this.client.post('/auth/change-password', body);
+  }
+
+  /** Always 202 (no account-existence oracle). */
+  async requestPasswordReset(email: string): Promise<void> {
+    await this.client.post('/auth/request-password-reset', { email });
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await this.client.post('/auth/reset-password', { token, newPassword });
+  }
+
+  // ---- Display capability tokens (owner-gated mint/rotate) -------------
+
+  /** The workspace's public display link, minted on first ask. Owner-only. */
+  async getDisplayToken(tid: string): Promise<DisplayTokenDTO> {
+    const r = await this.client.get<DisplayTokenDTO>(
+      `/tournaments/${tid}/display-token`,
+    );
+    return r.data;
+  }
+
+  /** Revoke-by-rotation: the old link dies the moment this returns. */
+  async rotateDisplayToken(tid: string): Promise<DisplayTokenDTO> {
+    const r = await this.client.post<DisplayTokenDTO>(
+      `/tournaments/${tid}/display-token/rotate`,
+    );
+    return r.data;
+  }
+
+  // ---- Public display projection (token-authenticated, read-only) ------
+  // The ONLY unauthenticated data plane: `/display/{token}/*` serves the
+  // spectator board a projection, never the raw state blob.
+
+  async getDisplaySummary(
+    token: string,
+  ): Promise<{ kind: string; name: string | null }> {
+    const r = await this.client.get(
+      `/display/${encodeURIComponent(token)}/summary`,
+    );
+    return r.data;
+  }
+
+  /** The meet-board projection. `null` when the workspace has no data yet (204). */
+  async getDisplayState(token: string): Promise<TournamentStateDTO | null> {
+    const r = await this.client.get<TournamentStateDTO>(
+      `/display/${encodeURIComponent(token)}/state`,
+      { validateStatus: (s) => s === 200 || s === 204 },
+    );
+    if (r.status === 204) return null;
+    return r.data;
+  }
+
+  async getDisplayMatchStates(
+    token: string,
+  ): Promise<Record<string, MatchStateDTO>> {
+    const r = await this.client.get<Record<string, MatchStateDTO>>(
+      `/display/${encodeURIComponent(token)}/match-states`,
+    );
+    return r.data;
+  }
+
+  /** Bracket board read. `null` when no bracket is configured yet (404),
+   *  mirroring ``getBracket``. */
+  async getDisplayBracket(token: string): Promise<BracketTournamentDTO | null> {
+    const r = await this.client.get(
+      `/display/${encodeURIComponent(token)}/bracket`,
+      { validateStatus: (s) => s === 200 || s === 404 },
+    );
+    if (r.status === 404) return null;
+    return r.data;
   }
 
   // ---- Solve jobs (SP-CLOUD-1 async solve rail) ------------------------
@@ -497,9 +604,8 @@ class ApiClient {
   }
 
   /** Public lookup. Returns tournament name + role + valid flag. The
-   *  call goes through the same axios instance so the interceptor
-   *  still tries to attach an Authorization header when a session
-   *  exists — backend ignores it on this route. */
+   *  call goes through the same axios instance so the session cookie
+   *  rides along when one exists — backend ignores it on this route. */
   async resolveInvite(token: string): Promise<InviteResolveDTO> {
     const r = await this.client.get<InviteResolveDTO>(`/invites/${token}`);
     return r.data;
@@ -1053,7 +1159,14 @@ class ApiClient {
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // Same CSRF shield as the axios default header — this bare
+        // fetch() bypasses the axios instance, so it must carry the
+        // session cookie + CSRF marker itself.
+        'X-ShuttleWorks-CSRF': '1',
+      },
+      credentials: 'include',
       signal: abortSignal,
     });
     if (!response.ok) {

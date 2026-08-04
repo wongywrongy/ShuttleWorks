@@ -1,12 +1,12 @@
 /**
- * Redirect to ``/login`` when no Supabase session.
+ * Redirect to ``/login`` when there is no session.
  *
  * Mounted between ``BrowserRouter`` and the protected route subtree.
- * In local-dev mode (no Supabase env config), the synthetic session
- * provided by ``AuthProvider`` lets every request through, so the
- * guard is a no-op for the developer experience and pytest harness.
+ * In local mode the backend's ``/auth/me`` always answers with the
+ * bootstrap identity, so ``session`` is truthy and the guard is a
+ * no-op for the developer experience and pytest harness.
  *
- * Loading: while ``supabase.auth.getSession()`` resolves on first
+ * Loading: while the initial ``/auth/me`` probe resolves on first
  * mount, render a thin spinner instead of flashing the login form —
  * a flicker would be confusing for an already-authenticated user.
  */

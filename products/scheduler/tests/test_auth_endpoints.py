@@ -177,17 +177,17 @@ def test_password_reset_flow(client, caplog):
 
     _register(client)
     client.cookies.clear()
-    with caplog.at_level(logging.INFO, logger="scheduler.api.auth"):
+    with caplog.at_level(logging.INFO, logger="scheduler.email"):
         r = client.post(
             "/auth/request-password-reset", json={"email": "dana@example.com"}
         )
     assert r.status_code == 202
-    # Token is logged (the Phase 3 email seam replaces this), never
-    # returned in the response.
+    # The token travels via the email seam (console backend logs the
+    # full message locally), never in the HTTP response.
     assert "token" not in r.text.lower()
-    token_lines = [m for m in caplog.messages if "password-reset token" in m]
-    assert token_lines, "reset token should be logged in local mode"
-    token = token_lines[0].split(": ")[-1]
+    mail_lines = [m for m in caplog.messages if "Reset link:" in m]
+    assert mail_lines, "console email backend should log the reset mail"
+    token = mail_lines[0].split("?reset=")[1].split()[0]
 
     r = client.post(
         "/auth/reset-password",

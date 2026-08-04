@@ -36,6 +36,9 @@ export interface UseDisplaySyncResult {
 export function useDisplaySync(now: Date): UseDisplaySyncResult {
   const [searchParams] = useSearchParams();
   const params = useParams<{ id: string }>();
+  // Public capability link (SP-CLOUD-2): ?token=<display-token> reads the
+  // unauthenticated /display/{token}/state projection.
+  const token = searchParams.get('token');
   // Standalone /display route: ?id=<tid>. In-workspace Preview: the route
   // param. Without the fallback the preview had no tid, never synced, and
   // sat on a permanent "Delayed" pill inside a perfectly healthy workspace.
@@ -44,15 +47,17 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
   const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!tid) {
-      setSyncError('Missing ?id=<tournament-id> query parameter');
+    if (!token && !tid) {
+      setSyncError('Missing ?token=<display-token> (or ?id=) query parameter');
       return;
     }
     let cancelled = false;
 
     const pull = async () => {
       try {
-        const remote = await apiClient.getTournamentState(tid);
+        const remote = token
+          ? await apiClient.getDisplayState(token)
+          : await apiClient.getTournamentState(tid as string);
         if (cancelled) return;
         if (remote) {
           useTournamentStore.setState({
@@ -93,7 +98,7 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, [tid]);
+  }, [tid, token]);
 
   // Derive freshness from the last SUCCESSFUL sync (not the most-recent
   // attempt) — that way a single flaky request doesn't flash "Out of
