@@ -13,6 +13,15 @@ services:
     environment:
       - LOG_LEVEL=info
       - BACKEND_DATA_DIR=/app/data
+      # MUST be absolute and inside the bind-mounted data dir. Without
+      # it the app falls back to the default ``sqlite:///./local.db``,
+      # which is CWD-relative — i.e. ``/app/local.db``, on the
+      # ``read_only: true`` rootfs below. That is a silent data-loss
+      # trap: every tournament lives in a database that cannot be
+      # written to, or (if the rootfs were ever made writable) one that
+      # vanishes on the next ``docker compose up``. Four slashes is not
+      # a typo — ``sqlite:///`` + the absolute path ``/app/data/...``.
+      - DATABASE_URL=sqlite:////app/data/local.db
     volumes:
       - ./data:/app/data
     restart: unless-stopped
