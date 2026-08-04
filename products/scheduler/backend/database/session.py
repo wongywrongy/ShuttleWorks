@@ -83,7 +83,7 @@ def _build_engine(url: str) -> Engine:
         return engine
     # Postgres (cloud mode): ``pool_pre_ping`` revalidates pooled
     # connections so a bounced database or an idle-timeout proxy
-    # (Supabase pgbouncer) surfaces as a transparent reconnect instead
+    # (e.g. pgbouncer) surfaces as a transparent reconnect instead
     # of a mid-request OperationalError.
     return create_engine(url, pool_pre_ping=True, future=True)
 

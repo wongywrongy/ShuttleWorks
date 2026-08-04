@@ -3,9 +3,8 @@
 SP-CLOUD-1 Phase 1. The queue rides the primary database (SQLite in
 local mode, Postgres in cloud mode) — no broker, no new daemon. Design
 borrows from Solid Queue / procrastinate (claiming, lease semantics)
-and from this repo's own ``sync_service`` outbox (enqueue in the
-caller's transaction, injectable session factory, synchronous testable
-functions).
+and from the outbox pattern (enqueue in the caller's transaction,
+injectable session factory, synchronous testable functions).
 
 Transaction contract: **no function here commits or rolls back.** The
 caller owns the transaction. The API layer enqueues in the same

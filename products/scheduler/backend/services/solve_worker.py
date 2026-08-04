@@ -10,10 +10,10 @@ ONE implementation for both process topologies (Rule 7):
   the same class against ``DATABASE_URL``, one thread per
   ``WORKER_CONCURRENCY`` unit.
 
-Thread-based like ``SyncService`` (the loop is blocking DB I/O plus a
-subprocess wait — asyncio buys nothing), with the same testability
-seams: injectable ``session_factory``/``runner`` resolved at call time,
-and a synchronous ``run_once()`` tests drive without any thread.
+Thread-based rather than asyncio (the loop is blocking DB I/O plus a
+subprocess wait — asyncio buys nothing), with testability seams:
+injectable ``session_factory``/``runner`` resolved at call time, and a
+synchronous ``run_once()`` tests drive without any thread.
 
 Sessions are short: claim in one transaction, then a fresh session per
 heartbeat and per completion write, so Postgres row locks never span a

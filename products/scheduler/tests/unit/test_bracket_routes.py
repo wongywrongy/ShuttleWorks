@@ -6,11 +6,8 @@ Coverage:
   - create / read / delete happy paths
   - 4xx error paths: no events, duplicate event id, undersized event,
     bracket-already-exists, no-bracket-on-GET, unknown tournament
-  - outbox: every write through ``_LocalBracketRepo`` stages a
-    ``sync_queue`` row (one per event / participant set / match /
-    result), so operator browsers can subscribe via Realtime
-  - record-result + advancement: the result row lands, downstream
-    match slots resolve, downstream sync rows queue
+  - record-result + advancement: the result row lands and downstream
+    match slots resolve
   - schedule-next no-op: ``/schedule-next`` returns gracefully on a
     bracket with no ready PlayUnits (e.g. 2-entrant event with
     auto-walkover already cascaded — covered by SE smoke)
@@ -226,30 +223,6 @@ def test_delete_bracket_clears_everything(client, tid):
     # GET now 404s — nothing left.
     r2 = client.get(_bracket_url(tid))
     assert r2.status_code == 404
-
-
-# ---- Outbox -----------------------------------------------------------------
-
-
-def test_create_bracket_stages_sync_rows(client, tid):
-    """Outbox invariant: every write through _LocalBracketRepo stages
-    a sync_queue row in the same transaction."""
-    client.post(_bracket_url(tid), json=_se_4_body())
-
-    # Inspect sync_queue directly via the same SQLite engine the
-    # backend uses (bound by isolate_test_database).
-    from sqlalchemy import select
-    from database.models import SyncQueue
-    from database.session import SessionLocal
-
-    with SessionLocal() as session:
-        rows = list(session.scalars(select(SyncQueue)))
-    types = [r.entity_type for r in rows]
-    # 1 event + 3 matches + 0 results (SE with seeds, no auto-walkovers
-    # because every R1 has two real players) + 1 tournament (from the
-    # initial /tournaments create) = 5 minimum.
-    assert "bracket_event" in types
-    assert types.count("bracket_match") == 3
 
 
 # ---- Record result ----------------------------------------------------------
@@ -523,37 +496,6 @@ def test_bracket_match_action_reset_clears_start_before_result(client, tid):
     )
     assert a["actual_start_slot"] is None
     assert a["started"] is False
-
-
-def test_record_result_stages_result_and_match_sync_rows(client, tid):
-    client.post(_bracket_url(tid), json=_se_4_body())
-    state = client.get(_bracket_url(tid)).json()
-    sf1 = next(
-        p for p in state["play_units"] if p["round_index"] == 0 and p["match_index"] == 0
-    )
-    # Drain the queue's pre-existing rows so we only see the new ones
-    # from the result recording.
-    from sqlalchemy import delete
-    from database.models import SyncQueue
-    from database.session import SessionLocal
-
-    with SessionLocal() as session:
-        session.execute(delete(SyncQueue))
-        session.commit()
-
-    client.post(
-        _bracket_url(tid, "results"),
-        json={"play_unit_id": sf1["id"], "winner_side": "A", "walkover": False},
-    )
-
-    from sqlalchemy import select
-
-    with SessionLocal() as session:
-        rows = list(session.scalars(select(SyncQueue)))
-    types = sorted(r.entity_type for r in rows)
-    # 1 result + 1 downstream match update (final's slot_a resolves).
-    assert "bracket_result" in types
-    assert "bracket_match" in types
 
 
 def test_record_result_404_when_no_bracket(client, tid):

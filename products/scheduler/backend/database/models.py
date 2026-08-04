@@ -266,53 +266,6 @@ class Command(Base):
     )
 
 
-class SyncQueue(Base):
-    """Outbox for SQLite → Supabase Postgres replication.
-
-    Step E of the architecture-adjustment arc. Every match / tournament
-    write inserts a row here in the same transaction as the entity
-    update, then a background worker drains the queue and pushes to
-    Supabase. The outbox pattern guarantees the queue entry exists iff
-    the data write committed — no race between "in-flight" and
-    "queued" states.
-
-    Schema deviations from the prompt's pseudocode (forced by SQLite +
-    cross-DB portability):
-    - ``payload`` is the portable ``JSON`` type, not Postgres ``JSONB``.
-    - UUID defaults generated app-side rather than ``DEFAULT
-      gen_random_uuid()`` (SQLite has no such function).
-    - ``created_at`` defaults via Python ``_utcnow`` rather than
-      ``DEFAULT now()``.
-    - ``entity_id`` is ``String(100)`` rather than ``UUID``: covers
-      both UUID-shaped tournament ids (serialised as 36-char strings)
-      and String-shaped match ids (the Step A composite-PK reality).
-
-    Worker contract: rows are processed in ``created_at`` order. On
-    successful Supabase upsert, the row is deleted. On failure, the
-    worker increments ``attempts`` and moves on. Rows with
-    ``attempts >= 10`` are skipped indefinitely (logged but kept for
-    audit / manual remediation).
-    """
-
-    __tablename__ = "sync_queue"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
-    )
-    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_attempt: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-
-    __table_args__ = (
-        Index("ix_sync_queue_created_attempts", "created_at", "attempts"),
-    )
-
-
 class MatchState(Base):
     __tablename__ = "match_states"
 

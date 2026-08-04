@@ -11,8 +11,28 @@ import uuid
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session as _SA_SESSION
 
 from _helpers import isolate_test_database
+
+
+def _boom_on_commit(self, *args, **kwargs):
+    """Fail the write at the commit boundary.
+
+    Injection point for the two atomicity tests below, which assert that
+    a failure in the mutation-to-commit window rolls the *whole*
+    transaction back — neither the cleared schedule nor the edited
+    config may leak.
+
+    These tests previously patched ``SyncService.enqueue_tournament``,
+    which happened to sit in that window. The Supabase mirror was removed
+    in SP-CLOUD-3 / 0.E, so the scaffolding went with it. Patching
+    ``Session.commit`` expresses the same guarantee against a seam that
+    can never become vestigial — deliberately chosen over retaining a
+    now-purposeless ``flush()`` in the repository just so a test could
+    patch it, since the next dead-code sweep would rightly delete it.
+    """
+    raise RuntimeError("simulated failure between mutation and commit")
 
 
 @pytest.fixture
@@ -742,17 +762,12 @@ def test_clear_schedule_flag_atomic_rollback_on_write_failure(client, monkeypatc
     row is untouched and a fresh read must show the original schedule
     and config, not a partially-applied edit.
     """
-    from services.sync_service import SyncService
-
     created = client.post("/tournaments", json={"name": "L6"}).json()
     tid = created["id"]
     original = _state_with_schedule()
     assert client.put(f"/tournaments/{tid}/state", json=original).status_code == 200
 
-    def _boom(session, tournament):
-        raise RuntimeError("simulated failure between mutation and commit")
-
-    monkeypatch.setattr(SyncService, "enqueue_tournament", staticmethod(_boom))
+    monkeypatch.setattr(_SA_SESSION, "commit", _boom_on_commit)
 
     edited = _state_with_schedule()
     edited["config"]["defaultRestMinutes"] = 5
@@ -963,17 +978,12 @@ def test_bracket_clear_atomic_rollback_on_write_failure(client, monkeypatch):
     for the bracket side: if the single commit that would clear bracket
     assignments + apply the edit fails mid-way, the prior assignments
     must survive intact — no half-cleared state."""
-    from services.sync_service import SyncService
-
     created = client.post("/tournaments", json={"name": "B4"}).json()
     tid = created["id"]
     client.put(f"/tournaments/{tid}/state", json=_basic_state("B4"))
     _seed_bracket_schedule(tid)
 
-    def _boom(session, tournament):
-        raise RuntimeError("simulated failure between mutation and commit")
-
-    monkeypatch.setattr(SyncService, "enqueue_tournament", staticmethod(_boom))
+    monkeypatch.setattr(_SA_SESSION, "commit", _boom_on_commit)
 
     edited = _basic_state("B4")
     edited["config"]["defaultRestMinutes"] = 5

@@ -30,7 +30,7 @@
  * remount). Existence-checking inherently needs one request that may
  * 404; the goal is to eliminate the *repeated* noise, which this does.
  *
- * Realtime via Supabase ``postgres_changes`` remains a deliberate
+ * Push-based realtime remains a deliberate
  * follow-up; this hook still polls once a draw exists.
  */
 import { useCallback, useEffect, useState } from 'react';

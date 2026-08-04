@@ -1,9 +1,9 @@
 """Application settings loaded from environment variables.
 
 Per ``docs/shuttleworks-tech-stack.md``: a Pydantic ``BaseSettings`` model
-that reads ``DATABASE_URL`` / ``SUPABASE_URL`` / ``SUPABASE_ANON_KEY`` /
-``ENVIRONMENT`` / ``CORS_ORIGINS`` and friends from the process
-environment, falling back to a ``.env`` file in the working directory.
+that reads ``DATABASE_URL`` / ``ENVIRONMENT`` / ``CORS_ORIGINS`` and
+friends from the process environment, falling back to a ``.env`` file in
+the working directory.
 
 Single source of truth for every URL, DB path, port, and key the
 backend reads at runtime. Step 1 introduced ``database_url``; Step 3
@@ -24,10 +24,6 @@ class Settings(BaseSettings):
 
     # ---- Database ------------------------------------------------------
     database_url: str = "sqlite:///./local.db"
-
-    # ---- Supabase (populated in Step 4) -------------------------------
-    supabase_url: str = ""
-    supabase_anon_key: str = ""
 
     # ---- Deployment metadata ------------------------------------------
     environment: str = "local"  # local | cloud
@@ -175,8 +171,7 @@ class Settings(BaseSettings):
         # In cloud mode the bootstrap-identity fallback is unacceptable
         # — every request would silently act as the local operator.
         # Refuse to start unless real accounts + secure cookies + a
-        # real database are configured. (Supabase vars are now
-        # mirror-only and optional — SP-CLOUD-2 retired Supabase Auth.)
+        # real database are configured.
         if self.environment != "cloud":
             return self
         missing: list[str] = []

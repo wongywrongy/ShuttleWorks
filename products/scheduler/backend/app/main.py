@@ -99,19 +99,6 @@ async def lifespan(app: FastAPI):
     await worker.start()
     log.info("suggestions_worker started")
 
-    # Step E: Supabase outbox replicator. Skip in local-dev mode
-    # (SUPABASE_URL blank) — the worker would have no client and
-    # would idle. The enqueue path still writes to ``sync_queue``
-    # regardless; the queue just doesn't drain.
-    from services.sync_service import SyncService
-    sync_service = SyncService()
-    app.state.sync_service = sync_service
-    if settings.supabase_url and settings.supabase_anon_key:
-        sync_service.start()
-        log.info("sync_service started")
-    else:
-        log.info("sync_service skipped (SUPABASE_URL blank — local-dev mode)")
-
     # SP-CLOUD-1: the embedded solve worker — local mode's zero-config
     # job executor (one thread, concurrency 1). Cloud mode sets
     # EMBEDDED_WORKER=false and runs ``python -m worker`` containers
@@ -139,8 +126,6 @@ async def lifespan(app: FastAPI):
         log.info("suggestions_worker stopped")
         solve_worker.stop()
         log.info("solve_worker stopped")
-        sync_service.stop()
-        log.info("sync_service stopped")
         log.info("app_shutdown")
 
 

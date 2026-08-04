@@ -293,11 +293,6 @@ const MODULE_DEFAULTS: {
     name: 'Display',
     desc: 'Read-only public TV display of live matches, draws, and results.',
     defaultState: 'Available',
-    integration: {
-      name: 'Supabase sync',
-      desc: 'Required for the live public display — mirrors state to viewer browsers.',
-      envVar: 'ENVIRONMENT=cloud + SUPABASE_URL',
-    },
   },
 ];
 

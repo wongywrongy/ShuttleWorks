@@ -234,8 +234,8 @@ def me(
     user_uuid = user.as_uuid()
     row = repo.session.get(User, user_uuid) if user_uuid else None
     if row is None:
-        # Bearer-era identities (Supabase JWT) or the pre-bootstrap
-        # synthetic user may have no local row yet; synthesize the DTO.
+        # Bearer-era identities or the pre-bootstrap synthetic user may
+        # have no local row yet; synthesize the DTO.
         return UserDTO(
             id=user.id,
             email=user.email or "",

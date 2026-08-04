@@ -167,9 +167,9 @@ def create_user(
 def ensure_user(
     session: Session, user_id: uuid.UUID, email: Optional[str]
 ) -> User:
-    """Idempotently materialize a users row for an externally-issued
-    identity (legacy Supabase JWT subjects until Phase 3 retires the
-    bearer path). Gets a personal org like every other identity."""
+    """Idempotently materialize a users row for an identity that
+    predates the local ``users`` table (bearer-era subjects carried in
+    existing data). Gets a personal org like every other identity."""
     user = session.get(User, user_id)
     if user is None:
         candidate = (email or "").strip()

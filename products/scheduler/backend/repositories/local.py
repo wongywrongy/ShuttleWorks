@@ -73,7 +73,6 @@ from database.models import (
     derive_modules,
 )
 from database.session import SessionLocal
-from services.sync_service import SyncService
 
 log = logging.getLogger("scheduler.repositories")
 
@@ -213,9 +212,6 @@ class _LocalTournamentRepo:
         if new_date is not None:
             row.tournament_date = new_date
         row.schema_version = CURRENT_TOURNAMENT_SCHEMA_VERSION
-        # Step E: stage tournament sync in the same transaction.
-        self.session.flush()
-        SyncService.enqueue_tournament(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -346,12 +342,6 @@ class _LocalMatchRepo:
         if not new_row:
             row.version = row.version + 1
 
-        # Step E: stage the Supabase sync row in the same transaction
-        # so the outbox invariant holds (queue row exists iff match
-        # was committed). flush() first to materialise the version
-        # change before payload serialisation.
-        self.session.flush()
-        SyncService.enqueue_match(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -419,7 +409,6 @@ class _LocalMatchRepo:
         }
 
         touched = 0
-        sync_rows: list[Match] = []  # only inserts/updates — deletes don't sync
         for mid in ordered_ids:
             court_id, time_slot = court_slot_by_id.get(mid, (None, None))
             row = existing.get(mid)
@@ -434,14 +423,12 @@ class _LocalMatchRepo:
                 )
                 self.session.add(row)
                 touched += 1
-                sync_rows.append(row)
                 continue
             if row.court_id != court_id or row.time_slot != time_slot:
                 row.court_id = court_id
                 row.time_slot = time_slot
                 row.version = row.version + 1
                 touched += 1
-                sync_rows.append(row)
 
         # Drop rows whose match id is no longer present in the payload.
         for mid, row in existing.items():
@@ -450,11 +437,6 @@ class _LocalMatchRepo:
                 touched += 1
 
         if touched:
-            # Flush so newly-inserted rows have their generated ids /
-            # defaults populated before payload serialisation.
-            self.session.flush()
-            for sync_row in sync_rows:
-                SyncService.enqueue_match(self.session, sync_row)
             self.session.commit()
         return touched
 
@@ -489,11 +471,10 @@ class _LocalBracketRepo:
     recorded outcome, no per-result version semantics — the row is
     the result).
 
-    Every write path stages an outbox row via the same SyncService
-    pattern matches and tournaments use — guarantees the queue entry
-    exists iff the data committed. Operator browsers + the public TV
-    display read bracket changes from the matching Supabase Realtime
-    channels added in this PR.
+    Every write path commits its own transaction, so a returned row is
+    always persisted. Operator browsers and the public TV display read
+    bracket changes by polling the API (the Display module's projection
+    routes); there is no push channel.
     """
 
     _MUTABLE_MATCH_FIELDS = frozenset(
@@ -551,8 +532,6 @@ class _LocalBracketRepo:
             status=status,
         )
         self.session.add(row)
-        self.session.flush()
-        SyncService.enqueue_bracket_event(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -592,8 +571,6 @@ class _LocalBracketRepo:
         if config is not None:
             row.config = dict(config)
         row.version = row.version + 1
-        self.session.flush()
-        SyncService.enqueue_bracket_event(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -606,16 +583,13 @@ class _LocalBracketRepo:
     ) -> Optional[BracketEvent]:
         """Update the status column of a bracket event.
 
-        Stages an outbox row so operator browsers see the status change
-        via Supabase Realtime. Returns None if the event does not exist.
+        Returns None if the event does not exist.
         """
         row = self.get_event(tournament_id, event_id)
         if row is None:
             return None
         row.status = status
         row.version = row.version + 1
-        self.session.flush()
-        SyncService.enqueue_bracket_event(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -628,20 +602,8 @@ class _LocalBracketRepo:
         row = self.get_event(tournament_id, event_id)
         if row is None:
             return False
-        # CASCADE wipes participants + matches + results via FK locally
-        # AND on Supabase (the bracket_events Supabase FKs are
-        # ON DELETE CASCADE). Stage a tombstone outbox row so the
-        # SyncService issues the DELETE against bracket_events; the
-        # Supabase FK cascade handles the rest. Without this row,
-        # Supabase keeps the rows forever and Realtime subscribers
-        # see ghost matches after the operator wipes.
+        # CASCADE wipes participants + matches + results via FK.
         self.session.delete(row)
-        self.session.flush()
-        SyncService.enqueue_bracket_delete(
-            self.session,
-            tournament_id=tournament_id,
-            event_id=event_id,
-        )
         self.session.commit()
         return True
 
@@ -691,14 +653,6 @@ class _LocalBracketRepo:
             for p in participants
         ]
         self.session.add_all(rows)
-        # PR 4 audit fix: participants need their own outbox rows.
-        # The earlier "rides along in the parent event payload"
-        # comment was wishful — the parent payload only carries
-        # scalar event columns, so Supabase's bracket_participants
-        # table was never populated.
-        self.session.flush()
-        for row in rows:
-            SyncService.enqueue_bracket_participant(self.session, row)
         self.session.commit()
         return len(rows)
 
@@ -771,9 +725,6 @@ class _LocalBracketRepo:
             for m in matches
         ]
         self.session.add_all(rows)
-        self.session.flush()
-        for row in rows:
-            SyncService.enqueue_bracket_match(self.session, row)
         self.session.commit()
         return len(rows)
 
@@ -811,8 +762,6 @@ class _LocalBracketRepo:
             if key in self._MUTABLE_MATCH_FIELDS:
                 setattr(row, key, value)
         row.version = row.version + 1
-        self.session.flush()
-        SyncService.enqueue_bracket_match(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -1019,8 +968,6 @@ class _LocalBracketRepo:
             existing.walkover = walkover
             existing.reason = reason
             row = existing
-        self.session.flush()
-        SyncService.enqueue_bracket_result(self.session, row)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -1944,12 +1891,6 @@ class LocalRepository:
         command_row.applied_at = datetime.now(timezone.utc)
         command_row.rejected_at = None
         command_row.rejection_reason = None
-
-        # Step E: stage Supabase sync in the same transaction as the
-        # command-apply write. ``flush`` so ``match.version`` is at
-        # its post-increment value before payload serialisation.
-        self.session.flush()
-        SyncService.enqueue_match(self.session, match)
 
         self.session.commit()
         self.session.refresh(match)

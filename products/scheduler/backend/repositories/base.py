@@ -83,7 +83,7 @@ class MatchRepository(Protocol):
     """Per-match operational state — status, version, court, time_slot.
 
     Added by the architecture-adjustment arc's Step A. Single source of
-    truth for the state-machine + solver-locking + sync layers.
+    truth for the state-machine and solver-locking layers.
     ``version`` increments on every write; passing ``expected_version``
     enables optimistic-concurrency checks (raises ``ConflictError`` on
     mismatch). The HTTP ``If-Match`` wrapper that surfaces this to
