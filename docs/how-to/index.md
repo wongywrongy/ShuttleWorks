@@ -20,6 +20,17 @@ contracts](/contracts/) instead.
 | [Enable a module](/how-to/enable-a-module) | Turn a module on/off per workspace, within the control-plane rules. |
 | [Build on the engine](/how-to/build-on-the-engine) | Build your own product on the pure `scheduler_core` CP-SAT engine. |
 
+## Deploying & operating
+
+Running ShuttleWorks rather than extending it.
+
+| Guide | Use it to… |
+|---|---|
+| [Install: local (offline)](/how-to/install-local) | Run the single-machine offline mode — a first-class product mode, not a dev shortcut. |
+| [Install: self-hosted](/how-to/install-selfhost) | Stand up the multi-tenant deployment behind a Cloudflare Tunnel, on a fresh Ubuntu host. |
+| [Add a worker machine](/how-to/add-a-worker) | Join a second machine as pure compute, under a least-privilege database role. |
+| [Operations](/how-to/operations) | Upgrade, roll back, read the health endpoints, and set the two alerts that matter. |
+
 ## The throughline
 
 A module is not a registry object — it's a set of **honest declarations** across

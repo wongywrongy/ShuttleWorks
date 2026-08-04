@@ -27,11 +27,32 @@ never forked logic:
 | Database | SQLite (bind-mounted `data/local.db`) | Postgres 16 |
 | Solve worker | embedded thread in the API process | `python -m worker` containers, `--scale`-able |
 | Migrations | API lifespan (`alembic upgrade head`) | API only; workers **wait** for the schema |
-| Compose file | `docker-compose.yml` | `docker-compose.cloud.yml` |
+| Compose file | `docker-compose.yml` | `docker-compose.cloud.yml` (dev smoke) · `docker-compose.selfhost.yml` + `docker-compose.worker.yml` (real deployment) |
+| Startup validation | none | `_enforce_cloud_secrets`, **role-aware**: the API profile demands Postgres + `AUTH_MODE=cloud` + secure cookies + SMTP; the worker profile validates the database only |
 
 Local-first parity is a product rule: `docker compose up` must remain
 the full offline product with no external services. Cloud mode is
 strictly additive.
+
+**Ingress is a Cloudflare Tunnel, not an origin TLS terminator.** TLS
+terminates at Cloudflare's edge; `cloudflared` dials outward, so the
+host publishes no inbound port and there is no Caddy/nginx in front of
+the API. Two consequences the code cares about:
+
+- Every request arrives from the connector, so the credential throttle
+  would collapse into one global bucket without `TRUSTED_PROXY_IPS`,
+  which lets `app/client_ip.py` believe `CF-Connecting-IP` **only** from
+  that peer. **Do not add uvicorn `--proxy-headers`** — it rewrites
+  `request.client.host` from `X-Forwarded-For`, so the trust check stops
+  matching and the collapse returns silently.
+- Cookie security is configuration (`SESSION_COOKIE_SECURE=true`), never
+  detection. Nothing in this backend reads the request scheme, so the
+  container seeing plain HTTP is irrelevant.
+
+Runbooks: [install-local](../../../docs/how-to/install-local.md),
+[install-selfhost](../../../docs/how-to/install-selfhost.md),
+[add-a-worker](../../../docs/how-to/add-a-worker.md),
+[operations](../../../docs/how-to/operations.md).
 
 **Why a DB-backed queue and not a broker:** the queue rides the primary
 database (`solve_jobs` table; `FOR UPDATE SKIP LOCKED` claims on
@@ -45,16 +66,26 @@ job per `(tournament, type)`.
 
 **Why the solve runs in a child subprocess:** CP-SAT cannot be
 preempted in-process — a kill is the only reliable cancel; the child
-also takes the Linux `RLIMIT_AS` memory cap and the
-`PYTHONHASHSEED=0` pin.
+also takes the Linux `RLIMIT_AS` memory cap. (It used to take a
+`PYTHONHASHSEED=0` pin too; SP-CLOUD-3 fixed the hash-ordered iteration
+that pin was masking, so determinism is now a property of the engine
+rather than of the launch environment.)
+
+**Health surface:** `/health` (liveness, dependency-free),
+`/health/ready` (database reachable + schema at head; 503 otherwise),
+`/health/deep` (readiness plus data-dir/solver checks — what the image
+HEALTHCHECK calls), `/health/metrics` (queue depth, oldest-queued age,
+per-worker heartbeat age). Do not publish these through the tunnel.
 
 **Determinism (a product guarantee):** same input + params ⇒ same
 schedule on any host. Mechanisms: fixed `random_seed`, single search
 worker, `max_deterministic_time` as the binding stop criterion
-(wall-clock is only an outer safety kill), `PYTHONHASHSEED=0` in the
-solve process (set/dict iteration order feeds model build), and an
-exact `ortools` pin. `tests/test_solve_job_determinism.py` gates this
-end-to-end (byte-identical double-solve + matching model fingerprints).
+(wall-clock is only an outer safety kill), **stable sorted iteration in
+the engine's model build**, and an exact `ortools` pin. Gated
+end-to-end by `tests/test_solve_job_determinism.py` (byte-identical
+double-solve + matching model fingerprints) and
+`tests/unit/test_engine_build_order.py`, which asserts one identical
+CP-SAT fingerprint across four different `PYTHONHASHSEED` values.
 
 ### Env matrix (solve jobs & worker)
 
