@@ -447,3 +447,28 @@ a green 1,100-test suite. The real check is the viewer flow in
     deterministic SolverOptions are built in an unpinned interpreter
     (`solver_options_for` + `_bracket_solver_options`); the job child still
     hard-refuses to run unpinned. Size M.
+
+- **2026-08-03 — SP-CLOUD-2 (auth & tenancy) adjacent findings:**
+  - **GDPR/export/delete tooling is a pre-launch requirement** (explicitly
+    deferred by the SP-CLOUD-2 prompt): account deletion, data export, and
+    the `owner_email` PII already mirrored into Supabase `tournaments` all
+    need a story before public launch. Size L.
+  - **`GET /tournaments` loads all rows and filters in Python** against the
+    caller's memberships; fine at solo scale, wrong shape for multi-tenant
+    cloud. Move the membership filter into SQL (index
+    `ix_tournament_members_user` now exists). Size S.
+  - **`GET /invites/{token}` is a token-existence oracle** (404 on unknown
+    vs `valid:false` on revoked/expired — its own docstring claims
+    otherwise). Cloud invite tokens are UUIDv4 so guessing is impractical,
+    but the uniform-shape claim should be made true or the docstring fixed.
+    Size S.
+  - **Supabase mirror ignores the new tenancy columns**: `_tournament_to_payload`
+    hand-lists fields, so `org_id` is silently absent from the mirror (and an
+    RLS story on the Supabase side reads a membership table nothing
+    populates). Revisit when the mirror gets its own slice. Size M.
+  - **VitePress docs don't yet cover SP-CLOUD-2** (auth model, tenancy seam,
+    display capability link) — `backend/README.md` is the current source;
+    fold into `docs/architecture/` + `contracts/` pages. Size S.
+  - **Members remain unmanageable over HTTP** (no remove/demote/transfer
+    endpoints) — unchanged from pre-slice, now more visible since People &
+    Access shows real identities. Size M.

@@ -94,6 +94,59 @@ docker compose -f docker-compose.cloud.yml up -d --scale worker=2
 `ENVIRONMENT` stays `local` in that stack on purpose — `cloud` switches
 on Supabase-auth enforcement, which is a later SP-CLOUD slice.
 
+## Auth & tenancy (SP-CLOUD-2)
+
+Self-hosted cookie-session auth; Supabase Auth is retired (the
+Supabase env vars now feed only the data mirror).
+
+| | `AUTH_MODE=local` (default) | `AUTH_MODE=cloud` |
+|---|---|---|
+| Identity | requests without a session resolve to the **bootstrap operator** (zero UUID, `local@dev`, ensured at startup) — no signup, no email, offline | real accounts only; no session → 401 |
+| Sign-in | optional (accounts work locally too) | `POST /auth/register` / `/auth/login` |
+| Email | console backend logs invite/reset mail | `EMAIL_BACKEND=smtp` delivers it |
+| Cookies | `Secure` off is tolerated (plain-HTTP dev) | startup **refuses** without `SESSION_COOKIE_SECURE=true` when `ENVIRONMENT=cloud` |
+
+Mechanics (see `services/auth.py`, `api/auth.py`):
+- Passwords: **Argon2id** (argon2-cffi PHC strings, transparent
+  rehash-on-login). Policy is NIST 800-63B: length bounds only + a tiny
+  worst-password blocklist. No composition rules, no rotation.
+- Sessions: opaque 256-bit tokens in an `httpOnly; SameSite=Lax`
+  cookie; only the SHA-256 lands in `auth_sessions` (revocable,
+  rolling `last_seen`, absolute expiry). Password change/reset revokes
+  every other session.
+- CSRF: state-changing requests that carry the session cookie must
+  send `X-ShuttleWorks-CSRF: 1` (enforced in middleware; the frontend
+  sends it on every request). Cookie-less local bootstrap traffic is
+  exempt by construction.
+- Throttle: DB-backed per-account + per-IP backoff on credential
+  endpoints (429 + `retryAfterSeconds`).
+- Tenancy: **orgs own workspaces** (`tournaments.org_id`); every user
+  gets a personal org (`services/auth.ensure_personal_org`).
+  Membership stays per-workspace in `tournament_members` (FK to
+  `users` since the SP-CLOUD-2 backfill migration).
+
+### The enforcement seam — how to add a workspace endpoint
+
+Every route that acts on a workspace resource MUST:
+1. take the tenant id from a path param named exactly
+   ``tournament_id`` (the seam binds to that name), and
+2. attach ``Depends(require_tournament_access("<viewer|operator|owner>"))``
+   (router- or route-level).
+
+The seam answers a **uniform 404** (`TOURNAMENT_NOT_FOUND`) for
+non-members and nonexistent ids — existence is information; never
+hand-roll a 403 for "not yours". Insufficient *role* for a real member
+is 403. The cross-tenant isolation suite
+(`tests/test_tenant_isolation.py`) discovers every ``{tournament_id}``
+operation from the OpenAPI schema and fails if any of them leaks — a
+new endpoint that forgets the dependency fails CI automatically.
+
+The ONLY unauthenticated data plane is the spectator display: public
+``/display/{token}/*`` projection routes resolved by a per-workspace
+capability token (`display_tokens`; owner mint/rotate via
+``/tournaments/{id}/display-token``). Never add public routes keyed on
+raw tournament UUIDs.
+
 ## Layout
 
 ```
@@ -148,8 +201,11 @@ import it directly via `from scheduler_core...`.
    def do_thing(req: DoThingRequest) -> DoThingResponse: ...
    ```
 3. Register it in `app/main.py`: `app.include_router(feature.router)`.
-4. Mirror the DTOs in `frontend/src/api/dto.ts`.
-5. Add a method on `frontend/src/api/client.ts`.
+4. **Workspace-scoped?** Follow "The enforcement seam" above —
+   `tournament_id` path param + `require_tournament_access` dep, or
+   the isolation suite fails.
+5. Mirror the DTOs in `frontend/src/api/dto.ts`.
+6. Add a method on `frontend/src/api/client.ts`.
 
 ## Tests
 
