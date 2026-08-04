@@ -116,7 +116,7 @@ value in the working tree is blank, so nothing is currently being pushed.
 | dto.generated.ts regen | **DONE** | `bb29b21` |
 | Phase 1 — member management (5 ops) | not started | |
 | 0.D — sorted iteration + re-baseline | not started | |
-| 0.E — mirror removal + ADR | **blocked** on the Supabase audit above | |
+| 0.E — mirror removal + ADR | **DONE** — option (c), removed entirely; ADR 0012 | `465c2ca` / `d3a46b6` / `9e677a1` |
 | Phase 3 — deployment readiness | not started | |
 | Phase 4 — install docs | not started | |
 
@@ -187,3 +187,144 @@ Four planned items were already done, and one predicted defect does not exist:
   tests updated); DTO regen. Gates at session end: backend **899 passed / 37
   skipped** (894 green + the 5 repaired), frontend **1281 passed / 169 files**,
   tsc clean, eslint **0 errors**, ruff clean.
+
+## 0.E — Mirror removal: DONE (2026-08-04)
+
+Inventory: `docs/audits/10-mirror-removal-inventory.md`. ADR:
+`docs/decisions/0012-remove-the-supabase-mirror.md`.
+Commits: `465c2ca` (inventory) → `d3a46b6` (removal) → `9e677a1` (ADR + docs).
+
+**Supabase is now entirely absent from the product.** Auth went in SP-CLOUD-2;
+the data mirror went here.
+
+### Evidence it was never operated
+
+The real `products/scheduler/data/local.db` carried **827 undrained `sync_queue`
+rows** at head `o8f2a6b0c4d5`. The drain thread only started when `SUPABASE_URL`
+and `SUPABASE_ANON_KEY` were both set, and both were blank everywhere, so the
+outbox accumulated from Step E onward and pushed nothing, ever. No credential or
+project ref has ever been committed (`git log -S` on `eyJ` and `.supabase.co`
+across all branches → placeholders only). This is why the Supabase-project audit
+became moot: there was never anything in it.
+
+### Rule 2 — verified empirically, not argued
+
+Step 1 removed **only** the 11 write-path enqueues and ran the full suite in
+isolation: **exactly the 4 predicted tests failed, 931 passed.** No
+transaction-semantics regression. Every enqueue was a `session.add()` staged into
+the caller's transaction under an explicit "Caller commits" contract, so no commit
+boundary moved. Confirmed beforehand that no `try/except` wrapped any enqueue
+site, so removing the adjacent `flush()` calls could not change error propagation
+either.
+
+### The atomicity tests — mechanism substituted, intent preserved
+
+`test_clear_schedule_flag_atomic_rollback_on_write_failure` and
+`test_bracket_clear_atomic_rollback_on_write_failure` matched the mirror grep but
+are **not** mirror tests: they assert that a failure in the mutation-to-commit
+window rolls the whole transaction back, using `SyncService.enqueue_tournament`
+as a convenient injection point in that window.
+
+They now patch **`Session.commit`**. Chosen over the alternative of retaining the
+repository's now-purposeless `flush()` calls as a patch target: a `flush()` that
+exists only so a test can hook it is exactly what the next dead-code sweep
+deletes, and `Session.commit` is a seam that must exist forever. The reasoning
+lives in `_boom_on_commit`'s docstring in `tests/test_tournaments.py`, next to
+where it would otherwise be re-litigated.
+
+### Tests edited or deleted (per the sanctioned-change protocol)
+
+| Test | Action |
+|---|---|
+| `tests/unit/test_sync_service.py` (364 lines) | deleted — purely mirror |
+| `tests/unit/test_sync_service_characterization.py` (346 lines) | deleted — purely mirror |
+| `test_create_bracket_stages_sync_rows` | deleted — purely outbox |
+| `test_record_result_stages_result_and_match_sync_rows` | deleted — purely outbox |
+| `test_bracket_routes.py` module docstring | outbox coverage bullet removed |
+| the 2 atomicity tests above | **kept**, injection point substituted |
+
+False positives, untouched: the 19 `enqueue_*` grep hits in
+`test_solve_worker.py` / `test_solve_jobs.py` are the solve-job fixture
+`enqueue_job`, unrelated to the outbox.
+
+### Migration `p9a3b7c1d5e6` — verified four ways
+
+`sync_queue` has no foreign keys in either direction, so the drop has no ordering
+constraints. Note the table had an index (`ix_sync_queue_created_attempts`)
+created by the original migration but **not declared on the model** — the
+downgrade recreates it, which the model alone would not have told us.
+
+1. Fresh SQLite `upgrade head` → table absent, 20 tables.
+2. Fresh Postgres 16 `upgrade head` → absent.
+3. `downgrade -1` → table **and index** recreated on both dialects; re-upgrade →
+   absent again. Clean round-trip.
+4. Copy of the **real pre-slice `local.db`** upgraded → 10 tournaments, 13
+   matches, 1 user, **29 backups** preserved; the 827 orphan rows dropped.
+
+(The 29 backups are also the concrete answer to the Rule 3 parity question:
+`tournament_backups` is genuinely in use.)
+
+### Docs policy applied
+
+**Living docs corrected** (they describe the current system): data-flow, glossary,
+quality-attributes, system-overview, backend-structure, operational-scenarios,
+the workspace-suite ownership map, three getting-started pages, api/index, both
+READMEs, BACKEND.md, CLAUDE.md.
+
+**Historical records left intact**: `docs/audits/**`, `docs/superpowers/**`,
+`docs/changes/**`, and the two Alembic migrations that created the table.
+Retro-editing them would falsify the record. `tech-stack.md` is a dated decision
+log with an existing superseded-note block, so that block was extended rather
+than its tables rewritten. `docs/deploy/cloud.md` (55 mentions, `srcExclude`d from
+the site, about to be replaced by the Phase 4 runbooks) got a prominent
+HISTORICAL/DO-NOT-FOLLOW banner instead of a rewrite.
+
+ADR 0003 was **superseded, not edited** — its primary decision (local SQLite as
+source of truth) still stands; only its mirror clause is retired.
+
+### Debt-log
+
+Closed: the invite-token oracle entry, and the mirror `org_id` + stale-RLS entry
+(the latter resolved by deletion rather than by fixing). Added four SP-CLOUD-3
+entries, including the accepted one: **no in-product off-site durability for local
+mode**, recorded as a known choice with its rationale — local mode is one operator
+on their own machine, where that is their responsibility as for any desktop app;
+cloud mode, where it is not optional, has a real answer in the Phase 4
+`install-selfhost.md`.
+
+### Postgres test-leg question — answered
+
+CI **does** set `TEST_POSTGRES_URL` (a `postgres:16-alpine` service on 5433), so
+the dual-dialect leg runs on every PR and push. Verified locally rather than
+inferred: the full suite against a real PG16 gave **935 passed / 1 by-design
+skip** pre-removal, reconciling exactly with the 925 documented baseline + the 10
+tests added earlier this session. The 36 local-only skips were purely my missing
+env var. **New baseline after removal: 904 passed / 1 by-design skip** (935 − 31
+deleted mirror tests) — restated here so a future session does not read the drop
+as a regression.
+
+### Gates
+
+Backend **904 passed / 1 by-design skip** (PG leg on); frontend **1281 passed /
+169 files**; tsc clean; eslint **0 errors** (102 warnings); depcruise **0 errors**
+(17 known warnings); ruff clean; `docs:build` clean (dead-link gate); simulator
+`sim-ephemeral small-meet` **PASS** (48 requests, 0 violations) — which exercises
+the edited ephemeral server. `git diff --stat v0.1.0..HEAD -- scheduler_core/
+archive/` **empty**.
+
+`docs:freshness` reports 4 areas BEHIND (Workspace model, State management,
+Modules, Extending). **Verified false positive, not deferred work:** all four
+tracked-source globs were touched by the removal commit only incidentally
+(`models.py` losing `SyncQueue`, a `useBracket.ts` comment, the
+`GlobalSettingsPage.tsx` settings row), and none of those four doc pages ever
+mentioned the mirror — `grep -i "supabase|sync_queue|outbox|realtime"` over them
+returns nothing. The heuristic tracks commit recency per glob, not semantic
+staleness. Left alone rather than touched to silence it.
+
+### One correction to the Phase 0 audit
+
+0.F.4 reported that the worker's DB session lacked reconnect resilience. That was
+wrong: `database/session.py:88` already builds the engine with
+`pool_pre_ping=True`, which is exactly the transparent-reconnect behaviour a
+tailnet blip needs. The remaining Phase 3 work there is narrower than reported —
+the reap/re-run-exactly-once test, not adding pre-ping.
