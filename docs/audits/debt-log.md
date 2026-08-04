@@ -507,3 +507,23 @@ a green 1,100-test suite. The real check is the viewer flow in
     writability and the ortools import, so it reports `healthy` with Postgres
     unreachable. A health check that cannot fail turns an outage into a silent
     outage. Size S. *(Scheduled: SP-CLOUD-3 Phase 3, 0.F.6.)*
+  - **Schema-vs-model drift is unchecked, and we know it exists.** Removing
+    `sync_queue` surfaced that migration `e2a5f3b8c1d6` created
+    `ix_sync_queue_created_attempts` while the `SyncQueue` model **never declared
+    it** — the ORM metadata and the real schema had silently diverged. It was
+    caught only because writing a downgrade forced reproducing the true schema;
+    nothing in the test suite or CI would have found it, and there is no reason
+    to assume `sync_queue` was the only table affected. Proposed check: on a
+    scratch database, run `alembic upgrade head`, then compare the resulting
+    schema against `Base.metadata` (either `metadata.create_all` on a second
+    scratch DB and diff, or `alembic revision --autogenerate` and assert the
+    generated migration is empty). Cheap CI step, dual-dialect, would find the
+    rest. Size S.
+  - **`docs:freshness` tracked globs are too coarse.** Four areas reported BEHIND
+    after the mirror removal purely because an unrelated symbol left `models.py`
+    and a comment changed in `useBracket.ts`; none of those pages ever mentioned
+    the mirror. A freshness signal that cries wolf gets ignored, and the next
+    real staleness will look identical. Either narrow the globs (per-symbol or
+    per-directory rather than whole files like `database/models.py`, which every
+    slice touches) or teach it to ignore commits that only remove content the
+    docs never referenced. Size S.
