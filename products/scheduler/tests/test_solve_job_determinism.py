@@ -1,10 +1,15 @@
 """End-to-end determinism through the FULL job path (SP-CLOUD-1 Rule 5).
 
 A small real tournament input, solved twice via enqueue → worker →
-subprocess (real CP-SAT, real ``PYTHONHASHSEED=0`` child env), must
-produce byte-identical serialized schedules and identical CP-SAT model
-fingerprints in the solver logs. This is the gate on decisions C1/C2:
-deterministic-time budget + pinned hash seed + single search worker.
+subprocess (real CP-SAT), must produce byte-identical serialized
+schedules and identical CP-SAT model fingerprints in the solver logs.
+
+Since SP-CLOUD-3 the child runs with **no hash-seed pin**: the engine
+sorts its own model-build iteration, so determinism is a property of the
+code rather than of the launch environment. That makes this test a
+genuine regression guard — if hash-ordered iteration is ever
+reintroduced, these two runs diverge instead of being masked. See
+``tests/unit/test_engine_build_order.py`` for the direct assertion.
 
 Spawns two real interpreter subprocesses (~10 s total).
 """

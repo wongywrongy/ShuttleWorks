@@ -14,14 +14,17 @@ solve error (not retryable — rerunning the same input reproduces it).
 
 Subprocess isolation is what makes cancellation (parent kills the
 process) and the memory guard possible — CP-SAT cannot be preempted
-in-process. Determinism invariants enforced here:
+in-process. Determinism invariant enforced here:
 
-- The parent launches this process with ``PYTHONHASHSEED=0`` so set/dict
-  iteration order feeding model construction is identical on every
-  host (Phase 0 measured: unpinned hash seeds change the CP-SAT model
-  fingerprint AND the resulting schedule). Refuse to run otherwise.
 - Solver options come exclusively from the job's persisted ``params``
   — never from live settings — so a re-run reproduces the original.
+
+This process used to refuse to start unless ``PYTHONHASHSEED=0``,
+because the engine's model build iterated hash-ordered sets. SP-CLOUD-3
+fixed that at source, so the guard was removed with the mask it was
+guarding (Rule 7 — compensations go together or not at all). Model-build
+order is now hash-seed independent; the regression guard is a test that
+double-solves *unpinned* and asserts byte-identity.
 """
 from __future__ import annotations
 
@@ -96,13 +99,6 @@ def main(argv: list[str]) -> int:
     if len(argv) != 3:
         print("usage: python -m services.solve_child <in.json> <out.json>", file=sys.stderr)
         return 2
-    if os.environ.get("PYTHONHASHSEED") != "0":
-        # Rule 5(d): unpinned hash seeds make the model build (and the
-        # schedule) vary per process. This is a launch bug, not a solve
-        # error — fail loudly as an infra failure.
-        print("solve_child: PYTHONHASHSEED must be pinned to 0", file=sys.stderr)
-        return 3
-
     in_path, out_path = argv[1], argv[2]
     with open(in_path, encoding="utf-8") as f:
         payload = json.load(f)

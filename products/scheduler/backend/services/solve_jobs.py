@@ -412,9 +412,9 @@ def default_solve_params(settings) -> dict:
 
     The worker reads ONLY the job's stored params — never live settings
     — so re-running a job reproduces the original solve even after the
-    deployment's defaults change. ``PYTHONHASHSEED`` is pinned by the
-    worker's solve subprocess (Phase 2), not stored here, because it is
-    an execution-environment invariant rather than a per-job knob.
+    deployment's defaults change. Model-build order is not a param: the
+    engine sorts its own iteration (SP-CLOUD-3), so determinism does not
+    depend on the execution environment at all.
     """
     return {
         "random_seed": settings.solve_random_seed,

@@ -436,20 +436,20 @@ a green 1,100-test suite. The real check is the viewer flow in
   - **api/README.md still documents an EventSource SSE flow** (now fully
     retired — solves are jobs; the meet SSE routes answer 410); and
     `unscheduledMatches` is returned by every solve but rendered nowhere. Size S.
-  - **scheduler_core `_player_matches()` iterates hash-ordered sets** feeding
-    constraint emission order. Three facts (SP-CLOUD-2 0.C): (1) the worker's
-    PYTHONHASHSEED=0 pin is a **mask**, not a fix; (2) any solve outside the
-    pinned env — in-request interactive solves, ad-hoc scripts, notebooks,
-    bare pytest runs — **silently reverts** to nondeterministic model builds
-    (different schedules at equal objective); (3) the honest fix is sorted
-    iteration at the model-build site in the engine. The former "locked
-    pending Phase 7" blocker no longer applies — Phase 7 completed 2026-07-01
-    (both functions characterized + decomposed), so the fix now only needs
-    user sanction for a scheduler_core edit. Interim hardening shipped:
-    `services/determinism.py` guard logs an unmissable error when
-    deterministic SolverOptions are built in an unpinned interpreter
-    (`solver_options_for` + `_bracket_solver_options`); the job child still
-    hard-refuses to run unpinned. Size M.
+  - ~~**scheduler_core `_player_matches()` iterates hash-ordered sets**~~ —
+    ✅ **Fixed 2026-08-04 (SP-CLOUD-3, commit below).** The honest fix landed:
+    `get_player_ids` now returns a sorted list, so `_player_matches`' key
+    order — and therefore constraint emission order — follows from the input
+    alone. Measured: before, four `PYTHONHASHSEED` values gave four distinct
+    CP-SAT model fingerprints (`5d6d4ff8…` pinned); after, six seeds give one
+    (`88f2ee35…`). All three compensations were removed **together** per
+    Rule 7 — the child's `PYTHONHASHSEED=0` pin, its hard-refusal to run
+    unpinned, and `services/determinism.py` entirely. A warning whose stated
+    justification has become false is worse than silence. The replacement
+    guard is a test that double-solves *unpinned*
+    (`tests/unit/test_engine_build_order.py`), which the log line could never
+    be. Negative control performed: dropping the `sorted()` fails 3 of its 4
+    tests.
 
 - **2026-08-03 — SP-CLOUD-2 (auth & tenancy) adjacent findings:**
   - **GDPR/export/delete tooling is a pre-launch requirement** (explicitly

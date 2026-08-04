@@ -45,7 +45,6 @@ from scheduler_core.domain.models import (  # noqa: E402
     ScheduleConfig,
     SolverOptions,
 )
-from services.determinism import warn_if_unpinned
 from services.scheduling.params import SchedulingParams, build_schedule_config
 
 
@@ -116,7 +115,6 @@ def solver_options_for(
     else:
         time_limit = DEFAULT_SOLVER_OPTIONS.time_limit_seconds
     if config.deterministic:
-        warn_if_unpinned("meet.solver_options_for")
         return SolverOptions(
             time_limit_seconds=time_limit,
             num_workers=1,

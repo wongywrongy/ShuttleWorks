@@ -87,11 +87,19 @@ the primary database (`solve_jobs` table; `FOR UPDATE SKIP LOCKED` claims on Pos
 Two dedup layers: an `Idempotency-Key` unique index and a partial unique index enforcing at
 most one active job per `(tournament, type)`. The solve itself runs in a **child subprocess**
 (`services/solve_child.py`) because CP-SAT cannot be preempted in-process — a kill is the only
-reliable cancel; the child also takes the memory cap and the `PYTHONHASHSEED=0` pin.
+reliable cancel; the child also takes the memory cap.
 Determinism is a product guarantee (same input + params ⇒ same schedule on any host): fixed
-seed, one search worker, `max_deterministic_time` as the binding stop criterion, and an exact
-`ortools` pin, gated end-to-end by `tests/test_solve_job_determinism.py`. The full env matrix
-and rationale live in `backend/README.md` § "Dual-mode runtime".
+seed, one search worker, `max_deterministic_time` as the binding stop criterion, an exact
+`ortools` pin, and **stable sorted iteration in the engine's model build**. Gated end-to-end by
+`tests/test_solve_job_determinism.py` plus `tests/unit/test_engine_build_order.py`, which
+asserts one identical CP-SAT model fingerprint across four different `PYTHONHASHSEED` values.
+
+The child used to run with `PYTHONHASHSEED=0`, and a `services/determinism.py` guard warned
+whenever a solve happened outside that pinned environment. Both were masks for hash-ordered
+iteration in `get_player_ids`; SP-CLOUD-3 fixed the iteration and removed the pin, the guard,
+and the child's hard-refusal together — determinism is now a property of the code rather than of
+the launch environment. The full env matrix and rationale live in `backend/README.md`
+§ "Dual-mode runtime".
 
 ### Request lifecycle
 

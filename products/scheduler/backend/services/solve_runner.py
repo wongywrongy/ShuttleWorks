@@ -10,8 +10,10 @@ three guarantees the in-process solve path never had:
 - **Outer safety kill**: the ONLY permitted use of wall-clock time
   (Rule 5c) — a hard deadline well above the solver's own budget, as a
   backstop against a hung child. On a healthy run it never binds.
-- **Determinism env**: the child runs with ``PYTHONHASHSEED=0`` (the
-  Phase 0 / decision C2 mechanism for stable model-build order).
+- **Determinism**: comes from the engine itself (stable sorted iteration
+  in the model build) plus the job's persisted solver params — not from
+  the child's environment. The old ``PYTHONHASHSEED=0`` pin was removed
+  in SP-CLOUD-3 once the underlying ordering bug was fixed.
 
 Portable Popen only (no preexec_fn / start_new_session / creationflags)
 — the same shape the simulator's EphemeralServer already uses on
@@ -126,7 +128,12 @@ def _run_in_workdir(
         json.dump({"params": params, "input_snapshot": input_snapshot}, f)
 
     env = dict(os.environ)
-    env["PYTHONHASHSEED"] = "0"  # Rule 5(d) — stable model-build order
+    # NOTE: no PYTHONHASHSEED pin. It used to be set here to mask
+    # hash-ordered iteration in the engine's model build; SP-CLOUD-3
+    # fixed that at source (``get_player_ids`` now sorts), so the build
+    # is hash-seed independent and the pin would only hide a future
+    # regression. Verified: six different hash seeds produce one
+    # identical model fingerprint.
     # numpy (imported by ortools) initialises an OpenBLAS thread pool
     # sized to the host's cores; CP-SAT gains nothing from BLAS threads
     # and under the child's RLIMIT_AS cap the pool's per-thread stacks

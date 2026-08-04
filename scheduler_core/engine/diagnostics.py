@@ -5,9 +5,39 @@ from typing import Dict, List
 from scheduler_core.domain.models import Match, Player, ScheduleConfig
 
 
-def get_player_ids(match: Match) -> set[str]:
-    """Get all player IDs in a match."""
-    return set(match.side_a) | set(match.side_b)
+def get_player_ids(match: Match) -> List[str]:
+    """All player IDs in a match, de-duplicated, in **stable sorted order**.
+
+    The sort is load-bearing, not tidiness. This used to return a bare
+    ``set``, and ``CPSATScheduler._player_matches`` builds its dict by
+    iterating it — so the dict's *key insertion order* was inherited from
+    string hash order, which Python randomises per interpreter unless
+    ``PYTHONHASHSEED`` is pinned. The three constraint plugins that walk
+    that dict (``player_no_overlap``, ``rest``, ``game_proximity``) then
+    emitted their constraints in a different order on every run, so
+    CP-SAT broke search-tree ties differently and returned a different —
+    equally optimal — schedule.
+
+    Measured before the fix on a 10-match doubles instance: four
+    ``PYTHONHASHSEED`` values produced four distinct CP-SAT model
+    fingerprints. After it, all four agree.
+
+    Everything else feeding the model build was already ordered
+    (``add_matches``/``add_players`` sort by id; ``bridge._build_players``
+    sorts its participant set). This was the last unordered construct,
+    which is why ``PYTHONHASHSEED=0`` could mask it so completely.
+
+    Returns a ``list`` rather than a ``set``: the ordering *is* the
+    contract now, and a set would silently discard it again — every call
+    site is a ``for`` loop, so nothing else would fail.
+
+    Negative control (2026-08-04, CODE_HEALTH rule 3b): dropping the
+    ``sorted()`` fails 3 of the 4 tests in
+    ``tests/unit/test_engine_build_order.py``, with the fingerprint test
+    reporting 4 distinct hashes across 4 hash seeds. Verified, not
+    assumed.
+    """
+    return sorted(set(match.side_a) | set(match.side_b))
 
 
 def diagnose_infeasibility(
