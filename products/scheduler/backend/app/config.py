@@ -13,6 +13,7 @@ remaining env-var reads in the codebase are this module.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Annotated, Any
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -170,6 +171,45 @@ class Settings(BaseSettings):
     public_app_origin: str = ""
     # Cloud email invites expire; local link invites may be eternal.
     invite_ttl_days: float = 14.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _read_file_backed_secrets(cls, values: Any) -> Any:
+        """Support ``<VAR>_FILE`` alongside every ``<VAR>``.
+
+        Docker secrets, systemd credentials, and Kubernetes secret mounts
+        all deliver a secret as a file. Reading it here means a
+        deployment never has to put the value in ``environment:``, where
+        it shows up in ``docker inspect``, in process listings, and in
+        whatever shipped those.
+
+        This exists specifically so a compose file can have ONE source of
+        truth for a shared secret. The self-host stack needs the Postgres
+        password in two places — the database container and the API's
+        ``DATABASE_URL`` — and injecting it as a file for one and an env
+        var for the other is how the two silently drift apart. (Observed
+        during Phase 3.6: they did.)
+
+        ``<VAR>`` wins if both are set, so an explicit value always
+        overrides. Whitespace is stripped, because every tool that
+        writes these appends a trailing newline.
+        """
+        import os
+
+        if not isinstance(values, dict):
+            return values
+        for name in cls.model_fields:
+            env_file_key = f"{name.upper()}_FILE"
+            path = os.environ.get(env_file_key)
+            if not path or name in values or name.upper() in os.environ:
+                continue
+            try:
+                values[name] = Path(path).read_text(encoding="utf-8").strip()
+            except OSError as exc:
+                raise ValueError(
+                    f"{env_file_key}={path!r} could not be read: {exc}"
+                ) from exc
+        return values
 
     @field_validator("cors_origins", "trusted_proxy_ips", mode="before")
     @classmethod

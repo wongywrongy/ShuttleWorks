@@ -1,0 +1,167 @@
+# Self-hosted production stack — API + Postgres 16 + embedded worker +
+# cloudflared, for the primary host.
+#
+# Deployed to /opt/shuttleworks/ (deliberately outside any homelab
+# /opt/stacks/ or /opt/infra/ tree, so a homelab-wide `docker compose
+# down` or a prune in the wrong directory cannot touch the product).
+#
+#   cd /opt/shuttleworks
+#   docker compose -f docker-compose.selfhost.yml up -d --build
+#
+# Ingress is a Cloudflare Tunnel: TLS terminates at Cloudflare's edge and
+# the connector dials OUT, so this host publishes no inbound port at all.
+# See docs/how-to/install-selfhost.md for the runbook.
+
+name: shuttleworks
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=scheduler
+      - POSTGRES_DB=scheduler
+      # File injection: the password never appears in `docker inspect`,
+      # in this file, or in shell history. See install-selfhost.md.
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    # ─────────────────────────────────────────────────────────────────
+    # NEVER bind this to 0.0.0.0.
+    #
+    # Docker publishes ports by writing iptables rules directly and does
+    # NOT consult UFW, so `0.0.0.0:5432->5432` is a publicly reachable
+    # database no matter what `ufw status` claims. Binding to the
+    # tailnet address keeps it reachable by the remote worker and by
+    # nothing else.
+    #
+    # Replace the placeholder with this host's tailnet IP. If no remote
+    # worker is in play, delete the mapping entirely — the API reaches
+    # Postgres over the compose network and needs no published port.
+    # ─────────────────────────────────────────────────────────────────
+    ports:
+      - "${POSTGRES_BIND_ADDR:?set POSTGRES_BIND_ADDR to the tailnet IP, never 0.0.0.0}:5432:5432"
+    volumes:
+      # An explicit BIND MOUNT, not a named or anonymous volume: this is
+      # the source of truth, and it must be somewhere an operator can
+      # find, back up, and reason about. An anonymous volume is what
+      # `docker system prune --volumes` deletes.
+      #
+      # Overridable so the data can live on a different disk from the
+      # checkout. It must be a real local filesystem — Postgres' initdb
+      # fails on network/synced paths (verified: an OneDrive-backed path
+      # errors with `could not create directory .../pg_wal`).
+      - ${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  api:
+    build:
+      context: ../..
+      dockerfile: products/scheduler/backend/Dockerfile
+    restart: always
+    # No `ports:` — nothing is published. cloudflared reaches this over
+    # the compose network. Publishing a port here would create exactly
+    # the public surface the tunnel exists to avoid.
+    environment:
+      - ENVIRONMENT=cloud
+      - AUTH_MODE=cloud
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATA_DIR=/app/data
+      # ONE source of truth for the password: the secret file, read by
+      # Postgres via POSTGRES_PASSWORD_FILE and by the API via the
+      # generic <VAR>_FILE support in app/config.py. Splitting it into a
+      # file for one service and an env var for the other is how the two
+      # drift apart — which is exactly what happened the first time this
+      # file was written and booted.
+      - DATABASE_URL_FILE=/run/secrets/database_url
+      # The API owns the schema (migrations run in its lifespan) and, on
+      # this host, also runs the embedded worker so a single-box install
+      # solves without a second machine. Set false if you would rather
+      # all solving happen on remote workers.
+      - EMBEDDED_WORKER=${EMBEDDED_WORKER:-true}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-1}
+      # HTTPS-only cookies. Correct even though this container speaks
+      # plain HTTP to cloudflared: the flag describes the BROWSER leg,
+      # which is HTTPS at Cloudflare's edge. Nothing in the backend
+      # sniffs the request scheme, so this is config, not detection.
+      - SESSION_COOKIE_SECURE=true
+      - CORS_ORIGINS=https://${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME}
+      - PUBLIC_APP_ORIGIN=https://${PUBLIC_HOSTNAME}
+      # ───────────────────────────────────────────────────────────────
+      # The cloudflared container's address on the compose network.
+      # Without it, every request appears to come from the connector and
+      # the credential throttle collapses into ONE bucket for the whole
+      # internet — the fifth failed login from anyone locks out everyone.
+      #
+      # Do NOT "fix" that with uvicorn --proxy-headers. That flag
+      # rewrites request.client.host from X-Forwarded-For, so the peer
+      # compared against this list becomes the *claimed* client address,
+      # the trust check never matches, and the collapse returns
+      # silently. The two mechanisms are mutually defeating.
+      # ───────────────────────────────────────────────────────────────
+      - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:?set to the cloudflared container IP}
+      - EMAIL_BACKEND=smtp
+      - SMTP_HOST=${SMTP_HOST:?required in cloud mode}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+    secrets:
+      - database_url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/data:uid=1001,gid=1001
+    healthcheck:
+      # /health/deep is a REAL readiness check since SP-CLOUD-3 — it
+      # fails when the database is unreachable or the schema is behind.
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/health/deep', timeout=5); sys.exit(0 if __import__('json').load(r).get('status')=='healthy' else 1)\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: always
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN}
+    # ─────────────────────────────────────────────────────────────────
+    # The tunnel's ingress rule must point at THIS service and nothing
+    # else:  <hostname> -> http://api:8000
+    #
+    # Never point it at a shared reverse proxy, and never add a wildcard
+    # route. A wildcard would publish every other service reachable from
+    # this host — including anything else on the box — to the public
+    # internet through the same tunnel. Configure the rule in the
+    # Cloudflare dashboard for this named tunnel.
+    # ─────────────────────────────────────────────────────────────────
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+secrets:
+  # Both files are created by the install runbook and chmod 600. Neither
+  # is committed — ./secrets/.gitignore excludes everything in here.
+  postgres_password:
+    file: ./secrets/postgres_password
+  database_url:
+    file: ./secrets/database_url

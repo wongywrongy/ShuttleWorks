@@ -154,3 +154,7 @@ design/baseline/
 .vitepress/cache/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+
+# Self-host secrets + Postgres bind mount (docker-compose.selfhost.yml).
+products/scheduler/secrets/
+products/scheduler/data/postgres/

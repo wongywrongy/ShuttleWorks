@@ -221,6 +221,46 @@ class SolveWorker:
                 session.commit()
                 return
 
+            # LEASE OWNERSHIP — the duplicate-write guard.
+            #
+            # Losing the database mid-solve (a tailnet blip between this
+            # worker and Postgres) stops our heartbeats. After
+            # ``job_lease_seconds`` the reaper requeues the job and
+            # another worker claims it. Our child, meanwhile, is still
+            # solving happily — it never touches the database — and
+            # eventually finishes and arrives here.
+            #
+            # Without this check we would write our result over a job
+            # someone else now owns: the other worker is mid-solve and
+            # will write its own result afterwards, so the job completes
+            # twice and the surviving result is whichever raced last.
+            # `_transition` cannot catch it — running → succeeded is a
+            # perfectly legal move; what is illegal is *us* making it.
+            #
+            # Rejecting also covers the reaped-but-not-yet-reclaimed
+            # window (status back to `queued`). Discarding a good result
+            # costs one redundant solve; accepting it risks two writers.
+            # Determinism means the re-run produces the same schedule.
+            #
+            # Negative control (2026-08-04, CODE_HEALTH rule 3b): removing
+            # this check fails 4 tests in tests/unit/test_lease_recovery.py.
+            # Note the FIRST version of those tests passed without it —
+            # they let worker B *finish* before A's late write arrived, so
+            # `_transition` rejected it as succeeded -> succeeded and the
+            # ownership check was never reached. The window only opens
+            # while B is mid-solve, where running -> succeeded is legal.
+            if job.claimed_by != self.worker_id:
+                log.warning(
+                    "discarding completion for job %s: lease now held by %s "
+                    "(status=%s). This worker lost its lease — most likely a "
+                    "database outage stopped its heartbeats mid-solve.",
+                    job_id,
+                    job.claimed_by,
+                    job.status,
+                )
+                session.commit()
+                return
+
             if outcome.kind == "ok":
                 result = outcome.result or {}
                 if result.get("status") == "infeasible":
