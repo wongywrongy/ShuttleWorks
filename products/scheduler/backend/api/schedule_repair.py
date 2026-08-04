@@ -1,18 +1,30 @@
-"""Targeted disruption repair endpoint.
+"""Targeted disruption repair.
 
-Wires the existing CP-SAT engine's ``solve_repair`` to a FastAPI route.
 Translates a disruption (withdrawal / court_closed / overrun /
-cancellation) into a slice rule (``RepairSpec``), invokes the engine,
-and returns a fresh ``ScheduleDTO`` whose ``repairedMatchIds`` field
-tells the UI which matches actually moved.
+cancellation) into a slice rule (``RepairSpec``), invokes the CP-SAT
+engine's ``solve_repair``, and returns a fresh ``ScheduleDTO`` whose
+``repairedMatchIds`` field tells the UI which matches actually moved.
 
 Solve time target: < 5 s for tournaments up to 40 matches. The repair
 problem is small (only the affected slice is free) and warm-started
 via ``model.AddHint``, so it converges much faster than a full solve.
+
+**The route here is a 410 tombstone; the engine is not.** ``_run_repair``
+and ``_run_repair_with_cancel`` are the live implementation, consumed by
+the tenant-scoped proposal pipeline (``api/schedule_proposals.py``,
+``schedule_director.py``, ``schedule_suggestions.py``).
+
+The retired ``POST /schedule/repair`` took an entire tournament in its
+body and named no workspace, so it carried no ``tournament_id`` path
+param and no ``require_tournament_access`` — the last compute surface
+outside the tenancy seam the rest of the API is held to. It had no
+frontend caller. Retired 2026-08-04 following the same
+410-with-a-pointer pattern as the synchronous solve routes in
+``api/schedule.py``, so stale clients learn where it went instead of
+meeting a bare 404.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Dict, List, Literal, Optional, Set
 
@@ -45,6 +57,12 @@ from adapters.badminton import (
 
 router = APIRouter(prefix="", tags=["schedule"])
 log = logging.getLogger("scheduler.repair")
+
+_GONE_MESSAGE = (
+    "the untenanted repair route was removed; repair now flows through "
+    "the tenant-scoped proposal pipeline: "
+    "POST /tournaments/{tournament_id}/schedule/proposals"
+)
 
 
 class Disruption(BaseModel):
@@ -312,14 +330,11 @@ def _run_repair_with_cancel(
     return new_schedule, repaired_ids
 
 
-@router.post("/schedule/repair", response_model=RepairResponse)
-async def repair_schedule(request: RepairRequest) -> RepairResponse:
-    """Re-solve the affected slice; everything else stays put."""
-    # Offload the CPU-bound solve to a threadpool so the event loop stays
-    # responsive to concurrent requests during the solve. The sync helper
-    # keeps its signature; ``await`` re-raises any exception it raises.
-    loop = asyncio.get_running_loop()
-    new_schedule, repaired_ids = await loop.run_in_executor(
-        None, lambda: _run_repair(request)
-    )
-    return RepairResponse(schedule=new_schedule, repairedMatchIds=repaired_ids)
+@router.post("/schedule/repair", deprecated=True)
+async def repair_schedule_gone():
+    """410 — repair flows through the tenant-scoped proposal pipeline.
+
+    See the module docstring. The engine below is unchanged and very
+    much alive; only this untenanted door is closed.
+    """
+    raise http_error(410, ErrorCode.SOLVE_ENDPOINT_GONE, _GONE_MESSAGE)

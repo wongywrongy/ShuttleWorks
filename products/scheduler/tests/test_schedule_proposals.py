@@ -310,22 +310,30 @@ def test_proposal_evicted_after_ttl(client):
     assert r.status_code == 410
 
 
-# ---------- backward compat: existing endpoints still work -----------------
+# ---------- the retired untenanted twins -----------------------------------
+#
+# These two used to assert the pathless /schedule/repair and
+# /schedule/warm-restart "still work". They did — that was the problem.
+# Both took an entire tournament in the body and named no workspace, so
+# neither could carry a ``tournament_id`` path param or
+# ``require_tournament_access``: the last compute surface outside the
+# tenancy seam every other route is held to, and with no frontend
+# caller. Retired to 410 on 2026-08-04. The engine they called is
+# unchanged and reached through the proposal routes above.
 
 
-def test_existing_warm_restart_endpoint_unaffected(client):
-    """The pathless /schedule/warm-restart is stateless compute and
-    doesn't need a tournament; takes the full problem in the body."""
+def test_retired_warm_restart_route_answers_410(client):
     state = _basic_state()
     r = client.post("/schedule/warm-restart", json=_warm_restart_request(state))
-    assert r.status_code == 200
-    body = r.json()
-    assert "schedule" in body
-    assert "movedMatchIds" in body
+    assert r.status_code == 410
+    detail = r.json()["detail"]
+    assert detail["code"] == "SOLVE_ENDPOINT_GONE"
+    # A tombstone that doesn't say where the thing went is just a 404
+    # with extra steps.
+    assert "proposals/warm-restart" in detail["message"]
 
 
-def test_existing_repair_endpoint_unaffected(client):
-    """Same: stateless compute, no tournament needed."""
+def test_retired_repair_route_answers_410(client):
     state = _basic_state()
     r = client.post(
         "/schedule/repair",
@@ -338,7 +346,7 @@ def test_existing_repair_endpoint_unaffected(client):
             "disruption": {"type": "withdrawal", "playerId": "p1"},
         },
     )
-    assert r.status_code == 200
-    body = r.json()
-    assert "schedule" in body
-    assert "repairedMatchIds" in body
+    assert r.status_code == 410
+    detail = r.json()["detail"]
+    assert detail["code"] == "SOLVE_ENDPOINT_GONE"
+    assert "proposals" in detail["message"]

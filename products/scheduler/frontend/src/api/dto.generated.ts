@@ -145,10 +145,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Repair Schedule
-         * @description Re-solve the affected slice; everything else stays put.
+         * Repair Schedule Gone
+         * @deprecated
+         * @description 410 — repair flows through the tenant-scoped proposal pipeline.
+         *
+         *     See the module docstring. The engine below is unchanged and very
+         *     much alive; only this untenanted door is closed.
          */
-        post: operations["repair_schedule_schedule_repair_post"];
+        post: operations["repair_schedule_gone_schedule_repair_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -165,10 +169,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Warm Restart Schedule
-         * @description Re-solve the whole problem with a stay-close bias.
+         * Warm Restart Schedule Gone
+         * @deprecated
+         * @description 410 — warm restart flows through the tenant-scoped proposal
+         *     pipeline. See the module docstring; the engine below is unchanged.
          */
-        post: operations["warm_restart_schedule_schedule_warm_restart_post"];
+        post: operations["warm_restart_schedule_gone_schedule_warm_restart_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1852,9 +1858,37 @@ export interface paths {
         };
         /**
          * Health Check
-         * @description Shallow liveness probe — the container is up.
+         * @description Liveness. Intentionally dependency-free — see the module docstring.
          */
         get: operations["health_check_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Ready
+         * @description Readiness: database reachable AND schema current.
+         *
+         *     Returns 503 when either fails, so this endpoint can actually go red.
+         *
+         *     Negative control (2026-08-04, CODE_HEALTH rule 3b): forcing
+         *     ``db_ok = True`` in the except branch fails
+         *     ``test_readiness_fails_when_the_database_is_genuinely_down``. That
+         *     test breaks the database for real rather than mocking the handler,
+         *     because a mocked failure proves the mock works, not the check.
+         */
+        get: operations["health_ready_health_ready_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1872,13 +1906,38 @@ export interface paths {
         };
         /**
          * Health Deep
-         * @description Deep readiness probe.
-         *
-         *     Verifies the data directory is writable and the CP-SAT solver module
-         *     imports successfully. Used by the Docker HEALTHCHECK so orchestrators
-         *     can catch "backend is up but can't persist" failure modes.
+         * @description Deep readiness. Alias of ``/health/ready`` plus the legacy fields
+         *     (data-dir writability, solver import) that existing tooling reads.
          */
         get: operations["health_deep_health_deep_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Metrics
+         * @description Queue shape and worker liveness, from ``solve_jobs`` alone.
+         *
+         *     No new table and no new bookkeeping: every number here is derivable
+         *     from columns the queue already maintains.
+         *
+         *     The alert worth wiring is ``queued > 0 AND running == 0 AND
+         *     oldestQueuedAgeSeconds > N`` — work arriving and nothing picking it
+         *     up. Per-worker, ``lastHeartbeatAgeSeconds > JOB_LEASE_SECONDS`` means
+         *     that worker is about to have its job reaped.
+         */
+        get: operations["health_metrics_health_metrics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3284,12 +3343,6 @@ export interface components {
             /** Timebudgetsec */
             timeBudgetSec?: number | null;
         };
-        /** RepairResponse */
-        RepairResponse: {
-            schedule: components["schemas"]["ScheduleDTO"];
-            /** Repairedmatchids */
-            repairedMatchIds: string[];
-        };
         /** RequestPasswordResetRequest */
         RequestPasswordResetRequest: {
             /** Email */
@@ -4032,12 +4085,6 @@ export interface components {
             /** Timebudgetsec */
             timeBudgetSec?: number | null;
         };
-        /** WarmRestartResponse */
-        WarmRestartResponse: {
-            schedule: components["schemas"]["ScheduleDTO"];
-            /** Movedmatchids */
-            movedMatchIds: string[];
-        };
         /**
          * WorkspaceModuleDTO
          * @description Wire shape for one persisted per-workspace module row.
@@ -4330,18 +4377,14 @@ export interface operations {
             };
         };
     };
-    repair_schedule_schedule_repair_post: {
+    repair_schedule_gone_schedule_repair_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RepairRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -4349,32 +4392,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RepairResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": unknown;
                 };
             };
         };
     };
-    warm_restart_schedule_schedule_warm_restart_post: {
+    warm_restart_schedule_gone_schedule_warm_restart_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WarmRestartRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -4382,16 +4412,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WarmRestartResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": unknown;
                 };
             };
         };
@@ -6981,7 +7002,47 @@ export interface operations {
             };
         };
     };
+    health_ready_health_ready_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     health_deep_health_deep_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    health_metrics_health_metrics_get: {
         parameters: {
             query?: never;
             header?: never;

@@ -89,8 +89,9 @@ def test_routes_registered(client):
     assert "/tournaments/{tournament_id}/solve-jobs" in paths
     assert "/tournaments/{tournament_id}/solve-jobs/{job_id}" in paths
     assert "/tournaments/{tournament_id}/solve-jobs/{job_id}/cancel" in paths
-    # Retired sync routes still answer (as 410), and the pure-Python
-    # validator stays.
+    # Retired routes stay REGISTERED so they can answer 410 with a
+    # pointer — deleting them would 404 a stale client with no hint. The
+    # pure-Python validator is genuinely still live.
     assert "/schedule" in paths
     assert "/schedule/stream" in paths
     assert "/schedule/validate" in paths
@@ -106,6 +107,31 @@ def test_synchronous_solve_routes_are_gone(client):
         assert r.status_code == 410, f"{path}: {r.status_code}"
         assert r.json()["detail"]["code"] == "SOLVE_ENDPOINT_GONE"
         assert "solve-jobs" in r.json()["detail"]["message"]
+
+
+def test_untenanted_compute_routes_are_gone(client):
+    """The other pair, retired 2026-08-04 for a different reason.
+
+    ``/schedule/repair`` and ``/schedule/warm-restart`` were not slow or
+    synchronous — they were *untenanted*. Each took a whole tournament
+    in its body and named no workspace, so neither could carry a
+    ``tournament_id`` path param or ``require_tournament_access``, and
+    ``test_tenant_isolation`` (which derives its route list from
+    OpenAPI) had nothing to bind to. They also had no frontend caller.
+
+    Same 410-with-a-pointer treatment: a stale client learns where the
+    capability moved instead of meeting a bare 404.
+    """
+    config, players, matches = _minimal_problem()
+    body = {"config": config, "players": players, "matches": matches}
+    for path in ("/schedule/repair", "/schedule/warm-restart"):
+        r = client.post(path, json=body)
+        assert r.status_code == 410, f"{path}: {r.status_code}"
+        detail = r.json()["detail"]
+        assert detail["code"] == "SOLVE_ENDPOINT_GONE"
+        assert "proposals" in detail["message"], (
+            f"{path} tombstone doesn't say where the capability went"
+        )
 
 
 def test_solve_job_full_flow_honours_closed_windows(client):
@@ -126,9 +152,17 @@ def test_solve_job_full_flow_honours_closed_windows(client):
     assert job["startedAt"] is not None and job["finishedAt"] is not None
 
 
-def test_job_schedule_feeds_repair_and_warm_restart(client):
-    """The job-produced ScheduleDTO keeps flowing through the (still
-    request-shaped) repair and warm-restart endpoints unchanged."""
+def test_job_schedule_feeds_the_proposal_pipeline(client):
+    """A job-produced ScheduleDTO flows on into repair and warm restart.
+
+    The cross-rail seam: the async job rail produces the schedule, the
+    in-request proposal pipeline consumes it. Previously routed through
+    the untenanted ``/schedule/repair`` and ``/schedule/warm-restart``;
+    those are 410 now, so this exercises the tenant-scoped routes that
+    replaced them. Same engine underneath, same request bodies — what
+    changed is that the workspace is named in the path and access is
+    checked.
+    """
     tid = seed_tournament(client, "jobs-repair")
     config, players, matches = _minimal_problem()
     job = _solve_to_completion(client, tid)
@@ -138,7 +172,7 @@ def test_job_schedule_feeds_repair_and_warm_restart(client):
     assert schedule["assignments"] == schedule["candidates"][0]["assignments"]
 
     closed_court = schedule["assignments"][0]["courtId"]
-    r = client.post("/schedule/repair", json={
+    r = client.post(f"/tournaments/{tid}/schedule/proposals/repair", json={
         "originalSchedule": schedule,
         "config": config,
         "players": players,
@@ -147,13 +181,12 @@ def test_job_schedule_feeds_repair_and_warm_restart(client):
         "disruption": {"type": "court_closed", "courtId": closed_court},
     })
     assert r.status_code == 200, r.text
-    body = r.json()
-    assert "schedule" in body and "repairedMatchIds" in body
-    for a in body["schedule"]["assignments"]:
-        assert a["courtId"] != closed_court
+    repaired = r.json()["proposedSchedule"]
+    for a in repaired["assignments"]:
+        assert a["courtId"] != closed_court, "repair left a match on the closed court"
 
-    r = client.post("/schedule/warm-restart", json={
-        "originalSchedule": body["schedule"],
+    r = client.post(f"/tournaments/{tid}/schedule/proposals/warm-restart", json={
+        "originalSchedule": repaired,
         "config": config,
         "players": players,
         "matches": matches,
@@ -161,7 +194,7 @@ def test_job_schedule_feeds_repair_and_warm_restart(client):
         "stayCloseWeight": 10,
     })
     assert r.status_code == 200, r.text
-    assert "schedule" in r.json() and "movedMatchIds" in r.json()
+    assert "proposedSchedule" in r.json()
 
 
 def test_idempotency_key_replays_the_same_job(client):
@@ -217,9 +250,15 @@ def test_job_list_and_scoping(client):
 
 
 def test_repair_validates_disruption_payload(client):
-    """Bad disruption payload returns 400, not 500."""
+    """Bad disruption payload returns 400, not 500.
+
+    Moved onto the proposal route when the untenanted ``/schedule/repair``
+    was retired; the validation under test (``Disruption`` parsing inside
+    ``_run_repair``) is the same code reached by a different door.
+    """
+    tid = seed_tournament(client, "repair-validation")
     config, players, matches = _minimal_problem()
-    r = client.post("/schedule/repair", json={
+    r = client.post(f"/tournaments/{tid}/schedule/proposals/repair", json={
         "originalSchedule": {"assignments": [], "unscheduledMatches": [],
                              "softViolations": [], "objectiveScore": None,
                              "infeasibleReasons": [], "status": "optimal"},

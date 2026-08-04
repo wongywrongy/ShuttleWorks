@@ -193,9 +193,9 @@ backend/
 │   ├── paths.py                # data_dir() / ensure_data_dir() helpers
 │   └── time_utils.py           # ISO-8601 UTC + slot-math helpers
 ├── api/
-│   ├── schedule.py              # /schedule, /schedule/stream, /schedule/validate
-│   ├── schedule_repair.py       # /schedule/repair
-│   ├── schedule_warm_restart.py # /schedule/warm-restart
+│   ├── schedule.py              # /schedule/validate (+ 410 tombstones)
+│   ├── schedule_repair.py       # repair engine (route is a 410 tombstone)
+│   ├── schedule_warm_restart.py # warm-restart engine (route is a 410 tombstone)
 │   ├── match_state.py           # /tournaments/{id}/match-states, /commands
 │   ├── tournaments.py           # /tournaments/{id}/state (+ control-plane routes)
 │   ├── _backups.py              # tournament-state backup helpers

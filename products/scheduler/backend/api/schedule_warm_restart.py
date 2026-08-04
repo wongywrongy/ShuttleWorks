@@ -1,19 +1,30 @@
-"""Warm-start full re-solve endpoint.
+"""Warm-start full re-solve.
 
-The escape hatch for when targeted repair (``/schedule/repair``)
-isn't enough — the operator wants the solver to consider the whole
-problem again, but with a strong bias to keep the existing schedule
-intact. Finished + in-progress matches are hard-pinned; everything
-else is hinted at its current slot+court and a per-match move
-penalty is added to the objective.
+The escape hatch for when targeted repair isn't enough — the operator
+wants the solver to consider the whole problem again, but with a strong
+bias to keep the existing schedule intact. Finished + in-progress
+matches are hard-pinned; everything else is hinted at its current
+slot+court and a per-match move penalty is added to the objective.
 
 Conservative / Balanced / Aggressive map to weights 10 / 5 / 1.
 Higher weight = fewer moves, even at the cost of a worse
 makespan/rest objective.
+
+**The route here is a 410 tombstone; the engine is not.**
+``_run_warm_restart`` and ``_run_warm_restart_with_cancel`` are the live
+implementation, consumed by the tenant-scoped proposal pipeline
+(``api/schedule_proposals.py``, ``schedule_director.py``,
+``schedule_suggestions.py``).
+
+The retired ``POST /schedule/warm-restart`` took an entire tournament in
+its body and named no workspace, so it carried no ``tournament_id`` path
+param and no ``require_tournament_access`` — the last compute surface
+outside the tenancy seam the rest of the API is held to. It had no
+frontend caller. Retired 2026-08-04 alongside ``/schedule/repair``,
+following the 410-with-a-pointer pattern in ``api/schedule.py``.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Dict, List, Optional
 
@@ -45,6 +56,12 @@ from adapters.badminton import (
 
 router = APIRouter(prefix="", tags=["schedule"])
 log = logging.getLogger("scheduler.warm_restart")
+
+_GONE_MESSAGE = (
+    "the untenanted warm-restart route was removed; warm restart now "
+    "flows through the tenant-scoped proposal pipeline: "
+    "POST /tournaments/{tournament_id}/schedule/proposals/warm-restart"
+)
 
 
 class WarmRestartRequest(BaseModel):
@@ -136,17 +153,11 @@ def _run_warm_restart(
     return new_schedule, moved
 
 
-@router.post("/schedule/warm-restart", response_model=WarmRestartResponse)
-async def warm_restart_schedule(request: WarmRestartRequest) -> WarmRestartResponse:
-    """Re-solve the whole problem with a stay-close bias."""
-    # Offload the CPU-bound solve to a threadpool so the event loop stays
-    # responsive to concurrent requests during the solve. The sync helper
-    # keeps its signature; ``await`` re-raises any exception it raises.
-    loop = asyncio.get_running_loop()
-    new_schedule, moved = await loop.run_in_executor(
-        None, lambda: _run_warm_restart(request)
-    )
-    return WarmRestartResponse(schedule=new_schedule, movedMatchIds=moved)
+@router.post("/schedule/warm-restart", deprecated=True)
+async def warm_restart_schedule_gone():
+    """410 — warm restart flows through the tenant-scoped proposal
+    pipeline. See the module docstring; the engine below is unchanged."""
+    raise http_error(410, ErrorCode.SOLVE_ENDPOINT_GONE, _GONE_MESSAGE)
 
 
 def _run_warm_restart_with_cancel(

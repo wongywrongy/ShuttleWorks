@@ -82,21 +82,27 @@ Cheap pre-check used during a drag. Takes a `ProposedMove` and reports
 hard-rule violations (court conflict, player double-book, availability
 miss, freeze-horizon trespass) without running the full solver.
 
-### `/schedule/repair`
+### `/tournaments/{id}/schedule/proposals/repair`
 
 Targeted disruption repair — withdrawal, court closure, overrun,
 cancellation. Translates the disruption into a slice rule, invokes
 the engine's `solve_repair` warm-started from the current schedule,
-and returns a fresh `ScheduleDTO` whose `repairedMatchIds` tells the
-UI which matches actually moved. Solve target: < 5 s for ≤ 40
+and stashes the result as a proposal whose `proposedSchedule` the
+operator reviews before committing. Solve target: < 5 s for ≤ 40
 matches.
 
-### `/schedule/warm-restart`
+### `/tournaments/{id}/schedule/proposals/warm-restart`
 
 Full re-solve biased to keep the existing schedule intact. Finished /
 in-progress matches are hard-pinned; everything else is hinted at its
 current slot+court with a per-match move penalty. Conservative /
 Balanced / Aggressive map to penalty weights 10 / 5 / 1.
+
+> The untenanted `POST /schedule/repair` and `POST /schedule/warm-restart`
+> answer **410 Gone** as of 2026-08-04. Each took a whole tournament in
+> its body and named no workspace, so neither could carry a
+> `tournament_id` path param or `require_tournament_access`. The engine
+> is unchanged — only the door moved.
 
 ### `/tournaments/{id}/state`
 

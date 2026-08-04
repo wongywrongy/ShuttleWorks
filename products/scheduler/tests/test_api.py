@@ -1,8 +1,9 @@
 """Health-endpoint smoke test for the canonical FastAPI app.
 
-Functional coverage of /schedule, /schedule/repair, /schedule/warm-restart
-lives in test_schedule_endpoints_e2e.py; this file just confirms the app
-boots and answers liveness probes.
+Functional coverage of the solve rail (the job routes) and of repair /
+warm restart (the tenant-scoped proposal pipeline) lives in
+test_schedule_endpoints_e2e.py and test_schedule_proposals.py; this file
+just confirms the app boots and answers liveness probes.
 """
 from __future__ import annotations
 
