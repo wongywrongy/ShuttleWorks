@@ -1398,6 +1398,11 @@ export interface paths {
          * List Tournament Members
          * @description All members of a tournament. Viewer-level so any member can see
          *     who else has access; owner-only management actions stay gated.
+         *
+         *     SP-CLOUD-2: rows carry real identity (email/display name from the
+         *     users table) — People & Access finally shows people, not UUIDs.
+         *     Placeholder ``@unmigrated.local`` addresses (pre-account era) are
+         *     withheld so the UI falls back to its short-id rendering.
          */
         get: operations["list_tournament_members_tournaments__tournament_id__members_get"];
         put?: never;
@@ -1466,14 +1471,21 @@ export interface paths {
         };
         /**
          * Resolve Invite
-         * @description Public lookup. Returns the tournament's display name + the role
-         *     the invite grants + a ``valid`` flag.
+         * @description Public lookup. Returns the workspace's display name + the role
+         *     the invite grants, and *only* for an invite that can still be
+         *     accepted.
          *
-         *     Intentionally does not 404 on missing tokens — an attacker probing
-         *     random UUIDs gets the same shape (with ``valid: false``) as a
-         *     revoked or expired invite. We only fast-path 404 when the invite
-         *     truly doesn't exist; the recipient page treats both as "invalid
-         *     link" without exposing the distinction in the UI.
+         *     Every other state — never existed, revoked, expired, workspace
+         *     deleted — answers one uniform 404 (SP-CLOUD-3). Previously this
+         *     404'd only for unknown tokens and returned 200 with ``valid: false``
+         *     for revoked/expired ones, which told a leaked link's holder whether
+         *     their access had been deliberately taken away. The old docstring
+         *     claimed this endpoint already behaved uniformly; it did not.
+         *
+         *     Returning ``tournamentName`` to an unauthenticated caller is
+         *     deliberate — the join page has to say what you're joining — but it
+         *     is why the 404 has to be airtight: a valid token is a workspace-name
+         *     disclosure, so the set of valid tokens must not be probeable.
          */
         get: operations["resolve_invite_invites__token__get"];
         put?: never;
@@ -1508,8 +1520,249 @@ export interface paths {
          *     upgraded when the invite grants a higher role. Owner is never
          *     overwritten. Returns ``alreadyMember`` so the UI can branch on
          *     "joined" vs "promoted" vs "no-op".
+         *
+         *     Shares the uniform 404 with the resolve route (SP-CLOUD-3). This
+         *     used to answer 404 for an unknown token and 410 for a revoked or
+         *     expired one, which re-leaked on a second axis exactly what the
+         *     resolve route leaked on the first.
          */
         post: operations["accept_invite_invites__token__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register */
+        post: operations["register_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Me */
+        get: operations["me_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Password */
+        post: operations["change_password_auth_change_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/request-password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Password Reset
+         * @description Always 202 (no account-existence oracle). The token rides the
+         *     email seam in Phase 3; until then it's logged server-side only.
+         */
+        post: operations["request_password_reset_auth_request_password_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Password */
+        post: operations["reset_password_auth_reset_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/display/{token}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Display Summary */
+        get: operations["display_summary_display__token__summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/display/{token}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Display State */
+        get: operations["display_state_display__token__state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/display/{token}/match-states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Display Match States */
+        get: operations["display_match_states_display__token__match_states_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/display/{token}/bracket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Display Bracket
+         * @description Bracket board read — same serialized session the viewer-gated
+         *     ``GET /bracket`` returns (it is already a projection DTO with no
+         *     operator-only material), served through the short-TTL cache.
+         */
+        get: operations["display_bracket_display__token__bracket_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/display-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Or Create Display Token
+         * @description The workspace's display link, minted on first ask.
+         */
+        get: operations["get_or_create_display_token_tournaments__tournament_id__display_token_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/display-token/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate Display Token
+         * @description Revoke-by-rotation: the old link dies the moment this returns.
+         */
+        post: operations["rotate_display_token_tournaments__tournament_id__display_token_rotate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1871,6 +2124,13 @@ export interface components {
             /** End */
             end: string;
         };
+        /** ChangePasswordRequest */
+        ChangePasswordRequest: {
+            /** Currentpassword */
+            currentPassword: string;
+            /** Newpassword */
+            newPassword: string;
+        };
         /** CollaborationDTO */
         CollaborationDTO: {
             /**
@@ -2060,6 +2320,20 @@ export interface components {
             matchStates: {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
+        };
+        /** DisplaySummaryDTO */
+        DisplaySummaryDTO: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name?: string | null;
+        };
+        /** DisplayTokenDTO */
+        DisplayTokenDTO: {
+            /** Token */
+            token: string;
+            /** Url */
+            url: string;
         };
         /**
          * Disruption
@@ -2355,6 +2629,10 @@ export interface components {
         /**
          * InviteCreateDTO
          * @description Body for ``POST /tournaments/{id}/invites``.
+         *
+         *     ``email`` (SP-CLOUD-2) turns this into an email invite: the link is
+         *     delivered via the email seam and the invite expires. Omitted =
+         *     local link-style invite (copy the URL yourself).
          */
         InviteCreateDTO: {
             /**
@@ -2362,6 +2640,8 @@ export interface components {
              * @enum {string}
              */
             role: "operator" | "viewer";
+            /** Email */
+            email?: string | null;
         };
         /**
          * InviteCreatedDTO
@@ -2390,6 +2670,12 @@ export interface components {
         /**
          * InviteResolveDTO
          * @description Wire shape returned by the public ``GET /invites/{token}``.
+         *
+         *     Deliberately minimal (SP-CLOUD-3). A 200 from this endpoint now
+         *     *means* the invite is acceptable, so ``valid`` / ``expiresAt`` /
+         *     ``revokedAt`` would be both redundant and the exact fields that
+         *     carried the existence oracle. ``email`` stays withheld: this route
+         *     is unauthenticated and the invitee's address must not be probeable.
          */
         InviteResolveDTO: {
             /** Token */
@@ -2403,12 +2689,6 @@ export interface components {
              * @enum {string}
              */
             role: "operator" | "viewer";
-            /** Valid */
-            valid: boolean;
-            /** Expiresat */
-            expiresAt?: string | null;
-            /** Revokedat */
-            revokedAt?: string | null;
         };
         /**
          * InviteSummaryDTO
@@ -2432,6 +2712,15 @@ export interface components {
             revokedAt?: string | null;
             /** Valid */
             valid: boolean;
+            /** Email */
+            email?: string | null;
+        };
+        /** LoginRequest */
+        LoginRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
         };
         /**
          * ManualEditRequest
@@ -2891,6 +3180,15 @@ export interface components {
             /** Seen Version */
             seen_version?: number | null;
         };
+        /** RegisterRequest */
+        RegisterRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Displayname */
+            displayName?: string | null;
+        };
         /** RepairRequest */
         RepairRequest: {
             originalSchedule: components["schemas"]["ScheduleDTO"];
@@ -2917,6 +3215,18 @@ export interface components {
             schedule: components["schemas"]["ScheduleDTO"];
             /** Repairedmatchids */
             repairedMatchIds: string[];
+        };
+        /** RequestPasswordResetRequest */
+        RequestPasswordResetRequest: {
+            /** Email */
+            email: string;
+        };
+        /** ResetPasswordRequest */
+        ResetPasswordRequest: {
+            /** Token */
+            token: string;
+            /** Newpassword */
+            newPassword: string;
         };
         /** ResultOut */
         ResultOut: {
@@ -3388,6 +3698,9 @@ export interface components {
         /**
          * TournamentMemberDTO
          * @description Wire shape for the Step 7 Settings → Share "Members" list.
+         *
+         *     ``email``/``displayName`` (SP-CLOUD-2) come from the users table;
+         *     ``email`` is None for pre-account placeholder identities.
          */
         TournamentMemberDTO: {
             /** Userid */
@@ -3396,6 +3709,10 @@ export interface components {
             role: string;
             /** Joinedat */
             joinedAt: string;
+            /** Email */
+            email?: string | null;
+            /** Displayname */
+            displayName?: string | null;
         };
         /** TournamentOut */
         TournamentOut: {
@@ -3525,6 +3842,30 @@ export interface components {
             status?: ("draft" | "active" | "archived") | null;
             /** Tournamentdate */
             tournamentDate?: string | null;
+        };
+        /** UserDTO */
+        UserDTO: {
+            /** Id */
+            id: string;
+            /** Email */
+            email: string;
+            /** Displayname */
+            displayName?: string | null;
+            /**
+             * Emailverified
+             * @default false
+             */
+            emailVerified: boolean;
+            /**
+             * Isbootstrap
+             * @default false
+             */
+            isBootstrap: boolean;
+            /**
+             * Authmode
+             * @default local
+             */
+            authMode: string;
         };
         /**
          * ValidateMoveRequest
@@ -6006,6 +6347,395 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InviteAcceptedDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_auth_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDTO"];
+                };
+            };
+        };
+    };
+    change_password_auth_change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_password_reset_auth_request_password_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestPasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_password_auth_reset_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    display_summary_display__token__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisplaySummaryDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    display_state_display__token__state_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    display_match_states_display__token__match_states_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["MatchStateDTO"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    display_bracket_display__token__bracket_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_or_create_display_token_tournaments__tournament_id__display_token_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisplayTokenDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_display_token_tournaments__tournament_id__display_token_rotate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisplayTokenDTO"];
                 };
             };
             /** @description Validation Error */
