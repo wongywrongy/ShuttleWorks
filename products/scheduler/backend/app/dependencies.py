@@ -33,6 +33,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from app.config import settings
+from app.error_codes import ErrorCode, http_error
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service
 
@@ -187,20 +188,21 @@ def require_tournament_access(min_role: str):
         repo: LocalRepository = Depends(get_repository),
     ) -> AuthUser:
         user_uuid = user.as_uuid()
+        # Rule 5 (SP-CLOUD-2): a caller without membership gets 404 —
+        # never 403 — so "doesn't exist" and "exists but not yours" are
+        # indistinguishable. Existence is information. Insufficient
+        # *role* for an actual member stays 403 (they already know the
+        # workspace exists).
+        not_found = http_error(
+            status.HTTP_404_NOT_FOUND,
+            ErrorCode.TOURNAMENT_NOT_FOUND,
+            "Tournament not found",
+        )
         if user_uuid is None:
-            # A Supabase user id should always parse as UUID; rejecting
-            # otherwise is defensive — anything stranger is a misconfigured
-            # auth provider, not a legitimate request.
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User id is not a UUID",
-            )
+            raise not_found
         role = repo.members.get_role(tournament_id, user_uuid)
         if role is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not a member of this tournament",
-            )
+            raise not_found
         actual_level = _ROLE_LEVELS.get(role, -1)
         if actual_level < required_level:
             raise HTTPException(

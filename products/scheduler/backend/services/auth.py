@@ -37,7 +37,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from database.models import AuthSession, AuthThrottle, User
+from database.models import AuthSession, AuthThrottle, Org, OrgMember, User
 
 log = logging.getLogger("scheduler.auth_service")
 
@@ -160,7 +160,65 @@ def create_user(
     )
     session.add(user)
     session.flush()
+    ensure_personal_org(session, user)
     return user
+
+
+def ensure_user(
+    session: Session, user_id: uuid.UUID, email: Optional[str]
+) -> User:
+    """Idempotently materialize a users row for an externally-issued
+    identity (legacy Supabase JWT subjects until Phase 3 retires the
+    bearer path). Gets a personal org like every other identity."""
+    user = session.get(User, user_id)
+    if user is None:
+        candidate = (email or "").strip()
+        taken = bool(candidate) and get_user_by_email(session, candidate) is not None
+        user = User(
+            id=user_id,
+            email=candidate if candidate and not taken
+            else f"user-{user_id.hex[:12]}@unmigrated.local",
+        )
+        session.add(user)
+        session.flush()
+    ensure_personal_org(session, user)
+    return user
+
+
+def ensure_personal_org(session: Session, user: User) -> Org:
+    """Idempotently give a user a personal org (owner membership).
+
+    The GitHub/Stripe day-one-org pattern: workspaces belong to orgs,
+    never directly to users, even while the UI ignores orgs entirely.
+    """
+    existing = session.execute(
+        select(Org)
+        .join(OrgMember, OrgMember.org_id == Org.id)
+        .where(OrgMember.user_id == user.id, OrgMember.role == "owner")
+    ).scalars().first()
+    if existing is not None:
+        return existing
+    if user.id == BOOTSTRAP_USER_UUID:
+        name = "Local Workspace"
+    else:
+        base = user.display_name or user.email.split("@")[0]
+        name = f"{base}'s workspace"[:200]
+    org = Org(name=name)
+    session.add(org)
+    session.flush()
+    session.add(OrgMember(org_id=org.id, user_id=user.id, role="owner"))
+    session.flush()
+    return org
+
+
+def personal_org_id(session: Session, user_id: uuid.UUID) -> Optional[uuid.UUID]:
+    """The org this user owns (personal org), or None."""
+    row = session.execute(
+        select(OrgMember.org_id).where(
+            OrgMember.user_id == user_id, OrgMember.role == "owner"
+        )
+    ).first()
+    return row[0] if row else None
 
 
 def ensure_bootstrap_user(session: Session) -> User:
@@ -181,6 +239,7 @@ def ensure_bootstrap_user(session: Session) -> User:
         )
         session.add(user)
         session.flush()
+    ensure_personal_org(session, user)
     return user
 
 

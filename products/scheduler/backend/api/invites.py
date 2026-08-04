@@ -214,6 +214,11 @@ def accept_invite(
     existing_role = repo.members.get_role(invite.tournament_id, user_uuid)
 
     if existing_role is None:
+        # tournament_members.user_id now FKs users (SP-CLOUD-2) —
+        # materialize a users row for bearer-era identities first.
+        from services.auth import ensure_user
+
+        ensure_user(repo.session, user_uuid, user.email)
         repo.members.add_member(invite.tournament_id, user_uuid, target_role)
         final_role = target_role
         already_member = False

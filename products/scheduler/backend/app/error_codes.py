@@ -76,6 +76,10 @@ class ErrorCode(str, Enum):
     MODULE_LAST_OPERATIONAL = "MODULE_LAST_OPERATIONAL"
     MODULE_HAS_DATA = "MODULE_HAS_DATA"
 
+    # Tenancy (SP-CLOUD-2) — the uniform cross-tenant answer. A caller
+    # without membership can never learn whether the workspace exists.
+    TOURNAMENT_NOT_FOUND = "TOURNAMENT_NOT_FOUND"
+
     # Auth & sessions (SP-CLOUD-2)
     AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"
     AUTH_THROTTLED = "AUTH_THROTTLED"

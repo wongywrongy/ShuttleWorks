@@ -86,8 +86,15 @@ class Tournament(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     # Step 4 backfills this from the Supabase JWT subject. Nullable so
-    # rows created before auth lands aren't rejected.
+    # rows created before auth lands aren't rejected. Since SP-CLOUD-2
+    # this is provenance only — authorization reads memberships.
     owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    # SP-CLOUD-2: the owning org. Nullable at the column level so the
+    # backfill migration can populate it; the application always sets
+    # it (creator's personal org) and the migration leaves no NULLs.
+    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("orgs.id", ondelete="RESTRICT"), nullable=True
+    )
     # Denormalised name pulled out of ``data["config"]["tournamentName"]``
     # for the Step 6 dashboard list. Nullable to mirror the existing
     # behaviour where ``tournamentName`` is optional.
@@ -370,13 +377,19 @@ class TournamentMember(Base):
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    # SP-CLOUD-2: real users now — the raw-UUID era ended with the
+    # backfill migration seeding a users row for every historical id.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
 
     tournament: Mapped[Tournament] = relationship(back_populates="members")
+
+    __table_args__ = (Index("ix_tournament_members_user", "user_id"),)
 
 
 class InviteLink(Base):
@@ -916,6 +929,43 @@ class User(Base):
     __table_args__ = (
         Index("uq_users_email_lower", text("lower(email)"), unique=True),
     )
+
+
+class Org(Base):
+    """The owning entity for workspaces (club / program).
+
+    Every user gets a personal org at creation (GitHub/Stripe pattern)
+    so the UI can ignore orgs entirely while the data model never hangs
+    workspaces directly off users — retrofitting an org layer later is
+    the migration everyone regrets.
+    """
+
+    __tablename__ = "orgs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class OrgMember(Base):
+    """User ↔ org membership. Roles stay minimal: owner | member."""
+
+    __tablename__ = "org_members"
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("orgs.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="owner")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    __table_args__ = (Index("ix_org_members_user", "user_id"),)
 
 
 class AuthSession(Base):

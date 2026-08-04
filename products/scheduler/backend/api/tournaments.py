@@ -335,15 +335,27 @@ def create_tournament(
     else:
         seed_rows = None
 
+    # SP-CLOUD-2: fail closed — an identity that can't own a membership
+    # row must not be able to create a workspace nobody can ever access
+    # (the pre-tenancy code tolerated this and produced orphans).
+    if user_uuid is None:
+        raise http_error(
+            401, ErrorCode.AUTH_NOT_SIGNED_IN, "A signed-in identity is required"
+        )
+    # Workspaces belong to orgs: materialize the caller's users row +
+    # personal org if this identity predates the account system.
+    from services.auth import ensure_user, personal_org_id
+
+    ensure_user(repo.session, user_uuid, user.email)
     row = repo.tournaments.create(
         name=body.name,
         kind=body.kind,
         tournament_date=body.tournamentDate,
         owner_id=user_uuid,
         owner_email=user.email,
+        org_id=personal_org_id(repo.session, user_uuid),
     )
-    if user_uuid is not None:
-        repo.members.add_member(row.id, user_uuid, role="owner")
+    repo.members.add_member(row.id, user_uuid, role="owner")
 
     # Explicit module seed (control-plane templates / custom create). When
     # present, persist before any module read so ensure_modules is a no-op.

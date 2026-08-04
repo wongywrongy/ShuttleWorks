@@ -94,12 +94,13 @@ def test_get_returns_summary(client):
     assert r.json()["name"] == "A"
 
 
-def test_get_missing_returns_403_to_non_member(client):
-    """Step 5: an id that doesn't exist (or that the caller isn't a
-    member of) returns 403, not 404. Hiding the existence distinction
-    keeps tournament ids from leaking via membership probes."""
+def test_get_missing_returns_404_to_non_member(client):
+    """SP-CLOUD-2 Rule 5: an id that doesn't exist (or that the caller
+    isn't a member of) returns a uniform 404 — existence never leaks
+    to non-members."""
     r = client.get("/tournaments/00000000-0000-0000-0000-000000000001")
-    assert r.status_code == 403
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_patch_updates_name_status_and_date(client):
@@ -133,25 +134,24 @@ def test_patch_rejects_unknown_status(client):
     assert r.status_code == 422
 
 
-def test_patch_missing_returns_403(client):
-    """Step 5: same as GET — non-membership trumps not-found."""
+def test_patch_missing_returns_404(client):
+    """Rule 5: same as GET — uniform 404 for missing/non-member."""
     r = client.patch(
         "/tournaments/00000000-0000-0000-0000-000000000001",
         json={"name": "X"},
     )
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
-def test_delete_returns_204_then_403(client):
+def test_delete_returns_204_then_404(client):
     """First DELETE succeeds (caller is owner via creation). Second
-    DELETE: the row + member row are both gone (CASCADE), so the
-    role check returns 403 — matching the missing/not-a-member pattern
-    used by GET and PATCH."""
+    DELETE: the row + member row are both gone (CASCADE), so the seam
+    answers the uniform 404 (Rule 5)."""
     created = client.post("/tournaments", json={"name": "A"}).json()
     r = client.delete(f"/tournaments/{created['id']}")
     assert r.status_code == 204
     r = client.delete(f"/tournaments/{created['id']}")
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 # ---- Scoped state ------------------------------------------------------
@@ -240,14 +240,14 @@ def test_state_put_updates_denormalised_name_on_summary(client):
     assert summary["name"] == "Renamed via PUT"
 
 
-def test_state_put_on_missing_tournament_403(client):
-    """Step 5: role check runs first; missing/non-member → 403."""
+def test_state_put_on_missing_tournament_404(client):
+    """Rule 5: the seam runs first; missing/non-member → uniform 404."""
     payload = _basic_state("X")
     r = client.put(
         "/tournaments/00000000-0000-0000-0000-000000000001/state",
         json=payload,
     )
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 def test_state_put_overwrites_previous(client):
@@ -438,9 +438,9 @@ def test_state_writes_do_not_leak_across_tournaments(client):
 def test_delete_cascades_backups(client):
     """Deleting a tournament drops its backups (CASCADE on the FK).
 
-    Step 5: the post-delete request returns 403 because the member row
-    is gone too (CASCADE) — the caller is no longer authorized to ask
-    whether backups exist.
+    Rule 5: the post-delete request returns 404 because the member row
+    is gone too (CASCADE) — the caller can no longer even learn whether
+    the workspace existed.
     """
     created = client.post("/tournaments", json={"name": "A"}).json()
     tid = created["id"]
@@ -450,7 +450,7 @@ def test_delete_cascades_backups(client):
 
     client.delete(f"/tournaments/{tid}")
     r = client.get(f"/tournaments/{tid}/state/backups")
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 # ---- Role matrix (Step 5) ---------------------------------------------
@@ -518,15 +518,16 @@ def test_role_matrix_viewer_can_read_but_not_write(client):
     assert client.delete(f"/tournaments/{tid}").status_code == 403
 
 
-def test_role_matrix_non_member_gets_403_everywhere(client):
+def test_role_matrix_non_member_gets_404_everywhere(client):
+    """Rule 5: non-members get the uniform 404 on every verb."""
     tid = client.post("/tournaments", json={"name": "A"}).json()["id"]
     _remove_membership(tid)
 
-    assert client.get(f"/tournaments/{tid}").status_code == 403
-    assert client.get(f"/tournaments/{tid}/state").status_code == 403
-    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 403
-    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 403
-    assert client.delete(f"/tournaments/{tid}").status_code == 403
+    assert client.get(f"/tournaments/{tid}").status_code == 404
+    assert client.get(f"/tournaments/{tid}/state").status_code == 404
+    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 404
+    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 404
+    assert client.delete(f"/tournaments/{tid}").status_code == 404
 
 
 def test_role_matrix_owner_only_for_restore(client):
