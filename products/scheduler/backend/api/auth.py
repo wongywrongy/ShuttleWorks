@@ -18,6 +18,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel
 
+from app.client_ip import client_ip
 from app.config import settings
 from app.dependencies import AuthUser, get_current_user
 from app.error_codes import ErrorCode, http_error
@@ -94,8 +95,11 @@ def _clear_session_cookie(response: Response) -> None:
     )
 
 
-def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+# Real client IP, honouring ``CF-Connecting-IP`` only from a configured
+# trusted proxy (``app/client_ip.py``). Behind a tunnel the raw socket
+# peer is the connector for every request, which would collapse every
+# user on the internet into one throttle bucket.
+_client_ip = client_ip
 
 
 def _auth_error(exc: AuthError):

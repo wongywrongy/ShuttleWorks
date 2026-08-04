@@ -59,6 +59,14 @@ class Settings(BaseSettings):
         "http://127.0.0.1:4173",
     ]
 
+    # Immediate peers whose ``CF-Connecting-IP`` header may be believed
+    # (see ``app/client_ip.py``). Empty = trust nothing, which is the
+    # right default and keeps local mode from ever reading the header.
+    # Set this to the cloudflared connector's address behind a tunnel;
+    # never to a wildcard, which would make the header a throttle
+    # bypass. Same JSON-list-or-comma-separated parsing as CORS_ORIGINS.
+    trusted_proxy_ips: Annotated[list[str], NoDecode] = []
+
     # ---- Filesystem ----------------------------------------------------
     # Writable directory for runtime artifacts (SQLite when the URL
     # points at a relative file, future upload caches, etc.). The
@@ -151,7 +159,7 @@ class Settings(BaseSettings):
     # Cloud email invites expire; local link invites may be eternal.
     invite_ttl_days: float = 14.0
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "trusted_proxy_ips", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: Any) -> Any:
         """Accept comma-separated as well as JSON-list env-var inputs."""
