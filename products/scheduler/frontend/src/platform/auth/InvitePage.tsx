@@ -6,6 +6,11 @@
  * signed in we redirect to ``/login`` first; on successful login the
  * AuthProvider re-renders this page and we POST ``accept``.
  *
+ * Resolution is now all-or-nothing: the endpoint answers one uniform
+ * 404 for unknown, revoked, and expired tokens (SP-CLOUD-3), so a
+ * resolved invite is by definition acceptable and there is no
+ * "invalid invite" render branch — only the error state.
+ *
  * Already-a-member is a happy path: the spec calls for idempotent
  * accept, so a redirect to the tournament happens regardless.
  */
@@ -34,9 +39,16 @@ export function InvitePage() {
         const r = await apiClient.resolveInvite(token);
         if (cancelled) return;
         setInvite(r);
-      } catch (err) {
+      } catch {
         if (cancelled) return;
-        setResolveError(err instanceof Error ? err.message : 'Invite not found');
+        // The backend answers one uniform 404 for unknown, revoked, and
+        // expired tokens (SP-CLOUD-3), so there is nothing to branch on
+        // and nothing more specific we could honestly say. Deliberately
+        // ignore the error's own message rather than surface a wording
+        // difference the API worked to remove.
+        setResolveError(
+          'This invite link is not valid. Ask the tournament owner to send you a new one.',
+        );
       }
     })();
     return () => {
@@ -90,14 +102,7 @@ export function InvitePage() {
           </div>
         )}
 
-        {invite && !invite.valid && (
-          <div className="text-sm text-muted-foreground">
-            This invite link is no longer valid. Ask the tournament owner
-            to send you a new one.
-          </div>
-        )}
-
-        {invite && invite.valid && (
+        {invite && (
           <>
             <div className="space-y-1">
               <div className="text-sm text-muted-foreground">You'll join</div>

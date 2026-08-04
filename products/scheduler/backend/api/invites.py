@@ -26,7 +26,8 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
 from pydantic import BaseModel
 
 from app.dependencies import AuthUser, get_current_user
-from database.models import InviteLink
+from app.error_codes import ErrorCode, http_error
+from database.models import InviteLink, Tournament
 from repositories import LocalRepository, get_repository
 from repositories.local import is_invite_valid
 
@@ -79,14 +80,18 @@ class InviteCreatedDTO(BaseModel):
 
 
 class InviteResolveDTO(BaseModel):
-    """Wire shape returned by the public ``GET /invites/{token}``."""
+    """Wire shape returned by the public ``GET /invites/{token}``.
+
+    Deliberately minimal (SP-CLOUD-3). A 200 from this endpoint now
+    *means* the invite is acceptable, so ``valid`` / ``expiresAt`` /
+    ``revokedAt`` would be both redundant and the exact fields that
+    carried the existence oracle. ``email`` stays withheld: this route
+    is unauthenticated and the invitee's address must not be probeable.
+    """
     token: str
     tournamentId: str
     tournamentName: Optional[str] = None
     role: InviteRole
-    valid: bool
-    expiresAt: Optional[str] = None
-    revokedAt: Optional[str] = None
 
 
 class InviteAcceptedDTO(BaseModel):
@@ -112,6 +117,48 @@ def _to_summary(invite: InviteLink) -> InviteSummaryDTO:
         email=invite.email,
         valid=is_invite_valid(invite),
     )
+
+
+# A token that cannot exist, used to keep the "no such invite" branch
+# doing the same database work as the "invite found" branch. Mirrors the
+# dummy-hash trick in ``api/auth.py`` — there the cost being equalized is
+# Argon2 verification, here it is an indexed primary-key lookup.
+_DUMMY_TOURNAMENT_ID = uuid.UUID("00000000-0000-0000-0000-0000000000ff")
+
+
+def _invite_not_found() -> HTTPException:
+    """The single answer for every non-acceptable invite state.
+
+    Nonexistent, revoked, expired, and "exists but its workspace is
+    gone" are indistinguishable by status, body, and query count.
+    """
+    return http_error(
+        status.HTTP_404_NOT_FOUND,
+        ErrorCode.INVITE_NOT_FOUND,
+        "Invite not found or no longer valid",
+    )
+
+
+def _resolve_acceptable_invite(
+    repo: LocalRepository, token: uuid.UUID
+) -> tuple[InviteLink, Optional[Tournament]]:
+    """Return ``(invite, tournament)`` only when the invite can be acted
+    on; otherwise raise the uniform 404.
+
+    Both branches issue exactly two queries — the invite lookup and a
+    tournament lookup (against a sentinel id when there is no invite) —
+    so the failure modes are not separable by response time. Without
+    that second lookup the missing-token path returns measurably sooner,
+    which is a timing oracle even when the bodies match. Pinned by
+    ``tests/test_invite_oracle.py``.
+    """
+    invite = repo.invite_links.get(token)
+    lookup_id = invite.tournament_id if invite is not None else _DUMMY_TOURNAMENT_ID
+    tournament = repo.tournaments.get_by_id(lookup_id)
+
+    if invite is None or not is_invite_valid(invite) or tournament is None:
+        raise _invite_not_found()
+    return invite, tournament
 
 
 def _require_invite_owner(
@@ -154,32 +201,28 @@ def resolve_invite(
     token: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ):
-    """Public lookup. Returns the tournament's display name + the role
-    the invite grants + a ``valid`` flag.
+    """Public lookup. Returns the workspace's display name + the role
+    the invite grants, and *only* for an invite that can still be
+    accepted.
 
-    Intentionally does not 404 on missing tokens — an attacker probing
-    random UUIDs gets the same shape (with ``valid: false``) as a
-    revoked or expired invite. We only fast-path 404 when the invite
-    truly doesn't exist; the recipient page treats both as "invalid
-    link" without exposing the distinction in the UI.
+    Every other state — never existed, revoked, expired, workspace
+    deleted — answers one uniform 404 (SP-CLOUD-3). Previously this
+    404'd only for unknown tokens and returned 200 with ``valid: false``
+    for revoked/expired ones, which told a leaked link's holder whether
+    their access had been deliberately taken away. The old docstring
+    claimed this endpoint already behaved uniformly; it did not.
+
+    Returning ``tournamentName`` to an unauthenticated caller is
+    deliberate — the join page has to say what you're joining — but it
+    is why the 404 has to be airtight: a valid token is a workspace-name
+    disclosure, so the set of valid tokens must not be probeable.
     """
-    invite = repo.invite_links.get(token)
-    if invite is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="invite not found",
-        )
-    tournament = repo.tournaments.get_by_id(invite.tournament_id)
+    invite, tournament = _resolve_acceptable_invite(repo, token)
     return InviteResolveDTO(
         token=str(invite.id),
         tournamentId=str(invite.tournament_id),
         tournamentName=tournament.name if tournament else None,
         role=invite.role,  # type: ignore[arg-type]
-        valid=is_invite_valid(invite),
-        expiresAt=invite.expires_at.isoformat() if invite.expires_at else None,
-        revokedAt=invite.revoked_at.isoformat() if invite.revoked_at else None,
-        # NOTE: deliberately no ``email`` here — this endpoint is
-        # public, and the invitee's address must not be probeable.
     )
 
 
@@ -200,18 +243,13 @@ def accept_invite(
     upgraded when the invite grants a higher role. Owner is never
     overwritten. Returns ``alreadyMember`` so the UI can branch on
     "joined" vs "promoted" vs "no-op".
+
+    Shares the uniform 404 with the resolve route (SP-CLOUD-3). This
+    used to answer 404 for an unknown token and 410 for a revoked or
+    expired one, which re-leaked on a second axis exactly what the
+    resolve route leaked on the first.
     """
-    invite = repo.invite_links.get(token)
-    if invite is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="invite not found",
-        )
-    if not is_invite_valid(invite):
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="invite is revoked or expired",
-        )
+    invite, _tournament = _resolve_acceptable_invite(repo, token)
 
     user_uuid = user.as_uuid()
     if user_uuid is None:

@@ -79,6 +79,10 @@ class ErrorCode(str, Enum):
     # Tenancy (SP-CLOUD-2) — the uniform cross-tenant answer. A caller
     # without membership can never learn whether the workspace exists.
     TOURNAMENT_NOT_FOUND = "TOURNAMENT_NOT_FOUND"
+    # The same idea for invite links (SP-CLOUD-3): one answer for
+    # nonexistent, revoked, and expired, so a leaked link's holder can't
+    # tell which of those it is.
+    INVITE_NOT_FOUND = "INVITE_NOT_FOUND"
 
     # Auth & sessions (SP-CLOUD-2)
     AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"

@@ -753,14 +753,16 @@ export interface InviteSummaryDTO {
   email?: string | null;
 }
 
+/** Public `GET /invites/{token}`. A 200 *means* the invite is
+ *  acceptable — every other state (unknown, revoked, expired, workspace
+ *  deleted) answers one uniform 404, so there are no lifecycle flags to
+ *  read here. `InviteSummaryDTO` keeps them for the owner-facing
+ *  listing, which is authenticated and may legitimately see them. */
 export interface InviteResolveDTO {
   token: string;
   tournamentId: string;
   tournamentName: string | null;
   role: InviteRole;
-  valid: boolean;
-  expiresAt: string | null;
-  revokedAt: string | null;
 }
 
 export interface InviteAcceptedDTO {

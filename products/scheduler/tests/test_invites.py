@@ -141,22 +141,31 @@ def test_resolve_returns_tournament_name_and_role(client, tid):
     assert body["tournamentId"] == tid
     assert body["tournamentName"] == "T1"
     assert body["role"] == "operator"
-    assert body["valid"] is True
+    # ``valid`` was removed in SP-CLOUD-3: a 200 here now *means* valid,
+    # and the lifecycle flags were the invite-existence oracle. See
+    # tests/test_invite_oracle.py.
+    assert "valid" not in body
 
 
-def test_resolve_revoked_is_invalid(client, tid):
+def test_resolve_revoked_is_not_resolvable(client, tid):
+    """SP-CLOUD-3: a revoked invite answers the uniform 404 rather than
+    200-with-``valid: false``, so its holder cannot tell revoked from
+    never-existed."""
     token = client.post(
         f"/tournaments/{tid}/invites", json={"role": "viewer"},
     ).json()["token"]
     client.delete(f"/invites/{token}")
-    body = client.get(f"/invites/{token}").json()
-    assert body["valid"] is False
-    assert body["revokedAt"] is not None
+    r = client.get(f"/invites/{token}")
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "INVITE_NOT_FOUND"
 
 
-def test_resolve_expired_is_invalid(client, tid):
+def test_resolve_expired_is_not_resolvable(client, tid):
     """Backdate ``expires_at`` directly so we can exercise the expired
-    branch without sleeping."""
+    branch without sleeping.
+
+    SP-CLOUD-3: expiry is now indistinguishable from revocation and from
+    a token that never existed."""
     token = client.post(
         f"/tournaments/{tid}/invites", json={"role": "viewer"},
     ).json()["token"]
@@ -172,9 +181,9 @@ def test_resolve_expired_is_invalid(client, tid):
     finally:
         session.close()
 
-    body = client.get(f"/invites/{token}").json()
-    assert body["valid"] is False
-    assert body["expiresAt"] is not None
+    r = client.get(f"/invites/{token}")
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "INVITE_NOT_FOUND"
 
 
 def test_resolve_unknown_token_returns_404(client):
@@ -238,7 +247,10 @@ def test_accept_does_not_downgrade_operator_to_viewer(client, tid):
     assert body["role"] == "operator"
 
 
-def test_accept_rejects_revoked_invite_410(client, tid):
+def test_accept_rejects_revoked_invite(client, tid):
+    """SP-CLOUD-3: was 410, now the same 404 an unknown token gets —
+    accept must not re-leak on a second axis what resolve no longer
+    leaks on the first (see test_accept_unknown_token_returns_404)."""
     token = client.post(
         f"/tournaments/{tid}/invites", json={"role": "viewer"},
     ).json()["token"]
@@ -246,7 +258,8 @@ def test_accept_rejects_revoked_invite_410(client, tid):
     _remove_membership(tid)
 
     r = client.post(f"/invites/{token}/accept")
-    assert r.status_code == 410
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "INVITE_NOT_FOUND"
 
 
 def test_accept_unknown_token_returns_404(client):
@@ -257,13 +270,16 @@ def test_accept_unknown_token_returns_404(client):
 # ---- Revoke ------------------------------------------------------------
 
 
-def test_revoke_marks_invite_invalid(client, tid):
+def test_revoke_makes_invite_unusable(client, tid):
     token = client.post(
         f"/tournaments/{tid}/invites", json={"role": "viewer"},
     ).json()["token"]
     r = client.delete(f"/invites/{token}")
     assert r.status_code == 204
-    assert client.get(f"/invites/{token}").json()["valid"] is False
+    # Revocation is observable to the *owner* via the invite listing
+    # (which keeps the lifecycle flags); to the token holder it is
+    # simply gone.
+    assert client.get(f"/invites/{token}").status_code == 404
 
 
 def test_revoke_is_idempotent(client, tid):
