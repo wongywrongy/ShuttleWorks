@@ -160,8 +160,76 @@ Each control was broken for real and the suite re-run. `tests/test_input_limits.
 | docs:build | clean |
 | `scheduler_core/` + `archive/` | untouched |
 
-### Phases 2–4 · **NOT STARTED**
+### Phase 2 — Output encoding on derived surfaces · **COMPLETE** (2026-08-05)
 
-Phase 2 (derived-surface encoding: SEC-05 CSV, SEC-08 ICS, SEC-09 email + the XLSX behaviour
-test), Phase 3 (abuse + headers + disclosure + blocklist: SEC-03, 02, 04, 06, 07, 13),
+**Closed: SEC-05, SEC-08, SEC-09.** Plus the Phase 0 XLSX claim, now pinned.
+
+The app's own screens are safe by React's default escaping. These three surfaces are not React
+and inherit none of it — which is the whole reason the brief singles them out.
+
+- **SEC-05, CSV formula injection** (`services/bracket/io/export_schedule.py`). `csv.writer`
+  quotes correctly, so the file *structure* was already safe; what it does nothing about is
+  Excel/LibreOffice evaluating a cell that begins `=`/`+`/`-`/`@`/TAB/CR. `_csv_safe` prefixes
+  an apostrophe. Applied to **every** cell rather than the two that carry participant names
+  today — "which column is user-controlled?" is exactly the question that goes stale when
+  someone adds a column.
+- **SEC-08, ICS content injection.** `_ics_escape` handled `\n` but not `\r`. ICS property
+  lines are CRLF-delimited, so a bare CR ended the `SUMMARY:` line and everything after it
+  parsed as new properties — enough to inject a whole `VEVENT` into a subscriber's calendar.
+  CRLF is now replaced before the lone CR so a pair does not become two escaped newlines. `UID`
+  is escaped too (engine-authored today, so belt-and-braces — but leaving one interpolation
+  site unescaped is how the bug class returns).
+- **SEC-09, email headers.** `_header_safe` flattens every line-break form centrally in
+  `send_email`, so no call site can forget. Worth restating what this fixes: the stdlib's
+  `email.policy.default` already refused to store a header containing CR/LF, so the injection
+  never worked — the real defect was the resulting `ValueError` escaping as an **unhandled 500
+  after the invite row had been written**. The fix stops resting a security property on an
+  undocumented library behaviour that nothing pinned.
+- **XLSX** — Phase 0 asserted these were safe because ExcelJS writes a JS string as a
+  string-typed cell. That was a claim about a library, from reading, with nothing holding it
+  true. A Python test cannot drive client-side TypeScript, so the test pins the property the
+  claim rests on: neither export module constructs a `{formula: …}` cell. If one ever does, the
+  test fails and the Phase 0 reasoning gets revisited.
+
+**Two of my own test assertions were wrong before they were right, both the same way:** they
+matched substrings where the property is structural. The escaped payload legitimately still
+appears *inside* a `SUMMARY` value and *inside* a `Subject` value; a substring count reports an
+injection that did not happen. Both now assert on line structure — how many `BEGIN:VEVENT`
+lines exist, and whether any header line begins `Bcc:`.
+
+### Negative controls — Phase 2
+
+`tests/test_derived_output_encoding.py` is 22 tests.
+
+| Control | Broken by | Tests that failed |
+|---|---|---|
+| CSV formula guard | `_csv_safe` made the identity | **8** |
+| ICS carriage-return escaping | deleting both `\r` replacements | **3** |
+| Email header flattening | `_header_safe` made the identity | **2** |
+
+The ICS control had to be run twice: the first attempt's `sed` silently failed to match, and a
+"22 passed" from a control that never applied is exactly the false negative Rule 5 exists to
+catch. The second run verified the escaper actually leaked a CR before trusting the result.
+
+### Gates (Phase 2)
+
+Backend pytest **980 passed**, 62 skipped (958 + 22 new) · ruff clean ·
+`scheduler_core/` + `archive/` untouched.
+
+### Phases 3–4 · **NOT STARTED**
+
+Phase 3 (abuse + headers + disclosure + blocklist: SEC-03, 02, 04, 06, 07, 13),
 Phase 4 (cayde verification, `SECURITY.md`, residual risks SEC-10 / SEC-11).
+
+### Process note — working tree contention
+
+Twice this session `git checkout --` was used to revert a negative control on a file whose
+Phase-N edits were **uncommitted**, which discarded real work (recovered both times from
+context; nothing lost). The rule now: **commit the phase before running its negative controls**,
+and never use `git checkout` as an undo for uncommitted work. Phase 2 was committed first for
+exactly this reason.
+
+Separately, the trunk moved mid-session (`dev/review-fixes` merged, `CONTRIBUTING.md` retired
+the `dev/*` convention) and the working tree was switched to other branches while work was in
+flight. Both SP-SEC commits were rebuilt onto `main` as `sec/hardening`; `docs/sp-repo-1-consolidation`
+was restored to its own tip. Worth knowing that this tree has more than one writer.

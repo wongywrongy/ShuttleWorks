@@ -8,8 +8,9 @@ Requirement IDs are cited as `v5.0.0-<chapter>.<section>.<requirement>` and were
 from the machine-readable ASVS 5.0.0 JSON (`OWASP/ASVS`, `5.0/docs_en`), not from memory.
 
 **Status: Phase 0 complete.** Per-finding resolution status is tracked in `SEC_PROGRESS.md`.
-As of 2026-08-05, Phase 1 has closed SEC-01, SEC-12, SEC-14 and SEC-15, and closed SEC-16 as
-**not exploitable** (see the correction on that finding). 0.G was decided: Cloudflare Access
+As of 2026-08-05, Phase 1 has closed SEC-01, SEC-12, SEC-14 and SEC-15 and closed SEC-16 as
+**not exploitable** (see the correction on that finding); Phase 2 has closed SEC-05, SEC-08 and
+SEC-09 and pinned the XLSX claim with a test. 0.G was decided: Cloudflare Access
 in front of the app now, rate-limited open registration as the target state.
 
 ---
