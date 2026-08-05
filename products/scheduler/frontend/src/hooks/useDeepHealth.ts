@@ -21,8 +21,10 @@ interface DeepHealth {
 }
 
 function deepHealthUrl(): string {
-  const base = import.meta.env.VITE_API_BASE_URL ||
-    (import.meta.env.DEV ? '/api' : 'http://localhost:8000');
+  // Same default as api/client.ts — relative, never a hardcoded
+  // localhost port. See the comment there for why the old fallback
+  // failed silently.
+  const base = import.meta.env.VITE_API_BASE_URL || '/api';
   return `${base}/health/deep`;
 }
 

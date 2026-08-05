@@ -183,6 +183,19 @@ jobs:
         working-directory: products/scheduler/frontend
         env:
           VITE_ERROR_HARNESS: "1"
+          # REQUIRED. api/client.ts falls back to a hardcoded
+          # http://localhost:8000 for any production build that doesn't set
+          # this, and the backend here is on 8600 — so every API call fails,
+          # AuthContext maps the failure to "signed out" (it cannot tell a
+          # network error from a 401), and AuthGuard redirects to /login.
+          # The suite then presses buttons on a login page and only the two
+          # tests that assert real workspace content notice.
+          #
+          # Every real deployment already sets this (docker-compose*.yml pass
+          # it as a build arg); only this job did not. It went unnoticed
+          # because a developer's untracked frontend/.env.local supplies
+          # VITE_API_BASE_URL=/api, so local runs pass and CI does not.
+          VITE_API_BASE_URL: /api
         run: npm run build
 
       - name: Serve the production build
