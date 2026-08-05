@@ -110,6 +110,14 @@ remove it in its own small commit, verified against the test suite. Accumulated
 dead code is one of the most measurable, low-risk forms of debt to clear as you
 go.
 
+### How the change reaches the trunk
+
+This file governs the *quality* of a change. `CONTRIBUTING.md` governs its
+*path*: trunk-based development with short-lived branches off `main`, merged by
+PR with CI green and deleted on merge, releases cut as tags, and the deployment
+tracking a tag or `main` — never a feature branch. Read it before cutting a
+branch or moving a deployment.
+
 ---
 
 ## PART 2 — Handling "locked" functions (spaghetti nobody dares touch)

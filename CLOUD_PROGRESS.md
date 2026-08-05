@@ -696,3 +696,183 @@ hang, not an error.
 Provisioning, the tunnel, Tailscale ACLs — infrastructure, by hand, next.
 Org-level member management, billing, GDPR tooling, Postgres replication/HA —
 all logged, all out of scope by design.
+
+---
+
+## SP-REPO-1 — Branch consolidation & repository hygiene: DONE (2026-08-05)
+
+Program SP-REPO, run *before* SP-SEC-1 and SP-PERF-1 so both fork from one
+unambiguous trunk. No application code changed — branches moved, labels
+deleted, docs added.
+
+### The two acute problems, as found
+
+1. **Production was running an unmerged feature branch.** `cayde:/opt/ShuttleWorks`
+   was checked out to `dev/review-fixes` @ `edc3387` — CI-green and correct,
+   but a movable label rather than a release.
+2. **44 commits of unknown merge status** across `dev/cloud-hardening` and
+   `dev/cloud-tenancy`.
+
+Problem 2 dissolved on inspection: the GitHub ahead/behind reading had been
+taken backwards. Both branches were **0 ahead / 10 and 34 *behind*** — strict
+ancestors of `main`, same SHAs, `git branch --merged main` listing both. There
+was never anything to recover.
+
+### Branch tip SHAs recorded before deletion (recovery rule)
+
+A deleted branch is recoverable only from its tip. Recorded here first, then
+deleted — `git checkout -b <name> <sha>` restores any of them.
+
+| Branch | Tip | Classification |
+|---|---|---|
+| `dev/review-fixes` | `edc3387` | Merged to `main` via PR #13 |
+| `dev/sec-hardening` | `edc3387` | Empty placeholder, identical to the above |
+| `dev/ci-baseline` | `6a8f44f` | Throwaway; tip was a cherry-pick of `46d0ea9` |
+| `dev/cloud-audit-fixes` | `14fb182` | Merged (was exactly the old `main` tip) |
+| `dev/cloud-hardening` | `d5d468b` | Merged (ancestor of `main`) |
+| `dev/cloud-tenancy` | `93d26d3` (origin `af543d8`) | Merged (ancestor of `main`) |
+| `origin/dev2` | `bc938c6` | Merged via PR #10 |
+| `origin/feat/monorepo-consolidation` | `961e9da` | Merged via PR #9 |
+| `origin/feat/suggestions-inbox` | `401dfb7` | Merged |
+
+Proof standard: `git cherry -v main <branch>` returned **0 unique commits** for
+every branch above except `dev/review-fixes` (6) and `dev/ci-baseline` (1, a
+patch-equivalent cherry-pick). "Old-looking" and a `0 ahead` UI reading were
+not accepted as proof.
+
+### Kept, deliberately
+
+`dev/cloud-concurrency` (`025af1f`) — SP-CLOUD-4 Phase 0: a concurrency audit
+plus a test that **reproduces a lost update on `PUT /state` by failing**.
+Merging it would red the trunk; cherry-picking the doc alone would orphan it
+from the reproduction that gives it meaning. **Pushed to origin** (it existed
+only on the dev laptop) and left unmerged as genuinely-active work. SP-CLOUD-4
+resumes from there.
+
+### Sequence executed
+
+Push concurrency → merge PR #13 → tag `v0.2.0` → **re-point and verify cayde**
+→ *then* delete labels → document. The deletions were held until after cayde
+was verified, so `dev/review-fixes` stayed available as rollback throughout.
+
+### The re-point was a no-op rebuild, and that was verifiable in advance
+
+`edc3387` and the merge commit `26508f2` resolve to the **same tree**
+(`3ac183d`) — the merge of a branch 6 ahead / 0 behind adds no content. The
+images already running on cayde (built 21:12 UTC from that tree) therefore
+*were* `v0.2.0`. `docker compose up --build` was deliberately **not** run: it
+would have taken the stack down and returned bit-identical images. Verified
+instead.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `main` CI (frontend + backend + compose + interaction smoke) | green, run `31049772738` |
+| Publish release images on `main` | green, run `31049774333` — first success since April; the old failures were pre-monorepo path breakage |
+| cayde `git describe --tags --exact-match` | `v0.2.0` |
+| `/api/health` | 200 `{"status":"healthy","version":"2.0.0","role":"api"}` |
+| `/api/health/metrics` no token | 403 |
+| `/api/health/metrics` with `X-ShuttleWorks-Ops-Token` | 200 |
+| `/api/health/ready` with token | 200 |
+| SPA root | 200 |
+| Containers | api / frontend / postgres healthy, cloudflared up |
+
+The metrics endpoint was checked in **both** directions on purpose: a 403 alone
+proves only that something denies, not that the gate opens for a valid token.
+
+### Environment notes worth keeping
+
+- **The deploy path is `/opt/ShuttleWorks`, capital S.** The runbook says
+  `/opt/shuttleworks`; on the case-sensitive host that directory does not
+  exist. Logged to the debt log.
+- **Nothing is published on the host.** `frontend` listens on `8080/tcp` inside
+  the compose network only, with cloudflared as the sole ingress — `curl
+  localhost` on cayde returns connection-refused and looks exactly like an
+  outage. Probe from inside the network.
+- **`localhost` inside the container is `::1`**, while nginx binds IPv4, so an
+  in-container probe must use `127.0.0.1`. This is the *same* IPv6 trap that
+  `46d0ea9` fixed in CI, met again in a second venue.
+- **`neo` runs no worker.** Its Docker is entirely homelab; the `add-a-worker`
+  remote-compute host is undeployed and cayde's `EMBEDDED_WORKER=true` carries
+  all solve work. Logged to the debt log.
+
+### Discipline adopted
+
+`CONTRIBUTING.md` (new): trunk-based development, short-lived `<type>/<slug>`
+branches deleted on merge, releases are tags, and **the deployment tracks a tag
+or `main`, never a feature branch**. `dev/*` is retired as a naming convention —
+it named the stacks that caused this. The branch-hygiene section makes
+`git cherry` the proof standard and requires recording a tip SHA before any
+deletion.
+
+### Phase 3 — final state (addendum, same day)
+
+Three corrections to the table above. All three exist because branches moved
+*during* the slice: an SP-SEC-1 session ran in parallel in the same working
+tree, and a shared working tree has one HEAD.
+
+- **`dev/sec-hardening` was not the empty placeholder the audit recorded.** It
+  was `edc3387` (identical to `dev/review-fixes`, zero commits) when audited,
+  then gained `592d71c` — the SP-SEC-1 Phase 0 ASVS audit. That work moved to
+  `sec/hardening` as `240c0af`, and
+  `git cherry -v sec/hardening dev/sec-hardening` reports `592d71c` as
+  patch-equivalent (`-` prefix): present under a different SHA, not unique.
+  Deleted at **`592d71c`**, superseded rather than merged.
+- **`docs/sp-repo-1-consolidation`** (`453abef`) was created by this slice for
+  its own Phase 2 commit, merged via PR #14, and deleted — an instance of the
+  discipline it documents, not an exception to it.
+- **`docs/sp-repo-1-close`** (`9150b59`) was cut for this addendum and had to be
+  abandoned. See below; deleted at `9150b59`, its content rewritten here.
+
+### The shared-working-tree hazard, in full
+
+Worth recording precisely, because it cost three separate mistakes and the
+first two lessons did not prevent the third.
+
+Two sessions shared one working tree, so `git checkout` moved HEAD for **both**.
+The failure escalated each time:
+
+1. This slice checked out `main`, then a docs branch, while the other session
+   had 17 files uncommitted. Its WIP checkpoint landed on the docs branch.
+   Recoverable; it recommitted onto its own branch.
+2. Same again on the next branch. Same recovery.
+3. **The damaging one.** `git checkout main` and `git checkout -b
+   docs/sp-repo-1-close` were two separate commands. Between them the other
+   session checked out its branch, so the new branch was cut from *its* tip,
+   not from `main`. A one-file ledger commit was pushed carrying SP-SEC-1
+   Phase 1 underneath it — 28 files, +1973/-524 — and opened as PR #15, which
+   reported CONFLICTING for reasons that had nothing to do with the ledger.
+   The PR was closed unmerged; nothing reached the trunk.
+
+The rule that actually prevents this, as opposed to the two that did not:
+**never let a branch's base be implicit.** `git checkout -b <name> <sha>` with
+an explicit SHA is immune to HEAD moving between commands; `git checkout -b
+<name>` is not. The weaker rules — "leave HEAD where you found it", "push your
+own branch" — are still right, but they address only the symptom.
+
+The other session recorded the same class of hazard from its side (see
+`SEC_PROGRESS.md`, "working tree contention"): it twice used `git checkout --`
+to revert a negative control on a file with uncommitted work. Its rule —
+**commit the phase before running its negative controls** — is the same insight
+from the other direction.
+
+### Branches after consolidation
+
+| Branch | State |
+|---|---|
+| `main` | trunk, tagged `v0.2.0`, CI green |
+| `dev/cloud-concurrency` | active — SP-CLOUD-4 Phase 0, deliberately unmerged (failing reproduction), pushed |
+| `sec/hardening` | active — SP-SEC-1 Phases 0–2 complete, pushed |
+
+Everything else is deleted: eleven remote labels and eight local ones, each
+proven at zero unique commits by `git cherry -v main` and each tip SHA recorded
+before deletion. SP-SEC-1 and SP-PERF-1 can both branch cleanly from `main`.
+
+### What the parallel session demonstrated
+
+It named its branch `sec/hardening` — `<type>/<slug>`, not `dev/*` — the same
+day `CONTRIBUTING.md` landed, and recorded in its own ledger that it renamed
+`dev/sec-hardening` specifically "to match the convention it now has to follow."
+The convention was adopted by a session that was not told to adopt it, which is
+the only real evidence that a written convention works.
