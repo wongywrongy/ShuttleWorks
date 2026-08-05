@@ -19,6 +19,15 @@ services:
       dockerfile: products/scheduler/backend/Dockerfile
     restart: always
     command: ["python", "-m", "worker"]
+    # The shared backend image ships a HEALTHCHECK that GETs
+    # http://localhost:8000/health/deep. This container runs the worker
+    # loop, which serves no HTTP at all, so that probe can never pass:
+    # the container would sit permanently `unhealthy` in `docker ps`,
+    # and any restart-on-unhealthy supervision would flap it forever.
+    # Liveness here is "is it claiming jobs", which /health/metrics on
+    # the API host answers (see docs/how-to/add-a-worker.md).
+    healthcheck:
+      disable: true
     environment:
       - ENVIRONMENT=cloud
       - LOG_LEVEL=${LOG_LEVEL:-info}

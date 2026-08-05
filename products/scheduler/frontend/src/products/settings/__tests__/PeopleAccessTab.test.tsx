@@ -322,6 +322,57 @@ describe('PeopleAccessTab — confirmation', () => {
     expect(await screen.findByTestId('confirm-body')).toHaveTextContent(/new invite/i);
   });
 
+  it('a FAILED leave does not log the user out', async () => {
+    // `run()` swallows errors so it can render them inline, which means
+    // `await run(...)` resolves on failure too. The session-expired
+    // dispatch used to fire unconditionally right after it — so a
+    // refused leave (last-owner, 403, or a network blip) showed the
+    // error AND bounced the user to /login, out of a workspace they
+    // were still a member of.
+    const user = userEvent.setup();
+    mockMembers(OWNER, SECOND_OWNER);
+    vi.mocked(apiClient.leaveTournament).mockRejectedValue(
+      Object.assign(new Error('nope'), { code: 'MEMBER_LAST_OWNER', status: 409 }),
+    );
+    const onExpired = vi.fn();
+    window.addEventListener('sw:session-expired', onExpired);
+
+    try {
+      render(<PeopleAccessTab tid="t1" summary={summary} />);
+      await screen.findByTestId('member-u-owner');
+      await openMenu(user, 'Olive Owner');
+      await user.click(screen.getByTestId('leave-u-owner'));
+      await user.click(await screen.findByTestId('confirm-action'));
+
+      await waitFor(() => expect(apiClient.leaveTournament).toHaveBeenCalled());
+      expect(onExpired).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('sw:session-expired', onExpired);
+    }
+  });
+
+  it('a SUCCESSFUL leave still logs the user out', async () => {
+    // The other half of the guard: fixing the failure path must not
+    // break the redirect that the success path depends on.
+    const user = userEvent.setup();
+    mockMembers(OWNER, SECOND_OWNER);
+    vi.mocked(apiClient.leaveTournament).mockResolvedValue(undefined as never);
+    const onExpired = vi.fn();
+    window.addEventListener('sw:session-expired', onExpired);
+
+    try {
+      render(<PeopleAccessTab tid="t1" summary={summary} />);
+      await screen.findByTestId('member-u-owner');
+      await openMenu(user, 'Olive Owner');
+      await user.click(screen.getByTestId('leave-u-owner'));
+      await user.click(await screen.findByTestId('confirm-action'));
+
+      await waitFor(() => expect(onExpired).toHaveBeenCalledTimes(1));
+    } finally {
+      window.removeEventListener('sw:session-expired', onExpired);
+    }
+  });
+
   it('dialog is focus-trapped, Escape-dismissible, and returns focus', async () => {
     const user = userEvent.setup();
     mockMembers(OWNER, OPERATOR);

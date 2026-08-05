@@ -553,3 +553,20 @@ a green 1,100-test suite. The real check is the viewer flow in
     per-directory rather than whole files like `database/models.py`, which every
     slice touches) or teach it to ignore commits that only remove content the
     docs never referenced. Size S.
+  - **`/health/metrics` full-table aggregate.** The status counts are a
+    `GROUP BY` over every row in `solve_jobs`, including terminal rows retained
+    for `JOB_RETENTION_DAYS` (30 by default) — a sequential scan on Postgres on
+    every scrape, growing between prunes. The obvious narrowing (restrict the
+    `WHERE` to live statuses) is **wrong**: `succeeded` and `failed` are part of
+    the endpoint's published response, so filtering them out would silently
+    zero two documented numbers. The right fix is an index on `solve_jobs.status`
+    if volumes ever make the scrape visible. Not doing it now: at present
+    volumes the scan is not measurable, and it costs a migration. Size S.
+    *(Found in the 2026-08-05 review; deliberately left after confirming the
+    suggested fix would have been a regression.)*
+  - **`OverflowMenu` disabled items still close the menu.** Activation is blocked
+    in the click handler, but Headless UI closes the menu on select regardless,
+    so clicking a disabled item dismisses the menu while doing nothing — it
+    reads as a dead control. The doc comment now states this; the behaviour is
+    unfixed. Needs either an `onClose` guard or a non-`MenuItem` render for
+    disabled entries. Size S. *(2026-08-05 review.)*

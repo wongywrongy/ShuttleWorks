@@ -50,6 +50,7 @@ from __future__ import annotations
 import logging
 import secrets as _secrets
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
@@ -95,7 +96,15 @@ def require_ops_token(request: Request) -> None:
     if not expected:
         return
     supplied = request.headers.get(OPS_TOKEN_HEADER, "")
-    if not _secrets.compare_digest(supplied, expected):
+    # Compare as BYTES. ``compare_digest`` raises TypeError on ``str``
+    # arguments holding non-ASCII characters, so a header (or an
+    # ``OPS_TOKEN_FILE`` value) carrying one byte outside ASCII would
+    # escape this guard as an unhandled 500 with a traceback, instead of
+    # the uniform 403 the caller is supposed to get. Encoding first keeps
+    # the comparison constant-time and total over every possible input.
+    if not _secrets.compare_digest(
+        supplied.encode("utf-8"), expected.encode("utf-8")
+    ):
         raise HTTPException(status_code=403, detail="ops token required")
 
 
@@ -104,10 +113,20 @@ def require_ops_token(request: Request) -> None:
 _OPS_DEP = [Depends(require_ops_token)]
 
 
+@lru_cache(maxsize=1)
 def _expected_revision() -> Optional[str]:
     """The Alembic head this codebase ships, read from the migration
     scripts rather than hard-coded — a hard-coded revision is one more
-    thing to forget to bump, and forgetting silently disables the check."""
+    thing to forget to bump, and forgetting silently disables the check.
+
+    Cached for the process lifetime: resolving it constructs an Alembic
+    ``Config`` and walks/parses every migration module, and both
+    ``/health/ready`` and ``/health/deep`` call it on EVERY request. With
+    an orchestrator probing each container every few seconds that is a
+    repeated filesystem walk on the request thread, for a value that
+    cannot change without restarting the process — the migration scripts
+    are baked into the image.
+    """
     try:
         from alembic.config import Config
         from alembic.script import ScriptDirectory
@@ -253,6 +272,15 @@ def health_metrics(repo: LocalRepository = Depends(get_repository)):
     """
     now = datetime.now(timezone.utc)
 
+    # Counts every status, including the terminal ones: ``succeeded`` and
+    # ``failed`` are part of this endpoint's response contract, so this
+    # aggregate cannot be narrowed to the live statuses without silently
+    # zeroing two published numbers.
+    #
+    # It is therefore a full aggregate over a table bounded only by
+    # JOB_RETENTION_DAYS. That is fine at present volumes; if solve_jobs
+    # ever grows enough for the scrape to show up, the fix is an index on
+    # ``status``, not a narrower WHERE. Logged in docs/audits/debt-log.md.
     counts = {
         row[0]: row[1]
         for row in repo.session.execute(

@@ -31,6 +31,9 @@ nothing here.
 """
 from __future__ import annotations
 
+import ipaddress
+from functools import lru_cache
+
 from app.config import settings
 
 # Cloudflare sets this on every proxied request and strips any
@@ -47,6 +50,46 @@ _REAL_IP_HEADER = "CF-Connecting-IP"
 _UNKNOWN = "unknown"
 
 
+@lru_cache(maxsize=8)
+def _parse_trusted(entries: tuple[str, ...]) -> tuple[list, list[str]]:
+    """Split the configured trust list into networks and literal strings.
+
+    Entries are accepted as either a bare address (``172.18.0.4``) or a
+    CIDR block (``172.18.0.0/16``). CIDR matters in practice because
+    Docker assigns container addresses from the compose network's pool
+    and they change on ``--force-recreate`` — pinning a single literal IP
+    is a configuration that silently stops matching, and a trust check
+    that stops matching fails *open* into one global throttle bucket.
+
+    Anything unparseable is kept as a literal for exact comparison, so a
+    typo degrades to "never matches" rather than raising at import.
+    """
+    nets: list = []
+    literals: list[str] = []
+    for raw in entries:
+        entry = raw.strip()
+        if not entry:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            literals.append(entry)
+    return nets, literals
+
+
+def _is_trusted(peer: str) -> bool:
+    nets, literals = _parse_trusted(tuple(settings.trusted_proxy_ips))
+    if peer in literals:
+        return True
+    if not nets:
+        return False
+    try:
+        addr = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return any(addr in net for net in nets)
+
+
 def client_ip(request) -> str:
     """The caller's address, as trustworthy as configuration allows.
 
@@ -59,8 +102,7 @@ def client_ip(request) -> str:
     if not peer:
         return _UNKNOWN
 
-    trusted = settings.trusted_proxy_ips
-    if trusted and peer in trusted:
+    if _is_trusted(peer):
         forwarded = request.headers.get(_REAL_IP_HEADER)
         if forwarded:
             # Take the first entry defensively: the header is

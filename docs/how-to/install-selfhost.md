@@ -59,8 +59,28 @@ openssl rand -base64 32 | tr -d '\n' > secrets/postgres_password
 printf 'postgresql://scheduler:%s@postgres:5432/scheduler' "$(cat secrets/postgres_password)" \
   > secrets/database_url
 openssl rand -hex 32 | tr -d '\n' > secrets/ops_token
-chmod 600 secrets/*
+
+# Lock the DIRECTORY, not the files. Compose (non-swarm) bind-mounts each
+# secret into the container preserving its host ownership and mode, and
+# the API runs as UID 1001 (`app`) — so `chmod 600` owned by your
+# deploying user makes the file unreadable inside the container. Postgres
+# hits the same wall as UID 999.
+chmod 700 secrets          # only you (and root) can traverse in
+chmod 644 secrets/*        # readable by the container users
 ```
+
+::: danger The failure this prevents is silent and misleading
+With `chmod 600` on the files, `_read_file_backed_secrets()` raises
+`PermissionError`, which surfaces as a `ValueError` from a module-level
+`Settings()` — so the API dies at **import** with what looks like a
+configuration error, naming the setting rather than the permission. The
+container just restart-loops. If you see a config error naming
+`DATABASE_URL` or `OPS_TOKEN` on a fresh install, check the mode here first.
+
+The directory at `700` is what keeps the secrets private on the host; the
+files being `644` inside it does not widen access for anyone who cannot
+already traverse the directory.
+:::
 
 All three are injected as files rather than environment variables, so the values
 never appear in `docker inspect` or a process listing. The API reads
@@ -106,7 +126,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | `587` / `''` / `''` / `ShuttleWorks <no-reply@localhost>` | – | as your provider requires | not read | Mail silently fails. |
 | `PUBLIC_APP_ORIGIN` | `''` | – | **required** | not read | Emailed invite/reset links come out relative and unclickable. |
 | `CORS_ORIGINS` | localhost list | default | **your hostname** | not read | The browser blocks API calls. Never `*` — cookie auth requires an explicit allowlist. |
-| `TRUSTED_PROXY_IPS` | `[]` (trust nothing) | leave empty | **connector IP** | not read | See §6 — this is the one that locks out every user at once. |
+| `TRUSTED_PROXY_IPS` | `[]` (trust nothing) | leave empty | **compose subnet** (defaulted) | not read | See §6 — this is the one that locks out every user at once. Must match the API's peer (`frontend` nginx), not cloudflared. |
 | `OPS_TOKEN` | `''` (guard off) | leave empty | **required** (`OPS_TOKEN_FILE`) | not read | Without it `/health/ready\|deep\|metrics` publish worker ids, live job ids and the schema revision to anyone who can reach the hostname. |
 | `PROCESS_ROLE` | `api` | – | `api` | `worker` (set automatically) | Set by `worker.py` itself; only override to be explicit. |
 | `EMBEDDED_WORKER` | `true` | `true` | `true` or `false` | n/a | `false` with no remote worker means jobs queue and never run. |
@@ -180,19 +200,37 @@ without the variable set, deliberately, so the choice is explicit.
 
 ## 6. `TRUSTED_PROXY_IPS` — the one that bites
 
-Behind the tunnel, every request arrives from the cloudflared container. The
-credential throttle keys on the client address, so without this setting **all
-users share one bucket**: the fifth failed login from anyone on earth locks out
-everyone, doubling to a 15-minute cap.
+Behind the tunnel every request reaches the API through a proxy, so the peer
+address is the same for everyone. The credential throttle keys on the client
+address, so if this setting doesn't match **all users share one bucket**: the
+fifth failed login from anyone on earth locks out everyone, doubling to a
+15-minute cap.
 
-Find the connector's address on the compose network and set it:
+**It must name the API's immediate peer, which is the `frontend` nginx
+container — not cloudflared.** The request path is:
+
+```
+browser → cloudflared → frontend:8080 (nginx) → /api/* → backend:8000
+```
+
+cloudflared never talks to the API directly, so trusting *its* address means the
+check never matches and the throttle collapses exactly as if the setting were
+absent. (This guide said "connector IP" before 2026-08-05. That was wrong, and
+wrong in the fail-open direction.)
+
+The stack pins its network to `10.201.0.0/24` for this reason, and the compose
+file defaults the setting to that range — **so on a standard install there is
+nothing to set here.** Prefer the subnet over a container address: Docker
+reassigns container IPs on `--force-recreate`, and a pinned literal that stops
+matching fails open, silently.
+
+Only if you changed the subnet, keep the two in step:
 
 ```bash
-docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
-  shuttleworks-cloudflared-1
-# → 172.20.0.5
-echo 'TRUSTED_PROXY_IPS=172.20.0.5' >> .env
+echo 'TRUSTED_PROXY_IPS=10.201.0.0/24' >> .env   # must match `networks:` in the compose file
 ```
+
+Both a bare address and a CIDR block are accepted.
 
 The API then reads `CF-Connecting-IP`, **but only when the request's immediate
 peer is in that list**. A header trusted from anywhere would be worse than none:

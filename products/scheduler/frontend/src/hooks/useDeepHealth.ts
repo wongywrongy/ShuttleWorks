@@ -60,6 +60,13 @@ export function useDeepHealth(): DeepHealthState {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Health check failed');
       setHealth(null);
+      // Clear `restricted` too. It is sticky otherwise: once a 403 has
+      // been seen (routine in cloud mode) a later outage would leave it
+      // true, and AppStatusPopover checks `restricted` BEFORE `error`,
+      // so the status row would read a calm "not published" while the
+      // backend was unreachable. An outage must not be able to render
+      // as a deliberate configuration choice.
+      setRestricted(false);
     }
   }, []);
 

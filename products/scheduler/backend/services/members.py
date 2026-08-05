@@ -67,6 +67,16 @@ class MemberNotFoundError(MemberError):
     """The target user is not a member of this workspace."""
 
 
+class NotOwnerError(MemberError):
+    """The acting user is not an owner of this workspace.
+
+    Distinct from ``MemberNotFoundError``: the user IS a member, just not
+    privileged enough for the operation. Only ``transfer_ownership``
+    raises it today, as a guard on its own precondition rather than as a
+    replacement for the route's ``require_tournament_access("owner")``.
+    """
+
+
 class LastOwnerError(MemberError):
     """The operation would leave the workspace with no owner.
 
@@ -221,11 +231,22 @@ def transfer_ownership(
     a double-submit looks like, and failing it would be surprising.
     """
     _lock_workspace(session, tournament_id)
-    _require_member(session, tournament_id, from_user_id)
+    from_role = _require_member(session, tournament_id, from_user_id)
     _require_member(session, tournament_id, to_user_id)
 
     if from_user_id == to_user_id:
         return
+
+    # Only an OWNER can hand the workspace on. The one caller today is
+    # owner-gated at the route, so this is belt-and-braces — but the
+    # demotion below is a hardcoded "operator", which would silently
+    # PROMOTE a viewer handed to this function by some future caller.
+    # Asserting the precondition is cheaper than that bug.
+    if from_role != OWNER:
+        raise NotOwnerError(
+            f"user {from_user_id} is a {from_role}, not an owner, and "
+            "cannot transfer ownership"
+        )
 
     # Promote first — after this there are two owners, so the demotion
     # below cannot trip the last-owner guard.
