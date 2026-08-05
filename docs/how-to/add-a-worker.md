@@ -46,7 +46,7 @@ GRANT SELECT, UPDATE, DELETE ON TABLE solve_jobs TO sw_worker;
 ```
 
 ```bash
-cd /opt/shuttleworks/products/scheduler
+cd /opt/ShuttleWorks/products/scheduler
 docker compose -f docker-compose.selfhost.yml exec -T postgres \
   psql -U scheduler -d scheduler <<'SQL'
 CREATE ROLE sw_worker LOGIN PASSWORD 'CHANGE-ME';
@@ -93,8 +93,8 @@ See [the backup section](/how-to/install-selfhost#backup-and-restore).
 ## 3. Configure the worker host
 
 ```bash
-sudo mkdir -p /opt/shuttleworks && sudo chown "$USER" /opt/shuttleworks
-cd /opt/shuttleworks && git clone <repo> .
+sudo mkdir -p /opt/ShuttleWorks && sudo chown "$USER" /opt/ShuttleWorks
+cd /opt/ShuttleWorks && git clone <repo> .
 cd products/scheduler
 cp .env.worker.example .env
 chmod 600 .env
