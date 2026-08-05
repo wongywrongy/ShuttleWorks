@@ -9,8 +9,8 @@ Design decisions (grounded in OWASP Authentication / Session Management
   and parameters, so parameter upgrades verify old hashes transparently
   and ``needs_rehash`` flags them for opportunistic rehashing at login.
 - **Password policy is length-only** (NIST 800-63B): min/max from
-  settings, no composition rules, no rotation. A tiny worst-password
-  blocklist rejects the most-stuffed strings.
+  settings, no composition rules, no rotation, plus a bundled 5000-entry
+  breached-password blocklist (ASVS v5.0.0-6.2.4 L1 asks for 3000).
 - **Sessions are opaque server-side rows**: the cookie carries a random
   256-bit urlsafe token; only its SHA-256 is stored, so a DB leak can't
   be replayed. Revocable, rolling ``last_seen_at``, absolute expiry.
@@ -23,12 +23,14 @@ callers own the transaction boundary.
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import logging
 import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 from argon2 import PasswordHasher
@@ -43,15 +45,45 @@ log = logging.getLogger("scheduler.auth_service")
 
 _hasher = PasswordHasher()
 
-# The handful of strings that dominate real credential-stuffing lists.
-# NIST 800-63B asks for a blocklist of commonly-used passwords; keeping
-# it tiny and inline beats shipping a wordlist for a product whose
-# accounts guard tournament schedules.
-_WORST_PASSWORDS = {
-    "password", "password1", "password123", "12345678", "123456789",
-    "1234567890", "qwertyuiop", "letmein123", "iloveyou1", "sunshine1",
-    "admin123", "welcome1", "changeme", "baseball1", "football1",
-}
+def _load_common_passwords() -> frozenset[str]:
+    """The bundled breached-password blocklist (SP-SEC-1, SEC-07).
+
+    ASVS ``v5.0.0-6.2.4`` is an **L1** requirement — the register's only
+    outright L1 failure — and asks for at least the top 3000 passwords
+    *matching the policy*. This ships 5000, drawn from the NCSC/HIBP
+    100k-most-used list (SecLists, MIT) filtered to entries of at least the
+    8-character policy minimum: anything shorter is already refused by the
+    length rule, so including it would pad the list without adding coverage.
+
+    Bundled and read in-process, never fetched. Rule 2 (local-first parity):
+    a network reputation call would make password-setting depend on the
+    internet, and this product is expected to run an entire event offline.
+
+    Lives under ``app/wordlists/`` so it ships with the existing
+    ``COPY app/`` layer. A separate top-level directory would have needed its
+    own Dockerfile line, which is exactly how ``config_lock.py`` ended up
+    reading a ``/shared`` file that no image contained. NOT ``app/data/``:
+    ``**/data/`` is gitignored as Docker-volume state, so the file would have
+    been absent from the repo and every image built from it.
+
+    Loaded eagerly, and a missing file is fatal. The alternative — falling
+    back to a short hard-coded set — would leave a deployment quietly
+    enforcing a weaker policy than the code claims, which is the failure mode
+    this whole slice exists to remove.
+    """
+    path = Path(__file__).resolve().parent.parent / "app" / "wordlists" / "common-passwords.txt.gz"
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as fh:
+            return frozenset(line.strip() for line in fh if line.strip())
+    except OSError as exc:  # pragma: no cover - deployment defect, not a branch
+        raise RuntimeError(
+            f"password blocklist missing or unreadable at {path}: {exc}. "
+            "The image is built wrong; refusing to start with a weaker "
+            "password policy than advertised."
+        ) from exc
+
+
+_WORST_PASSWORDS = _load_common_passwords()
 
 # Local bootstrap identity — the same zero UUID the synthetic-user era
 # used, so existing tournament_members / owner_id rows keep matching.

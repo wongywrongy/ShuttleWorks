@@ -814,12 +814,16 @@ def restore_tournament_backup(
             ErrorCode.BACKUP_NOT_FOUND,
             f"backup not found: {filename}",
         )
-    except Exception as e:
-        log.error("restore failed: %s", e)
+    except Exception:
+        # SEC-06: the exception's str() went to the client. A SQLAlchemy
+        # connection error carries the DSN — the exact leak the 2026-08-04
+        # audit already fixed once in /health/ready. The detail belongs in
+        # the log, where the operator can read it and the caller cannot.
+        log.exception("restore failed for tournament %s", tournament_id)
         raise http_error(
             500,
             ErrorCode.BACKUP_RESTORE_FAILED,
-            f"restore failed: {e}",
+            "restore failed — see server logs",
         )
     return get_tournament_state(tournament_id, repo)
 

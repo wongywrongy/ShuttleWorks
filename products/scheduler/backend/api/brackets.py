@@ -1841,9 +1841,13 @@ async def schedule_next_round_stream(
                     candidates=_candidates_from_schedule_result(solve_result),
                 )
                 result_holder["status_value"] = solve_result.status.value
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception:  # pragma: no cover - defensive
+                # SEC-06: str(exc) was emitted to the browser over SSE.
+                # The stream is a public-ish surface (any operator's tab);
+                # the exception text is not. Logged with a traceback here,
+                # generic on the wire.
                 log.exception("bracket SSE solver worker failed")
-                error_holder["error"] = str(exc)
+                error_holder["error"] = "solve failed — see server logs"
             finally:
                 emit({"type": "done"}, critical=True)
 

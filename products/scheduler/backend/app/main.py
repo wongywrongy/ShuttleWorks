@@ -128,11 +128,41 @@ async def lifespan(app: FastAPI):
         log.info("app_shutdown")
 
 
+# Interactive API docs are local-mode only (SP-SEC-1, SEC-04).
+#
+# /docs, /redoc and /openapi.json carried no auth dependency, so a public
+# deployment published the complete route table and every request/response
+# schema for all 77 paths. That is not a vulnerability by itself — it is a
+# free, complete map for anyone probing the rest of the surface, and ASVS
+# v5.0.0-13.4.5 calls it out.
+#
+# They stay ON in local mode, where they are genuinely useful and the API is
+# bound to the operator's own machine. Gating on ENVIRONMENT rather than
+# AUTH_MODE deliberately: this is about who can reach the process, not about
+# how a caller authenticates.
+# A function, not an inline conditional, so the decision is testable
+# without constructing a cloud app: ENVIRONMENT=cloud makes Settings()
+# itself refuse to build without the full cloud secret set (a postgres DSN,
+# OPS_TOKEN, SMTP), so an in-process cloud app is not something a unit test
+# can have. The live 404s are verified against the real deployment in
+# Phase 4 (Rule 6) — this covers the branch, cayde covers the behaviour.
+def docs_urls(environment: str) -> tuple[str | None, str | None, str | None]:
+    """``(docs_url, redoc_url, openapi_url)`` for FastAPI, per environment."""
+    if environment == "cloud":
+        return (None, None, None)
+    return ("/docs", "/redoc", "/openapi.json")
+
+
+_docs_url, _redoc_url, _openapi_url = docs_urls(settings.environment)
+
 app = FastAPI(
     title="School Sparring Scheduler API",
     description="Stateless scheduling API for school sparring matches using CP-SAT solver",
     version="2.0.0",
     lifespan=lifespan,
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+    openapi_url=_openapi_url,
 )
 
 # CORS middleware — origins read from ``settings.cors_origins`` so a
