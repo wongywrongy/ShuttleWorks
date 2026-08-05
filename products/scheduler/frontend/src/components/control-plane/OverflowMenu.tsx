@@ -7,10 +7,19 @@ export interface OverflowItem {
   onSelect: () => void;
   destructive?: boolean;
   testId?: string;
-  /** Locked: the action is not available in this state. Renders the item
-   *  disabled (blocking pointer AND keyboard activation, not merely styling it)
-   *  and surfaces `disabledReason` so the operator knows WHY — a menu item that
-   *  silently does nothing is the bug this prevents. */
+  /** Locked: the action is not available in this state.
+   *
+   *  The item stays FOCUSABLE and keyboard-reachable — it is marked
+   *  `aria-disabled`, not `disabled`, and activation is blocked in the
+   *  click handler. That is deliberate: the native `disabled` attribute
+   *  drops the item out of the tab order, so a keyboard or screen-reader
+   *  user meets an item that isn't there rather than one that explains
+   *  itself. `disabledReason` is folded into the accessible name.
+   *
+   *  Callers should ALSO render the reason visibly — and note that
+   *  clicking a disabled item still closes the menu (Headless UI closes
+   *  on select), so a caller relying on the menu staying open needs to
+   *  handle that itself. */
   disabled?: boolean;
   disabledReason?: string;
 }

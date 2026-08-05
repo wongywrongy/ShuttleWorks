@@ -149,10 +149,18 @@ jobs:
           DATABASE_URL: sqlite:///./smoke.db
         run: |
           python -m uvicorn app.main:app --host 127.0.0.1 --port 8600 --log-level warning &
+          # The loop must FAIL when the service never arrives. Written as a
+          # bare `break` loop it exits 0 after the last sleep whether or not
+          # anything came up, so a dead backend reaches the next step
+          # disguised as a healthy one.
           for i in $(seq 1 40); do
             curl -sf http://127.0.0.1:8600/health && break
             sleep 1
           done
+          curl -sf http://127.0.0.1:8600/health > /dev/null || {
+            echo "::error::backend never became healthy on 127.0.0.1:8600"
+            exit 1
+          }
 
       # Two workspaces: one the caller owns, one the caller only views. The seed
       # script prints `tid=` / `viewerTid=` lines straight into $GITHUB_OUTPUT.
@@ -175,6 +183,19 @@ jobs:
         working-directory: products/scheduler/frontend
         env:
           VITE_ERROR_HARNESS: "1"
+          # REQUIRED. api/client.ts falls back to a hardcoded
+          # http://localhost:8000 for any production build that doesn't set
+          # this, and the backend here is on 8600 — so every API call fails,
+          # AuthContext maps the failure to "signed out" (it cannot tell a
+          # network error from a 401), and AuthGuard redirects to /login.
+          # The suite then presses buttons on a login page and only the two
+          # tests that assert real workspace content notice.
+          #
+          # Every real deployment already sets this (docker-compose*.yml pass
+          # it as a build arg); only this job did not. It went unnoticed
+          # because a developer's untracked frontend/.env.local supplies
+          # VITE_API_BASE_URL=/api, so local runs pass and CI does not.
+          VITE_API_BASE_URL: /api
         run: npm run build
 
       - name: Serve the production build
@@ -182,11 +203,20 @@ jobs:
         env:
           VITE_API_PROXY_TARGET: http://127.0.0.1:8600
         run: |
-          npx vite preview --port 4173 --strictPort &
+          # --host 127.0.0.1 is load-bearing. Without it `vite preview` binds
+          # `localhost`, which resolves to IPv6 ::1 on GitHub runners, while
+          # the readiness check below and E2E_BASE_URL both use IPv4
+          # 127.0.0.1 — so the server is up and unreachable at the same time.
+          npx vite preview --port 4173 --strictPort --host 127.0.0.1 &
           for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:4173/ && break
+            curl -sf http://127.0.0.1:4173/ > /dev/null && break
             sleep 1
           done
+          # Same reason as the backend loop: it must be able to fail.
+          curl -sf http://127.0.0.1:4173/ > /dev/null || {
+            echo "::error::vite preview never became reachable on 127.0.0.1:4173"
+            exit 1
+          }
 
       - name: Install Chromium
         working-directory: products/scheduler/e2e

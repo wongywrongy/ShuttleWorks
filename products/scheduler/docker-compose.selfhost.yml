@@ -96,18 +96,34 @@ services:
       - CORS_ORIGINS=https://${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME}
       - PUBLIC_APP_ORIGIN=https://${PUBLIC_HOSTNAME}
       # ───────────────────────────────────────────────────────────────
-      # The cloudflared container's address on the compose network.
-      # Without it, every request appears to come from the connector and
-      # the credential throttle collapses into ONE bucket for the whole
-      # internet — the fifth failed login from anyone locks out everyone.
+      # The address the API sees as its IMMEDIATE PEER — which in this
+      # stack is the `frontend` nginx container, NOT cloudflared.
       #
-      # Do NOT "fix" that with uvicorn --proxy-headers. That flag
+      # The request path is:
+      #     browser → cloudflared → frontend:8080 (nginx)
+      #                           → /api/* proxy_pass → backend:8000
+      #
+      # so the API's peer is always nginx. Setting this to the
+      # cloudflared address (as it read before 2026-08-05) means the
+      # trust check never matches, CF-Connecting-IP is ignored, and the
+      # credential throttle collapses into ONE bucket for the whole
+      # internet — the fifth failed login from anyone locks out everyone.
+      # That is the exact failure app/client_ip.py exists to prevent, so
+      # a wrong value here silently disarms the whole seam.
+      #
+      # Prefer the compose network's SUBNET over a container address:
+      # Docker reassigns container IPs on --force-recreate, and a pinned
+      # literal that stops matching fails open, silently. The default
+      # below is the subnet declared for this stack's network at the
+      # bottom of this file.
+      #
+      # Do NOT "fix" a mismatch with uvicorn --proxy-headers. That flag
       # rewrites request.client.host from X-Forwarded-For, so the peer
       # compared against this list becomes the *claimed* client address,
       # the trust check never matches, and the collapse returns
       # silently. The two mechanisms are mutually defeating.
       # ───────────────────────────────────────────────────────────────
-      - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:?set to the cloudflared container IP}
+      - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-10.201.0.0/24}
       - EMAIL_BACKEND=smtp
       - SMTP_HOST=${SMTP_HOST:?required in cloud mode}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -229,8 +245,28 @@ services:
         limits:
           memory: 256M
 
+networks:
+  # Pinned subnet so TRUSTED_PROXY_IPS above can name a STABLE range.
+  #
+  # Without this the stack lands on whatever Docker picks from its
+  # default pool (172.17–172.31), which varies per host and can shift
+  # when networks are recreated — leaving the trust list either wrong on
+  # day one or wrong later, both of which fail open silently.
+  #
+  # 10.201.0.0/24 sits outside Docker's default allocation pool, so it
+  # will not collide with an auto-assigned network on the same host.
+  # If it clashes with something on your LAN, change BOTH this and
+  # TRUSTED_PROXY_IPS together — they are one setting in two places.
+  default:
+    ipam:
+      config:
+        - subnet: 10.201.0.0/24
+
 secrets:
-  # All three files are created by the install runbook and chmod 600.
+  # All three files are created by the install runbook. They must be
+  # readable by UID 1001 (the image's `app` user) — see the runbook;
+  # a 600 file owned by the deploying user makes the API crash at
+  # import with a config error rather than a permissions one.
   # None is committed — ./secrets/.gitignore excludes everything in here.
   postgres_password:
     file: ./secrets/postgres_password

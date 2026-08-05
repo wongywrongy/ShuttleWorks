@@ -21,12 +21,19 @@ cross-cutting backend feature.
 The frontend resolves the API base URL as (`frontend/src/api/README.md`):
 
 ```ts
-import.meta.env.VITE_API_BASE_URL
-  || (import.meta.env.DEV ? '/api' : 'http://localhost:8000')
+import.meta.env.VITE_API_BASE_URL || '/api'
 ```
 
 In dev the Vite proxy rewrites `/api/*` to the FastAPI container; in production the nginx config
 does the same against the FastAPI service. Paths below are written without the base.
+
+The default is **relative on purpose**. It used to fall back to a hardcoded
+`http://localhost:8000` for production builds, which fails silently: requests go to a port
+nothing is listening on, `AuthContext` cannot tell a network error from a 401, and the app
+redirects to `/login` — so an unreachable API looks like a sign-in prompt. That bug reached CI
+and made the interaction-smoke suite press buttons on a login page (2026-08-05). Set
+`VITE_API_BASE_URL` to an absolute URL only when the SPA is genuinely served from a different
+origin than its API.
 
 ## Route-ownership model
 

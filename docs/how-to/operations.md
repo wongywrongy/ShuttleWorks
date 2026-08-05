@@ -12,6 +12,24 @@ Assumes [Install: self-hosted](/how-to/install-selfhost).
 | `GET /health` | Is the process up? | Liveness. **Dependency-free on purpose** — it stays green during a database outage, because killing a container whose database is down turns a recoverable outage into a restart loop. |
 | `GET /health/ready` | Is the database reachable *and* the schema at the expected revision? | Readiness. 503 when either is false. This is the one to gate a deploy on. |
 | `GET /health/deep` | Readiness, plus data-dir writability and solver import | What the container `HEALTHCHECK` calls. Also carries `schemaVersion` for the app's status popover. |
+| `GET /health/metrics` | Queue depth, oldest-queued age, per-worker heartbeat age | The two alerts below. Also the liveness signal for a remote worker, which has no container healthcheck. |
+
+::: warning `/health` is public; the other three need the ops token
+`ready`, `deep` and `metrics` carry operational detail — worker identities,
+live job ids, queue depth, the deployed schema revision — so they require
+`X-ShuttleWorks-Ops-Token` whenever `OPS_TOKEN` is set, which the cloud API
+profile **requires**. Every command on this page therefore sends it:
+
+```bash
+export OPS=$(cat /opt/shuttleworks/products/scheduler/secrets/ops_token)
+curl -s -H "X-ShuttleWorks-Ops-Token: $OPS" http://localhost:8000/health/ready
+```
+
+A bare `curl` answers `403` — that is the guard working, not an outage.
+`/health` stays credential-free on purpose: a liveness probe that can return
+"unauthorized" is indistinguishable from a dead process, and an orchestrator
+would restart a container it should have left alone.
+:::
 | `GET /health/metrics` | Queue depth, oldest-queued age, per-worker heartbeat age | Alerting. |
 
 ::: warning Do not publish these through the tunnel
@@ -100,7 +118,8 @@ columns the not-yet-migrated database does not have.
 Watch the API for `alembic_upgrade_head_complete`, then confirm:
 
 ```bash
-curl -s http://localhost:8000/health/ready | grep -o '"schemaCurrent":[a-z]*'
+curl -s -H "X-ShuttleWorks-Ops-Token: $OPS" \
+  http://localhost:8000/health/ready | grep -o '"schemaCurrent":[a-z]*'
 ```
 
 ## Rollback

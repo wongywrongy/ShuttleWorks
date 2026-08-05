@@ -208,6 +208,36 @@ def test_transfer_ownership_promotes_target_and_demotes_caller(session, workspac
     assert _owner_count(session, tid) == 1
 
 
+def test_transfer_from_a_non_owner_is_refused(session, workspace):
+    """A viewer cannot transfer, and must not be promoted by trying.
+
+    The demotion half of the transfer is a hardcoded ``operator``. Without
+    a precondition check on the source's role, passing a VIEWER as
+    ``from_user_id`` silently *promotes* them — a privilege escalation
+    hiding inside a transfer. The route is owner-gated today, so this
+    guards the service against its next caller.
+    """
+    tid, ids = workspace
+    with pytest.raises(members_service.NotOwnerError):
+        members_service.transfer_ownership(
+            session, tid, ids["viewer"], ids["op"]
+        )
+    session.rollback()
+    assert members_service.get_role(session, tid, ids["viewer"]) == "viewer"
+    assert members_service.get_role(session, tid, ids["op"]) == "operator"
+
+
+def test_transfer_from_an_operator_is_refused(session, workspace):
+    """Same guard, one rung up — an operator is still not an owner."""
+    tid, ids = workspace
+    with pytest.raises(members_service.NotOwnerError):
+        members_service.transfer_ownership(
+            session, tid, ids["op"], ids["viewer"]
+        )
+    session.rollback()
+    assert members_service.get_role(session, tid, ids["op"]) == "operator"
+
+
 def test_transfer_to_a_non_member_is_not_found(session, workspace):
     tid, ids = workspace
     with pytest.raises(MemberNotFoundError):

@@ -21,8 +21,10 @@ interface DeepHealth {
 }
 
 function deepHealthUrl(): string {
-  const base = import.meta.env.VITE_API_BASE_URL ||
-    (import.meta.env.DEV ? '/api' : 'http://localhost:8000');
+  // Same default as api/client.ts — relative, never a hardcoded
+  // localhost port. See the comment there for why the old fallback
+  // failed silently.
+  const base = import.meta.env.VITE_API_BASE_URL || '/api';
   return `${base}/health/deep`;
 }
 
@@ -60,6 +62,13 @@ export function useDeepHealth(): DeepHealthState {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Health check failed');
       setHealth(null);
+      // Clear `restricted` too. It is sticky otherwise: once a 403 has
+      // been seen (routine in cloud mode) a later outage would leave it
+      // true, and AppStatusPopover checks `restricted` BEFORE `error`,
+      // so the status row would read a calm "not published" while the
+      // backend was unreachable. An outage must not be able to render
+      // as a deliberate configuration choice.
+      setRestricted(false);
     }
   }, []);
 

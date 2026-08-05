@@ -113,8 +113,17 @@ export function PeopleAccessTab({
    * The row is never mutated locally, so a failure leaves it exactly as
    * it was — there is no optimistic residue to roll back.
    */
+  /** Returns true when the operation actually succeeded.
+   *
+   *  Callers MUST branch on this rather than on `run` resolving: it
+   *  swallows every error to render it inline, so `await run(...)`
+   *  resolves on failure too. The "leave workspace" path used to treat
+   *  resolution as success and fired a session-expired redirect
+   *  unconditionally — a rejected leave (409 last-owner, 403, or a
+   *  network blip) logged the user out while showing them the error.
+   */
   const run = useCallback(
-    async (userId: string, op: () => Promise<unknown>, success: string) => {
+    async (userId: string, op: () => Promise<unknown>, success: string): Promise<boolean> => {
       setBusyUserId(userId);
       setError(null);
       setNotice(null);
@@ -122,6 +131,7 @@ export function PeopleAccessTab({
         await op();
         await load();
         setNotice(success);
+        return true;
       } catch (err) {
         const e = err as { code?: string; status?: number; message?: string };
         if (e.code === 'MEMBER_LAST_OWNER') {
@@ -135,6 +145,7 @@ export function PeopleAccessTab({
         }
         // Stale in every branch above; the list is the source of truth.
         await load();
+        return false;
       } finally {
         setBusyUserId(null);
       }
@@ -163,8 +174,17 @@ export function PeopleAccessTab({
       // Self-removal: once it lands this user has no access, so let the
       // existing session/permission machinery do the redirect rather
       // than inventing a second mechanism for the same situation.
-      await run(member.userId, () => apiClient.leaveTournament(tid), 'You left the workspace.');
-      window.dispatchEvent(new CustomEvent('sw:session-expired'));
+      //
+      // Only on SUCCESS. If the leave was refused the user still has
+      // access, and redirecting them would both discard the inline
+      // explanation and log them out of a workspace they remain a
+      // member of.
+      const left = await run(
+        member.userId,
+        () => apiClient.leaveTournament(tid),
+        'You left the workspace.',
+      );
+      if (left) window.dispatchEvent(new CustomEvent('sw:session-expired'));
     } else {
       await run(
         member.userId,

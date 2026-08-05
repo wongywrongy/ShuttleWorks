@@ -57,9 +57,24 @@ import type {
   BracketCommitRoundIn,
 } from './bracketDto';
 
-// Use /api proxy in dev, or explicit URL in production
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? '/api' : 'http://localhost:8000');
+// Same-origin ``/api`` unless a deployment explicitly overrides it.
+//
+// The default is deliberately relative. It used to fall back to a hardcoded
+// ``http://localhost:8000`` for production builds, which fails SILENTLY and
+// in the most confusing possible way: every request goes to a port nothing
+// is listening on, AuthContext cannot tell a network error from a 401 and
+// maps it to "signed out", and AuthGuard redirects to /login. The app looks
+// like it is asking you to sign in when it is really unable to reach its API.
+//
+// It stayed hidden because every real deployment sets VITE_API_BASE_URL=/api
+// (both compose files, and the frontend Dockerfile's ARG default), and a
+// developer's untracked frontend/.env.local sets it too — so only a bare
+// `vite build` with no environment hit the fallback. CI was exactly that
+// case, and the failure surfaced as two unrelated-looking test failures.
+//
+// An absolute URL is only correct when the SPA is served from a genuinely
+// different origin than the API; that deployment must say so explicitly.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Toast-dedupe window. With four polling hooks running concurrently
 // (useAdvisories every 15s, useSuggestions every 8s, useBracket every
