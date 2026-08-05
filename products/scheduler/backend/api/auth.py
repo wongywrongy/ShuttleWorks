@@ -148,8 +148,13 @@ def register(
     response: Response,
     repo: LocalRepository = Depends(get_repository),
 ) -> UserDTO:
-    ip_key = f"ip:{_client_ip(request)}"
-    _throttle_guard(repo, ip_key)
+    ip = _client_ip(request)
+    ip_key = f"ip:{ip}"
+    reg_key = auth_service.registration_key(ip)
+    # Both buckets gate: the credential one so registration cannot be used
+    # to sidestep a login lockout, the registration one so account
+    # creation itself is bounded (SEC-03).
+    _throttle_guard(repo, ip_key, reg_key)
     try:
         email = auth_service.normalize_email(body.email)
         auth_service.validate_password(body.password)
@@ -163,8 +168,12 @@ def register(
         # Failed registrations count against the IP so enumeration via
         # EMAIL_TAKEN probing is bounded by the same backoff as login.
         auth_service.throttle_record_failure(repo.session, ip_key)
+        auth_service.throttle_record_registration(repo.session, reg_key)
         repo.session.commit()
         raise _auth_error(exc)
+    # Charge the successful path too — it is the expensive one, creating a
+    # users row, a personal org, and an org_members row.
+    auth_service.throttle_record_registration(repo.session, reg_key)
     token, _ = auth_service.create_session(repo.session, user.id)
     repo.session.commit()
     _set_session_cookie(response, token)

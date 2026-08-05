@@ -361,9 +361,23 @@ def throttle_check(session: Session, key: str) -> Optional[float]:
     return remaining if remaining > 0 else None
 
 
-def throttle_record_failure(session: Session, key: str) -> None:
-    """Count a failed attempt; lock the key with doubling backoff once
-    the windowed failure budget is spent."""
+def throttle_record_attempt(
+    session: Session,
+    key: str,
+    *,
+    max_attempts: int,
+    window_seconds: float,
+    lock_seconds: float,
+) -> None:
+    """Count one attempt against ``key``; lock with doubling backoff once
+    the windowed budget is spent.
+
+    The counting mechanism is identical whatever is being counted — only
+    the budget differs — so the credential throttle and the registration
+    volume bucket (SEC-03) share this and pass their own numbers. The
+    column is still named ``failures``; it means "attempts charged to this
+    key", and renaming it would cost a migration for no behaviour change.
+    """
     now = _utcnow()
     row = session.get(AuthThrottle, key)
     if row is None:
@@ -373,17 +387,53 @@ def throttle_record_failure(session: Session, key: str) -> None:
         # re-read (multiple failures in one request) sees this row.
         session.flush()
     window_age = (now - _aware(row.window_started_at)).total_seconds()
-    if window_age > settings.auth_throttle_window_seconds:
+    if window_age > window_seconds:
         row.failures = 0
         row.window_started_at = now
         row.locked_until = None
     row.failures += 1
-    overflow = row.failures - settings.auth_throttle_max_failures
+    overflow = row.failures - max_attempts
     if overflow >= 0:
-        lock = min(
-            settings.auth_throttle_lock_seconds * (2**overflow), _LOCK_CAP_SECONDS
-        )
+        lock = min(lock_seconds * (2**overflow), _LOCK_CAP_SECONDS)
         row.locked_until = now + timedelta(seconds=lock)
+
+
+def throttle_record_failure(session: Session, key: str) -> None:
+    """Count a failed credential attempt against the credential budget."""
+    throttle_record_attempt(
+        session,
+        key,
+        max_attempts=settings.auth_throttle_max_failures,
+        window_seconds=settings.auth_throttle_window_seconds,
+        lock_seconds=settings.auth_throttle_lock_seconds,
+    )
+
+
+def registration_key(ip: str) -> str:
+    """Bucket key for registration volume from one client IP.
+
+    Deliberately a different namespace from the ``ip:`` credential bucket
+    so a burst of registrations cannot lock a venue out of *logging in*,
+    and a run of failed logins cannot block a legitimate signup.
+    """
+    return f"reg:{ip}"
+
+
+def throttle_record_registration(session: Session, key: str) -> None:
+    """Count one registration — successful or not — against the IP.
+
+    SEC-03: the credential throttle recorded only the ``except AuthError``
+    branch, so the path that actually consumes resources (a *successful*
+    registration creating a user, an org, and a membership row) was the
+    one path that counted nothing.
+    """
+    throttle_record_attempt(
+        session,
+        key,
+        max_attempts=settings.registration_max_per_ip,
+        window_seconds=settings.registration_window_seconds,
+        lock_seconds=settings.registration_lock_seconds,
+    )
 
 
 def throttle_record_success(session: Session, key: str) -> None:

@@ -60,6 +60,11 @@ class ErrorCode(str, Enum):
     # Solve jobs (SP-CLOUD-1 async solve rail)
     SOLVE_JOB_NOT_FOUND = "SOLVE_JOB_NOT_FOUND"
     SOLVE_JOB_ACTIVE = "SOLVE_JOB_ACTIVE"
+    # Caller holds the maximum concurrent solve jobs across all their
+    # workspaces (SP-SEC-1 SEC-03). Separate from SOLVE_JOB_ACTIVE so the
+    # UI can say "you have too many solves running" rather than pointing
+    # at a job in a workspace the user may not be looking at.
+    SOLVE_QUOTA_EXCEEDED = "SOLVE_QUOTA_EXCEEDED"
     SOLVE_ENDPOINT_GONE = "SOLVE_ENDPOINT_GONE"
 
     # Schedule operations

@@ -36,7 +36,11 @@ from app.schemas import (
 from api.schedule import GenerateScheduleRequest
 from repositories import LocalRepository, get_repository
 from services import solve_jobs
-from services.solve_jobs import ActiveSolveJobConflict, default_solve_params
+from services.solve_jobs import (
+    ActiveSolveJobConflict,
+    UserSolveQuotaExceeded,
+    default_solve_params,
+)
 
 router = APIRouter(
     prefix="/tournaments/{tournament_id}/solve-jobs",
@@ -97,6 +101,7 @@ def submit_solve_job(
     tournament_id: uuid.UUID = Path(...),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     repo: LocalRepository = Depends(get_repository),
+    user=Depends(get_current_user),
 ) -> SolveJobDTO:
     """Enqueue one solve. 202 always means "accepted, poll the job".
 
@@ -114,8 +119,18 @@ def submit_solve_job(
             input_snapshot=body.model_dump(mode="json"),
             idempotency_key=idempotency_key,
             max_attempts=settings.job_max_attempts,
+            user_id=user.as_uuid(),
+            max_active_per_user=settings.max_active_solve_jobs_per_user,
         )
         session.commit()
+    except UserSolveQuotaExceeded as exc:
+        session.rollback()
+        raise http_error(
+            429,
+            ErrorCode.SOLVE_QUOTA_EXCEEDED,
+            "too many solves running — wait for one to finish",
+            extra={"activeJobs": exc.held, "limit": exc.limit},
+        )
     except ActiveSolveJobConflict as exc:
         session.rollback()
         raise http_error(

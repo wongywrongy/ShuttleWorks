@@ -18,10 +18,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import Base, SolveJob, Tournament
+from database.models import Base, SolveJob, SolveJobStatus, Tournament
 from services import solve_jobs
 from services.solve_jobs import (
     ActiveSolveJobConflict,
+    UserSolveQuotaExceeded,
     SolveJobTransitionError,
     assert_valid_transition,
 )
@@ -485,3 +486,101 @@ def test_get_job_scopes_by_tournament(session, tournament_id):
     session.commit()
     assert solve_jobs.get_job(session, tournament_id, job.id).id == job.id
     assert solve_jobs.get_job(session, uuid.uuid4(), job.id) is None
+
+
+# ---- Per-user concurrency cap (SP-SEC-1 Phase 3, SEC-03) --------------
+
+
+def _user(session, email="quota@example.com"):
+    from database.models import User
+
+    u = User(email=email)
+    session.add(u)
+    session.commit()
+    return u
+
+
+def _member_tournament(session, user, name="quota-t"):
+    """A tournament the user is a member of — membership, not ownership,
+    is what the cap counts."""
+    from database.models import TournamentMember
+
+    t = Tournament(name=name)
+    session.add(t)
+    session.commit()
+    session.add(
+        TournamentMember(tournament_id=t.id, user_id=user.id, role="owner")
+    )
+    session.commit()
+    return t.id
+
+
+def test_count_active_for_user_counts_across_tournaments(session):
+    user = _user(session)
+    a = _member_tournament(session, user, "a")
+    b = _member_tournament(session, user, "b")
+    assert solve_jobs.count_active_for_user(session, user.id) == 0
+    _enqueue(session, a)
+    _enqueue(session, b)
+    session.commit()
+    assert solve_jobs.count_active_for_user(session, user.id) == 2
+
+
+def test_count_active_for_user_ignores_terminal_and_other_users(session):
+    user = _user(session)
+    other = _user(session, "other@example.com")
+    mine = _member_tournament(session, user, "mine")
+    theirs = _member_tournament(session, other, "theirs")
+
+    finished = _enqueue(session, mine)
+    finished.status = SolveJobStatus.SUCCEEDED.value
+    _enqueue(session, theirs)
+    session.commit()
+
+    # A terminal job frees the slot; another user's active job is theirs.
+    assert solve_jobs.count_active_for_user(session, user.id) == 0
+    assert solve_jobs.count_active_for_user(session, other.id) == 1
+
+
+def test_enqueue_raises_when_user_is_at_the_cap(session):
+    user = _user(session)
+    held = _member_tournament(session, user, "held")
+    fresh = _member_tournament(session, user, "fresh")
+    _enqueue(session, held)
+    session.commit()
+
+    with pytest.raises(UserSolveQuotaExceeded) as exc:
+        solve_jobs.enqueue(
+            session,
+            tournament_id=fresh,
+            type_=solve_jobs.MEET_SCHEDULE_SOLVE,
+            params={},
+            input_snapshot={},
+            user_id=user.id,
+            max_active_per_user=1,
+        )
+    assert exc.value.held == 1
+    assert exc.value.limit == 1
+
+
+def test_enqueue_without_user_context_is_uncapped(session):
+    """Internal callers that pass no user_id keep the old behaviour.
+
+    The cap is an API-boundary control; a worker or migration enqueueing
+    on the system's behalf has no user to charge and must not be blocked
+    by a limit meant for public submissions.
+    """
+    user = _user(session)
+    a = _member_tournament(session, user, "a")
+    b = _member_tournament(session, user, "b")
+    _enqueue(session, a)
+    session.commit()
+    job, created = solve_jobs.enqueue(
+        session,
+        tournament_id=b,
+        type_=solve_jobs.MEET_SCHEDULE_SOLVE,
+        params={},
+        input_snapshot={},
+        max_active_per_user=1,  # no user_id → not enforced
+    )
+    assert created and job is not None

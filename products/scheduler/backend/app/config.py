@@ -181,6 +181,22 @@ class Settings(BaseSettings):
     auth_throttle_max_failures: int = 5
     auth_throttle_window_seconds: float = 900.0
     auth_throttle_lock_seconds: float = 60.0
+    # Registration volume per client IP (SP-SEC-1 Phase 3, SEC-03). A
+    # SEPARATE bucket from the credential throttle above, because the two
+    # count different things: that one counts *failures* and a legitimate
+    # user produces none, so folding successful registrations into it
+    # would spend a lockout budget sized for typos. An hour-long window
+    # suits the real pattern — a director registers once, occasionally
+    # once more for a co-director on the same venue IP.
+    registration_max_per_ip: int = 5
+    registration_window_seconds: float = 3600.0
+    registration_lock_seconds: float = 300.0
+    # Concurrent queued/running solve jobs a single user may hold across
+    # ALL their workspaces. The uq_solve_jobs_active partial index bounds
+    # this per tournament; nothing bounded it per user, and the shipped
+    # worker runs worker_concurrency=1, so N jobs across N attacker-owned
+    # workspaces starve every legitimate solve behind them.
+    max_active_solve_jobs_per_user: int = 3
     # Password policy per NIST 800-63B: length only, no composition
     # rules, no rotation.
     password_min_length: int = 8
