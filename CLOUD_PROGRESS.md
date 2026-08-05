@@ -696,3 +696,112 @@ hang, not an error.
 Provisioning, the tunnel, Tailscale ACLs — infrastructure, by hand, next.
 Org-level member management, billing, GDPR tooling, Postgres replication/HA —
 all logged, all out of scope by design.
+
+---
+
+## SP-REPO-1 — Branch consolidation & repository hygiene: DONE (2026-08-05)
+
+Program SP-REPO, run *before* SP-SEC-1 and SP-PERF-1 so both fork from one
+unambiguous trunk. No application code changed — branches moved, labels
+deleted, docs added.
+
+### The two acute problems, as found
+
+1. **Production was running an unmerged feature branch.** `cayde:/opt/ShuttleWorks`
+   was checked out to `dev/review-fixes` @ `edc3387` — CI-green and correct,
+   but a movable label rather than a release.
+2. **44 commits of unknown merge status** across `dev/cloud-hardening` and
+   `dev/cloud-tenancy`.
+
+Problem 2 dissolved on inspection: the GitHub ahead/behind reading had been
+taken backwards. Both branches were **0 ahead / 10 and 34 *behind*** — strict
+ancestors of `main`, same SHAs, `git branch --merged main` listing both. There
+was never anything to recover.
+
+### Branch tip SHAs recorded before deletion (recovery rule)
+
+A deleted branch is recoverable only from its tip. Recorded here first, then
+deleted — `git checkout -b <name> <sha>` restores any of them.
+
+| Branch | Tip | Classification |
+|---|---|---|
+| `dev/review-fixes` | `edc3387` | Merged to `main` via PR #13 |
+| `dev/sec-hardening` | `edc3387` | Empty placeholder, identical to the above |
+| `dev/ci-baseline` | `6a8f44f` | Throwaway; tip was a cherry-pick of `46d0ea9` |
+| `dev/cloud-audit-fixes` | `14fb182` | Merged (was exactly the old `main` tip) |
+| `dev/cloud-hardening` | `d5d468b` | Merged (ancestor of `main`) |
+| `dev/cloud-tenancy` | `93d26d3` (origin `af543d8`) | Merged (ancestor of `main`) |
+| `origin/dev2` | `bc938c6` | Merged via PR #10 |
+| `origin/feat/monorepo-consolidation` | `961e9da` | Merged via PR #9 |
+| `origin/feat/suggestions-inbox` | `401dfb7` | Merged |
+
+Proof standard: `git cherry -v main <branch>` returned **0 unique commits** for
+every branch above except `dev/review-fixes` (6) and `dev/ci-baseline` (1, a
+patch-equivalent cherry-pick). "Old-looking" and a `0 ahead` UI reading were
+not accepted as proof.
+
+### Kept, deliberately
+
+`dev/cloud-concurrency` (`025af1f`) — SP-CLOUD-4 Phase 0: a concurrency audit
+plus a test that **reproduces a lost update on `PUT /state` by failing**.
+Merging it would red the trunk; cherry-picking the doc alone would orphan it
+from the reproduction that gives it meaning. **Pushed to origin** (it existed
+only on the dev laptop) and left unmerged as genuinely-active work. SP-CLOUD-4
+resumes from there.
+
+### Sequence executed
+
+Push concurrency → merge PR #13 → tag `v0.2.0` → **re-point and verify cayde**
+→ *then* delete labels → document. The deletions were held until after cayde
+was verified, so `dev/review-fixes` stayed available as rollback throughout.
+
+### The re-point was a no-op rebuild, and that was verifiable in advance
+
+`edc3387` and the merge commit `26508f2` resolve to the **same tree**
+(`3ac183d`) — the merge of a branch 6 ahead / 0 behind adds no content. The
+images already running on cayde (built 21:12 UTC from that tree) therefore
+*were* `v0.2.0`. `docker compose up --build` was deliberately **not** run: it
+would have taken the stack down and returned bit-identical images. Verified
+instead.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `main` CI (frontend + backend + compose + interaction smoke) | green, run `31049772738` |
+| Publish release images on `main` | green, run `31049774333` — first success since April; the old failures were pre-monorepo path breakage |
+| cayde `git describe --tags --exact-match` | `v0.2.0` |
+| `/api/health` | 200 `{"status":"healthy","version":"2.0.0","role":"api"}` |
+| `/api/health/metrics` no token | 403 |
+| `/api/health/metrics` with `X-ShuttleWorks-Ops-Token` | 200 |
+| `/api/health/ready` with token | 200 |
+| SPA root | 200 |
+| Containers | api / frontend / postgres healthy, cloudflared up |
+
+The metrics endpoint was checked in **both** directions on purpose: a 403 alone
+proves only that something denies, not that the gate opens for a valid token.
+
+### Environment notes worth keeping
+
+- **The deploy path is `/opt/ShuttleWorks`, capital S.** The runbook says
+  `/opt/shuttleworks`; on the case-sensitive host that directory does not
+  exist. Logged to the debt log.
+- **Nothing is published on the host.** `frontend` listens on `8080/tcp` inside
+  the compose network only, with cloudflared as the sole ingress — `curl
+  localhost` on cayde returns connection-refused and looks exactly like an
+  outage. Probe from inside the network.
+- **`localhost` inside the container is `::1`**, while nginx binds IPv4, so an
+  in-container probe must use `127.0.0.1`. This is the *same* IPv6 trap that
+  `46d0ea9` fixed in CI, met again in a second venue.
+- **`neo` runs no worker.** Its Docker is entirely homelab; the `add-a-worker`
+  remote-compute host is undeployed and cayde's `EMBEDDED_WORKER=true` carries
+  all solve work. Logged to the debt log.
+
+### Discipline adopted
+
+`CONTRIBUTING.md` (new): trunk-based development, short-lived `<type>/<slug>`
+branches deleted on merge, releases are tags, and **the deployment tracks a tag
+or `main`, never a feature branch**. `dev/*` is retired as a naming convention —
+it named the stacks that caused this. The branch-hygiene section makes
+`git cherry` the proof standard and requires recording a tip SHA before any
+deletion.

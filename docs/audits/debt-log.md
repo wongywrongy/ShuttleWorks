@@ -570,3 +570,21 @@ a green 1,100-test suite. The real check is the viewer flow in
     reads as a dead control. The doc comment now states this; the behaviour is
     unfixed. Needs either an `onClose` guard or a non-`MenuItem` render for
     disabled entries. Size S. *(2026-08-05 review.)*
+  - **The deploy runbook's path is the wrong case.** `docs/how-to/deploy.md:66`
+    (and `install-selfhost.md:44`) instruct `cd /opt/shuttleworks`; the actual
+    deployment is `/opt/ShuttleWorks`, and on the case-sensitive Linux host the
+    lowercase directory does not exist, so the runbook's very first step fails.
+    Worth fixing carefully rather than blindly: decide whether the *docs* or the
+    *host* is wrong (renaming the live directory means recreating the compose
+    project name and its volumes, so the docs are almost certainly the thing to
+    change). Size S. *(Found in SP-REPO-1 while verifying what cayde ran; not
+    fixed there because that slice was no-code-changes.)*
+  - **The documented remote worker is not deployed.** `docs/how-to/add-a-worker.md`
+    describes `neo` as a remote compute host, and the SP-CLOUD-3 audit's env
+    matrix has a `neo (worker)` column, but neo runs no ShuttleWorks container
+    at all — its Docker is entirely homelab (jellyfin, signoz, bookstack,
+    nginx-proxy-manager). All solve work is carried by cayde's
+    `EMBEDDED_WORKER=true`. Either deploy the worker or mark the runbook as
+    aspirational; a runbook describing a host that isn't running the thing is
+    how an operator loses an hour during an event. Size M (deploy) / S (doc).
+    *(Found in SP-REPO-1 while locating the deployment host.)*
