@@ -805,3 +805,74 @@ or `main`, never a feature branch**. `dev/*` is retired as a naming convention �
 it named the stacks that caused this. The branch-hygiene section makes
 `git cherry` the proof standard and requires recording a tip SHA before any
 deletion.
+
+### Phase 3 — final state (addendum, same day)
+
+Three corrections to the table above. All three exist because branches moved
+*during* the slice: an SP-SEC-1 session ran in parallel in the same working
+tree, and a shared working tree has one HEAD.
+
+- **`dev/sec-hardening` was not the empty placeholder the audit recorded.** It
+  was `edc3387` (identical to `dev/review-fixes`, zero commits) when audited,
+  then gained `592d71c` — the SP-SEC-1 Phase 0 ASVS audit. That work moved to
+  `sec/hardening` as `240c0af`, and
+  `git cherry -v sec/hardening dev/sec-hardening` reports `592d71c` as
+  patch-equivalent (`-` prefix): present under a different SHA, not unique.
+  Deleted at **`592d71c`**, superseded rather than merged.
+- **`docs/sp-repo-1-consolidation`** (`453abef`) was created by this slice for
+  its own Phase 2 commit, merged via PR #14, and deleted — an instance of the
+  discipline it documents, not an exception to it.
+- **`docs/sp-repo-1-close`** (`9150b59`) was cut for this addendum and had to be
+  abandoned. See below; deleted at `9150b59`, its content rewritten here.
+
+### The shared-working-tree hazard, in full
+
+Worth recording precisely, because it cost three separate mistakes and the
+first two lessons did not prevent the third.
+
+Two sessions shared one working tree, so `git checkout` moved HEAD for **both**.
+The failure escalated each time:
+
+1. This slice checked out `main`, then a docs branch, while the other session
+   had 17 files uncommitted. Its WIP checkpoint landed on the docs branch.
+   Recoverable; it recommitted onto its own branch.
+2. Same again on the next branch. Same recovery.
+3. **The damaging one.** `git checkout main` and `git checkout -b
+   docs/sp-repo-1-close` were two separate commands. Between them the other
+   session checked out its branch, so the new branch was cut from *its* tip,
+   not from `main`. A one-file ledger commit was pushed carrying SP-SEC-1
+   Phase 1 underneath it — 28 files, +1973/-524 — and opened as PR #15, which
+   reported CONFLICTING for reasons that had nothing to do with the ledger.
+   The PR was closed unmerged; nothing reached the trunk.
+
+The rule that actually prevents this, as opposed to the two that did not:
+**never let a branch's base be implicit.** `git checkout -b <name> <sha>` with
+an explicit SHA is immune to HEAD moving between commands; `git checkout -b
+<name>` is not. The weaker rules — "leave HEAD where you found it", "push your
+own branch" — are still right, but they address only the symptom.
+
+The other session recorded the same class of hazard from its side (see
+`SEC_PROGRESS.md`, "working tree contention"): it twice used `git checkout --`
+to revert a negative control on a file with uncommitted work. Its rule —
+**commit the phase before running its negative controls** — is the same insight
+from the other direction.
+
+### Branches after consolidation
+
+| Branch | State |
+|---|---|
+| `main` | trunk, tagged `v0.2.0`, CI green |
+| `dev/cloud-concurrency` | active — SP-CLOUD-4 Phase 0, deliberately unmerged (failing reproduction), pushed |
+| `sec/hardening` | active — SP-SEC-1 Phases 0–2 complete, pushed |
+
+Everything else is deleted: eleven remote labels and eight local ones, each
+proven at zero unique commits by `git cherry -v main` and each tip SHA recorded
+before deletion. SP-SEC-1 and SP-PERF-1 can both branch cleanly from `main`.
+
+### What the parallel session demonstrated
+
+It named its branch `sec/hardening` — `<type>/<slug>`, not `dev/*` — the same
+day `CONTRIBUTING.md` landed, and recorded in its own ledger that it renamed
+`dev/sec-hardening` specifically "to match the convention it now has to follow."
+The convention was adopted by a session that was not told to adopt it, which is
+the only real evidence that a written convention works.
