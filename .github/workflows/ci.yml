@@ -1,10 +1,14 @@
 name: CI
 
 on:
+  # Every branch, not an allowlist. The old filter was [main, "dev/**"], which
+  # silently stopped matching the day CONTRIBUTING.md retired `dev/*` in favour
+  # of short-lived `<type>/<slug>` branches: pushes to `sec/hardening` ran no
+  # CI at all, and the gap was invisible because a green PR check looks the
+  # same either way. A gate whose trigger has to be kept in step with a naming
+  # convention is a gate that will be out of step.
   pull_request:
-    branches: [main, "dev/**"]
   push:
-    branches: [main, "dev/**"]
 
 jobs:
   frontend:

@@ -27,6 +27,7 @@ from api import (
     brackets,  # Backend-merge arc PR 2 — bracket draws / advancement / I/O
     workspace_modules,  # Workspace-modules program #1 — per-workspace module state
 )
+from app.body_limit import BodyLimitMiddleware
 from app.config import settings
 from app.dependencies import get_current_user
 from app.exceptions import ConflictError, PreconditionFailedError
@@ -127,11 +128,41 @@ async def lifespan(app: FastAPI):
         log.info("app_shutdown")
 
 
+# Interactive API docs are local-mode only (SP-SEC-1, SEC-04).
+#
+# /docs, /redoc and /openapi.json carried no auth dependency, so a public
+# deployment published the complete route table and every request/response
+# schema for all 77 paths. That is not a vulnerability by itself — it is a
+# free, complete map for anyone probing the rest of the surface, and ASVS
+# v5.0.0-13.4.5 calls it out.
+#
+# They stay ON in local mode, where they are genuinely useful and the API is
+# bound to the operator's own machine. Gating on ENVIRONMENT rather than
+# AUTH_MODE deliberately: this is about who can reach the process, not about
+# how a caller authenticates.
+# A function, not an inline conditional, so the decision is testable
+# without constructing a cloud app: ENVIRONMENT=cloud makes Settings()
+# itself refuse to build without the full cloud secret set (a postgres DSN,
+# OPS_TOKEN, SMTP), so an in-process cloud app is not something a unit test
+# can have. The live 404s are verified against the real deployment in
+# Phase 4 (Rule 6) — this covers the branch, cayde covers the behaviour.
+def docs_urls(environment: str) -> tuple[str | None, str | None, str | None]:
+    """``(docs_url, redoc_url, openapi_url)`` for FastAPI, per environment."""
+    if environment == "cloud":
+        return (None, None, None)
+    return ("/docs", "/redoc", "/openapi.json")
+
+
+_docs_url, _redoc_url, _openapi_url = docs_urls(settings.environment)
+
 app = FastAPI(
     title="School Sparring Scheduler API",
     description="Stateless scheduling API for school sparring matches using CP-SAT solver",
     version="2.0.0",
     lifespan=lifespan,
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+    openapi_url=_openapi_url,
 )
 
 # CORS middleware — origins read from ``settings.cors_origins`` so a
@@ -267,6 +298,29 @@ async def close_repository_middleware(request: Request, call_next):
         repo = getattr(request.state, "repository", None)
         if repo is not None:
             repo.close()
+
+
+# Body-size ceiling (SP-SEC-1, SEC-01). Registered LAST on purpose.
+#
+# ``add_middleware`` does ``user_middleware.insert(0, …)``, so the most
+# recently registered middleware is the OUTERMOST one. Registering this
+# above (next to the CORS call, where it reads more naturally) puts it
+# *innermost* instead — verified by inspecting ``app.user_middleware``,
+# not assumed from the call order. Outermost is what we want: an
+# oversized body is refused before CORS, CSRF, the request-id stamp, or
+# a database session get involved.
+#
+# The cost of being outermost: the 413 does not pass back through
+# ``CORSMiddleware``, so it carries no ``Access-Control-Allow-Origin``.
+# That is invisible in every shipped stack — nginx serves the SPA and
+# proxies ``/api/`` on one origin, and the Vite dev proxy does the same —
+# but a genuinely cross-origin client would see an opaque network error
+# instead of the 413 body. Accepted: the guard's job is to refuse cheaply
+# and unconditionally, and the alternative hides it behind three layers
+# that all have to run first.
+app.add_middleware(
+    BodyLimitMiddleware, max_bytes=settings.max_request_body_bytes
+)
 
 
 # Step 4 — every data router is guarded by ``get_current_user``. The

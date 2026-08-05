@@ -570,7 +570,19 @@ a green 1,100-test suite. The real check is the viewer flow in
     reads as a dead control. The doc comment now states this; the behaviour is
     unfixed. Needs either an `onClose` guard or a non-`MenuItem` render for
     disabled entries. Size S. *(2026-08-05 review.)*
-  - **The deploy runbook's path is the wrong case.** `docs/how-to/deploy.md:66`
+  - **The backend CSV importer is dead code.** `backend/services/csv_importer.py`
+    (`CSVImporterService.parse_roster_csv` / `parse_matches_csv`) and
+    `RosterImportDTO` in `app/schemas.py` have **zero references** anywhere in
+    the repo — no route, no service, no test. SP-SEC-1 Phase 0 filed the
+    unguarded `int(parts[3])` in it as finding SEC-16 (a malformed column raises
+    an uncaught `ValueError`); Phase 1 established the code is unreachable, so
+    the finding is not exploitable and was closed rather than fixed — patching
+    dead code just makes it look maintained. Delete both, or wire the importer
+    up if roster CSV import is still wanted (the UI's CSV affordances are all
+    export today). Size S. *(SP-SEC-1 Phase 1.)*
+  - ~~**The deploy runbook's path is the wrong case.**~~ **RESOLVED 2026-08-05**
+    (SP-SEC-1 Phase 3 runbook commit — 26 occurrences corrected across five
+    files; the docs were wrong, not the host). `docs/how-to/deploy.md:66`
     (and `install-selfhost.md:44`) instruct `cd /opt/shuttleworks`; the actual
     deployment is `/opt/ShuttleWorks`, and on the case-sensitive Linux host the
     lowercase directory does not exist, so the runbook's very first step fails.

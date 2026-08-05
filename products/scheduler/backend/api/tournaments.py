@@ -21,7 +21,8 @@ from app.dependencies import (
     require_tournament_access,
 )
 from app.error_codes import ErrorCode, http_error
-from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO
+from app.limits import Code, Identifier, StrictModel
+from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO, state_dto_from_document
 from database.models import (
     Tournament,
     TournamentMember,
@@ -45,6 +46,15 @@ router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 log = logging.getLogger("scheduler.tournaments")
 
 TournamentStatus = Literal["draft", "active", "archived"]
+
+# Keys inside the state blob that only the server may set, mapped to the
+# value used when the stored document has none yet. Enforced in
+# ``put_tournament_state``; see the comment there for why these are
+# preserved from the prior document rather than stripped.
+_SERVER_MANAGED_STATE_FIELDS: dict[str, object] = {
+    "scheduleVersion": 0,
+    "scheduleHistory": [],
+}
 
 
 # ---- DTOs --------------------------------------------------------------
@@ -80,20 +90,22 @@ class TournamentSummaryDTO(BaseModel):
     signals: Optional[WorkspaceSignalsDTO] = None
 
 
-class WorkspaceModuleSeedDTO(BaseModel):
+class WorkspaceModuleSeedDTO(StrictModel):
     moduleId: str = Field(max_length=20)
     status: str = Field(max_length=20)
     config: Optional[dict] = None
 
 
-class TournamentCreateDTO(BaseModel):
+class TournamentCreateDTO(StrictModel):
     name: Optional[str] = Field(default=None, max_length=200)
     kind: str = Field(default="meet", max_length=20)
     tournamentDate: Optional[str] = Field(default=None, max_length=32)
-    modules: Optional[List[WorkspaceModuleSeedDTO]] = None
+    # One seed row per module; the vocabulary is fixed and tiny, so this
+    # bound only exists to stop a payload repeating it indefinitely.
+    modules: Optional[List[WorkspaceModuleSeedDTO]] = Field(default=None, max_length=20)
 
 
-class TournamentUpdateDTO(BaseModel):
+class TournamentUpdateDTO(StrictModel):
     name: Optional[str] = Field(default=None, max_length=200)
     status: Optional[TournamentStatus] = None
     tournamentDate: Optional[str] = Field(default=None, max_length=32)
@@ -526,7 +538,30 @@ def get_tournament_state(
     row = _resolve_tournament(tournament_id, repo)
     if not row.data:
         return Response(status_code=204)
-    payload = dict(row.data)
+    # Project the stored document onto the wire shape (SP-SEC-1 Phase 1).
+    #
+    # This used to return ``dict(row.data)`` — the raw internal document,
+    # including server-managed sections the DTO does not declare. Two
+    # reasons that had to change once the PUT started forbidding unknown
+    # fields:
+    #
+    # 1. It made GET → PUT round-tripping impossible. A client that read
+    #    the state and wrote it back sent ``bracket_session`` and got a
+    #    422. The frontend never did this (``snapshot()`` composes an
+    #    explicit object), but scripts and tests do, and an API whose own
+    #    output its input rejects is a broken API.
+    # 2. ``bracket_session`` is the bracket engine's internal state. Every
+    #    viewer-role member was being handed it for no reason; nothing
+    #    reads it over the wire (verified across the frontend, the
+    #    simulator, and the backend, which reads it from ``tournament.data``
+    #    directly).
+    #
+    # Values are passed through unvalidated, exactly as before — this
+    # filters which keys are returned, it does not re-parse them, so a
+    # historical blob still reads back as whatever it holds.
+    payload = {
+        k: v for k, v in row.data.items() if k in TournamentStateDTO.model_fields
+    }
     payload["standings"] = [
         s.model_dump() for s in _meet_standings_for(row, repo)
     ]
@@ -587,6 +622,32 @@ def put_tournament_state(
     row_prior = _resolve_tournament(tournament_id, repo)  # 404 if missing
     incoming = state.model_dump(exclude={"standings"})
     prior = dict(row_prior.data or {})
+
+    # SP-SEC-1 (SEC-12): server-managed fields come from the stored
+    # document, never from the request. ``scheduleVersion`` is the
+    # optimistic-concurrency token the proposal-commit path compares
+    # ``fromScheduleVersion`` against, and ``scheduleHistory`` is the
+    # revert pool — a client that could set either could defeat the
+    # stale-proposal check or forge the audit trail.
+    #
+    # Preserved, not stripped. Stripping looks like the safer move and is
+    # the wrong one: the DTO's defaults (0 / []) would then win and every
+    # ordinary save would wipe the value. That is exactly why the
+    # frontend's ``snapshot()`` echoes both fields back in the first
+    # place (see ``useTournamentState.ts``). Preserving makes the echo
+    # redundant rather than load-bearing, so an older tab cannot roll the
+    # version backwards either.
+    #
+    # The legitimate writer is the proposal-commit path, which builds its
+    # payload server-side from persisted state and calls
+    # ``commit_tournament_state`` directly — it does not come through
+    # this route, so it is unaffected. Backup restore likewise writes via
+    # the repository, so a restore still restores the historical values.
+    #
+    # ``updatedAt`` and ``version`` need no handling here: ``_stamp_payload``
+    # in the repository overwrites both unconditionally on every write.
+    for key, default in _SERVER_MANAGED_STATE_FIELDS.items():
+        incoming[key] = prior.get(key, default)
 
     prior_schedule = prior.get("schedule")
     prior_assignments = (
@@ -701,7 +762,7 @@ def put_tournament_state(
             ErrorCode.STATE_WRITE_FAILED,
             "could not persist tournament state",
         )
-    return TournamentStateDTO(**row.data)
+    return state_dto_from_document(row.data)
 
 
 @router.get(
@@ -753,12 +814,16 @@ def restore_tournament_backup(
             ErrorCode.BACKUP_NOT_FOUND,
             f"backup not found: {filename}",
         )
-    except Exception as e:
-        log.error("restore failed: %s", e)
+    except Exception:
+        # SEC-06: the exception's str() went to the client. A SQLAlchemy
+        # connection error carries the DSN — the exact leak the 2026-08-04
+        # audit already fixed once in /health/ready. The detail belongs in
+        # the log, where the operator can read it and the caller cannot.
+        log.exception("restore failed for tournament %s", tournament_id)
         raise http_error(
             500,
             ErrorCode.BACKUP_RESTORE_FAILED,
-            f"restore failed: {e}",
+            "restore failed — see server logs",
         )
     return get_tournament_state(tournament_id, repo)
 
@@ -766,7 +831,7 @@ def restore_tournament_backup(
 # ---- Plan-finalized flag (SP-G1 Plan→Run handoff) ----------------------
 
 
-class PlanFinalizedDTO(BaseModel):
+class PlanFinalizedDTO(StrictModel):
     finalized: bool
 
 
@@ -964,12 +1029,15 @@ def list_tournament_members(
 # against the parameterised route instead of reaching the leave handler.
 
 
-class RoleChangeRequest(BaseModel):
-    role: str
+class RoleChangeRequest(StrictModel):
+    # Validated against ``members_service.ROLES`` in the handler, which
+    # owns the last-owner invariant too; bounded here so an unknown role
+    # is a short string either way.
+    role: Code
 
 
-class TransferOwnershipRequest(BaseModel):
-    userId: str
+class TransferOwnershipRequest(StrictModel):
+    userId: Identifier
 
 
 def _member_error(exc: members_service.MemberError):

@@ -27,6 +27,7 @@ from pydantic import BaseModel
 
 from app.dependencies import AuthUser, get_current_user
 from app.error_codes import ErrorCode, http_error
+from app.limits import Email, StrictModel
 from database.models import InviteLink, Tournament
 from repositories import LocalRepository, get_repository
 from repositories.local import is_invite_valid
@@ -41,15 +42,19 @@ InviteRole = Literal["operator", "viewer"]
 # ---- DTOs --------------------------------------------------------------
 
 
-class InviteCreateDTO(BaseModel):
+class InviteCreateDTO(StrictModel):
     """Body for ``POST /tournaments/{id}/invites``.
 
     ``email`` (SP-CLOUD-2) turns this into an email invite: the link is
     delivered via the email seam and the invite expires. Omitted =
     local link-style invite (copy the URL yourself).
+
+    The address is bounded here and validated for shape by
+    ``normalize_email`` at the handler — that regex rejects all
+    whitespace, which is what keeps a newline out of the ``To:`` header.
     """
     role: InviteRole
-    email: Optional[str] = None
+    email: Optional[Email] = None
 
 
 class InviteSummaryDTO(BaseModel):

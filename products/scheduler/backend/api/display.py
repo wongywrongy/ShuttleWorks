@@ -139,9 +139,27 @@ def display_state(
     if not t.data:
         return Response(status_code=204)
     from api.tournaments import _meet_standings_for
+    from services.bracket import response_cache
+
+    # SEC-13: this is the only unauthenticated data plane, and it recomputed
+    # Meet standings plus a match_states query on EVERY request with no
+    # cache — unlike /bracket, which has had one all along. A display link is
+    # a capability URL projected onto a screen in a public hall, so anyone
+    # holding one could drive that rebuild as fast as they liked. The edge
+    # rate limit (nginx zone sw_display) bounds request volume; this bounds
+    # the cost of each one.
+    #
+    # Same bounded-staleness contract as the bracket cache: a missed
+    # invalidation is at most TTL_SECONDS stale and self-heals, never
+    # permanently wrong. The board polls on a multi-second cadence, so the
+    # TTL is below the poll period and adds no perceptible latency.
+    cached = response_cache.get(t.id, response_cache.DISPLAY_STATE)
+    if cached is not None:
+        return cached
 
     payload = {k: t.data.get(k) for k in _MEET_PROJECTION_FIELDS if k in t.data}
     payload["standings"] = [s.model_dump() for s in _meet_standings_for(t, repo)]
+    response_cache.put(t.id, payload, response_cache.DISPLAY_STATE)
     return payload
 
 

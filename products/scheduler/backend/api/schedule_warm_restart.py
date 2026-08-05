@@ -31,8 +31,14 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter
 
 from app.error_codes import ErrorCode, http_error
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.limits import (
+    MAX_MATCHES,
+    MAX_PLAYERS,
+    Identifier,
+    StrictModel,
+)
 from app.schemas import (
     MatchDTO,
     PlayerDTO,
@@ -64,12 +70,12 @@ _GONE_MESSAGE = (
 )
 
 
-class WarmRestartRequest(BaseModel):
+class WarmRestartRequest(StrictModel):
     originalSchedule: ScheduleDTO
     config: TournamentConfig
-    players: List[PlayerDTO]
-    matches: List[MatchDTO]
-    matchStates: Dict[str, MatchStateDTO] = {}
+    players: List[PlayerDTO] = Field(..., max_length=MAX_PLAYERS)
+    matches: List[MatchDTO] = Field(..., max_length=MAX_MATCHES)
+    matchStates: Dict[Identifier, MatchStateDTO] = Field(default_factory=dict, max_length=MAX_MATCHES)
     # 10 = Conservative (default), 5 = Balanced, 1 = Aggressive.
     stayCloseWeight: int = 10
     nowIso: Optional[str] = None

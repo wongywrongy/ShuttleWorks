@@ -60,9 +60,9 @@ get it wrong, so treat step 10 as mandatory.
 ## 2. Get the code
 
 ```bash
-sudo mkdir -p /opt/shuttleworks
-sudo chown "$USER" /opt/shuttleworks
-cd /opt/shuttleworks
+sudo mkdir -p /opt/ShuttleWorks
+sudo chown "$USER" /opt/ShuttleWorks
+cd /opt/ShuttleWorks
 git clone <repo> .
 ```
 
@@ -75,7 +75,7 @@ aimed at the homelab, must not be able to reach the product's database.
 Three files, never committed (`products/scheduler/secrets/` is gitignored):
 
 ```bash
-cd /opt/shuttleworks/products/scheduler
+cd /opt/ShuttleWorks/products/scheduler
 mkdir -p secrets
 openssl rand -base64 32 | tr -d '\n' > secrets/postgres_password
 printf 'postgresql://scheduler:%s@postgres:5432/scheduler' "$(cat secrets/postgres_password)" \
@@ -188,7 +188,7 @@ The API applies Alembic migrations in its startup lifespan — it is the only
 process that ever does. Watch for `alembic_upgrade_head_complete`, then:
 
 ```bash
-export OPS=$(cat /opt/shuttleworks/products/scheduler/secrets/ops_token)
+export OPS=$(cat /opt/ShuttleWorks/products/scheduler/secrets/ops_token)
 docker compose -f docker-compose.selfhost.yml exec api \
   python -c "import urllib.request,json,os; t=open('/run/secrets/ops_token').read().strip(); \
 req=urllib.request.Request('http://localhost:8000/health/ready', headers={'X-ShuttleWorks-Ops-Token': t}); \
@@ -280,7 +280,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/shuttleworks/products/scheduler
+WorkingDirectory=/opt/ShuttleWorks/products/scheduler
 ExecStart=/usr/bin/docker compose -f docker-compose.selfhost.yml up -d
 ExecStop=/usr/bin/docker compose -f docker-compose.selfhost.yml down
 TimeoutStartSec=0
@@ -309,10 +309,10 @@ Postgres is the source of truth. **Two dumps, not one:**
 
 ```bash
 #!/usr/bin/env bash
-# /opt/shuttleworks/backup.sh
+# /opt/ShuttleWorks/backup.sh
 set -euo pipefail
-cd /opt/shuttleworks/products/scheduler
-OUT=/opt/shuttleworks/backups/$(date +%F)
+cd /opt/ShuttleWorks/products/scheduler
+OUT=/opt/ShuttleWorks/backups/$(date +%F)
 mkdir -p "$OUT"
 
 docker compose -f docker-compose.selfhost.yml exec -T postgres \
