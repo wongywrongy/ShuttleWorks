@@ -19,6 +19,8 @@ from typing import Annotated, Any
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.limits import MAX_REQUEST_BODY_BYTES
+
 
 class Settings(BaseSettings):
     """Process-wide configuration. One source of truth for env vars."""
@@ -79,6 +81,14 @@ class Settings(BaseSettings):
     # never to a wildcard, which would make the header a throttle
     # bypass. Same JSON-list-or-comma-separated parsing as CORS_ORIGINS.
     trusted_proxy_ips: Annotated[list[str], NoDecode] = []
+
+    # Ceiling on a single request body, enforced by
+    # ``app.body_limit.BodyLimitMiddleware``. Default in ``app/limits.py``
+    # (4 MB — ~200x the largest observed real state blob). Exposed as a
+    # setting because the binding case is the whole-document state PUT,
+    # and an installation running genuinely large events is the one that
+    # would need to raise it. Lowering it is always safe.
+    max_request_body_bytes: int = MAX_REQUEST_BODY_BYTES
 
     # ---- Operational endpoints ----------------------------------------
     # Shared secret guarding /health/ready, /health/deep and

@@ -28,6 +28,10 @@ class ErrorCode(str, Enum):
     MATCH_STATE_UNREADABLE = "MATCH_STATE_UNREADABLE"
     MATCH_STATE_WRITE_FAILED = "MATCH_STATE_WRITE_FAILED"
 
+    # Transport-level input bounds (SP-SEC-1). Raised by the body-size
+    # middleware before any handler runs, so it carries no route context.
+    REQUEST_TOO_LARGE = "REQUEST_TOO_LARGE"
+
     # Imports
     UPLOAD_TOO_LARGE = "UPLOAD_TOO_LARGE"
     UPLOAD_INVALID_JSON = "UPLOAD_INVALID_JSON"

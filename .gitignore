@@ -65,6 +65,7 @@ coverage/
 !/CODE_HEALTH.md
 !/FRONTEND_PROGRESS.md
 !/CLOUD_PROGRESS.md
+!/SEC_PROGRESS.md
 
 # Old app folders (legacy)
 apps/

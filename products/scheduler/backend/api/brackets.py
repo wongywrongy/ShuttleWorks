@@ -85,6 +85,20 @@ from services.bracket.formats import (
     segment_label,
     segment_positions,
 )
+from app.limits import (
+    MAX_ASSIGNMENTS,
+    MAX_COURTS,
+    MAX_EVENTS,
+    MAX_PLAYERS,
+    MAX_ROUNDS,
+    MAX_SIDE_MEMBERS,
+    MAX_SOLVE_SECONDS,
+    Code,
+    Identifier,
+    Name,
+    StrictModel,
+)
+from app.schemas import MAX_DURATION_SLOTS, MAX_SLOT_INDEX
 from services.bracket.io.export_schedule import to_csv, to_ics
 from services.bracket.io.import_matches import (
     parse_csv_payload,
@@ -184,9 +198,9 @@ def _generate_draw(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-class ParticipantIn(BaseModel):
-    id: str
-    name: str
+class ParticipantIn(StrictModel):
+    id: Identifier
+    name: Name
     members: Optional[List[str]] = Field(
         None,
         description=(
@@ -203,28 +217,28 @@ class ParticipantIn(BaseModel):
     )
 
 
-class EventIn(BaseModel):
-    id: str
-    discipline: str = Field("GEN", description="MS/WS/MD/WD/XD or short code.")
+class EventIn(StrictModel):
+    id: Identifier
+    discipline: Code = Field("GEN", description="MS/WS/MD/WD/XD or short code.")
     format: FormatId = "se"
-    participants: List[ParticipantIn]
-    seeded_count: Optional[int] = None
-    bracket_size: Optional[int] = None
-    rr_rounds: int = Field(1, ge=1)
-    duration_slots: int = Field(1, ge=1)
+    participants: List[ParticipantIn] = Field(..., max_length=MAX_PLAYERS)
+    seeded_count: Optional[int] = Field(None, ge=0, le=MAX_PLAYERS)
+    bracket_size: Optional[int] = Field(None, ge=0, le=MAX_PLAYERS)
+    rr_rounds: int = Field(1, ge=1, le=MAX_ROUNDS)
+    duration_slots: int = Field(1, ge=1, le=MAX_DURATION_SLOTS)
     randomize: bool = False
     # Format-specific knobs (validated by the format's normalize_config).
     config: dict = Field(default_factory=dict)
 
 
-class CreateTournamentIn(BaseModel):
-    courts: int = Field(2, ge=1, le=64)
-    total_slots: int = Field(128, ge=1)
-    rest_between_rounds: int = Field(1, ge=0)
-    interval_minutes: int = Field(30, ge=1)
-    time_limit_seconds: float = Field(5.0, gt=0)
+class CreateTournamentIn(StrictModel):
+    courts: int = Field(2, ge=1, le=MAX_COURTS)
+    total_slots: int = Field(128, ge=1, le=MAX_SLOT_INDEX)
+    rest_between_rounds: int = Field(1, ge=0, le=MAX_SLOT_INDEX)
+    interval_minutes: int = Field(30, ge=1, le=240)
+    time_limit_seconds: float = Field(5.0, gt=0, le=MAX_SOLVE_SECONDS)
     start_time: Optional[datetime] = None
-    events: List[EventIn]
+    events: List[EventIn] = Field(..., max_length=MAX_EVENTS)
 
 
 class ParticipantOut(BaseModel):
@@ -366,12 +380,12 @@ class TournamentOut(BaseModel):
     results: List[ResultOut]
 
 
-class BracketAssignmentIn(BaseModel):
+class BracketAssignmentIn(StrictModel):
     """One solver-produced (or operator-chosen) assignment cell."""
-    play_unit_id: str
-    slot_id: int
-    court_id: int
-    duration_slots: int = 1
+    play_unit_id: Identifier
+    slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
+    court_id: int = Field(..., ge=0, le=MAX_COURTS)
+    duration_slots: int = Field(1, ge=0, le=MAX_DURATION_SLOTS)
 
 
 class BracketScheduleCandidate(BaseModel):
@@ -401,15 +415,15 @@ class ScheduleNextRoundOut(BaseModel):
     candidates: List[BracketScheduleCandidate] = Field(default_factory=list)
 
 
-class CommitRoundIn(BaseModel):
+class CommitRoundIn(StrictModel):
     """Persist the operator-chosen candidate's assignments for a round."""
-    assignments: List[BracketAssignmentIn]
+    assignments: List[BracketAssignmentIn] = Field(..., max_length=MAX_ASSIGNMENTS)
 
 
-class RecordResultIn(BaseModel):
-    play_unit_id: str
+class RecordResultIn(StrictModel):
+    play_unit_id: Identifier
     winner_side: Literal["A", "B"]
-    finished_at_slot: Optional[int] = None
+    finished_at_slot: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
     walkover: bool = False
     # Opaque set-by-set score JSON for Sets-mode brackets (see ADR 0006:
     # the bracket carries an opaque score blob + winner_side, the meet
@@ -422,39 +436,39 @@ class RecordResultIn(BaseModel):
     seen_version: Optional[int] = None
 
 
-class MatchActionIn(BaseModel):
-    play_unit_id: str
+class MatchActionIn(StrictModel):
+    play_unit_id: Identifier
     action: Literal["start", "finish", "reset"]
-    slot: Optional[int] = None
+    slot: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
 
 
-class BracketValidateIn(BaseModel):
+class BracketValidateIn(StrictModel):
     """A single proposed drag target evaluated by /bracket/validate."""
-    play_unit_id: str
-    slot_id: int
-    court_id: int
+    play_unit_id: Identifier
+    slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
+    court_id: int = Field(..., ge=0, le=MAX_COURTS)
 
 
-class BracketPinIn(BaseModel):
+class BracketPinIn(StrictModel):
     """A single proposed drag target committed by /bracket/pin."""
-    play_unit_id: str
-    slot_id: int
-    court_id: int
+    play_unit_id: Identifier
+    slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
+    court_id: int = Field(..., ge=0, le=MAX_COURTS)
 
 
-class BracketAssignIn(BaseModel):
+class BracketAssignIn(StrictModel):
     """Body for POST /bracket/assign — direct (non-solver) court placement."""
-    play_unit_id: str
-    court_id: int
-    slot_id: int
+    play_unit_id: Identifier
+    court_id: int = Field(..., ge=0, le=MAX_COURTS)
+    slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
 
 
-class BracketUnassignIn(BaseModel):
+class BracketUnassignIn(StrictModel):
     """Body for POST /bracket/unassign — remove a play unit's court assignment."""
-    play_unit_id: str
+    play_unit_id: Identifier
 
 
-class EventUpsertIn(BaseModel):
+class EventUpsertIn(StrictModel):
     """Body of POST /bracket/events/{event_id} — upsert one event."""
     discipline: str
     format: FormatId = "se"
@@ -462,12 +476,12 @@ class EventUpsertIn(BaseModel):
     seeded_count: int = 0
     rr_rounds: int = Field(1, ge=1)
     duration_slots: int = Field(1, ge=1)
-    participants: List[ParticipantIn] = Field(default_factory=list)
+    participants: List[ParticipantIn] = Field(default_factory=list, max_length=MAX_PLAYERS)
     # Format-specific knobs (validated by the format's normalize_config).
     config: dict = Field(default_factory=dict)
 
 
-class EventConfigPatchIn(BaseModel):
+class EventConfigPatchIn(StrictModel):
     """Body of PATCH /bracket/events/{event_id} — edit a DRAFT draw's
     configuration without touching its participants (the upsert route
     wipes them; a config-only patch must not)."""
@@ -479,7 +493,7 @@ class EventConfigPatchIn(BaseModel):
     config: Optional[dict] = None
 
 
-class GenerateEventIn(BaseModel):
+class GenerateEventIn(StrictModel):
     wipe: bool = False
 
 
@@ -503,31 +517,31 @@ class BracketValidationOut(BaseModel):
     conflicts: List[BracketValidationConflictOut] = Field(default_factory=list)
 
 
-class ImportPlayUnitIn(BaseModel):
-    id: str
-    side_a: Optional[List[str]] = None
-    side_b: Optional[List[str]] = None
-    feeder_a: Optional[str] = None
-    feeder_b: Optional[str] = None
-    duration_slots: int = 1
+class ImportPlayUnitIn(StrictModel):
+    id: Identifier
+    side_a: Optional[List[Identifier]] = Field(None, max_length=MAX_SIDE_MEMBERS)
+    side_b: Optional[List[Identifier]] = Field(None, max_length=MAX_SIDE_MEMBERS)
+    feeder_a: Optional[Identifier] = None
+    feeder_b: Optional[Identifier] = None
+    duration_slots: int = Field(1, ge=0, le=MAX_DURATION_SLOTS)
 
 
-class ImportEventIn(BaseModel):
-    id: str
-    discipline: str = "GEN"
+class ImportEventIn(StrictModel):
+    id: Identifier
+    discipline: Code = "GEN"
     format: FormatId = "se"
-    participants: List[ParticipantIn]
-    rounds: List[List[ImportPlayUnitIn]]
+    participants: List[ParticipantIn] = Field(..., max_length=MAX_PLAYERS)
+    rounds: List[List[ImportPlayUnitIn]] = Field(..., max_length=MAX_ROUNDS)
 
 
-class ImportTournamentIn(BaseModel):
-    courts: int = Field(..., ge=1)
-    total_slots: int = Field(..., ge=1)
-    rest_between_rounds: int = Field(1, ge=0)
-    interval_minutes: int = Field(30, ge=1)
-    time_limit_seconds: float = Field(5.0, gt=0)
+class ImportTournamentIn(StrictModel):
+    courts: int = Field(..., ge=1, le=MAX_COURTS)
+    total_slots: int = Field(..., ge=1, le=MAX_SLOT_INDEX)
+    rest_between_rounds: int = Field(1, ge=0, le=MAX_SLOT_INDEX)
+    interval_minutes: int = Field(30, ge=1, le=240)
+    time_limit_seconds: float = Field(5.0, gt=0, le=MAX_SOLVE_SECONDS)
     start_time: Optional[datetime] = None
-    events: List[ImportEventIn]
+    events: List[ImportEventIn] = Field(..., max_length=MAX_EVENTS)
 
 
 # ---------------------------------------------------------------------------

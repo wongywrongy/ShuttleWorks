@@ -27,6 +27,7 @@ from api import (
     brackets,  # Backend-merge arc PR 2 — bracket draws / advancement / I/O
     workspace_modules,  # Workspace-modules program #1 — per-workspace module state
 )
+from app.body_limit import BodyLimitMiddleware
 from app.config import settings
 from app.dependencies import get_current_user
 from app.exceptions import ConflictError, PreconditionFailedError
@@ -267,6 +268,29 @@ async def close_repository_middleware(request: Request, call_next):
         repo = getattr(request.state, "repository", None)
         if repo is not None:
             repo.close()
+
+
+# Body-size ceiling (SP-SEC-1, SEC-01). Registered LAST on purpose.
+#
+# ``add_middleware`` does ``user_middleware.insert(0, …)``, so the most
+# recently registered middleware is the OUTERMOST one. Registering this
+# above (next to the CORS call, where it reads more naturally) puts it
+# *innermost* instead — verified by inspecting ``app.user_middleware``,
+# not assumed from the call order. Outermost is what we want: an
+# oversized body is refused before CORS, CSRF, the request-id stamp, or
+# a database session get involved.
+#
+# The cost of being outermost: the 413 does not pass back through
+# ``CORSMiddleware``, so it carries no ``Access-Control-Allow-Origin``.
+# That is invisible in every shipped stack — nginx serves the SPA and
+# proxies ``/api/`` on one origin, and the Vite dev proxy does the same —
+# but a genuinely cross-origin client would see an opaque network error
+# instead of the 413 body. Accepted: the guard's job is to refuse cheaply
+# and unconditionally, and the alternative hides it behind three layers
+# that all have to run first.
+app.add_middleware(
+    BodyLimitMiddleware, max_bytes=settings.max_request_body_bytes
+)
 
 
 # Step 4 — every data router is guarded by ``get_current_user``. The

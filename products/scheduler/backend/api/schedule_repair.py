@@ -31,8 +31,14 @@ from typing import Dict, List, Literal, Optional, Set
 from fastapi import APIRouter
 
 from app.error_codes import ErrorCode, http_error
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.limits import (
+    MAX_MATCHES,
+    MAX_PLAYERS,
+    Identifier,
+    StrictModel,
+)
 from app.schemas import (
     MatchDTO,
     PlayerDTO,
@@ -65,7 +71,7 @@ _GONE_MESSAGE = (
 )
 
 
-class Disruption(BaseModel):
+class Disruption(StrictModel):
     """One disruption that triggers a repair.
 
     Fields are optional individually but the *combination* is
@@ -89,12 +95,12 @@ class Disruption(BaseModel):
     reason: Optional[str] = None
 
 
-class RepairRequest(BaseModel):
+class RepairRequest(StrictModel):
     originalSchedule: ScheduleDTO
     config: TournamentConfig
-    players: List[PlayerDTO]
-    matches: List[MatchDTO]
-    matchStates: Dict[str, MatchStateDTO] = {}
+    players: List[PlayerDTO] = Field(..., max_length=MAX_PLAYERS)
+    matches: List[MatchDTO] = Field(..., max_length=MAX_MATCHES)
+    matchStates: Dict[Identifier, MatchStateDTO] = Field(default_factory=dict, max_length=MAX_MATCHES)
     disruption: Disruption
     nowIso: Optional[str] = None  # accepted for future "now slot" math
     # Optional override for the solver's wall-clock budget. The

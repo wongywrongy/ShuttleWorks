@@ -7,7 +7,10 @@
 Requirement IDs are cited as `v5.0.0-<chapter>.<section>.<requirement>` and were taken
 from the machine-readable ASVS 5.0.0 JSON (`OWASP/ASVS`, `5.0/docs_en`), not from memory.
 
-**Status: Phase 0 complete. No remediation code written. Awaiting confirmation + the 0.G decision.**
+**Status: Phase 0 complete.** Per-finding resolution status is tracked in `SEC_PROGRESS.md`.
+As of 2026-08-05, Phase 1 has closed SEC-01, SEC-12, SEC-14 and SEC-15, and closed SEC-16 as
+**not exploitable** (see the correction on that finding). 0.G was decided: Cloudflare Access
+in front of the app now, rate-limited open registration as the target state.
 
 ---
 
@@ -377,11 +380,17 @@ It is truncated to 200 only when deriving an org name. Rendered in the React app
 ---
 
 ### SEC-16 — CSV roster import: unbounded body, unguarded `int()`
-**Severity: Low (informational) · `v5.0.0-2.2.1` L1 · `v5.0.0-16.5.3` L2**
+**Severity: Low → NOT EXPLOITABLE (corrected in Phase 1) · `v5.0.0-2.2.1` L1**
 
-`RosterImportDTO.csv` is an unbounded string, and `CSVImporterService.parse_roster_csv` calls
-`int(parts[3])` without a guard — a non-numeric column raises an uncaught `ValueError`. Bounded by
-SEC-01's body limit once that lands; the `int()` should still be handled and returned as a 400.
+As filed: `RosterImportDTO.csv` is an unbounded string and `CSVImporterService.parse_roster_csv`
+calls `int(parts[3])` without a guard, so a non-numeric column raises an uncaught `ValueError`.
+
+**Correction.** Phase 1 established that `CSVImporterService` and `RosterImportDTO` have **zero
+references anywhere in the repo** — no route, no service, no test. The code is unreachable, so
+neither issue is. Closed without a code fix and logged to `docs/audits/debt-log.md` as dead code
+to delete: patching dead code makes it look maintained, which is worse than leaving it visibly
+dead. Phase 0 assigned this a severity without first checking reachability; that check belongs
+in the method for future findings.
 
 ---
 

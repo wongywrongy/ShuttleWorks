@@ -22,6 +22,7 @@ from app.client_ip import client_ip
 from app.config import settings
 from app.dependencies import AuthUser, get_current_user
 from app.error_codes import ErrorCode, http_error
+from app.limits import Email, Name, Password, StrictModel, Token
 from database.models import User
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service
@@ -35,29 +36,33 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # ---- DTOs ------------------------------------------------------------
 
 
-class RegisterRequest(BaseModel):
-    email: str
-    password: str
-    displayName: Optional[str] = None
+class RegisterRequest(StrictModel):
+    email: Email
+    # Bounded well above the 128-char policy so an over-long password is
+    # a clean AUTH_WEAK_PASSWORD from ``validate_password`` rather than a
+    # 422 from the schema — and so an unbounded string never reaches
+    # Argon2, whose cost is a function of what it is asked to hash.
+    password: Password
+    displayName: Optional[Name] = None
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
+class LoginRequest(StrictModel):
+    email: Email
+    password: Password
 
 
-class ChangePasswordRequest(BaseModel):
-    currentPassword: str
-    newPassword: str
+class ChangePasswordRequest(StrictModel):
+    currentPassword: Password
+    newPassword: Password
 
 
-class RequestPasswordResetRequest(BaseModel):
-    email: str
+class RequestPasswordResetRequest(StrictModel):
+    email: Email
 
 
-class ResetPasswordRequest(BaseModel):
-    token: str
-    newPassword: str
+class ResetPasswordRequest(StrictModel):
+    token: Token
+    newPassword: Password
 
 
 class UserDTO(BaseModel):
