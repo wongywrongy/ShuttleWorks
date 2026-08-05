@@ -696,3 +696,47 @@ hang, not an error.
 Provisioning, the tunnel, Tailscale ACLs — infrastructure, by hand, next.
 Org-level member management, billing, GDPR tooling, Postgres replication/HA —
 all logged, all out of scope by design.
+
+### Phase 3 — final state (addendum, same day)
+
+Two corrections to the table above, both because branches moved *during* the
+slice while an SP-SEC-1 session ran in parallel in the same working tree.
+
+- **`dev/sec-hardening` was not the empty placeholder the audit recorded.** It
+  was `edc3387` (identical to `dev/review-fixes`, zero commits) when audited,
+  and it later gained `592d71c` — the SP-SEC-1 Phase 0 ASVS audit. That work
+  then moved to `sec/hardening` as `240c0af`, and
+  `git cherry -v sec/hardening dev/sec-hardening` reports `592d71c` as
+  patch-equivalent (`-` prefix), i.e. already present under a different SHA.
+  Deleted at **`592d71c`**, superseded rather than merged.
+- **`docs/sp-repo-1-consolidation`** (`453abef`) was created by this slice for
+  its own Phase 2 commit, merged via PR #14, and deleted — an example of the
+  discipline it documents rather than an exception to it.
+
+### Branches after consolidation
+
+| Branch | State |
+|---|---|
+| `main` | trunk, tagged `v0.2.0`, CI green |
+| `dev/cloud-concurrency` | active — SP-CLOUD-4 Phase 0, deliberately unmerged (failing reproduction), pushed |
+| `sec/hardening` | active — SP-SEC-1 Phase 1 |
+
+Everything else is deleted: nine remote labels and six local ones, each proven
+at zero unique commits by `git cherry -v main` and each tip SHA recorded above
+before deletion. SP-SEC-1 and SP-PERF-1 can now both branch cleanly from `main`.
+
+### What the parallel session demonstrated
+
+The SP-SEC-1 session named its branch `sec/hardening` — `<type>/<slug>`, not
+`dev/*` — the same day `CONTRIBUTING.md` landed. That is the convention working
+as intended, and it is the reason the old naming is called out explicitly there
+rather than left implicit.
+
+It also produced the one hazard worth writing down: **two sessions share one
+working tree, so `git checkout` moves HEAD for both.** This slice checked out
+`main` and then a docs branch while that session had 17 files uncommitted,
+which sent its WIP checkpoint onto the docs branch. Nothing was lost (it
+recommitted onto `sec/hardening` and the stray commit is unreferenced), but the
+rule earned is: **when a second session may be live, push your own branch and
+leave HEAD where you found it** — a shared worktree makes branch switching a
+cross-session side effect, not a local one.
