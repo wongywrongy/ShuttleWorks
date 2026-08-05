@@ -288,8 +288,14 @@ failure, which is otherwise invisible until it hits real users:
 2. From a **different** network (phone on cellular is ideal), log in normally.
 
 If step 2 works, per-client throttling is live. If step 2 is throttled, the
-header is not being read — recheck `TRUSTED_PROXY_IPS` against the connector's
-current address, which changes if the container is recreated.
+header is not being read — recheck `TRUSTED_PROXY_IPS` against the address the
+API sees as its **immediate peer**, which is the `frontend` nginx container,
+not cloudflared. Confirm it is inside the compose subnet:
+
+```bash
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
+  shuttleworks-frontend-1
+```
 
 ## 7. First run
 

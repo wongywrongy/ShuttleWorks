@@ -128,6 +128,7 @@ export default defineConfig({
         text: 'Deploying & operating',
         collapsed: false,
         items: [
+          { text: 'Deploy: start to finish', link: '/how-to/deploy' },
           { text: 'Install: local (offline)', link: '/how-to/install-local' },
           { text: 'Install: self-hosted', link: '/how-to/install-selfhost' },
           { text: 'Add a worker machine', link: '/how-to/add-a-worker' },
