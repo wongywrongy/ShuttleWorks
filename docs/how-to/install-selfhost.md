@@ -153,6 +153,36 @@ value; the file is read and stripped. `<VAR>` wins if both are set.
 
 ## 4. Cloudflare Tunnel
 
+::: warning The tunnel is not optional in this stack
+Two things make it required rather than recommended:
+
+1. **Compose will not even load the file without a token.**
+   `CLOUDFLARE_TUNNEL_TOKEN` is declared `:?`, so `docker compose -f
+   docker-compose.selfhost.yml up -d` fails at interpolation — *even if you
+   only name `postgres api frontend` on the command line*. Variable
+   interpolation happens for the whole file before service selection.
+2. **Nothing is reachable without it.** The `frontend` service publishes no
+   host port by design; the connector reaches it over the compose network.
+   Skipping cloudflared leaves the stack running and unreachable.
+
+And if you worked around both, a third would stop you: the cloud profile
+requires `SESSION_COOKIE_SECURE=true` (the startup validator refuses to boot
+otherwise), so the session cookie is never sent over plain HTTP. A LAN-only
+deployment on `http://` cannot log in.
+
+**If you don't want a tunnel**, your options are:
+
+- **A single operator on one machine** → [Install: local](/how-to/install-local).
+  No accounts, no TLS, fully offline. This is the right answer for a solo
+  director and is strictly simpler.
+- **Another TLS terminator you already trust** (Tailscale Serve, an existing
+  reverse proxy with a real certificate). Workable in principle — publish a
+  port on `frontend`, point `PUBLIC_HOSTNAME` at that hostname, and set
+  `TRUSTED_PROXY_IPS` to whatever address the API sees as its peer. **Not
+  tested here**, and getting `TRUSTED_PROXY_IPS` wrong fails open (see §6), so
+  verify with the day-one smoke check below before trusting it.
+:::
+
 Create a **named tunnel** in the Cloudflare dashboard (Zero Trust → Networks →
 Tunnels), copy its token into `.env` as `CLOUDFLARE_TUNNEL_TOKEN`, and add a
 public hostname.
@@ -263,8 +293,23 @@ current address, which changes if the container is recreated.
 
 ## 7. First run
 
+Check the secrets are readable **inside** the container before starting
+anything. This is a ten-second check that pre-empts the most confusing
+first-boot failure on this page:
+
 ```bash
 cd /opt/shuttleworks/products/scheduler
+docker compose -f docker-compose.selfhost.yml run --rm --no-deps \
+  --entrypoint sh api -c 'cat /run/secrets/database_url >/dev/null && echo "secrets readable by uid $(id -u)"'
+```
+
+If that errors instead of printing, revisit §2 — the API runs as UID 1001 and
+cannot read a secret file owned by your deploying user with mode `600`. The
+symptom otherwise is a container that restart-loops with a *configuration*
+error naming `DATABASE_URL`, which sends you looking at the wrong thing
+entirely.
+
+```bash
 docker compose -f docker-compose.selfhost.yml up -d --build
 ```
 

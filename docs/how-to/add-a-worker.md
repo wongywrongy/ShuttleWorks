@@ -141,10 +141,20 @@ solve worker up: id=neo-1 concurrency=2 db=100.101.102.103:5432/scheduler
 ## 5. Verify it is actually claiming work
 
 A worker that connects but never claims looks identical to a healthy idle one.
+And `docker ps` will not help you here: the worker container carries **no
+healthcheck at all**. That is deliberate — it shares the backend image, whose
+`HEALTHCHECK` probes `/health/deep` over HTTP, and `python -m worker` serves no
+HTTP, so the probe could only ever report `unhealthy` forever. `.worker.yml`
+disables it rather than shipping a permanently-red container. **Queue metrics
+are the liveness signal for a worker, not container health.**
+
 Submit a solve, then watch the queue from the **primary**:
 
 ```bash
-curl -s http://localhost:8000/health/metrics | python3 -m json.tool
+# /health/metrics requires the ops token in cloud mode (SP-CLOUD-3). Without
+# the header this answers 403 — that is the guard, not a fault.
+curl -s -H "X-ShuttleWorks-Ops-Token: $(cat secrets/ops_token)" \
+  http://localhost:8000/health/metrics | python3 -m json.tool
 ```
 
 ```json
