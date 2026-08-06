@@ -38,9 +38,9 @@ instead — this guide is strictly more complexity.
 ## 1. Directory layout
 
 ```bash
-sudo mkdir -p /opt/shuttleworks
-sudo chown "$USER" /opt/shuttleworks
-cd /opt/shuttleworks
+sudo mkdir -p /opt/ShuttleWorks
+sudo chown "$USER" /opt/ShuttleWorks
+cd /opt/ShuttleWorks
 git clone <repo> .
 ```
 
@@ -53,7 +53,7 @@ aimed at the homelab, should not be able to reach the product's database.
 Three files, never committed (`products/scheduler/secrets/` is gitignored):
 
 ```bash
-cd /opt/shuttleworks/products/scheduler
+cd /opt/ShuttleWorks/products/scheduler
 mkdir -p secrets
 openssl rand -base64 32 | tr -d '\n' > secrets/postgres_password
 printf 'postgresql://scheduler:%s@postgres:5432/scheduler' "$(cat secrets/postgres_password)" \
@@ -207,6 +207,40 @@ public internet through the same tunnel, with no authentication in front of it.
 The tunnel's blast radius is whatever you point it at.
 :::
 
+### 4a. Cloudflare Access, and the one route that must stay open
+
+Registration is open by default: anyone who finds the hostname can create an
+account. Until you have deliberately decided otherwise, put **Cloudflare
+Access** in front of the hostname — it is free, takes about ten minutes, and is
+reversible. It is the right posture for any deployment that has not been
+penetration-tested.
+
+::: danger Exclude the display routes or every spectator screen goes dark
+An Access policy covering the whole hostname breaks the public display plane,
+and it breaks it *at the event*, on the screens in the hall, in front of
+everyone.
+
+Two things must bypass the policy:
+
+- `/api/display/*` — the projection API the boards poll
+- `/display/*` — the SPA route the boards are pointed at
+
+Both are capability URLs: unguessable 192-bit tokens, scoped to one workspace,
+serving a strict projection with no operator material. That is the design —
+they are *meant* to be openable by anyone holding the link, because the link
+gets typed into a smart TV. Putting a login in front of them defeats their
+only purpose.
+
+Add both as Bypass rules in the Access application before the first event, and
+re-check them after any Access policy edit.
+:::
+
+Once the remediation in `SEC_PROGRESS.md` has landed and you want public
+signup, the intended end state is **open registration with rate limiting**
+(already implemented: a per-IP registration bucket, a per-user concurrent-solve
+cap, and `limit_req` zones at the edge) rather than invite-only. Invite-only is
+held in reserve for if abuse actually appears.
+
 ## 5. Postgres binding
 
 ::: danger `0.0.0.0` is a public database, whatever UFW says
@@ -304,7 +338,7 @@ anything. This is a ten-second check that pre-empts the most confusing
 first-boot failure on this page:
 
 ```bash
-cd /opt/shuttleworks/products/scheduler
+cd /opt/ShuttleWorks/products/scheduler
 docker compose -f docker-compose.selfhost.yml run --rm --no-deps \
   --entrypoint sh api -c 'cat /run/secrets/database_url >/dev/null && echo "secrets readable by uid $(id -u)"'
 ```
@@ -352,7 +386,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/shuttleworks/products/scheduler
+WorkingDirectory=/opt/ShuttleWorks/products/scheduler
 ExecStart=/usr/bin/docker compose -f docker-compose.selfhost.yml up -d
 ExecStop=/usr/bin/docker compose -f docker-compose.selfhost.yml down
 TimeoutStartSec=0
@@ -388,10 +422,10 @@ Postgres is the source of truth. Two dumps, not one:
 
 ```bash
 #!/usr/bin/env bash
-# /opt/shuttleworks/backup.sh
+# /opt/ShuttleWorks/backup.sh
 set -euo pipefail
-cd /opt/shuttleworks/products/scheduler
-OUT=/opt/shuttleworks/backups/$(date +%F)
+cd /opt/ShuttleWorks/products/scheduler
+OUT=/opt/ShuttleWorks/backups/$(date +%F)
 mkdir -p "$OUT"
 
 docker compose -f docker-compose.selfhost.yml exec -T postgres \
@@ -417,10 +451,10 @@ A backup you have never restored is a hypothesis.
 
 ```bash
 #!/usr/bin/env bash
-# /opt/shuttleworks/restore-drill.sh  — restores into a THROWAWAY database
+# /opt/ShuttleWorks/restore-drill.sh  — restores into a THROWAWAY database
 set -euo pipefail
 SRC=${1:?usage: restore-drill.sh /path/to/backup-dir}
-cd /opt/shuttleworks/products/scheduler
+cd /opt/ShuttleWorks/products/scheduler
 C="docker compose -f docker-compose.selfhost.yml exec -T postgres"
 
 $C psql -U scheduler -d postgres -c 'DROP DATABASE IF EXISTS drill;'

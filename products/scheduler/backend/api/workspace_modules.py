@@ -17,10 +17,10 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Path
-from pydantic import BaseModel
 
 from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
+from app.limits import Code, StrictModel
 from app.schemas import WorkspaceModuleDTO
 from database.models import (
     MODULE_STATUSES,
@@ -46,7 +46,7 @@ _ALLOWED_TRANSITIONS = frozenset(
 )
 
 
-class WorkspaceModulePatchDTO(BaseModel):
+class WorkspaceModulePatchDTO(StrictModel):
     """Body of ``PATCH /tournaments/{id}/modules/{moduleId}``.
 
     Both fields optional; ``exclude_unset`` at the call site means an
@@ -54,7 +54,7 @@ class WorkspaceModulePatchDTO(BaseModel):
     member of the module status vocabulary; ``config`` replaces the
     module's settings blob.
     """
-    status: Optional[str] = None
+    status: Optional[Code] = None
     config: Optional[dict] = None
 
 

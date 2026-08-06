@@ -152,3 +152,78 @@ def test_link_invite_still_eternal(client, workspace):
     listed = client.get(f"/tournaments/{tid}/invites").json()
     row = next(i for i in listed if i["token"] == r.json()["token"])
     assert row["expiresAt"] is None and row["email"] is None
+
+
+# ---- SEC-13: the public state route is cached ------------------------
+
+
+def test_display_state_is_served_from_a_short_ttl_cache(
+    client, workspace, monkeypatch
+):
+    """The only unauthenticated data plane must not rebuild per request.
+
+    Standings are recomputed from the blob and joined against match_states
+    on every call; a leaked capability URL could drive that as fast as it
+    liked. Asserted by counting rebuilds, not by timing.
+    """
+    from services.bracket import response_cache
+
+    response_cache.clear_all()
+    tid, token = workspace
+    client.put(
+        f"/tournaments/{tid}/state",
+        json={
+            "config": {
+                "intervalMinutes": 30, "dayStart": "09:00", "dayEnd": "18:00",
+                "breaks": [], "courtCount": 2, "defaultRestMinutes": 0,
+                "freezeHorizonSlots": 0, "tournamentName": "TV Night",
+            },
+            "players": [], "matches": [], "groups": [],
+        },
+        headers=CSRF,
+    )
+    client.cookies.clear()
+
+    calls = {"n": 0}
+    import api.tournaments as tournaments_api
+
+    real = tournaments_api._meet_standings_for
+
+    def counting(*a, **kw):
+        calls["n"] += 1
+        return real(*a, **kw)
+
+    monkeypatch.setattr(tournaments_api, "_meet_standings_for", counting)
+
+    for _ in range(3):
+        assert client.get(f"/display/{token}/state").status_code == 200
+    assert calls["n"] == 1, "standings rebuilt on a cached read"
+
+
+def test_display_state_and_bracket_caches_do_not_collide(client):
+    """Both cache per tournament id; without a namespace one would serve
+    the other's payload."""
+    from services.bracket import response_cache
+
+    response_cache.clear_all()
+    tid = __import__("uuid").uuid4()
+    response_cache.put(tid, {"which": "bracket"}, response_cache.BRACKET)
+    response_cache.put(tid, {"which": "state"}, response_cache.DISPLAY_STATE)
+
+    assert response_cache.get(tid, response_cache.BRACKET) == {"which": "bracket"}
+    assert response_cache.get(tid, response_cache.DISPLAY_STATE) == {"which": "state"}
+
+
+def test_invalidate_clears_every_namespace(client):
+    """A bracket write changes standings the display board also renders."""
+    from services.bracket import response_cache
+
+    response_cache.clear_all()
+    tid = __import__("uuid").uuid4()
+    response_cache.put(tid, {"a": 1}, response_cache.BRACKET)
+    response_cache.put(tid, {"b": 2}, response_cache.DISPLAY_STATE)
+
+    response_cache.invalidate(tid)
+
+    assert response_cache.get(tid, response_cache.BRACKET) is None
+    assert response_cache.get(tid, response_cache.DISPLAY_STATE) is None

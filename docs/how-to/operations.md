@@ -21,7 +21,7 @@ live job ids, queue depth, the deployed schema revision — so they require
 profile **requires**. Every command on this page therefore sends it:
 
 ```bash
-export OPS=$(cat /opt/shuttleworks/products/scheduler/secrets/ops_token)
+export OPS=$(cat /opt/ShuttleWorks/products/scheduler/secrets/ops_token)
 curl -s -H "X-ShuttleWorks-Ops-Token: $OPS" http://localhost:8000/health/ready
 ```
 
@@ -90,7 +90,7 @@ appears.
 ## Upgrades
 
 ```bash
-cd /opt/shuttleworks/products/scheduler
+cd /opt/ShuttleWorks/products/scheduler
 ./backup.sh                                   # always first
 git pull
 docker compose -f docker-compose.selfhost.yml up -d --build
@@ -144,7 +144,7 @@ Which is why `./backup.sh` runs *before* `git pull`, every time.
 ## Logs
 
 ```bash
-cd /opt/shuttleworks/products/scheduler
+cd /opt/ShuttleWorks/products/scheduler
 docker compose -f docker-compose.selfhost.yml logs -f api
 docker compose -f docker-compose.selfhost.yml logs -f postgres
 docker compose -f docker-compose.selfhost.yml logs -f cloudflared

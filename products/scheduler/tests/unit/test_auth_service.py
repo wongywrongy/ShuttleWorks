@@ -220,3 +220,52 @@ def test_throttle_success_resets(session, monkeypatch):
     assert auth_service.throttle_check(session, key) is not None
     auth_service.throttle_record_success(session, key)
     assert auth_service.throttle_check(session, key) is None
+
+
+# ---- Breached-password blocklist (SP-SEC-1 Phase 3, SEC-07) ----------
+
+
+def test_blocklist_meets_the_asvs_l1_floor():
+    """v5.0.0-6.2.4 L1: at least the top 3000 matching the policy.
+
+    Asserted as a number because the requirement IS a number — a test that
+    only checked "some passwords are rejected" would have passed against the
+    15-entry list this replaced.
+    """
+    from services.auth import _WORST_PASSWORDS
+
+    assert len(_WORST_PASSWORDS) >= 3000
+
+
+def test_blocklist_holds_only_policy_eligible_entries():
+    """Entries below the length minimum would be dead weight — already
+    refused by the length rule before the blocklist is consulted."""
+    from app.config import settings
+    from services.auth import _WORST_PASSWORDS
+
+    too_short = [w for w in _WORST_PASSWORDS if len(w) < settings.password_min_length]
+    assert too_short == []
+
+
+@pytest.mark.parametrize(
+    "password",
+    [
+        "password1",   # was in the old 15-entry list
+        "trustno1",    # was NOT — only the expanded list catches it
+        "qwerty123",
+        "michael1",
+    ],
+)
+def test_common_passwords_are_refused(password):
+    from services.auth import AuthError, validate_password
+
+    with pytest.raises(AuthError) as exc:
+        validate_password(password)
+    assert exc.value.code == "PASSWORD_TOO_COMMON"
+
+
+def test_a_long_passphrase_is_still_accepted():
+    """The blocklist must not become a de-facto composition rule."""
+    from services.auth import validate_password
+
+    validate_password("correct horse battery staple")

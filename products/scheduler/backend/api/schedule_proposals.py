@@ -33,10 +33,19 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
+from app.limits import (
+    MAX_COURTS,
+    MAX_GROUPS,
+    MAX_MATCHES,
+    MAX_PLAYERS,
+    Identifier,
+    StrictModel,
+)
+from app.schemas import MAX_SLOT_INDEX, state_dto_from_document
 from app.schemas import (
     Impact,
     MatchDTO,
@@ -247,7 +256,7 @@ async def _persist_committed_state(
         raise http_error(
             500, ErrorCode.STATE_WRITE_FAILED, "could not persist schedule commit"
         )
-    return TournamentStateDTO(**{k: v for k, v in row.data.items() if k != "_integrity"})
+    return state_dto_from_document(row.data)
 
 
 def _build_proposal(
@@ -336,19 +345,19 @@ def _impact_summary(impact: Impact, clock_shift_delta: int = 0) -> str:
 # ---------- request schemas ------------------------------------------------
 
 
-class ManualEditRequest(BaseModel):
+class ManualEditRequest(StrictModel):
     """Drag-pin a single match to a new slot/court and warm-restart with a
     high stay-close weight so nothing else moves unless feasibility forces it.
     """
     originalSchedule: ScheduleDTO
     config: TournamentConfig
-    players: List[PlayerDTO]
-    matches: List[MatchDTO]
-    groups: List[RosterGroupDTO] = []
-    matchStates: Dict[str, MatchStateDTO] = {}
-    matchId: str
-    pinnedSlotId: int
-    pinnedCourtId: int
+    players: List[PlayerDTO] = Field(..., max_length=MAX_PLAYERS)
+    matches: List[MatchDTO] = Field(..., max_length=MAX_MATCHES)
+    groups: List[RosterGroupDTO] = Field(default_factory=list, max_length=MAX_GROUPS)
+    matchStates: Dict[Identifier, MatchStateDTO] = Field(default_factory=dict, max_length=MAX_MATCHES)
+    matchId: Identifier
+    pinnedSlotId: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
+    pinnedCourtId: int = Field(..., ge=0, le=MAX_COURTS)
 
 
 class CommitResponse(BaseModel):

@@ -28,6 +28,7 @@ from app.dependencies import require_tournament_access
 from repositories import LocalRepository, get_repository
 
 from app.schemas import (
+    state_dto_from_document,
     Advisory,
     MatchDTO,
     ScheduleDTO,
@@ -501,9 +502,7 @@ async def get_schedule_advisories(
     try:
         tournament_row = repo.tournaments.get_by_id(tournament_id)
         if tournament_row is not None and tournament_row.data:
-            state = TournamentStateDTO(**{
-                k: v for k, v in tournament_row.data.items() if k != "_integrity"
-            })
+            state = state_dto_from_document(tournament_row.data)
     except Exception as e:  # noqa: BLE001 — advisor must never 500 on read failure
         log.warning("advisories: tournament state unreadable: %s", e)
         return []

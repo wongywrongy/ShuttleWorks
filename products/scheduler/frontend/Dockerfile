@@ -51,6 +51,10 @@ RUN npm run -w products/scheduler/frontend build
 FROM nginxinc/nginx-unprivileged:alpine
 
 COPY products/scheduler/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# Security headers live in a snippet because nginx drops inherited
+# add_header directives in any location that declares one of its own, so the
+# list has to be repeated per location — see SEC-02 in the snippet's header.
+COPY products/scheduler/frontend/security-headers.conf /etc/nginx/snippets/security-headers.conf
 
 # nginx-unprivileged already owns /usr/share/nginx/html as UID 101.
 COPY --from=builder --chown=101:101 \

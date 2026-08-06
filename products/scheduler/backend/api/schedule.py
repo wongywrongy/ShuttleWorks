@@ -20,9 +20,17 @@ from dataclasses import replace
 from fastapi import APIRouter
 
 from app.error_codes import ErrorCode, http_error
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import Field
+from typing import Annotated, List, Optional
+from app.limits import (
+    MAX_ASSIGNMENTS,
+    MAX_COURT_CLOSURES,
+    MAX_MATCHES,
+    MAX_PLAYERS,
+    StrictModel,
+)
 from app.schemas import (
+    MAX_SLOT_INDEX,
     TournamentConfig, PlayerDTO, MatchDTO,
     ScheduleAssignment, PreviousAssignmentDTO, ProposedMoveDTO, ValidationResponseDTO,
 )
@@ -32,19 +40,28 @@ router = APIRouter(prefix="", tags=["schedule"])
 log = logging.getLogger("scheduler.schedule")
 
 
-class GenerateScheduleRequest(BaseModel):
-    """The complete solver input — includes all data needed."""
+class GenerateScheduleRequest(StrictModel):
+    """The complete solver input — includes all data needed.
+
+    The collection bounds matter more here than anywhere else in the API:
+    this payload is what reaches CP-SAT, and solve cost grows with the
+    grid it describes rather than with the bytes it occupies.
+    """
     config: TournamentConfig
-    players: List[PlayerDTO]
-    matches: List[MatchDTO]
+    players: List[PlayerDTO] = Field(..., max_length=MAX_PLAYERS)
+    matches: List[MatchDTO] = Field(..., max_length=MAX_MATCHES)
     # Accept both typed and untyped for back-compat; legacy clients sent raw dicts.
-    previousAssignments: Optional[List[PreviousAssignmentDTO]] = None
+    previousAssignments: Optional[List[PreviousAssignmentDTO]] = Field(
+        None, max_length=MAX_ASSIGNMENTS
+    )
     # Cross-engine court coordination (hybrid workspaces): extra closed
     # ``[court, from_slot, to_slot]`` windows the meet solve must avoid —
     # the bracket's currently-occupied courts. The hybrid Operations
     # surface passes these so a meet re-solve never double-books a court the
     # bracket already owns. Empty/absent for single-engine meet.
-    closedCourtWindows: Optional[List[List[int]]] = None
+    closedCourtWindows: Optional[
+        List[List[Annotated[int, Field(ge=0, le=MAX_SLOT_INDEX)]]]
+    ] = Field(None, max_length=MAX_COURT_CLOSURES)
 
 
 def _merge_closed_windows(schedule_config, extra: Optional[List[List[int]]]):
@@ -64,14 +81,16 @@ def _merge_closed_windows(schedule_config, extra: Optional[List[List[int]]]):
     )
 
 
-class ValidateMoveRequest(BaseModel):
+class ValidateMoveRequest(StrictModel):
     """Request to validate a single drag target without invoking CP-SAT."""
     config: TournamentConfig
-    players: List[PlayerDTO]
-    matches: List[MatchDTO]
-    assignments: List[ScheduleAssignment]
+    players: List[PlayerDTO] = Field(..., max_length=MAX_PLAYERS)
+    matches: List[MatchDTO] = Field(..., max_length=MAX_MATCHES)
+    assignments: List[ScheduleAssignment] = Field(..., max_length=MAX_ASSIGNMENTS)
     proposedMove: ProposedMoveDTO
-    previousAssignments: Optional[List[PreviousAssignmentDTO]] = None
+    previousAssignments: Optional[List[PreviousAssignmentDTO]] = Field(
+        None, max_length=MAX_ASSIGNMENTS
+    )
 
 
 _GONE_MESSAGE = (

@@ -44,11 +44,20 @@ from typing import Dict, Iterable, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Path, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
 from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
 from app.exceptions import PreconditionFailedError
+from app.limits import (
+    MAX_COURTS,
+    Identifier,
+    Notes,
+    StrictIgnoringModel,
+    StrictModel,
+    Timestamp,
+)
+from app.schemas import MAX_SLOT_INDEX
 from app.time_utils import now_iso
 from database.models import MatchState, MatchStatus
 from repositories import LocalRepository, get_repository
@@ -91,22 +100,22 @@ MAX_IMPORT_BYTES = 20 * 1024 * 1024
 MatchStateStatusLiteral = Literal["scheduled", "called", "started", "finished"]
 
 
-class MatchScore(BaseModel):
+class MatchScore(StrictModel):
     sideA: int = Field(..., ge=0, le=99)
     sideB: int = Field(..., ge=0, le=99)
 
 
-class MatchStateDTO(BaseModel):
-    matchId: str
+class MatchStateDTO(StrictIgnoringModel):
+    matchId: Identifier
     status: MatchStateStatusLiteral = "scheduled"
-    calledAt: Optional[str] = None  # ISO-8601 UTC
-    actualStartTime: Optional[str] = None  # ISO-8601 UTC
-    actualEndTime: Optional[str] = None  # ISO-8601 UTC
+    calledAt: Optional[Timestamp] = None  # ISO-8601 UTC
+    actualStartTime: Optional[Timestamp] = None  # ISO-8601 UTC
+    actualEndTime: Optional[Timestamp] = None  # ISO-8601 UTC
     score: Optional[MatchScore] = None
-    notes: Optional[str] = None
-    updatedAt: Optional[str] = None
-    originalSlotId: Optional[int] = None
-    originalCourtId: Optional[int] = None
+    notes: Optional[Notes] = None
+    updatedAt: Optional[Timestamp] = None
+    originalSlotId: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
+    originalCourtId: Optional[int] = Field(None, ge=0, le=MAX_COURTS)
 
     @field_validator("status", mode="before")
     @classmethod
@@ -115,7 +124,14 @@ class MatchStateDTO(BaseModel):
             return v
         return "scheduled"
 
-    model_config = {"extra": "allow"}
+    # Tolerant of unknown fields on purpose, unlike every other request
+    # model (SP-SEC-1 Phase 1). This DTO is also the *import* shape for
+    # a match-states file exported by an older build, and rejecting a
+    # field a previous version wrote would make those imports fail. The
+    # tolerance is safe because nothing downstream reads the extras:
+    # ``_dto_to_fields`` maps an explicit column list, so an unknown key
+    # is parsed and then dropped, never persisted. Narrow this to
+    # ``StrictModel`` if the import path ever stops needing it.
 
 
 # ---- DTO <-> ORM translation -------------------------------------------

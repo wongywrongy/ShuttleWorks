@@ -25,10 +25,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Sequence
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from database.models import SolveJob, SolveJobStatus
+from database.models import SolveJob, SolveJobStatus, TournamentMember
 
 log = logging.getLogger("scheduler.solve_jobs")
 
@@ -104,6 +104,43 @@ class ActiveSolveJobConflict(Exception):
         self.existing = existing
 
 
+class UserSolveQuotaExceeded(Exception):
+    """The caller already holds the maximum concurrent solve jobs.
+
+    Distinct from :class:`ActiveSolveJobConflict`: that one means "this
+    workspace is busy" and the UI mirrors it by pointing at the running
+    job. This one means "you are busy across your workspaces", which no
+    single job identifies — so it carries counts, not a job handle.
+    """
+
+    def __init__(self, held: int, limit: int) -> None:
+        super().__init__(f"user holds {held} active solve jobs (limit {limit})")
+        self.held = held
+        self.limit = limit
+
+
+def count_active_for_user(session: Session, user_id: uuid.UUID) -> int:
+    """Active solve jobs across every tournament this user is a member of.
+
+    Membership rather than ownership: an operator on someone else's
+    workspace can submit there, so their submissions have to count
+    against them too or the cap is trivially sidestepped by being added
+    to workspaces.
+    """
+    return (
+        session.execute(
+            select(func.count())
+            .select_from(SolveJob)
+            .join(TournamentMember, TournamentMember.tournament_id == SolveJob.tournament_id)
+            .where(
+                TournamentMember.user_id == user_id,
+                SolveJob.status.in_(ACTIVE_STATUSES),
+            )
+        ).scalar_one()
+        or 0
+    )
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -135,6 +172,8 @@ def enqueue(
     idempotency_key: Optional[str] = None,
     priority: int = 100,
     max_attempts: int = 2,
+    user_id: Optional[uuid.UUID] = None,
+    max_active_per_user: Optional[int] = None,
 ) -> tuple[SolveJob, bool]:
     """Insert a job in the caller's transaction.
 
@@ -163,6 +202,11 @@ def enqueue(
     ).scalar_one_or_none()
     if active is not None:
         raise ActiveSolveJobConflict(active)
+
+    if max_active_per_user is not None and user_id is not None:
+        held = count_active_for_user(session, user_id)
+        if held >= max_active_per_user:
+            raise UserSolveQuotaExceeded(held, max_active_per_user)
 
     job = SolveJob(
         tournament_id=tournament_id,

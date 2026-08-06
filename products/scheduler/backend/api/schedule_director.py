@@ -27,12 +27,18 @@ import uuid
 from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Path, Request
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
 from repositories import LocalRepository, get_repository
 from services.match_state import build_locked_assignments
+from app.limits import (
+    MAX_MATCHES,
+    MAX_PLAYERS,
+    Identifier,
+    StrictModel,
+)
 from app.schemas import (
     BreakWindow,
     HHMMTime,
@@ -58,7 +64,7 @@ router = APIRouter(
 log = logging.getLogger("scheduler.director")
 
 
-class DirectorAction(BaseModel):
+class DirectorAction(StrictModel):
     """A single director-tool invocation. Discriminated by ``kind``.
 
     Only the fields relevant to the chosen kind need to be set; the
@@ -80,13 +86,13 @@ class DirectorAction(BaseModel):
     courtId: Optional[int] = Field(None, ge=1)
 
 
-class DirectorActionRequest(BaseModel):
+class DirectorActionRequest(StrictModel):
     action: DirectorAction
     config: TournamentConfig
-    players: List[PlayerDTO]
-    matches: List[MatchDTO]
+    players: List[PlayerDTO] = Field(..., max_length=MAX_PLAYERS)
+    matches: List[MatchDTO] = Field(..., max_length=MAX_MATCHES)
     originalSchedule: ScheduleDTO
-    matchStates: Dict[str, MatchStateDTO] = {}
+    matchStates: Dict[Identifier, MatchStateDTO] = Field(default_factory=dict, max_length=MAX_MATCHES)
 
 
 async def _apply_delay_start(

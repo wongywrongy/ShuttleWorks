@@ -22,6 +22,7 @@ from app.client_ip import client_ip
 from app.config import settings
 from app.dependencies import AuthUser, get_current_user
 from app.error_codes import ErrorCode, http_error
+from app.limits import Email, Name, Password, StrictModel, Token
 from database.models import User
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service
@@ -35,29 +36,33 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # ---- DTOs ------------------------------------------------------------
 
 
-class RegisterRequest(BaseModel):
-    email: str
-    password: str
-    displayName: Optional[str] = None
+class RegisterRequest(StrictModel):
+    email: Email
+    # Bounded well above the 128-char policy so an over-long password is
+    # a clean AUTH_WEAK_PASSWORD from ``validate_password`` rather than a
+    # 422 from the schema — and so an unbounded string never reaches
+    # Argon2, whose cost is a function of what it is asked to hash.
+    password: Password
+    displayName: Optional[Name] = None
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
+class LoginRequest(StrictModel):
+    email: Email
+    password: Password
 
 
-class ChangePasswordRequest(BaseModel):
-    currentPassword: str
-    newPassword: str
+class ChangePasswordRequest(StrictModel):
+    currentPassword: Password
+    newPassword: Password
 
 
-class RequestPasswordResetRequest(BaseModel):
-    email: str
+class RequestPasswordResetRequest(StrictModel):
+    email: Email
 
 
-class ResetPasswordRequest(BaseModel):
-    token: str
-    newPassword: str
+class ResetPasswordRequest(StrictModel):
+    token: Token
+    newPassword: Password
 
 
 class UserDTO(BaseModel):
@@ -143,8 +148,13 @@ def register(
     response: Response,
     repo: LocalRepository = Depends(get_repository),
 ) -> UserDTO:
-    ip_key = f"ip:{_client_ip(request)}"
-    _throttle_guard(repo, ip_key)
+    ip = _client_ip(request)
+    ip_key = f"ip:{ip}"
+    reg_key = auth_service.registration_key(ip)
+    # Both buckets gate: the credential one so registration cannot be used
+    # to sidestep a login lockout, the registration one so account
+    # creation itself is bounded (SEC-03).
+    _throttle_guard(repo, ip_key, reg_key)
     try:
         email = auth_service.normalize_email(body.email)
         auth_service.validate_password(body.password)
@@ -158,8 +168,12 @@ def register(
         # Failed registrations count against the IP so enumeration via
         # EMAIL_TAKEN probing is bounded by the same backoff as login.
         auth_service.throttle_record_failure(repo.session, ip_key)
+        auth_service.throttle_record_registration(repo.session, reg_key)
         repo.session.commit()
         raise _auth_error(exc)
+    # Charge the successful path too — it is the expensive one, creating a
+    # users row, a personal org, and an org_members row.
+    auth_service.throttle_record_registration(repo.session, reg_key)
     token, _ = auth_service.create_session(repo.session, user.id)
     repo.session.commit()
     _set_session_cookie(response, token)

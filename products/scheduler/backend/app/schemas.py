@@ -1,8 +1,45 @@
-"""Pydantic schemas for API requests/responses - simplified for school sparring."""
+"""Pydantic schemas for API requests/responses - simplified for school sparring.
+
+Input bounds (SP-SEC-1 Phase 1): every model here that parses request
+input inherits ``StrictModel`` from ``app.limits`` — unknown fields are
+rejected and every string is bounded. The size vocabulary
+(``Name``/``Identifier``/``Notes``/…) lives there so the numbers are
+decided once rather than per field.
+
+Several models in this file are both a request shape and a response
+shape (``ScheduleDTO`` and everything under it). Their bounds are set
+generously enough for solver-authored content, because a bound that
+rejects our own output is an outage, not a control.
+"""
 import uuid
 from typing import Annotated, List, Literal, Optional, Dict, Any
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from enum import Enum
+from app.limits import (
+    MAX_ASSIGNMENTS,
+    MAX_CANDIDATES,
+    MAX_COURT_CLOSURES,
+    MAX_COURTS,
+    MAX_CSV,
+    MAX_GROUPS,
+    MAX_HISTORY,
+    MAX_MATCHES,
+    MAX_PLAYERS,
+    MAX_RANKS,
+    MAX_REASONS,
+    MAX_SIDE_MEMBERS,
+    MAX_TAGS,
+    MAX_VIOLATIONS,
+    MAX_WINDOWS,
+    Code,
+    Description,
+    HexColor,
+    Identifier,
+    Name,
+    Notes,
+    StrictModel,
+    Timestamp,
+)
 from app.time_utils import now_iso
 
 
@@ -11,6 +48,16 @@ HHMMTime = Annotated[
     str,
     StringConstraints(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$"),
 ]
+
+# Upper bounds for the abstract solver grid. The grid is slots x courts,
+# both small by construction — a day divided into intervals, and a venue's
+# courts. These ceilings exist so a payload cannot describe a grid the
+# solver would spend the afternoon on; they are not domain rules.
+MAX_SLOT_INDEX = 10_000
+MAX_DURATION_SLOTS = 1_000
+MAX_MATCH_NUMBER = 100_000
+MAX_PENALTY = 1_000_000.0
+MAX_SEED = 2**31 - 1
 
 
 # Enums
@@ -27,12 +74,12 @@ class ScheduleView(str, Enum):
 
 
 # Tournament Configuration
-class BreakWindow(BaseModel):
+class BreakWindow(StrictModel):
     start: HHMMTime  # HH:mm format, 00:00–23:59
     end: HHMMTime
 
 
-class CourtClosure(BaseModel):
+class CourtClosure(StrictModel):
     """A court closure window. ``fromTime`` / ``toTime`` are HH:mm
     wall-clock bounds inside the tournament day. Either may be omitted:
 
@@ -43,17 +90,17 @@ class CourtClosure(BaseModel):
     The solver translates the bounds to slot indices via the same
     rounding ``time_to_slot`` uses for breaks.
     """
-    courtId: int = Field(..., ge=1, le=64)
+    courtId: int = Field(..., ge=1, le=MAX_COURTS)
     fromTime: Optional[HHMMTime] = None
     toTime: Optional[HHMMTime] = None
-    reason: Optional[str] = None
+    reason: Optional[Notes] = None
 
 
-class TournamentConfig(BaseModel):
+class TournamentConfig(StrictModel):
     # Human-readable tournament name. Drives backup filenames and the
     # public-display headline. Optional — UI falls back to defaults
     # when unset.
-    tournamentName: Optional[str] = None
+    tournamentName: Optional[Name] = None
     # Per-tournament meet mode (``dual`` = School A vs B, ``tri`` =
     # three-way). The auto-match generator and rendering surfaces
     # branch on this value.
@@ -61,29 +108,31 @@ class TournamentConfig(BaseModel):
     intervalMinutes: int = Field(..., gt=0, le=240)
     dayStart: HHMMTime
     dayEnd: HHMMTime
-    tournamentDate: Optional[str] = None  # ISO date string: "2026-02-15"
-    breaks: List[BreakWindow] = Field(default_factory=list)
-    courtCount: int = Field(..., ge=1, le=64)
+    tournamentDate: Optional[Timestamp] = None  # ISO date string: "2026-02-15"
+    breaks: List[BreakWindow] = Field(default_factory=list, max_length=MAX_WINDOWS)
+    courtCount: int = Field(..., ge=1, le=MAX_COURTS)
     defaultRestMinutes: int = Field(..., ge=0, le=240)
     freezeHorizonSlots: int = Field(..., ge=0, le=1000)
-    rankCounts: Dict[str, int] = Field(default_factory=dict)  # {"MS": 3, "WS": 3, "MD": 2, "WD": 4, "XD": 2}
+    # {"MS": 3, "WS": 3, "MD": 2, "WD": 4, "XD": 2} — keys are event
+    # codes, so both the key length and the number of entries are bounded.
+    rankCounts: Dict[Code, int] = Field(default_factory=dict, max_length=MAX_RANKS)
     enableCourtUtilization: Optional[bool] = True
-    courtUtilizationPenalty: Optional[float] = Field(50.0, ge=0)
+    courtUtilizationPenalty: Optional[float] = Field(50.0, ge=0, le=MAX_PENALTY)
     # Game proximity constraint
     enableGameProximity: Optional[bool] = False
-    minGameSpacingSlots: Optional[int] = Field(None, ge=0)
-    maxGameSpacingSlots: Optional[int] = Field(None, ge=0)
-    gameProximityPenalty: Optional[float] = Field(5.0, ge=0)
+    minGameSpacingSlots: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
+    maxGameSpacingSlots: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
+    gameProximityPenalty: Optional[float] = Field(5.0, ge=0, le=MAX_PENALTY)
     # Compact schedule
     enableCompactSchedule: Optional[bool] = False
     compactScheduleMode: Optional[Literal["minimize_makespan", "no_gaps", "finish_by_time"]] = (
         "minimize_makespan"
     )
-    compactSchedulePenalty: Optional[float] = Field(100.0, ge=0)
-    targetFinishSlot: Optional[int] = Field(None, ge=0)
+    compactSchedulePenalty: Optional[float] = Field(100.0, ge=0, le=MAX_PENALTY)
+    targetFinishSlot: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
     # Player overlap
     allowPlayerOverlap: Optional[bool] = False
-    playerOverlapPenalty: Optional[float] = Field(50.0, ge=0)
+    playerOverlapPenalty: Optional[float] = Field(50.0, ge=0, le=MAX_PENALTY)
     # Scoring format — UI metadata, not a solver input. Declared here so
     # Pydantic's serializer preserves the fields across PUT round-trips.
     scoringFormat: Optional[Literal["simple", "badminton"]] = None
@@ -93,7 +142,12 @@ class TournamentConfig(BaseModel):
     # Public TV display mode (UI-only metadata; preserved across PUT).
     tvDisplayMode: Optional[Literal["strip", "grid", "list"]] = None
     # Public-display branding + layout knobs (all UI-only).
-    tvAccent: Optional[str] = None  # hex "#RRGGBB"
+    # Hex "#RRGGBB". Validated here as well as in the browser: the
+    # frontend's ``resolveTvAccent`` is a client-side control over a
+    # server-stored value, which ASVS v5.0.0-2.2.2 says cannot be the
+    # only one. The value reaches an inline ``style`` prop on the public
+    # display board.
+    tvAccent: Optional[HexColor] = None
     tvPreset: Optional[
         Literal[
             "court", "pitch", "midnight", "ash",
@@ -104,15 +158,19 @@ class TournamentConfig(BaseModel):
     tvCardSize: Optional[Literal["auto", "compact", "comfortable", "large"]] = None
     tvShowScores: Optional[bool] = None
     # Display layout configuration (UI-only; all optional).
-    courtOrder: Optional[list[int]] = None
-    hiddenCourts: Optional[list[int]] = None
+    courtOrder: Optional[List[Annotated[int, Field(ge=1, le=MAX_COURTS)]]] = Field(
+        None, max_length=MAX_COURTS
+    )
+    hiddenCourts: Optional[List[Annotated[int, Field(ge=1, le=MAX_COURTS)]]] = Field(
+        None, max_length=MAX_COURTS
+    )
     standingsMode: Optional[Literal["off", "side", "rotate"]] = None
     # Roster position-grid event-column order + visibility (UI-only).
-    eventOrder: Optional[List[str]] = None
-    eventVisible: Optional[Dict[str, bool]] = None
+    eventOrder: Optional[List[Code]] = Field(None, max_length=MAX_RANKS)
+    eventVisible: Optional[Dict[Code, bool]] = Field(None, max_length=MAX_RANKS)
     # ---- Engine settings ------------------------------------------
     deterministic: Optional[bool] = None
-    randomSeed: Optional[int] = None
+    randomSeed: Optional[int] = Field(None, ge=0, le=MAX_SEED)
     # Solver wall-clock cap; higher = closer to optimal at the cost
     # of operator wait time. Default 30s (DEFAULT_SOLVER_OPTIONS).
     solverTimeLimitSeconds: Optional[float] = Field(None, gt=0, le=300)
@@ -127,8 +185,12 @@ class TournamentConfig(BaseModel):
     # closures with explicit time bounds go in ``courtClosures``. The
     # solver merges both — every entry in ``closedCourts`` is treated
     # as an indefinite all-day closure.
-    closedCourts: List[int] = Field(default_factory=list)
-    courtClosures: List[CourtClosure] = Field(default_factory=list)
+    closedCourts: List[Annotated[int, Field(ge=1, le=MAX_COURTS)]] = Field(
+        default_factory=list, max_length=MAX_COURTS
+    )
+    courtClosures: List[CourtClosure] = Field(
+        default_factory=list, max_length=MAX_COURT_CLOSURES
+    )
     # ---- Time-axis (director tools) -------------------------------
     # Wall-clock minutes added to every unstarted match's displayed
     # start time. Mutated by `POST /schedule/director-action` with
@@ -139,34 +201,38 @@ class TournamentConfig(BaseModel):
     clockShiftMinutes: Optional[int] = Field(0, ge=0, le=24 * 60)
     # ---- Bracket-kind settings -----------------------------------
     # Slots of forced rest between bracket rounds. Bracket-side only.
-    restBetweenRounds: int = Field(default=1, ge=0)
+    restBetweenRounds: int = Field(default=1, ge=0, le=MAX_SLOT_INDEX)
 
 
 # Availability
-class AvailabilityWindow(BaseModel):
+class AvailabilityWindow(StrictModel):
     start: HHMMTime
     end: HHMMTime
 
 
 # Roster Group (for school grouping)
-class RosterGroupDTO(BaseModel):
-    id: str
-    name: str
+class RosterGroupDTO(StrictModel):
+    id: Identifier
+    name: Name
     metadata: Optional[Dict[str, Any]] = None
 
 
 # Player
-class PlayerDTO(BaseModel):
-    id: str  # Auto-generated UUID
-    name: str
-    groupId: str  # School group ID (REQUIRED - this is school vs school scheduling)
-    ranks: List[str] = Field(default_factory=list)  # [MS1, MD1, XD1] - Player can play multiple events
-    availability: List[AvailabilityWindow] = Field(default_factory=list)
-    minRestMinutes: Optional[int] = None  # If not provided, uses config.defaultRestMinutes
-    notes: Optional[str] = None
+class PlayerDTO(StrictModel):
+    id: Identifier  # Auto-generated UUID
+    name: Name
+    groupId: Identifier  # School group ID (REQUIRED - this is school vs school scheduling)
+    # [MS1, MD1, XD1] - Player can play multiple events
+    ranks: List[Code] = Field(default_factory=list, max_length=MAX_RANKS)
+    availability: List[AvailabilityWindow] = Field(
+        default_factory=list, max_length=MAX_WINDOWS
+    )
+    # If not provided, uses config.defaultRestMinutes
+    minRestMinutes: Optional[int] = Field(None, ge=0, le=1440)
+    notes: Optional[Notes] = None
 
 
-class BracketPlayerDTO(BaseModel):
+class BracketPlayerDTO(StrictModel):
     """Roster entry for bracket-kind tournaments.
 
     ``id`` is the stable slug produced by the frontend ``playerSlug()``
@@ -177,54 +243,63 @@ class BracketPlayerDTO(BaseModel):
     ``defaultRestSlots`` for this player. Both feed the CP-SAT solve
     path via ``services.bracket.player_constraints`` (SP-D7 S2).
     """
-    id: str = Field(..., min_length=1)
-    name: str = Field(..., min_length=1)
-    notes: Optional[str] = None
-    restSlots: Optional[int] = Field(default=None, ge=0)
-    availability: List[AvailabilityWindow] = Field(default_factory=list)
+    id: Identifier
+    name: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    notes: Optional[Notes] = None
+    restSlots: Optional[int] = Field(default=None, ge=0, le=MAX_SLOT_INDEX)
+    availability: List[AvailabilityWindow] = Field(
+        default_factory=list, max_length=MAX_WINDOWS
+    )
 
 
-class RosterImportDTO(BaseModel):
-    csv: str
+class RosterImportDTO(StrictModel):
+    # A pasted CSV is legitimately large, so it opts out of the model's
+    # default string backstop with an explicit, larger bound. The
+    # body-size middleware is the real ceiling here.
+    csv: Annotated[str, StringConstraints(max_length=MAX_CSV)]
 
 
 # Match - simplified for school sparring (supports dual and tri-meets)
-class MatchDTO(BaseModel):
-    id: str
-    matchNumber: Optional[int] = None  # Display ordinal (frontend-authored sequence)
-    sideA: List[str] = Field(default_factory=list)  # List of player IDs (School A)
-    sideB: List[str] = Field(default_factory=list)  # List of player IDs (School B)
-    sideC: Optional[List[str]] = None  # List of player IDs (School C) - for tri-meets
-    matchType: str = "dual"  # "dual" or "tri"
-    eventRank: Optional[str] = None  # MS1, MS2, WS1, WS2, etc. - the rank/event this match represents
-    durationSlots: int = 1
-    preferredCourt: Optional[int] = None
-    tags: Optional[List[str]] = None  # Optional tags like ["School A", "School B"]
+class MatchDTO(StrictModel):
+    id: Identifier
+    # Display ordinal (frontend-authored sequence)
+    matchNumber: Optional[int] = Field(None, ge=0, le=MAX_MATCH_NUMBER)
+    # Lists of player IDs (School A / B, and C for tri-meets)
+    sideA: List[Identifier] = Field(default_factory=list, max_length=MAX_SIDE_MEMBERS)
+    sideB: List[Identifier] = Field(default_factory=list, max_length=MAX_SIDE_MEMBERS)
+    sideC: Optional[List[Identifier]] = Field(None, max_length=MAX_SIDE_MEMBERS)
+    matchType: Code = "dual"  # "dual" or "tri"
+    # MS1, MS2, WS1, WS2, etc. - the rank/event this match represents
+    eventRank: Optional[Code] = None
+    durationSlots: int = Field(1, ge=0, le=MAX_DURATION_SLOTS)
+    preferredCourt: Optional[int] = Field(None, ge=1, le=MAX_COURTS)
+    # Optional tags like ["School A", "School B"]
+    tags: Optional[List[Name]] = Field(None, max_length=MAX_TAGS)
 
 
 # Schedule
-class ScheduleAssignment(BaseModel):
-    matchId: str
-    slotId: int
-    courtId: int
-    durationSlots: int
+class ScheduleAssignment(StrictModel):
+    matchId: Identifier
+    slotId: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
+    courtId: int = Field(..., ge=0, le=MAX_COURTS)
+    durationSlots: int = Field(..., ge=0, le=MAX_DURATION_SLOTS)
 
 
-class PreviousAssignmentDTO(BaseModel):
+class PreviousAssignmentDTO(StrictModel):
     """Typed previous assignment used by /schedule re-solve and drag pin-and-resolve."""
-    matchId: str
-    slotId: int
-    courtId: int
+    matchId: Identifier
+    slotId: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
+    courtId: int = Field(..., ge=0, le=MAX_COURTS)
     locked: bool = False
-    pinnedSlotId: Optional[int] = None
-    pinnedCourtId: Optional[int] = None
+    pinnedSlotId: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
+    pinnedCourtId: Optional[int] = Field(None, ge=0, le=MAX_COURTS)
 
 
-class ProposedMoveDTO(BaseModel):
+class ProposedMoveDTO(StrictModel):
     """A single drag target evaluated by /schedule/validate."""
-    matchId: str
-    slotId: int
-    courtId: int
+    matchId: Identifier
+    slotId: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
+    courtId: int = Field(..., ge=0, le=MAX_COURTS)
 
 
 class ValidationConflict(BaseModel):
@@ -243,12 +318,12 @@ class ValidationResponseDTO(BaseModel):
     conflicts: List[ValidationConflict] = Field(default_factory=list)
 
 
-class SoftViolation(BaseModel):
-    type: str
-    matchId: Optional[str] = None
-    playerId: Optional[str] = None
-    description: str
-    penaltyIncurred: float
+class SoftViolation(StrictModel):
+    type: Code
+    matchId: Optional[Identifier] = None
+    playerId: Optional[Identifier] = None
+    description: Description
+    penaltyIncurred: float = Field(..., ge=-MAX_PENALTY, le=MAX_PENALTY)
 
 
 class ScheduleCandidate(BaseModel):
@@ -260,27 +335,40 @@ class ScheduleCandidate(BaseModel):
     candidate ranks; ``foundAtSeconds`` is wall-clock seconds since
     solve start (lower = solver's earlier guess, often more disrupted).
     """
-    solutionId: str
-    assignments: List[ScheduleAssignment] = Field(default_factory=list)
+    solutionId: Identifier
+    assignments: List[ScheduleAssignment] = Field(
+        default_factory=list, max_length=MAX_ASSIGNMENTS
+    )
     objectiveScore: float = 0.0
     foundAtSeconds: float = 0.0
 
 
-class ScheduleDTO(BaseModel):
-    assignments: List[ScheduleAssignment] = Field(default_factory=list)
-    unscheduledMatches: List[str] = Field(default_factory=list)
-    softViolations: List[SoftViolation] = Field(default_factory=list)
+class ScheduleDTO(StrictModel):
+    assignments: List[ScheduleAssignment] = Field(
+        default_factory=list, max_length=MAX_ASSIGNMENTS
+    )
+    unscheduledMatches: List[Identifier] = Field(
+        default_factory=list, max_length=MAX_MATCHES
+    )
+    softViolations: List[SoftViolation] = Field(
+        default_factory=list, max_length=MAX_VIOLATIONS
+    )
     objectiveScore: Optional[float] = None
-    infeasibleReasons: List[str] = Field(default_factory=list)
+    # Engine-authored prose, so bounded generously rather than tightly.
+    infeasibleReasons: List[Description] = Field(
+        default_factory=list, max_length=MAX_REASONS
+    )
     status: SolverStatus
     # The seed the solver actually used. Pair with ``deterministic`` to
     # reproduce a schedule byte-for-byte from the same input.
-    solverSeed: Optional[int] = None
+    solverSeed: Optional[int] = Field(None, ge=0, le=MAX_SEED)
     # Top-N near-optimal alternatives. ``assignments`` above always
     # equals ``candidates[activeCandidateIndex].assignments`` when the
     # pool is non-empty; older clients ignore both fields.
-    candidates: List[ScheduleCandidate] = Field(default_factory=list)
-    activeCandidateIndex: Optional[int] = None
+    candidates: List[ScheduleCandidate] = Field(
+        default_factory=list, max_length=MAX_CANDIDATES
+    )
+    activeCandidateIndex: Optional[int] = Field(None, ge=0, le=MAX_CANDIDATES)
 
 
 # ---- Solve jobs (SP-CLOUD-1 long-running-operation resource) ----------
@@ -534,7 +622,7 @@ class HealthResponse(BaseModel):
 
 # ---- Tournament state (whole-document persistence) --------------------
 
-class ScheduleHistoryEntry(BaseModel):
+class ScheduleHistoryEntry(StrictModel):
     """Snapshot of a prior committed schedule, kept for revert + audit.
 
     Appended whenever a proposal is committed; the entry captures the
@@ -542,14 +630,14 @@ class ScheduleHistoryEntry(BaseModel):
     server-side (oldest dropped first) so the persisted state file stays
     bounded.
     """
-    version: int                                    # the version this entry replaced
-    committedAt: str                                # ISO timestamp of the swap
-    trigger: Optional[str] = None                   # "warm_restart" | "repair" | "manual_edit" | "director_action" | "initial"
-    summary: Optional[str] = None                   # short human-readable impact summary
+    version: int = Field(..., ge=0)                 # the version this entry replaced
+    committedAt: Timestamp                          # ISO timestamp of the swap
+    trigger: Optional[Code] = None                  # "warm_restart" | "repair" | "manual_edit" | "director_action" | "initial"
+    summary: Optional[Description] = None           # short human-readable impact summary
     schedule: Optional[ScheduleDTO] = None          # full snapshot so the entry can be restored
 
 
-class MeetStandingRowDTO(BaseModel):
+class MeetStandingRowDTO(StrictModel):
     """One group's school-vs-school pool record.
 
     Computed fresh on every ``GET /tournaments/{id}/state`` by
@@ -560,26 +648,26 @@ class MeetStandingRowDTO(BaseModel):
     blob it commits). Empty when the Meet module isn't enabled for the
     workspace or there's no finished, scored pool play yet.
     """
-    groupId: str
-    groupName: str
-    matchesPlayed: int
-    wins: int
-    losses: int
+    groupId: Identifier
+    groupName: Name
+    matchesPlayed: int = Field(..., ge=0)
+    wins: int = Field(..., ge=0)
+    losses: int = Field(..., ge=0)
 
 
-class TournamentStateDTO(BaseModel):
+class TournamentStateDTO(StrictModel):
     """Authoritative persisted state for one tournament.
 
     Writes come as a single blob: frontend Zustand state snapshotted and
     PUT to /tournament/state. Server stamps `updatedAt` on write; the
     client's value is ignored.
     """
-    version: int = 1
-    updatedAt: Optional[str] = None
+    version: int = Field(1, ge=0, le=1000)
+    updatedAt: Optional[Timestamp] = None
     config: Optional[TournamentConfig] = None
-    groups: List[RosterGroupDTO] = Field(default_factory=list)
-    players: List[PlayerDTO] = Field(default_factory=list)
-    matches: List[MatchDTO] = Field(default_factory=list)
+    groups: List[RosterGroupDTO] = Field(default_factory=list, max_length=MAX_GROUPS)
+    players: List[PlayerDTO] = Field(default_factory=list, max_length=MAX_PLAYERS)
+    matches: List[MatchDTO] = Field(default_factory=list, max_length=MAX_MATCHES)
     schedule: Optional[ScheduleDTO] = None
     scheduleStats: Optional[dict] = None
     scheduleIsStale: bool = False
@@ -587,9 +675,13 @@ class TournamentStateDTO(BaseModel):
     # on every successful commit through the proposal pipeline; clients
     # use it for optimistic-concurrency rejection of stale proposals.
     # ``scheduleHistory`` is the rolling-revert pool, capped at 5.
-    scheduleVersion: int = 0
-    scheduleHistory: List[ScheduleHistoryEntry] = Field(default_factory=list)
-    bracketPlayers: List[BracketPlayerDTO] = Field(default_factory=list)
+    scheduleVersion: int = Field(0, ge=0)
+    scheduleHistory: List[ScheduleHistoryEntry] = Field(
+        default_factory=list, max_length=MAX_HISTORY
+    )
+    bracketPlayers: List[BracketPlayerDTO] = Field(
+        default_factory=list, max_length=MAX_PLAYERS
+    )
     bracketRosterMigrated: Optional[bool] = None
     # SP-G1 Plan→Run handoff: operator marks plan as ready before running.
     # Stored in the tournament.data JSON blob; no Alembic migration needed.
@@ -597,10 +689,36 @@ class TournamentStateDTO(BaseModel):
     # Authoritative Meet pool standings (Display redesign, Task 2). Derived,
     # never persisted — GET computes it fresh from live match_states each
     # time; PUT strips it before committing (see api/tournaments.py).
-    standings: List[MeetStandingRowDTO] = Field(default_factory=list)
+    standings: List[MeetStandingRowDTO] = Field(
+        default_factory=list, max_length=MAX_GROUPS
+    )
 
 
-class SolverOptionsDTO(BaseModel):
+def state_dto_from_document(data: dict) -> "TournamentStateDTO":
+    """Project a stored ``tournaments.data`` document onto the wire DTO.
+
+    The stored document is a **superset** of this DTO. It carries
+    server-managed sections the client never sends and the DTO does not
+    declare — ``bracket_session`` (the bracket engine's persisted state,
+    merged back in by ``commit_tournament_state``) and the legacy
+    ``_integrity`` field. Constructing the model straight from the row
+    therefore fails now that request models forbid unknown fields
+    (SP-SEC-1 Phase 1), and it failed *loudly*, in seven tests, which is
+    how this projection came to exist.
+
+    Keeping ``extra="forbid"`` on the request side and filtering here is
+    the right way round: an unknown key arriving from a client is an
+    error, while an unknown key arriving from our own storage is just a
+    section this shape does not cover. Three call sites each had their
+    own partial version of this filter (two of which only knew about
+    ``_integrity``); this is the one they now share.
+    """
+    return TournamentStateDTO(
+        **{k: v for k, v in data.items() if k in TournamentStateDTO.model_fields}
+    )
+
+
+class SolverOptionsDTO(StrictModel):
     """Optional per-request override of solver parameters (no UI yet)."""
     timeLimitSeconds: Optional[float] = None
     numWorkers: Optional[int] = None
@@ -610,7 +728,7 @@ class SolverOptionsDTO(BaseModel):
 # ---- Commands (Step C) ------------------------------------------------
 
 
-class CommandRequest(BaseModel):
+class CommandRequest(StrictModel):
     """Body of ``POST /tournaments/{tournament_id}/commands``.
 
     ``id`` is the *client-generated* UUID used as the idempotency key.
@@ -662,7 +780,7 @@ class CommandResponse(BaseModel):
     replay: bool      # True on idempotent replay, False on fresh apply
 
 
-class BracketCommandRequest(BaseModel):
+class BracketCommandRequest(StrictModel):
     """Body of ``POST /tournaments/{tournament_id}/bracket/commands``.
 
     ``id`` is the client-generated UUID used as the idempotency key.
@@ -680,10 +798,10 @@ class BracketCommandRequest(BaseModel):
 
     id: uuid.UUID
     kind: Literal["record_result"]
-    play_unit_id: str
+    play_unit_id: Identifier
     winner_side: Literal["A", "B"]
-    seen_version: Optional[int] = None
-    finished_at_slot: Optional[int] = None
+    seen_version: Optional[int] = Field(None, ge=0)
+    finished_at_slot: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
     walkover: bool = False
     score: Optional[Dict[str, Any]] = None
     # Contingency annotation (spec 2026-07-14 §1): why the result was
