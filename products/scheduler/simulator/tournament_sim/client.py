@@ -173,7 +173,20 @@ class SimClient:
         return self._json("GET", f"/tournaments/{tid}/state", expect={200, 204})
 
     def put_state(self, tid: str, blob: dict) -> dict:
-        return self._json("PUT", f"/tournaments/{tid}/state", json=blob)
+        """Save the state blob, carrying the optimistic-concurrency token.
+
+        SP-CLOUD-4 made ``If-Match`` mandatory on this route: a write without
+        it is refused with 412 rather than silently clobbering a concurrent
+        edit. The simulator is a real client of this API and gets no
+        exemption, so it reads the current version first — the same thing
+        ``api/client.ts`` does.
+        """
+        probe = self.request("GET", f"/tournaments/{tid}/state", expect={200, 204})
+        etag = probe.headers.get("etag")
+        headers = {"If-Match": etag} if etag else {}
+        return self._json(
+            "PUT", f"/tournaments/{tid}/state", json=blob, headers=headers
+        )
 
     def solve(
         self,

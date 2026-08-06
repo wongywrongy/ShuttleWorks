@@ -33,9 +33,20 @@ const post = async (path, body) => {
   return res.json();
 };
 const put = async (path, body, headers = {}) => {
+  // SP-CLOUD-4: PUT /tournaments/{id}/state requires an If-Match precondition
+  // and refuses a write without one (412). Read the current version first,
+  // exactly as the app's own client does — this script is a real client of
+  // that API and gets no exemption from its contract.
+  const extra = { ...headers };
+  const stateRoute = /^\/tournaments\/[^/]+\/state(?:\?|$)/.test(path);
+  if (stateRoute && !Object.keys(extra).some((k) => k.toLowerCase() === 'if-match')) {
+    const probe = await fetch(`${API}${path.split('?')[0]}`, { headers });
+    const etag = probe.headers.get('etag');
+    if (etag) extra['If-Match'] = etag;
+  }
   const res = await fetch(`${API}${path}`, {
     method: 'PUT',
-    headers: { 'content-type': 'application/json', ...headers },
+    headers: { 'content-type': 'application/json', ...extra },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`PUT ${path} → ${res.status} ${await res.text()}`);
