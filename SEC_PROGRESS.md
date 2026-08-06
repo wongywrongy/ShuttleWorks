@@ -337,17 +337,104 @@ Backend pytest **1003 passed**, 66 skipped (980 + 23 new) · ruff clean ·
 `nginx -t` clean in the real `nginxinc/nginx-unprivileged` image (validated by
 running it, not by inspection) · `scheduler_core/` + `archive/` untouched.
 
-### Phase 4 · **NOT STARTED**
+### Phase 4 — Verification against the deployment & documentation · **COMPLETE** (2026-08-05)
 
-cayde verification (Rule 6), `SECURITY.md`, residual risks SEC-10 / SEC-11.
+Deployed as **`v0.3.0`** (`3af15e0`) and verified on cayde. The deployment
+tracks the tag, per `CONTRIBUTING.md`; the branch was merged to `main` first
+rather than deployed directly, so production has never run this branch.
 
-**Blocked on a decision, not on work.** Rule 6 verification requires the
-headers, the 429s and the cloud-mode 404s to be exercised on the real
-deployment, and cayde currently runs the `v0.2.0` tag. Verifying means
-deploying this branch — unmerged security work — to production. That is the
-user's call. The 0.G runbook change (excluding `/display/{token}/*` from the
-Cloudflare Access policy, or every spectator screen at an event breaks) has to
-land in `docs/how-to/install-selfhost.md` at the same time.
+Rule 6 exists because the program has a recorded incident — the
+`TRUSTED_PROXY_IPS` fix that was correct in reasoning and untested in reality.
+Everything below is an observation of the running system, not an inference.
+
+#### Verified live
+
+| Check | Result |
+|---|---|
+| `git describe --tags --exact-match` on cayde | `v0.3.0` |
+| `/api/health` | 200 |
+| `/api/health/metrics` without token | 403 |
+| `/api/health/metrics` with `X-ShuttleWorks-Ops-Token` | 200 |
+| SPA root | 200 |
+| **SEC-04** `/api/docs`, `/api/redoc`, `/api/openapi.json` | **404, 404, 404** |
+| **SEC-02** headers on **SPA HTML** | all 5 present |
+| **SEC-02** headers on **`/assets/index-*.js`** | all 5 present |
+| **SEC-02** headers on `/api/*` | all 5 present |
+| `X-XSS-Protection` anywhere | **absent** (correctly removed) |
+| **SEC-03** 20 rapid POSTs to `/api/auth/login` | **14 × 429**, matching `rate=10r/m burst=5` |
+
+The two SEC-02 rows that matter are the SPA HTML and the asset bundle. Those
+are precisely the responses that carried **no** security headers before this
+slice, because each declares its own `Cache-Control` and nginx therefore
+dropped the inherited list. They now carry the full set including a CSP whose
+`script-src` permits neither `unsafe-inline` nor `unsafe-eval`.
+
+#### HSTS — mechanism proven, deployment fact still unobservable
+
+Verified in-container both ways:
+
+- **without** `X-Forwarded-Proto` → **no** `Strict-Transport-Security` header
+- **with** `X-Forwarded-Proto: https` → `max-age=31536000; includeSubDomains`
+
+So the map works exactly as designed. What is **not** yet observed is whether
+cloudflared actually sends that header in production, because Cloudflare Access
+intercepts at the edge: a request to the public hostname returns a 302 to the
+Access login and never reaches the origin, so origin response headers cannot be
+read from outside.
+
+This is deliberately the safe direction. If the connector does not send the
+header, the result is *no HSTS on a deployment that is already HTTPS-only at
+the edge* — not HSTS on a plaintext deployment, and not a browser pinning
+`localhost` to HTTPS in local development. It resolves the first time an
+Access-authenticated request is inspected at the origin. Logged as open, not
+claimed as done.
+
+#### 0.G — registration exposure, as deployed
+
+Cloudflare Access is confirmed active in front of the hostname (observed: a 302
+to `misogyu.cloudflareaccess.com` with `www-authenticate: Cloudflare-Access`).
+The operator manages the allowed identities directly and runs a closed internal
+testing group, so the interim posture from 0.G is in force.
+
+The runbook (`docs/how-to/install-selfhost.md` §4a) documents the display-route
+bypass requirement for whenever the audience widens beyond that group. It is a
+runbook note, not an open action item.
+
+#### Documentation
+
+- **`SECURITY.md`** — threat model (including why prompt injection is
+  explicitly *not* in it: there is no LLM in the request path, so there is
+  nothing to inject into), the ASVS level targeted, the control inventory,
+  what was verified-clean rather than rebuilt, the adversarial-testing
+  practice, disclosure contact, and reporting scope.
+- **Accepted risks recorded with triggers**, not just listed: no MFA (SEC-11),
+  no session inactivity timeout or session list (SEC-10), the 8-character
+  password minimum as a policy choice rather than a conformance gap, the
+  `style-src 'unsafe-inline'` carve-out, and the display plane's
+  unauthenticated-by-design capability URLs.
+
+#### A defect found by this phase, in the gate itself
+
+PR #17 reported **zero checks**, which reads like "not started" rather than
+"blocked". Two independent causes:
+
+1. GitHub cannot construct a merge ref for a conflicting PR, so `pull_request`
+   workflows are skipped entirely. A conflicting PR does not show a red gate;
+   it shows no gate.
+2. `ci.yml` triggered on `[main, "dev/**"]`, which **stopped matching the day
+   `CONTRIBUTING.md` retired `dev/*`** in favour of `<type>/<slug>` branches.
+   Every push to `sec/hardening` — six commits of security work — ran no CI at
+   all, invisibly.
+
+Fixed by triggering on every branch. A gate whose trigger must be kept in step
+with a naming convention is a gate that will eventually be out of step. Worth
+recording because the *convention* and the *gate* were changed by the same
+program, hours apart, and nothing connected them.
+
+### Gates (Phase 4)
+
+Backend pytest **1003 passed** · ruff clean · docs:build clean · all four CI
+jobs green on `main` · cayde healthy on `v0.3.0` with every check above.
 
 ### Process note — working tree contention
 
