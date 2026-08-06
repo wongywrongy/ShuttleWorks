@@ -24,7 +24,7 @@ import type { TournamentMemberDTO } from '../../api/dto';
 
 export type MemberRole = 'viewer' | 'operator' | 'owner';
 
-export const ROLE_ORDER: MemberRole[] = ['viewer', 'operator', 'owner'];
+const ROLE_ORDER: MemberRole[] = ['viewer', 'operator', 'owner'];
 
 /** Why the last-owner rule blocks something, plus the way out. Naming
  *  the escape hatch matters: "you can't" without "instead, do this" is
@@ -54,7 +54,7 @@ function blocked(reason: string): ActionState {
   return { shown: true, disabled: true, reason };
 }
 
-export function ownerCount(members: TournamentMemberDTO[]): number {
+function ownerCount(members: TournamentMemberDTO[]): number {
   return members.filter((m) => m.role === 'owner').length;
 }
 
@@ -66,7 +66,7 @@ export function ownerCount(members: TournamentMemberDTO[]): number {
  *  Verified rather than assumed, because Phase 1's backend concurrency
  *  test originally passed with its guard removed. If you change this
  *  function, re-run that check. */
-export function isLastOwner(
+function isLastOwner(
   members: TournamentMemberDTO[],
   member: TournamentMemberDTO,
 ): boolean {

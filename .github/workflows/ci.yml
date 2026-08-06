@@ -29,6 +29,20 @@ jobs:
       - name: Architecture boundaries (dependency-cruiser)
         run: npm run depcruise
 
+      # Report-only, deliberately. knip finds real debris — this slice removed
+      # three files it flagged — but its verdict is a hypothesis, not proof:
+      # in the same run it reported src/types/fonts.d.ts as unused, which is an
+      # ambient declaration file that nothing imports BY DESIGN and whose
+      # removal breaks tsc. A gate that fails on that would train people to
+      # delete load-bearing code or to ignore the gate.
+      #
+      # So it prints and never blocks (per the lean-gate philosophy in
+      # CLAUDE.md: gates stay lean so they stay green, and get ratcheted
+      # deliberately). Its value today is that nothing at all currently gates
+      # re-accumulation — which is how dto.generated.ts rotted.
+      - name: Unused files and exports (knip, report-only)
+        run: npm run knip || true
+
   backend:
     name: Backend (ruff + pytest)
     runs-on: ubuntu-latest

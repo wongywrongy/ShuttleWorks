@@ -20,7 +20,6 @@ from app.limits import (
     MAX_CANDIDATES,
     MAX_COURT_CLOSURES,
     MAX_COURTS,
-    MAX_CSV,
     MAX_GROUPS,
     MAX_HISTORY,
     MAX_MATCHES,
@@ -250,13 +249,6 @@ class BracketPlayerDTO(StrictModel):
     availability: List[AvailabilityWindow] = Field(
         default_factory=list, max_length=MAX_WINDOWS
     )
-
-
-class RosterImportDTO(StrictModel):
-    # A pasted CSV is legitimately large, so it opts out of the model's
-    # default string backstop with an explicit, larger bound. The
-    # body-size middleware is the real ceiling here.
-    csv: Annotated[str, StringConstraints(max_length=MAX_CSV)]
 
 
 # Match - simplified for school sparring (supports dual and tri-meets)
