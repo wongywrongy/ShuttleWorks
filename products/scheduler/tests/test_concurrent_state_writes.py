@@ -231,7 +231,12 @@ def test_missing_if_match_is_refused_not_guessed(client, tid):
     """
     _seed(client, tid)
     state, _ = _load(client, tid)
-    r = client.put(f"/tournaments/{tid}/state", json=_writable(state))
+    # `client.request` bypasses the conftest shim that auto-attaches If-Match
+    # for the ~104 tests that merely need to save state. This test is about the
+    # precondition itself, so it must send the request a forgetful client would.
+    r = client.request(
+        "PUT", f"/tournaments/{tid}/state", json=_writable(state)
+    )
     assert r.status_code == 412
     assert r.json()["detail"]["code"] == "STATE_VERSION_REQUIRED"
 

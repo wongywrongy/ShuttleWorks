@@ -561,8 +561,13 @@ def _parse_if_match(raw: str | None) -> int:
 )
 def get_tournament_state(
     tournament_id: uuid.UUID = Path(...),
-    response: Response = None,  # type: ignore[assignment]
     repo: LocalRepository = Depends(get_repository),
+    # Deliberately LAST. Inserting it before `repo` silently rerouted the
+    # in-process callers below, which pass (tournament_id, repo)
+    # positionally — the repo landed in `response` and the route 500'd on
+    # restore. FastAPI resolves these by name, so order costs nothing here
+    # and buys immunity to that.
+    response: Response = None,  # type: ignore[assignment]
 ):
     """Return the persisted ``TournamentStateDTO`` blob.
 
@@ -918,7 +923,7 @@ def restore_tournament_backup(
             ErrorCode.BACKUP_RESTORE_FAILED,
             "restore failed — see server logs",
         )
-    return get_tournament_state(tournament_id, repo)
+    return get_tournament_state(tournament_id=tournament_id, repo=repo)
 
 
 # ---- Plan-finalized flag (SP-G1 Plan→Run handoff) ----------------------

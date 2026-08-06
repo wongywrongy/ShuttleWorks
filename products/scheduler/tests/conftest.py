@@ -45,3 +45,56 @@ def backend_env(tmp_path, monkeypatch):
     `from api.<module> import router` immediately afterwards.
     """
     yield isolate_test_database(tmp_path, monkeypatch)
+
+
+# ---------------------------------------------------------------------------
+# SP-CLOUD-4: PUT /tournaments/{id}/state requires an If-Match precondition.
+#
+# ~104 call sites across 44 test files write that blob, and not one of them is
+# ABOUT concurrency — they are testing config locks, command replay, module
+# summaries, the proposal pipeline. Requiring each to hand-manage a version
+# would add ceremony to 104 tests to exercise a guard that one test file
+# already covers properly.
+#
+# So the test client models what a real client does: it remembers the version
+# it last saw and sends it. That is exactly the behaviour shipped in
+# `api/client.ts` (`stateEtags`), which is what makes this an honest stand-in
+# rather than a way of dodging the precondition.
+#
+# WHAT THIS DELIBERATELY DOES NOT DO: it never invents a version for a caller
+# that supplied one. An explicit `If-Match` always wins, so a test can still
+# drive a real conflict. And it only fills in for THIS route.
+#
+# The actual contract — 412 on a missing header, 409 with the current state on
+# a stale one — is pinned in tests/test_concurrent_state_writes.py, which
+# bypasses this shim by calling `client.request("PUT", ...)` directly. If you
+# are adding a test about concurrency, use that file and that escape hatch;
+# if you are adding a test that merely needs to save state, do nothing.
+# ---------------------------------------------------------------------------
+import re as _re  # noqa: E402
+
+from starlette.testclient import TestClient as _TestClient  # noqa: E402
+
+_STATE_PUT = _re.compile(r"^/tournaments/(?P<tid>[^/]+)/state(?:\?.*)?$")
+_original_put = _TestClient.put
+
+
+def _put_with_if_match(self, url, *args, **kwargs):
+    match = _STATE_PUT.match(str(url))
+    if match is not None:
+        headers = dict(kwargs.get("headers") or {})
+        if not any(k.lower() == "if-match" for k in headers):
+            probe = self.get(
+                f"/tournaments/{match.group('tid')}/state",
+                # 204 is a real answer here: an empty workspace still has a
+                # version, and its first save needs one.
+                params=None,
+            )
+            etag = probe.headers.get("etag")
+            if etag:
+                headers["If-Match"] = etag
+                kwargs["headers"] = headers
+    return _original_put(self, url, *args, **kwargs)
+
+
+_TestClient.put = _put_with_if_match
