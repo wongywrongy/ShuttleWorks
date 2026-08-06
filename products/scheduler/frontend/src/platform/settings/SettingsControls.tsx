@@ -92,9 +92,10 @@ export function FieldRow({ last, className = '', ...field }: FieldRowProps) {
  * ========================================================================= */
 export function SectionHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="border-b border-border pb-2 pt-8 text-base font-semibold tracking-tight text-foreground first:pt-0">
+    /* A real heading, matching `Section` — see the note there. */
+    <h3 className="border-b border-border pb-2 pt-8 text-base font-semibold tracking-tight text-foreground first:pt-0">
       {children}
-    </div>
+    </h3>
   );
 }
 
@@ -119,31 +120,47 @@ export function Section({
   title,
   children,
   defaultOpen = true,
+  action,
 }: {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  /** Optional control on the heading rule, right-aligned — a section-scoped
+   *  affordance such as Reset. It sits OUTSIDE the disclosure button: nesting
+   *  a button inside a button is invalid HTML, and clicking Reset would also
+   *  collapse the section it just reset. */
+  action?: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     /* Tight: closed, this surface is a stack of one-line headers, so the
        32px section gap that suited open sections left it looking sparse. */
     <section className="pt-3 first:pt-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 border-b border-border pb-1.5 text-left text-base font-semibold tracking-tight text-foreground"
-      >
-        <CaretRight
-          aria-hidden="true"
-          className={[
-            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-fast ease-brand',
-            open ? 'rotate-90' : '',
-          ].join(' ')}
-        />
-        {title}
-      </button>
+      <div className="flex items-center gap-2 border-b border-border pb-1.5">
+        {/* A real heading WRAPPING the disclosure button — the WAI-ARIA
+            disclosure pattern. A bare button carries no heading role, so a
+            surface built only from these had no document outline at all:
+            screen-reader heading navigation skipped straight past every
+            section title on the page. */}
+        <h3 className="flex-1 text-base font-semibold tracking-tight text-foreground">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="flex w-full items-center gap-2 text-left"
+          >
+            <CaretRight
+              aria-hidden="true"
+              className={[
+                'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-fast ease-brand',
+                open ? 'rotate-90' : '',
+              ].join(' ')}
+            />
+            {title}
+          </button>
+        </h3>
+        {action != null ? <div className="shrink-0">{action}</div> : null}
+      </div>
       {open ? <div>{children}</div> : null}
     </section>
   );

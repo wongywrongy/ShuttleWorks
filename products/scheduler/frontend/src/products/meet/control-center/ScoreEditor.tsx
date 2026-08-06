@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
-import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 import type { MatchDTO, MatchStateDTO, SetScore, TournamentConfig } from '../../../api/dto';
 
 interface ScoreEditorProps {
@@ -118,7 +118,7 @@ function SimpleScoreEditor({
   return (
     <form onSubmit={submit} className="mb-3 border-t border-border pt-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
           Score
         </span>
         <button
@@ -284,7 +284,7 @@ function BadmintonInlineEditor({
   return (
     <form onSubmit={submit} className="mb-3 border-t border-border pt-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
           Score · best of {maxSets}
         </span>
         <div className="flex items-center gap-1">

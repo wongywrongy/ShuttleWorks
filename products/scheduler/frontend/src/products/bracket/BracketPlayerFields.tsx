@@ -29,6 +29,7 @@ import {
   type BadgeEntry,
 } from './rosterEvents';
 import { disciplineLabel } from './bracketLabels';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** Writes one event's participant list (config echoed by the caller). */
 export type CommitEventFn = (
@@ -37,7 +38,7 @@ export type CommitEventFn = (
 ) => Promise<void>;
 
 export const FIELD_LABEL_CLASSES =
-  'text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground';
+  `${EYEBROW_CLASS} text-muted-foreground`;
 
 export const FIELD_INPUT_CLASSES =
   'w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring';

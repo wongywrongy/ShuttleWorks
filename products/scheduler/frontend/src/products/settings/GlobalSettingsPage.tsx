@@ -18,6 +18,7 @@ import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from '../../platform/auth/passwordPolicy';
 import { FieldRow, Section } from '../../platform/settings/SettingsControls';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 // Profile/security editing is locked for the local-mode bootstrap identity
 // (no password, no real account); a signed-in account (cloud mode, or any
@@ -370,7 +371,7 @@ export function GlobalSettingsPage() {
         <nav className="w-56 shrink-0 space-y-4 overflow-y-auto border-r border-border p-3">
           {NAV.map((g) => (
             <div key={g.group} className="space-y-0.5">
-              <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <div className={`px-2 pb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
                 {g.group}
               </div>
               {g.items.map((it) => (

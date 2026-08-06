@@ -35,7 +35,7 @@ import { SuggestionsRail } from './suggestions/SuggestionsRail';
 import { AlertsActivityPanel } from './control-center/AlertsActivityPanel';
 import { useActivityLog } from '../../hooks/useActivityLog';
 import { exportScheduleXlsx } from './exports/xlsxExports';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { SourceChip } from '../../components/SourceChip';
 import { ActionsBar } from '../../components/control-plane';
 import type { Advisory } from '../../api/dto';
@@ -623,7 +623,7 @@ export function MatchControlCenterPage() {
           {detailsOpen ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
-                <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
                   Match details
                 </span>
                 <button
@@ -683,7 +683,7 @@ export function MatchControlCenterPage() {
               onClick={() => setDetailsOpen(true)}
               title="Show match details"
               aria-label="Show match details"
-              className={`${INTERACTIVE_BASE} flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
+              className={`${INTERACTIVE_BASE} flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2 ${EYEBROW_CLASS} text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted hover:text-foreground`}
             >
               <span>Match details</span>
               <CaretRight aria-hidden="true" className="h-3.5 w-3.5" />

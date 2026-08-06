@@ -18,6 +18,7 @@ import { attentionReasons, moduleCountsOf, readinessOf, setupLabel } from './hub
 import { rowActionFor } from './nextAction';
 import { eventDate, temporalGroupOf } from './hubGrouping';
 import { NextUpList } from './NextUpList';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** One metric tile in the "This event" triplet. */
 function MetricTile({
@@ -50,7 +51,7 @@ function fmtDate(iso: string | null): string {
 /** 10px uppercase micro-label — the rail's section voice. */
 function RailLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-2 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
+    <div className={`mb-2 ${EYEBROW_CLASS} text-ink-faint`}>
       {children}
     </div>
   );
@@ -167,7 +168,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
       {setupEntries.length > 0 ? (
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
+            <span className={`${EYEBROW_CLASS} text-ink-faint`}>
               Readiness
             </span>
             {readiness ? (

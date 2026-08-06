@@ -653,3 +653,12 @@ a green 1,100-test suite. The real check is the viewer flow in
     it is a token-mapping change, but it moves colors on a shipped operational
     surface, so it belongs with the palette direction decision rather than
     ahead of it. Size S. *(2026-08-06 frontend design review.)*
+  - **`Eyebrow` uppercases its text content in JS as well as in CSS.** So
+    `<Eyebrow>Details</Eyebrow>` puts `DETAILS` in the DOM while the equivalent
+    `<span className={EYEBROW_CLASS}>Details</span>` puts `Details`. Visually
+    identical (CSS `uppercase` does the work either way), but screen readers
+    may spell out an all-caps string, and it makes the component and the class
+    constant disagree about DOM text. Six call sites. Deferred because removing
+    it changes DOM text that tests may query, which is unrelated to the config
+    unification it surfaced during. Size S. *(2026-08-06 config-surface
+    unification — see `docs/audits/15-frontend-design-review.md` §6.)*

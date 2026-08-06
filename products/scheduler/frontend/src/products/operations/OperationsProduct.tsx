@@ -24,7 +24,7 @@ import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
 import { useMatchStateSync } from '../../hooks/useMatchStateSync';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { slotToTime } from '../../lib/time';
 import { bracketOccupiedWindows } from '../../lib/bracketOccupancy';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
@@ -208,7 +208,7 @@ function OperationsBody() {
     <div className="relative flex h-full min-h-0 flex-col bg-card">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</span>
+          <span className={`${EYEBROW_CLASS} text-muted-foreground`}>{title}</span>
           <span className="text-xs text-muted-foreground">{subtitle}</span>
         </div>
         {/* Plan is the planning surface: build / adjust the plan. Run runs

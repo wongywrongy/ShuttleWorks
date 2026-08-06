@@ -22,6 +22,7 @@ import { SortControl } from './SortControl';
 import { needsAttention } from './hubSignals';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** The ⌘K handler accepts Ctrl too — the hint should name the key the
  *  user's OS actually has. */
@@ -307,7 +308,7 @@ export function HubPage() {
                   prototype (widths mirror WorkspaceRow's cells). */}
               <div
                 aria-hidden
-                className="flex items-center gap-3 border-b border-border px-4 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint"
+                className={`flex items-center gap-3 border-b border-border px-4 py-2 ${EYEBROW_CLASS} text-ink-faint`}
               >
                 {showDates ? <span className="w-14 shrink-0">Date</span> : null}
                 <span className="min-w-0 flex-1">Workspace</span>

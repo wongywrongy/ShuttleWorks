@@ -14,6 +14,7 @@ import type { AppTab } from '../../store/uiStore';
 import { readinessOf, setupLabel, attentionReasons } from '../hub/hubSignals';
 import { eventDate } from '../hub/hubGrouping';
 import { NextUpList } from '../hub/NextUpList';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return 'No date set';
@@ -41,7 +42,7 @@ function stepTarget(key: string, kind: 'meet' | 'bracket'): AppTab | null {
 /** 10px uppercase section label — the workspace's section voice. */
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-2 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint">{children}</div>
+    <div className={`mb-2 ${EYEBROW_CLASS} text-ink-faint`}>{children}</div>
   );
 }
 

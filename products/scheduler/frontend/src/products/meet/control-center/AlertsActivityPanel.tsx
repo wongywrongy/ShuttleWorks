@@ -14,6 +14,7 @@ import { Button, StatusPill } from '@scheduler/design-system/components';
 import { useAlertStore } from '../../../store/alertStore';
 import { sortPanel, type AlertEntry } from '../../../platform/domain/alertModel';
 import type { Advisory } from '../../../api/dto';
+import { EYEBROW_CLASS } from '../../../lib/utils';
 
 interface AlertsActivityPanelProps {
   onReview?: (advisory: Advisory) => void;
@@ -110,7 +111,7 @@ export function AlertsActivityPanel({ onReview, className = '' }: AlertsActivity
         aria-expanded={!collapsed}
         className="flex flex-shrink-0 items-center justify-between gap-2 px-4 py-2 text-left hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <span className={`flex items-center gap-1.5 ${EYEBROW_CLASS} text-muted-foreground`}>
           {collapsed ? (
             <CaretRight aria-hidden="true" className="h-3 w-3" />
           ) : (

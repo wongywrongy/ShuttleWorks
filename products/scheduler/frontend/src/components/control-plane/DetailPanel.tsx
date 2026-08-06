@@ -21,6 +21,7 @@
  */
 import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from '@phosphor-icons/react';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 export function DetailPanel({
   label,
@@ -107,7 +108,7 @@ export function DetailPanel({
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
             {label}
           </span>
           <span

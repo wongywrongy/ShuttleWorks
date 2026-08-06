@@ -36,7 +36,7 @@ import { DirectorToolsPanel } from './director/DirectorToolsPanel';
 import { Modal } from '../../components/common/Modal';
 import { useProposals } from '../../hooks/useProposals';
 import { useActivityLog } from '../../hooks/useActivityLog';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import type { Advisory } from '../../api/dto';
 import { exportScheduleXlsx } from './exports/xlsxExports';
 import { computeConstraintViolations } from '../../utils/constraintChecker';
@@ -391,7 +391,7 @@ export function SchedulePage() {
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
                 <div className="flex min-w-0 items-baseline gap-3">
-                  <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
                     Matches
                   </span>
                   <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">

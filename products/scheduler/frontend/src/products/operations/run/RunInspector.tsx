@@ -20,7 +20,7 @@ import {
   type RunActionKind,
 } from '../runtime/runMachine';
 import type { RunMatch } from '../runtime/runModel';
-import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 
 // ── button styles (mirrors OpsDetailRail) ────────────────────────────────
 const actionBtn =
@@ -206,7 +206,7 @@ function NowActions({
     <div className="space-y-2">
       {/* Drift indicator — only when playing and running over */}
       {driftSlots > 0 && (
-        <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-warning">
+        <p className={`${EYEBROW_CLASS} text-status-warning`}>
           Running over
         </p>
       )}

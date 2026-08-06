@@ -17,7 +17,7 @@
  * direct `useLockGuard` import, so platform/ never depends on a
  * product-owned store.
  */
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { useTournament } from '../../hooks/useTournament';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
@@ -65,6 +65,19 @@ export interface EngineConfigFormProps {
    *  only — no save affordance renders and submit is a no-op. Pair with a
    *  `LockedFieldset` so the controls themselves are inert too. */
   readOnly?: boolean;
+  /** Module-owned `Section`s rendered above Scoring, in the slot Meet's
+   *  inline "Events" section occupies.
+   *
+   *  This is a SLOT, not an import, on purpose: the bracket's Events content
+   *  reads `useBracket()` and lives in `products/bracket/`, and this form
+   *  lives in `platform/` — which dependency-cruiser forbids from importing
+   *  `products/`. Passing the node keeps the merged surface (one form, one
+   *  save path) without inverting the layer.
+   *
+   *  Whatever is passed must NOT write `TournamentConfig`: this form's submit
+   *  spreads the whole config, so a second writer on the same page is a
+   *  silent clobber. The bracket's structure content is read-only. */
+  leadingSections?: ReactNode;
 }
 
 export const ENGINE_CONFIG_FIELDS = [
@@ -123,6 +136,7 @@ export function EngineConfigForm({
   onBusyChange,
   guardSave,
   readOnly = false,
+  leadingSections,
 }: EngineConfigFormProps) {
   const { config, updateConfig } = useTournament();
   const [formData, setFormData] = useState<Partial<TournamentConfig>>(() =>
@@ -226,6 +240,10 @@ export function EngineConfigForm({
           what the matches are, then when they run, then what the solver
           optimises for, with the solver's own internals last. */}
       <div className="max-w-3xl space-y-2">
+          {/* The module's own sections lead — Meet's inline Events below,
+              Bracket's via the `leadingSections` slot. Both engines put
+              "what is being contested" above "how it is scored". */}
+          {leadingSections}
           {module === 'meet' ? (
             <>
               {/* One section, not two. "Format" sat two sections above the

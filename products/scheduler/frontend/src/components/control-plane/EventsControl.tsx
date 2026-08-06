@@ -14,6 +14,7 @@
  */
 import { Fragment, useState, type ReactNode } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 export interface EventCategory {
   id: string;
@@ -109,7 +110,7 @@ export function EventsControl({
                   isOpen ? 'rotate-90' : '',
                 ].join(' ')}
               />
-              <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-3">
+              <span className={`${EYEBROW_CLASS} text-ink-3`}>
                 {cat.label}
               </span>
               <span className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1">

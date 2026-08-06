@@ -299,15 +299,19 @@ describe('BracketTab — Schedule chrome (data populated)', () => {
 });
 
 describe('BracketTab — Setup chrome', () => {
-  it('renders the Setup sections in the Configuration switcher', () => {
+  it('renders Configuration as one surface, with no section switcher', () => {
     // Default mock (null data) is fine — Setup doesn't depend on bracket data.
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
-    // The actions-bar Seg renders a radio per section: Engine + Events.
-    expect(screen.getByRole('radio', { name: /^Engine$/i })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /^Events$/i })).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: /^Tournament data$/i })).toBeNull();
-    expect(screen.queryByRole('radio', { name: /^Share$/i })).toBeNull();
+    // The actions-bar Seg is gone: Engine and Events were merged into a
+    // single stack of sections. Every former section is a heading now.
+    expect(screen.queryByRole('radio', { name: /^Engine$/i })).toBeNull();
+    expect(screen.queryByRole('radio', { name: /^Events$/i })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Events' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Scoring' })).toBeInTheDocument();
+    // Tournament data + Share stayed out — they live in workspace settings.
+    expect(screen.queryByRole('heading', { name: /^Tournament data$/i })).toBeNull();
+    expect(screen.queryByRole('heading', { name: /^Share$/i })).toBeNull();
   });
 
   it('renders the Engine section content by default', () => {

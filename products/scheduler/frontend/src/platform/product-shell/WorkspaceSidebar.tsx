@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { CaretRight } from '@phosphor-icons/react';
 import type { AppTab } from '../../store/uiStore';
 import type { ModuleId, WorkspaceModule } from './types';
+import { EYEBROW_CLASS } from '../../lib/utils';
 import {
   buildWorkspaceNav,
   roleBadge,
@@ -116,7 +117,7 @@ export function WorkspaceSidebar({ tid, kind, modules, activeTab }: WorkspaceSid
                 className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-muted/40"
               >
                 <span className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
                     {s.label}
                   </span>
                   <span className="rounded-sm border border-border px-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -147,7 +148,7 @@ export function WorkspaceSidebar({ tid, kind, modules, activeTab }: WorkspaceSid
 
       {/* Tier 3 — Workspace admin (always, bottom) */}
       <div className="my-2 border-t border-border" />
-      <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <div className={`px-2 pb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
         {nav.admin.label}
       </div>
       <div className="space-y-0.5">

@@ -10,7 +10,7 @@
 import { useMemo } from 'react';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 
 interface Props {
@@ -37,7 +37,7 @@ function RowActions({
   onAction: (block: OpsBlock, action: OperationalAction) => void;
 }) {
   if (b.done) {
-    return <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-done">Done</span>;
+    return <span className={`${EYEBROW_CLASS} text-status-done`}>Done</span>;
   }
   const assigned = b.court != null;
   if (b.source === 'meet') {
@@ -144,7 +144,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
   const section = (title: string, items: OpsBlock[]) =>
     items.length > 0 ? (
       <>
-        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <li className={`border-y border-border bg-muted/40 px-4 py-1 ${EYEBROW_CLASS} text-muted-foreground`}>
           {title} · {items.length}
         </li>
         {items.map(row)}

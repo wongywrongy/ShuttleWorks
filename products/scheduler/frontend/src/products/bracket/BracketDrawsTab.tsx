@@ -34,7 +34,7 @@ import {
 } from '../../components/control-plane';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { Modal } from '../../components/common/Modal';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import type { PickedSingle, PickedPair } from './ParticipantPicker';
 import { DrawDetailPanel } from './DrawDetailPanel';
 import {
@@ -491,7 +491,7 @@ function StatusPillFor({
 }) {
   if (status === 'draft') {
     return (
-      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
         ○ Draft
       </span>
     );
@@ -744,7 +744,7 @@ function FormatCard({
         )}
       </span>
       <span className="mt-1 block text-xs text-muted-foreground">{descriptor.blurb}</span>
-      <span className="mt-1.5 block text-2xs font-semibold uppercase tracking-[0.08em] text-accent">
+      <span className={`mt-1.5 block ${EYEBROW_CLASS} text-accent`}>
         {descriptor.matchesHint}
       </span>
     </button>
@@ -805,7 +805,7 @@ function NewDrawModal({
   return (
     <Modal onClose={onClose} titleId={titleId} widthClass="max-w-2xl">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 id={titleId} className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <h2 id={titleId} className={`${EYEBROW_CLASS} text-muted-foreground`}>
           New draw
         </h2>
         <button
@@ -908,7 +908,7 @@ function DrawConfigModal({
   return (
     <Modal onClose={onClose} titleId={titleId} widthClass="max-w-md">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 id={titleId} className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <h2 id={titleId} className={`${EYEBROW_CLASS} text-muted-foreground`}>
           Configure draw
         </h2>
         <button

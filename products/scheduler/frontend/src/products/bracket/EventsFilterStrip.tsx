@@ -8,6 +8,7 @@
  */
 import { useBracket } from '../../hooks/useBracket';
 import { useUiStore } from '../../store/uiStore';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 export function EventsFilterStrip() {
   const { data } = useBracket();
@@ -16,7 +17,7 @@ export function EventsFilterStrip() {
 
   if (!data) return null;
   return (
-    <div className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-[0.08em]">
+    <div className={`flex items-center gap-1 ${EYEBROW_CLASS}`}>
       <span className="text-muted-foreground mr-2">EVENTS:</span>
       {data.events.map((ev) => {
         const on = filter[ev.id] !== false;

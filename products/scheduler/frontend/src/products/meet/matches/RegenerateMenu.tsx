@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { ArrowsClockwise } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../../store/tournamentStore';
-import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 import type { MatchDTO } from '../../../api/dto';
 
 function expandRanks(counts: Record<string, number> | undefined): string[] {
@@ -163,7 +163,7 @@ export function RegenerateMenu() {
           aria-label="Regenerate matches from roster"
           className="motion-enter absolute right-0 top-full z-overlay mt-1 w-72 rounded-sm border border-border bg-popover p-3 text-popover-foreground shadow-lg"
         >
-          <div className="mb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <div className={`mb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
             Regenerate from roster
           </div>
           <p className="text-xs text-muted-foreground">{infoLine}</p>

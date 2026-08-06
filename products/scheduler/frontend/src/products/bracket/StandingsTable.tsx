@@ -13,6 +13,7 @@ import {
   ColumnHeaderRow,
   type BandedListColumn,
 } from "../../components/control-plane";
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 // Numeric columns stay tight (two 2-digit numbers + en-dash at text-xs)
 // so the flex-1 Player cell keeps real width even in the xl side rail.
@@ -39,7 +40,7 @@ export function StandingsTable({
       className="overflow-hidden rounded-lg border border-border bg-card"
     >
       <div className="border-b border-border px-5 py-2">
-        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-3">
+        <span className={`${EYEBROW_CLASS} text-ink-3`}>
           Standings
         </span>
       </div>

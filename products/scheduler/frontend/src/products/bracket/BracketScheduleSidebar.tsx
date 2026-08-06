@@ -6,6 +6,7 @@
 import { useMemo } from 'react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { formatBracketSlot } from './formatBracketSlot';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 interface Props {
   data: BracketTournamentDTO;
@@ -67,7 +68,7 @@ export function BracketScheduleSidebar({ data, selectedId }: Props) {
   return (
     <aside className="w-64 shrink-0 overflow-auto border-l border-border bg-background px-4 py-4">
       <div className="mb-3">
-        <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
           {event?.discipline ?? '—'}
         </div>
         <div className="text-sm font-medium text-foreground">

@@ -226,90 +226,87 @@ A and C are not exclusive — A is the cheap floor, C is where an actual identit
 
 ---
 
-## 6. Continuation plan (written 2026-08-06, end of session 1)
+## 6. Config-surface unification (session 2, 2026-08-06)
 
-Everything below is **not yet done**. Session 1's work is committed on `dev`
-(`37c6fd0`) and pushed. All gates green at that commit: vitest 1315, tsc,
-eslint 0 errors, depcruise 0 errors, contrast both themes, docs build.
+Session 1 built the grammar (`Section` + `Row` + `FieldRow`) and applied it to
+Meet. Session 2 applied it to the two modules that still ran their own: Bracket
+and Display. All gates green: vitest 1316, tsc, eslint 0 errors, depcruise 0
+errors, contrast both themes, docs build.
 
-### Step 1 — Triage the 33 hand-rolled section labels (do first)
+### Bracket Configuration is one surface
 
-`SectionHeader`'s reweighting only reached surfaces that import it from
-`platform/settings/SettingsControls`. **33 hand-rolled copies of the exact
-pre-review style remain**:
+The Engine/Events switcher is gone, mirroring the Meet merge. Bracket already
+rendered the shared `EngineConfigForm`, so it had inherited the *inside* of the
+fix while keeping the switcher around it.
 
-```
-text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground
-```
+`BracketStructureSection` now arrives through a new `leadingSections` prop
+rather than as a second mounted form. That is the load-bearing detail:
+`EngineConfigForm` spreads the whole config on submit, so two forms on one page
+each doing that is a silent clobber. It is a slot rather than an import because
+the bracket content calls `useBracket()` and lives in `products/`, which
+dependency-cruiser forbids `platform/` from importing.
 
-Found in at least: `products/workspace/displayConfig/DisplayLayoutEditor.tsx`,
-`products/bracket/{BracketDrawsTab,DrawDetailPanel,LiveView,LiveMatchList,
-BracketScheduleSidebar,BracketMatchesTable,BracketPlayerFields,
-BracketEmptyState}.tsx`, `components/control-plane/{ActionsBar,DetailPanel}.tsx`.
+`?section=` is retired with the switcher; old links still resolve.
 
-Re-derive the list before starting:
+`BracketStructureSection`'s own "Manage" heading went too — a section heading
+over two links, on a surface whose other headings introduce runs of settings,
+was a heading doing decoration. The two routing rows sit in Events.
 
-```
-grep -rn "text-2xs font-semibold uppercase tracking-\[0.08em\] text-muted-foreground" \
-  --include=*.tsx products/scheduler/frontend/src
-```
+### Display Configuration adopts the grammar
 
-**This is a judgement pass, not a find-and-replace.** Each call site is one of
-two things and they must not be conflated:
+It ran a third grammar: `<h3 className="text-sm">` headings at the exact weight
+of the row labels beneath them, rows inside rounded bordered cards, and an
+explanatory paragraph under every heading. Now `Section` + `Row` + `FieldRow`,
+single column, `max-w-3xl`, same as the other two.
 
-- **Section header** — introduces a group of rows/fields. Adopt `Section` (or
-  `SectionHeader`). These are the ones causing the flat-weight complaint.
-- **Eyebrow** — a small label on a panel, chip, or bar that is NOT introducing
-  a group (e.g. `ActionsBar`'s title). The small all-caps treatment is
-  probably right here; the defect is that there are 33 copies of it. Extract
-  ONE `Eyebrow` component and route them through it.
+- `Section` gained an optional `action` slot (Reset on Court order, Copy/Open
+  on Public link). It sits outside the disclosure button: a button inside a
+  button is invalid, and clicking Reset would collapse the section it reset.
+- The "Grid columns" dependent row lost its left-rule indent, matching the
+  one-rail rule Meet already followed. Dependency is carried by the dimmed +
+  `aria-disabled` state.
+- Two entity-in-attribute bugs fixed: JSX string attributes are not
+  entity-decoded, so `aria-label="Reset court order &amp;amp; visibility"` put a
+  literal `&amp;amp;` in the accessible name.
 
-Deliverable: every one of the 33 either uses `Section`/`SectionHeader` or the
-new shared `Eyebrow`. Zero hand-rolled copies of that class string.
+### `Section` renders a real heading (regression from session 1)
 
-### Step 2 — Merge Bracket's Engine + Events
+Session 1's `Section` title was a bare `<button>`. A button carries no heading
+role, so a surface built only from these had **no document outline** — screen
+reader heading navigation skipped every section title on the page. It is now
+an `<h3>` wrapping the disclosure button (the WAI-ARIA disclosure pattern);
+`SectionHeader` likewise. Two DisplayConfig tests were already asserting
+`getByRole('heading')` and had been failing against the merged surface — they
+were right and the component was wrong.
 
-Mirror the Meet merge (session 1). Bracket already renders the same
-`EngineConfigForm`, so it inherited the *inside* of the fix but still has the
-switcher: `products/bracket/BracketTab.tsx` `bracketSetupSections` defines an
-`engine` section and a `structure` section (labelled "Events",
-`BracketStructureSection`) behind a `Seg`.
+### One definition of the micro-label treatment
 
-- `ConfigSurface`'s `sections`/`section`/`onSectionChange` are ALREADY optional
-  (session 1) and the switcher only renders when `sections.length > 1`, so no
-  shell change is needed.
-- **The hazard is the same one that shaped the Meet merge**: do not mount two
-  forms that each spread the whole config on save. Fold the bracket structure
-  fields into `EngineConfigForm`'s own state gated on `module === 'bracket'`,
-  exactly as `meetMode`/`rankCounts` were, and declare them in
-  `ENGINE_CONFIG_FIELDS` (its test asserts the module-specific list, so it will
-  catch an undeclared field).
-- Tests: `bracketConfigTabs.test.tsx` asserts the two radios exist; those
-  assertions describe the surface being removed and need rewriting, not
-  patching. `expandConfigSections()` helpers already exist in the bracket test
-  files.
+`EYEBROW_CLASS` in `lib/utils.ts`, beside `INTERACTIVE_BASE` (the established
+home for shared class constants). It replaced ~56 hand-copied instances of
+`text-2xs font-semibold uppercase tracking-[0.08em]` across 40 files, plus two
+`text-[10px]` near-duplicates in `WorkspaceSidebar`.
 
-### Step 3 — Customizable events (its own slice, NOT a UI change)
+**Colour is deliberately excluded** — call sites append `text-muted-foreground`,
+a status token, or a state-derived class. That separation is what lets one
+constant own every use of the type step without also deciding what each one
+means. Most of these could not have been the `Eyebrow` *component*: they are
+`<th>`, `<td>` group rows, `<h3>` panel headings, and state-coloured pills.
 
-`rankCounts` is a fixed five-key object (`MS/WS/MD/WD/XD`) and those keys are
-read by the backend and the solver, not just the form. Making events
-user-definable is a data-model change plus a migration. Scope it separately.
+This is the fix for the actual failure mode: when session 1 reweighted section
+headings, the change reached only surfaces that imported a component, so
+Bracket and Display kept the old treatment and looked untouched.
 
-### Deferred by decision (do not silently "fix")
+### Still open
 
-- **`Reproducible run` / `Freeze horizon`** — solver jargon, deliberately NOT
-  renamed. Needs a product decision on what they mean to a director; a
-  confident wrong rename is worse than jargon.
-- **The standalone `—` empty-value glyph** (~180 occurrences, tests pin it).
-  Session 1 removed em dashes from *prose* only. Replacing the glyph is a
-  separate decision about what stands in for "no value".
-- **The five action panels** (`ModulesSettingsTab`, `SharingTab`,
-  `PeopleAccessTab`, `SyncBackupsTab`, `DangerZoneTab`) were aligned on width
-  and heading weight but deliberately NOT forced into `Row`/`FieldRow`: their
-  rows carry a description beside the control, which `Row` forbids. If they
-  should share the grammar, add a third row type (`ActionRow`: title,
-  description, action) rather than bending the existing two.
-- **The blue collision** — `--status-started` (sky) still reads as interactive
-  beside the azure accent, and `--module-meet` is still the accent hex. The
-  cheap half of palette Direction B (demote `--status-started` to neutral, keep
-  the azure accent) closes it. See `debt-log.md`.
+- **Customizable events** — unchanged from session 1's assessment. `rankCounts`
+  is a fixed five-key object (`MS/WS/MD/WD/XD`) read by the backend and the
+  solver, not just the form. Data-model change plus a migration; its own slice.
+- **`Eyebrow` uppercases text content in JS** as well as CSS, so
+  `<Eyebrow>Details</Eyebrow>` puts `DETAILS` in the DOM while
+  `<span className={EYEBROW_CLASS}>` puts `Details`. Screen readers may spell
+  out the former. Six call sites. Logged to the debt log rather than fixed here
+  — it changes DOM text, which is a test-visible change unrelated to this work.
+- The deferred-by-decision list from session 1 stands unchanged: the
+  `Reproducible run` / `Freeze horizon` names, the standalone `—` empty-value
+  glyph, the five action panels (which want a third `ActionRow` type rather
+  than being bent into `Row`), and the sky/azure collision.

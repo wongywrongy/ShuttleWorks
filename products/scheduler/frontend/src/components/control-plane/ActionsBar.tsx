@@ -16,6 +16,7 @@
  * pinned while only the content scrolls.
  */
 import type { ReactNode } from 'react';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 export function ActionsBar({
   title,
@@ -28,7 +29,7 @@ export function ActionsBar({
 }) {
   return (
     <header className="flex h-11 shrink-0 items-center gap-3 border-b border-border bg-card px-4">
-      <span className="shrink-0 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <span className={`shrink-0 ${EYEBROW_CLASS} text-muted-foreground`}>
         {title}
       </span>
       {status != null ? (

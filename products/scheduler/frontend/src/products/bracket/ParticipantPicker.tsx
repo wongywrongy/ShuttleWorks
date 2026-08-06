@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import type { BracketPlayerDTO } from '../../api/dto';
 import { Button } from '@scheduler/design-system';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 export interface PickedSingle {
   id: string;
@@ -76,7 +77,7 @@ function SinglesPicker({
     });
   return (
     <div className="border border-border bg-bg-elev p-3 space-y-2">
-      <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
         Pick participants ({picked.size})
       </div>
       <ul className="grid grid-cols-2 gap-1">
@@ -132,7 +133,7 @@ function DoublesPicker({
 
   return (
     <div className="border border-border bg-bg-elev p-3 space-y-2">
-      <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
         {step === 'A'
           ? `Pick player A (pair ${pairs.length + 1})`
           : `Pick partner for ${pickedA?.name}`}

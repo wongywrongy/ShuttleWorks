@@ -23,6 +23,7 @@ import { applyOptimisticResult } from "./optimisticResult";
 import { bwfPositions } from "./bwf";
 import { descriptorFor } from "./formatRegistry";
 import { StandingsTable } from "./StandingsTable";
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** How the SE canvas lays out its rounds. One-sided is the classic
  *  printed-bracket cascade (R1 left, Final right) and the default;
@@ -309,7 +310,7 @@ function BracketView({
                 style={{ left: `${col.left}px`, width: `${BRACKET_CARD_WIDTH}px` }}
               >
                 <h3
-                  className={`text-2xs font-semibold uppercase tracking-[0.08em] ${
+                  className={`${EYEBROW_CLASS} ${
                     isFinal ? 'text-accent' : 'text-ink-faint'
                   }`}
                 >
@@ -776,7 +777,7 @@ function SegmentedBracketView({
                     }}
                   >
                     <span
-                      className={`text-2xs font-semibold uppercase tracking-[0.08em] ${
+                      className={`${EYEBROW_CLASS} ${
                         isGf ? "text-accent" : "text-ink-3"
                       }`}
                     >
@@ -803,7 +804,7 @@ function SegmentedBracketView({
                         }}
                       >
                         <h3
-                          className={`text-2xs font-semibold uppercase tracking-[0.08em] ${
+                          className={`${EYEBROW_CLASS} ${
                             isFinalCol ? "text-accent" : "text-ink-faint"
                           }`}
                         >

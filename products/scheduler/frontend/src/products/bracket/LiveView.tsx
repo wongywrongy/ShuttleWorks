@@ -13,6 +13,7 @@ import { BracketEmptyState } from './BracketEmptyState';
 import { MatchDetailPanel } from './MatchDetailPanel';
 import { DetailDock } from '../../components/control-plane';
 import { LiveMatchList } from './LiveMatchList';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 // ---- State-ring vocabulary ------------------------------------------------
 
@@ -244,7 +245,7 @@ function ChipStateLegend() {
   ];
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-1.5">
-      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
         Status
       </span>
       {items.map((item) => (

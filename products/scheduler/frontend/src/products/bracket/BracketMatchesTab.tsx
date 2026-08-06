@@ -29,7 +29,7 @@ import {
   type BandedTableGroup,
   type BracketMatchStatus,
 } from '../../components/control-plane';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { buildPlayUnitLabels, disciplineLabel } from './bracketLabels';
 import {
@@ -277,7 +277,7 @@ export function BracketMatchesTab({
                         {renderSide(pu.side_b)}
                       </span>
                       <span
-                        className={`${MATCH_CELL.status} text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+                        className={`${MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
                       >
                         {STATUS_LABEL[status]}
                       </span>

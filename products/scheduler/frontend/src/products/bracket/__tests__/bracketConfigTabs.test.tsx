@@ -1,12 +1,17 @@
 /**
- * SP-E4 — Bracket Configuration is two tabs: Engine and Events.
+ * Bracket Configuration is ONE surface — the Engine/Events switcher is gone.
  *
- * Engine tab = the SAME scoring field set as the Meet Engine tab (score
- * type / points / match format / deuce) plus the bracket-specific rest
- * between rounds. Events tab = the draw facts (type / size / seeding /
- * active disciplines), read from the existing draws and rendered as the
- * same Row-stack grammar as Meet's Events section. The section label is
- * 'Events'; its URL id stays 'structure'.
+ * It used to be two tabs behind a `Seg`. Meet's identical switcher was merged
+ * first; leaving Bracket's in place is what made the config unification look
+ * half-done. Both engines now render a single stack of collapsible sections:
+ * Events (the draw facts, read-only) leads, then the shared Scoring / Timing /
+ * Optimisation goals / Advanced solver.
+ *
+ * The load-bearing property these tests hold is that the merge did NOT create
+ * a second config writer: Events comes in through `EngineConfigForm`'s
+ * `leadingSections` slot and writes nothing, so there is exactly one save
+ * path. Two forms each spreading the whole config would clobber each other
+ * silently — see the save test below.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -105,18 +110,31 @@ beforeEach(() => {
   });
 });
 
-describe('Bracket Configuration — two tabs', () => {
-  it('renders exactly two tabs: Engine and Events', () => {
+describe('Bracket Configuration — one merged surface', () => {
+  it('has no Engine/Events switcher', () => {
     renderBracketTab();
     expandConfigSections();
-    expect(screen.getByRole('radio', { name: /^Engine$/i })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /^Events$/i })).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: /^Tournament$/i })).toBeNull();
+    // The switcher's radios. Asserting their absence is only meaningful
+    // alongside the next test, which proves BOTH sets of fields are on the
+    // page — otherwise this would pass just as well on a blank surface.
+    expect(screen.queryByRole('radio', { name: /^Engine$/i })).toBeNull();
+    expect(screen.queryByRole('radio', { name: /^Events$/i })).toBeNull();
   });
 
-  it('Engine tab shows the same scoring field set as Meet + rest between rounds', () => {
+  it('renders the Events facts and the engine fields together, no navigation', () => {
     renderBracketTab();
     expandConfigSections();
+
+    // Formerly the Events tab: per-draw facts, read from the existing draws.
+    expect(screen.getByText(/Active disciplines/i)).toBeInTheDocument();
+    expect(screen.getByText("Men's Singles")).toBeInTheDocument();
+    expect(screen.getByText('MS-1')).toBeInTheDocument();
+    expect(screen.getByText(/Single elimination · 8 · 6 seeded/)).toBeInTheDocument();
+    expect(screen.getByText(/Round robin · 4 · 4 seeded/)).toBeInTheDocument();
+
+    // Formerly the Engine tab: the same scoring field set as Meet, plus the
+    // one declared bracket-specific knob. Simultaneously visible — no click
+    // between the two groups.
     expect(screen.getByLabelText('Score type')).toBeInTheDocument();
     expect(screen.getByLabelText('Points per set')).toBeInTheDocument();
     expect(screen.getByLabelText('Match format')).toBeInTheDocument();
@@ -124,32 +142,52 @@ describe('Bracket Configuration — two tabs', () => {
     expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
   });
 
-  it('toggling score type to Sets and saving writes scoringFormat=badminton to the store', async () => {
-    // The Engine tab now uses the shared EngineConfigForm's save-on-submit
-    // model (Task 8) — the shared form matches Meet, not the old bracket
-    // immediate-write pattern. No committed schedule is present, so the
-    // save guard resolves without a confirm.
+  it('sections are collapsible and start expanded, with solver internals closed', () => {
+    renderBracketTab();
+    const events = screen.getByRole('button', { name: /^Events$/ });
+    expect(events).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText(/Active disciplines/i)).toBeInTheDocument();
+
+    fireEvent.click(events);
+    expect(events).toHaveAttribute('aria-expanded', 'false');
+    // Collapsed content leaves the DOM — the reason every negative assertion
+    // on this surface has to open the sections first.
+    expect(screen.queryByText(/Active disciplines/i)).toBeNull();
+
+    expect(screen.getByRole('button', { name: /Advanced solver/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('there is ONE save path: the merged surface writes engine fields and nothing else', async () => {
+    // The merge hazard. `EngineConfigForm` spreads the WHOLE config on
+    // submit, so a second form on the page that did the same would silently
+    // overwrite this one's fields with its own stale copy. Events is a
+    // read-only slot, so exactly one Save exists and the write it produces
+    // carries the edited engine field.
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderBracketTab();
     expandConfigSections();
+
+    expect(screen.getAllByRole('button', { name: /^Save/i })).toHaveLength(1);
+
     fireEvent.click(screen.getByRole('radio', { name: 'Sets' }));
     expect(setConfig).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Save engine settings/i }));
     await waitFor(() => expect(setConfig).toHaveBeenCalled());
     const last = setConfig.mock.calls[setConfig.mock.calls.length - 1][0];
     expect(last.scoringFormat).toBe('badminton');
+    // The rest of the config survived the write — nothing was clobbered by
+    // an unrelated section rendering on the same page.
+    expect(last.tournamentName).toBe('Bracket A');
+    expect(last.courtCount).toBe(4);
   });
 
-  it('Events tab shows per-draw facts (type / size / seeding) + active disciplines', () => {
+  it('routes to Draws and Roster from the Events section', () => {
     renderBracketTab();
     expandConfigSections();
-    fireEvent.click(screen.getByRole('radio', { name: /^Events$/i }));
-    expect(screen.getByText(/Active disciplines/i)).toBeInTheDocument();
-    // Per-discipline Rows: discipline name + event code label, compact
-    // "type · size · seeded" facts (the old table's columns, one line).
-    expect(screen.getByText("Men's Singles")).toBeInTheDocument();
-    expect(screen.getByText('MS-1')).toBeInTheDocument();
-    expect(screen.getByText(/Single elimination · 8 · 6 seeded/)).toBeInTheDocument();
-    expect(screen.getByText(/Round robin · 4 · 4 seeded/)).toBeInTheDocument();
+    expect(screen.getByTestId('bracket-open-draws')).toBeInTheDocument();
+    expect(screen.getByTestId('bracket-open-roster')).toBeInTheDocument();
   });
 });

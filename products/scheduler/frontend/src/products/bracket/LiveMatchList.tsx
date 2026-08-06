@@ -21,7 +21,7 @@ import { useMemo } from 'react';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import { useUiStore } from '../../store/uiStore';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 import { formatBracketSlot } from './formatBracketSlot';
 import { playUnitSideLabels } from './bracketLabels';
@@ -138,7 +138,7 @@ export function LiveMatchList({ data, onChange }: Props) {
           onClick={(e) => e.stopPropagation()}
         >
           {result ? (
-            <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-done">
+            <span className={`${EYEBROW_CLASS} text-status-done`}>
               {result.winner_side === 'A' ? labelA : labelB} won
             </span>
           ) : assignment && !started ? (
@@ -177,7 +177,7 @@ export function LiveMatchList({ data, onChange }: Props) {
   const section = (title: string, ids: string[]) =>
     ids.length > 0 ? (
       <>
-        <li className="border-y border-border bg-muted/40 px-4 py-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <li className={`border-y border-border bg-muted/40 px-4 py-1 ${EYEBROW_CLASS} text-muted-foreground`}>
           {title} · {ids.length}
         </li>
         {ids.map(renderRow)}
