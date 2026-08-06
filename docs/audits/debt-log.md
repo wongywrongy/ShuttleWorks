@@ -245,7 +245,7 @@ Found by driving four simulated tournaments (mid-day meet / full meet / DE brack
 - **Deleted-workspace polling never stops → endless 403 storm.** With a bracket page open, deleting the tournament (this or another session) leaves the ~2.5s poll running forever against 403s; no user-facing "workspace gone" state. Also: access-check runs before existence-check, so deleted reads as *Forbidden*, not *Not Found*. Stop polling on 403/404 + surface a dead-workspace banner. Size M.
 - **The Run nav item is two different surfaces.** Meet-only workspaces get the legacy meet Live page (Director/Disruption/Re-optimize/XLSX, score entry); hybrid workspaces get the SP-G1b unified board (queue/inspector/zoom, no meet tools). Same label, disjoint affordances — an operator moving between workspaces re-learns the page. Deliberate convergence decision needed (this is the F-ARCH-3 neighborhood). Size L (decision first).
 - **Actual-time chips render off-axis.** On both Run boards, playing/done chips place at wall-clock-derived actual slots while the axis only spans the planned range — chips float in unlabeled space far right (meet-only board) or off-viewport (hybrid). Any day that starts late (or any compressed replay) degrades this way. Extend the axis to `max(planned, actual, now)` or clamp actuals. Size M.
-- **Lifecycle states never reach the control plane.** A 43%-played (or 100%-done) tournament still shows Hub filter *Draft*, header pill *DRAFT*, "Next action: Set date", Overview "0 to do"/"results ✓", "Next up" listing already-finished matches as `Sched` (reads schedule, not match states), and a fully-resolved draw card saying *STARTED*. Display shows *DELAYED* on a finished meet. No surface says "in progress" or "complete". Size M–L (one derived-status seam would fix most).
+- **Lifecycle states never reach the control plane.** ~~A 43%-played (or 100%-done) tournament still shows Hub filter *Draft*, header pill *DRAFT*, "Next action: Set date", Overview "0 to do"/"results ✓"~~, "Next up" listing already-finished matches as `Sched` (reads schedule, not match states), ~~and a fully-resolved draw card saying *STARTED*~~. Display shows *DELAYED* on a finished meet. Size M–L (one derived-status seam would fix most). **Mostly closed:** the `signals.phase` seam landed 2026-07-10 (Hub row action, shell badge, inspector, draw card) and SP-UI-1 closed the **Overview** half on 2026-08-06 — it is now phase-keyed and says Setup/Ready/Live/Complete outright. Still open: the meet `nextUp` finished-match filter (its own row above), Display's *DELAYED* on a finished meet, and the Hub *facet* set, which still partitions on the operator-managed `status` column (`Draft`/`Active`) rather than the derived phase, so a live event still files under *Draft*.
 - **Plan invites destructive actions mid-tournament.** Plan page on a live tournament: footer says "Solver idle — click Generate to begin", Generate/Re-plan enabled, finished matches drag-able, no played-state indication on chips. A mid-day Generate re-solves everything. Needs a planFinalized/live guard or confirm. Size M.
 - **Match naming is triple-dialect.** Same match is `MS1` (chips), `M1` (Plan list "Match" column), `#1` (Run advisory banner "Match #1 was called…"). Operators must mentally join three keys; the advisory is the worst (no court/event context). Standardize on eventRank codes. Size S.
 - **Minor**: "(moved)" tag shows on an in-progress match that was never moved (mid-day sim, MD2) — trigger appears to be command-path court/slot writes differing from schedule assignment; Radix Select uncontrolled→controlled warning (console, Hub/Display config); Score "Save" disabled-state styling reads as enabled; bracket draw card leaks internal event id (`ev-de`) as a label chip; solver jargon in Plan header ("Score: 50", "Time: 0ms").
@@ -691,3 +691,32 @@ a green 1,100-test suite. The real check is the viewer flow in
     address is misleading if bookmarked or shared. Unknown segments should
     redirect to `overview` the way unknown top-level routes redirect to the
     Hub. Size S. *(2026-08-06 full-flow route pass.)*
+  - **Overview rail has no "last backup" row.** SP-UI-1's rail shows event
+    date, public display and collaborators. Last-backup was specified but
+    dropped: it needs a second list fetch (`ws-sync`'s backups endpoint) on
+    every workspace landing to render a glance-only fact, and the Overview
+    otherwise makes exactly one extra call. Add it if/when the summary payload
+    or a cheap head endpoint can carry a `lastBackupAt` stamp. Size S.
+    *(2026-08-06 SP-UI-1.)*
+  - **The `ready` / `live` / `complete` Overview panels are minimal.** SP-UI-1
+    shipped `setup` fully and gave the other three honest versions built only
+    from data that already exists (`signals.matches`, `signals.nextUp`) —
+    structure over completeness, deliberately, rather than faking richness.
+    They want real content: live court occupancy, per-event progress, a
+    results/export summary. Size M, product call on what each phase owes.
+    *(2026-08-06 SP-UI-1.)*
+  - **The shell identity bar can disagree with the Overview about a
+    workspace's name.** Seen while verifying SP-UI-1: a `ready` workspace whose
+    Overview header read "Interaction smoke" showed `Untitled` in the shell top
+    bar. The two read different sources (`WorkspaceIdentity` vs the fetched
+    summary) and one lags. Pre-existing; not touched by SP-UI-1 because the
+    fix belongs to the identity seam, not the Overview. Size S.
+    *(2026-08-06 SP-UI-1 verification.)*
+  - **`comingSoon` keeps retired vocabulary alive in the contract.**
+    `ModuleCountsDTO.comingSoon` and the `coming_soon` module status still
+    exist in the backend schema, `dto.ts`, `dto.generated.ts` and ~8 test
+    fixtures, but nothing renders a coming-soon state — `modulesFromDto` maps
+    the value to `available`. "Coming soon" is retired product vocabulary, so
+    the field is dead weight that invites someone to resurface it. Removing it
+    touches the DTO contract both sides. Size S, needs a contract call.
+    *(2026-08-06 SP-UI-1.)*

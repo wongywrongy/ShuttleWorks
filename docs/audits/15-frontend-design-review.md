@@ -400,3 +400,106 @@ identically; only the exit link differs.
 - The deferred-by-decision list from session 1 stands: the `Reproducible run` /
   `Freeze horizon` names, the standalone `—` glyph on operator surfaces, the
   five action panels wanting an `ActionRow` type, and the sky/azure collision.
+
+---
+
+## Session 4 (2026-08-06) — SP-UI-1: control-plane appearance pass
+
+Three findings from a review of the running control plane, all about
+misallocated visual weight rather than missing features. Branch
+`feat/sp-ui-1-control-plane`; frontend-only.
+
+### P1 — The wordmark read as a button
+
+`ShuttleWorksMark` was the wordmark inside a 1px frame — per the brand skill
+the frame *is* the mark, no glyph. At 26px in an `h-12` page header that reads
+as an unstyled button.
+
+The frame is gone. The wordmark is plain display type (15px, `-0.01em`), and
+contrast now comes from a new `SwMonogram` tile — 22px, `bg-foreground /
+text-background`, so it is maximum-contrast in either theme and achromatic,
+spending none of the restrained accent budget. The same tile replaces the
+Phosphor `House` glyph as `AppSidebar`'s home affordance, unifying "this is
+ShuttleWorks" with "go home"; its active state is a ring, because the solid
+tile swallows `railItemClass`'s accent tint.
+
+Deliberately a placeholder *system*: a real mark drops into `SwMonogram` and
+the wordmark is unchanged. One component + tokens, no image assets.
+
+### P2 — Nothing led the Hub row
+
+The row was anchored on a DATE column that is empty for most workspaces, and
+name / modules / next-action all carried near-identical weight.
+
+- **Name leads** (14px semibold); the date moved to trailing right-aligned
+  metadata. An undated row now renders an EMPTY cell rather than an em-dash:
+  the column-level `showDate` hide only fires when *no* visible row has a date,
+  so on a mixed list the placeholder produced a rail of dashes.
+- **Module chips** were `bg-surface-chip text-text-secondary` — close enough
+  to the row background that M/B/D could not be read without hovering for the
+  `title`. On a scanning surface that is a dead column. Raised to the
+  raised-surface step + full-strength text on a hairline, 18px → 20px.
+- **Next action** reads as the row's call to action: hover wash, revealed
+  chevron, and a focus ring that was previously invisible even though the
+  control was always keyboard-reachable. Same accessible name and behaviour.
+
+All 79 existing Hub tests passed unchanged — the reorder broke no selectors.
+
+### P3 — Overview was a status report
+
+Rebuilt as a **phase-keyed command center**. The primary column is a panel map
+keyed on `signals.phase`, so the page changes as the event does.
+
+**The brief assumed `phase` had to be added. It already existed** — computed
+server-side by `workspace_signals.py::_derive_phase` (`setup → ready → live →
+complete`), typed in `dto.ts`, covered by 3 backend tests, and already driving
+`lifecycleBadge` and the Hub row action. So SP-UI-1 touched **no backend code
+at all**, and reused the shipped vocabulary rather than the brief's proposed
+`scheduled`/`done` rename — two derivations of one lifecycle drifting apart is
+the bug class this avoids. `overviewPhase.ts` only narrows the string and
+decides which phases are worth showing; an unrecognised value renders the safe
+default panel, which is the seam future Entries phases arrive through.
+
+- A **lifecycle stepper** replaces the "1/4 steps" progress bar, which measured
+  setup completeness and called it the event's state. Only phases that exist
+  for the workspace render — no placeholder or dashed slots.
+- **One merged checklist** replaces the readiness + "needs attention" pair.
+  They were one fact set rendered twice: `roster: false` and `NO_ROSTER — No
+  players added yet` are the same thing split across two lists, neither
+  actionable. Merged, the attention copy becomes the step's subline and the
+  step carries a button routing to the fixing surface. Later incomplete steps
+  render present-but-quiet. Built from data (`setupChecklist.ts`), not
+  hand-authored JSX, because future phases add steps by extending the tables.
+- **Stat cards removed in `setup`** — `0 / 0 / 2` on a draft spent the page's
+  most visual weight on its least information. Figures appear only in the
+  phases where they mean something.
+- Two-column grid at full content width, replacing a narrow column floating
+  left in a wide canvas.
+- A **rail** of phase-agnostic facts (date, public display, collaborators),
+  each linking to its owning surface.
+
+The Hub inspector consumes the same checklist model, so the two surfaces
+cannot state readiness two different ways.
+
+### Architecture
+
+Shared code went to `platform/domain/` + `components/control-plane/` rather
+than either product, and `NextUpList` moved out of `products/hub/`.
+Cross-product depcruise violations **17 → 14**.
+
+### Gates
+
+`tsc -b` clean · vitest **1338 → 1381** passing · eslint 0 errors (no new
+warnings in touched files) · production build green · backend untouched.
+Verified live against the host backend at 1600px in `setup`, `ready` and
+`live`; screenshots in `.playwright-mcp/sp-ui-1/` (untracked).
+
+### Still open from this session
+
+- The `ready` / `live` / `complete` panels are honest minimal versions built
+  from data that already exists — structure over completeness.
+- The rail's "last backup" row was dropped rather than adding a second fetch
+  on every workspace landing (debt log).
+- Pre-existing, seen while verifying: the shell identity bar can show
+  `Untitled` while the Overview shows the real name — the two read different
+  sources. Not touched here (debt log).

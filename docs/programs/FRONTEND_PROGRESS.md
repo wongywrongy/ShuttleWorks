@@ -1,5 +1,12 @@
 # Frontend Design-Language Migration — Ledger
 
+> **This file is the ledger for the 2026-06/07 re-skin program (Phases 0–14), which is
+> COMPLETE. It stops at 2026-07-04 and is kept as the record of that program.**
+> Appearance work since then is recorded in **`docs/audits/15-frontend-design-review.md`** —
+> read that first for current state. Sessions there: 1–3 (2026-08-06, palette/type/form
+> primitives/config grammar) and 4 (2026-08-06, **SP-UI-1** control-plane pass: wordmark
+> lockup, Hub row hierarchy, phase-keyed Overview).
+
 > READ THIS FILE FIRST at the start of every design-migration session; UPDATE IT LAST
 > before ending one. It — not memory, not the last chat — is the single source of truth
 > for where the frontend revamp stands. (Sibling of `REFACTOR_PROGRESS.md`.)

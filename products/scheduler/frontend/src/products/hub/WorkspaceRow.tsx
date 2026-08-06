@@ -56,15 +56,19 @@ function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
   );
 }
 
-/** Tabular date cell — "Jul 12" (year only when it isn't this year); undated
- *  reads as a muted em-dash so the column still aligns. Trailing METADATA
- *  since SP-UI-1: it used to lead the row, which anchored a dense list on its
- *  most often-empty field. Right-aligned so the numerals form a clean rail. */
+/** Tabular date cell — "Jul 12" (year only when it isn't this year). Trailing
+ *  METADATA since SP-UI-1: it used to lead the row, which anchored a dense
+ *  list on its most often-empty field. Right-aligned so the numerals form a
+ *  clean rail.
+ *
+ *  An undated row renders an EMPTY cell, not an em-dash: the column-level
+ *  `showDate` hide only fires when NO visible row has a date, so on a mixed
+ *  list the placeholder produced a rail of dashes — visual noise standing in
+ *  for the absence of a fact nobody asked for. The width is kept so the dated
+ *  rows still align. */
 function DateCell({ iso }: { iso: string | null }) {
   if (!iso) {
-    return (
-      <span className="w-16 shrink-0 text-right text-2xs sw-num text-muted-foreground">—</span>
-    );
+    return <span aria-hidden className="w-16 shrink-0" />;
   }
   const d = eventDate(iso);
   const valid = !Number.isNaN(d.getTime());
