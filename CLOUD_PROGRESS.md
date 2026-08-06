@@ -947,3 +947,94 @@ since the job queue's partial indexes, and the solve rail under load are **not
 measured**. No query or index change is proposed, because there is no evidence
 for one. Stated as an open gap rather than left implied — the natural next
 slice.
+
+---
+
+## SP-CLOUD-4 — Lost-update concurrency on the state blob: DONE (2026-08-06)
+
+Phase 0 audit (`docs/audits/13-sp-cloud-4-phase0.md`) was authored in a
+parallel session and left three tests failing by design. This is Phase 1.
+
+### The defect
+
+`PUT /tournaments/{id}/state` was the **last unversioned whole-object write in
+the codebase**, and it carries essentially the entire product — config, roster,
+groups, matches, schedule, bracket roster, plan-finalized — all sent on every
+500 ms debounced save.
+
+The loss was **total, not partial**: a stale writer reverted every field the
+other tab had changed since it loaded, not merely the field it touched. And
+because the client re-hydrates only on a 409 — of which there were none — the
+window was **hours, not milliseconds**. The losing PUT answered 200.
+
+### Mechanism (audit 0.D)
+
+`If-Match` as transport, extending the convention `match_state.py` ships, but
+answering a stale version with **409 + `STATE_VERSION_CONFLICT` + the current
+state** rather than a bare 412. The body is what makes the refusal recoverable
+in one round trip. 412 is kept for a *missing or malformed* header — a client
+bug, with no conflict to reconcile and no state worth returning.
+
+**Fail-closed on a missing header**, unlike `/bracket/results`' `Optional`
+`seen_version`, which silently does nothing for any caller that forgets it. An
+optional precondition is one that will eventually be omitted.
+
+Column is `state_version`, deliberately not `version`: three near-collisions
+already existed on this object (`TournamentStateDTO.version` = schema version,
+`schema_version` = its column, `scheduleVersion` = proposal-commit counter).
+
+The bump lives in the repository's **single blob writer**, so a future writer
+cannot forget it, rather than in each endpoint.
+
+### The local-mode hazard, closed (audit 0.E, Rule 1)
+
+The proposal-commit path writes the blob server-side. Without feeding the new
+version back, a **solo operator** would hold a stale token through no fault of
+their own and their next debounced save would spuriously 409. It now returns
+the new version on its ETag. The rule generalises: *any server response that
+rewrites the blob must return the version it produced.*
+
+### Option A — migrating 104 callers rather than weakening the guard
+
+104 `PUT /state` call sites across 44 test files, none of them about
+concurrency. Rather than adding version ceremony to 104 tests, the **test
+client models a real client**: it remembers the version it last saw and sends
+it, exactly as `api/client.ts` does with `stateEtags`. It never invents a
+version for a caller that supplied one, so a test can still drive a real
+conflict, and the contract stays pinned in `test_concurrent_state_writes.py`,
+which bypasses the shim via `client.request()` to send what a forgetful client
+would — and still gets its 412.
+
+**This is a breaking API change.** Any unmigrated client — script, simulator,
+external caller — gets a 412 until it sends the header. The frontend ships in
+the same change.
+
+### A regression the suite caught
+
+Adding `response` as the *second* parameter of `get_tournament_state` silently
+rerouted its two in-process callers, which pass `(tournament_id, repo)`
+positionally — the repo landed in `response` and backup restore 500'd. The
+parameter now goes last and those callers pass by keyword. FastAPI resolves by
+name, so the ordering costs nothing and removes the class of mistake.
+
+### Negative controls (Rule 5 / CODE_HEALTH 3b)
+
+| Control | Broken by | Tests that failed |
+|---|---|---|
+| Version check | forcing the mismatch branch to `if False` | **4** |
+| Fail-closed on missing header | returning a sentinel instead of raising 412 | **1** |
+
+### Gates
+
+Backend pytest **1009 passed**, 66 skipped (1003 + 6) · ruff clean ·
+`tsc -b` clean · `scheduler_core/` untouched.
+
+### Deliberately not done
+
+- **Roster narrowing** (audit 0.C item 1). It reduces conflict *frequency*; it
+  does not affect correctness now that the write is versioned. Its own slice.
+- **`seen_version` required on `/bracket/results`** (audit item 5) — the same
+  fail-open defect one route over. Logged; small.
+- **`match_state` still answers 412 on a stale version** while `/state` answers
+  409. Deliberate divergence: converging it is a breaking change to a shipped,
+  tested path. Logged rather than done.
