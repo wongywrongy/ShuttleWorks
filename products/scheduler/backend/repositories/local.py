@@ -196,11 +196,39 @@ class _LocalTournamentRepo:
         self.session.commit()
         return True
 
-    def upsert_data(self, tournament_id: uuid.UUID, payload: dict) -> Tournament:
-        """Replace the ``data`` blob on an explicit tournament."""
+    def upsert_data(
+        self,
+        tournament_id: uuid.UUID,
+        payload: dict,
+        *,
+        expected_version: Optional[int] = None,
+    ) -> Tournament:
+        """Replace the ``data`` blob on an explicit tournament.
+
+        ``expected_version`` makes the write a genuine compare-and-swap: the
+        version is re-read and compared immediately before the mutation, so
+        two requests that both passed an earlier API-layer check cannot both
+        commit. Omitted by writers with no caller-supplied token (bracket
+        persistence, plan-finalized, restore), which keep last-write-wins.
+        """
         row = self.get_by_id(tournament_id)
         if row is None:
             raise KeyError(tournament_id)
+        if expected_version is not None and (row.state_version or 0) != expected_version:
+            # Reuses the repository layer's existing optimistic-concurrency
+            # signal rather than inventing a second one — _LocalMatchRepo has
+            # raised ConflictError from ``expected_version`` since the
+            # match-state work, and one mechanism beats two that drift apart.
+            raise _conflict_error_class()(
+                match_id=str(tournament_id),
+                current_version=row.state_version or 0,
+                seen_version=expected_version,
+                message=(
+                    f"tournament {tournament_id} state_version moved from "
+                    f"{expected_version} to {row.state_version or 0} while "
+                    "this write was in flight"
+                ),
+            )
         stamped = _stamp_payload(payload)
         row.data = stamped
         # Keep the denormalised columns in sync when the payload's config
@@ -213,11 +241,18 @@ class _LocalTournamentRepo:
             row.tournament_date = new_date
         row.schema_version = CURRENT_TOURNAMENT_SCHEMA_VERSION
         # Every committed blob write advances the optimistic-concurrency
-        # counter (SP-CLOUD-4). This is the ONLY place ``data`` is written —
-        # commit_tournament_state is the single caller path — so bumping here
-        # cannot be forgotten by a future writer the way a per-endpoint bump
-        # could. Any response that rewrites the blob must feed the new value
-        # back to the client, or the client's next save spuriously conflicts.
+        # counter (SP-CLOUD-4). This is the only method that assigns
+        # ``row.data``, so bumping here cannot be forgotten by a future writer
+        # the way a per-endpoint bump could.
+        #
+        # It is NOT reached only through ``commit_tournament_state``. Direct
+        # callers today: ``api/brackets.py`` (session metadata, clear),
+        # ``api/tournaments.py::set_plan_finalized``, and
+        # ``restore_tournament_from_backup`` below. An earlier version of this
+        # comment claimed a single caller path, and that false premise is
+        # exactly why three of those shipped without returning the new token.
+        # Any response that rewrites the blob must feed the new value back to
+        # the client, or the client's next save spuriously conflicts.
         row.state_version = (row.state_version or 0) + 1
         self.session.commit()
         self.session.refresh(row)
@@ -1523,6 +1558,7 @@ class LocalRepository:
         payload: dict,
         *,
         clear_bracket_assignments: bool = False,
+        expected_version: Optional[int] = None,
     ) -> Tournament:
         """Snapshot the prior state into a backup, then write the new one.
 
@@ -1563,7 +1599,9 @@ class LocalRepository:
             session = dict(merged["bracket_session"])
             session.pop("assignments", None)
             merged["bracket_session"] = session
-        result = self.tournaments.upsert_data(tournament_id, merged)
+        result = self.tournaments.upsert_data(
+            tournament_id, merged, expected_version=expected_version
+        )
         self._project_matches_from_payload(tournament_id, payload)
         return result
 

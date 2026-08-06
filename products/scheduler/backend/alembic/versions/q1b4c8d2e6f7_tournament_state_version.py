@@ -11,9 +11,11 @@ The column is an integer bumped on every committed write. Existing rows start
 at 0, which is correct: no client currently holds a version for them, and the
 first read after deploy hands out 0.
 
-Both dialects: a plain integer plus a compare-and-swap
-``UPDATE ... WHERE state_version = :seen``. No dialect-specific SQL, no
-RETURNING, no advisory locks.
+Both dialects: a plain integer. The API layer compares the caller's
+``If-Match`` against it, and ``upsert_data`` re-checks it under the write when
+given ``expected_version`` — the pre-check alone is check-then-act and two
+interleaved requests can both pass it. No dialect-specific SQL, no RETURNING,
+no advisory locks.
 """
 from typing import Sequence, Union
 

@@ -193,9 +193,34 @@ and Display (preview source).
 | --- | --- |
 | `GET · POST /tournaments` | list (with [signals](/api/signals)) / create a workspace |
 | `GET · PATCH · DELETE /tournaments/{id}` | summary / update / delete |
-| `GET · PUT /tournaments/{id}/state` | the persisted workspace-state blob (shared); `PUT` honours `?clearSchedule=true` — see the schedule lock below |
-| `GET …/state/backups`, `POST …/state/backup`, `POST …/state/restore/{file}` | snapshots |
-| `POST /tournaments/{id}/plan-finalized` | toggle the persisted `planFinalized` flag (Run surface) |
+| `GET · PUT /tournaments/{id}/state` | the persisted workspace-state blob (shared). **`PUT` requires `If-Match`** (`412` when missing or malformed, `409` `STATE_VERSION_CONFLICT` when stale — see the concurrency note below); honours `?clearSchedule=true` — see the schedule lock below |
+| `GET …/state/backups`, `POST …/state/backup`, `POST …/state/restore/{file}` | snapshots. Restore rewrites the blob, so its response carries a fresh `ETag` |
+
+::: warning `PUT …/state` is optimistically concurrency-controlled
+`GET /tournaments/{id}/state` returns an `ETag` (a bare integer, same form as
+the match-state route). `PUT` **must** echo it back as `If-Match`:
+
+- **missing or malformed header → `412 STATE_VERSION_REQUIRED`.** Deliberately
+  fail-closed. An optional precondition is one a caller eventually forgets,
+  which is how the lost update this guards against happened in the first
+  place.
+- **stale version → `409 STATE_VERSION_CONFLICT`**, and the body carries
+  `currentState` so a client can reconcile without a second round trip, plus
+  `seenVersion` / `currentVersion`.
+- successful writes return the **new** `ETag`, so a client can save repeatedly
+  without re-reading.
+
+Every response that rewrites the blob returns a fresh `ETag` —
+`PUT …/state`, the proposal commit, `POST …/plan-finalized`, and
+`POST …/state/restore/{file}`. Bracket writes also advance the version but do
+not currently return it; a client that has just performed one should expect a
+single `409` and re-read (tracked in the debt log).
+
+This is a **breaking change** for any client written before it: without the
+header, every state write answers `412`.
+:::
+
+| `POST /tournaments/{id}/plan-finalized` | toggle the persisted `planFinalized` flag (Run surface). Writes the blob, so the response carries a fresh `ETag` |
 | `GET /tournaments/{id}/modules`, `PATCH …/modules/{moduleId}` | the `workspace_modules` control plane |
 | `POST · GET /tournaments/{id}/invites`, `GET …/members` | create / list invites (owner-gated) + list members. `POST` with an `email` makes an **email invite**: delivered via the email seam (`services/email.py` — console backend locally, SMTP in cloud) with a bounded lifetime (`invite_ttl_days`); without `email` it stays a copy-the-URL link invite with no expiry |
 | `GET /invites/{token}` (public) · `POST …/accept` (auth) · `DELETE …/{token}` (owner, revoke) | resolve / accept / revoke an invite link |

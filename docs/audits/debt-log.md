@@ -600,3 +600,30 @@ a green 1,100-test suite. The real check is the viewer flow in
     aspirational; a runbook describing a host that isn't running the thing is
     how an operator loses an hour during an event. Size M (deploy) / S (doc).
     *(Found in SP-REPO-1 while locating the deployment host.)*
+  - **`seen_version` is optional on `POST /bracket/results`.** The DTO declares
+    it `Optional[int]` and the guard runs only `if body.seen_version is not
+    None`, so any caller that omits it is silently unprotected — a fail-*open*
+    optimistic-concurrency check. SP-CLOUD-4 closed the identical defect one
+    route over by making `If-Match` mandatory on `PUT …/state` (412 when
+    absent); this route was left as-is because the frontend already sends the
+    token, so tightening it is a small, low-risk follow-up rather than a
+    behaviour change anyone would notice. Size S. *(SP-CLOUD-4; re-confirmed
+    by the 2026-08-06 review.)*
+  - **Two conflict dialects on the same concept.** `PUT …/match-states/{id}`
+    answers **412** on a stale version; `PUT …/state` answers **409** with the
+    current state in the body. Both are correct in isolation — 412 is the
+    strict HTTP reading of a failed precondition, 409-with-state is what lets a
+    client reconcile in one round trip — but a codebase should not teach two
+    answers for one question. Converging them means changing a shipped, tested
+    path with a working client-side counterpart (`MatchVersionMismatch`), so it
+    is a deliberate breaking change, not a cleanup. Size M. *(SP-CLOUD-4.)*
+  - **Bracket writes advance `state_version` without returning it.**
+    `api/brackets.py` persists session metadata and clears draws through
+    `upsert_data`, which bumps the concurrency token, but those routes return
+    bracket payloads and have no `ETag`. A client that performs a bracket
+    action and then saves meet state gets one spurious `409`, which now
+    self-heals (the recovery re-reads and re-syncs) but is still a visible
+    hiccup. Threading a token through ~21 call sites was judged
+    disproportionate to that; the alternative is a small response hook that
+    stamps the ETag centrally for any route under `/tournaments/{id}/`.
+    Size M. *(2026-08-06 review.)*

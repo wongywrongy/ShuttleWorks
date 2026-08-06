@@ -15,7 +15,7 @@ Two mechanisms, because Pydantic v2 offers exactly two:
   parent accepts both unknown fields and unbounded strings.
 - The ``Annotated`` aliases below — per-field limits for the fields whose
   real-world size is known. A field-level ``max_length`` overrides the
-  model-level backstop, so a genuinely long field (an imported CSV) can
+  model-level backstop, so a genuinely long field can
   opt out explicitly rather than by omission.
 
 **Why ``extra="forbid"`` is safe on the state blob.** ``PUT

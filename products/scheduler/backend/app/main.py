@@ -175,8 +175,18 @@ app.add_middleware(
     # because ``cors_origins`` is an explicit allowlist, never "*".
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
-    expose_headers=["X-Request-ID"],
+    # ``If-Match`` and ``ETag`` carry the state-blob concurrency token
+    # (SP-CLOUD-4). Neither is CORS-safelisted, so on a genuinely
+    # cross-origin deployment — which CORS_ORIGINS exists to support — the
+    # browser would refuse to send the request header and would hide the
+    # response header from JS, making every state write 412 with no way for
+    # the client to ever obtain a token. Same-origin stacks never notice,
+    # which is exactly why it would have shipped broken.
+    allow_headers=[
+        "Authorization", "Content-Type", "Accept", "Origin",
+        "X-Requested-With", "If-Match",
+    ],
+    expose_headers=["X-Request-ID", "ETag"],
 )
 
 

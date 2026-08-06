@@ -221,6 +221,18 @@ export class StateVersionConflict extends Error {
   currentState: TournamentStateDTO | null;
   seenVersion: number;
   currentVersion: number;
+  // The save-error handler in useTournamentState detects conflicts with
+  // `err.response?.status ?? err.status` and returns early unless it sees
+  // 409. Without these two fields this error was invisible to it: the
+  // re-hydrate path never ran, the user got a bare "Save failed", and their
+  // stale content stayed loaded. Shaped like the axios error it replaces so
+  // the existing recovery machinery works rather than being reimplemented.
+  status = 409;
+  code = 'STATE_VERSION_CONFLICT';
+  response: { status: number; data: { detail: { code: string } } } = {
+    status: 409,
+    data: { detail: { code: 'STATE_VERSION_CONFLICT' } },
+  };
 
   constructor(
     currentState: TournamentStateDTO | null,
@@ -228,7 +240,9 @@ export class StateVersionConflict extends Error {
     currentVersion: number,
   ) {
     super(
-      `workspace state moved on (sent v${seenVersion}, server at v${currentVersion})`,
+      // Reaches a user only if the automatic re-sync ALSO fails, via the
+      // unsaved-changes banner. Written for that reader, not for a log.
+      `This workspace was changed by someone else while you were editing`,
     );
     this.currentState = currentState;
     this.seenVersion = seenVersion;
@@ -334,7 +348,15 @@ export function handleApiResponseError(error: any): never {
   // raw backend string (which literally reads "...Retry with
   // ?clearSchedule=true...") would surface a second, scarier toast
   // alongside — or instead of — that dedicated handling.
-  const isLockCode = code === 'CONFIG_LOCKED' || code === 'DRAW_STARTED';
+  // STATE_VERSION_CONFLICT joins the locks: all three are 409s on PUT /state
+  // that the tournament-state hook handles inline with curated copy and an
+  // automatic re-sync. Without it here the user saw TWO messages for one
+  // event — this generic toast, plus the banner rendering the raw Error
+  // text ("workspace state moved on (sent v5, server at v6)").
+  const isLockCode =
+    code === 'CONFIG_LOCKED' ||
+    code === 'DRAW_STARTED' ||
+    code === 'STATE_VERSION_CONFLICT';
 
   // Member-management failures are owned end-to-end by People & Access,
   // which renders them inline against the row that produced them. A
@@ -984,10 +1006,17 @@ class ApiClient {
         .response;
       if (res?.status === 409 && res.data?.detail?.code === 'STATE_VERSION_CONFLICT') {
         const d = res.data.detail;
-        // Adopt the server's version so the caller's follow-up write — after
-        // it reconciles — is against the current revision rather than
-        // conflicting again forever.
-        stateEtags.set(tid, `"${d.currentVersion}"`);
+        // DELIBERATELY NOT adopting the server's version here.
+        //
+        // Doing so was a lost update with extra steps: the local store still
+        // held stale content, so the next save carried a VALID If-Match and
+        // the backend accepted it — silently clobbering the other session's
+        // work that this very guard had just refused. Dropping the token
+        // instead makes the next write fail closed (412) unless something
+        // re-reads the state first, and the recovery path does exactly that:
+        // `handleRejectedSave` calls `getTournamentState`, which records the
+        // fresh ETag as a side effect of hydrating.
+        stateEtags.delete(tid);
         throw new StateVersionConflict(
           (d.currentState as TournamentStateDTO) ?? null,
           Number(d.seenVersion ?? -1),

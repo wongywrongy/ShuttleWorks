@@ -21,6 +21,7 @@ from app.dependencies import (
     require_tournament_access,
 )
 from app.error_codes import ErrorCode, http_error
+from app.exceptions import ConflictError
 from app.limits import Code, Identifier, StrictModel
 from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO, state_dto_from_document
 from database.models import (
@@ -544,7 +545,16 @@ def _parse_if_match(raw: str | None) -> int:
             "If-Match is required on this write. Send the ETag from the "
             "last GET or write response.",
         )
-    token = raw.strip().strip("W/").strip('"')
+    # Parsed the same way as ``api/match_state.py::_parse_if_match_header``:
+    # a literal ``W/`` PREFIX, then paired quotes. The obvious-looking
+    # ``raw.strip("W/")`` is wrong — str.strip takes a CHARACTER SET, not a
+    # prefix, so it also ate stray W and / at either end and accepted
+    # malformed values like ``W/W/"3"`` that the sibling route rejects.
+    token = raw.strip()
+    if token.startswith("W/"):
+        token = token[2:]
+    if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
+        token = token[1:-1]
     try:
         return int(token)
     except ValueError:
@@ -834,7 +844,14 @@ def put_tournament_state(
 
     try:
         row = repo.commit_tournament_state(
-            tournament_id, incoming, clear_bracket_assignments=clear_bracket
+            tournament_id,
+            incoming,
+            clear_bracket_assignments=clear_bracket,
+            # Compare-and-swap against the version the caller was shown. The
+            # check above is necessary but NOT sufficient: it reads the row at
+            # the top of the request and the write lands ~150 lines later, so
+            # two concurrent requests can both pass it.
+            expected_version=seen,
         )
         if response is not None:
             # The client's next debounced save needs the version this write
@@ -847,6 +864,28 @@ def put_tournament_state(
             # TTL expires. Invalidate now so a poll or re-entry right after
             # this write sees the cleared schedule immediately.
             response_cache.invalidate(tournament_id)
+    except ConflictError as exc:
+        # Lost the compare-and-swap: another request committed between this
+        # one's check and its write. Same answer as the pre-check, so a client
+        # cannot tell them apart — both mean "reload and retry".
+        conflict_metrics.record("PUT /tournaments/{id}/state")
+        log.warning(
+            "state version CAS lost on %s: expected %s, row at %s",
+            tournament_id, seen, getattr(exc, "current_version", "?"),
+        )
+        raise http_error(
+            409,
+            ErrorCode.STATE_VERSION_CONFLICT,
+            "This workspace changed since you loaded it. Your copy is out of "
+            "date; reload to see the current state before saving again.",
+            extra={
+                "seenVersion": seen,
+                "currentVersion": getattr(exc, "current_version", seen + 1),
+                "currentState": state_dto_from_document(
+                    _resolve_tournament(tournament_id, repo).data or {}
+                ).model_dump(mode="json"),
+            },
+        )
     except KeyError:
         raise http_error(
             404,
@@ -902,6 +941,7 @@ def restore_tournament_backup(
     filename: str,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    response: Response = None,  # type: ignore[assignment]
 ):
     _resolve_tournament(tournament_id, repo)
     try:
@@ -923,7 +963,9 @@ def restore_tournament_backup(
             ErrorCode.BACKUP_RESTORE_FAILED,
             "restore failed — see server logs",
         )
-    return get_tournament_state(tournament_id=tournament_id, repo=repo)
+    return get_tournament_state(
+        tournament_id=tournament_id, repo=repo, response=response
+    )
 
 
 # ---- Plan-finalized flag (SP-G1 Plan→Run handoff) ----------------------
@@ -941,6 +983,7 @@ def set_plan_finalized(
     body: PlanFinalizedDTO,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    response: Response = None,  # type: ignore[assignment]
 ):
     """Toggle the ``planFinalized`` flag stored in the tournament data blob.
 
@@ -952,7 +995,12 @@ def set_plan_finalized(
     row = _resolve_tournament(tournament_id, repo)  # 404 if missing
     data = dict(row.data or {})
     data["planFinalized"] = bool(body.finalized)
-    repo.tournaments.upsert_data(tournament_id, data)
+    updated = repo.tournaments.upsert_data(tournament_id, data)
+    if response is not None:
+        # This route WRITES the blob, so it advances the concurrency token.
+        # Hand the new one back or the director's very next autosave carries a
+        # stale If-Match and 409s on a flow with no conflict in it.
+        response.headers["ETag"] = _state_etag(updated)
     return {"planFinalized": data["planFinalized"]}
 
 
