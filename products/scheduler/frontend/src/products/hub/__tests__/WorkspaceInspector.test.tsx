@@ -105,13 +105,23 @@ describe('WorkspaceInspector', () => {
     render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} />);
     expect(screen.queryByTestId('inspector-next-up')).toBeNull();
   });
-  it('renders plain-language to-dos, a readiness checklist, and module counts', () => {
+  // SP-UI-1: the rail used to render a separate `inspector-todos` list AND a
+  // readiness checklist — one fact set in two shapes. They are now ONE merged
+  // checklist (shared with the Overview), so the attention copy appears as the
+  // step's subline instead of in a list of its own.
+  it('renders one merged checklist carrying the plain-language reason, plus module counts', () => {
     render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
-    expect(screen.getByTestId('inspector-todos')).toHaveTextContent('No players added yet');
+    expect(screen.queryByTestId('inspector-todos')).toBeNull();
     const checklist = screen.getByTestId('inspector-checklist');
     expect(checklist).toHaveTextContent(/roster/i);
     expect(checklist).toHaveTextContent(/scheduled/i);
+    expect(checklist).toHaveTextContent('No players added yet');
     expect(screen.getByTestId('inspector-module-counts')).toHaveTextContent('1 on · 2 available');
+  });
+
+  it('keeps the rail free of per-step action buttons (the CTA lives at its head)', () => {
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    expect(screen.queryByTestId('setup-action-roster')).toBeNull();
   });
 
   it('does not show raw signal codes or identity/collaboration metadata', () => {

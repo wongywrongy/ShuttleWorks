@@ -1,8 +1,12 @@
 /**
- * Inspector "Next up" list — the selected workspace's next ≤3 scheduled
- * matches (from `signals.nextUp`). Each row: match code · time · court · a
- * "Sched" tag. Renders nothing when there's nothing scheduled. The match code
- * (e.g. "MS1") carries the discipline, so no separate module glyph is needed.
+ * "Next up" list — a workspace's next ≤3 scheduled matches (from
+ * `signals.nextUp`). Each row: match code · time · court · a "Sched" tag.
+ * Renders nothing when there's nothing scheduled. The match code (e.g. "MS1")
+ * carries the discipline, so no separate module glyph is needed.
+ *
+ * Shared by the Hub inspector and the workspace Overview — it lives here
+ * rather than under either product so neither imports the other's internals
+ * (SP-UI-1; it was the last such edge between hub and workspace).
  */
 import type { NextMatchDTO } from '../../api/dto';
 

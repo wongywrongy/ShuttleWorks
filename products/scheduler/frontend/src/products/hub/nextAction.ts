@@ -1,15 +1,9 @@
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { attentionReasons } from './hubSignals';
 import type { HubGroupId } from './hubGrouping';
-
-/** Attention reason code → the operator's most useful next action. */
-const REASON_ACTION: Record<string, string> = {
-  NO_ROSTER: 'Add players',
-  NOT_SCHEDULED: 'Generate schedule',
-  NO_BRACKET: 'Build the bracket',
-  NO_MODULES_ENABLED: 'Enable a module',
-  DISPLAY_NO_SOURCE: 'Enable an operator',
-};
+// One table, two consumers: the Hub row CTA and the Overview checklist's
+// per-step action must never name the same action two ways (SP-UI-1).
+import { REASON_ACTION } from '../../platform/domain/setupChecklist';
 
 /** The primary next action for a workspace — the first mapped attention reason,
  *  else "Open". Pure; degrades to Open when signals are absent. */
