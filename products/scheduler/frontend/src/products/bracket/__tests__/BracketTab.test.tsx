@@ -6,7 +6,7 @@
  * show the empty-state CTA instead of crashing.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { BracketTab } from '../BracketTab';
@@ -82,10 +82,21 @@ beforeEach(() => {
   });
 });
 
+
+/** Config sections are collapsed by default; open them before asserting on
+ *  any control inside one (a negative assertion would otherwise pass without
+ *  testing anything). */
+function expandConfigSections() {
+  screen
+    .getAllByRole('button', { expanded: false })
+    .forEach((btn) => fireEvent.click(btn));
+}
+
 describe('BracketTab — fresh tournament (data === null)', () => {
   it('renders the Engine tab (scoring + rest) on bracket-setup tab', () => {
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
+    expandConfigSections();
     // The Engine section surfaces scoring + the bracket-specific rest;
     // identity + venue were extracted to workspace settings / Venue & schedule.
     expect(screen.getByLabelText('Score type')).toBeInTheDocument();
@@ -302,6 +313,7 @@ describe('BracketTab — Setup chrome', () => {
   it('renders the Engine section content by default', () => {
     useUiStore.setState({ activeTab: 'bracket-setup' });
     renderBracketTab();
+    expandConfigSections();
     // Engine section shows scoring + the engine-timing field by default.
     expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
   });

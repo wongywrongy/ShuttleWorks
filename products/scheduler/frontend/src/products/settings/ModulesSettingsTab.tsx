@@ -8,9 +8,9 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
   const { modules, enable, disable } = useWorkspaceModules(tid);
 
   return (
-    <div className="max-w-2xl space-y-4 p-6">
+    <div className="max-w-3xl space-y-4 p-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Module catalog</h2>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">Module catalog</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Each module is a product system inside this workspace. Display needs an
           enabled Meet or Bracket; a workspace keeps at least one operational module

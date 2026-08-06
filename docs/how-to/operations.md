@@ -30,7 +30,6 @@ A bare `curl` answers `403` — that is the guard working, not an outage.
 "unauthorized" is indistinguishable from a dead process, and an orchestrator
 would restart a container it should have left alone.
 :::
-| `GET /health/metrics` | Queue depth, oldest-queued age, per-worker heartbeat age | Alerting. |
 
 ::: warning Do not publish these through the tunnel
 They carry operational detail — worker ids, queue shape. The Cloudflare ingress
@@ -166,7 +165,7 @@ way to tie a user's report to a log line.
 | Daily (automated) | `./backup.sh`, copied off-host and encrypted |
 | Weekly | `/health/metrics` — any worker with a persistently high heartbeat age |
 | Monthly | `./restore-drill.sh` — a backup you have never restored is a hypothesis |
-| After any reboot | `curl -sf https://<hostname>/health` — confirm unattended recovery |
+| After any reboot | `curl -sf https://<hostname>/api/health` — confirm unattended recovery. **`/api/health`, not `/health`**: nginx proxies only `/api/*`, so every other path falls through to the SPA and `/health` answers `200` with `index.html` whatever state the backend is in |
 | After adding a worker | The [failure drill](/how-to/add-a-worker#the-failure-drill) |
 
 ## Things that look broken but are not

@@ -60,11 +60,14 @@ touch the repo.
 - **Secret hygiene.** Credentials live in `backend/.env` (git-ignored; the image
   build excludes `**/.env`) and are never committed. `CORS_ORIGINS` gates which
   browser origins may call the director's FastAPI.
-- **Local-only caveat.** In the default local-only mode the backend seeds a synthetic
-  dev user with no auth — correct for a single-laptop event, **not** for exposing the
-  backend to an untrusted network. Reaching operators over the internet is the
-  director's explicit choice (LAN, or an optional ngrok / Cloudflare tunnel; there is
-  **no tunnel automation in the repo** — see `docs/deploy/cloud.md`).
+- **Local-only caveat.** In `AUTH_MODE=local` (the default) a credential-less request
+  resolves to the bootstrap operator — correct for a single-laptop event, **not** for
+  exposing the backend to an untrusted network. Reaching operators over the internet
+  is a deliberate switch to `AUTH_MODE=cloud`, which the startup validator backs by
+  refusing to boot without a non-SQLite database, secure cookies and an SMTP backend.
+  **The repo does now ship tunnel automation** (this said otherwise before 2026-08-06):
+  `docker-compose.selfhost.yml` runs the stack behind a cloudflared connector with no
+  inbound port — see [Deploy](/how-to/deploy).
 
 ## Maintainability
 
@@ -161,4 +164,7 @@ event, not a fleet.
 - [Operational scenarios](/architecture/operational-scenarios) — the day-of narratives these attributes support
 - [Module contracts](/contracts/) — where the seam cadences and criticality live
 - [Glossary](/glossary) — outbox, mirror, local-only tables, source of truth
-- Historical infra note: `docs/deploy/cloud.md` (deployment topology, Supabase setup)
+- [Deploy](/how-to/deploy) · [Operations](/how-to/operations) — the current deployment
+  and day-two runbooks
+- Historical infra note: `docs/deploy/cloud.md` is a tombstone — the Supabase-era
+  deployment guide was removed 2026-08-06; it points at the ADRs that hold the record

@@ -48,7 +48,7 @@ glow/tint/status-fill; prototype hex/`color-mix`/rgba values are **converted** t
 
 ## Current state
 - **Program started:** 2026-07-01
-- **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb`
+- **Branch / baseline:** `dev/workspace-suite` @ `b52bfcb` — **historical baseline; that branch no longer exists.** It was merged and deleted in SP-REPO-1 (2026-08-05), which consolidated everything onto `main` and retired the `dev/*` convention. This work is all in `main`; the SHA is kept because it is what the phases below were measured against.
 - **Scope:** Foundation + keystones
 - **Current phase:** ALL PHASES COMPLETE, **including Phase 7 (reusable archetypes + lock parity + follow-up close-out)**.
 - **Status:** Phases 0–4 committed (`02f1cc8`, `99213d0`, `a46db9b`, `c8ed474`, `5c64fde`, `05f01b4`), then the

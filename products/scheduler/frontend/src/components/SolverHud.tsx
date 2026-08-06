@@ -101,8 +101,8 @@ export function SolverHud() {
           {/* With a schedule in place, "click Generate to begin" read as an
               invitation to re-solve a possibly-live day — name the stakes. */}
           {hasSchedule
-            ? 'Solver idle — schedule in place. Generate replaces it.'
-            : 'Solver idle — click Generate to begin.'}
+            ? 'Solver idle. A schedule is in place; Generate replaces it.'
+            : 'Solver idle. Click Generate to begin.'}
         </span>
       </footer>
     );

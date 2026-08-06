@@ -59,7 +59,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-md px-2.5 py-1 text-xs transition-colors duration-fast ease-brand ${
+      className={`rounded-md px-2.5 py-1 text-2xs transition-colors duration-fast ease-brand ${
         active
           ? 'bg-surface-active font-medium text-foreground'
           : 'text-muted-foreground hover:text-foreground'
@@ -242,24 +242,35 @@ export function HubPage() {
         </Button>
       </header>
 
-      {/* Status-facet strip — quiet text chips, raised active pill; the
-          "Needs attention" count warms to amber. Facets overlap by design.
-          The sort control sits at the right edge (redesign). */}
+      {/* Page chrome — title + the controls that narrow the list.
+          One block, one rule at its foot.
+
+          This used to be a bare `h-10` facet strip with its own `border-b`,
+          which made it a horizontal band with a bottom hairline sitting
+          directly above… a table of horizontal bands with bottom hairlines.
+          Same device, three different jobs (chrome / column headers / data),
+          so nothing on the page carried more weight than anything else.
+          The title supplies the missing top tier — it is the only thing on
+          this surface above 14px — and the filters now group WITH it as
+          chrome rather than reading as another row. */}
       {!loading && tournaments.length > 0 ? (
-        <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3.5">
-          <div className="flex items-center gap-0.5">
-            {HUB_FACETS.map((f) => (
-              <FilterChip
-                key={f.id}
-                label={f.label}
-                count={counts[f.id]}
-                active={facet === f.id}
-                emphasize={f.id === 'attention'}
-                onClick={() => setFacet(f.id)}
-              />
-            ))}
+        <div className="shrink-0 border-b border-border px-4 pb-2.5 pt-4">
+          <h1 className="type-display text-2xl text-foreground">Workspaces</h1>
+          <div className="mt-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-0.5">
+              {HUB_FACETS.map((f) => (
+                <FilterChip
+                  key={f.id}
+                  label={f.label}
+                  count={counts[f.id]}
+                  active={facet === f.id}
+                  emphasize={f.id === 'attention'}
+                  onClick={() => setFacet(f.id)}
+                />
+              ))}
+            </div>
+            <SortControl value={sort} onChange={setSort} />
           </div>
-          <SortControl value={sort} onChange={setSort} />
         </div>
       ) : null}
 

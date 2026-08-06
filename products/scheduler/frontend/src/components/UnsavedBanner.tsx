@@ -57,7 +57,7 @@ export function UnsavedBanner() {
     >
       <span className="font-medium">
         {isError
-          ? `Couldn't save to the server${lastSaveError ? ` — ${lastSaveError}` : '.'}`
+          ? `Couldn't save to the server${lastSaveError ? `: ${lastSaveError}` : '.'}`
           : 'You have unsaved changes.'}
       </span>
       <button

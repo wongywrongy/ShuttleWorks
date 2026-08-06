@@ -15,14 +15,12 @@
  * workspace summary (the identity-clobber bug guarded below).
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 import type { TournamentConfig } from '../../../api/dto';
-import { useTournamentId } from '../../../hooks/useTournamentId';
 import { useSuccessFlash } from '../../../hooks/useSuccessFlash';
 import { Button, IconDone } from '@scheduler/design-system';
 import {
   Row,
-  SectionHeader,
+  Section,
   Seg,
   NumberWithSuffix,
 } from '../../../platform/settings/SettingsControls';
@@ -57,7 +55,6 @@ export function MeetStructureForm({
     tournamentDate: config.tournamentDate,
   });
   const justSaved = useSuccessFlash(saving);
-  const tid = useTournamentId();
 
   const baselineRef = useRef<TournamentConfig>(config);
 
@@ -105,8 +102,10 @@ export function MeetStructureForm({
 
   return (
     <form id={formId} onSubmit={handleSubmit}>
-      <section>
-        <SectionHeader>Format</SectionHeader>
+      {/* Same bounded column as the Engine surface so both halves of
+          Configuration land their controls on one rail. */}
+      <div className="max-w-3xl">
+      <Section title="Format">
         <Row
           label="Meet type"
           control={
@@ -119,22 +118,10 @@ export function MeetStructureForm({
           }
           last
         />
-      </section>
+      </Section>
 
-      <section>
-        <SectionHeader>Events</SectionHeader>
-        <p className="pb-1 text-xs text-muted-foreground">
-          Lineup positions contested per discipline (e.g. 3 = 1st–3rd singles).
-          Who fills each position lives in{' '}
-          <Link
-            to={`/tournaments/${tid}/roster`}
-            className="text-accent hover:underline"
-          >
-            Roster
-          </Link>
-          .
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10">
+      <Section title="Events">
+        <div>
           <Row label="Men's singles" control={
             <NumberWithSuffix value={ranks.MS ?? 3} onChange={(n) => setRank('MS', n)} suffix="positions" min={0} max={20} ariaLabel="Men's singles positions" />
           } />
@@ -151,7 +138,8 @@ export function MeetStructureForm({
             <NumberWithSuffix value={ranks.XD ?? 2} onChange={(n) => setRank('XD', n)} suffix="positions" min={0} max={20} ariaLabel="Mixed doubles positions" />
           } last />
         </div>
-      </section>
+      </Section>
+      </div>
 
       {/* In-form Save — hidden when the page actions-bar Save owns
           submission (formId set). */}

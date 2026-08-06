@@ -7,6 +7,23 @@ _Last updated: 2026-05-13_
 > module model, redesigned Settings, module dock) — see
 > [`superpowers/specs/`](./superpowers/specs).
 
+> **Note (2026-08): do not follow this as a plan — its target stack no longer exists.**
+> Everything below is a **pre-SP-CLOUD-3 planning document**. Three of the technologies it
+> plans around have since been removed outright, so the deferred work it describes (notably
+> T-F) will never be done as written:
+>
+> - **Supabase Realtime** — gone. Reads are polling; the mirror was removed entirely in
+>   SP-CLOUD-3 ([ADR 0012](/decisions/0012-remove-the-supabase-mirror)).
+> - **The `sync_queue` outbox** — table dropped, writers removed. It was never operated.
+> - **Supabase Auth** — replaced in SP-CLOUD-2 by self-hosted identity (Argon2id + cookie
+>   sessions, `AUTH_MODE=local|cloud`).
+> - **Fly.io / Render** — the deployment targets are `docker-compose.selfhost.yml` behind a
+>   Cloudflare Tunnel; see [Deploy](/how-to/deploy).
+>
+> Branch names below (`dev2`) predate `CONTRIBUTING.md`, which retired `dev/*` in favour of
+> short-lived `<type>/<slug>` branches. For how the system works now, start at
+> [System overview](./architecture/system-overview).
+
 > **Status: 7/8 steps shipped** as of PR 4. The arc landed across
 > four PRs on branch `dev2`:
 >

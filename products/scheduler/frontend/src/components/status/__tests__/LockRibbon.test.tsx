@@ -13,7 +13,7 @@ describe('LockRibbon', () => {
     const ribbon = screen.getByTestId('lock-ribbon');
     expect(ribbon.dataset.tier).toBe('soft');
     expect(ribbon).toHaveTextContent('Schedule locked');
-    expect(ribbon).toHaveTextContent('saving will clear the committed schedule');
+    expect(ribbon).toHaveTextContent('Saving will clear the committed schedule.');
     expect(ribbon.className).toContain('bg-status-warning-bg');
   });
 
@@ -29,7 +29,7 @@ describe('LockRibbon', () => {
     expect(ribbon.dataset.tier).toBe('hard');
     expect(ribbon).toHaveTextContent('Results in play');
     expect(ribbon).toHaveTextContent(
-      'settings are read-only until the started draws are finished or reset',
+      'Settings are read-only until the started draws are finished or reset.',
     );
     // Protective state must NOT read as an alarm.
     expect(ribbon.className).not.toContain('bg-status-warning-bg');

@@ -2,7 +2,7 @@
   "name": "@scheduler/design-system",
   "private": true,
   "version": "0.1.0",
-  "description": "Shared design language for cp-sat-scheduling-engine — tokens, Tailwind preset, base CSS, components, icons. Implements design/BRAND.md.",
+  "description": "Shared design language for ShuttleWorks — tokens, Tailwind preset, base CSS, components, icons. Specified by DESIGN_COLOR.md + tokens.css.",
   "type": "module",
   "main": "./index.ts",
   "exports": {

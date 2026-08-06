@@ -156,7 +156,37 @@
 }
 
 /* ===========================================================================
- * Brutalist signature texture — BRAND.md §8 new additions.
+ * Display type role (Direction C, 2026-08-06).
+ *
+ * Tailwind's `font-display` utility maps the FAMILY only; the condensed look
+ * lives on Archivo's width axis, which needs `font-stretch`. So the display
+ * role ships as one utility that sets family, width, weight, and tracking
+ * together — never hand-roll those four.
+ *
+ * Use it with restraint, on the things the hall already reads as a scoreboard:
+ * match identity, court numbers, timers, page titles. NOT on body copy, table
+ * cells, labels, or buttons — those stay `--font-sans`, and tabular data stays
+ * `--font-mono`.
+ * ======================================================================== */
+.type-display {
+  font-family: var(--font-display);
+  font-stretch: var(--display-stretch);
+  font-weight: var(--display-weight);
+  letter-spacing: -0.012em;
+}
+
+/* Court numbers, timers, scores in the display role: keep the digits aligned
+ * so a column of them does not shimmer as values change. */
+.type-display-num {
+  font-family: var(--font-display);
+  font-stretch: var(--display-stretch);
+  font-weight: var(--display-weight);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* ===========================================================================
+ * Signature texture — legacy brutalist additions (see BRAND.md, superseded).
  *
  * These are opt-in via classname. Apply to body or a specific surface.
  * ======================================================================== */

@@ -14,6 +14,12 @@ had already been replaced (the public display now polls capability-token
 projection routes), and it was never operated — no project was ever populated.
 See [ADR 0012](/decisions/0012-remove-the-supabase-mirror).
 
+The **Tauri packaging end-state** named below is also not the plan. It was never
+scaffolded — no `src-tauri/`, no CLI dependency, no build script — and the deployment
+story is now Docker: [Install: local](/how-to/install-local) for one machine,
+[Install: self-hosted](/how-to/install-selfhost) for a team. The `docs/deploy/cloud.md`
+it cites is a tombstone as of 2026-08-06.
+
 The text below is preserved as the record of what was decided at the time.
 :::
 

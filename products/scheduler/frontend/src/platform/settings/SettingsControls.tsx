@@ -1,19 +1,35 @@
 /**
- * SettingsControls — shared Row + control primitives used by every
- * pane of the Setup tab.
+ * SettingsControls — the shared grammar for EVERY configuration surface.
  *
- * The Row contract is locked: flex / items-center / justify-between,
- * gap-6 (24px), h-11 (44px), 1px bottom border unless `last`. Labels
- * are 13px / font-medium / flex-1. Controls go on the right,
- * flex-shrink-0. No descriptions inside rows — labels only.
+ * TWO ROW TYPES, and the control decides which (2026-08-06 design review):
  *
- * Every Setup form (Tournament, Engine, Public display, Appearance,
- * Data) uses these primitives. Adding a one-off layout = breaking the
- * uniform-rows rule.
+ *   - `Row`      label left, control right, h-11, hairline. Toggles,
+ *                selects, numbers, segmented controls — anything whose
+ *                control is small and fixed-width. Contract is locked:
+ *                flex / items-center / justify-between, gap-6 (24px),
+ *                1px bottom border unless `last`, labels 13px/medium/flex-1,
+ *                controls flex-shrink-0.
+ *   - `FieldRow` label above, full-width input, hint below. FREE TEXT only
+ *                — names, emails, passwords, URLs. A wide text input cannot
+ *                live in a right-aligned control slot, which is exactly why
+ *                the global-settings and workspace surfaces each grew their
+ *                own stacked pattern instead of using this file.
+ *
+ * The rule: free text → FieldRow, everything else → Row. There is no third
+ * option. A one-off layout is a bug, not a variation.
+ *
+ * Sections come from `SectionHeader`, which carries real weight — the old
+ * 10px all-caps label was the same visual weight as the rows it introduced,
+ * so nothing on a settings page outranked anything else.
+ *
+ * Pages are SINGLE COLUMN. The Meet config surface used to split these rows
+ * across two unrelated columns while Venue & schedule ran one column off the
+ * identical primitives; same components, different products to the eye.
  */
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { CaretRight } from '@phosphor-icons/react';
 
-import { Select } from '@scheduler/design-system/components';
+import { Select, TextField, type TextFieldProps } from '@scheduler/design-system/components';
 
 /* =========================================================================
  * Row — the only layout primitive in the Setup form.
@@ -44,13 +60,92 @@ export function Row({ label, control, last }: RowProps) {
 }
 
 /* =========================================================================
- * SectionHeader — small uppercase chrome between row groups.
+ * FieldRow — the free-text row. Label above, full-width input, hint below.
+ *
+ * Delegates to the design system's TextField so the input chrome (border,
+ * radius, focus ring, error wiring, password reveal) is the same object
+ * everywhere; this wrapper exists to give the settings grammar a single
+ * named row type rather than call sites reaching for TextField directly and
+ * each choosing their own spacing.
+ * ========================================================================= */
+export interface FieldRowProps extends TextFieldProps {
+  /** Bottom hairline, matching `Row`. Omit on the last field in a section. */
+  last?: boolean;
+}
+
+export function FieldRow({ last, className = '', ...field }: FieldRowProps) {
+  return (
+    <div className={['py-3', last ? '' : 'border-b border-border/60', className].join(' ')}>
+      <TextField {...field} />
+    </div>
+  );
+}
+
+/* =========================================================================
+ * SectionHeader — the group heading between row runs.
+ *
+ * Was a 10px all-caps muted label: the same visual weight as the rows it
+ * introduced, which is what made settings pages read as one undifferentiated
+ * list. It sits a full step ABOVE the row labels on the type ladder (16px
+ * semibold vs the rows' 14px medium) with a rule beneath. A section header at
+ * the same size as its rows is not a header, whatever weight it carries.
  * ========================================================================= */
 export function SectionHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="pt-6 pb-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="border-b border-border pb-2 pt-8 text-base font-semibold tracking-tight text-foreground first:pt-0">
       {children}
     </div>
+  );
+}
+
+/* =========================================================================
+ * Section — a collapsible group of rows. The unit every config surface is
+ * built from.
+ *
+ * OPEN by default, with disclosure reserved for genuinely advanced groups.
+ * Collapsed content is not in the DOM, so browser find cannot reach it, and
+ * find is exactly how someone locates a rarely-touched option when they do
+ * not know which section owns it. Collapse the solver internals; leave the
+ * settings a director actually reads visible.
+ *
+ * EVERY row inside sits at ONE indent. Dependent rows used to be pushed in
+ * with a left rule (points-per-set under score type, the utilisation weight
+ * under its toggle), which meant the eye had to track two rails down a form
+ * that already had four section levels. Dependency is carried by the dimmed
+ * + aria-disabled state instead, which is the part that actually tells you
+ * the control is inert.
+ * ========================================================================= */
+export function Section({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    /* Tight: closed, this surface is a stack of one-line headers, so the
+       32px section gap that suited open sections left it looking sparse. */
+    <section className="pt-3 first:pt-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 border-b border-border pb-1.5 text-left text-base font-semibold tracking-tight text-foreground"
+      >
+        <CaretRight
+          aria-hidden="true"
+          className={[
+            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-fast ease-brand',
+            open ? 'rotate-90' : '',
+          ].join(' ')}
+        />
+        {title}
+      </button>
+      {open ? <div>{children}</div> : null}
+    </section>
   );
 }
 

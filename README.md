@@ -2,10 +2,11 @@
 
 One product for inter-school dual / tri-meet operators *and*
 bracket-draw tournaments. Runs on the tournament director's laptop
-(today via Docker Compose; a Tauri binary is the intended end-state
-— see [deploy doc](./docs/deploy/cloud.md)) with SQLite as the
-source of truth. Operator browsers on other devices and the public
-TV display read live state by polling the director's backend.
+via Docker Compose with SQLite as the source of truth, or
+self-hosted for a team on Postgres behind a Cloudflare Tunnel — see
+the [deploy runbooks](./docs/how-to/deploy.md). Operator browsers on
+other devices and the public TV display read live state by polling
+the backend.
 
 The repo used to ship two products in parallel — a scheduler for
 meets and a separate tournament app for brackets. The
@@ -186,12 +187,15 @@ examples/                      engine usage examples (product-agnostic)
 docs/                          project planning artifacts
 ├── tech-stack.md              post-merge architecture + data model + flows
 ├── how-to/install-*.md        the deploy runbooks (local / self-host / worker)
-├── deploy/cloud.md            HISTORICAL — the retired Supabase-era guide
+├── deploy/cloud.md            tombstone — the retired Supabase-era guide, removed 2026-08-06
 ├── architectural-roadmap.md   the backend-merge arc roadmap (historical)
 ├── superpowers/specs|plans/   per-slice design record (incl. the 2026-06 workspace-suite
 │                              control-plane redesign: SP-A backend → SP-D Settings/Dock)
 ├── audits/                    historical UI/UX audit notes + screenshots
-└── changes/                   dated decision log
+├── changes/                   dated decision log
+└── programs/                  program ledgers — read at session start, updated at session
+                               end (CLOUD / SEC / REFACTOR / FRONTEND _PROGRESS.md) plus
+                               design-plan/ working notes. Moved off the root 2026-08-06.
 Makefile                       top-level chooser (this is what most people use)
 ```
 
@@ -213,7 +217,7 @@ Makefile                       top-level chooser (this is what most people use)
 - [`products/scheduler/BACKEND.md`](./products/scheduler/BACKEND.md) — FastAPI routes, request lifecycle, how to add an endpoint or a constraint
 - [`products/scheduler/FRONTEND.md`](./products/scheduler/FRONTEND.md) — shell + tabs, store split, theme system
 - [`docs/tech-stack.md`](./docs/tech-stack.md) — full architecture + data model + state machine + command flows + conflict UX
-- **Deploying?** [`docs/how-to/install-local.md`](./docs/how-to/install-local.md) (one machine) or [`docs/how-to/install-selfhost.md`](./docs/how-to/install-selfhost.md) (cloud, Cloudflare Tunnel) — plus [`add-a-worker.md`](./docs/how-to/add-a-worker.md) for a second compute host. **Not** `docs/deploy/cloud.md`: that is the retired Supabase-era guide, kept for history and marked DO NOT FOLLOW.
+- **Deploying?** [`docs/how-to/install-local.md`](./docs/how-to/install-local.md) (one machine) or [`docs/how-to/install-selfhost.md`](./docs/how-to/install-selfhost.md) (cloud, Cloudflare Tunnel) — plus [`add-a-worker.md`](./docs/how-to/add-a-worker.md) for a second compute host. `docs/deploy/cloud.md` is now only a tombstone — the Supabase-era guide it held was removed on 2026-08-06 (it documented three surfaces that never existed); the full text remains in git history.
 - [`docs/superpowers/specs/`](./docs/superpowers/specs) — per-slice design record, incl. the workspace-suite control-plane redesign (`2026-06-23-workspace-suite-architecture-design.md` → the SP-A…SP-D specs)
 - [`docs/architectural-roadmap.md`](./docs/architectural-roadmap.md) — the (historical) backend-merge arc roadmap
 - [`docs/changes/`](./docs/changes/) — dated decision log

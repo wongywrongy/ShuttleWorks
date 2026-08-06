@@ -76,7 +76,7 @@ export function BracketMatchesTable({ data, selectedId, onSelect }: Props) {
   if (totalCount === 0) {
     return (
       <div className="flex-1 min-h-0 overflow-auto px-4 py-6 text-sm text-muted-foreground">
-        No matches yet — generate from the <strong>Events</strong> tab.
+        No matches yet. Generate from the <strong>Events</strong> tab.
       </div>
     );
   }

@@ -47,8 +47,12 @@ function resetStore() {
   useTournamentStore.setState({ config: { ...baseConfig } });
 }
 
-function mount(module: 'meet' | 'bracket', props: Partial<Parameters<typeof EngineConfigForm>[0]> = {}) {
-  return render(
+function mount(
+  module: 'meet' | 'bracket',
+  props: Partial<Parameters<typeof EngineConfigForm>[0]> = {},
+  { expandSections = true }: { expandSections?: boolean } = {},
+) {
+  const result = render(
     <MemoryRouter initialEntries={['/tournaments/t1/config']}>
       <Routes>
         <Route
@@ -58,6 +62,16 @@ function mount(module: 'meet' | 'bracket', props: Partial<Parameters<typeof Engi
       </Routes>
     </MemoryRouter>,
   );
+  if (expandSections) expandAll();
+  return result;
+}
+
+/** Open every collapsed section. Keyed off aria-expanded, so it stays correct
+ *  as sections are added. */
+function expandAll() {
+  screen
+    .getAllByRole('button', { expanded: false })
+    .forEach((btn) => fireEvent.click(btn));
 }
 
 beforeEach(() => {
@@ -77,12 +91,24 @@ describe('engineFieldAppliesTo (schema helper)', () => {
     expect(engineFieldAppliesTo('deterministic', 'bracket')).toBe(true);
   });
 
-  it('schema declares exactly two module-specific fields', () => {
+  it('every module-specific field is declared in the schema, and no others', () => {
+    // The point of this assertion is that a module-specific knob cannot be
+    // added by hand in the JSX: it has to be written down here first. The
+    // list grew when Configuration absorbed the old Events tab.
     const specific = ENGINE_CONFIG_FIELDS.filter((f) => f.modules.length === 1);
     expect(specific.map((f) => f.key).sort()).toEqual([
+      'meetMode',
+      'rankCounts',
       'restBetweenRounds',
       'solverTimeLimitSeconds',
     ]);
+  });
+
+  it('meet structure fields apply only to meet', () => {
+    for (const key of ['meetMode', 'rankCounts'] as const) {
+      expect(engineFieldAppliesTo(key, 'meet')).toBe(true);
+      expect(engineFieldAppliesTo(key, 'bracket')).toBe(false);
+    }
   });
 
   it('solverTimeLimitSeconds applies only to meet — bracket keeps its own per-request budget (C10)', () => {
@@ -222,5 +248,73 @@ describe('<EngineConfigForm /> — save flow', () => {
     const written = setConfig.mock.calls[0][0] as TournamentConfig;
     expect(written.deterministic).toBe(true);
     expect(written.courtCount).toBe(baseConfig.courtCount);
+  });
+});
+
+/* Collapse is a real behaviour of this surface, so it gets real coverage
+   rather than only being worked around by `mount`'s expandSections. */
+describe('<EngineConfigForm /> — collapsible sections', () => {
+  it('opens the settings a director reads, and collapses only the solver internals', () => {
+    mount('meet', {}, { expandSections: false });
+
+    // Everyday settings are visible AND findable by browser search, which is
+    // the whole reason they are not collapsed.
+    expect(screen.getByRole('button', { name: /Scoring/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByLabelText('Maximise court utilisation')).toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: /Advanced solver/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.queryByLabelText('Reproducible solver run')).not.toBeInTheDocument();
+  });
+
+  it('opening Advanced solver reveals its controls without touching the others', () => {
+    mount('meet', {}, { expandSections: false });
+
+    fireEvent.click(screen.getByRole('button', { name: /Advanced solver/ }));
+
+    expect(screen.getByLabelText('Reproducible solver run')).toBeInTheDocument();
+    // Sections are independent, not an accordion.
+    expect(screen.getByRole('button', { name: /Scoring/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+});
+
+describe('<EngineConfigForm /> — merged meet structure', () => {
+  it('meet renders the Events section the old Events tab used to hold', () => {
+    mount('meet');
+    expect(screen.getByLabelText('Meet type')).toBeInTheDocument();
+    expect(screen.getByLabelText("Men's singles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText('Mixed doubles positions')).toBeInTheDocument();
+  });
+
+  it('bracket renders neither — they are meet-only structure', () => {
+    mount('bracket');
+    expect(screen.queryByLabelText('Meet type')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Men's singles positions")).not.toBeInTheDocument();
+  });
+
+  it('saving carries the meet structure through the one save path', async () => {
+    mount('meet');
+
+    fireEvent.change(screen.getByLabelText("Men's singles positions"), {
+      target: { value: '5' },
+    });
+    await act(async () => {
+      fireEvent.submit(screen.getByLabelText('Meet type').closest('form')!);
+    });
+
+    const saved = useTournamentStore.getState().config!;
+    expect(saved.rankCounts?.MS).toBe(5);
+    // The whole config still round-trips: merging the two forms must not
+    // drop the fields the other one used to own.
+    expect(saved.pointsPerSet).toBe(21);
+    expect(saved.tournamentName).toBe('Config Tournament');
   });
 });

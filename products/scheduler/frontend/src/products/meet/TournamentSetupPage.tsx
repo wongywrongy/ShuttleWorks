@@ -21,61 +21,22 @@ import { useState } from 'react';
 import { useTournament } from '../../hooks/useTournament';
 import { useLockGuard } from '../../hooks/useLockGuard';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
-import { useSearchParamState } from '../../hooks/useSearchParamState';
-import { MeetStructureForm } from './tournaments/MeetStructureForm';
 import { LockRibbon } from '../../components/status/LockRibbon';
 import { EngineConfigForm } from '../../platform/settings/EngineConfigForm';
 import { ConfigSurface } from '../../platform/settings/ConfigSurface';
 import { IconDone } from '@scheduler/design-system';
-import type { TournamentConfig } from '../../api/dto';
 
 const FORM_ID = 'meet-config-form';
 
-const SECTION_OPTIONS = [
-  { value: 'engine' as const, label: 'Engine' },
-  // Label is 'Events' (shared grammar with Bracket Configuration); the
-  // value stays 'meet' — it's URL state (?section=meet).
-  { value: 'meet' as const, label: 'Events' },
-];
-
 export function TournamentSetupPage() {
-  const { config, loading, error, updateConfig } = useTournament();
+  const { config, loading, error } = useTournament();
   const { isLocked, confirmUnlock } = useLockGuard();
   const [busy, setBusy] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [section, setSection] = useSearchParamState('section', 'engine', {
-    debounceMs: 0,
-  });
+  // Save errors now render inside EngineConfigForm, which owns the save.
+  const [saveError] = useState<string | null>(null);
   const justSaved = useSuccessFlash(busy);
 
-  const handleSave = async (newConfig: TournamentConfig) => {
-    if (!(await confirmUnlock())) return;
-    try {
-      setBusy(true);
-      setSaveError(null);
-      await updateConfig(newConfig);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save configuration');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Show default config if tournament doesn't exist (404 error)
-  const defaultConfig: TournamentConfig = {
-    intervalMinutes: 30,
-    dayStart: '09:00',
-    dayEnd: '18:00',
-    breaks: [],
-    courtCount: 4,
-    defaultRestMinutes: 30,
-    freezeHorizonSlots: 0,
-    rankCounts: { MS: 3, WS: 3, MD: 2, WD: 2, XD: 2 },
-  };
-
-  const displayConfig = config || defaultConfig;
   const isNewTournament = !config && error && error.includes('not found');
-  const activeSection = section === 'meet' ? 'meet' : 'engine';
 
   if (loading && !config && !error) {
     return (
@@ -87,9 +48,6 @@ export function TournamentSetupPage() {
 
   return (
     <ConfigSurface
-      sections={SECTION_OPTIONS}
-      section={activeSection}
-      onSectionChange={(v) => setSection(v)}
       actions={
         <button
           type="submit"
@@ -132,23 +90,16 @@ export function TournamentSetupPage() {
         </>
       }
     >
-      {/* Only one form is mounted at a time; both share FORM_ID so the bar
-          Save targets the active one. */}
-      {activeSection === 'meet' ? (
-        <MeetStructureForm
-          formId={FORM_ID}
-          config={displayConfig}
-          onSave={handleSave}
-          saving={busy}
-        />
-      ) : (
-        <EngineConfigForm
-          module="meet"
-          formId={FORM_ID}
-          onBusyChange={setBusy}
-          guardSave={() => confirmUnlock('save engine settings')}
-        />
-      )}
+      {/* ONE form, one save path. Configuration used to be an Engine/Events
+          switch over two forms that each spread the whole config on submit;
+          the meet-structure fields now live in this form's own state, so
+          Format and Events are just its first two sections. */}
+      <EngineConfigForm
+        module="meet"
+        formId={FORM_ID}
+        onBusyChange={setBusy}
+        guardSave={() => confirmUnlock('save configuration')}
+      />
     </ConfigSurface>
   );
 }

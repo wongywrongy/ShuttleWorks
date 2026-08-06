@@ -30,13 +30,29 @@ const TIERS = {
     chrome:
       'bg-status-warning-bg border-status-warning-fg/30 text-status-warning-fg',
     label: 'Schedule locked',
-    reason: 'saving will clear the committed schedule',
+    reason: 'Saving will clear the committed schedule.',
   },
   hard: {
     chrome: 'bg-muted/40 border-border text-muted-foreground',
     label: 'Results in play',
-    reason: 'settings are read-only until the started draws are finished or reset',
+    reason: 'Settings are read-only until the started draws are finished or reset.',
   },
+} as const;
+
+/* Two shapes, because this renders in two different slots.
+ *
+ * `ribbon` (default) is the PAGE-LEVEL banner slot — the `ribbons=` prop on
+ * the setup shells, whose other occupants (new-tournament, error, saveError)
+ * are all full-bleed `border-b` bands. This component used to render a
+ * rounded, fully-bordered CHIP in that slot, so it was the one banner that
+ * did not follow the pattern: rounded corners floating in a square well with
+ * a gap around them. Square, bottom rule, same padding as its siblings.
+ *
+ * `inline` is for in-flow use inside padded page content, where a full-bleed
+ * band would be wrong — there it keeps a full border and the system radius. */
+const SHAPES = {
+  ribbon: 'shrink-0 border-b px-4 py-2',
+  inline: 'rounded-sm border px-3 py-1.5',
 } as const;
 
 interface LockRibbonProps {
@@ -47,9 +63,17 @@ interface LockRibbonProps {
   /** The exit path for locks whose resolution lives elsewhere (hard tier:
    *  a link to the surface where the draws can be finished or reset). */
   action?: ReactNode;
+  /** `ribbon` (default) for the page banner slot; `inline` for page content. */
+  variant?: keyof typeof SHAPES;
 }
 
-export function LockRibbon({ tier, className = '', locked, action }: LockRibbonProps) {
+export function LockRibbon({
+  tier,
+  className = '',
+  locked,
+  action,
+  variant = 'ribbon',
+}: LockRibbonProps) {
   const meetLocked = useTournamentStore((state) => state.isScheduleLocked);
   const isLocked = locked ?? meetLocked;
 
@@ -60,13 +84,14 @@ export function LockRibbon({ tier, className = '', locked, action }: LockRibbonP
     <div
       data-testid="lock-ribbon"
       data-tier={tier}
-      className={`flex items-center gap-1.5 rounded border px-2 py-1 text-xs ${t.chrome} ${className}`}
+      data-variant={variant}
+      className={`flex items-center gap-1.5 text-xs ${SHAPES[variant]} ${t.chrome} ${className}`}
     >
       <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
         <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
       </svg>
-      <span className="font-medium">{t.label}</span>
-      <span>— {t.reason}</span>
+      <span className="font-medium">{t.label}.</span>
+      <span>{t.reason}</span>
       {action}
     </div>
   );

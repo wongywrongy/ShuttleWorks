@@ -259,7 +259,7 @@ export function BracketDrawsTab() {
           {events.length === 0 ? (
             <EmptyState
               title="No draws yet"
-              body="A draw is one event's bracket. Create a draw, enter its participants, then generate — it’ll appear here and feed Matches and Operations."
+              body="A draw is one event's bracket. Create a draw, enter its participants, then generate. It’ll appear here and feed Matches and Operations."
               action={
                 <button
                   type="button"

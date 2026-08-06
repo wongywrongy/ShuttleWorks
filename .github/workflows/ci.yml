@@ -139,7 +139,8 @@ jobs:
     # real UI works. A fully green 1100-test suite coexisted with a viewer who
     # could not edit anything, Run-view Undo buttons that 409'd on every press,
     # and a rejected roster delete that killed all further saving.
-    # See products/scheduler/e2e/README.md and design-plan/INTERACTION_FINDINGS.md.
+    # See products/scheduler/e2e/README.md and
+    # docs/programs/design-plan/INTERACTION_FINDINGS.md.
     #
     # Unlike the older e2e specs this does NOT boot the Docker stack — it runs a
     # preview build against a local uvicorn + SQLite, which is why it can be a

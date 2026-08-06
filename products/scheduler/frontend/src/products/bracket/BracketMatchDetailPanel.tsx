@@ -196,7 +196,7 @@ function ContingencySection({
                 ].join(' ')}
               >
                 {confirm.armed
-                  ? `Confirm — ${label} advances`
+                  ? `Confirm: ${label} advances`
                   : `${label} advances`}
               </button>
             ),

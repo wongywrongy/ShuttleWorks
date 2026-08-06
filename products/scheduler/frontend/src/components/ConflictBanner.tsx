@@ -27,7 +27,7 @@ import { X as XIcon } from '@phosphor-icons/react';
 import { useMatchStateStore, type ConflictRecord } from '../store/matchStateStore';
 
 const STALE_VERSION_AUTO_DISMISS_MS = 4000;
-const STALE_VERSION_MESSAGE = 'Updated by someone else — reloaded';
+const STALE_VERSION_MESSAGE = 'Updated by someone else. Reloaded.';
 
 interface ControlledProps {
   flavour: ConflictRecord['flavour'];

@@ -56,6 +56,16 @@ function populated(): BracketTournamentDTO {
   };
 }
 
+
+/** Config sections are collapsed by default; a collapsed section renders no
+ *  controls, so every assertion about a control (and especially every
+ *  negative one, which would otherwise pass vacuously) opens them first. */
+function expandConfigSections() {
+  screen
+    .getAllByRole('button', { expanded: false })
+    .forEach((btn) => fireEvent.click(btn));
+}
+
 function renderBracketTab() {
   return render(
     <MemoryRouter initialEntries={['/tournaments/t-1']}>
@@ -98,6 +108,7 @@ beforeEach(() => {
 describe('Bracket Configuration — two tabs', () => {
   it('renders exactly two tabs: Engine and Events', () => {
     renderBracketTab();
+    expandConfigSections();
     expect(screen.getByRole('radio', { name: /^Engine$/i })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /^Events$/i })).toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: /^Tournament$/i })).toBeNull();
@@ -105,6 +116,7 @@ describe('Bracket Configuration — two tabs', () => {
 
   it('Engine tab shows the same scoring field set as Meet + rest between rounds', () => {
     renderBracketTab();
+    expandConfigSections();
     expect(screen.getByLabelText('Score type')).toBeInTheDocument();
     expect(screen.getByLabelText('Points per set')).toBeInTheDocument();
     expect(screen.getByLabelText('Match format')).toBeInTheDocument();
@@ -119,6 +131,7 @@ describe('Bracket Configuration — two tabs', () => {
     // save guard resolves without a confirm.
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderBracketTab();
+    expandConfigSections();
     fireEvent.click(screen.getByRole('radio', { name: 'Sets' }));
     expect(setConfig).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Save engine settings/i }));
@@ -129,6 +142,7 @@ describe('Bracket Configuration — two tabs', () => {
 
   it('Events tab shows per-draw facts (type / size / seeding) + active disciplines', () => {
     renderBracketTab();
+    expandConfigSections();
     fireEvent.click(screen.getByRole('radio', { name: /^Events$/i }));
     expect(screen.getByText(/Active disciplines/i)).toBeInTheDocument();
     // Per-discipline Rows: discipline name + event code label, compact

@@ -23,10 +23,13 @@ export function ConfigSurface({
   ribbons,
   children,
 }: {
-  /** Section switcher entries (rendered as the bar's Seg). */
-  sections: { value: string; label: string }[];
-  section: string;
-  onSectionChange: (value: string) => void;
+  /** Section switcher entries (rendered as the bar's Seg). OPTIONAL: a
+   *  config surface that is a single merged form (Meet, since Events was
+   *  folded into it) passes none and gets no switcher. A one-entry switcher
+   *  is worse than no switcher. */
+  sections?: { value: string; label: string }[];
+  section?: string;
+  onSectionChange?: (value: string) => void;
   /** Right-aligned bar actions (e.g. the Meet Save button). */
   actions?: ReactNode;
   /** Full-bleed `border-b` ribbon rows between the bar and the content
@@ -37,12 +40,14 @@ export function ConfigSurface({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ActionsBar title="Configuration">
-        <Seg
-          options={sections}
-          value={section}
-          onChange={onSectionChange}
-          ariaLabel="Configuration section"
-        />
+        {sections && sections.length > 1 && section && onSectionChange ? (
+          <Seg
+            options={sections}
+            value={section}
+            onChange={onSectionChange}
+            ariaLabel="Configuration section"
+          />
+        ) : null}
         {actions}
       </ActionsBar>
       {ribbons}

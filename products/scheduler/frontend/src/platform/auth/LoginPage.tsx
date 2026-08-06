@@ -12,12 +12,19 @@
  *
  * In local mode the bootstrap session is already present, so the page
  * redirects away exactly as before — no login wall.
+ *
+ * Password-setting flows (create account, reset, and Settings → Security)
+ * all follow the same contract: a confirm field, the policy stated as a
+ * hint BEFORE submission, and failures anchored to the field that caused
+ * them. The server remains authoritative — ``validate_password`` also
+ * rejects breached passwords, which the client cannot check.
  */
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
-import { Button, Card } from '@scheduler/design-system';
+import { Button, Card, TextField } from '@scheduler/design-system';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from './passwordPolicy';
 
 interface FromState {
   from?: { pathname: string };
@@ -25,28 +32,39 @@ interface FromState {
 
 type Mode = 'signin' | 'register' | 'forgot';
 
-const INPUT_CLASS =
-  'mt-1 w-full px-3 py-2 rounded border border-input bg-background text-foreground';
+interface AuthFailure {
+  message: string;
+  /** Field to anchor the message to, when the server named one. */
+  field?: 'email' | 'password';
+}
 
 /** Human message for an auth failure, preferring the structured code. */
-function authErrorMessage(err: unknown): string {
+function authFailure(err: unknown): AuthFailure {
   const e = err as {
     code?: string;
     message?: string;
     response?: { data?: { detail?: { retryAfterSeconds?: number } } };
   };
-  if (e.code === 'AUTH_THROTTLED') {
-    const secs = e.response?.data?.detail?.retryAfterSeconds;
-    return secs
-      ? `Too many attempts — try again in ${secs}s.`
-      : 'Too many attempts — try again shortly.';
+  switch (e.code) {
+    case 'AUTH_THROTTLED': {
+      const secs = e.response?.data?.detail?.retryAfterSeconds;
+      return {
+        message: secs
+          ? `Too many attempts. Try again in ${secs}s.`
+          : 'Too many attempts. Try again shortly.',
+      };
+    }
+    case 'AUTH_INVALID_CREDENTIALS':
+      return { message: 'Invalid email or password.' };
+    case 'AUTH_WEAK_PASSWORD':
+      return { message: e.message || 'Choose a stronger password.', field: 'password' };
+    case 'AUTH_EMAIL_TAKEN':
+      return { message: 'An account already exists for that address.', field: 'email' };
+    case 'AUTH_INVALID_EMAIL':
+      return { message: 'Enter a valid email address.', field: 'email' };
+    default:
+      return { message: e.message || 'Something went wrong. Please try again.' };
   }
-  if (e.code === 'AUTH_INVALID_CREDENTIALS') return 'Invalid email or password.';
-  return e.message || 'Something went wrong. Please try again.';
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <span className="text-sm text-muted-foreground">{children}</span>;
 }
 
 export function LoginPage() {
@@ -60,13 +78,21 @@ export function LoginPage() {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<AuthFailure | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
   const from = (location.state as FromState)?.from?.pathname ?? '/';
+
+  /** Form-level error: only what we could not anchor to a field. */
+  const formError = failure && !failure.field ? failure.message : null;
+  const fieldError = (field: 'email' | 'password') =>
+    failure?.field === field ? failure.message : undefined;
 
   // ---- ?reset=<token>: set-new-password form -------------------------
   // Takes precedence over the session redirect so a signed-in browser
@@ -74,13 +100,23 @@ export function LoginPage() {
   if (resetToken) {
     const handleReset = async (e: FormEvent) => {
       e.preventDefault();
+      if (newPassword !== confirmNewPassword) {
+        setConfirmError('Passwords do not match.');
+        return;
+      }
       setSubmitting(true);
-      setError(null);
+      setFailure(null);
+      setConfirmError(null);
       try {
         await apiClient.resetPassword(resetToken, newPassword);
+        // Same route, param dropped — the component stays mounted, so the
+        // confirmation below survives the navigation.
+        setInfo('Password updated. Sign in with your new password.');
+        setNewPassword('');
+        setConfirmNewPassword('');
         navigate('/login', { replace: true });
       } catch (err) {
-        setError(authErrorMessage(err));
+        setFailure(authFailure(err));
       } finally {
         setSubmitting(false);
       }
@@ -89,24 +125,40 @@ export function LoginPage() {
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
         <Card className="w-full max-w-md p-8 space-y-5">
           <div>
-            <h1 className="text-2xl font-medium tracking-tight">ShuttleWorks</h1>
+            <h1 className="type-display text-2xl">ShuttleWorks</h1>
             <p className="text-sm text-muted-foreground mt-1">Choose a new password</p>
           </div>
           <form onSubmit={handleReset} className="space-y-3">
-            <label className="block">
-              <FieldLabel>New password</FieldLabel>
-              <input
-                type="password"
-                required
-                minLength={8}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                autoComplete="new-password"
-                className={INPUT_CLASS}
-                disabled={submitting}
-              />
-            </label>
-            {error && <div className="text-sm text-status-danger-fg">{error}</div>}
+            <TextField
+              label="New password"
+              type="password"
+              required
+              minLength={PASSWORD_MIN_LENGTH}
+              hint={PASSWORD_HINT}
+              error={fieldError('password')}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              disabled={submitting}
+            />
+            <TextField
+              label="Confirm new password"
+              type="password"
+              required
+              error={confirmError ?? undefined}
+              value={confirmNewPassword}
+              onChange={(e) => {
+                setConfirmNewPassword(e.target.value);
+                setConfirmError(null);
+              }}
+              autoComplete="new-password"
+              disabled={submitting}
+            />
+            {formError && (
+              <div role="alert" className="text-sm text-status-danger-fg">
+                {formError}
+              </div>
+            )}
             <Button type="submit" disabled={submitting} className="w-full">
               {submitting ? 'Saving…' : 'Set new password'}
             </Button>
@@ -124,8 +176,13 @@ export function LoginPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (mode === 'register' && password !== confirmPassword) {
+      setConfirmError('Passwords do not match.');
+      return;
+    }
     setSubmitting(true);
-    setError(null);
+    setFailure(null);
+    setConfirmError(null);
     setInfo(null);
     try {
       if (mode === 'forgot') {
@@ -145,7 +202,7 @@ export function LoginPage() {
       await refresh();
       navigate(from, { replace: true });
     } catch (err) {
-      setError(authErrorMessage(err));
+      setFailure(authFailure(err));
     } finally {
       setSubmitting(false);
     }
@@ -153,7 +210,9 @@ export function LoginPage() {
 
   const switchMode = (next: Mode) => {
     setMode(next);
-    setError(null);
+    setFailure(null);
+    setConfirmError(null);
+    setConfirmPassword('');
     setInfo(null);
   };
 
@@ -161,7 +220,7 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
       <Card className="w-full max-w-md p-8 space-y-5">
         <div>
-          <h1 className="text-2xl font-medium tracking-tight">ShuttleWorks</h1>
+          <h1 className="type-display text-2xl">ShuttleWorks</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === 'signin' && 'Sign in to continue'}
             {mode === 'register' && 'Create your account'}
@@ -171,47 +230,66 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-3">
           {mode === 'register' && (
-            <label className="block">
-              <FieldLabel>Display name (optional)</FieldLabel>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                autoComplete="name"
-                className={INPUT_CLASS}
-                disabled={submitting}
-              />
-            </label>
-          )}
-          <label className="block">
-            <FieldLabel>Email</FieldLabel>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              className={INPUT_CLASS}
+            <TextField
+              label="Display name (optional)"
+              type="text"
+              hint="How you appear to everyone else in a workspace."
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="name"
               disabled={submitting}
             />
-          </label>
+          )}
+          <TextField
+            label="Email"
+            type="email"
+            required
+            error={fieldError('email')}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            disabled={submitting}
+          />
           {mode !== 'forgot' && (
-            <label className="block">
-              <FieldLabel>Password</FieldLabel>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                className={INPUT_CLASS}
-                disabled={submitting}
-              />
-            </label>
+            <TextField
+              label="Password"
+              type="password"
+              required
+              minLength={mode === 'register' ? PASSWORD_MIN_LENGTH : undefined}
+              hint={mode === 'register' ? PASSWORD_HINT : undefined}
+              error={fieldError('password')}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+              disabled={submitting}
+            />
+          )}
+          {mode === 'register' && (
+            <TextField
+              label="Confirm password"
+              type="password"
+              required
+              error={confirmError ?? undefined}
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setConfirmError(null);
+              }}
+              autoComplete="new-password"
+              disabled={submitting}
+            />
           )}
 
-          {error && <div className="text-sm text-status-danger-fg">{error}</div>}
-          {info && <div className="text-sm text-muted-foreground">{info}</div>}
+          {formError && (
+            <div role="alert" className="text-sm text-status-danger-fg">
+              {formError}
+            </div>
+          )}
+          {info && (
+            <div role="status" className="text-sm text-muted-foreground">
+              {info}
+            </div>
+          )}
 
           <Button type="submit" disabled={submitting} className="w-full">
             {submitting
