@@ -296,17 +296,107 @@ This is the fix for the actual failure mode: when session 1 reweighted section
 headings, the change reached only surfaces that imported a component, so
 Bracket and Display kept the old treatment and looked untouched.
 
+## 7. Customizable events + reported bugs (session 3, 2026-08-06)
+
+### Events are user-defined
+
+**This was scoped in §6 as a data-model change plus a migration. That was
+wrong, and checking rather than trusting the earlier note is what made it
+cheap.** Nothing below the UI ever required five events:
+
+- backend `rankCounts: Dict[Code, int]`, and `Code` is
+  `Annotated[str, StringConstraints(max_length=MAX_CODE)]` — a bounded string,
+  not an enum. Bounds: 40 chars, 50 events.
+- the DTO is already `Record<string, number>`.
+- every consumer (position grid, matches spreadsheet, rank validation, xlsx
+  export) already iterates the object's own keys, and
+  `usePositionGridColumns` explicitly appends configured events that are not
+  in the canonical `EVENT_ORDER`.
+- `DISCIPLINE_NAMES` already documents "unknown codes have no entry — callers
+  fall back to the raw code", and every `EVENT_LABEL` read is `?.`-guarded.
+
+So the fixed five lived **only** in the form. `MeetEventsSection` replaces the
+hardcoded list with add / remove / rename-by-code rows over `rankCounts`.
+`DEFAULT_RANKS` stays as the seed for a new meet. Verified end-to-end against
+the running backend: `PUT /state` with a custom `BS` code returns 200 and
+stores it.
+
+Validation lives in `validateEventCode` so the rules are stated once: letters
+only (a code carrying digits would make the rank `MD2` ambiguous between event
+MD position 2 and event MD2 position 1), unique, within the backend's own
+`MAX_CODE` / `MAX_RANKS` bounds so a 422 is never provoked.
+
+Labels now come from the shared `DISCIPLINE_NAMES` instead of a third private
+copy, which changes the Meet config labels to title case ("Men's Singles"),
+matching Bracket and the position grid.
+
+`MeetStructureForm.tsx` is deleted — dead since the §6 merge, and it carried
+its own copy of the hardcoded five.
+
+### The dirty-check bug this surfaced
+
+Driving the editor against a real workspace showed the form rendering the
+default five while the workspace actually stored `{MS: 2, WS: 2}`.
+
+`EngineConfigForm`'s dirty-check seeds `baselineRef` from whatever `config` was
+at mount — `null` whenever the config resolves after the first render, which is
+the normal case. It then fell back to using `config` as its own baseline, so
+every field whose stored value differed from its default compared unequal, was
+read as "the user touched this", and **the server value was never adopted**.
+The form showed defaults over real saved settings, and saving wrote them back.
+
+Mostly invisible while the surface rendered a fixed five with per-field
+fallbacks. Not invisible once the event *list* comes from config: a workspace
+with two events showed five and would have overwritten its own set on save.
+First load is not an edit; the fix adopts unconditionally until a baseline
+exists. Both halves are pinned — the adopt case and the in-flight-edit case
+the dirty-check exists for.
+
+### Reported bugs
+
+- **"Configure display" went to the wrong page** — `setup?section=display`, the
+  Meet Configuration page plus a `?section=` value no switcher has ever had.
+  Its test asserted the wrong destination in its own name AND registered only
+  a `/setup` route, so a wrong target rendered nothing and was
+  indistinguishable from a dead button. The probe is a catch-all now.
+- **Lock banners differed between engines** — see below.
+- **Display board polish** — the progress footer was viewport-`fixed`, so in
+  the in-shell Preview it spanned the window and ran under the sidebar. The
+  live court card was white-on-near-white: presets keep the status palette
+  global, which is right for status *foregrounds* but not their `-bg`
+  partners, which are light-theme tints; a dark preset painted the card in
+  near-white green and wrote its own white `--foreground` on top. Every preset
+  now declares its own status surfaces. Empty courts dropped the placeholder
+  dash, and an unresolved side reads TBD.
+
+### Lock tiers are named for the condition
+
+`soft`/`hard` named the volume and left the condition implicit, which hid a
+real divergence: Bracket implemented both tiers, Meet only the quiet one, so
+results-recorded produced an amber "saving will clear this" on Meet and a
+neutral read-only banner on Bracket.
+
+Tiers are now `schedule` and `results`, and Meet gains the results tier
+(`useMeetResultsLock`). **Behaviour change:** Meet Configuration goes read-only
+once a match is started or finished, matching Bracket, instead of offering to
+clear the schedule while scores exist. A merely *called* match does not lock —
+nothing is recorded yet.
+
+The amber-vs-neutral split is kept deliberately. Cloudscape and Carbon
+converge on two orthogonal axes — disabled vs read-only (read-only keeps the
+values legible; disabled means a prerequisite is missing), and warning vs
+informational severity (warning is for a consequence the operator is about to
+cause, neutral for a standing condition). Colouring both amber is what teaches
+an operator to skip amber. Copy is engine-neutral so both surfaces read
+identically; only the exit link differs.
+
 ### Still open
 
-- **Customizable events** — unchanged from session 1's assessment. `rankCounts`
-  is a fixed five-key object (`MS/WS/MD/WD/XD`) read by the backend and the
-  solver, not just the form. Data-model change plus a migration; its own slice.
-- **`Eyebrow` uppercases text content in JS** as well as CSS, so
-  `<Eyebrow>Details</Eyebrow>` puts `DETAILS` in the DOM while
-  `<span className={EYEBROW_CLASS}>` puts `Details`. Screen readers may spell
-  out the former. Six call sites. Logged to the debt log rather than fixed here
-  — it changes DOM text, which is a test-visible change unrelated to this work.
-- The deferred-by-decision list from session 1 stands unchanged: the
-  `Reproducible run` / `Freeze horizon` names, the standalone `—` empty-value
-  glyph, the five action panels (which want a third `ActionRow` type rather
-  than being bent into `Row`), and the sky/azure collision.
+- **Custom event codes get no colour identity.** `EVENT_LABEL` carries
+  per-event colours for the five known codes; a custom code renders unstyled.
+  Every read is guarded so nothing breaks — it is a polish gap, not a defect.
+- **`Eyebrow` uppercases text content in JS as well as CSS** (§6, in the debt
+  log).
+- The deferred-by-decision list from session 1 stands: the `Reproducible run` /
+  `Freeze horizon` names, the standalone `—` glyph on operator surfaces, the
+  five action panels wanting an `ActionRow` type, and the sky/azure collision.

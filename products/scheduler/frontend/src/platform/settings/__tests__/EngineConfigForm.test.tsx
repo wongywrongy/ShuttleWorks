@@ -290,20 +290,20 @@ describe('<EngineConfigForm /> — merged meet structure', () => {
   it('meet renders the Events section the old Events tab used to hold', () => {
     mount('meet');
     expect(screen.getByLabelText('Meet type')).toBeInTheDocument();
-    expect(screen.getByLabelText("Men's singles positions")).toBeInTheDocument();
-    expect(screen.getByLabelText('Mixed doubles positions')).toBeInTheDocument();
+    expect(screen.getByLabelText("Men's Singles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText('Mixed Doubles positions')).toBeInTheDocument();
   });
 
   it('bracket renders neither — they are meet-only structure', () => {
     mount('bracket');
     expect(screen.queryByLabelText('Meet type')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Men's singles positions")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Men's Singles positions")).not.toBeInTheDocument();
   });
 
   it('saving carries the meet structure through the one save path', async () => {
     mount('meet');
 
-    fireEvent.change(screen.getByLabelText("Men's singles positions"), {
+    fireEvent.change(screen.getByLabelText("Men's Singles positions"), {
       target: { value: '5' },
     });
     await act(async () => {
@@ -316,5 +316,65 @@ describe('<EngineConfigForm /> — merged meet structure', () => {
     // drop the fields the other one used to own.
     expect(saved.pointsPerSet).toBe(21);
     expect(saved.tournamentName).toBe('Config Tournament');
+  });
+});
+
+/**
+ * The form must show what is SAVED, not what the defaults happen to be.
+ *
+ * `baselineRef` starts as whatever `config` was at mount — `null` whenever the
+ * config resolves after the first render, which is the normal case. The
+ * dirty-check used to fall back to `config` as its own baseline there, so
+ * every field whose stored value differed from its default compared unequal,
+ * was read as a user edit, and the server value was never adopted.
+ */
+describe('<EngineConfigForm /> — config arriving after mount', () => {
+  it('adopts stored values that differ from the defaults', async () => {
+    // Mount with NO config, the way the real page loads.
+    useTournamentStore.setState({ config: null });
+    mount('meet', {}, { expandSections: false });
+
+    await act(async () => {
+      useTournamentStore.setState({
+        config: {
+          ...baseConfig,
+          rankCounts: { MS: 2, WS: 2 },
+          pointsPerSet: 15,
+          defaultRestMinutes: 45,
+        },
+      });
+    });
+    expandAll();
+
+    // The stored event set, not DEFAULT_RANKS.
+    expect(screen.getByLabelText("Men's Singles positions")).toHaveValue(2);
+    expect(screen.queryByLabelText('Mixed Doubles positions')).toBeNull();
+    expect(screen.getByLabelText('Rest between matches')).toHaveValue(45);
+    expect(screen.getByRole('radio', { name: '15 points' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('still protects a genuine in-flight edit from an autosave elsewhere', async () => {
+    // The behaviour the dirty-check exists for must survive the fix.
+    mount('meet');
+    fireEvent.change(screen.getByLabelText('Rest between matches'), {
+      target: { value: '99' },
+    });
+
+    await act(async () => {
+      useTournamentStore.setState({
+        config: { ...baseConfig, defaultRestMinutes: 12, pointsPerSet: 11 },
+      });
+    });
+
+    // The touched field keeps the user's value...
+    expect(screen.getByLabelText('Rest between matches')).toHaveValue(99);
+    // ...while an untouched one adopts the incoming server value.
+    expect(screen.getByRole('radio', { name: '11 points' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
   });
 });

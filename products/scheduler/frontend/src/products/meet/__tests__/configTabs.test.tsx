@@ -104,18 +104,18 @@ describe('Meet Configuration (one merged surface)', () => {
     renderPage();
     expandConfigSections();
     expect(screen.getByLabelText('Meet type')).toBeInTheDocument();
-    expect(screen.getByLabelText("Men's singles positions")).toBeInTheDocument();
-    expect(screen.getByLabelText("Women's singles positions")).toBeInTheDocument();
-    expect(screen.getByLabelText("Men's doubles positions")).toBeInTheDocument();
-    expect(screen.getByLabelText("Women's doubles positions")).toBeInTheDocument();
-    expect(screen.getByLabelText('Mixed doubles positions')).toBeInTheDocument();
+    expect(screen.getByLabelText("Men's Singles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText("Women's Singles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText("Men's Doubles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText("Women's Doubles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText('Mixed Doubles positions')).toBeInTheDocument();
   });
 
   it('changing a position count then saving persists the new rankCounts', async () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderPage();
     expandConfigSections();
-    const ms = screen.getByLabelText("Men's singles positions") as HTMLInputElement;
+    const ms = screen.getByLabelText("Men's Singles positions") as HTMLInputElement;
     fireEvent.change(ms, { target: { value: '5' } });
     fireEvent.click(screen.getByTestId('config-save'));
     await waitFor(() => expect(setConfig).toHaveBeenCalled());

@@ -32,21 +32,16 @@ import {
   TimeInput,
 } from './SettingsControls';
 import { ScoringFields, type ScoringValue } from './ScoringFields';
+import { MeetEventsSection, DEFAULT_RANKS } from './MeetEventsSection';
 
 const MEET_TYPE_OPTIONS = [
   { value: 'dual' as const, label: 'Dual' },
   { value: 'tri' as const, label: 'Tri' },
 ];
 
-const DEFAULT_RANKS = { MS: 3, WS: 3, MD: 2, WD: 2, XD: 2 };
-
-const DISCIPLINES = [
-  { key: 'MS' as const, label: "Men's singles", fallback: 3 },
-  { key: 'WS' as const, label: "Women's singles", fallback: 3 },
-  { key: 'MD' as const, label: "Men's doubles", fallback: 2 },
-  { key: 'WD' as const, label: "Women's doubles", fallback: 2 },
-  { key: 'XD' as const, label: 'Mixed doubles', fallback: 2 },
-];
+/* The five disciplines used to be a hardcoded list right here, which made
+   them look like a property of the product. They are the default seed for a
+   new meet and nothing more — see MeetEventsSection. */
 
 /** The modules that render this form. Both drive the same CP-SAT engine. */
 export type EngineModule = 'meet' | 'bracket';
@@ -154,15 +149,29 @@ export function EngineConfigForm({
 
   // Dirty-check: adopt new server values only for fields the user
   // hasn't touched since the last accepted baseline.
+  //
+  // FIRST LOAD IS NOT AN EDIT. `baselineRef` starts as whatever `config` was
+  // at mount, which is `null` whenever the config resolves after the first
+  // render — the normal case. This used to fall back to `config` as the
+  // baseline in that situation, so every field whose stored value differed
+  // from its default compared unequal, was read as "the user touched this",
+  // and the server value was silently never adopted: the form showed
+  // defaults over real saved settings, and saving wrote them back.
+  //
+  // Mostly invisible while the surface rendered a fixed five events with
+  // per-field fallbacks. Not invisible once the event LIST itself comes from
+  // config — a workspace with two events showed five and would have
+  // overwritten its own set on the next save.
   useEffect(() => {
     if (!config) return;
+    const baseline = baselineRef.current;
     setFormData((prev) => {
       const merged: Partial<TournamentConfig> = { ...prev };
-      const prevBaseline = baselineRef.current ?? config;
       (Object.keys(initialEngineState(config)) as Array<keyof TournamentConfig>).forEach(
         (key) => {
           const userTouched =
-            JSON.stringify(prev[key]) !== JSON.stringify(prevBaseline[key]);
+            baseline !== null &&
+            JSON.stringify(prev[key]) !== JSON.stringify(baseline[key]);
           if (!userTouched) {
             (merged as Record<string, unknown>)[key] = config[key];
           }
@@ -170,9 +179,9 @@ export function EngineConfigForm({
       );
       return merged;
     });
-    const prevBreaks = breakBaselineRef.current;
     const breakUserTouched =
-      JSON.stringify(breakWindows) !== JSON.stringify(prevBreaks);
+      baseline !== null &&
+      JSON.stringify(breakWindows) !== JSON.stringify(breakBaselineRef.current);
     if (!breakUserTouched) {
       setBreakWindows(config.breaks ?? []);
     }
@@ -263,28 +272,11 @@ export function EngineConfigForm({
                     />
                   }
                 />
-                {DISCIPLINES.map((d, i) => (
-                  <Row
-                    key={d.key}
-                    label={d.label}
-                    last={i === DISCIPLINES.length - 1}
-                    control={
-                      <NumberWithSuffix
-                        value={(formData.rankCounts ?? DEFAULT_RANKS)[d.key] ?? d.fallback}
-                        onChange={(n) =>
-                          set('rankCounts', {
-                            ...(formData.rankCounts ?? DEFAULT_RANKS),
-                            [d.key]: n,
-                          })
-                        }
-                        suffix="positions"
-                        min={0}
-                        max={20}
-                        ariaLabel={`${d.label} positions`}
-                      />
-                    }
-                  />
-                ))}
+                <MeetEventsSection
+                  rankCounts={formData.rankCounts ?? DEFAULT_RANKS}
+                  onChange={(next) => set('rankCounts', next)}
+                  readOnly={readOnly}
+                />
               </Section>
             </>
           ) : null}
