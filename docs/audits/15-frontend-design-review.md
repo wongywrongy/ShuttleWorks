@@ -223,3 +223,93 @@ A and C are not exclusive — A is the cheap floor, C is where an actual identit
 | `products/scheduler/frontend/src/products/settings/GlobalSettingsPage.tsx` | Private `Field` deleted → `TextField`; mismatch anchored to the confirm field |
 | `products/scheduler/frontend/src/platform/auth/__tests__/LoginPage.test.tsx` | **New** — 7 tests |
 | `docs/audits/debt-log.md` | 3 follow-ups logged |
+
+---
+
+## 6. Continuation plan (written 2026-08-06, end of session 1)
+
+Everything below is **not yet done**. Session 1's work is committed on `dev`
+(`37c6fd0`) and pushed. All gates green at that commit: vitest 1315, tsc,
+eslint 0 errors, depcruise 0 errors, contrast both themes, docs build.
+
+### Step 1 — Triage the 33 hand-rolled section labels (do first)
+
+`SectionHeader`'s reweighting only reached surfaces that import it from
+`platform/settings/SettingsControls`. **33 hand-rolled copies of the exact
+pre-review style remain**:
+
+```
+text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground
+```
+
+Found in at least: `products/workspace/displayConfig/DisplayLayoutEditor.tsx`,
+`products/bracket/{BracketDrawsTab,DrawDetailPanel,LiveView,LiveMatchList,
+BracketScheduleSidebar,BracketMatchesTable,BracketPlayerFields,
+BracketEmptyState}.tsx`, `components/control-plane/{ActionsBar,DetailPanel}.tsx`.
+
+Re-derive the list before starting:
+
+```
+grep -rn "text-2xs font-semibold uppercase tracking-\[0.08em\] text-muted-foreground" \
+  --include=*.tsx products/scheduler/frontend/src
+```
+
+**This is a judgement pass, not a find-and-replace.** Each call site is one of
+two things and they must not be conflated:
+
+- **Section header** — introduces a group of rows/fields. Adopt `Section` (or
+  `SectionHeader`). These are the ones causing the flat-weight complaint.
+- **Eyebrow** — a small label on a panel, chip, or bar that is NOT introducing
+  a group (e.g. `ActionsBar`'s title). The small all-caps treatment is
+  probably right here; the defect is that there are 33 copies of it. Extract
+  ONE `Eyebrow` component and route them through it.
+
+Deliverable: every one of the 33 either uses `Section`/`SectionHeader` or the
+new shared `Eyebrow`. Zero hand-rolled copies of that class string.
+
+### Step 2 — Merge Bracket's Engine + Events
+
+Mirror the Meet merge (session 1). Bracket already renders the same
+`EngineConfigForm`, so it inherited the *inside* of the fix but still has the
+switcher: `products/bracket/BracketTab.tsx` `bracketSetupSections` defines an
+`engine` section and a `structure` section (labelled "Events",
+`BracketStructureSection`) behind a `Seg`.
+
+- `ConfigSurface`'s `sections`/`section`/`onSectionChange` are ALREADY optional
+  (session 1) and the switcher only renders when `sections.length > 1`, so no
+  shell change is needed.
+- **The hazard is the same one that shaped the Meet merge**: do not mount two
+  forms that each spread the whole config on save. Fold the bracket structure
+  fields into `EngineConfigForm`'s own state gated on `module === 'bracket'`,
+  exactly as `meetMode`/`rankCounts` were, and declare them in
+  `ENGINE_CONFIG_FIELDS` (its test asserts the module-specific list, so it will
+  catch an undeclared field).
+- Tests: `bracketConfigTabs.test.tsx` asserts the two radios exist; those
+  assertions describe the surface being removed and need rewriting, not
+  patching. `expandConfigSections()` helpers already exist in the bracket test
+  files.
+
+### Step 3 — Customizable events (its own slice, NOT a UI change)
+
+`rankCounts` is a fixed five-key object (`MS/WS/MD/WD/XD`) and those keys are
+read by the backend and the solver, not just the form. Making events
+user-definable is a data-model change plus a migration. Scope it separately.
+
+### Deferred by decision (do not silently "fix")
+
+- **`Reproducible run` / `Freeze horizon`** — solver jargon, deliberately NOT
+  renamed. Needs a product decision on what they mean to a director; a
+  confident wrong rename is worse than jargon.
+- **The standalone `—` empty-value glyph** (~180 occurrences, tests pin it).
+  Session 1 removed em dashes from *prose* only. Replacing the glyph is a
+  separate decision about what stands in for "no value".
+- **The five action panels** (`ModulesSettingsTab`, `SharingTab`,
+  `PeopleAccessTab`, `SyncBackupsTab`, `DangerZoneTab`) were aligned on width
+  and heading weight but deliberately NOT forced into `Row`/`FieldRow`: their
+  rows carry a description beside the control, which `Row` forbids. If they
+  should share the grammar, add a third row type (`ActionRow`: title,
+  description, action) rather than bending the existing two.
+- **The blue collision** — `--status-started` (sky) still reads as interactive
+  beside the azure accent, and `--module-meet` is still the accent hex. The
+  cheap half of palette Direction B (demote `--status-started` to neutral, keep
+  the azure accent) closes it. See `debt-log.md`.
