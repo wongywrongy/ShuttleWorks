@@ -448,3 +448,58 @@ Separately, the trunk moved mid-session (`dev/review-fixes` merged, `CONTRIBUTIN
 the `dev/*` convention) and the working tree was switched to other branches while work was in
 flight. Both SP-SEC commits were rebuilt onto `main` as `sec/hardening`; `docs/sp-repo-1-consolidation`
 was restored to its own tip. Worth knowing that this tree has more than one writer.
+
+
+---
+
+## SP-SEC-2 — Standing security audit · **COMPLETE** (2026-08-06)
+
+Report: `docs/audits/14-sp-sec-2-audit.md`. A verification pass, not a second
+remediation programme.
+
+**The deliverable is a gate, not a document.**
+`tests/test_auth_surface.py` derives all 92 routes from `app.openapi()` in
+`AUTH_MODE=cloud` and asserts each refuses an anonymous caller. **78 refuse
+outright, 11 are public by design, 3 are ops-token gated, zero unaccounted
+for.** Adding an unguarded route fails the gate by name.
+
+The allowlist is **enumerated with a reason per entry**, not pattern-matched: a
+rule like "anything under /auth is public" would silently bless a future
+`/auth/admin/impersonate`.
+
+Three supporting assertions, because an allowlist entry is only a claim: the
+ops endpoints must 403 without their token, the display routes must reject a
+bogus token (unauthenticated is not unguarded), and an entry naming a route
+that no longer exists fails — so the list cannot rot into describing a wider
+surface than the app has.
+
+**A negative control that correctly did nothing.** Removing the router-level
+`Depends(get_current_user)` from the solve-jobs router did not fail the gate.
+That was the right answer, not a hole: those routes still carry
+`require_tournament_access`, which resolves identity itself, so they kept
+refusing with the tenancy 404. The control created no exposure. A genuinely
+unguarded route was then added and the gate named it.
+
+**Verified clean:** no raw SQL (ORM throughout; only static `text()`
+literals), no DOM XSS sinks in app or design system, **no outbound HTTP at
+all** — so there is no SSRF surface to defend, a property of the
+offline-capable architecture rather than a mitigation — and no committed
+secrets. Python dependencies: zero known CVEs.
+
+**Node dependencies 9 → 4.** Fixed axios (DoS), form-data (CRLF injection),
+postcss, tmp, brace-expansion.
+
+The four remaining were **triaged, not bumped**. `react-router`'s six
+advisories need a major version the project deliberately holds; four are
+SSR/RSC-only and this is a pure SPA (verified: no `hydrateRoot`,
+`renderToString`, `createStaticHandler`, RSC), one is a client-side-only DoS,
+and the open-redirect one was traced to every non-literal navigation target —
+all app-controlled template literals except the post-login redirect, which
+reads a router-state `pathname` and is same-origin by construction. Trigger to
+revisit recorded: adopting SSR/RSC, or accepting a redirect target from a query
+parameter. `exceljs`/`uuid`'s only offered fix is a *downgrade* to an older
+major, declined on the grounds that trading a known dependency for an older
+unaudited one is not a security improvement.
+
+**Open, small:** `seen_version` is still `Optional` on `POST /bracket/results`
+— the same fail-open defect SP-CLOUD-4 closed one route over.
