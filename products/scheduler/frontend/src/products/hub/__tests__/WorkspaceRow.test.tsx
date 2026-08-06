@@ -61,6 +61,31 @@ describe('WorkspaceRow', () => {
     expect(screen.getByTestId('row-module-meet').className).toMatch(/border-dashed/);
   });
 
+  // SP-UI-1: the next action is the row's call to action, not a metadata
+  // column. Pin the properties that make it read that way — the chevron is
+  // decorative and must not enter the accessible name.
+  it('the next action is a keyboard-focusable affordance whose name is the label alone', () => {
+    render(
+      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
+    );
+    const cta = screen.getByTestId('row-next-action');
+    expect(cta.tagName).toBe('BUTTON');
+    expect(cta).toHaveAccessibleName('Add players');
+    cta.focus();
+    expect(cta).toHaveFocus();
+  });
+
+  it('name leads the row — the date is trailing metadata, not the first cell', () => {
+    const { container } = render(
+      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
+    );
+    const row = container.firstElementChild!;
+    // First cell carries the name; the date lives after the Modules column.
+    expect(row.firstElementChild).toHaveTextContent('Spring');
+    const text = row.textContent ?? '';
+    expect(text.indexOf('Spring')).toBeLessThan(text.indexOf('Jul 1'));
+  });
+
   it('Delete lives in the overflow menu, not inline', () => {
     const onDelete = vi.fn();
     render(

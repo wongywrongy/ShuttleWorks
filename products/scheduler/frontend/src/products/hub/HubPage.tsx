@@ -310,10 +310,10 @@ export function HubPage() {
                 aria-hidden
                 className={`flex items-center gap-3 border-b border-border px-4 py-2 ${EYEBROW_CLASS} text-ink-faint`}
               >
-                {showDates ? <span className="w-14 shrink-0">Date</span> : null}
                 <span className="min-w-0 flex-1">Workspace</span>
                 <span className="w-[108px] shrink-0">Modules</span>
-                <span className="w-40 shrink-0">Next action</span>
+                {showDates ? <span className="w-16 shrink-0 text-right">Date</span> : null}
+                <span className="w-40 shrink-0 px-2">Next action</span>
                 <span className="w-6 shrink-0" />
               </div>
               <div className="divide-y divide-border">
@@ -341,7 +341,7 @@ export function HubPage() {
           {!loading && tournaments.length > 0 ? (
             <div
               data-testid="hub-footer"
-              className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2.5 text-2xs text-muted-foreground"
+              className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2 text-3xs text-muted-foreground"
             >
               <span className="sw-num">
                 {footerCounts.total} workspace{footerCounts.total === 1 ? '' : 's'}
