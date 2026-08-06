@@ -94,7 +94,21 @@ async function handleRejectedSave(tid: string, err: unknown): Promise<void> {
     const remote = await apiClient.getTournamentState(tid);
     if (remote) hydrate(remote);
     useUiStore.getState().setPersistStatus('idle');
-    if (code === 'DRAW_STARTED') {
+    if (code === 'STATE_VERSION_CONFLICT') {
+      // Someone else (or another tab) saved first. The re-sync above already
+      // replaced the local copy with the server's, and refreshed the
+      // concurrency token as a side effect of the GET, so the next save
+      // works. Say what happened in the operator's terms, not in versions.
+      useUiStore.getState().pushToast({
+        level: 'warn',
+        message: 'Someone else saved first',
+        detail:
+          'This workspace changed in another tab or by another operator. ' +
+          'Your view has been re-synced to the server — re-apply your change ' +
+          'if it is still needed.',
+        durationMs: 8000,
+      });
+    } else if (code === 'DRAW_STARTED') {
       useUiStore.getState().pushToast({
         level: 'warn',
         message: "A started draw locks the schedule",

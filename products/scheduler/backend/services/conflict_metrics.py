@@ -10,8 +10,8 @@ which loses the one signal that tells you whether an optimistic-concurrency
 surface is actually conflicting in practice, or whether the guard is inert.
 
 So this is the smallest thing that answers the question: an in-memory counter,
-no table, no migration, no dependency, exposed on the existing ops-token-gated
-metrics surface.
+no table, no migration, no dependency, exposed under the ``conflicts`` key
+of ``GET /health/metrics`` (ops-token gated, see ``api/health.py``).
 
 **Stated plainly, because it matters for how the number is read:** it resets on
 restart and it is per-process. In a multi-container cloud deployment you get

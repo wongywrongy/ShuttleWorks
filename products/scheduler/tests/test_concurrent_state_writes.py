@@ -31,6 +31,8 @@ from fastapi.testclient import TestClient
 
 from _helpers import isolate_test_database
 
+CSRF = {"X-ShuttleWorks-CSRF": "1"}
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
@@ -280,3 +282,136 @@ def test_conflicts_are_counted_for_observability(client, tid):
     assert snap["total"] == 1
     assert snap["byPath"]["PUT /tournaments/{id}/state"] == 1
     assert snap["lastConflictAt"] is not None
+
+
+# ---- Review findings: writers that advance the version must return it ----
+
+
+def test_plan_finalized_returns_the_new_version(client, tid):
+    """The flow that made the guard worse than no guard.
+
+    Toggling plan-finalized writes the blob, so it advances the version. If
+    it does not hand the new one back, the director's very next autosave
+    carries a stale If-Match and 409s on a flow containing no conflict at
+    all — a spurious failure immediately after an action that succeeded.
+    """
+    _seed(client, tid)
+    state, etag = _load(client, tid)
+
+    toggled = client.post(
+        f"/tournaments/{tid}/plan-finalized",
+        json={"finalized": True},
+        headers=CSRF,
+    )
+    assert toggled.status_code == 200, toggled.text
+    new_etag = _etag(toggled)
+    assert new_etag != etag, "the write advanced the version but returned the old token"
+
+    # The token it handed back is the one that works.
+    assert _save(client, tid, _writable(state), new_etag).status_code == 200
+
+
+def test_restore_returns_the_new_version(client, tid):
+    """Same contract for backup restore, which also rewrites the blob."""
+    _seed(client, tid)
+    state, etag = _load(client, tid)
+    _save(client, tid, _writable(state), etag)
+
+    backups = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+    assert backups, "expected the seed write to have produced a backup"
+
+    restored = client.post(
+        f"/tournaments/{tid}/state/restore/{backups[0]['filename']}",
+        headers=CSRF,
+    )
+    assert restored.status_code == 200, restored.text
+    fresh_etag = _etag(restored)
+    latest, _ = _load(client, tid)
+    assert _save(client, tid, _writable(latest), fresh_etag).status_code == 200
+
+
+def test_the_write_is_a_compare_and_swap_not_just_a_precheck(client, tid):
+    """The API pre-check reads the row ~150 lines before the write lands, so
+    two interleaved requests can both pass it. The repository re-checks under
+    the write, which is what actually makes the guarantee hold.
+
+    Driven at the repository layer because the interleaving happens INSIDE a
+    request and cannot be produced by ordering two HTTP calls.
+    """
+    from app.exceptions import ConflictError
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    _seed(client, tid)
+    import uuid as _uuid
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        row = repo.tournaments.get_by_id(_uuid.UUID(tid))
+        stale = row.state_version or 0
+
+        # A concurrent writer commits first.
+        repo.tournaments.upsert_data(_uuid.UUID(tid), dict(row.data or {}))
+
+        # The slow request now writes with the version it validated earlier.
+        with pytest.raises(ConflictError):
+            repo.tournaments.upsert_data(
+                _uuid.UUID(tid), dict(row.data or {}), expected_version=stale
+            )
+    finally:
+        session.close()
+
+
+def test_conflicts_are_visible_on_the_metrics_endpoint(client, tid):
+    """0.F: counted is not the same as observable.
+
+    The earlier version of this suite asserted the counter by calling
+    snapshot() directly, which passed while /health/metrics never exposed it
+    — a test certifying something it did not check (CODE_HEALTH 3b).
+    """
+    from services import conflict_metrics
+
+    conflict_metrics.reset()
+    _seed(client, tid)
+    state, shared = _load(client, tid)
+    assert _save(client, tid, _writable(state), shared).status_code == 200
+    assert _save(client, tid, _writable(state), shared).status_code == 409
+
+    from fastapi.testclient import TestClient as _TC
+    from app.main import app as _full_app
+
+    metrics = _TC(_full_app).get("/health/metrics")
+    assert metrics.status_code == 200, metrics.text
+    conflicts = metrics.json()["conflicts"]
+    assert conflicts["total"] == 1
+    assert conflicts["byPath"]["PUT /tournaments/{id}/state"] == 1
+
+
+def test_if_match_parsing_matches_the_sibling_route(client, tid):
+    """A malformed weak-validator must be refused, not leniently accepted.
+
+    str.strip("W/") takes a CHARACTER SET, so the old parser accepted
+    W/W/"3" where api/match_state.py's prefix-based parser rejects it.
+    """
+    _seed(client, tid)
+    state, etag = _load(client, tid)
+    version = etag.strip('"')
+
+    r = client.request(
+        "PUT",
+        f"/tournaments/{tid}/state",
+        json=_writable(state),
+        headers={"If-Match": f'W/W/"{version}"'},
+    )
+    assert r.status_code == 412
+    assert r.json()["detail"]["code"] == "STATE_VERSION_REQUIRED"
+
+    # The well-formed weak validator is still accepted.
+    ok = client.request(
+        "PUT",
+        f"/tournaments/{tid}/state",
+        json=_writable(state),
+        headers={"If-Match": f'W/"{version}"'},
+    )
+    assert ok.status_code == 200, ok.text

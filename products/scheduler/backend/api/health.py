@@ -58,6 +58,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select, text
 
 from app.config import settings
+from services import conflict_metrics
 from database.models import SolveJob
 from repositories import LocalRepository, get_repository
 from repositories.local import (
@@ -319,4 +320,12 @@ def health_metrics(repo: LocalRepository = Depends(get_repository)):
         "leaseSeconds": settings.job_lease_seconds,
         "workers": workers,
         "workerCount": len({w["workerId"] for w in workers if w["workerId"]}),
+        # Optimistic-concurrency conflicts (SP-CLOUD-4, 0.F). Unlike every
+        # other number here, this is NOT derivable from a column — a conflict
+        # is an event, not a state — so it comes from an in-process counter.
+        # It therefore resets on restart and is per-process: in a multi-worker
+        # cloud deployment these are per-instance counts, not a fleet total.
+        # That is enough to answer "is this surface conflicting a lot?", which
+        # is the question it exists for.
+        "conflicts": conflict_metrics.snapshot(),
     }
