@@ -876,3 +876,74 @@ day `CONTRIBUTING.md` landed, and recorded in its own ledger that it renamed
 `dev/sec-hardening` specifically "to match the convention it now has to follow."
 The convention was adopted by a session that was not told to adopt it, which is
 the only real evidence that a written convention works.
+
+---
+
+## SP-PERF-1 — Performance audit & dead-code removal (2026-08-05)
+
+Register: `docs/audits/12-sp-perf-1-phase0.md`. Branch `perf/hygiene`, merged
+via PR #19. Behaviour-preserving throughout — no test was modified, and the
+counts are identical before and after (backend 1003, frontend 1301), which is
+the evidence the removed code was genuinely unreachable rather than merely
+untested.
+
+### Phase 1 — removed, 488 lines
+
+| Item | Lines | Evidence |
+|---|---|---|
+| `useBulkOperations.ts` | 268 | zero references repo-wide |
+| `usePlayerSelection.ts` | 73 | zero references repo-wide |
+| `services/csv_importer.py` + `RosterImportDTO` + `MAX_CSV` | 141 | zero references; every mention of `CSVImporterService` was inside its own file |
+
+The backend pair is the code SP-SEC-1 filed **SEC-16** against — an unguarded
+`int()` on a malformed column. That finding was closed *not exploitable*
+because the path was unreachable, on the grounds that patching dead code only
+makes it look maintained. Deleting it is the follow-through.
+
+### What the tooling got wrong — the point of Rule 3
+
+`knip`'s **top finding, `src/types/fonts.d.ts`, is not dead**. It declares the
+two `@fontsource-variable` modules that `main.tsx` imports for side effects;
+nothing imports an ambient `.d.ts` *by design*, and removing it breaks `tsc`.
+
+Three further "unused exports" — `ROLE_ORDER`, `ownerCount`, `isLastOwner` —
+are called from inside their own module. The unused thing is the `export`
+keyword, so they were **narrowed, not deleted**; `isLastOwner` is load-bearing
+enough that stubbing it fails three tests (`SEC_PROGRESS.md`).
+
+**The grep pass changed the classification of more than half of knip's
+output.** That ratio is the argument for the rule, and it is why the new CI
+step is report-only.
+
+### Two measured negative results
+
+Both would have been plausible "wins" to guess at, and both were already done:
+
+- **`exceljs` is 937 kB, 3.7× the next chunk — and already lazy.** Loaded via
+  `await import()`, imported as a type elsewhere, and `grep -c exceljs
+  dist/assets/index-*.js` returns 0. Not on the critical path. No finding.
+- **The Hub batched-signals path still holds.** `_counts_for` issues 9–10
+  grouped queries for any number of workspaces — constant in N, not linear.
+  Verified rather than assumed, since the audit trail only said it *had* been
+  batched once.
+
+Bundle baseline for future comparison: `dist/` 2.5 MB; entry 209.79 kB
+(66.02 kB gz), `ui-vendor` 254.45 kB (73.48 kB gz).
+
+### CI
+
+`knip` added as a **report-only** step. It finds real debris — three of its
+findings were deleted here — but a blocking gate on output that includes
+`fonts.d.ts` would teach people to delete load-bearing code or to stop reading
+the gate. Nothing previously gated re-accumulation at all, which is how
+`dto.generated.ts` rotted. Ratcheting it to blocking wants knip's config
+tightened first so ambient declarations and barrel re-exports stop being
+reported as debris.
+
+### Deliberately not done
+
+Endpoint latency under realistic load, index coverage on the read paths added
+since the job queue's partial indexes, and the solve rail under load are **not
+measured**. No query or index change is proposed, because there is no evidence
+for one. Stated as an open gap rather than left implied — the natural next
+slice.
