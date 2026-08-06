@@ -16,7 +16,10 @@ const MEET_OPERATOR_TABS = new Set([
   'live',
 ]);
 
-const MODULE_LABELS: Record<ModuleId, string> = {
+/** The one module label map. `/new` used to carry a second copy in
+ *  newWorkspaceTemplates.ts alongside the preset seeds; the presets are gone
+ *  and the labels live here. */
+export const MODULE_LABELS: Record<ModuleId, string> = {
   meet: 'Meet',
   bracket: 'Bracket',
   display: 'Display',

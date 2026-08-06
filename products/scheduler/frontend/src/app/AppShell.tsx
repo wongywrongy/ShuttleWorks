@@ -287,7 +287,14 @@ function ReadOnlyBannerSlot() {
   // window, or every workspace entry would flash a banner at its owner.
   if (role === null || canEdit(role)) return null;
   return (
-    <div className="border-b border-border bg-background px-4 py-1.5">
+    /* `data-testid` because READ_ONLY_MESSAGE is deliberately reused by the
+       refusal TOAST too, so a text locator for the phrase matches this banner
+       AND the transient toast — ambiguous, and flaky as the toast expires. The
+       persistent banner needs its own handle. */
+    <div
+      data-testid="read-only-banner"
+      className="border-b border-border bg-background px-4 py-1.5"
+    >
       <Notice
         tone="info"
         icon={<Eye aria-hidden="true" />}
