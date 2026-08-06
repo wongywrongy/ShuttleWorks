@@ -257,8 +257,12 @@ function CourtCard({
         </div>
 
         {/* Event code */}
+        {/* Blank, not a dash, when no match is ON the court. Only one court
+            is usually in play, so a placeholder glyph here put a meaningless
+            mark beside every other court number on the board. The min-width
+            holds the column so the players still line up. */}
         <div className={`min-w-[3.5rem] ${eventCodeSize} font-bold text-foreground tabular-nums`}>
-          {match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
+          {match ? match.eventRank || `M${match.matchNumber || '?'}` : ''}
         </div>
 
         {/* Players (grows). Always rendered on their own lines so long

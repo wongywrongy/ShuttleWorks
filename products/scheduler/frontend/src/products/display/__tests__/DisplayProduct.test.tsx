@@ -20,7 +20,11 @@ function renderAt(id: string) {
     <MemoryRouter initialEntries={[`/tournaments/${id}/tv`]}>
       <Routes>
         <Route path="/tournaments/:id/tv" element={<DisplayProduct />} />
-        <Route path="/tournaments/:id/setup" element={<LocationProbe />} />
+        {/* Catch-all probe. This used to register only `/setup`, so the
+            navigation assertion could only ever be checked against the one
+            destination the test already assumed — a wrong target would have
+            rendered nothing and been indistinguishable from a dead button. */}
+        <Route path="*" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -36,12 +40,16 @@ describe('DisplayProduct', () => {
     expect(link).toHaveAttribute('target', '_blank');
   });
 
-  it('navigates via the router to setup?section=display on Configure (route + UI stay in sync)', async () => {
+  it('Configure display goes to the Display config surface, not meet setup', async () => {
+    // This asserted `setup?section=display` — the MEET Configuration page,
+    // plus a `?section=` value no switcher has ever had. "Configure display"
+    // landed the operator on meet scoring settings. Display owns
+    // `display-config` (moduleContract ownedSegments).
     renderAt('abc123');
     await screen.findByTestId('public-display');
     await userEvent.click(screen.getByRole('button', { name: /configure display/i }));
     expect(screen.getByTestId('loc')).toHaveTextContent(
-      '/tournaments/abc123/setup?section=display',
+      '/tournaments/abc123/display-config',
     );
   });
 });

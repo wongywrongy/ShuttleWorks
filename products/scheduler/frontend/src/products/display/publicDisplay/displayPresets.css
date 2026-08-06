@@ -23,8 +23,15 @@
  *
  * Accent (--accent / --accent-bg / --accent-ink) is intentionally NOT
  * overridden — the operator's brand accent picker controls that
- * independently. Status palette (--status-live etc.) also stays
- * global so a "Live" pill reads the same regardless of substrate.
+ * independently.
+ *
+ * Status FOREGROUNDS (--status-live, --status-called) also stay global, so a
+ * "Live" pill reads the same regardless of substrate. Their `-bg` partners do
+ * NOT: a surface tint has to match the substrate it sits on. Leaving them
+ * global meant a dark preset painted the live court card in the LIGHT
+ * theme's near-white green tint and then wrote its own white --foreground on
+ * top — the least readable row on the board was the one showing the match
+ * actually in play. Every preset now declares its own status surfaces.
  * ========================================================================= */
 
 /* Shared legacy-alias block — applied alongside each preset's canonical
@@ -61,6 +68,18 @@
   --muted-foreground:     var(--ink-muted);
   --border:               var(--rule-soft);
   --input:                var(--rule-soft);
+
+  /* Status SURFACES follow the substrate. The status FOREGROUNDS
+     (--status-live, --status-called) stay global on purpose so a Live pill
+     reads the same everywhere — but their `-bg` partners are light-theme
+     tints (--green-1 is #E9F6EB, near-white). A dark preset remaps
+     --foreground to white and then painted a whole court card in that
+     near-white tint, so the live court — the one row that most has to be
+     readable — was white text on near-white. */
+  --status-success-bg: var(--green-9);
+  --status-warning-bg: var(--amber-9);
+  --status-live-bg:    var(--green-9);
+  --status-called-bg:  var(--amber-9);
 }
 
 [data-tv-preset='pitch'] {
@@ -89,6 +108,18 @@
   --muted-foreground:     var(--ink-muted);
   --border:               var(--rule-soft);
   --input:                var(--rule-soft);
+
+  /* Status SURFACES follow the substrate. The status FOREGROUNDS
+     (--status-live, --status-called) stay global on purpose so a Live pill
+     reads the same everywhere — but their `-bg` partners are light-theme
+     tints (--green-1 is #E9F6EB, near-white). A dark preset remaps
+     --foreground to white and then painted a whole court card in that
+     near-white tint, so the live court — the one row that most has to be
+     readable — was white text on near-white. */
+  --status-success-bg: var(--green-9);
+  --status-warning-bg: var(--amber-9);
+  --status-live-bg:    var(--green-9);
+  --status-called-bg:  var(--amber-9);
 }
 
 [data-tv-preset='midnight'] {
@@ -117,6 +148,18 @@
   --muted-foreground:     var(--ink-muted);
   --border:               var(--rule-soft);
   --input:                var(--rule-soft);
+
+  /* Status SURFACES follow the substrate. The status FOREGROUNDS
+     (--status-live, --status-called) stay global on purpose so a Live pill
+     reads the same everywhere — but their `-bg` partners are light-theme
+     tints (--green-1 is #E9F6EB, near-white). A dark preset remaps
+     --foreground to white and then painted a whole court card in that
+     near-white tint, so the live court — the one row that most has to be
+     readable — was white text on near-white. */
+  --status-success-bg: var(--green-9);
+  --status-warning-bg: var(--amber-9);
+  --status-live-bg:    var(--green-9);
+  --status-called-bg:  var(--amber-9);
 }
 
 [data-tv-preset='ash'] {
@@ -145,6 +188,18 @@
   --muted-foreground:     var(--ink-muted);
   --border:               var(--rule-soft);
   --input:                var(--rule-soft);
+
+  /* Status SURFACES follow the substrate. The status FOREGROUNDS
+     (--status-live, --status-called) stay global on purpose so a Live pill
+     reads the same everywhere — but their `-bg` partners are light-theme
+     tints (--green-1 is #E9F6EB, near-white). A dark preset remaps
+     --foreground to white and then painted a whole court card in that
+     near-white tint, so the live court — the one row that most has to be
+     readable — was white text on near-white. */
+  --status-success-bg: var(--green-9);
+  --status-warning-bg: var(--amber-9);
+  --status-live-bg:    var(--green-9);
+  --status-called-bg:  var(--amber-9);
 }
 
 /* ---------------- Light presets ---------------- */
@@ -173,6 +228,14 @@
   --muted-foreground:     var(--ink-muted);
   --border:               var(--rule-soft);
   --input:                var(--rule-soft);
+
+  /* Status surfaces follow the substrate — see the dark presets. Light
+     presets keep the light tints; declared explicitly so the pairing is
+     stated at every preset rather than inherited by luck. */
+  --status-success-bg: var(--green-1);
+  --status-warning-bg: var(--amber-1);
+  --status-live-bg:    var(--green-1);
+  --status-called-bg:  var(--amber-1);
 }
 
 [data-tv-preset='chalk'] {
@@ -199,6 +262,14 @@
   --muted-foreground:     var(--ink-muted);
   --border:               var(--rule-soft);
   --input:                var(--rule-soft);
+
+  /* Status surfaces follow the substrate — see the dark presets. Light
+     presets keep the light tints; declared explicitly so the pairing is
+     stated at every preset rather than inherited by luck. */
+  --status-success-bg: var(--green-1);
+  --status-warning-bg: var(--amber-1);
+  --status-live-bg:    var(--green-1);
+  --status-called-bg:  var(--amber-1);
 }
 
 [data-tv-preset='daylight'] {
@@ -225,6 +296,14 @@
   --muted-foreground:     var(--ink-muted);
   --border:               var(--rule-soft);
   --input:                var(--rule-soft);
+
+  /* Status surfaces follow the substrate — see the dark presets. Light
+     presets keep the light tints; declared explicitly so the pairing is
+     stated at every preset rather than inherited by luck. */
+  --status-success-bg: var(--green-1);
+  --status-warning-bg: var(--amber-1);
+  --status-live-bg:    var(--green-1);
+  --status-called-bg:  var(--amber-1);
 }
 
 [data-tv-preset='sand'] {
@@ -251,4 +330,12 @@
   --muted-foreground:     var(--ink-muted);
   --border:               var(--rule-soft);
   --input:                var(--rule-soft);
+
+  /* Status surfaces follow the substrate — see the dark presets. Light
+     presets keep the light tints; declared explicitly so the pairing is
+     stated at every preset rather than inherited by luck. */
+  --status-success-bg: var(--green-1);
+  --status-warning-bg: var(--amber-1);
+  --status-live-bg:    var(--green-1);
+  --status-called-bg:  var(--amber-1);
 }

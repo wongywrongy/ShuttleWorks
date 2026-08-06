@@ -259,7 +259,7 @@ function BracketTabBody() {
             ribbons={
               bracketScheduleLocked ? (
                 <LockRibbon
-                  tier="hard"
+                  tier="results"
                   locked
                   action={
                     <Link
@@ -271,7 +271,7 @@ function BracketTabBody() {
                   }
                 />
               ) : bracketHasSchedule ? (
-                <LockRibbon tier="soft" locked />
+                <LockRibbon tier="schedule" locked />
               ) : null
             }
           >

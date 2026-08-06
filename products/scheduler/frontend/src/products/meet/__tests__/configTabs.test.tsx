@@ -17,6 +17,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { TournamentSetupPage } from '../TournamentSetupPage';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useUiStore } from '../../../store/uiStore';
+import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { TournamentConfig } from '../../../api/dto';
 
 function seed(overrides: Partial<TournamentConfig> = {}) {
@@ -208,5 +209,67 @@ describe('Meet Configuration (one merged surface)', () => {
       await waitFor(() => expect(setConfig).toHaveBeenCalled());
       expect(useTournamentStore.getState().isScheduleLocked).toBe(false);
     });
+  });
+});
+
+/**
+ * The RESULTS lock — Meet's counterpart of the bracket's started-draw lock.
+ *
+ * Meet used to have no such tier. It surfaced only the committed-schedule
+ * warning, so a meet mid-event with recorded scores showed an amber "saving
+ * will clear the schedule" and still let a director change points-per-set,
+ * while a bracket in the same situation went read-only. Same condition, two
+ * different answers on two sibling Configuration surfaces.
+ */
+describe('Meet Configuration — results lock', () => {
+  beforeEach(() => {
+    useMatchStateStore.setState({ matchStates: {} });
+  });
+
+  function withMatchStatus(status: 'called' | 'started' | 'finished') {
+    useMatchStateStore.setState({
+      matchStates: { m1: { matchId: 'm1', status } },
+    });
+  }
+
+  it('a started match makes Configuration read-only and removes Save', () => {
+    withMatchStatus('started');
+    renderPage();
+
+    const fieldset = document.querySelector('fieldset[data-locked]');
+    expect(fieldset).not.toBeNull();
+    // Read-only presentation, native-disabled enforcement: the values stay
+    // legible (that is the point of read-only over disabled) while
+    // interaction is off.
+    expect(fieldset?.className).toContain('sw-readonly');
+    expect(screen.queryByTestId('config-save')).toBeNull();
+  });
+
+  it('shows the neutral results ribbon naming the exit path, not the amber one', () => {
+    withMatchStatus('finished');
+    useTournamentStore.setState({ isScheduleLocked: true });
+    renderPage();
+
+    const ribbon = screen.getByTestId('lock-ribbon');
+    // The results lock SUPERSEDES the schedule lock: once scores exist,
+    // "saving will clear the schedule" is no longer a thing that can happen,
+    // so stacking both would state two different answers at once.
+    expect(ribbon.dataset.tier).toBe('results');
+    expect(ribbon.className).not.toContain('bg-status-warning-bg');
+    expect(screen.getByRole('link', { name: /View matches/i })).toBeInTheDocument();
+  });
+
+  it('a merely CALLED match does not lock — nothing is recorded yet', () => {
+    withMatchStatus('called');
+    renderPage();
+
+    expect(document.querySelector('fieldset[data-locked]')).toBeNull();
+    expect(screen.getByTestId('config-save')).toBeInTheDocument();
+  });
+
+  it('with no match state at all, Configuration stays editable', () => {
+    renderPage();
+    expect(document.querySelector('fieldset[data-locked]')).toBeNull();
+    expect(screen.getByTestId('config-save')).toBeInTheDocument();
   });
 });

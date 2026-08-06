@@ -27,7 +27,12 @@ export function DisplayProduct() {
       >
         <button
           type="button"
-          onClick={() => navigate(`/tournaments/${tid}/setup?section=display`)}
+          /* `display-config`, NOT `setup?section=display`. The old target was
+             the MEET Configuration page plus a `?section=` value no switcher
+             has ever had, so "Configure display" landed the operator on meet
+             scoring settings. Display owns `display-config` (see the module
+             contract's ownedSegments). */
+          onClick={() => navigate(`/tournaments/${tid}/display-config`)}
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground hover:bg-muted/40 hover:text-foreground`}
         >
           <GearSix aria-hidden="true" className="h-3.5 w-3.5" />

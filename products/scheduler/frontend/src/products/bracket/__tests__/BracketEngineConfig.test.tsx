@@ -203,7 +203,7 @@ describe('bracket engine config (shared form)', () => {
     expect(setConfig).not.toHaveBeenCalled();
   });
 
-  it('hard lock: a started draw makes the fields read-only and offers no confirm', () => {
+  it('results lock: a started draw makes the fields read-only and offers no confirm', () => {
     mockBracket(withStartedDraw());
     renderBracketTab();
     expandConfigSections();
@@ -216,7 +216,7 @@ describe('bracket engine config (shared form)', () => {
     expect(
       screen.getByLabelText('Rest between rounds (slots)'),
     ).toBeDisabled();
-    // No Save affordance at all under a hard lock (a disabled Save would
+    // No Save affordance at all under the results lock (a disabled Save would
     // just beg the question the ribbon answers).
     expect(
       screen.queryByRole('button', { name: /Save engine settings/i }),
@@ -224,15 +224,15 @@ describe('bracket engine config (shared form)', () => {
     expect(useUiStore.getState().unlockModalState).toBeNull();
     // The ribbon is the calm protective tier and names the exit path.
     const ribbon = screen.getByTestId('lock-ribbon');
-    expect(ribbon.dataset.tier).toBe('hard');
+    expect(ribbon.dataset.tier).toBe('results');
     expect(screen.getByRole('link', { name: /View draws/i })).toBeInTheDocument();
   });
 
-  it('soft lock: the ribbon is the amber caution tier', () => {
+  it('schedule lock: the ribbon is the amber caution tier', () => {
     mockBracket(withSchedule());
     renderBracketTab();
     expandConfigSections();
-    expect(screen.getByTestId('lock-ribbon').dataset.tier).toBe('soft');
+    expect(screen.getByTestId('lock-ribbon').dataset.tier).toBe('schedule');
   });
 
   it('existing scoring behavior still persists correctly (no regression)', async () => {
