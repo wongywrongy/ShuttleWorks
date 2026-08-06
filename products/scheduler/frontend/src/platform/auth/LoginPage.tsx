@@ -25,6 +25,7 @@ import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
 import { Button, Card, TextField } from '@scheduler/design-system';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from './passwordPolicy';
+import { SwMonogram } from '../../components/ShuttleWorksMark';
 
 interface FromState {
   from?: { pathname: string };
@@ -125,7 +126,10 @@ export function LoginPage() {
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
         <Card className="w-full max-w-md p-8 space-y-5">
           <div>
-            <h1 className="type-display text-2xl">ShuttleWorks</h1>
+            <h1 className="type-display flex items-center gap-2.5 text-2xl">
+              <SwMonogram />
+              ShuttleWorks
+            </h1>
             <p className="text-sm text-muted-foreground mt-1">Choose a new password</p>
           </div>
           <form onSubmit={handleReset} className="space-y-3">
@@ -220,7 +224,10 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
       <Card className="w-full max-w-md p-8 space-y-5">
         <div>
-          <h1 className="type-display text-2xl">ShuttleWorks</h1>
+          <h1 className="type-display flex items-center gap-2.5 text-2xl">
+            <SwMonogram />
+            ShuttleWorks
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === 'signin' && 'Sign in to continue'}
             {mode === 'register' && 'Create your account'}

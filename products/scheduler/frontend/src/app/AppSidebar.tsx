@@ -9,8 +9,9 @@
  * Per-workspace settings live inside the workspace; this rail never carries them.
  */
 import { Link, useLocation } from 'react-router-dom';
-import { GearSix, House, SignOut } from '@phosphor-icons/react';
+import { GearSix, SignOut } from '@phosphor-icons/react';
 import { useAuth } from '../context/AuthContext';
+import { SwMonogram } from '../components/ShuttleWorksMark';
 
 function railItemClass(active: boolean): string {
   return [
@@ -38,15 +39,20 @@ export function AppSidebar() {
       aria-label="Global"
       className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-card/40 py-3"
     >
-      {/* Home */}
+      {/* Home — the brand monogram IS the go-home affordance (SP-UI-1): one
+          object for "this is ShuttleWorks" and "back to the Hub". The generic
+          House glyph said neither. Active state is a ring rather than
+          railItemClass's accent tint, which the solid tile would swallow. */}
       <Link
         to="/"
         title="Home"
         aria-label="Home"
         aria-current={onHub ? 'page' : undefined}
-        className={railItemClass(onHub)}
+        className="flex h-10 w-10 items-center justify-center rounded-md transition-colors hover:bg-muted/40"
       >
-        <House className="h-5 w-5" weight={onHub ? 'fill' : 'regular'} aria-hidden />
+        <SwMonogram
+          className={onHub ? 'ring-2 ring-accent/60 ring-offset-2 ring-offset-card' : ''}
+        />
       </Link>
 
       <div className="mt-2 flex flex-1 flex-col items-center gap-1">
