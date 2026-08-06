@@ -66,9 +66,6 @@ MAX_EMAIL = 320         # RFC 5321 maximum
 MAX_PASSWORD = 1_024    # above the 128-char policy so an over-long
                         # password is a clean policy error, not a 422
 MAX_TOKEN = 512         # reset tokens, idempotency keys
-MAX_CSV = 2 * 1024 * 1024   # a pasted roster CSV; bounded by the body
-                            # limit anyway, stated here so the field is
-                            # explicitly bounded rather than incidentally
 
 Name = Annotated[str, StringConstraints(max_length=MAX_NAME)]
 Identifier = Annotated[str, StringConstraints(min_length=1, max_length=MAX_IDENTIFIER)]
