@@ -32,7 +32,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request, Response
 from pydantic import BaseModel, Field
 
 from app.dependencies import require_tournament_access
@@ -228,8 +228,12 @@ async def _persist_committed_state(
     new_schedule: ScheduleDTO,
     history_entry: ScheduleHistoryEntry,
     new_config: Optional[TournamentConfig] = None,
-) -> TournamentStateDTO:
-    """Apply a committed schedule (and optional config) to the DB."""
+) -> tuple[TournamentStateDTO, int]:
+    """Apply a committed schedule (and optional config) to the DB.
+
+    Returns ``(state, state_version)`` — the caller stamps the version onto
+    the response ETag so the client's next save is against this revision.
+    """
     new_history = list(state.scheduleHistory) + [history_entry]
     if len(new_history) > HISTORY_CAP:
         new_history = new_history[-HISTORY_CAP:]
@@ -256,7 +260,13 @@ async def _persist_committed_state(
         raise http_error(
             500, ErrorCode.STATE_WRITE_FAILED, "could not persist schedule commit"
         )
-    return state_dto_from_document(row.data)
+    # Carry the new concurrency token out with the state. Any server-side
+    # writer of the blob MUST feed this back to the client (SP-CLOUD-4,
+    # 0.E): a solo operator whose proposal commit bumped the version would
+    # otherwise hold a stale token through no fault of their own, and their
+    # very next debounced save would 409 — a spurious conflict in local
+    # mode, which Rule 1 forbids.
+    return state_dto_from_document(row.data), row.state_version or 0
 
 
 def _build_proposal(
@@ -608,6 +618,7 @@ async def cancel_proposal(
 async def commit_proposal(
     proposal_id: str,
     http_request: Request,
+    response: Response = None,  # type: ignore[assignment]
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ) -> CommitResponse:
@@ -651,7 +662,7 @@ async def commit_proposal(
             summary=proposal.summary,
             schedule=persisted.schedule,
         )
-        updated = await _persist_committed_state(
+        updated, new_state_version = await _persist_committed_state(
             repo,
             tournament_id,
             persisted,
@@ -691,4 +702,6 @@ async def commit_proposal(
         except Exception:
             log.exception("post-commit OPTIMIZE trigger failed")
 
+    if response is not None:
+        response.headers["ETag"] = f'"{new_state_version}"'
     return CommitResponse(state=updated, historyEntry=history_entry)

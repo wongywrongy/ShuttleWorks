@@ -212,6 +212,13 @@ class _LocalTournamentRepo:
         if new_date is not None:
             row.tournament_date = new_date
         row.schema_version = CURRENT_TOURNAMENT_SCHEMA_VERSION
+        # Every committed blob write advances the optimistic-concurrency
+        # counter (SP-CLOUD-4). This is the ONLY place ``data`` is written —
+        # commit_tournament_state is the single caller path — so bumping here
+        # cannot be forgotten by a future writer the way a per-endpoint bump
+        # could. Any response that rewrites the blob must feed the new value
+        # back to the client, or the client's next save spuriously conflicts.
+        row.state_version = (row.state_version or 0) + 1
         self.session.commit()
         self.session.refresh(row)
         return row

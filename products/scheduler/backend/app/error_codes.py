@@ -23,6 +23,12 @@ class ErrorCode(str, Enum):
     STATE_MISSING = "STATE_MISSING"
     STATE_WRITE_FAILED = "STATE_WRITE_FAILED"
     STATE_SCHEMA_MISMATCH = "STATE_SCHEMA_MISMATCH"
+    # SP-CLOUD-4 optimistic concurrency on the state blob.
+    # CONFLICT = a well-formed write on a superseded revision (409,
+    # carries the current state). REQUIRED = a missing or malformed
+    # If-Match header (412) — a client bug, with nothing to reconcile.
+    STATE_VERSION_CONFLICT = "STATE_VERSION_CONFLICT"
+    STATE_VERSION_REQUIRED = "STATE_VERSION_REQUIRED"
 
     # Match-state operations
     MATCH_STATE_UNREADABLE = "MATCH_STATE_UNREADABLE"
