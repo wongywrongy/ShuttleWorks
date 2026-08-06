@@ -662,3 +662,32 @@ a green 1,100-test suite. The real check is the viewer flow in
     it changes DOM text that tests may query, which is unrelated to the config
     unification it surfaced during. Size S. *(2026-08-06 config-surface
     unification — see `docs/audits/15-frontend-design-review.md` §6.)*
+  - **A dead workspace link hangs on "Loading workspace…" forever.**
+    `/tournaments/{unknown-id}/<segment>` renders the full workspace shell —
+    sidebar, module sections, admin nav — for a workspace that does not exist,
+    and never leaves the loading state. The only signal is a dismissible toast
+    (`TOURNAMENT_NOT_FOUND`), so once it auto-dismisses the surface is a
+    permanent spinner with a nav for nothing. A stale bookmark, a shared link
+    to a deleted workspace, or a revoked membership all land here. Wants a
+    not-found state with a route back to the Hub; `useTournamentState`'s
+    hydrate failure is the seam. Size S. *(2026-08-06 full-flow route pass.)*
+  - **8 of the 10 e2e spec files are stale and fail against the current UI.**
+    `00-sanity`, `02-inline-roster`, `03-auto-generate-matches`,
+    `04-solve-happy-path`, `05-drag-reschedule`, `06-persistence`,
+    `07-schedule-xlsx-import`, `08-suggestions-inbox` (plus
+    `99-baseline-screenshots`) were last touched 2026-05-11 and predate the
+    Hub / workspace control-plane redesign. They assert
+    `toHaveTitle(/schedul|tournament/i)` (the app is "ShuttleWorks") and
+    `getByTestId('tab-setup')` — the horizontal TabBar that CLAUDE.md already
+    documents as vestigial. `make test-e2e` reports 19 failures that are all
+    rot, so the suite currently provides negative value: a real regression
+    would be indistinguishable from the noise. Only
+    `interaction-smoke.spec.ts` is in CI and it is actively maintained (16/16).
+    Decision needed — repair against the sidebar nav, or delete and let
+    interaction-smoke be the e2e surface. Size M. *(2026-08-06 full-flow pass.)*
+  - **An unknown workspace segment silently renders Meet Configuration.**
+    `/tournaments/{id}/not-a-segment` falls back to the Configuration surface
+    while the URL keeps the bogus segment, so URL and content disagree and the
+    address is misleading if bookmarked or shared. Unknown segments should
+    redirect to `overview` the way unknown top-level routes redirect to the
+    Hub. Size S. *(2026-08-06 full-flow route pass.)*
