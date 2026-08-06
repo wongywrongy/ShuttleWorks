@@ -12,7 +12,7 @@ import logging
 import uuid
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, Path, Query, Response, status
+from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.dependencies import (
@@ -31,6 +31,7 @@ from database.models import (
 )
 from repositories import LocalRepository, get_repository
 from services import members as members_service
+from services import conflict_metrics
 from services.bracket import response_cache
 from services.config_lock import changed_scheduling_fields
 from services.meet.standings import compute_meet_standings
@@ -516,12 +517,51 @@ def delete_tournament(
 # ---- Scoped state routes -----------------------------------------------
 
 
+def _state_etag(row) -> str:
+    """ETag for the state blob — the bare integer, matching the form
+    ``match_state.py`` already ships (``"<n>"``)."""
+    return f'"{row.state_version or 0}"'
+
+
+def _parse_if_match(raw: str | None) -> int:
+    """Parse ``If-Match`` into a version, or raise.
+
+    Fail-closed on a MISSING header, like ``_enforce_if_match`` in
+    ``api/match_state.py``: an optional precondition is a precondition that
+    a caller silently forgets, which is the same defect class as the
+    lost update this guard exists to prevent.
+
+    412 here rather than 409 on purpose. A missing or malformed header is a
+    CLIENT BUG — there is no conflict to resolve and no state worth returning.
+    409 is reserved for the real thing: a well-formed request whose version
+    has been superseded, answered with the current state so the caller can
+    reconcile (SP-CLOUD-4, 0.D).
+    """
+    if raw is None:
+        raise http_error(
+            412,
+            ErrorCode.STATE_VERSION_REQUIRED,
+            "If-Match is required on this write. Send the ETag from the "
+            "last GET or write response.",
+        )
+    token = raw.strip().strip("W/").strip('"')
+    try:
+        return int(token)
+    except ValueError:
+        raise http_error(
+            412,
+            ErrorCode.STATE_VERSION_REQUIRED,
+            f"malformed If-Match value: {raw!r}",
+        )
+
+
 @router.get(
     "/{tournament_id}/state",
     dependencies=[Depends(require_tournament_access("viewer"))],
 )
 def get_tournament_state(
     tournament_id: uuid.UUID = Path(...),
+    response: Response = None,  # type: ignore[assignment]
     repo: LocalRepository = Depends(get_repository),
 ):
     """Return the persisted ``TournamentStateDTO`` blob.
@@ -537,7 +577,11 @@ def get_tournament_state(
     """
     row = _resolve_tournament(tournament_id, repo)
     if not row.data:
-        return Response(status_code=204)
+        # An empty workspace still HAS a version, and its client still needs
+        # one: the very first save after creation sends If-Match like any
+        # other. Returning a bare 204 here would leave that client with no
+        # token and a guaranteed 412 on its first write.
+        return Response(status_code=204, headers={"ETag": _state_etag(row)})
     # Project the stored document onto the wire shape (SP-SEC-1 Phase 1).
     #
     # This used to return ``dict(row.data)`` — the raw internal document,
@@ -565,6 +609,13 @@ def get_tournament_state(
     payload["standings"] = [
         s.model_dump() for s in _meet_standings_for(row, repo)
     ]
+    if response is not None:
+        # The concurrency token rides the ETag, not the body. Keeping it out
+        # of the payload means a client cannot accidentally echo a stale one
+        # back inside the blob (the mistake SEC-12 had to close for
+        # scheduleVersion), and it matches the If-Match convention
+        # match_state.py already ships.
+        response.headers["ETag"] = _state_etag(row)
     return payload
 
 
@@ -584,6 +635,8 @@ def put_tournament_state(
             "DRAW_STARTED) while any bracket draw is started."
         ),
     ),
+    response: Response = None,  # type: ignore[assignment]
+    if_match: str | None = Header(default=None, alias="If-Match"),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Overwrite the tournament data blob.
@@ -620,6 +673,41 @@ def put_tournament_state(
       placements. Draft draws don't block.
     """
     row_prior = _resolve_tournament(tournament_id, repo)  # 404 if missing
+
+    # SP-CLOUD-4: refuse a write built on a superseded revision.
+    #
+    # This blob carries essentially the whole product — config, roster,
+    # groups, matches, schedule, bracket roster — and the client sends ALL of
+    # it on every debounced save. So a stale writer does not lose only the
+    # field it touched; it reverts every field the other tab changed since it
+    # loaded. Before this check the loser's PUT answered 200 with no warning.
+    seen = _parse_if_match(if_match)
+    current = row_prior.state_version or 0
+    if seen != current:
+        conflict_metrics.record("PUT /tournaments/{id}/state")
+        log.warning(
+            "state version conflict on %s: client sent %s, server at %s",
+            tournament_id, seen, current,
+        )
+        raise http_error(
+            409,
+            ErrorCode.STATE_VERSION_CONFLICT,
+            "This workspace changed since you loaded it. Your copy is out of "
+            "date; reload to see the current state before saving again.",
+            extra={
+                "seenVersion": seen,
+                "currentVersion": current,
+                # The current state travels WITH the refusal so a client can
+                # reconcile without a second round trip.
+                # mode="json" matters: the raw model is not JSON-serializable
+                # and the error path would 500 while reporting a conflict —
+                # turning a recoverable refusal into an opaque failure.
+                "currentState": state_dto_from_document(
+                    row_prior.data or {}
+                ).model_dump(mode="json"),
+            },
+        )
+
     incoming = state.model_dump(exclude={"standings"})
     prior = dict(row_prior.data or {})
 
@@ -743,6 +831,11 @@ def put_tournament_state(
         row = repo.commit_tournament_state(
             tournament_id, incoming, clear_bracket_assignments=clear_bracket
         )
+        if response is not None:
+            # The client's next debounced save needs the version this write
+            # produced. Without this it would have to GET first, and a client
+            # that forgot would conflict with itself on every second save.
+            response.headers["ETag"] = _state_etag(row)
         if clear_bracket:
             # clearSchedule just nulled the committed bracket assignments —
             # a cached GET /bracket payload would still show them until the

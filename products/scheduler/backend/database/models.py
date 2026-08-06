@@ -129,6 +129,16 @@ class Tournament(Base):
     # Mirrors ``data["version"]``; lets Alembic-level queries reason
     # about payload schema without parsing the blob.
     schema_version: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Optimistic-concurrency counter for the whole ``data`` blob
+    # (SP-CLOUD-4). Bumped on every committed write; a ``PUT /state``
+    # carrying a stale value is refused rather than silently clobbering.
+    #
+    # Deliberately NOT called ``version``: three near-collisions already
+    # exist on this object — ``TournamentStateDTO.version`` (the schema
+    # version, currently 2), ``schema_version`` above (its column), and
+    # ``TournamentStateDTO.scheduleVersion`` (the proposal-commit
+    # counter). A fourth bare ``version`` would be unreadable.
+    state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

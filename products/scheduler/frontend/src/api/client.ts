@@ -207,6 +207,47 @@ export interface WarmRestartRequest {
   nowIso?: string;
 }
 
+/** Thrown when `PUT /tournaments/{id}/state` is refused because the client's
+ *  copy is out of date (HTTP 409 `STATE_VERSION_CONFLICT`).
+ *
+ *  Carries the server's current state so a caller can re-hydrate without a
+ *  second round trip. Distinct from `MatchVersionMismatch`: that one is a
+ *  412 on a narrow single-match write, this one means the whole workspace
+ *  blob moved under you. */
+export class StateVersionConflict extends Error {
+  override name = 'StateVersionConflict';
+  // Declared as fields rather than constructor parameter properties:
+  // `erasableSyntaxOnly` is on, and parameter properties emit runtime code.
+  currentState: TournamentStateDTO | null;
+  seenVersion: number;
+  currentVersion: number;
+
+  constructor(
+    currentState: TournamentStateDTO | null,
+    seenVersion: number,
+    currentVersion: number,
+  ) {
+    super(
+      `workspace state moved on (sent v${seenVersion}, server at v${currentVersion})`,
+    );
+    this.currentState = currentState;
+    this.seenVersion = seenVersion;
+    this.currentVersion = currentVersion;
+  }
+}
+
+/** Per-tournament concurrency token, mirrored from the `ETag` header.
+ *
+ *  Module-scoped rather than threaded through every caller: the token is a
+ *  transport detail of this one resource, and the debounced save path already
+ *  calls `putTournamentState` from several places. Keeping it out of the store
+ *  also means it cannot be echoed back INSIDE the blob, which is the exact
+ *  shape of the bug SEC-12 had to close for `scheduleVersion`.
+ *
+ *  A missing entry means "never read this workspace", and the write is then
+ *  refused with 412 rather than guessed at — fail-closed by construction. */
+const stateEtags = new Map<string, string>();
+
 /** Thrown when the server rejects a match-state mutation due to a
  *  stale or missing If-Match version (HTTP 412) or a state-machine
  *  transition conflict (HTTP 409). Callers can branch on `name` to
@@ -909,6 +950,10 @@ class ApiClient {
       `/tournaments/${tid}/state`,
       { validateStatus: (s) => s === 200 || s === 204 },
     );
+    const etag = response.headers?.etag ?? response.headers?.ETag;
+    // Recorded on 204 too: an empty workspace still has a version, and its
+    // first save needs one.
+    if (etag) stateEtags.set(tid, String(etag));
     if (response.status === 204) return null;
     return response.data;
   }
@@ -921,12 +966,36 @@ class ApiClient {
     state: TournamentStateDTO,
     opts?: { clearSchedule?: boolean },
   ): Promise<TournamentStateDTO> {
-    const response = await this.client.put<TournamentStateDTO>(
-      `/tournaments/${tid}/state`,
-      state,
-      opts?.clearSchedule ? { params: { clearSchedule: true } } : undefined,
-    );
-    return response.data;
+    const etag = stateEtags.get(tid);
+    try {
+      const response = await this.client.put<TournamentStateDTO>(
+        `/tournaments/${tid}/state`,
+        state,
+        {
+          ...(opts?.clearSchedule ? { params: { clearSchedule: true } } : {}),
+          ...(etag ? { headers: { 'If-Match': etag } } : {}),
+        },
+      );
+      const next = response.headers?.etag ?? response.headers?.ETag;
+      if (next) stateEtags.set(tid, String(next));
+      return response.data;
+    } catch (err) {
+      const res = (err as { response?: { status?: number; data?: { detail?: Record<string, unknown> } } })
+        .response;
+      if (res?.status === 409 && res.data?.detail?.code === 'STATE_VERSION_CONFLICT') {
+        const d = res.data.detail;
+        // Adopt the server's version so the caller's follow-up write — after
+        // it reconciles — is against the current revision rather than
+        // conflicting again forever.
+        stateEtags.set(tid, `"${d.currentVersion}"`);
+        throw new StateVersionConflict(
+          (d.currentState as TournamentStateDTO) ?? null,
+          Number(d.seenVersion ?? -1),
+          Number(d.currentVersion ?? -1),
+        );
+      }
+      throw err;
+    }
   }
 
   /** List rolling backups (newest first). */

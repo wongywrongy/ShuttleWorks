@@ -65,6 +65,27 @@ def _base_config() -> dict:
     }
 
 
+def _etag(response) -> str:
+    """The concurrency token a real client would keep from this response."""
+    tag = response.headers.get("etag")
+    assert tag, f"no ETag on {response.request.method} {response.request.url}"
+    return tag
+
+
+def _load(client, tid) -> tuple[dict, str]:
+    """One tab hydrating: the state plus the version it now holds."""
+    r = client.get(f"/tournaments/{tid}/state")
+    assert r.status_code == 200, r.text
+    return r.json(), _etag(r)
+
+
+def _save(client, tid, payload: dict, etag: str):
+    """One tab saving, carrying the version it loaded — as the client does."""
+    return client.put(
+        f"/tournaments/{tid}/state", json=payload, headers={"If-Match": etag}
+    )
+
+
 def _seed(client, tid) -> dict:
     """Establish a committed baseline both 'sessions' then load."""
     payload = {
@@ -76,7 +97,8 @@ def _seed(client, tid) -> dict:
         ],
         "matches": [],
     }
-    r = client.put(f"/tournaments/{tid}/state", json=payload)
+    seed_etag = _etag(client.get(f"/tournaments/{tid}/state"))
+    r = _save(client, tid, payload, seed_etag)
     assert r.status_code == 200, r.text
     return client.get(f"/tournaments/{tid}/state").json()
 
@@ -95,92 +117,161 @@ def _writable(state: dict) -> dict:
 
 
 def test_roster_edit_survives_concurrent_court_edit(client, tid):
-    """The tournament-day scenario. EXPECTED TO FAIL before Phase 1.
+    """The tournament-day scenario.
 
-    Tablet adds a player; laptop — which loaded before that write —
-    changes the court count. The laptop's blob still carries the old
-    one-player roster, so the tablet's addition is silently reverted.
+    Tablet adds a player; laptop — which loaded before that write — changes
+    the court count. The laptop's blob still carries the old one-player
+    roster, so accepting it would silently revert the tablet's addition.
+
+    Phase 0 left this asserting "either 409 or a merge, but never a silent
+    revert", with a pytest.fail on the 409 branch and a note to assert the
+    body once conflict detection landed. It has landed; this is that
+    assertion.
     """
     baseline = _seed(client, tid)
 
-    # Both sessions load the same snapshot at T0.
-    tablet = _writable(baseline)
-    laptop = _writable(baseline)
+    # Both sessions load the same snapshot at T0 — same state, same version.
+    state, shared_etag = _load(client, tid)
+    tablet = _writable(state)
+    laptop = _writable(state)
 
     # T1 — tablet adds a player to the roster.
     tablet["players"] = tablet["players"] + [
         {"id": "p2", "name": "Bob", "groupId": "g1", "ranks": ["MS2"]}
     ]
-    r1 = client.put(f"/tournaments/{tid}/state", json=tablet)
+    r1 = _save(client, tid, tablet, shared_etag)
     assert r1.status_code == 200, r1.text
 
-    # T2 — laptop, still holding its T0 copy, edits an unrelated field.
+    # T2 — laptop, still holding its T0 version, edits an unrelated field.
     laptop["config"] = {**laptop["config"], "courtCount": 6}
-    r2 = client.put(f"/tournaments/{tid}/state", json=laptop)
+    r2 = _save(client, tid, laptop, shared_etag)
 
-    # Either the server rejects the stale write (409), or it merges.
-    # What it must NOT do is accept it and silently drop Bob.
-    final = client.get(f"/tournaments/{tid}/state").json()
-    names = sorted(p["name"] for p in final["players"])
-
-    if r2.status_code == 409:
-        pytest.fail(
-            "409 is the Phase 1 target behaviour — remove this branch once "
-            "conflict detection lands and assert the 409 body instead."
-        )
-
-    assert names == ["Alice", "Bob"], (
-        f"LOST UPDATE: the tablet's roster addition vanished. players={names}. "
-        f"The laptop's PUT returned {r2.status_code} with no warning."
+    assert r2.status_code == 409, (
+        f"LOST UPDATE: the stale write was accepted with {r2.status_code}"
     )
+    detail = r2.json()["detail"]
+    assert detail["code"] == "STATE_VERSION_CONFLICT"
+    assert detail["currentVersion"] > detail["seenVersion"]
+
+    # The refusal carries the current state, so the client can reconcile
+    # without a second round trip. That is the whole point of answering 409
+    # with a body rather than a bare 412.
+    assert [p["name"] for p in detail["currentState"]["players"]] == ["Alice", "Bob"]
+
+    # And Bob is still there — nothing was reverted.
+    final = client.get(f"/tournaments/{tid}/state").json()
+    assert sorted(p["name"] for p in final["players"]) == ["Alice", "Bob"]
+    assert baseline is not None
 
 
 def test_court_edit_survives_concurrent_roster_edit(client, tid):
-    """The mirror ordering — whoever writes second wins entirely."""
-    baseline = _seed(client, tid)
-    tablet = _writable(baseline)
-    laptop = _writable(baseline)
+    """The mirror ordering — before Phase 1, whoever wrote second won
+    entirely, whichever tab that happened to be."""
+    _seed(client, tid)
+    state, shared_etag = _load(client, tid)
+    tablet = _writable(state)
+    laptop = _writable(state)
 
     # T1 — laptop changes court count.
     laptop["config"] = {**laptop["config"], "courtCount": 6}
-    assert client.put(f"/tournaments/{tid}/state", json=laptop).status_code == 200
+    assert _save(client, tid, laptop, shared_etag).status_code == 200
 
-    # T2 — tablet, holding its T0 copy, adds a player.
+    # T2 — tablet, holding its T0 version, adds a player.
     tablet["players"] = tablet["players"] + [
         {"id": "p2", "name": "Bob", "groupId": "g1", "ranks": ["MS2"]}
     ]
-    r2 = client.put(f"/tournaments/{tid}/state", json=tablet)
-    assert r2.status_code == 200, r2.text
+    r2 = _save(client, tid, tablet, shared_etag)
+    assert r2.status_code == 409, "the stale writer won again"
 
+    # The court change survives — it is no longer at the mercy of write order.
     final = client.get(f"/tournaments/{tid}/state").json()
-    assert final["config"]["courtCount"] == 6, (
-        "LOST UPDATE: the laptop's court-count change was reverted to "
-        f"{final['config']['courtCount']} by the tablet's stale blob."
-    )
+    assert final["config"]["courtCount"] == 6
+
+    # And the tablet can now succeed by reloading first, which is exactly what
+    # the client does on a 409. The conflict is recoverable, not a dead end.
+    fresh, fresh_etag = _load(client, tid)
+    retry = _writable(fresh)
+    retry["players"] = retry["players"] + [
+        {"id": "p2", "name": "Bob", "groupId": "g1", "ranks": ["MS2"]}
+    ]
+    assert _save(client, tid, retry, fresh_etag).status_code == 200
+    merged = client.get(f"/tournaments/{tid}/state").json()
+    assert sorted(p["name"] for p in merged["players"]) == ["Alice", "Bob"]
+    assert merged["config"]["courtCount"] == 6
 
 
 def test_stale_write_is_detectable_at_all(client, tid):
-    """The minimum bar (Rule 2): a stale write must be distinguishable.
-
-    Independent of any merge policy — the server must be ABLE to tell
-    that the second writer never saw the first writer's change. Today it
-    cannot: the request carries nothing identifying which revision it was
-    based on.
-    """
-    baseline = _seed(client, tid)
+    """The minimum bar (Rule 2): a stale write must be distinguishable."""
+    _seed(client, tid)
+    baseline, stale_etag = _load(client, tid)
     stale = _writable(baseline)
 
     fresh = _writable(baseline)
     fresh["config"] = {**fresh["config"], "courtCount": 6}
-    assert client.put(f"/tournaments/{tid}/state", json=fresh).status_code == 200
+    assert _save(client, tid, fresh, stale_etag).status_code == 200
 
-    # Replay the T0 copy verbatim. This is provably based on a superseded
-    # revision, so it must not be accepted as if it were current.
-    r = client.put(f"/tournaments/{tid}/state", json=stale)
+    # Replay the T0 copy verbatim, with the version it was loaded at. It is
+    # provably based on a superseded revision.
+    r = _save(client, tid, stale, stale_etag)
     assert r.status_code == 409, (
-        "A write based on a superseded revision was accepted with "
-        f"{r.status_code}. The server has no way to detect staleness: the "
-        "state DTO carries no concurrency version (its `version` field is "
-        "the SCHEMA version, and `scheduleVersion` covers only the "
-        "proposal-commit pipeline)."
+        f"a write based on a superseded revision was accepted with {r.status_code}"
     )
+
+
+def test_missing_if_match_is_refused_not_guessed(client, tid):
+    """Fail-closed: an absent precondition is rejected, not assumed current.
+
+    This is the difference between this guard and ``seen_version`` on
+    /bracket/results, which is Optional and therefore silently does nothing
+    for any caller that forgets it. A precondition that is optional is a
+    precondition that will be omitted.
+
+    412 rather than 409: there is no conflict to reconcile and no state worth
+    returning — it is a client bug.
+    """
+    _seed(client, tid)
+    state, _ = _load(client, tid)
+    r = client.put(f"/tournaments/{tid}/state", json=_writable(state))
+    assert r.status_code == 412
+    assert r.json()["detail"]["code"] == "STATE_VERSION_REQUIRED"
+
+
+def test_write_response_carries_the_next_version(client, tid):
+    """A client must be able to save twice without re-reading in between.
+
+    If the PUT response did not hand back the new ETag, every second
+    consecutive save would conflict with the client's own previous one.
+    """
+    _seed(client, tid)
+    state, etag = _load(client, tid)
+    body = _writable(state)
+
+    body["config"] = {**body["config"], "courtCount": 5}
+    first = _save(client, tid, body, etag)
+    assert first.status_code == 200
+    next_etag = _etag(first)
+    assert next_etag != etag
+
+    body["config"] = {**body["config"], "courtCount": 7}
+    assert _save(client, tid, body, next_etag).status_code == 200
+
+
+def test_conflicts_are_counted_for_observability(client, tid):
+    """0.F — a rejected stale write is visible to an operator.
+
+    A conflict is an event, not a column, so it cannot be derived from the
+    schema the way the rest of /health/metrics is. Counted in-process.
+    """
+    from services import conflict_metrics
+
+    conflict_metrics.reset()
+    _seed(client, tid)
+    state, shared = _load(client, tid)
+
+    assert _save(client, tid, _writable(state), shared).status_code == 200
+    assert _save(client, tid, _writable(state), shared).status_code == 409
+
+    snap = conflict_metrics.snapshot()
+    assert snap["total"] == 1
+    assert snap["byPath"]["PUT /tournaments/{id}/state"] == 1
+    assert snap["lastConflictAt"] is not None
