@@ -229,6 +229,20 @@ class PlayerDTO(StrictModel):
     # If not provided, uses config.defaultRestMinutes
     minRestMinutes: Optional[int] = Field(None, ge=0, le=1440)
     notes: Optional[Notes] = None
+    # ---- Entries provenance (SP-E1-1, spec §5 Seam A) ----------------
+    # Half of the commit seam's back-reference pair: the ``entries.id``
+    # this player was materialized from. ``entries.committed_player_id``
+    # is the other half, and its presence is what makes re-running the
+    # seam idempotent. Optional because almost no player has one — a
+    # hand-added roster player never came from an entry, and requiring it
+    # would fail every existing payload on the next autosave.
+    sourceEntryId: Optional[Identifier] = None
+    # The entrant's own free-text availability sentence, carried verbatim
+    # from ``entries.remarks``. Kept distinct from ``notes`` (the
+    # operator's own field) so the seam never overwrites what an operator
+    # wrote, and so "what the entrant said" stays attributable. Never
+    # parsed, never inferred from, never fed to the solver.
+    remarks: Optional[Notes] = None
 
 
 class BracketPlayerDTO(StrictModel):
@@ -249,6 +263,12 @@ class BracketPlayerDTO(StrictModel):
     availability: List[AvailabilityWindow] = Field(
         default_factory=list, max_length=MAX_WINDOWS
     )
+    # Entries provenance — mirrors PlayerDTO. The Bracket half of Seam A
+    # writes the participant row *and* this blob entry, because
+    # ``bracket_participants`` has nowhere to put a remark and the
+    # availability controls the operator uses read from here.
+    sourceEntryId: Optional[Identifier] = None
+    remarks: Optional[Notes] = None
 
 
 # Match - simplified for school sparring (supports dual and tri-meets)
