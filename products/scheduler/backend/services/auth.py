@@ -468,6 +468,36 @@ def throttle_record_registration(session: Session, key: str) -> None:
     )
 
 
+def entries_key(ip: str) -> str:
+    """Bucket key for public entry submissions from one client IP.
+
+    A third namespace, for the same reason ``reg:`` is separate from
+    ``ip:``: the buckets count different things and a shared budget lets
+    one surface's abuse close another. A flood of entry submissions from a
+    venue's shared address must not lock that venue's director out of
+    *signing in* — and, in the other direction, a run of failed logins must
+    not stop entrants entering.
+    """
+    return f"entry:{ip}"
+
+
+def throttle_record_entry(session: Session, key: str) -> None:
+    """Count one public entry submission — accepted or refused — against
+    the IP.
+
+    Refused attempts count deliberately. The abuse case here is an
+    automated poster that fails the challenge every time; charging only
+    successes would leave it unbounded.
+    """
+    throttle_record_attempt(
+        session,
+        key,
+        max_attempts=settings.entries_max_per_ip,
+        window_seconds=settings.entries_window_seconds,
+        lock_seconds=settings.entries_lock_seconds,
+    )
+
+
 def throttle_record_success(session: Session, key: str) -> None:
     row = session.get(AuthThrottle, key)
     if row is not None:
