@@ -68,7 +68,7 @@ export function VenueScheduleTab() {
           the same CONFIG_LOCKED contract that guards the engine forms
           guards them. Same ribbon as Configuration so the operator learns
           one lock vocabulary (reads the meet store flag). */}
-      <LockRibbon tier="soft" />
+      <LockRibbon tier="schedule" variant="inline" />
 
       <section>
         <SectionHeader>Venue</SectionHeader>

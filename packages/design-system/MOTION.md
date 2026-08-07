@@ -1,6 +1,6 @@
 # MOTION — Motion Design Language
 
-**Status:** Locked direction. Authoritative for every surface in both products. Companion to BRAND.md (visual language) and DESIGN.md (component-architecture rulebook).
+**Status:** Locked direction. Authoritative for every surface in the scheduler. Companion to `DESIGN_COLOR.md` + `tokens.css` (visual language) and `DESIGN.md` (component-architecture rulebook). `BRAND.md` is superseded — where this file cites it for the visual direction, read `DESIGN_COLOR.md` instead.
 
 **Authored:** 2026-05-12 alongside the first motion audit (see `design/motion-audit-setup-2026-05-12.md`).
 
@@ -327,8 +327,8 @@ If the director ever pauses mid-meet to admire the UI, the motion is wrong. The 
 
 ## 12. Companion documents
 
-- **`design/BRAND.md`** — visual language (palette, type, spacing, anti-patterns)
+- **[`DESIGN_COLOR.md`](./DESIGN_COLOR.md)** — visual language (palette, surfaces, status hues); `BRAND.md` is a superseded stub
 - **`packages/design-system/DESIGN.md`** — agent enforcement rulebook for component code
 - **`design/motion-audit-setup-2026-05-12.md`** — the first motion audit, applied to the Setup tab
 
-This file is the source of truth for motion. If anything in DESIGN.md or BRAND.md disagrees about motion — **MOTION.md wins** and the other doc updates to match.
+This file is the source of truth for motion. If anything in DESIGN.md disagrees about motion — **MOTION.md wins** and the other doc updates to match.

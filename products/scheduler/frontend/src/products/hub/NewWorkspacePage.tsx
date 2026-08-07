@@ -1,11 +1,26 @@
 /**
- * Dedicated "New workspace" surface (route `/new`) — a workspace *system builder*.
+ * "New workspace" (route `/new`) — the director states what they are running.
  *
- * Pick a preset template (each carries an explicit `modules[]` seed + a legacy
- * `kind`) or build a Custom one by toggling each module. On create the backend
- * persists the seed and echoes it back; `landingRoute` opens the workspace on its
- * primary module — or, when nothing is enabled, on Modules setup. Name and date
- * are secondary details.
+ * NO PRESETS. This used to lead with four template cards (Meet Day / Bracket
+ * Tournament / Hybrid Event / Blank) plus a Custom escape hatch, so the first
+ * decision was "which of our bundles is closest to my event?" — a question
+ * about ShuttleWorks' packaging, answerable only by someone who already knows
+ * what the bundles contain. A tournament director knows what they are running.
+ * They pick the modules and say how many courts they have.
+ *
+ * The tri-state module picker that used to hide behind "Custom" IS the form
+ * now. Courts moved here because it is the one venue fact needed before
+ * anything can be scheduled, and it was previously buried in Venue & schedule
+ * after creation.
+ *
+ * Built on the shared settings grammar (`Section` + `Row` + `FieldRow`) so
+ * creating a workspace and configuring one look like the same product.
+ *
+ * Two writes on create: `POST /tournaments` seeds name/kind/date/modules (its
+ * DTO is strict and carries no config), then `PUT /state` seeds courtCount.
+ * The second is best-effort — if it fails the workspace still exists with the
+ * default court count and Venue & schedule can fix it, which is a better
+ * outcome than failing the creation the director already committed to.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,25 +28,57 @@ import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
-import { TEMPLATES, type TemplateId } from './newWorkspaceTemplates';
+import {
+  FieldRow,
+  Row,
+  Section,
+  NumberWithSuffix,
+  Seg,
+} from '../../platform/settings/SettingsControls';
 import { landingRoute } from './workspaceCreateFlow';
-import { TemplateCard } from './TemplateCard';
-import { CustomModulesBuilder } from './CustomModulesBuilder';
-import { customSeed, kindForSeed, DEFAULT_CUSTOM, type CustomState } from './customModules';
+import { MODULE_LABELS } from '../../platform/domain/moduleModel';
+import {
+  customSeed,
+  kindForSeed,
+  DEFAULT_CUSTOM,
+  type CustomState,
+  type ModuleState,
+} from './customModules';
+
+const MODULE_IDS: (keyof CustomState)[] = ['meet', 'bracket', 'display'];
+
+const MODULE_STATES: { value: ModuleState; label: string }[] = [
+  { value: 'enabled', label: 'On' },
+  { value: 'available', label: 'Later' },
+  { value: 'off', label: 'Off' },
+];
+
+/** What each module actually does, in the director's terms — the one thing
+ *  the preset cards did carry that a bare module name does not. */
+const MODULE_HINT: Record<keyof CustomState, string> = {
+  meet: 'Roster and a solved schedule',
+  bracket: 'Draws, seeding, and advancement',
+  display: 'A public board for the venue',
+};
 
 export function NewWorkspacePage() {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<TemplateId>('meet-day');
-  const [custom, setCustom] = useState<CustomState>(DEFAULT_CUSTOM);
+  const [modules, setModules] = useState<CustomState>(DEFAULT_CUSTOM);
+  const [courts, setCourts] = useState(4);
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Select a template (or 'custom') and clear any stale create error, since the
-  // configuration just changed and a prior failure may no longer apply.
-  function pick(id: TemplateId) {
-    setSelected(id);
+  const nothingOn = MODULE_IDS.every((m) => modules[m] !== 'enabled');
+  const displayOrphaned =
+    modules.display !== 'off' &&
+    modules.meet !== 'enabled' &&
+    modules.bracket !== 'enabled';
+
+  function setModule(id: keyof CustomState, value: ModuleState) {
+    setModules((prev) => ({ ...prev, [id]: value }));
+    // The configuration just changed, so a prior failure may no longer apply.
     setError(null);
   }
 
@@ -39,25 +86,30 @@ export function NewWorkspacePage() {
     setCreating(true);
     setError(null);
     try {
-      const isCustom = selected === 'custom';
-      const tpl = TEMPLATES.find((t) => t.id === selected);
-      // Guard the non-null assertions below: a non-custom selection must match a
-      // TEMPLATES entry. (Defends against a future TemplateId added without a seed.)
-      if (!isCustom && !tpl) {
-        setError('Unknown template — please refresh and try again.');
-        return;
-      }
-      const modules = isCustom ? customSeed(custom) : tpl!.seed;
-      const kind = isCustom ? kindForSeed(custom) : tpl!.kind;
       const created = await apiClient.createTournament({
         name: name.trim() || null,
-        kind,
+        kind: kindForSeed(modules),
         tournamentDate: date || null,
-        modules,
+        modules: customSeed(modules),
       });
-      // Open via the RETURNED module state. landingRoute sends a workspace with
-      // nothing enabled (Blank / available-only Custom) to Modules setup, else to
-      // its primary module tab. No hardcoded destinations.
+
+      // Seed the court count. Best-effort: see the module docstring.
+      if (courts !== 4) {
+        try {
+          const state = await apiClient.getTournamentState(created.id);
+          if (state?.config) {
+            await apiClient.putTournamentState(created.id, {
+              ...state,
+              config: { ...state.config, courtCount: courts },
+            });
+          }
+        } catch {
+          /* keep the workspace; Venue & schedule owns the fix */
+        }
+      }
+
+      // Open via the RETURNED module state. `landingRoute` sends a workspace
+      // with nothing enabled to Modules setup, else to its primary module.
       navigate(landingRoute(created));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create workspace');
@@ -72,14 +124,10 @@ export function NewWorkspacePage() {
         <ShuttleWorksMark />
       </header>
 
-      <div className="sw-float-in mx-auto max-w-3xl space-y-6 px-6 py-10">
-        <div className="space-y-1">
+      <div className="sw-float-in mx-auto max-w-3xl space-y-2 px-6 py-10">
+        <div className="space-y-1 pb-2">
           <Eyebrow framed>CONTROL PLANE</Eyebrow>
-          <h1 className="text-2xl font-semibold">New workspace</h1>
-          <p className="text-sm text-muted-foreground">
-            Choose a system — or build a custom one. Modules can be turned on now or
-            left available to enable later.
-          </p>
+          <h1 className="type-display text-2xl text-foreground">New workspace</h1>
         </div>
 
         {error && (
@@ -91,66 +139,79 @@ export function NewWorkspacePage() {
           </div>
         )}
 
-        <section className="space-y-3">
-          <Eyebrow framed>SYSTEM</Eyebrow>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {TEMPLATES.map((t) => (
-              <TemplateCard
-                key={t.id}
-                template={t}
-                selected={selected === t.id}
-                onSelect={() => pick(t.id)}
-              />
-            ))}
-            <button
-              type="button"
-              aria-pressed={selected === 'custom'}
-              data-testid="template-custom"
-              onClick={() => pick('custom')}
-              className={[
-                'flex flex-col gap-2 rounded-md border p-4 text-left transition-colors sm:col-span-2',
-                selected === 'custom'
-                  ? 'border-accent bg-accent/10'
-                  : 'border-dashed border-border hover:bg-muted/40',
-              ].join(' ')}
-            >
-              <div className="text-sm font-semibold text-foreground">Custom</div>
-              <div className="text-xs text-muted-foreground">
-                Choose exactly which modules to enable, make available, or leave off.
-              </div>
-            </button>
-          </div>
-          {selected === 'custom' ? (
-            <CustomModulesBuilder state={custom} onChange={setCustom} />
-          ) : null}
-        </section>
+        <Section title="Modules">
+          {MODULE_IDS.map((id, i) => (
+            <Row
+              key={id}
+              last={i === MODULE_IDS.length - 1}
+              label={
+                <span className="inline-flex items-baseline gap-2">
+                  {MODULE_LABELS[id]}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {MODULE_HINT[id]}
+                  </span>
+                </span>
+              }
+              control={
+                <Seg
+                  options={MODULE_STATES}
+                  value={modules[id]}
+                  onChange={(v) => setModule(id, v)}
+                  ariaLabel={MODULE_LABELS[id]}
+                />
+              }
+            />
+          ))}
+        </Section>
 
-        <section className="space-y-2">
-          <Eyebrow framed>DETAILS (OPTIONAL)</Eyebrow>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-xs text-muted-foreground">Name</span>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Spring Invitational"
-                className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-                disabled={creating}
+        {/* Warn, never block: both states are recoverable from Modules after
+            creation, and a director mid-setup should not be argued with. */}
+        {displayOrphaned || nothingOn ? (
+          <p
+            data-testid="modules-hint"
+            className="pt-1 text-xs text-status-warning"
+          >
+            {nothingOn
+              ? 'Nothing is on yet, so this workspace opens on Modules.'
+              : 'Display needs Meet or Bracket on to show anything.'}
+          </p>
+        ) : null}
+
+        <Section title="Venue">
+          <Row
+            last
+            label="Courts"
+            control={
+              <NumberWithSuffix
+                value={courts}
+                onChange={setCourts}
+                suffix="courts"
+                min={1}
+                max={64}
+                ariaLabel="Courts"
               />
-            </label>
-            <label className="block">
-              <span className="text-xs text-muted-foreground">Date</span>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-                disabled={creating}
-              />
-            </label>
-          </div>
-        </section>
+            }
+          />
+        </Section>
+
+        <Section title="Details">
+          <FieldRow
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Spring Invitational"
+            disabled={creating}
+            hint="Optional. You can name it later."
+          />
+          <FieldRow
+            last
+            label="Date"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            disabled={creating}
+          />
+        </Section>
 
         <div className="flex justify-between border-t border-border pt-4">
           <Button variant="ghost" onClick={() => navigate('/')} disabled={creating}>

@@ -33,7 +33,12 @@ export function formatPlayers(
   ids: string[] | undefined,
   playerNames: Map<string, string>
 ): string {
-  if (!ids || ids.length === 0) return '—';
+  // "TBD", not a dash. This is the spectator board: an unresolved side is a
+  // bracket slot whose feeder hasn't finished, and "— vs —" tells a crowd
+  // nothing. (Scoped to the public display on purpose — the standalone `—`
+  // empty-value glyph on operator surfaces is a separate call; see the
+  // debt log.)
+  if (!ids || ids.length === 0) return 'TBD';
   return ids.map((id) => playerNames.get(id) || id).join(' & ');
 }
 

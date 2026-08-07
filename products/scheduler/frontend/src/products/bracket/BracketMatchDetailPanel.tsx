@@ -34,6 +34,7 @@ import {
   type CommitEventFn,
 } from './BracketPlayerFields';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 export type ContingencyReason = 'walkover' | 'retired' | 'forfeit';
 
@@ -112,7 +113,7 @@ export function BracketMatchDetailPanel({
           {/* Read-only pill — Operations owns run-state; never interactive. */}
           <span
             data-testid="bracket-match-status-pill"
-            className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+            className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
           >
             {STATUS_LABEL[status]}
           </span>
@@ -167,7 +168,7 @@ function ContingencySection({
               confirmB.reset();
             }}
             className={[
-              'rounded-sm border px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em]',
+              'rounded-sm border px-2 py-0.5 ${EYEBROW_CLASS}',
               'transition-colors duration-fast ease-brand',
               reason === r
                 ? 'border-accent bg-accent/10 text-accent'
@@ -196,7 +197,7 @@ function ContingencySection({
                 ].join(' ')}
               >
                 {confirm.armed
-                  ? `Confirm — ${label} advances`
+                  ? `Confirm: ${label} advances`
                   : `${label} advances`}
               </button>
             ),

@@ -17,6 +17,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { TournamentSetupPage } from '../TournamentSetupPage';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useUiStore } from '../../../store/uiStore';
+import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { TournamentConfig } from '../../../api/dto';
 
 function seed(overrides: Partial<TournamentConfig> = {}) {
@@ -59,18 +60,39 @@ beforeEach(() => {
   useUiStore.getState().setUnlockModalState(null);
 });
 
-describe('Meet Configuration — two tabs', () => {
-  it('renders exactly two tabs: Engine and Events', () => {
+/** Every config section is collapsed on arrival; open them all before
+ *  asserting on the controls inside (a negative assertion against a
+ *  collapsed form would pass without testing anything). */
+function expandConfigSections() {
+  screen
+    .getAllByRole('button', { expanded: false })
+    .forEach((btn) => fireEvent.click(btn));
+}
+
+describe('Meet Configuration (one merged surface)', () => {
+  it('has no Engine/Events switch: Configuration is a single form', () => {
     renderPage();
-    const seg = screen.getByRole('radiogroup', { name: /Configuration section/i });
-    expect(seg).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Engine' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Events' })).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: 'Tournament' })).toBeNull();
+    expect(
+      screen.queryByRole('radiogroup', { name: /Configuration section/i }),
+    ).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Engine' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Events' })).toBeNull();
   });
 
-  it('Engine tab shows the scoring field set + rest', () => {
-    renderPage(); // Engine is the default section.
+  it('carries the engine AND the meet-structure sections on one surface', () => {
+    renderPage();
+    // Section titles are visible while collapsed: the surface opens as a
+    // readable list of what it holds.
+    // No "Format" section: it collided with the "Match format" row in
+    // Scoring, and Meet type is now a row inside Events.
+    expect(screen.queryByRole('button', { name: /^Format$/ })).toBeNull();
+    for (const title of ['Events', 'Scoring', 'Timing', 'Optimisation goals', 'Advanced solver']) {
+      expect(screen.getByRole('button', { name: new RegExp(title) })).toBeInTheDocument();
+    }
+  });
+  it('shows the scoring field set + rest', () => {
+    renderPage();
+    expandConfigSections();
     expect(screen.getByLabelText('Score type')).toBeInTheDocument();
     expect(screen.getByLabelText('Points per set')).toBeInTheDocument();
     expect(screen.getByLabelText('Match format')).toBeInTheDocument();
@@ -78,22 +100,22 @@ describe('Meet Configuration — two tabs', () => {
     expect(screen.getByLabelText('Rest between matches')).toBeInTheDocument();
   });
 
-  it('Events tab shows meet type + per-discipline position counts', () => {
+  it('shows meet type + per-discipline position counts', () => {
     renderPage();
-    fireEvent.click(screen.getByRole('radio', { name: 'Events' }));
+    expandConfigSections();
     expect(screen.getByLabelText('Meet type')).toBeInTheDocument();
-    expect(screen.getByLabelText("Men's singles positions")).toBeInTheDocument();
-    expect(screen.getByLabelText("Women's singles positions")).toBeInTheDocument();
-    expect(screen.getByLabelText("Men's doubles positions")).toBeInTheDocument();
-    expect(screen.getByLabelText("Women's doubles positions")).toBeInTheDocument();
-    expect(screen.getByLabelText('Mixed doubles positions')).toBeInTheDocument();
+    expect(screen.getByLabelText("Men's Singles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText("Women's Singles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText("Men's Doubles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText("Women's Doubles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText('Mixed Doubles positions')).toBeInTheDocument();
   });
 
   it('changing a position count then saving persists the new rankCounts', async () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderPage();
-    fireEvent.click(screen.getByRole('radio', { name: 'Events' }));
-    const ms = screen.getByLabelText("Men's singles positions") as HTMLInputElement;
+    expandConfigSections();
+    const ms = screen.getByLabelText("Men's Singles positions") as HTMLInputElement;
     fireEvent.change(ms, { target: { value: '5' } });
     fireEvent.click(screen.getByTestId('config-save'));
     await waitFor(() => expect(setConfig).toHaveBeenCalled());
@@ -101,11 +123,11 @@ describe('Meet Configuration — two tabs', () => {
     expect(last.rankCounts?.MS).toBe(5);
   });
 
-  it('Events tab save never blanks identity that lives at the workspace level', async () => {
+  it('save never blanks identity that lives at the workspace level', async () => {
     seed({ tournamentName: undefined, tournamentDate: undefined });
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderPage();
-    fireEvent.click(screen.getByRole('radio', { name: 'Events' }));
+    expandConfigSections();
     fireEvent.click(screen.getByTestId('config-save'));
     await waitFor(() => expect(setConfig).toHaveBeenCalled());
     const last = setConfig.mock.calls[setConfig.mock.calls.length - 1][0] as TournamentConfig;
@@ -119,10 +141,11 @@ describe('Meet Configuration — two tabs', () => {
   // untested: the page actions-bar Save actually submits the shared
   // form (via form={FORM_ID}), and the schedule lock guard wired
   // through `guardSave` still gates that save exactly as before.
-  describe('Engine tab — shared EngineConfigForm via the actions-bar Save', () => {
+  describe('the actions-bar Save drives the one shared form', () => {
     it('actions-bar Save submits the shared form and persists an edited field', async () => {
       const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
-      renderPage(); // Engine is the default section.
+      renderPage();
+    expandConfigSections();
       fireEvent.click(screen.getByLabelText('Reproducible solver run'));
       fireEvent.click(screen.getByTestId('config-save'));
       await waitFor(() => expect(setConfig).toHaveBeenCalled());
@@ -144,7 +167,7 @@ describe('Meet Configuration — two tabs', () => {
         expect(useUiStore.getState().unlockModalState?.open).toBe(true),
       );
       expect(useUiStore.getState().unlockModalState?.actionDescription).toBe(
-        'save engine settings',
+        'save configuration',
       );
       expect(setConfig).not.toHaveBeenCalled();
     });
@@ -186,5 +209,67 @@ describe('Meet Configuration — two tabs', () => {
       await waitFor(() => expect(setConfig).toHaveBeenCalled());
       expect(useTournamentStore.getState().isScheduleLocked).toBe(false);
     });
+  });
+});
+
+/**
+ * The RESULTS lock — Meet's counterpart of the bracket's started-draw lock.
+ *
+ * Meet used to have no such tier. It surfaced only the committed-schedule
+ * warning, so a meet mid-event with recorded scores showed an amber "saving
+ * will clear the schedule" and still let a director change points-per-set,
+ * while a bracket in the same situation went read-only. Same condition, two
+ * different answers on two sibling Configuration surfaces.
+ */
+describe('Meet Configuration — results lock', () => {
+  beforeEach(() => {
+    useMatchStateStore.setState({ matchStates: {} });
+  });
+
+  function withMatchStatus(status: 'called' | 'started' | 'finished') {
+    useMatchStateStore.setState({
+      matchStates: { m1: { matchId: 'm1', status } },
+    });
+  }
+
+  it('a started match makes Configuration read-only and removes Save', () => {
+    withMatchStatus('started');
+    renderPage();
+
+    const fieldset = document.querySelector('fieldset[data-locked]');
+    expect(fieldset).not.toBeNull();
+    // Read-only presentation, native-disabled enforcement: the values stay
+    // legible (that is the point of read-only over disabled) while
+    // interaction is off.
+    expect(fieldset?.className).toContain('sw-readonly');
+    expect(screen.queryByTestId('config-save')).toBeNull();
+  });
+
+  it('shows the neutral results ribbon naming the exit path, not the amber one', () => {
+    withMatchStatus('finished');
+    useTournamentStore.setState({ isScheduleLocked: true });
+    renderPage();
+
+    const ribbon = screen.getByTestId('lock-ribbon');
+    // The results lock SUPERSEDES the schedule lock: once scores exist,
+    // "saving will clear the schedule" is no longer a thing that can happen,
+    // so stacking both would state two different answers at once.
+    expect(ribbon.dataset.tier).toBe('results');
+    expect(ribbon.className).not.toContain('bg-status-warning-bg');
+    expect(screen.getByRole('link', { name: /View matches/i })).toBeInTheDocument();
+  });
+
+  it('a merely CALLED match does not lock — nothing is recorded yet', () => {
+    withMatchStatus('called');
+    renderPage();
+
+    expect(document.querySelector('fieldset[data-locked]')).toBeNull();
+    expect(screen.getByTestId('config-save')).toBeInTheDocument();
+  });
+
+  it('with no match state at all, Configuration stays editable', () => {
+    renderPage();
+    expect(document.querySelector('fieldset[data-locked]')).toBeNull();
+    expect(screen.getByTestId('config-save')).toBeInTheDocument();
   });
 });

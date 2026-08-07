@@ -39,6 +39,7 @@ import { meetMatchStatus } from './meetMatchStatus';
 import { maxSeverity, type MatchIssue } from './validateMatch';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 import { getActiveAssignments } from '../../../lib/getActiveAssignments';
+import { EYEBROW_CLASS } from '../../../lib/utils';
 
 /** Side capacity derived from the event rank. Singles = 1, doubles =
  *  2, unknown rank = 2 (let the operator fill it; validation will flag
@@ -433,7 +434,7 @@ const MatchRow = memo(function MatchRow({
       />
       <span
         data-testid={`match-status-${match.id}`}
-        className={`${MATCH_CELL.status} text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+        className={`${MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
       >
         {STATUS_LABEL[status]}
       </span>

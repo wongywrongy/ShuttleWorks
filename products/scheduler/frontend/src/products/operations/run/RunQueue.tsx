@@ -10,6 +10,7 @@
 import type { CSSProperties } from 'react';
 import type { RunMatch } from '../runtime/runModel';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
+import { EYEBROW_CLASS } from '../../../lib/utils';
 
 // ── source initial + square tint (M=meet azure, B=bracket violet) ─────────
 const SOURCE_INITIAL: Record<'meet' | 'bracket', string> = { meet: 'M', bracket: 'B' };
@@ -99,7 +100,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               <span
                 data-testid={`run-queue-late-${match.key}`}
                 aria-label="Late"
-                className="sw-late-nudge flex-shrink-0 text-2xs font-semibold uppercase tracking-[0.08em] text-status-warning"
+                className={`sw-late-nudge flex-shrink-0 ${EYEBROW_CLASS} text-status-warning`}
               >
                 Late
               </span>

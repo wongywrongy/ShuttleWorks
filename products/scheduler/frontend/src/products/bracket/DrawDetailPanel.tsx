@@ -8,9 +8,10 @@ import { DetailPanel } from '../../components/control-plane';
 import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
 import type { BracketEventDTO } from './eventUpsertPayload';
 import { formatLabel, disciplineLabel } from './bracketLabels';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 const SECTION_LABEL =
-  'text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground';
+  `${EYEBROW_CLASS} text-muted-foreground`;
 
 export function DrawDetailPanel({
   ev,

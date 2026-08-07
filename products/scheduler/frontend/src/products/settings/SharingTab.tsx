@@ -137,9 +137,9 @@ export function SharingTab({ tid }: { tid: string }) {
   const now = Date.now();
 
   return (
-    <div className="max-w-2xl p-6">
+    <div className="max-w-3xl p-6">
       <div className="pb-4">
-        <h2 className="text-lg font-semibold text-foreground">Links &amp; access</h2>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">Links &amp; access</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           The public display link is view-only; collaborator invites let people sign in
           and operate this workspace. They are separate — share each deliberately.

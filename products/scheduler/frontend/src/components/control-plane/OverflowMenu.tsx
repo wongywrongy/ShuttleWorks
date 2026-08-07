@@ -61,7 +61,7 @@ export function OverflowMenu({ label, items }: { label?: string; items: Overflow
               // hovers a control they don't believe is live.
               aria-label={
                 item.disabled && item.disabledReason
-                  ? `${item.label} — unavailable: ${item.disabledReason}`
+                  ? `${item.label} unavailable: ${item.disabledReason}`
                   : undefined
               }
               title={item.disabled ? item.disabledReason : undefined}

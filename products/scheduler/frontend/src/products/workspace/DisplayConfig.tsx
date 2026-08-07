@@ -2,14 +2,27 @@
  * Display Configuration — the workspace's public-display settings: which engines
  * feed the display (follows the enabled modules) and the shareable public URL.
  * The live preview itself is the Display · Preview surface.
+ *
+ * Built from the shared settings grammar (`Section` + `Row` + `FieldRow`), the
+ * same as Meet and Bracket Configuration. It used to run its own third
+ * grammar — `<h3 className="text-sm">` headings at the exact weight of the row
+ * labels beneath them, rows inside rounded bordered cards, and an explanatory
+ * paragraph under every heading — which is why this module looked untouched by
+ * the config unification.
  */
 import { useState } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
 import { useTournamentStore } from '../../store/tournamentStore';
+import { FieldRow, Row, Section } from '../../platform/settings/SettingsControls';
 import { DisplayLayoutEditor } from './displayConfig/DisplayLayoutEditor';
 import { DisplayPreview } from './displayConfig/DisplayPreview';
+
+const FEEDS = [
+  { id: 'meet', label: 'Meet' },
+  { id: 'bracket', label: 'Bracket' },
+];
 
 export function DisplayConfig({ tid, modules }: { tid: string; modules: WorkspaceModule[] }) {
   const [copied, setCopied] = useState(false);
@@ -29,90 +42,85 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
   };
 
   return (
-    <div className="max-w-2xl space-y-6 p-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Display</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          What the public display shows, and where to open it.
-        </p>
+    <div className="max-w-3xl space-y-2 p-6">
+      <div className="pb-2">
+        <h2 className="type-display text-2xl text-foreground">Display</h2>
       </div>
 
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-foreground">Feeds</h3>
-        <div className="divide-y divide-border rounded-md border border-border">
-          {[
-            { id: 'meet', label: 'Meet', desc: 'Live courts, scores, and standings.' },
-            { id: 'bracket', label: 'Bracket', desc: 'Draw progress and results.' },
-          ].map((f) => (
-            <div key={f.id} className="flex items-center justify-between gap-4 p-3">
-              <div>
-                <div className="text-sm font-medium text-foreground">{f.label}</div>
-                <div className="text-xs text-muted-foreground">{f.desc}</div>
-              </div>
+      {/* A feed is on because its module is on — this section reports state,
+          it does not set it. The rows are labelled with the module name and
+          the control slot carries the state, so nothing here needs a
+          sentence explaining what "Meet" means. */}
+      <Section title="Feeds">
+        {FEEDS.map((f, i) => (
+          <Row
+            key={f.id}
+            label={f.label}
+            last={i === FEEDS.length - 1}
+            control={
               <span
                 className={[
                   'rounded-sm px-1.5 py-0.5 text-2xs font-medium',
-                  isOn(f.id) ? 'bg-accent/10 text-accent' : 'border border-border text-muted-foreground',
+                  isOn(f.id)
+                    ? 'bg-accent/10 text-accent'
+                    : 'border border-border text-muted-foreground',
                 ].join(' ')}
               >
                 {isOn(f.id) ? 'On' : 'Off'}
               </span>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Feeds follow the workspace&rsquo;s enabled modules. Enable or disable a module from
-          Workspace&nbsp;&rsaquo;&nbsp;Modules.
-        </p>
-      </section>
-
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-foreground">Public link</h3>
-        <div className="flex items-center gap-2">
-          <input
-            readOnly
-            value={publicUrl}
-            aria-label="Public display URL"
-            className="min-w-0 flex-1 rounded border border-border bg-muted/40 px-3 py-2 font-mono text-xs text-foreground"
+            }
           />
-          <Button variant="outline" size="sm" onClick={copy}>
-            {copied ? 'Copied' : 'Copy'}
-          </Button>
-          <a
-            href={publicUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-bg-elev px-3 py-2 text-sm text-foreground hover:bg-muted/40"
-          >
-            <ArrowSquareOut aria-hidden className="h-4 w-4" />
-            Open
-          </a>
-        </div>
-        <p className="text-xs text-muted-foreground">View-only. Anyone with the link can watch — no sign-in required.</p>
-      </section>
+        ))}
+      </Section>
+
+      {/* Copy / Open ride the heading rule: they act on the section's one
+          value, and a full row each would have read as two more settings. */}
+      <Section
+        title="Public link"
+        action={
+          <span className="inline-flex items-center gap-2">
+            {/* xs (28px) both — the anchor can't be a `Button`, so it mirrors
+                the variant="outline" chrome by hand. Two controls side by
+                side at different heights is the kind of near-miss the
+                grammar exists to stop. */}
+            <Button variant="outline" size="xs" onClick={copy}>
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+            <a
+              href={publicUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-3 text-sm text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40"
+            >
+              <ArrowSquareOut aria-hidden className="h-4 w-4" />
+              Open
+            </a>
+          </span>
+        }
+      >
+        <FieldRow
+          readOnly
+          label="Public display URL"
+          value={publicUrl}
+          hint="View-only. Anyone with the link can watch, with no sign-in."
+          inputClassName="font-mono"
+          last
+        />
+      </Section>
 
       {/* tv* fields only drive MeetDisplayPage (the bracket board never
           reads them) — scope the editor + preview to Meet-enabled
           workspaces so a bracket-only workspace isn't shown controls
-          that would have no visible effect. */}
+          that would have no visible effect. The editor brings its own
+          Board layout / Court order sections. */}
       {isOn('meet') && (
         <>
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-foreground">Board layout</h3>
-            <p className="text-xs text-muted-foreground">
-              How the public board lays out courts. Changes apply immediately — no save step.
-            </p>
-            <DisplayLayoutEditor tid={tid} />
-          </section>
-
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-foreground">Preview</h3>
-            <p className="text-xs text-muted-foreground">
-              A scaled mock of the board&rsquo;s courts layout with sample matches — reflects your
-              edits above as you make them.
-            </p>
-            <DisplayPreview config={config} />
-          </section>
+          <DisplayLayoutEditor tid={tid} />
+          <Section title="Preview">
+            <div className="py-3">
+              <DisplayPreview config={config} />
+            </div>
+          </Section>
         </>
       )}
     </div>

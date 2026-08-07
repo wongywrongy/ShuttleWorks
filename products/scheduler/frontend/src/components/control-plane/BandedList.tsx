@@ -18,6 +18,7 @@
  *     so every banded surface's rows measure identically.
  */
 import { CaretRight } from '@phosphor-icons/react';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** Canonical type treatment for a column label. Applied per-cell by
  *  `ColumnHeaderRow`; import directly for `<th>` cells in real tables. */
@@ -168,7 +169,7 @@ export function GroupBandHeader({
           {code}
         </span>
       ) : null}
-      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-3">
+      <span className={`${EYEBROW_CLASS} text-ink-3`}>
         {label}
       </span>
       <span className="text-2xs sw-num text-muted-foreground">{count}</span>

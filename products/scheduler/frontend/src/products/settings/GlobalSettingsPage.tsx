@@ -16,6 +16,9 @@ import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { AppearanceSettings } from './AppearanceSettings';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from '../../platform/auth/passwordPolicy';
+import { FieldRow, Section } from '../../platform/settings/SettingsControls';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 // Profile/security editing is locked for the local-mode bootstrap identity
 // (no password, no real account); a signed-in account (cloud mode, or any
@@ -53,39 +56,9 @@ function Note({ children }: { children: React.ReactNode }) {
   return <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>;
 }
 
-function Field({
-  label,
-  type = 'text',
-  defaultValue,
-  value,
-  onChange,
-  placeholder,
-  disabled,
-}: {
-  label: string;
-  type?: string;
-  defaultValue?: string;
-  /** Controlled-mode value (Security's change-password form). */
-  value?: string;
-  onChange?: (value: string) => void;
-  placeholder?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-foreground">{label}</span>
-      <input
-        type={type}
-        defaultValue={defaultValue}
-        value={value}
-        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:bg-muted/40 disabled:text-muted-foreground"
-      />
-    </label>
-  );
-}
+/* Form fields come from the design system's `TextField` — the local
+ * hand-rolled `Field` this page used to carry was one of the duplicated
+ * input implementations the design review flagged. */
 
 /* ------------------------------- pages -------------------------------- */
 
@@ -114,10 +87,15 @@ function ProfilePage() {
         </div>
       </div>
 
-      <div className="space-y-4">
-        <Field label="Full name" defaultValue={displayName} placeholder="Your name" disabled={locked} />
-        <Field label="Email" type="email" defaultValue={email} disabled={locked} />
-      </div>
+      <Section title="Your details" defaultOpen>
+        <FieldRow
+          label="Full name"
+          defaultValue={displayName}
+          placeholder="Your name"
+          disabled={locked}
+        />
+        <FieldRow label="Email" type="email" defaultValue={email} disabled={locked} last />
+      </Section>
 
       <div className="flex items-center gap-3">
         <Button disabled={locked}>Save changes</Button>
@@ -135,17 +113,21 @@ function SecurityPage() {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [mismatch, setMismatch] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(
     null,
   );
 
   async function updatePassword() {
+    // Anchored to the confirm field rather than the form footer — the
+    // failure belongs to the field that caused it.
     if (next !== confirm) {
-      setFeedback({ kind: 'error', message: 'New passwords do not match.' });
+      setMismatch('Passwords do not match.');
       return;
     }
     setBusy(true);
+    setMismatch(null);
     setFeedback(null);
     try {
       await apiClient.changePassword({ currentPassword: current, newPassword: next });
@@ -167,32 +149,42 @@ function SecurityPage() {
     <div className="max-w-xl space-y-6 p-6">
       <PageHead title="Security" subtitle="Manage your password and account security." />
 
-      <div className="space-y-4">
-        <Field
+      <Section title="Change password" defaultOpen>
+        <FieldRow
           label="Current password"
           type="password"
           placeholder="••••••••"
           value={current}
-          onChange={setCurrent}
+          onChange={(e) => setCurrent(e.target.value)}
+          autoComplete="current-password"
           disabled={locked}
         />
-        <Field
+        <FieldRow
           label="New password"
           type="password"
           placeholder="••••••••"
+          minLength={PASSWORD_MIN_LENGTH}
+          hint={PASSWORD_HINT}
           value={next}
-          onChange={setNext}
+          onChange={(e) => setNext(e.target.value)}
+          autoComplete="new-password"
           disabled={locked}
         />
-        <Field
+        <FieldRow
           label="Confirm new password"
           type="password"
           placeholder="••••••••"
           value={confirm}
-          onChange={setConfirm}
+          onChange={(e) => {
+            setConfirm(e.target.value);
+            setMismatch(null);
+          }}
+          error={mismatch ?? undefined}
+          autoComplete="new-password"
           disabled={locked}
+          last
         />
-      </div>
+      </Section>
 
       <div className="flex items-center gap-3">
         <Button
@@ -379,7 +371,7 @@ export function GlobalSettingsPage() {
         <nav className="w-56 shrink-0 space-y-4 overflow-y-auto border-r border-border p-3">
           {NAV.map((g) => (
             <div key={g.group} className="space-y-0.5">
-              <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <div className={`px-2 pb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
                 {g.group}
               </div>
               {g.items.map((it) => (

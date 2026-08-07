@@ -14,10 +14,13 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { StatusPill } from '../../components/StatusPill';
 import { lifecycleBadge } from '../../platform/domain/lifecycle';
 import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
-import { attentionReasons, moduleCountsOf, readinessOf, setupLabel } from './hubSignals';
+import { attentionReasons, moduleCountsOf, readinessOf } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, temporalGroupOf } from './hubGrouping';
-import { NextUpList } from './NextUpList';
+import { NextUpList } from '../../components/control-plane/NextUpList';
+import { SetupChecklist } from '../../components/control-plane/SetupChecklist';
+import { buildChecklist } from '../../platform/domain/setupChecklist';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** One metric tile in the "This event" triplet. */
 function MetricTile({
@@ -50,7 +53,7 @@ function fmtDate(iso: string | null): string {
 /** 10px uppercase micro-label — the rail's section voice. */
 function RailLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-2 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
+    <div className={`mb-2 ${EYEBROW_CLASS} text-ink-faint`}>
       {children}
     </div>
   );
@@ -75,7 +78,11 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const todos = attentionReasons(tournament);
   const moduleCounts = moduleCountsOf(tournament);
   const readiness = readinessOf(tournament);
-  const setupEntries = Object.entries(tournament.signals?.setup ?? {});
+  // ONE merged setup model, shared with the Overview (SP-UI-1): the rail used
+  // to render an amber to-do list AND a readiness checklist — the same fact
+  // set twice, in two shapes. `compact` drops the per-step action buttons;
+  // the rail already has a primary CTA at its head.
+  const steps = buildChecklist(tournament);
   const metrics = tournament.signals?.matches;
   const toDo = metrics ? metrics.toDo : todos.length;
 
@@ -151,23 +158,10 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
         </div>
       </div>
 
-      {todos.length > 0 ? (
-        <div>
-          <ul data-testid="inspector-todos" className="space-y-1.5">
-            {todos.map((r) => (
-              <li key={r.code} className="flex items-start gap-2 text-xs text-ink-2">
-                <span aria-hidden className="text-status-warning">›</span>
-                {r.label}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {setupEntries.length > 0 ? (
+      {steps.length > 0 ? (
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
+            <span className={`${EYEBROW_CLASS} text-ink-faint`}>
               Readiness
             </span>
             {readiness ? (
@@ -186,16 +180,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
           >
             <div className="h-full rounded-full bg-status-success-fg" style={{ width: `${pct}%` }} />
           </div>
-          <ul data-testid="inspector-checklist" className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-            {setupEntries.map(([key, done]) => (
-              <li key={key} className="flex items-center gap-1.5 text-xs capitalize text-muted-foreground">
-                <span aria-hidden className={done ? 'text-status-success-fg' : 'text-muted-foreground'}>
-                  {done ? '✓' : '○'}
-                </span>
-                {setupLabel(key)}
-              </li>
-            ))}
-          </ul>
+          <SetupChecklist steps={steps} variant="compact" testId="inspector-checklist" />
         </div>
       ) : null}
 

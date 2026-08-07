@@ -47,8 +47,12 @@ function resetStore() {
   useTournamentStore.setState({ config: { ...baseConfig } });
 }
 
-function mount(module: 'meet' | 'bracket', props: Partial<Parameters<typeof EngineConfigForm>[0]> = {}) {
-  return render(
+function mount(
+  module: 'meet' | 'bracket',
+  props: Partial<Parameters<typeof EngineConfigForm>[0]> = {},
+  { expandSections = true }: { expandSections?: boolean } = {},
+) {
+  const result = render(
     <MemoryRouter initialEntries={['/tournaments/t1/config']}>
       <Routes>
         <Route
@@ -58,6 +62,16 @@ function mount(module: 'meet' | 'bracket', props: Partial<Parameters<typeof Engi
       </Routes>
     </MemoryRouter>,
   );
+  if (expandSections) expandAll();
+  return result;
+}
+
+/** Open every collapsed section. Keyed off aria-expanded, so it stays correct
+ *  as sections are added. */
+function expandAll() {
+  screen
+    .getAllByRole('button', { expanded: false })
+    .forEach((btn) => fireEvent.click(btn));
 }
 
 beforeEach(() => {
@@ -77,12 +91,24 @@ describe('engineFieldAppliesTo (schema helper)', () => {
     expect(engineFieldAppliesTo('deterministic', 'bracket')).toBe(true);
   });
 
-  it('schema declares exactly two module-specific fields', () => {
+  it('every module-specific field is declared in the schema, and no others', () => {
+    // The point of this assertion is that a module-specific knob cannot be
+    // added by hand in the JSX: it has to be written down here first. The
+    // list grew when Configuration absorbed the old Events tab.
     const specific = ENGINE_CONFIG_FIELDS.filter((f) => f.modules.length === 1);
     expect(specific.map((f) => f.key).sort()).toEqual([
+      'meetMode',
+      'rankCounts',
       'restBetweenRounds',
       'solverTimeLimitSeconds',
     ]);
+  });
+
+  it('meet structure fields apply only to meet', () => {
+    for (const key of ['meetMode', 'rankCounts'] as const) {
+      expect(engineFieldAppliesTo(key, 'meet')).toBe(true);
+      expect(engineFieldAppliesTo(key, 'bracket')).toBe(false);
+    }
   });
 
   it('solverTimeLimitSeconds applies only to meet — bracket keeps its own per-request budget (C10)', () => {
@@ -222,5 +248,133 @@ describe('<EngineConfigForm /> — save flow', () => {
     const written = setConfig.mock.calls[0][0] as TournamentConfig;
     expect(written.deterministic).toBe(true);
     expect(written.courtCount).toBe(baseConfig.courtCount);
+  });
+});
+
+/* Collapse is a real behaviour of this surface, so it gets real coverage
+   rather than only being worked around by `mount`'s expandSections. */
+describe('<EngineConfigForm /> — collapsible sections', () => {
+  it('opens the settings a director reads, and collapses only the solver internals', () => {
+    mount('meet', {}, { expandSections: false });
+
+    // Everyday settings are visible AND findable by browser search, which is
+    // the whole reason they are not collapsed.
+    expect(screen.getByRole('button', { name: /Scoring/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByLabelText('Maximise court utilisation')).toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: /Advanced solver/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.queryByLabelText('Reproducible solver run')).not.toBeInTheDocument();
+  });
+
+  it('opening Advanced solver reveals its controls without touching the others', () => {
+    mount('meet', {}, { expandSections: false });
+
+    fireEvent.click(screen.getByRole('button', { name: /Advanced solver/ }));
+
+    expect(screen.getByLabelText('Reproducible solver run')).toBeInTheDocument();
+    // Sections are independent, not an accordion.
+    expect(screen.getByRole('button', { name: /Scoring/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+});
+
+describe('<EngineConfigForm /> — merged meet structure', () => {
+  it('meet renders the Events section the old Events tab used to hold', () => {
+    mount('meet');
+    expect(screen.getByLabelText('Meet type')).toBeInTheDocument();
+    expect(screen.getByLabelText("Men's Singles positions")).toBeInTheDocument();
+    expect(screen.getByLabelText('Mixed Doubles positions')).toBeInTheDocument();
+  });
+
+  it('bracket renders neither — they are meet-only structure', () => {
+    mount('bracket');
+    expect(screen.queryByLabelText('Meet type')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Men's Singles positions")).not.toBeInTheDocument();
+  });
+
+  it('saving carries the meet structure through the one save path', async () => {
+    mount('meet');
+
+    fireEvent.change(screen.getByLabelText("Men's Singles positions"), {
+      target: { value: '5' },
+    });
+    await act(async () => {
+      fireEvent.submit(screen.getByLabelText('Meet type').closest('form')!);
+    });
+
+    const saved = useTournamentStore.getState().config!;
+    expect(saved.rankCounts?.MS).toBe(5);
+    // The whole config still round-trips: merging the two forms must not
+    // drop the fields the other one used to own.
+    expect(saved.pointsPerSet).toBe(21);
+    expect(saved.tournamentName).toBe('Config Tournament');
+  });
+});
+
+/**
+ * The form must show what is SAVED, not what the defaults happen to be.
+ *
+ * `baselineRef` starts as whatever `config` was at mount — `null` whenever the
+ * config resolves after the first render, which is the normal case. The
+ * dirty-check used to fall back to `config` as its own baseline there, so
+ * every field whose stored value differed from its default compared unequal,
+ * was read as a user edit, and the server value was never adopted.
+ */
+describe('<EngineConfigForm /> — config arriving after mount', () => {
+  it('adopts stored values that differ from the defaults', async () => {
+    // Mount with NO config, the way the real page loads.
+    useTournamentStore.setState({ config: null });
+    mount('meet', {}, { expandSections: false });
+
+    await act(async () => {
+      useTournamentStore.setState({
+        config: {
+          ...baseConfig,
+          rankCounts: { MS: 2, WS: 2 },
+          pointsPerSet: 15,
+          defaultRestMinutes: 45,
+        },
+      });
+    });
+    expandAll();
+
+    // The stored event set, not DEFAULT_RANKS.
+    expect(screen.getByLabelText("Men's Singles positions")).toHaveValue(2);
+    expect(screen.queryByLabelText('Mixed Doubles positions')).toBeNull();
+    expect(screen.getByLabelText('Rest between matches')).toHaveValue(45);
+    expect(screen.getByRole('radio', { name: '15 points' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('still protects a genuine in-flight edit from an autosave elsewhere', async () => {
+    // The behaviour the dirty-check exists for must survive the fix.
+    mount('meet');
+    fireEvent.change(screen.getByLabelText('Rest between matches'), {
+      target: { value: '99' },
+    });
+
+    await act(async () => {
+      useTournamentStore.setState({
+        config: { ...baseConfig, defaultRestMinutes: 12, pointsPerSet: 11 },
+      });
+    });
+
+    // The touched field keeps the user's value...
+    expect(screen.getByLabelText('Rest between matches')).toHaveValue(99);
+    // ...while an untouched one adopts the incoming server value.
+    expect(screen.getByRole('radio', { name: '11 points' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
   });
 });

@@ -94,6 +94,16 @@ function withStartedDraw(): BracketTournamentDTO {
   return data;
 }
 
+
+/** Config sections are collapsed by default; a collapsed section renders no
+ *  controls, so every assertion about a control (and especially every
+ *  negative one, which would otherwise pass vacuously) opens them first. */
+function expandConfigSections() {
+  screen
+    .getAllByRole('button', { expanded: false })
+    .forEach((btn) => fireEvent.click(btn));
+}
+
 function renderBracketTab() {
   return render(
     <MemoryRouter initialEntries={['/tournaments/t-1']}>
@@ -123,6 +133,7 @@ beforeEach(() => {
 describe('bracket engine config (shared form)', () => {
   it('exposes the full unified option set — the two Engine tabs no longer differ', () => {
     renderBracketTab();
+    expandConfigSections();
     // Scoring
     expect(screen.getByLabelText('Score type')).toBeInTheDocument();
     // Timing
@@ -144,6 +155,7 @@ describe('bracket engine config (shared form)', () => {
 
   it('renders restBetweenRounds — the one declared bracket-only field', () => {
     renderBracketTab();
+    expandConfigSections();
     const input = screen.getByLabelText('Rest between rounds (slots)') as HTMLInputElement;
     expect(input).toBeInTheDocument();
     expect(input.value).toBe('1');
@@ -153,6 +165,7 @@ describe('bracket engine config (shared form)', () => {
     mockBracket(withSchedule());
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderBracketTab();
+    expandConfigSections();
 
     fireEvent.click(screen.getByRole('button', { name: /Save engine settings/i }));
 
@@ -172,6 +185,7 @@ describe('bracket engine config (shared form)', () => {
     mockBracket(withSchedule());
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderBracketTab();
+    expandConfigSections();
 
     fireEvent.click(screen.getByRole('button', { name: /Save engine settings/i }));
 
@@ -189,9 +203,10 @@ describe('bracket engine config (shared form)', () => {
     expect(setConfig).not.toHaveBeenCalled();
   });
 
-  it('hard lock: a started draw makes the fields read-only and offers no confirm', () => {
+  it('results lock: a started draw makes the fields read-only and offers no confirm', () => {
     mockBracket(withStartedDraw());
     renderBracketTab();
+    expandConfigSections();
 
     const fieldset = document.querySelector('fieldset[data-locked]');
     expect(fieldset).not.toBeNull();
@@ -201,7 +216,7 @@ describe('bracket engine config (shared form)', () => {
     expect(
       screen.getByLabelText('Rest between rounds (slots)'),
     ).toBeDisabled();
-    // No Save affordance at all under a hard lock (a disabled Save would
+    // No Save affordance at all under the results lock (a disabled Save would
     // just beg the question the ribbon answers).
     expect(
       screen.queryByRole('button', { name: /Save engine settings/i }),
@@ -209,19 +224,21 @@ describe('bracket engine config (shared form)', () => {
     expect(useUiStore.getState().unlockModalState).toBeNull();
     // The ribbon is the calm protective tier and names the exit path.
     const ribbon = screen.getByTestId('lock-ribbon');
-    expect(ribbon.dataset.tier).toBe('hard');
+    expect(ribbon.dataset.tier).toBe('results');
     expect(screen.getByRole('link', { name: /View draws/i })).toBeInTheDocument();
   });
 
-  it('soft lock: the ribbon is the amber caution tier', () => {
+  it('schedule lock: the ribbon is the amber caution tier', () => {
     mockBracket(withSchedule());
     renderBracketTab();
-    expect(screen.getByTestId('lock-ribbon').dataset.tier).toBe('soft');
+    expandConfigSections();
+    expect(screen.getByTestId('lock-ribbon').dataset.tier).toBe('schedule');
   });
 
   it('existing scoring behavior still persists correctly (no regression)', async () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderBracketTab();
+    expandConfigSections();
 
     fireEvent.click(screen.getByRole('radio', { name: 'Sets' }));
     // Save-on-submit: the click alone must not have written yet.

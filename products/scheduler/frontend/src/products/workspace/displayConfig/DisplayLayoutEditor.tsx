@@ -76,7 +76,7 @@ import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { TournamentConfig } from '../../../api/dto';
-import { Row, Seg, Toggle } from '../../../platform/settings/SettingsControls';
+import { Row, Seg, Section, Toggle } from '../../../platform/settings/SettingsControls';
 import { orderCourts, courtsWithActiveMatch, reorderIds } from '../../display/publicDisplay/courtLayout';
 
 // Same required-field shape as BracketEngineSection's FALLBACK_CONFIG — the
@@ -278,7 +278,12 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
 
   return (
     <>
-    <div className="divide-y divide-border rounded-md border border-border px-3">
+    {/* The settings grammar, not a boxed card: this surface used to render
+        its rows inside a rounded bordered panel while Meet Configuration ran
+        the identical primitives bare under a `Section`. Same components,
+        two products to the eye — which is the whole complaint the config
+        unification is answering. */}
+    <Section title="Board layout">
       <Row
         label="Display mode"
         control={
@@ -290,15 +295,18 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
           />
         }
       />
-      {/* Column count applies only in Grid mode — indented + dimmed as a
-          dependent control (same idiom as EngineConfigForm's utilisation
-          weight), with the Seg REALLY disabled (not just dimmed) so it is
-          equally inoperable by mouse and keyboard. The value persists. */}
+      {/* Column count applies only in Grid mode. Dimmed + REALLY disabled
+          (not just `pointer-events-none`, which would leave it keyboard
+          operable); the value persists.
+
+          No left rule / extra indent: every row in a section sits at ONE
+          indent, so the eye tracks a single rail. Dependency is carried by
+          the dimmed + aria-disabled state, which is the part that actually
+          says the control is inert. Same call as EngineConfigForm's
+          utilisation weight. */}
       <div
-        className={[
-          'pl-4 border-l border-border/60',
-          tvDisplayMode === 'grid' ? '' : 'opacity-50',
-        ].join(' ')}
+        className={tvDisplayMode === 'grid' ? '' : 'opacity-50'}
+        aria-disabled={tvDisplayMode !== 'grid'}
       >
         <Row
           label="Grid columns"
@@ -348,47 +356,45 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
         }
         last
       />
-    </div>
+    </Section>
 
-    <div className="mt-4">
-      <div className="flex items-center justify-between">
-        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Court order &amp; visibility
-        </span>
-        {isCustomized && (
+    {/* The section title names what these rows are; the drag affordance is
+        carried by the grab cursor and the row's own title attribute. The
+        one fact the title can't carry — that hiding is board-only and
+        Operations keeps scheduling the court — rides on the hide control's
+        own label instead of a paragraph over the whole group. */}
+    <Section
+      title="Court order & visibility"
+      action={
+        isCustomized ? (
           <button
             type="button"
             onClick={resetCourtLayout}
-            aria-label="Reset court order &amp; visibility"
-            title="Reset court order &amp; visibility"
+            aria-label="Reset court order & visibility"
+            title="Reset court order & visibility"
             className="inline-flex items-center gap-1 rounded p-1 text-2xs text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground"
           >
             <ArrowCounterClockwise aria-hidden className="h-3.5 w-3.5" />
             Reset
           </button>
-        )}
-      </div>
-      <p className="pb-2 text-xs text-muted-foreground">
-        Drag to reorder. Hiding a court only affects this public board —
-        Operations keeps scheduling and tracking it normally.
-      </p>
-      <div className="divide-y divide-border rounded-md border border-border px-3">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onCourtDragEnd}>
-          <SortableContext items={orderedCourtIds} strategy={verticalListSortingStrategy}>
-            {orderedCourtIds.map((courtId) => (
-              <CourtOrderRow
-                key={courtId}
-                courtId={courtId}
-                hidden={hiddenSet.has(courtId)}
-                isNew={isNewCourt(courtId)}
-                hasLiveMatch={activeCourtIds.has(courtId)}
-                onToggleHidden={toggleCourtHidden}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
-      </div>
-    </div>
+        ) : null
+      }
+    >
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onCourtDragEnd}>
+        <SortableContext items={orderedCourtIds} strategy={verticalListSortingStrategy}>
+          {orderedCourtIds.map((courtId) => (
+            <CourtOrderRow
+              key={courtId}
+              courtId={courtId}
+              hidden={hiddenSet.has(courtId)}
+              isNew={isNewCourt(courtId)}
+              hasLiveMatch={activeCourtIds.has(courtId)}
+              onToggleHidden={toggleCourtHidden}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
+    </Section>
     </>
   );
 }

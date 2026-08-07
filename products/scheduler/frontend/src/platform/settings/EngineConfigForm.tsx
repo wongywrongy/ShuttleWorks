@@ -17,22 +17,31 @@
  * direct `useLockGuard` import, so platform/ never depends on a
  * product-owned store.
  */
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { useTournament } from '../../hooks/useTournament';
-import { useTournamentId } from '../../hooks/useTournamentId';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
 import { Button, IconDone } from '@scheduler/design-system';
 import {
   Row,
-  SectionHeader,
+  Seg,
+  Section,
   Toggle,
   NumberWithSuffix,
   RangeSlider,
   TimeInput,
 } from './SettingsControls';
 import { ScoringFields, type ScoringValue } from './ScoringFields';
+import { MeetEventsSection, DEFAULT_RANKS } from './MeetEventsSection';
+
+const MEET_TYPE_OPTIONS = [
+  { value: 'dual' as const, label: 'Dual' },
+  { value: 'tri' as const, label: 'Tri' },
+];
+
+/* The five disciplines used to be a hardcoded list right here, which made
+   them look like a property of the product. They are the default seed for a
+   new meet and nothing more — see MeetEventsSection. */
 
 /** The modules that render this form. Both drive the same CP-SAT engine. */
 export type EngineModule = 'meet' | 'bracket';
@@ -51,6 +60,19 @@ export interface EngineConfigFormProps {
    *  only — no save affordance renders and submit is a no-op. Pair with a
    *  `LockedFieldset` so the controls themselves are inert too. */
   readOnly?: boolean;
+  /** Module-owned `Section`s rendered above Scoring, in the slot Meet's
+   *  inline "Events" section occupies.
+   *
+   *  This is a SLOT, not an import, on purpose: the bracket's Events content
+   *  reads `useBracket()` and lives in `products/bracket/`, and this form
+   *  lives in `platform/` — which dependency-cruiser forbids from importing
+   *  `products/`. Passing the node keeps the merged surface (one form, one
+   *  save path) without inverting the layer.
+   *
+   *  Whatever is passed must NOT write `TournamentConfig`: this form's submit
+   *  spreads the whole config, so a second writer on the same page is a
+   *  silent clobber. The bracket's structure content is read-only. */
+  leadingSections?: ReactNode;
 }
 
 export const ENGINE_CONFIG_FIELDS = [
@@ -74,9 +96,16 @@ export const ENGINE_CONFIG_FIELDS = [
   { key: 'enableGameProximity', group: 'goals', modules: ['meet', 'bracket'] },
   { key: 'enableCompactSchedule', group: 'goals', modules: ['meet', 'bracket'] },
   { key: 'allowPlayerOverlap', group: 'goals', modules: ['meet', 'bracket'] },
+  // Meet structure. These used to live in a separate `MeetStructureForm` on
+  // an "Events" tab beside this one. Two forms on one page, each spreading
+  // the WHOLE config on save, is a silent-clobber waiting to happen, so the
+  // merge moved the fields into this form's single save path rather than
+  // mounting both.
+  { key: 'meetMode', group: 'structure', modules: ['meet'] },
+  { key: 'rankCounts', group: 'structure', modules: ['meet'] },
 ] as const satisfies ReadonlyArray<{
   key: keyof TournamentConfig;
-  group: 'scoring' | 'timing' | 'solver' | 'goals';
+  group: 'scoring' | 'timing' | 'solver' | 'goals' | 'structure';
   modules: ReadonlyArray<EngineModule>;
 }>;
 
@@ -102,9 +131,9 @@ export function EngineConfigForm({
   onBusyChange,
   guardSave,
   readOnly = false,
+  leadingSections,
 }: EngineConfigFormProps) {
   const { config, updateConfig } = useTournament();
-  const tid = useTournamentId();
   const [formData, setFormData] = useState<Partial<TournamentConfig>>(() =>
     initialEngineState(config)
   );
@@ -120,15 +149,29 @@ export function EngineConfigForm({
 
   // Dirty-check: adopt new server values only for fields the user
   // hasn't touched since the last accepted baseline.
+  //
+  // FIRST LOAD IS NOT AN EDIT. `baselineRef` starts as whatever `config` was
+  // at mount, which is `null` whenever the config resolves after the first
+  // render — the normal case. This used to fall back to `config` as the
+  // baseline in that situation, so every field whose stored value differed
+  // from its default compared unequal, was read as "the user touched this",
+  // and the server value was silently never adopted: the form showed
+  // defaults over real saved settings, and saving wrote them back.
+  //
+  // Mostly invisible while the surface rendered a fixed five events with
+  // per-field fallbacks. Not invisible once the event LIST itself comes from
+  // config — a workspace with two events showed five and would have
+  // overwritten its own set on the next save.
   useEffect(() => {
     if (!config) return;
+    const baseline = baselineRef.current;
     setFormData((prev) => {
       const merged: Partial<TournamentConfig> = { ...prev };
-      const prevBaseline = baselineRef.current ?? config;
       (Object.keys(initialEngineState(config)) as Array<keyof TournamentConfig>).forEach(
         (key) => {
           const userTouched =
-            JSON.stringify(prev[key]) !== JSON.stringify(prevBaseline[key]);
+            baseline !== null &&
+            JSON.stringify(prev[key]) !== JSON.stringify(baseline[key]);
           if (!userTouched) {
             (merged as Record<string, unknown>)[key] = config[key];
           }
@@ -136,9 +179,9 @@ export function EngineConfigForm({
       );
       return merged;
     });
-    const prevBreaks = breakBaselineRef.current;
     const breakUserTouched =
-      JSON.stringify(breakWindows) !== JSON.stringify(prevBreaks);
+      baseline !== null &&
+      JSON.stringify(breakWindows) !== JSON.stringify(breakBaselineRef.current);
     if (!breakUserTouched) {
       setBreakWindows(config.breaks ?? []);
     }
@@ -198,31 +241,56 @@ export function EngineConfigForm({
 
   return (
     <form id={formId} onSubmit={handleSubmit}>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 items-start">
-        {/* Left column — Scoring + Timing (the operator-facing inputs). */}
-        <div className="lg:col-span-1 space-y-2">
-          <section>
-            <SectionHeader>Scoring</SectionHeader>
+      {/* SINGLE COLUMN, bounded width so every control lands on one rail.
+          This was a 2-column grid: you read down Scoring/Timing on the left,
+          then jumped back up to the right for the solver — an implied reading
+          order nothing on the page stated, while Venue & schedule ran one
+          column off these same primitives. Order is now operator-first:
+          what the matches are, then when they run, then what the solver
+          optimises for, with the solver's own internals last. */}
+      <div className="max-w-3xl space-y-2">
+          {/* The module's own sections lead — Meet's inline Events below,
+              Bracket's via the `leadingSections` slot. Both engines put
+              "what is being contested" above "how it is scored". */}
+          {leadingSections}
+          {module === 'meet' ? (
+            <>
+              {/* One section, not two. "Format" sat two sections above the
+                  "Match format" row in Scoring: different things, near
+                  identical names. Meet type is a single row, so it belongs
+                  with what is being contested rather than owning a section
+                  of its own. */}
+              <Section title="Events">
+                <Row
+                  label="Meet type"
+                  control={
+                    <Seg
+                      options={MEET_TYPE_OPTIONS}
+                      value={formData.meetMode ?? 'dual'}
+                      onChange={(v) => set('meetMode', v)}
+                      ariaLabel="Meet type"
+                    />
+                  }
+                />
+                <MeetEventsSection
+                  rankCounts={formData.rankCounts ?? DEFAULT_RANKS}
+                  onChange={(next) => set('rankCounts', next)}
+                  readOnly={readOnly}
+                />
+              </Section>
+            </>
+          ) : null}
+
+          <Section title="Scoring">
             <ScoringFields
               value={scoring}
               onChange={(patch) =>
                 setFormData((prev) => ({ ...prev, ...patch }))
               }
             />
-          </section>
+          </Section>
 
-          <section>
-            <SectionHeader>Timing</SectionHeader>
-            <p className="pb-1 text-xs text-muted-foreground">
-              Courts, slot duration, and the day window live in{' '}
-              <Link
-                to={`/tournaments/${tid}/ws-venue`}
-                className="text-accent hover:underline"
-              >
-                Venue &amp; schedule
-              </Link>
-              .
-            </p>
+          <Section title="Timing">
             <Row
               label="Rest between matches"
               control={
@@ -254,13 +322,19 @@ export function EngineConfigForm({
                     </button>
                   </span>
                 ) : (
-                  <button
+                  /* A real control, not a sentence. This was bare muted text
+                     ("None, add break"), so the one row on the form whose
+                     control was a link read as body copy and the row looked
+                     empty. The label already says the break is optional; the
+                     control only has to name the action. */
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={() => setBreakStart('12:00')}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast ease-brand"
                   >
-                    None — add break
-                  </button>
+                    Add break
+                  </Button>
                 )
               }
             />
@@ -280,56 +354,9 @@ export function EngineConfigForm({
                 last
               />
             ) : null}
-          </section>
-        </div>
+          </Section>
 
-        {/* Right column — Advanced solver knobs (also CP-SAT inputs). */}
-        <div className="lg:col-span-1 space-y-2">
-          <section>
-            <SectionHeader>Advanced solver</SectionHeader>
-            <Row
-              label="Reproducible run"
-              control={
-                <Toggle
-                  value={formData.deterministic ?? false}
-                  onChange={(v) => set('deterministic', v)}
-                  ariaLabel="Reproducible solver run"
-                />
-              }
-            />
-            {engineFieldAppliesTo('solverTimeLimitSeconds', module) ? (
-              <Row
-                label="Solver time limit"
-                control={
-                  <NumberWithSuffix
-                    value={formData.solverTimeLimitSeconds ?? 30}
-                    onChange={(v) => set('solverTimeLimitSeconds', v)}
-                    suffix="s"
-                    min={1}
-                    max={600}
-                    ariaLabel="Solver wall-clock cap in seconds"
-                  />
-                }
-              />
-            ) : null}
-            <Row
-              label="Freeze horizon"
-              control={
-                <NumberWithSuffix
-                  value={formData.freezeHorizonSlots ?? 0}
-                  onChange={(v) => set('freezeHorizonSlots', v)}
-                  suffix="slots"
-                  min={0}
-                  max={32}
-                  ariaLabel="Freeze horizon in slots"
-                />
-              }
-              last
-            />
-          </section>
-
-          <section>
-            <SectionHeader>Optimisation goals</SectionHeader>
+          <Section title="Optimisation goals">
             <Row
               label="Maximise court utilisation"
               control={
@@ -344,7 +371,6 @@ export function EngineConfigForm({
                 indented + disabled to read as dependent (the value still saves). */}
             <div
               className={[
-                'mt-1 pl-4 border-l border-border/60',
                 (formData.enableCourtUtilization ?? true) ? '' : 'opacity-50 pointer-events-none',
               ].join(' ')}
               aria-disabled={!(formData.enableCourtUtilization ?? true)}
@@ -394,8 +420,53 @@ export function EngineConfigForm({
               }
               last
             />
-          </section>
-        </div>
+          </Section>
+
+          {/* Solver internals last: a director changes these rarely, and
+              never during an event. */}
+          {/* The one collapsed group: solver internals a director
+              changes rarely, and never during an event. */}
+          <Section title="Advanced solver" defaultOpen={false}>
+            <Row
+              label="Reproducible run"
+              control={
+                <Toggle
+                  value={formData.deterministic ?? false}
+                  onChange={(v) => set('deterministic', v)}
+                  ariaLabel="Reproducible solver run"
+                />
+              }
+            />
+            {engineFieldAppliesTo('solverTimeLimitSeconds', module) ? (
+              <Row
+                label="Solver time limit"
+                control={
+                  <NumberWithSuffix
+                    value={formData.solverTimeLimitSeconds ?? 30}
+                    onChange={(v) => set('solverTimeLimitSeconds', v)}
+                    suffix="s"
+                    min={1}
+                    max={600}
+                    ariaLabel="Solver wall-clock cap in seconds"
+                  />
+                }
+              />
+            ) : null}
+            <Row
+              label="Freeze horizon"
+              control={
+                <NumberWithSuffix
+                  value={formData.freezeHorizonSlots ?? 0}
+                  onChange={(v) => set('freezeHorizonSlots', v)}
+                  suffix="slots"
+                  min={0}
+                  max={32}
+                  ariaLabel="Freeze horizon in slots"
+                />
+              }
+              last
+            />
+          </Section>
       </div>
 
       {saveError && (
@@ -446,5 +517,7 @@ function initialEngineState(
     enableGameProximity: config?.enableGameProximity ?? false,
     enableCompactSchedule: config?.enableCompactSchedule ?? false,
     allowPlayerOverlap: config?.allowPlayerOverlap ?? false,
+    meetMode: config?.meetMode ?? 'dual',
+    rankCounts: config?.rankCounts ?? { ...DEFAULT_RANKS },
   };
 }

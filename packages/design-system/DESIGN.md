@@ -1,8 +1,30 @@
 # DESIGN — Agent rulebook for @scheduler/design-system
 
-**Companion to `design/BRAND.md`.** BRAND.md is the *spec*; this file is the *enforcement contract* for anyone (human or agent) writing code against the design system. Read both.
+**Spec:** [`DESIGN_COLOR.md`](./DESIGN_COLOR.md) + [`tokens.css`](./tokens.css). This file is the
+*enforcement contract* for anyone (human or agent) writing code against the design system.
 
-If you are an LLM agent writing code in this monorepo, treat this file as a hard rulebook. Violations get rejected.
+If you are an LLM agent writing code in this monorepo, treat this file as a hard rulebook. Violations get rejected — **except** for the rules listed as superseded immediately below.
+
+> ### ⚠ Partially superseded (2026-08-06)
+>
+> This file was written for the brutalist × Signal-Orange direction specified in `BRAND.md`.
+> That direction was replaced by the two-layer token system; `BRAND.md` is now a superseded
+> stub. The rules below no longer describe what ships — **follow `tokens.css` /
+> `DESIGN_COLOR.md`, not these**:
+>
+> | Rule | Said | Ships |
+> |---|---|---|
+> | §1.2, §1.8.b | No soft shadows; hard offset only | Real Gaussian `--shadow-sm/md/lg` in light; none in dark (elevation = luminance) |
+> | §1.3 | 90° corners; `rounded-sm` = 2px | Radius ladder 4→14px; `rounded-sm` = 6px; cards `rounded-lg`, pills `rounded-full` |
+> | §1.9, §1.10, §1.11 | Accent = Signal Orange `#FF6B1A` | Accent = `--action-primary` azure; `--accent` is an alias of it |
+> | §0 "both products" | `products/tournament/frontend` is a consumer | That product is frozen under `archive/`; the scheduler is the only consumer |
+>
+> Everything else here (no raw hex, no default Tailwind palette colors, the spacing ladder,
+> the type ladder, the one-font-family rule, mono reserved for tabular data) is **still
+> binding** — those rules were never about the brutalist direction.
+>
+> A full rewrite of this file against the current tokens is logged in
+> `docs/audits/debt-log.md`.
 
 ---
 
@@ -219,6 +241,12 @@ If a thing is used by both products, it lives here. If it's used by one, it live
 
 ---
 
-## 10. When this file disagrees with BRAND.md
+## 10. When this file disagrees with the spec
 
-**BRAND.md wins.** This file is the enforcement; that one is the spec. If you spot a drift, raise it; don't silently choose one.
+**`tokens.css` wins, then `DESIGN_COLOR.md`, then this file.** The shipped tokens are the
+ground truth; `DESIGN_COLOR.md` explains them; this file enforces how components may consume
+them. `MOTION.md` wins on motion. `BRAND.md` is superseded and wins on nothing.
+
+If you spot a drift, raise it — don't silently choose one. That precedence used to point at
+`BRAND.md`, which is exactly how this file spent months describing a design the product had
+already replaced.

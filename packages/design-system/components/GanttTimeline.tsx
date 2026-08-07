@@ -228,7 +228,7 @@ function defaultRenderCell(cell: GanttCell): ReactNode {
 
 function defaultRenderCourtLabel(courtId: number): ReactNode {
   return (
-    <span className="flex h-full items-center px-2 text-xs font-semibold tabular-nums text-foreground">
+    <span className="type-display-num flex h-full items-center px-2 text-sm text-foreground">
       C{courtId}
     </span>
   );

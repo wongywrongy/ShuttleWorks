@@ -2,11 +2,12 @@
  * Workspace Hub — the control-plane landing page at `/`.
  *
  * A full-width operational control plane: a top command bar (wordmark, search,
- * New workspace, account chip), a status-facet filter strip (All / Active /
- * Draft / Shared / Needs attention) with overlapping counts, a dense workspace
- * list (see WorkspaceRow) sorted by operational time order, and a right-side
- * inspector for the selected workspace. "New workspace" routes to the
- * dedicated `/new` create surface.
+ * New workspace, account chip), a lifecycle filter strip (All / Setup / Ready
+ * / Live / Complete / Shared / Needs attention / Archived — see hubFacets for
+ * why these read the derived phase rather than the operator-set status), a
+ * dense workspace list (see WorkspaceRow) sorted by operational time order,
+ * and a right-side inspector for the selected workspace. "New workspace"
+ * routes to the dedicated `/new` create surface.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +23,7 @@ import { SortControl } from './SortControl';
 import { needsAttention } from './hubSignals';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
+import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** The ⌘K handler accepts Ctrl too — the hint should name the key the
  *  user's OS actually has. */
@@ -37,38 +39,42 @@ function sinceLabel(ms: number): string {
   return `${Math.round(m / 60)}h ago`;
 }
 
-/** One status-facet chip (All / Active / Draft / Shared / Needs attention)
- *  with an overlapping count. Prototype grammar: quiet text; the ACTIVE facet
- *  is a raised pill (no border chrome — surface does the work). `emphasize`
- *  warms a non-zero count to amber (the "Needs attention" facet). */
+/** One facet chip with its count. Prototype grammar: quiet text; the SELECTED
+ *  facet is a raised pill (no border chrome — surface does the work).
+ *  `emphasize` warms a non-zero count: amber for "Needs attention", live-green
+ *  for "Live" — the two facets an operator scans for. A zero count stays quiet
+ *  whatever the tone, so an empty facet never shouts. */
 function FilterChip({
   label,
   count,
   active,
-  emphasize = false,
+  emphasize,
   onClick,
 }: {
   label: string;
   count: number;
   active: boolean;
-  emphasize?: boolean;
+  emphasize?: 'attention' | 'live';
   onClick: () => void;
 }) {
+  const countTone =
+    count > 0 && emphasize === 'attention'
+      ? 'text-status-warning'
+      : count > 0 && emphasize === 'live'
+        ? 'text-status-live'
+        : 'text-ink-faint';
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-md px-2.5 py-1 text-xs transition-colors duration-fast ease-brand ${
+      className={`rounded-md px-2.5 py-1 text-2xs transition-colors duration-fast ease-brand ${
         active
           ? 'bg-surface-active font-medium text-foreground'
           : 'text-muted-foreground hover:text-foreground'
       }`}
     >
-      {label}{' '}
-      <span className={`sw-num ${emphasize && count > 0 ? 'text-status-warning' : 'text-ink-faint'}`}>
-        {count}
-      </span>
+      {label} <span className={`sw-num ${countTone}`}>{count}</span>
     </button>
   );
 }
@@ -242,24 +248,37 @@ export function HubPage() {
         </Button>
       </header>
 
-      {/* Status-facet strip — quiet text chips, raised active pill; the
-          "Needs attention" count warms to amber. Facets overlap by design.
-          The sort control sits at the right edge (redesign). */}
+      {/* Page chrome — title + the controls that narrow the list.
+          One block, one rule at its foot.
+
+          This used to be a bare `h-10` facet strip with its own `border-b`,
+          which made it a horizontal band with a bottom hairline sitting
+          directly above… a table of horizontal bands with bottom hairlines.
+          Same device, three different jobs (chrome / column headers / data),
+          so nothing on the page carried more weight than anything else.
+          The title supplies the missing top tier — it is the only thing on
+          this surface above 14px — and the filters now group WITH it as
+          chrome rather than reading as another row. */}
       {!loading && tournaments.length > 0 ? (
-        <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3.5">
-          <div className="flex items-center gap-0.5">
-            {HUB_FACETS.map((f) => (
-              <FilterChip
-                key={f.id}
-                label={f.label}
-                count={counts[f.id]}
-                active={facet === f.id}
-                emphasize={f.id === 'attention'}
-                onClick={() => setFacet(f.id)}
-              />
-            ))}
+        <div className="shrink-0 border-b border-border px-4 pb-2.5 pt-4">
+          <h1 className="type-display text-2xl text-foreground">Workspaces</h1>
+          <div className="mt-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-0.5">
+              {HUB_FACETS.map((f) => (
+                <FilterChip
+                  key={f.id}
+                  label={f.label}
+                  count={counts[f.id]}
+                  active={facet === f.id}
+                  emphasize={
+                    f.id === 'attention' ? 'attention' : f.id === 'live' ? 'live' : undefined
+                  }
+                  onClick={() => setFacet(f.id)}
+                />
+              ))}
+            </div>
+            <SortControl value={sort} onChange={setSort} />
           </div>
-          <SortControl value={sort} onChange={setSort} />
         </div>
       ) : null}
 
@@ -296,12 +315,12 @@ export function HubPage() {
                   prototype (widths mirror WorkspaceRow's cells). */}
               <div
                 aria-hidden
-                className="flex items-center gap-3 border-b border-border px-4 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint"
+                className={`flex items-center gap-3 border-b border-border px-4 py-2 ${EYEBROW_CLASS} text-ink-faint`}
               >
-                {showDates ? <span className="w-14 shrink-0">Date</span> : null}
                 <span className="min-w-0 flex-1">Workspace</span>
                 <span className="w-[108px] shrink-0">Modules</span>
-                <span className="w-40 shrink-0">Next action</span>
+                {showDates ? <span className="w-16 shrink-0 text-right">Date</span> : null}
+                <span className="w-40 shrink-0 px-2">Next action</span>
                 <span className="w-6 shrink-0" />
               </div>
               <div className="divide-y divide-border">
@@ -329,7 +348,7 @@ export function HubPage() {
           {!loading && tournaments.length > 0 ? (
             <div
               data-testid="hub-footer"
-              className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2.5 text-2xs text-muted-foreground"
+              className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2 text-3xs text-muted-foreground"
             >
               <span className="sw-num">
                 {footerCounts.total} workspace{footerCounts.total === 1 ? '' : 's'}

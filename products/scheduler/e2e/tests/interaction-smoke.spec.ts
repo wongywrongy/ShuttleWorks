@@ -20,7 +20,7 @@
  *
  * NOISE FILTER: `console.error` is deliberately NOT fatal on its own. The audit
  * calibrated three benign sources that would otherwise make this suite
- * permanently red (see design-plan/INTERACTION_FINDINGS.md):
+ * permanently red (see docs/programs/design-plan/INTERACTION_FINDINGS.md):
  *   - the browser's own resource log for `GET /bracket` 404 (meaning "no bracket
  *     yet"; the client handles it and returns null)
  *   - a stale suggestion Apply (409/410 → handled, dropped, info toast)
@@ -263,7 +263,14 @@ test.describe('interaction smoke — real flows against real stores', () => {
     await page.goto(`/tournaments/${viewerTid}/live`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
 
-    await expect(page.getByText(/view-only access/i)).toBeVisible();
+    // The PERSISTENT banner, by testid. A text locator for the phrase is
+    // ambiguous: READ_ONLY_MESSAGE is deliberately reused by the refusal toast,
+    // so `getByText(/view-only access/i)` resolves to three nodes (banner body +
+    // toast title + toast body) and trips strict mode — reported, misleadingly,
+    // as "element(s) not found". It passed only while the toast happened not to
+    // be on screen.
+    await expect(page.getByTestId('read-only-banner')).toBeVisible();
+    await expect(page.getByTestId('read-only-banner')).toContainText(/view-only access/i);
 
     const actions = page.locator('button[aria-label*="Call"], button[aria-label*="Start"]');
     const n = await actions.count();

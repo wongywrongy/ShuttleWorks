@@ -92,11 +92,14 @@ because it carries GitHub-relative links and implementation scratch:
 | `docs/tech-stack.md` | The post-merge architecture + data-model reference. |
 | `docs/changes/` | Dated decision logs. |
 | `docs/audits/` | Historical UI/UX audits + screenshots. |
-| `docs/deploy/cloud.md` | Deployment guide (historical; superseded by the `how-to/install-*` runbooks). |
+| `docs/programs/` | Program ledgers — `CLOUD_PROGRESS.md`, `SEC_PROGRESS.md`, `REFACTOR_PROGRESS.md`, `FRONTEND_PROGRESS.md` — each read at session start and updated at session end, plus the `design-plan/` working notes. Moved off the repo root on 2026-08-06 so the root holds only files a tool or convention reads by path. |
+| `docs/deploy/cloud.md` | Tombstone. The Supabase-era deployment guide was removed 2026-08-06; use the `how-to/` runbooks. |
 | `docs/architectural-roadmap.md` | The historical backend-merge arc roadmap. |
 
-Nothing there is deleted — it is the archive. The curated pages here are the single source of
-truth going forward.
+Nothing there is deleted — it is the archive. The one exception is `deploy/cloud.md`, whose
+body was removed on 2026-08-06 because it was a runbook for a topology that never existed;
+the path survives as a tombstone and the text is in git history. The curated pages here are
+the single source of truth going forward.
 
 ## Keeping these docs current
 

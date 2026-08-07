@@ -3,7 +3,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Check, CaretRight } from '@phosphor-icons/react';
-import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 import type { ImpactAnalysis } from '../../../hooks/useLiveOperations';
 import type { MatchDTO, MatchStateDTO, ScheduleAssignment, ScheduleDTO, PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../../api/dto';
 import type { TrafficLightResult } from '../../../utils/trafficLight';
@@ -302,7 +302,7 @@ export function MatchDetailsPanel({
         return (
           <div className="mb-3 border-t border-border pt-2 text-xs text-foreground">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
                 Done
               </span>
               {onUpdateStatus && mode === 'idle' && (
@@ -681,7 +681,7 @@ export function MatchDetailsPanel({
           // and the colored SchoolDot indicators.
           const teamHeader = (label: string | undefined) =>
             label ? (
-              <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
                 {label}
               </div>
             ) : null;
@@ -821,7 +821,7 @@ export function MatchDetailsPanel({
         <div className="px-3 py-2 border-t border-border/60 bg-muted/30 space-y-2">
           {onRequestMove && assignment && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
                 Reschedule
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -839,7 +839,7 @@ export function MatchDetailsPanel({
           )}
           {onRequestDisruption && (
             <div className="space-y-1">
-              <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
                 Disruption
               </div>
               <div className="flex flex-wrap gap-1.5">

@@ -1,8 +1,9 @@
 /**
  * A single workspace row in the Hub's dense list — the handoff prototype's
- * "Hub — workspace dashboard" table grammar: a tabular DATE column, the
- * workspace NAME (health dot secondary), and one plain-language NEXT ACTION
- * as quiet text (amber when it needs input). Nothing else rides the row —
+ * "Hub — workspace dashboard" table grammar: the workspace NAME leads (health
+ * dot secondary), then modules, a tabular DATE as trailing metadata, and one
+ * plain-language NEXT ACTION as the row's call to action. Nothing else rides
+ * the row —
  * the old stacked calendar block, per-row module chips and per-row action
  * buttons were extraneous chrome (2026-07-02 redesign); modules/metrics/
  * buttons live in the inspector. Destructive actions stay in an overflow
@@ -15,15 +16,19 @@ import { rowActionFor } from './nextAction';
 import { eventDate, type HubGroupId } from './hubGrouping';
 import { moduleGlyphs, type ModuleGlyphId } from './moduleGlyphs';
 
-/** Static per-module glyph classes (Tailwind can't scan dynamic names — these
- *  arbitrary-value strings carry the 16%-tint fill + the module hue). */
 /* Color budget (2026-07): module identity is carried by the LETTER, not a
  * hue — the M/D/B rainbow was decoration. Enabled modules read as neutral
- * filled chips, available ones as dashed outlines. */
+ * filled chips, available ones as dashed outlines.
+ *
+ * SP-UI-1: the fill was `bg-surface-chip text-text-secondary`, which sat so
+ * close to the row background that M/B/D was unreadable without hovering for
+ * the title — on a scanning surface that is a dead column. Raised to the
+ * raised-surface step + full-strength text, on a hairline so the chip has an
+ * edge of its own. Still achromatic, still compact. */
 const GLYPH_CLASS: Record<ModuleGlyphId, string> = {
-  meet: 'bg-surface-chip text-text-secondary',
-  display: 'bg-surface-chip text-text-secondary',
-  bracket: 'bg-surface-chip text-text-secondary',
+  meet: 'bg-surface-raised text-foreground border border-border',
+  display: 'bg-surface-raised text-foreground border border-border',
+  bracket: 'bg-surface-raised text-foreground border border-border',
 };
 
 /** The row's Modules column — enabled modules as solid tinted glyphs, or a
@@ -38,7 +43,7 @@ function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
           data-testid={`row-module-${g.id}`}
           title={`${g.letter === 'M' ? 'Meet' : g.letter === 'D' ? 'Display' : 'Bracket'} — ${g.enabled ? 'enabled' : 'available'}`}
           className={[
-            'inline-flex h-[18px] w-[18px] items-center justify-center rounded text-[10px] font-semibold',
+            'inline-flex h-5 w-5 items-center justify-center rounded text-[11px] font-semibold',
             g.enabled
               ? GLYPH_CLASS[g.id]
               : 'border border-dashed border-border text-muted-foreground',
@@ -51,13 +56,19 @@ function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
   );
 }
 
-/** Tabular date cell — "Jul 12" (year only when it isn't this year); undated
- *  reads as a muted em-dash so the column still aligns. */
+/** Tabular date cell — "Jul 12" (year only when it isn't this year). Trailing
+ *  METADATA since SP-UI-1: it used to lead the row, which anchored a dense
+ *  list on its most often-empty field. Right-aligned so the numerals form a
+ *  clean rail.
+ *
+ *  An undated row renders an EMPTY cell, not an em-dash: the column-level
+ *  `showDate` hide only fires when NO visible row has a date, so on a mixed
+ *  list the placeholder produced a rail of dashes — visual noise standing in
+ *  for the absence of a fact nobody asked for. The width is kept so the dated
+ *  rows still align. */
 function DateCell({ iso }: { iso: string | null }) {
   if (!iso) {
-    return (
-      <span className="w-14 shrink-0 text-2xs sw-num text-muted-foreground">—</span>
-    );
+    return <span aria-hidden className="w-16 shrink-0" />;
   }
   const d = eventDate(iso);
   const valid = !Number.isNaN(d.getTime());
@@ -70,9 +81,7 @@ function DateCell({ iso }: { iso: string | null }) {
       })
     : iso.slice(0, 10);
   return (
-    <span
-      className="w-14 shrink-0 text-2xs sw-num text-muted-foreground"
-    >
+    <span className="w-16 shrink-0 text-right text-2xs sw-num text-muted-foreground">
       {label}
     </span>
   );
@@ -132,35 +141,49 @@ export function WorkspaceRow({
           : 'hover:bg-muted/40',
       ].join(' ')}
     >
-      {showDate ? <DateCell iso={tournament.tournamentDate} /> : null}
-
+      {/* NAME leads — the row's anchor, and the only thing on it at full
+          weight. Everything to its right is metadata or an affordance. */}
       <span className="flex min-w-0 flex-1 items-center gap-2.5">
         <HealthDot health={health} />
-        <span className="truncate font-medium text-foreground">
+        <span className="truncate text-sm font-semibold text-foreground">
           {tournament.name || 'Untitled'}
         </span>
       </span>
 
       <ModulesCell tournament={tournament} />
 
-      {/* NEXT ACTION — quiet text, not a boxed button. Still a real button
-          (same accessible name + click behavior as before the redesign). */}
+      {showDate ? <DateCell iso={tournament.tournamentDate} /> : null}
+
+      {/* NEXT ACTION — the point of the control-plane model, so it has to read
+          as the row's call to action rather than as another metadata column.
+          It was already a real button; SP-UI-1 makes that VISIBLE: a hover
+          wash + revealed chevron, and a focus ring that was previously
+          invisible even though the control was always keyboard-reachable.
+          Same accessible name and click behavior as before. */}
       <button
         type="button"
+        data-testid="row-next-action"
         onClick={(e) => {
           e.stopPropagation();
           if (action.kind === 'set-date') onSetDate();
           else onOpen();
         }}
         className={[
-          'w-40 shrink-0 truncate text-left text-xs',
+          'flex w-40 shrink-0 items-center justify-between gap-1 rounded-sm px-2 py-1 text-left text-xs',
           'transition-colors duration-fast ease-brand',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
           attention
-            ? 'text-status-warning hover:brightness-110'
-            : 'text-muted-foreground hover:text-accent',
+            ? 'text-status-warning group-hover:bg-status-warning/10'
+            : 'text-muted-foreground group-hover:bg-accent/10 group-hover:text-accent',
         ].join(' ')}
       >
-        {action.label}
+        <span className="truncate">{action.label}</span>
+        <span
+          aria-hidden
+          className="shrink-0 opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100"
+        >
+          &rsaquo;
+        </span>
       </button>
 
       <span className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

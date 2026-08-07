@@ -32,7 +32,7 @@ export interface PendingBadgeProps {
 
 export const PendingBadge = forwardRef<HTMLSpanElement, PendingBadgeProps>(
   function PendingBadge(
-    { isPending, tooltip = 'Change pending — waiting for connection', className = '' },
+    { isPending, tooltip = 'Change pending. Waiting for connection.', className = '' },
     ref,
   ) {
     if (!isPending) return null;

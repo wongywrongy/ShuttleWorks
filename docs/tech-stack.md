@@ -35,10 +35,18 @@ current end-state.
 
 Cloud-prep arc decisions (still in effect except where noted):
 
+::: warning How to read these tables
+Rows tagged **SUPERSEDED** record what was decided at the time and are **not**
+how the system works now. The tag names what replaced them. Untagged rows still
+hold. Nothing below is a description of current behaviour unless it is untagged —
+for that, read [Backend structure](./architecture/backend-structure) and
+[System overview](./architecture/system-overview).
+:::
+
 | Decision | Choice | Reason |
 |---|---|---|
-| Persistence | SQLAlchemy 2.0 sync + SQLite (local) / Postgres (Supabase) | Cloud prep, multi-tournament |
-| Auth | Supabase Auth | Cloud requires identity; Supabase bundles auth + Postgres |
+| Persistence | SQLAlchemy 2.0 sync + SQLite (local) / Postgres (Supabase) — **SUPERSEDED**: Postgres is self-hosted (`docker-compose.selfhost.yml`), not Supabase | Cloud prep, multi-tournament |
+| Auth | Supabase Auth — **SUPERSEDED** (SP-CLOUD-2): self-hosted identity, Argon2id + cookie sessions, `AUTH_MODE=local\|cloud` | Cloud requires identity; Supabase bundles auth + Postgres |
 | Sharing | Invite links | Simplest multi-user model; no email infra needed |
 | Roles | Owner / Operator / Viewer | Minimal RBAC |
 | Dashboard | Two-section (Your Tournaments + Shared with You) | Operator's entry point |
@@ -47,15 +55,15 @@ Architecture-adjustment arc decisions (this 2026-05-13 rewrite):
 
 | Decision | Choice | Reason |
 |---|---|---|
-| Backend hosting | **Tauri sidecar on the director's laptop** (FastAPI on local port) — was Fly.io / Render | The director's laptop is the canonical state; cloud-hosted FastAPI was a misalignment with the operator-cockpit reality |
-| Source of truth | **SQLite on the director's machine** | Tournament-day reads + writes happen there; Supabase is a mirror |
-| Cloud DB role | **Read mirror of SQLite via outbox replication** — was primary | Operators / TV display read; writes still hit the director's local FastAPI |
+| Backend hosting | **Tauri sidecar on the director's laptop** (FastAPI on local port) — was Fly.io / Render — **SUPERSEDED**: no Tauri anywhere in the tree; local mode is Docker (or bare uvicorn), cloud mode is `docker-compose.selfhost.yml` behind a Cloudflare Tunnel | The director's laptop is the canonical state; cloud-hosted FastAPI was a misalignment with the operator-cockpit reality |
+| Source of truth | **SQLite on the director's machine** | Tournament-day reads + writes happen there. (The "Supabase is a mirror" clause of [ADR 0003](/decisions/0003-sqlite-as-primary-persistence) is retired; the decision itself stands.) |
+| Cloud DB role | **Read mirror of SQLite via outbox replication** — was primary — **SUPERSEDED** (SP-CLOUD-3, [ADR 0012](/decisions/0012-remove-the-supabase-mirror)): single-store. SQLite local *or* Postgres cloud; there is no mirror and no replication layer | Operators / TV display read; writes still hit the director's local FastAPI |
 | Operator write path | **Idempotent command queue (POST /commands)** with optimistic UI | Operators on browsers (any device) push commands; backend dedups; UI reflects pending vs applied vs rejected |
 | State machine | **Typed `MatchStatus` enum + transition guard** | Eliminates illegal status changes (e.g. starting a finished match); rejections surface as 409 with structured body |
 | Concurrency | **Versioned matches + `If-Match` header on legacy routes / `seen_version` on commands** | Two operators acting on the same match: second one gets a 409 stale_version, refetches |
 | Solver locking | **`LockedAssignment` propagated through every solver entry point** | State-machine-locked matches (called / playing / finished / retired) never move under a re-solve |
-| Sync mechanism | **Outbox pattern via `sync_queue` table + background worker** — instead of fire-and-forget direct push | Crash-safe: queue row exists iff the data write committed |
-| Realtime read path | **Supabase Realtime postgres_changes on `matches`** | Operators + TV display get sub-second updates without polling |
+| Sync mechanism | **Outbox pattern via `sync_queue` table + background worker** — instead of fire-and-forget direct push — **SUPERSEDED** (SP-CLOUD-3): table dropped, writers removed. It was never operated — 827 rows accumulated and pushed nothing, ever | Crash-safe: queue row exists iff the data write committed |
+| Realtime read path | **Supabase Realtime postgres_changes on `matches`** — **SUPERSEDED** (SP-CLOUD-3): reads are polling; Display polls its capability-token projection routes | Operators + TV display get sub-second updates without polling |
 | Conflict UI | **Inline pending badge + auto-dismissing stale-version banner + persistent conflict banner + header connection indicator** — no modals | Operator workflow can't tolerate blocking dialogs during a tournament |
 
 Backend-merge arc decisions (this 2026-05-13 follow-on):
@@ -63,9 +71,9 @@ Backend-merge arc decisions (this 2026-05-13 follow-on):
 | Decision | Choice | Reason |
 |---|---|---|
 | Bracket persistence shape | **Children of `tournaments(id)` — `bracket_events` / `bracket_participants` / `bracket_matches` / `bracket_results`** — instead of renaming `tournaments` → `events(kind)` | Cheaper migration. A tournament row now hosts a meet schedule *and/or* a bracket draw; the noun stays as the unit the operator owns |
-| Bracket repository | **`_LocalBracketRepo` mirrors `_LocalMatchRepo`** (CRUD + composite-PK + outbox enqueue + optimistic-concurrency `version`) | Reuse the architecture-adjustment arc's primitives instead of re-inventing them |
+| Bracket repository | **`_LocalBracketRepo` mirrors `_LocalMatchRepo`** (CRUD + composite-PK + outbox enqueue + optimistic-concurrency `version`) — the outbox-enqueue half is **SUPERSEDED** (SP-CLOUD-3); CRUD and `version` stand | Reuse the architecture-adjustment arc's primitives instead of re-inventing them |
 | Bracket route surface | **`/tournaments/{tid}/bracket/*` with `require_tournament_access` gates** — replaces the legacy product's anonymous `/tournament/*` on a separate stack | Single auth realm, role-gated, lives in the scheduler backend |
-| Bracket sync | **Same outbox (`sync_queue`) the matches table uses** — bracket entity types `bracket_event` / `bracket_match` / `bracket_result` join the existing dispatch | Operators on browsers + the public TV display read bracket changes via Realtime exactly the same way they read match changes |
+| Bracket sync | **Same outbox (`sync_queue`) the matches table uses** — bracket entity types `bracket_event` / `bracket_match` / `bracket_result` join the existing dispatch — **SUPERSEDED** (SP-CLOUD-3): no outbox. Bracket results flow through the idempotent command path `POST /bracket/commands` | Operators on browsers + the public TV display read bracket changes via Realtime exactly the same way they read match changes |
 | Bracket frontend | **Folded into the scheduler shell as a `Bracket` tab** — tournament-product React app retired | One app, one auth flow, one ThemeToggle, one ShuttleWorksMark |
 | Dashboard New-event dialog | **Single form: name + date + kind (Meet / Bracket) radio** — replaces the prior two-step Meet \| Tournament fork that `window.open`'d a separate stack | Both kinds create the same `tournaments` row; kind only picks the post-create landing tab |
 | Bracket pure-Python package | **Moved to `products/scheduler/backend/services/bracket/`** — relative imports internally, both backends imported it during the transition | One source of truth; archives cleanly into `archive/tournament-pre-merge/` once retired |

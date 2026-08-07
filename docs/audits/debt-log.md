@@ -133,7 +133,7 @@ design-gated items above + engine coverage.
 | **Shared StatusPill `pulse` glow is dormant** (found 2026-07-02, P12 T5 live pass) | `2601f93` gave pulsing dots sw-pulse + own-hue glow, but no reachable surface passes `pulse` to `src/components/StatusPill.tsx` (Display-page pills are separate local components). Utilities verified synthetically. Either wire `pulse` on live-ish pills (e.g. bracket Live tab) or fold the Display pills onto the shared component. Size S | ✅ **Fixed 2026-07-02**: the bracket "Started" (live) draw pill now renders `dot pulse` (`BracketDrawsTab.StatusPillFor`), so the `sw-pulse` + own-hue glow is reachable on a genuinely-live status; "Generated" uses a static `dot`. |
 | **Error toasts stack without auto-dismiss** (observed 2026-07-02, SP-D7 S5 live pass) | ~~Repeated 409s accumulated identical toasts~~ **FIXED 2026-07-02**: `uiStore.pushToast` dedupes on (level, message) — an identical toast refreshes the existing entry (latest detail wins) instead of stacking. Verified live (double MD2X generate → one toast). Errors remain persistent (no TTL) by design | ✅ fixed |
 | **`useAdvisories()` call in `MeetDisplayPage` is now dead weight** (found 2026-07-03, Display-redesign Task 3 — removed the operator `AdvisoryBanner` from the public board) | The hook's own source of a tournament id (`useTournamentIdOrNull()`) is a **route path param only** — no `?id=` query fallback (unlike `useLiveTracking`/`useDisplaySync`). On the standalone `/display?id=` route that id is always null, so the poll effect returns before firing — the call is inert there. On the embedded AppShell "TV preview" tab, `AppShell` already mounts `useAdvisories()` globally (gated to `kind==='meet'`), so the call is redundant there too. With the banner gone, nothing on this page reads `useUiStore.advisories` anymore. Left in place unchanged — removing it is a behavior change outside Task 3's scope (import + render-block removal only). Fix = delete the `useAdvisories()` call + its import from `MeetDisplayPage.tsx` once confirmed no other consumer needs it re-added here. Size XS | ⏳ open |
-| **Bracket result `reason` not mirrored to Supabase** (found 2026-07-14, task 5b — commit `1a55358` threaded a new `reason` field (walkover/retired/forfeit) through the bracket result path, including the outbox payload) | `services/sync_service.py` `_bracket_result_to_payload` briefly pushed `"reason": result.reason` to the Supabase upsert, but the cloud `bracket_results` schema is applied out-of-band (see `docs/deploy/cloud.md`'s migration chain: `step_a_matches_table_and_rls`, `step_t_a_bracket_schema_and_rls`, `step_t_d_bracket_realtime_publication`) and has **no** `reason` column — an unknown key fails the upsert, and the outbox row's `attempts` climbs and caps at 10, silently degrading sync for any deployed cloud mirror. Reverted the key (local SQLite already persists `reason` via migration `k4a7b1c9d3e5`, and the UI reads the local API, so nothing user-facing regresses). Fix = add a `reason` column to Supabase `bracket_results` via a migration in the documented chain style, THEN re-add `"reason": result.reason` to `_bracket_result_to_payload`. Size S | ⏳ open |
+| **Bracket result `reason` not mirrored to Supabase** (found 2026-07-14, task 5b — commit `1a55358` threaded a new `reason` field (walkover/retired/forfeit) through the bracket result path, including the outbox payload) | `services/sync_service.py` `_bracket_result_to_payload` briefly pushed `"reason": result.reason` to the Supabase upsert, but the cloud `bracket_results` schema is applied out-of-band (see `docs/deploy/cloud.md`'s migration chain: `step_a_matches_table_and_rls`, `step_t_a_bracket_schema_and_rls`, `step_t_d_bracket_realtime_publication`) and has **no** `reason` column — an unknown key fails the upsert, and the outbox row's `attempts` climbs and caps at 10, silently degrading sync for any deployed cloud mirror. Reverted the key (local SQLite already persists `reason` via migration `k4a7b1c9d3e5`, and the UI reads the local API, so nothing user-facing regresses). Fix = add a `reason` column to Supabase `bracket_results` via a migration in the documented chain style, THEN re-add `"reason": result.reason` to `_bracket_result_to_payload`. Size S | ✅ **closed 2026-08-06 — obsolete, not fixed.** The mirror was removed entirely in SP-CLOUD-3 ([ADR 0012](../decisions/0012-remove-the-supabase-mirror.md)): `services/sync_service.py` is deleted, `_bracket_result_to_payload` has zero call sites, and `sync_queue` was dropped in migration `p9a3b7c1d5e6`. There is no cloud schema to add a column to. Local SQLite already persists `reason` (migration `k4a7b1c9d3e5`) and the UI reads the local API, so nothing was ever user-visible. The prescribed fix is now unperformable — recorded rather than deleted so the entry's disappearance does not read as a silent fix. |
 | **`matchStateStore.liveState` is now fully dead** (found 2026-07-14/15, perf pass 2 — render-hotspot fix) | Perf pass 2 removed `useLiveTracking`'s 1s `setInterval` that wrote a fresh `liveState` object into the store every second via the now-deleted `setCurrentTime` setter (it forced every `useLiveTracking()` consumer, e.g. the 746-line `MatchControlCenterPage`, to re-render once a second regardless of data). Investigation (grep across `src` for `currentTime`/`liveState`/`liveTracking.`) found **no component reads `useLiveTracking().liveState`** — `MeetDisplayPage`/`BracketDisplayPage` compute their own page-local `now`/`currentTime` (needed for freshness derivation, untouched here) rather than consuming the store's copy. `buildLiveState`/`setLastSynced`/the `LiveScheduleState.currentTime` DTO field were deliberately left in place (pass-1 sync code, out of scope) but are removal candidates: `setLastSynced` still rebuilds a new `liveState` object every 5s in `syncMatchStates` for a value nothing reads. Fix = delete `liveState`/`buildLiveState`/`setLastSynced`/the DTO field once confirmed still unused. Size S | ⏳ open |
 
 > Note: knip still reports the 8 retained contract mirrors + the displayPresets
@@ -245,7 +245,7 @@ Found by driving four simulated tournaments (mid-day meet / full meet / DE brack
 - **Deleted-workspace polling never stops → endless 403 storm.** With a bracket page open, deleting the tournament (this or another session) leaves the ~2.5s poll running forever against 403s; no user-facing "workspace gone" state. Also: access-check runs before existence-check, so deleted reads as *Forbidden*, not *Not Found*. Stop polling on 403/404 + surface a dead-workspace banner. Size M.
 - **The Run nav item is two different surfaces.** Meet-only workspaces get the legacy meet Live page (Director/Disruption/Re-optimize/XLSX, score entry); hybrid workspaces get the SP-G1b unified board (queue/inspector/zoom, no meet tools). Same label, disjoint affordances — an operator moving between workspaces re-learns the page. Deliberate convergence decision needed (this is the F-ARCH-3 neighborhood). Size L (decision first).
 - **Actual-time chips render off-axis.** On both Run boards, playing/done chips place at wall-clock-derived actual slots while the axis only spans the planned range — chips float in unlabeled space far right (meet-only board) or off-viewport (hybrid). Any day that starts late (or any compressed replay) degrades this way. Extend the axis to `max(planned, actual, now)` or clamp actuals. Size M.
-- **Lifecycle states never reach the control plane.** A 43%-played (or 100%-done) tournament still shows Hub filter *Draft*, header pill *DRAFT*, "Next action: Set date", Overview "0 to do"/"results ✓", "Next up" listing already-finished matches as `Sched` (reads schedule, not match states), and a fully-resolved draw card saying *STARTED*. Display shows *DELAYED* on a finished meet. No surface says "in progress" or "complete". Size M–L (one derived-status seam would fix most).
+- **Lifecycle states never reach the control plane.** ~~A 43%-played (or 100%-done) tournament still shows Hub filter *Draft*, header pill *DRAFT*, "Next action: Set date", Overview "0 to do"/"results ✓"~~, "Next up" listing already-finished matches as `Sched` (reads schedule, not match states), ~~and a fully-resolved draw card saying *STARTED*~~. Display shows *DELAYED* on a finished meet. Size M–L (one derived-status seam would fix most). **Mostly closed:** the `signals.phase` seam landed 2026-07-10 (Hub row action, shell badge, inspector, draw card) and SP-UI-1 closed the **Overview** half on 2026-08-06 — it is now phase-keyed and says Setup/Ready/Live/Complete outright. The Hub **facets** followed on the same day — they now read the derived phase (All / Setup / Ready / Live / Complete / Shared / Needs attention / Archived) with archived outranking the phase, so a live event no longer files under *Draft*. Still open: the meet `nextUp` finished-match filter (its own row above) and Display's *DELAYED* on a finished meet.
 - **Plan invites destructive actions mid-tournament.** Plan page on a live tournament: footer says "Solver idle — click Generate to begin", Generate/Re-plan enabled, finished matches drag-able, no played-state indication on chips. A mid-day Generate re-solves everything. Needs a planFinalized/live guard or confirm. Size M.
 - **Match naming is triple-dialect.** Same match is `MS1` (chips), `M1` (Plan list "Match" column), `#1` (Run advisory banner "Match #1 was called…"). Operators must mentally join three keys; the advisory is the worst (no court/event context). Standardize on eventRank codes. Size S.
 - **Minor**: "(moved)" tag shows on an in-progress match that was never moved (mid-day sim, MD2) — trigger appears to be command-path court/slot writes differing from schedule assignment; Radix Select uncontrolled→controlled warning (console, Hub/Display config); Score "Save" disabled-state styling reads as enabled; bracket draw card leaks internal event id (`ev-de`) as a label chip; solver jargon in Plan header ("Score: 50", "Time: 0ms").
@@ -627,3 +627,96 @@ a green 1,100-test suite. The real check is the viewer flow in
     disproportionate to that; the alternative is a small response hook that
     stamps the ETag centrally for any route under `/tournaments/{id}/`.
     Size M. *(2026-08-06 review.)*
+  - **`DESIGN.md` still enforces the retired brutalist direction.** The agent
+    rulebook's §1.2/§1.3/§1.8.b/§1.9/§1.10/§1.11 describe Signal-Orange, 90°
+    corners, and hard-offset-only shadows — none of which ship. The 2026-08-06
+    design review added a superseded-rules banner and flipped the §10
+    precedence to `tokens.css` → `DESIGN_COLOR.md` → `DESIGN.md`, but the
+    individual rule bodies were left intact rather than rewritten: they are
+    load-bearing for agents and a blind rewrite risks loosening rules that are
+    still correct. The full rewrite (restate each rule against the current
+    token ladder, drop the `products/tournament/frontend` consumer) is the
+    follow-up. Size M. *(2026-08-06 frontend design review — see
+    `docs/audits/15-frontend-design-review.md`.)*
+  - **50 raw `<input>` elements remain outside `TextField`.** The review added
+    the missing input primitive and adopted it on the auth surface and global
+    settings (4 files), leaving ~50 hand-rolled inputs across ~24 files, each
+    re-deriving its own border/radius/focus treatment. They are not broken —
+    they mostly use `border-border` correctly — so this is drift-prevention,
+    not a defect fix, and it is a wide mechanical sweep best done as its own
+    slice. Size M. *(2026-08-06 frontend design review.)*
+  - **`--status-started` (sky) reads as interactive next to the azure accent,
+    and `--module-meet` is the accent hex.** The system's "one accent" rule is
+    literally satisfied but perceptually broken: a *scheduled* chip and a
+    clickable control are both blue on the Ops board, and the Meet module's
+    categorical identity color is the same value as `--action-primary`. Fixing
+    it is a token-mapping change, but it moves colors on a shipped operational
+    surface, so it belongs with the palette direction decision rather than
+    ahead of it. Size S. *(2026-08-06 frontend design review.)*
+  - **`Eyebrow` uppercases its text content in JS as well as in CSS.** So
+    `<Eyebrow>Details</Eyebrow>` puts `DETAILS` in the DOM while the equivalent
+    `<span className={EYEBROW_CLASS}>Details</span>` puts `Details`. Visually
+    identical (CSS `uppercase` does the work either way), but screen readers
+    may spell out an all-caps string, and it makes the component and the class
+    constant disagree about DOM text. Six call sites. Deferred because removing
+    it changes DOM text that tests may query, which is unrelated to the config
+    unification it surfaced during. Size S. *(2026-08-06 config-surface
+    unification — see `docs/audits/15-frontend-design-review.md` §6.)*
+  - **A dead workspace link hangs on "Loading workspace…" forever.**
+    `/tournaments/{unknown-id}/<segment>` renders the full workspace shell —
+    sidebar, module sections, admin nav — for a workspace that does not exist,
+    and never leaves the loading state. The only signal is a dismissible toast
+    (`TOURNAMENT_NOT_FOUND`), so once it auto-dismisses the surface is a
+    permanent spinner with a nav for nothing. A stale bookmark, a shared link
+    to a deleted workspace, or a revoked membership all land here. Wants a
+    not-found state with a route back to the Hub; `useTournamentState`'s
+    hydrate failure is the seam. Size S. *(2026-08-06 full-flow route pass.)*
+  - **8 of the 10 e2e spec files are stale and fail against the current UI.**
+    `00-sanity`, `02-inline-roster`, `03-auto-generate-matches`,
+    `04-solve-happy-path`, `05-drag-reschedule`, `06-persistence`,
+    `07-schedule-xlsx-import`, `08-suggestions-inbox` (plus
+    `99-baseline-screenshots`) were last touched 2026-05-11 and predate the
+    Hub / workspace control-plane redesign. They assert
+    `toHaveTitle(/schedul|tournament/i)` (the app is "ShuttleWorks") and
+    `getByTestId('tab-setup')` — the horizontal TabBar that CLAUDE.md already
+    documents as vestigial. `make test-e2e` reports 19 failures that are all
+    rot, so the suite currently provides negative value: a real regression
+    would be indistinguishable from the noise. Only
+    `interaction-smoke.spec.ts` is in CI and it is actively maintained (16/16).
+    Decision needed — repair against the sidebar nav, or delete and let
+    interaction-smoke be the e2e surface. Size M. *(2026-08-06 full-flow pass.)*
+  - **An unknown workspace segment silently renders Meet Configuration.**
+    `/tournaments/{id}/not-a-segment` falls back to the Configuration surface
+    while the URL keeps the bogus segment, so URL and content disagree and the
+    address is misleading if bookmarked or shared. Unknown segments should
+    redirect to `overview` the way unknown top-level routes redirect to the
+    Hub. Size S. *(2026-08-06 full-flow route pass.)*
+  - **Overview rail has no "last backup" row.** SP-UI-1's rail shows event
+    date, public display and collaborators. Last-backup was specified but
+    dropped: it needs a second list fetch (`ws-sync`'s backups endpoint) on
+    every workspace landing to render a glance-only fact, and the Overview
+    otherwise makes exactly one extra call. Add it if/when the summary payload
+    or a cheap head endpoint can carry a `lastBackupAt` stamp. Size S.
+    *(2026-08-06 SP-UI-1.)*
+  - **The `ready` / `live` / `complete` Overview panels are minimal.** SP-UI-1
+    shipped `setup` fully and gave the other three honest versions built only
+    from data that already exists (`signals.matches`, `signals.nextUp`) —
+    structure over completeness, deliberately, rather than faking richness.
+    They want real content: live court occupancy, per-event progress, a
+    results/export summary. Size M, product call on what each phase owes.
+    *(2026-08-06 SP-UI-1.)*
+  - **The shell identity bar can disagree with the Overview about a
+    workspace's name.** Seen while verifying SP-UI-1: a `ready` workspace whose
+    Overview header read "Interaction smoke" showed `Untitled` in the shell top
+    bar. The two read different sources (`WorkspaceIdentity` vs the fetched
+    summary) and one lags. Pre-existing; not touched by SP-UI-1 because the
+    fix belongs to the identity seam, not the Overview. Size S.
+    *(2026-08-06 SP-UI-1 verification.)*
+  - **`comingSoon` keeps retired vocabulary alive in the contract.**
+    `ModuleCountsDTO.comingSoon` and the `coming_soon` module status still
+    exist in the backend schema, `dto.ts`, `dto.generated.ts` and ~8 test
+    fixtures, but nothing renders a coming-soon state — `modulesFromDto` maps
+    the value to `available`. "Coming soon" is retired product vocabulary, so
+    the field is dead weight that invites someone to resurface it. Removing it
+    touches the DTO contract both sides. Size S, needs a contract call.
+    *(2026-08-06 SP-UI-1.)*

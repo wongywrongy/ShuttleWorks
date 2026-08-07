@@ -72,6 +72,12 @@ export default defineConfig({
     'changes/**',
     'deploy/**',
     'superpowers/**',
+    // Program ledgers + their working notes, moved here from the repo root on
+    // 2026-08-06. Same genre as `audits/` and `changes/`: dated working records
+    // read at session start, not curated pages. Root now holds only files a
+    // tool or convention reads by path (README, CLAUDE, CONTRIBUTING,
+    // SECURITY, CODE_HEALTH, LICENSE).
+    'programs/**',
     'architecture/workspace-suite/**',
     'README.md',
   ],

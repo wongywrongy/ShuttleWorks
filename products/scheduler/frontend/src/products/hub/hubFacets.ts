@@ -1,32 +1,80 @@
 /**
- * Status-based facets for the Hub workspace dashboard — the handoff
- * prototype's filter grammar (All / Active / Draft / Shared / Needs
- * attention). These are **facets, not a partition**: a workspace can match
- * several at once (e.g. an Active workspace that's also Shared and Needs
- * attention), so the counts overlap and only "All" is exhaustive. The strip
- * narrows *which* rows show; `sortWorkspaces` (hubGrouping) fixes their order.
+ * Facets for the Hub workspace dashboard: All / Setup / Ready / Live /
+ * Complete / Shared / Needs attention / Archived.
  *
- * Pure + derived entirely from the summary DTO (`status`, `role`, `signals`),
- * so it's unit-testable and needs no new backend field.
+ * These are **facets, not a partition** — a workspace can match several at
+ * once (a Live workspace that is also Shared and Needs attention), so the
+ * counts overlap and only "All" is exhaustive. The strip narrows *which* rows
+ * show; `sortBy` (hubSort) fixes their order.
+ *
+ * ## Why these filter on the derived phase (SP-UI-1 follow-up)
+ *
+ * The strip used to split on the operator-managed `status` column
+ * (Active / Draft), which the director sets by hand in Settings → General.
+ * That was defensible in isolation but produced a control plane that
+ * contradicted itself: a 43%-played tournament filed under **Draft** while the
+ * Overview stepper, the shell badge and the row action all said **Live**. On a
+ * real database it degenerated further — nothing had ever been marked Active,
+ * so the strip read `Active 0 / Draft 14` and one bucket held everything,
+ * including the three events that were mid-play. A filter that cannot separate
+ * a running tournament from an empty one is not narrowing anything.
+ *
+ * So the lifecycle facets now read `signals.phase`, the same server-computed
+ * value every other surface keys on. `status` keeps the two jobs it is
+ * genuinely good at: driving `health` (and therefore the row dot), and marking
+ * a workspace **Archived**.
+ *
+ * ## Archived outranks the phase
+ *
+ * Match rows persist forever, so an archived tournament keeps
+ * `phase: 'live' | 'complete'` for good. Without a precedence rule an archived
+ * event would sit in **Live** alongside the ones actually being played. This
+ * module applies the SAME order as `platform/domain/lifecycle.ts`
+ * (archived > phase): an archived workspace matches `archived` and no
+ * lifecycle facet.
+ *
+ * Pure + derived entirely from the summary DTO (`status`, `role`, `signals`).
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
+import type { WorkspacePhase } from '../../platform/domain/lifecycle';
+import { resolvePhase } from '../../platform/domain/overviewPhase';
 import { needsAttention } from './hubSignals';
 
-export type HubFacetId = 'all' | 'active' | 'draft' | 'shared' | 'attention';
+export type HubFacetId =
+  | 'all'
+  | 'setup'
+  | 'ready'
+  | 'live'
+  | 'complete'
+  | 'shared'
+  | 'attention'
+  | 'archived';
 
 export interface HubFacet {
   id: HubFacetId;
   label: string;
 }
 
-/** Fixed facet order for the filter strip (matches the prototype). */
+/** Fixed facet order for the filter strip: the lifecycle left-to-right in the
+ *  order an event actually travels, then the cross-cutting facets. */
 export const HUB_FACETS: HubFacet[] = [
   { id: 'all', label: 'All' },
-  { id: 'active', label: 'Active' },
-  { id: 'draft', label: 'Draft' },
+  { id: 'setup', label: 'Setup' },
+  { id: 'ready', label: 'Ready' },
+  { id: 'live', label: 'Live' },
+  { id: 'complete', label: 'Complete' },
   { id: 'shared', label: 'Shared' },
   { id: 'attention', label: 'Needs attention' },
+  { id: 'archived', label: 'Archived' },
 ];
+
+/** The facet ids that name a lifecycle phase, keyed by phase. */
+const PHASE_FACET: Record<WorkspacePhase, HubFacetId> = {
+  setup: 'setup',
+  ready: 'ready',
+  live: 'live',
+  complete: 'complete',
+};
 
 /** Shared = collaborating: either I'm on someone else's workspace
  *  (role operator/viewer), or I own it but have added/invited others. */
@@ -36,40 +84,41 @@ export function isShared(t: TournamentSummaryDTO): boolean {
   return !!c && (c.memberCount > 1 || c.activeInviteCount > 0);
 }
 
-/** Whether a workspace matches a facet. `all` matches everything.
- *
- *  `active`/`draft` read the workspace's explicit lifecycle `status` — the
- *  director's own choice, set in **Settings → General → Workspace status**
- *  (draft → active → archived; `updateTournament`). It is NOT inferred from
- *  scheduling: a dated-but-still-draft workspace stays Draft on purpose, and a
- *  brand-new workspace stays Draft until the director marks it Active. So a
- *  fresh/QA database where nothing was ever activated correctly shows
- *  `Active 0` — that is the honest state, not a dead facet. */
+/** The single lifecycle facet a workspace belongs to, or `archived`. Exported
+ *  so callers can label a row without re-deriving the precedence. */
+export function lifecycleFacetOf(t: TournamentSummaryDTO): HubFacetId {
+  if (t.status === 'archived') return 'archived';
+  return PHASE_FACET[resolvePhase(t)];
+}
+
+/** Whether a workspace matches a facet. `all` matches everything. */
 export function matchesFacet(t: TournamentSummaryDTO, facet: HubFacetId): boolean {
   switch (facet) {
     case 'all':
       return true;
-    case 'active':
-      return t.status === 'active';
-    case 'draft':
-      return t.status === 'draft';
     case 'shared':
       return isShared(t);
     case 'attention':
       return needsAttention(t);
+    default:
+      // Lifecycle facets (incl. archived) are mutually exclusive.
+      return lifecycleFacetOf(t) === facet;
   }
 }
 
-/** Per-facet counts over a list (the strip's badges). Counts overlap by
- *  design — a row is tallied under every facet it matches. */
+/** Per-facet counts over a list (the strip's badges). The lifecycle facets
+ *  partition the list; `shared` / `attention` overlap them by design. */
 export function facetCounts(list: TournamentSummaryDTO[]): Record<HubFacetId, number> {
-  const counts: Record<HubFacetId, number> = {
+  const counts = {
     all: 0,
-    active: 0,
-    draft: 0,
+    setup: 0,
+    ready: 0,
+    live: 0,
+    complete: 0,
     shared: 0,
     attention: 0,
-  };
+    archived: 0,
+  } satisfies Record<HubFacetId, number>;
   for (const t of list) {
     for (const f of HUB_FACETS) {
       if (matchesFacet(t, f.id)) counts[f.id] += 1;

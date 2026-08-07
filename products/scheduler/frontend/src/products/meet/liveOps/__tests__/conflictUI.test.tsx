@@ -44,7 +44,7 @@ describe('PendingBadge', () => {
     const badge = screen.getByTestId('pending-badge');
     expect(badge).toHaveAttribute(
       'title',
-      'Change pending — waiting for connection',
+      'Change pending. Waiting for connection.',
     );
   });
 });
@@ -64,7 +64,7 @@ describe('ConflictBanner — stale_version', () => {
     );
     expect(screen.getByTestId('conflict-banner-stale_version')).toBeInTheDocument();
     expect(
-      screen.getByText(/Updated by someone else — reloaded/),
+      screen.getByText(/Updated by someone else\. Reloaded\./),
     ).toBeInTheDocument();
 
     // Banner has no dismiss button — the stale flavour is informational.

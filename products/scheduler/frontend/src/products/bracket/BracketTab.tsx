@@ -12,9 +12,8 @@
  * ``TabBar`` (``activeTab`` is a ``bracket-*`` id), with a
  * ``BracketViewHeader`` strip above the active view.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Sliders, ListChecks } from '@phosphor-icons/react';
 
 import { BracketApiProvider } from '../../api/bracketClient';
 
@@ -23,11 +22,9 @@ import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
 import { reconcileBracketRoster } from './bracketMigration';
-import { type SettingsSectionDef } from '../../platform/settings/SettingsShell';
 import { ConfigSurface, LockedFieldset } from '../../platform/settings/ConfigSurface';
 import { EngineConfigForm } from '../../platform/settings/EngineConfigForm';
 import { LockRibbon } from '../../components/status/LockRibbon';
-import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { requestClearScheduleOnNextSave } from '../../hooks/useTournamentState';
 import { useBracketScheduleLock } from './useBracketScheduleLock';
 import { BracketStructureSection } from './BracketStructureSection';
@@ -166,11 +163,9 @@ function BracketTabBody() {
   // ``TournamentPage`` once kind resolves; fall back to 'setup'
   // defensively for the first render before that effect runs.
   const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : 'setup';
-  const [setupSection, setSetupSection] = useSearchParamState(
-    'section',
-    'engine',
-    { debounceMs: 0 },
-  );
+  // `?section=` is gone with the Engine/Events switcher — Configuration is
+  // one surface, so there is no sub-section for the URL to carry. Old links
+  // still resolve; the param is simply ignored.
   // Per-engine lock signals — independent of the meet schedule. Derived
   // from the bracket DTO. `bracketScheduleLocked` (hard lock) is a draw in
   // play — never clearable, so the fieldset just disables. `bracketHasSchedule`
@@ -196,37 +191,6 @@ function BracketTabBody() {
       });
     });
   }, [bracketHasSchedule, setUnlockModalState]);
-
-  const bracketSetupSections = useMemo<SettingsSectionDef[]>(
-    () => [
-      {
-        id: 'engine',
-        label: 'Engine',
-        icon: Sliders,
-        render: () => (
-          <LockedFieldset locked={bracketScheduleLocked}>
-            <EngineConfigForm
-              module="bracket"
-              guardSave={guardBracketSave}
-              readOnly={bracketScheduleLocked}
-            />
-          </LockedFieldset>
-        ),
-      },
-      {
-        // Label is 'Events' (shared grammar with Meet Configuration); the
-        // id stays 'structure' — it's URL state (?section=structure).
-        id: 'structure',
-        label: 'Events',
-        icon: ListChecks,
-        render: () => <BracketStructureSection />,
-      },
-      // Tournament data + Share were removed from the bracket Configuration
-      // switcher — they live in workspace settings (Sync and backups /
-      // Sharing) now, the same as Meet.
-    ],
-    [bracketScheduleLocked, guardBracketSave],
-  );
 
   // Setup, Roster, and Events do NOT depend on bracket-events data.
   // Draw/Schedule/Live render the events' draws/Gantts; they need data.
@@ -292,16 +256,10 @@ function BracketTabBody() {
       >
         {view === 'setup' && (
           <ConfigSurface
-            sections={bracketSetupSections.map((s) => ({
-              value: s.id,
-              label: s.label,
-            }))}
-            section={setupSection}
-            onSectionChange={(v) => setSetupSection(v)}
             ribbons={
               bracketScheduleLocked ? (
                 <LockRibbon
-                  tier="hard"
+                  tier="results"
                   locked
                   action={
                     <Link
@@ -313,14 +271,24 @@ function BracketTabBody() {
                   }
                 />
               ) : bracketHasSchedule ? (
-                <LockRibbon tier="soft" locked />
+                <LockRibbon tier="schedule" locked />
               ) : null
             }
           >
-            {(
-              bracketSetupSections.find((s) => s.id === setupSection) ??
-              bracketSetupSections[0]
-            ).render()}
+            {/* ONE surface, no Engine/Events switcher — the merge Meet got.
+                Events comes in through `leadingSections` rather than as a
+                second mounted form: `EngineConfigForm` spreads the whole
+                config on save, so a second config writer on the page would
+                silently clobber it. `BracketStructureSection` writes
+                nothing. */}
+            <LockedFieldset locked={bracketScheduleLocked}>
+              <EngineConfigForm
+                module="bracket"
+                guardSave={guardBracketSave}
+                readOnly={bracketScheduleLocked}
+                leadingSections={<BracketStructureSection />}
+              />
+            </LockedFieldset>
           </ConfigSurface>
         )}
         {view === 'roster' && <BracketRosterTab />}

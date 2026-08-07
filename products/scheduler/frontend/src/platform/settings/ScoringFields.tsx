@@ -9,7 +9,7 @@
  * locked `<Row>`; the Sets-only dependents (points / match format / deuce)
  * sit in an indented, dimmed group when score type is Simple.
  */
-import { Row, Seg, Toggle, SelectInput } from './SettingsControls';
+import { Row, Seg, Toggle } from './SettingsControls';
 
 export interface ScoringValue {
   scoringFormat: 'simple' | 'badminton';
@@ -57,11 +57,16 @@ export function ScoringFields({
         }
         last
       />
-      {/* Sets-only dependents — indented + dimmed when Simple so they read
-          as dependent on the score type (the values still persist). */}
+      {/* Sets-only dependents: indented and dimmed when Simple so they read
+          as dependent on the score type (the values still persist).
+
+          All three pick-one controls here are segmented, not a mix of
+          segmented and dropdown. Each has exactly 3 options; the rule is
+          3 or fewer segmented, more than 3 a dropdown. A form where every
+          choice looks like a different kind of control reads as unfinished
+          rather than as varied. */}
       <div
         className={[
-          'mt-1 pl-4 border-l border-border/60',
           isSimple ? 'opacity-50 pointer-events-none' : '',
         ].join(' ')}
         aria-disabled={isSimple}
@@ -69,22 +74,24 @@ export function ScoringFields({
         <Row
           label="Points per set"
           control={
-            <SelectInput
+            <Seg
               value={value.pointsPerSet}
               onChange={(v) => onChange({ pointsPerSet: v })}
               options={POINTS_PER_SET_OPTIONS}
               ariaLabel="Points per set"
+              disabled={isSimple}
             />
           }
         />
         <Row
           label="Match format"
           control={
-            <SelectInput
+            <Seg
               value={value.setsToWin}
               onChange={(v) => onChange({ setsToWin: v })}
               options={MATCH_FORMAT_OPTIONS}
               ariaLabel="Match format"
+              disabled={isSimple}
             />
           }
         />

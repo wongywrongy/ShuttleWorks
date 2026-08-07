@@ -21,8 +21,8 @@ rejected roster delete poisoned the whole-blob autosave so *all* later edits
 failed until reload, and a Plan-timeline chip's selection was wiped by the 2.5 s
 poll so it looked like a dead button.
 
-Write-up: `design-plan/INTERACTION_FINDINGS.md`. Static census of every
-interactive element: `design-plan/INTERACTION_INVENTORY.md`.
+Write-up: `docs/programs/design-plan/INTERACTION_FINDINGS.md`. Static census of
+every interactive element: `docs/programs/design-plan/INTERACTION_INVENTORY.md`.
 
 ### Running the interaction smoke suite
 

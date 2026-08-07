@@ -1,0 +1,898 @@
+<title>ShuttleWorks — palette directions</title>
+<style>
+  /* ---------------------------------------------------------------
+     Page chrome is deliberately achromatic: every colour you see in a
+     specimen belongs to the direction being proposed, not to this page.
+     --------------------------------------------------------------- */
+  :root {
+    --page-bg: #fbfbfa;
+    --page-panel: #ffffff;
+    --page-fg: #141414;
+    --page-fg-2: #55534e;
+    --page-fg-3: #8a877f;
+    --page-rule: #e3e1dc;
+    --page-rule-2: #cfccc5;
+    --sp: 1rem;
+    --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page-bg: #131313;
+      --page-panel: #1b1b1a;
+      --page-fg: #f0efec;
+      --page-fg-2: #b0ada6;
+      --page-fg-3: #7c7a74;
+      --page-rule: #2b2b29;
+      --page-rule-2: #3d3c39;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page-bg: #131313;
+    --page-panel: #1b1b1a;
+    --page-fg: #f0efec;
+    --page-fg-2: #b0ada6;
+    --page-fg-3: #7c7a74;
+    --page-rule: #2b2b29;
+    --page-rule-2: #3d3c39;
+  }
+  :root[data-theme="light"] {
+    --page-bg: #fbfbfa;
+    --page-panel: #ffffff;
+    --page-fg: #141414;
+    --page-fg-2: #55534e;
+    --page-fg-3: #8a877f;
+    --page-rule: #e3e1dc;
+    --page-rule-2: #cfccc5;
+  }
+
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--page-fg);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: calc(var(--sp) * 3) calc(var(--sp) * 1.5) calc(var(--sp) * 5);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--sp) * 3);
+  }
+
+  /* ------------------------------- masthead ------------------------------ */
+  .masthead { display: flex; flex-direction: column; gap: 0.6rem; }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--page-fg-3);
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+    font-weight: 620;
+    text-wrap: balance;
+  }
+  .lede { margin: 0; max-width: 62ch; color: var(--page-fg-2); }
+  .lede strong { color: var(--page-fg); font-weight: 600; }
+
+  .readme {
+    border-top: 1px solid var(--page-rule);
+    border-bottom: 1px solid var(--page-rule);
+    padding: calc(var(--sp) * 0.9) 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--sp) * 2);
+    font-size: 0.8125rem;
+    color: var(--page-fg-2);
+  }
+  .readme div { max-width: 30ch; }
+  .readme b { color: var(--page-fg); font-weight: 600; display: block; }
+
+  /* -------------------------------- bands -------------------------------- */
+  .band { display: flex; flex-direction: column; gap: calc(var(--sp) * 1.1); }
+  .band-head { display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
+  .band-letter {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--page-fg-3);
+    border: 1px solid var(--page-rule-2);
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+  }
+  .band-head h2 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 620;
+    letter-spacing: -0.01em;
+  }
+  .band-head .thesis { color: var(--page-fg-2); font-size: 0.9375rem; }
+
+  .band-grid {
+    display: grid;
+    grid-template-columns: minmax(16rem, 20rem) 1fr 1fr;
+    gap: calc(var(--sp) * 1.1);
+    align-items: start;
+  }
+  @media (max-width: 60rem) { .band-grid { grid-template-columns: 1fr; } }
+
+  .notes {
+    background: var(--page-panel);
+    border: 1px solid var(--page-rule);
+    border-radius: 6px;
+    padding: calc(var(--sp) * 1);
+    font-size: 0.8125rem;
+    color: var(--page-fg-2);
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+  .notes p { margin: 0; }
+  .notes .risk { color: var(--page-fg); }
+  .notes .risk b {
+    font-family: var(--mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--page-fg-3);
+    display: block;
+  }
+  .swatches { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .sw {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--mono);
+    font-size: 0.625rem;
+    color: var(--page-fg-2);
+    border: 1px solid var(--page-rule);
+    border-radius: 3px;
+    padding: 0.15rem 0.35rem 0.15rem 0.2rem;
+  }
+  .sw i {
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 2px;
+    border: 1px solid rgba(128, 128, 128, 0.35);
+    display: block;
+  }
+
+  /* ------------------------------ specimens ------------------------------
+     One component set, rendered once per palette per theme. Everything
+     inside .spec reads from the palette variables set on .spec itself.
+     ---------------------------------------------------------------------- */
+  .spec {
+    border: 1px solid var(--page-rule);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--s-base);
+    color: var(--s-tx);
+  }
+  .spec-label {
+    font-family: var(--mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--page-fg-3);
+    background: var(--page-panel);
+    border-bottom: 1px solid var(--page-rule);
+    padding: 0.35rem 0.6rem;
+  }
+  .spec-body {
+    padding: calc(var(--sp) * 0.9);
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    font-size: 0.8125rem;
+  }
+
+  /* court strip — the product's own primary object */
+  .court {
+    background: var(--s-raised);
+    border: 1px solid var(--s-bd);
+    border-radius: var(--s-radius, 8px);
+    padding: 0.6rem 0.7rem;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    box-shadow: var(--s-shadow, none);
+  }
+  .court-id {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--s-mut);
+    border-right: 1px solid var(--s-bd);
+    padding-right: 0.7rem;
+  }
+  .court-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+  .court-main .who { font-weight: 570; color: var(--s-tx); letter-spacing: -0.005em; }
+  .court-main .meta { font-size: 0.6875rem; color: var(--s-mut); }
+  .court-main .meta .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.625rem;
+    font-weight: 640;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 0.15rem 0.5rem;
+    white-space: nowrap;
+  }
+  .chip.live { color: var(--s-live); background: var(--s-live-bg); }
+  .chip.called { color: var(--s-call); background: var(--s-call-bg); }
+  .chip.sched { color: var(--s-sched); background: var(--s-sched-bg); }
+  .chip.done { color: var(--s-mut); background: var(--s-sunken); }
+  .chip i {
+    width: 0.4rem; height: 0.4rem; border-radius: 999px;
+    background: currentColor; display: block;
+  }
+
+  .row { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+
+  .btn {
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 560;
+    border-radius: var(--s-radius, 8px);
+    padding: 0.34rem 0.7rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .btn.primary { background: var(--s-acc); color: var(--s-acc-ink); }
+  .btn.primary:hover { background: var(--s-acc-hover); }
+  .btn.ghost { background: var(--s-raised); color: var(--s-tx); border-color: var(--s-bd-strong); }
+  .btn:focus-visible { outline: 2px solid var(--s-acc); outline-offset: 2px; }
+
+  .field { display: flex; flex-direction: column; gap: 0.2rem; }
+  .field span { font-size: 0.6875rem; font-weight: 560; color: var(--s-tx); }
+  .field .box {
+    background: var(--s-raised);
+    border: 1px solid var(--s-bd-strong);
+    border-radius: var(--s-radius-sm, 6px);
+    padding: 0.34rem 0.55rem;
+    color: var(--s-mut);
+    font-size: 0.75rem;
+  }
+  .link { color: var(--s-acc); text-decoration: none; font-size: 0.75rem; }
+  .link:hover { text-decoration: underline; }
+
+  .collide {
+    background: var(--s-sunken);
+    border-radius: var(--s-radius-sm, 6px);
+    padding: 0.45rem 0.55rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    color: var(--s-mut);
+  }
+
+  /* Direction C's type treatment, applied only inside its specimens. */
+  .spec[data-type="condensed"] .court-main .who {
+    font-family: "Archivo Narrow", "Barlow Condensed", "Roboto Condensed", var(--sans);
+    font-stretch: 87.5%;
+    font-size: 0.9375rem;
+    font-weight: 640;
+    letter-spacing: -0.015em;
+  }
+  .spec[data-type="condensed"] .court-id {
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+  }
+  /* The signature: a true-proportion court plan (13.4 × 6.1 m), drawn from
+     the real markings — outer boundary, doubles tramlines, net, the two
+     short service lines, and the centre lines that make the T. Everything
+     is stroked in currentColor so it inherits the row's state colour. */
+  .court-mark { flex: none; display: block; color: var(--s-bd-strong); }
+  .court-mark .lines { stroke: currentColor; stroke-width: 1.6; fill: none; }
+  .court-mark .net { stroke: currentColor; stroke-width: 3; }
+  .court-mark .surface { fill: var(--s-sunken); stroke: none; }
+  /* A live row lights its own court. */
+  .court.is-live .court-mark { color: var(--s-live); }
+
+  /* ----------------------------- palettes ------------------------------- */
+  /* NOW — what ships today. Tailwind blue-600 on a cool-220 gray ramp. */
+  .p-now.light {
+    --s-base:#F9FAFB; --s-raised:#FFFFFF; --s-sunken:#EFF2F5;
+    --s-tx:#0F1114; --s-mut:#5F6877; --s-bd:#E3E7EC; --s-bd-strong:#7E8798;
+    --s-acc:#2563EB; --s-acc-hover:#1949C7; --s-acc-ink:#FFFFFF;
+    --s-live:#176D42; --s-live-bg:#E7F8EE;
+    --s-call:#A25907; --s-call-bg:#FCF0D9;
+    --s-sched:#08689B; --s-sched-bg:#E3F3FC;
+    --s-shadow: 0 1px 2px rgba(15,17,20,.08);
+  }
+  .p-now.dark {
+    --s-base:#16181D; --s-raised:#23272E; --s-sunken:#0F1114;
+    --s-tx:#F0F2F5; --s-mut:#ACB4C0; --s-bd:#2C313B; --s-bd-strong:#7E8798;
+    --s-acc:#6D9BE4; --s-acc-hover:#90B1EC; --s-acc-ink:#0E1A2F;
+    --s-live:#72CA9F; --s-live-bg:#173524;
+    --s-call:#D8B15A; --s-call-bg:#383015;
+    --s-sched:#64AFD9; --s-sched-bg:#14293D;
+  }
+
+  /* A — warm substrate, azure moved off the Tailwind hex toward cyan. */
+  .p-a.light {
+    --s-base:#FAF8F5; --s-raised:#FFFFFF; --s-sunken:#F1EDE7;
+    --s-tx:#17140F; --s-mut:#6B6459; --s-bd:#E7E1D7; --s-bd-strong:#8C8477;
+    --s-acc:#0F62B8; --s-acc-hover:#0B4E94; --s-acc-ink:#FFFFFF;
+    --s-live:#1A6B44; --s-live-bg:#E8F5EC;
+    --s-call:#96560A; --s-call-bg:#FBEFDA;
+    --s-sched:#0A6493; --s-sched-bg:#E5F1F8;
+    --s-shadow: 0 1px 2px rgba(23,20,15,.09);
+  }
+  .p-a.dark {
+    --s-base:#1A1815; --s-raised:#26231F; --s-sunken:#100F0D;
+    --s-tx:#F2EFE9; --s-mut:#B0A99E; --s-bd:#35312B; --s-bd-strong:#8C8477;
+    --s-acc:#64A8E8; --s-acc-hover:#8BC0F0; --s-acc-ink:#0D1A26;
+    --s-live:#74C79C; --s-live-bg:#17301F;
+    --s-call:#D3AC5E; --s-call-bg:#332B15;
+    --s-sched:#68ADD2; --s-sched-bg:#14262F;
+  }
+
+  /* B — petrol accent; blue freed entirely; scheduled demoted to neutral;
+         live green pushed warmer so it cannot be mistaken for the accent. */
+  .p-b.light {
+    --s-base:#F7F9F8; --s-raised:#FFFFFF; --s-sunken:#ECF1EF;
+    --s-tx:#0E1412; --s-mut:#56635E; --s-bd:#DCE5E1; --s-bd-strong:#78877F;
+    --s-acc:#0A6B75; --s-acc-hover:#075058; --s-acc-ink:#FFFFFF;
+    --s-live:#2E7D3C; --s-live-bg:#E6F5E7;
+    --s-call:#A25907; --s-call-bg:#FCF0D9;
+    --s-sched:#56635E; --s-sched-bg:#ECF1EF;
+    --s-shadow: 0 1px 2px rgba(14,20,18,.09);
+  }
+  .p-b.dark {
+    --s-base:#14181A; --s-raised:#1F2528; --s-sunken:#0E1113;
+    --s-tx:#EEF2F1; --s-mut:#A3B0AC; --s-bd:#2A3235; --s-bd-strong:#78877F;
+    --s-acc:#4FBECB; --s-acc-hover:#78D2DC; --s-acc-ink:#062226;
+    --s-live:#7FCB8A; --s-live-bg:#17301C;
+    --s-call:#D8B15A; --s-call-bg:#383015;
+    --s-sched:#A3B0AC; --s-sched-bg:#262E30;
+  }
+
+  /* C — the shipped palette, unchanged. The identity moves to type + the
+         court signature, so the swatches here are deliberately the same. */
+  .p-c.light { }
+  .p-c.dark { }
+
+  /* --------------------------- geometry study ---------------------------- */
+  .study {
+    display: grid;
+    grid-template-columns: minmax(16rem, 20rem) 1fr;
+    gap: calc(var(--sp) * 1.1);
+    align-items: start;
+  }
+  @media (max-width: 60rem) { .study { grid-template-columns: 1fr; } }
+  .scales {
+    background: var(--s-base);
+    border: 1px solid var(--page-rule);
+    border-radius: 6px;
+    padding: calc(var(--sp) * 1.25);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: calc(var(--sp) * 1.75);
+  }
+  .scale { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+  .scale-cap {
+    font-family: var(--mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--s-mut);
+  }
+
+  /* ------------------------------- verdict ------------------------------- */
+  .verdict {
+    background: var(--page-panel);
+    border: 1px solid var(--page-rule);
+    border-radius: 6px;
+    padding: calc(var(--sp) * 1.25);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .verdict h2 { margin: 0; font-size: 1.0625rem; font-weight: 620; letter-spacing: -0.01em; }
+  .verdict p { margin: 0; color: var(--page-fg-2); max-width: 70ch; font-size: 0.875rem; }
+  .verdict p strong { color: var(--page-fg); font-weight: 600; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.8125rem; min-width: 34rem; }
+  th, td { text-align: left; padding: 0.45rem 0.7rem 0.45rem 0; border-bottom: 1px solid var(--page-rule); vertical-align: top; }
+  th { font-size: 0.625rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--page-fg-3); font-weight: 600; }
+  td:first-child { font-family: var(--mono); font-weight: 700; width: 2.5rem; }
+  td { color: var(--page-fg-2); }
+  td strong { color: var(--page-fg); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="kicker">Design review · 2026-08-06 · decision pending</div>
+    <h1>Three ways out of the default palette</h1>
+    <p class="lede">
+      The token architecture is sound — two layers, an elevation ladder, a contrast gate. The
+      <strong>values</strong> are the problem: <code>#2563EB</code> is Tailwind
+      <code>blue-600</code> over a stock cool-gray ramp, so the product reads as a competent
+      shadcn app rather than as ShuttleWorks. Each direction below is a mapping change, not a
+      component sweep. Pick one; A and C combine.
+    </p>
+  </header>
+
+  <div class="readme">
+    <div><b>Same specimen, every time</b> A court strip, the status vocabulary, a primary
+      action, and a sign-in field — the objects that actually carry the product.</div>
+    <div><b>Both themes, side by side</b> Light and dark are two mappings of one semantic
+      layer, so a direction has to survive both or it isn't a direction.</div>
+    <div><b>Watch the last row</b> Each specimen ends with the collision test: a
+      <em>scheduled</em> chip beside a clickable control. That is where today's palette fails.</div>
+  </div>
+
+  <!-- ============================== NOW ============================== -->
+  <section class="band">
+    <div class="band-head">
+      <span class="band-letter">NOW</span>
+      <h2>What ships today</h2>
+      <span class="thesis">Disciplined, well-built, and indistinguishable from any other stack.</span>
+    </div>
+    <div class="band-grid">
+      <div class="notes">
+        <div class="swatches">
+          <span class="sw"><i style="background:#2563EB"></i>#2563EB accent</span>
+          <span class="sw"><i style="background:#F9FAFB"></i>#F9FAFB base</span>
+          <span class="sw"><i style="background:#0F1114"></i>#0F1114 ink</span>
+          <span class="sw"><i style="background:#08689B"></i>#08689B scheduled</span>
+        </div>
+        <p>The accent is the most-used accent value on the web, and the neutrals are the
+          temperature every Tailwind starter ships with. Nothing here is wrong; nothing here
+          was chosen.</p>
+        <p class="risk"><b>The collision</b>Scheduled sky and interactive azure are the same
+          blue to the eye. On the Ops board a chip you cannot touch and a button you must
+          touch carry the same signal.</p>
+      </div>
+      <div class="spec p-now light">
+        <div class="spec-label">Light</div>
+        <div class="spec-body">
+          <div class="court">
+            <span class="court-id">C3</span>
+            <span class="court-main">
+              <span class="who">Tan / Fernandez</span>
+              <span class="meta">MS semi-final · <span class="num">14:20</span> · best of 3</span>
+            </span>
+            <span class="chip live"><i></i>Live</span>
+          </div>
+          <div class="row">
+            <span class="chip called"><i></i>Called</span>
+            <span class="chip sched"><i></i>Scheduled</span>
+            <span class="chip done"><i></i>Done</span>
+          </div>
+          <div class="field">
+            <span>Password</span>
+            <div class="box">••••••••</div>
+          </div>
+          <div class="collide">
+            <span class="chip sched"><i></i>Scheduled</span>
+            <button class="btn primary">Call match</button>
+            <span>same blue, different meaning</span>
+          </div>
+        </div>
+      </div>
+      <div class="spec p-now dark">
+        <div class="spec-label">Dark</div>
+        <div class="spec-body">
+          <div class="court">
+            <span class="court-id">C3</span>
+            <span class="court-main">
+              <span class="who">Tan / Fernandez</span>
+              <span class="meta">MS semi-final · <span class="num">14:20</span> · best of 3</span>
+            </span>
+            <span class="chip live"><i></i>Live</span>
+          </div>
+          <div class="row">
+            <span class="chip called"><i></i>Called</span>
+            <span class="chip sched"><i></i>Scheduled</span>
+            <span class="chip done"><i></i>Done</span>
+          </div>
+          <div class="field">
+            <span>Password</span>
+            <div class="box">••••••••</div>
+          </div>
+          <div class="collide">
+            <span class="chip sched"><i></i>Scheduled</span>
+            <button class="btn primary">Call match</button>
+            <span>same blue, different meaning</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================== A =============================== -->
+  <section class="band">
+    <div class="band-head">
+      <span class="band-letter">A</span>
+      <h2>Warm the substrate, keep the role</h2>
+      <span class="thesis">Ten primitive values. The cheapest way to stop looking generated.</span>
+    </div>
+    <div class="band-grid">
+      <div class="notes">
+        <div class="swatches">
+          <span class="sw"><i style="background:#0F62B8"></i>#0F62B8 accent</span>
+          <span class="sw"><i style="background:#FAF8F5"></i>#FAF8F5 base</span>
+          <span class="sw"><i style="background:#17140F"></i>#17140F ink</span>
+          <span class="sw"><i style="background:#8C8477"></i>#8C8477 control</span>
+        </div>
+        <p>The neutral ramp moves off cool-220 to a low-saturation warm — a hall floor rather
+          than a screenshot — and the accent moves off <code>blue-600</code> to a deeper,
+          cyan-leaning azure that holds its own against the warm ground.</p>
+        <p>Deliberately a whisper of warmth, not a cream page: warm-cream-plus-serif is its own
+          cliché and this is an operations tool, not a magazine.</p>
+        <p class="risk"><b>Risk</b>Lowest. Blue still means both <em>scheduled</em> and
+          <em>clickable</em> — this direction does not fix the collision.</p>
+      </div>
+      <div class="spec p-a light">
+        <div class="spec-label">Light</div>
+        <div class="spec-body">
+          <div class="court">
+            <span class="court-id">C3</span>
+            <span class="court-main">
+              <span class="who">Tan / Fernandez</span>
+              <span class="meta">MS semi-final · <span class="num">14:20</span> · best of 3</span>
+            </span>
+            <span class="chip live"><i></i>Live</span>
+          </div>
+          <div class="row">
+            <span class="chip called"><i></i>Called</span>
+            <span class="chip sched"><i></i>Scheduled</span>
+            <span class="chip done"><i></i>Done</span>
+          </div>
+          <div class="field">
+            <span>Password</span>
+            <div class="box">••••••••</div>
+          </div>
+          <div class="collide">
+            <span class="chip sched"><i></i>Scheduled</span>
+            <button class="btn primary">Call match</button>
+            <span>still adjacent hues</span>
+          </div>
+        </div>
+      </div>
+      <div class="spec p-a dark">
+        <div class="spec-label">Dark</div>
+        <div class="spec-body">
+          <div class="court">
+            <span class="court-id">C3</span>
+            <span class="court-main">
+              <span class="who">Tan / Fernandez</span>
+              <span class="meta">MS semi-final · <span class="num">14:20</span> · best of 3</span>
+            </span>
+            <span class="chip live"><i></i>Live</span>
+          </div>
+          <div class="row">
+            <span class="chip called"><i></i>Called</span>
+            <span class="chip sched"><i></i>Scheduled</span>
+            <span class="chip done"><i></i>Done</span>
+          </div>
+          <div class="field">
+            <span>Password</span>
+            <div class="box">••••••••</div>
+          </div>
+          <div class="collide">
+            <span class="chip sched"><i></i>Scheduled</span>
+            <button class="btn primary">Call match</button>
+            <span>still adjacent hues</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================== B =============================== -->
+  <section class="band">
+    <div class="band-head">
+      <span class="band-letter">B</span>
+      <h2>Petrol accent, blue retired</h2>
+      <span class="thesis">Fewer hues, each meaning exactly one thing.</span>
+    </div>
+    <div class="band-grid">
+      <div class="notes">
+        <div class="swatches">
+          <span class="sw"><i style="background:#0A6B75"></i>#0A6B75 accent</span>
+          <span class="sw"><i style="background:#F7F9F8"></i>#F7F9F8 base</span>
+          <span class="sw"><i style="background:#2E7D3C"></i>#2E7D3C live</span>
+          <span class="sw"><i style="background:#56635E"></i>#56635E scheduled</span>
+        </div>
+        <p>The accent becomes the petrol of a court surround, and blue leaves the system
+          entirely: <em>scheduled</em> is demoted to neutral — it is the default state, not an
+          alert — so the only coloured hues left are live, called, blocked, and the one thing
+          you can click.</p>
+        <p>Live green is pushed warmer (<code>#2E7D3C</code>) so it separates cleanly from the
+          teal accent at chip size.</p>
+        <p class="risk"><b>Risk</b>Medium. Teal and green are 40° apart; the warmed green is
+          what keeps them legible, and that has to hold at 10px on a hall projector. Moves
+          colour on the live Ops board.</p>
+      </div>
+      <div class="spec p-b light">
+        <div class="spec-label">Light</div>
+        <div class="spec-body">
+          <div class="court">
+            <span class="court-id">C3</span>
+            <span class="court-main">
+              <span class="who">Tan / Fernandez</span>
+              <span class="meta">MS semi-final · <span class="num">14:20</span> · best of 3</span>
+            </span>
+            <span class="chip live"><i></i>Live</span>
+          </div>
+          <div class="row">
+            <span class="chip called"><i></i>Called</span>
+            <span class="chip sched"><i></i>Scheduled</span>
+            <span class="chip done"><i></i>Done</span>
+          </div>
+          <div class="field">
+            <span>Password</span>
+            <div class="box">••••••••</div>
+          </div>
+          <div class="collide">
+            <span class="chip sched"><i></i>Scheduled</span>
+            <button class="btn primary">Call match</button>
+            <span>only the button carries hue</span>
+          </div>
+        </div>
+      </div>
+      <div class="spec p-b dark">
+        <div class="spec-label">Dark</div>
+        <div class="spec-body">
+          <div class="court">
+            <span class="court-id">C3</span>
+            <span class="court-main">
+              <span class="who">Tan / Fernandez</span>
+              <span class="meta">MS semi-final · <span class="num">14:20</span> · best of 3</span>
+            </span>
+            <span class="chip live"><i></i>Live</span>
+          </div>
+          <div class="row">
+            <span class="chip called"><i></i>Called</span>
+            <span class="chip sched"><i></i>Scheduled</span>
+            <span class="chip done"><i></i>Done</span>
+          </div>
+          <div class="field">
+            <span>Password</span>
+            <div class="box">••••••••</div>
+          </div>
+          <div class="collide">
+            <span class="chip sched"><i></i>Scheduled</span>
+            <button class="btn primary">Call match</button>
+            <span>only the button carries hue</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================== C =============================== -->
+  <section class="band">
+    <div class="band-head">
+      <span class="band-letter">C</span>
+      <h2>Keep the palette; spend the identity on type</h2>
+      <span class="thesis">Colour is not the only axis, and it is the riskiest one to move.</span>
+    </div>
+    <div class="band-grid">
+      <div class="notes">
+        <div class="swatches">
+          <span class="sw"><i style="background:#2563EB"></i>unchanged</span>
+          <span class="sw"><i style="background:#F9FAFB"></i>unchanged</span>
+          <span class="sw"><i style="background:#0F1114"></i>unchanged</span>
+        </div>
+        <p>Geist + JetBrains Mono is itself a default pairing. A condensed grotesque —
+          <strong>Archivo Narrow</strong> or <strong>Barlow Condensed</strong> — for match
+          identity, court numbers, and timers borrows from the object every player in the hall
+          is already reading: the scoreboard. Body copy stays Geist.</p>
+        <p>The signature is the court strip carrying a <strong>true-proportion court plan</strong>
+          — 13.4 × 6.1 m, tramlines, net, short service lines, the centre-line T — instead of a
+          generic status stripe. It inherits the row's state colour, so a live court lights up.</p>
+        <p class="risk"><b>Risk</b>Medium, none of it colour. The specimen approximates the
+          condensed face with the system stack; the real faces need bundling and a pass over
+          every dense table.</p>
+      </div>
+      <div class="spec p-c p-now light" data-type="condensed">
+        <div class="spec-label">Light</div>
+        <div class="spec-body">
+          <div class="court is-live">
+            <svg class="court-mark" width="46" height="21" viewBox="0 0 134 61" aria-hidden="true">
+              <rect class="surface" x="0" y="0" width="134" height="61" rx="1.5" />
+              <g class="lines">
+                <rect x="0.8" y="0.8" width="132.4" height="59.4" rx="1.5" />
+                <path d="M0.8 4.6H133.2M0.8 56.4H133.2" />
+                <path d="M47.2 0.8V60.2M86.8 0.8V60.2" />
+                <path d="M0.8 30.5H47.2M86.8 30.5H133.2" />
+              </g>
+              <path class="net" d="M67 0V61" />
+            </svg>
+            <span class="court-id">C3</span>
+            <span class="court-main">
+              <span class="who">Tan / Fernandez</span>
+              <span class="meta">MS semi-final · <span class="num">14:20</span> · best of 3</span>
+            </span>
+            <span class="chip live"><i></i>Live</span>
+          </div>
+          <div class="row">
+            <span class="chip called"><i></i>Called</span>
+            <span class="chip sched"><i></i>Scheduled</span>
+            <span class="chip done"><i></i>Done</span>
+          </div>
+          <div class="field">
+            <span>Password</span>
+            <div class="box">••••••••</div>
+          </div>
+          <div class="collide">
+            <span class="chip sched"><i></i>Scheduled</span>
+            <button class="btn primary">Call match</button>
+            <span>collision unchanged — pair with A or B</span>
+          </div>
+        </div>
+      </div>
+      <div class="spec p-c p-now dark" data-type="condensed">
+        <div class="spec-label">Dark</div>
+        <div class="spec-body">
+          <div class="court is-live">
+            <svg class="court-mark" width="46" height="21" viewBox="0 0 134 61" aria-hidden="true">
+              <rect class="surface" x="0" y="0" width="134" height="61" rx="1.5" />
+              <g class="lines">
+                <rect x="0.8" y="0.8" width="132.4" height="59.4" rx="1.5" />
+                <path d="M0.8 4.6H133.2M0.8 56.4H133.2" />
+                <path d="M47.2 0.8V60.2M86.8 0.8V60.2" />
+                <path d="M0.8 30.5H47.2M86.8 30.5H133.2" />
+              </g>
+              <path class="net" d="M67 0V61" />
+            </svg>
+            <span class="court-id">C3</span>
+            <span class="court-main">
+              <span class="who">Tan / Fernandez</span>
+              <span class="meta">MS semi-final · <span class="num">14:20</span> · best of 3</span>
+            </span>
+            <span class="chip live"><i></i>Live</span>
+          </div>
+          <div class="row">
+            <span class="chip called"><i></i>Called</span>
+            <span class="chip sched"><i></i>Scheduled</span>
+            <span class="chip done"><i></i>Done</span>
+          </div>
+          <div class="field">
+            <span>Password</span>
+            <div class="box">••••••••</div>
+          </div>
+          <div class="collide">
+            <span class="chip sched"><i></i>Scheduled</span>
+            <button class="btn primary">Call match</button>
+            <span>collision unchanged — pair with A or B</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= GEOMETRY STUDY ========================= -->
+  <section class="band">
+    <div class="band-head">
+      <span class="band-letter">C·1</span>
+      <h2>The court mark, drawn properly</h2>
+      <span class="thesis">First pass was a vertical bar with a tick through it — not a court.</span>
+    </div>
+    <div class="study">
+      <div class="notes">
+        <p>A badminton court is <strong>13.4 × 6.1 m</strong> — a 2.2 : 1 landscape rectangle.
+          The first attempt was a narrow vertical rail, so the proportion was inverted and only
+          one marking was present. Nothing about it read as a court.</p>
+        <p>This one is drawn from the real markings at true scale: outer boundary, the doubles
+          tramlines 0.46 m in, the net across the middle, the short service lines 1.98 m either
+          side, and the centre lines running back from them — the T that only badminton has.</p>
+        <p>The doubles long service line (0.76 m from the back) is deliberately omitted: at row
+          size it lands under a quarter of a pixel and only muddies the mark.</p>
+        <p class="risk"><b>Open</b>The mark carries state colour. Whether a whole board of lit
+          courts is useful or noisy is a call to make against real fixture data, not a specimen.</p>
+      </div>
+      <div class="scales p-a light">
+        <div class="scale">
+          <svg class="court-mark" width="46" height="21" viewBox="0 0 134 61" aria-hidden="true">
+            <rect class="surface" x="0" y="0" width="134" height="61" rx="1.5" />
+            <g class="lines">
+              <rect x="0.8" y="0.8" width="132.4" height="59.4" rx="1.5" />
+              <path d="M0.8 4.6H133.2M0.8 56.4H133.2" />
+              <path d="M47.2 0.8V60.2M86.8 0.8V60.2" />
+              <path d="M0.8 30.5H47.2M86.8 30.5H133.2" />
+            </g>
+            <path class="net" d="M67 0V61" />
+          </svg>
+          <span class="scale-cap">Row · 46px</span>
+        </div>
+        <div class="scale">
+          <svg class="court-mark" width="88" height="40" viewBox="0 0 134 61" aria-hidden="true">
+            <rect class="surface" x="0" y="0" width="134" height="61" rx="1.5" />
+            <g class="lines">
+              <rect x="0.8" y="0.8" width="132.4" height="59.4" rx="1.5" />
+              <path d="M0.8 4.6H133.2M0.8 56.4H133.2" />
+              <path d="M47.2 0.8V60.2M86.8 0.8V60.2" />
+              <path d="M0.8 30.5H47.2M86.8 30.5H133.2" />
+            </g>
+            <path class="net" d="M67 0V61" />
+          </svg>
+          <span class="scale-cap">Card · 88px</span>
+        </div>
+        <div class="scale">
+          <svg class="court-mark" style="color: var(--s-live)" width="220" height="100" viewBox="0 0 134 61" aria-hidden="true">
+            <rect class="surface" x="0" y="0" width="134" height="61" rx="1.5" />
+            <g class="lines">
+              <rect x="0.8" y="0.8" width="132.4" height="59.4" rx="1.5" />
+              <path d="M0.8 4.6H133.2M0.8 56.4H133.2" />
+              <path d="M47.2 0.8V60.2M86.8 0.8V60.2" />
+              <path d="M0.8 30.5H47.2M86.8 30.5H133.2" />
+            </g>
+            <path class="net" d="M67 0V61" />
+          </svg>
+          <span class="scale-cap">Live, board scale · 220px</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================= VERDICT ============================= -->
+  <section class="verdict">
+    <h2>Decided: A + C</h2>
+    <p><strong>A and C ship; B is not taken.</strong> A costs about ten primitive values and no
+      component changes, and it removes the "generated" read on its own. C is where the identity
+      actually comes from, and it carries zero colour risk, so it runs alongside. B stays on the
+      shelf — its argument is the strongest (one hue means touchable, three mean state,
+      everything else is neutral) but it repaints a surface directors read under time pressure.</p>
+    <p><strong>What A + C does not fix:</strong> blue still means both <em>scheduled</em> and
+      <em>clickable</em>, and <code>--module-meet</code> is still the accent hex. That collision
+      is logged in the debt log and needs its own decision — the cheap half of B (demote
+      <code>--status-started</code> to neutral, leave the accent azure) would close it without
+      repainting anything else.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Dir</th><th>Changes</th><th>Fixes the blue collision</th><th>Effort</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>A</td>
+            <td><strong>~10 primitives</strong> — gray ramp temperature, azure hex</td>
+            <td>No</td>
+            <td>Half a day, plus the contrast gate</td>
+          </tr>
+          <tr>
+            <td>B</td>
+            <td><strong>Primitives + status mapping</strong> — accent, scheduled → neutral, green warmed</td>
+            <td>Yes, by removing blue from status entirely</td>
+            <td>Two days, plus an event trial</td>
+          </tr>
+          <tr>
+            <td>C</td>
+            <td><strong>Type stack + court strip</strong> — condensed display face, court geometry</td>
+            <td>No — pair it with A or B</td>
+            <td>Two to three days, font bundling included</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Whichever wins: it lands as a mapping change in <code>tokens.css</code>, runs through
+      <code>scripts/check-contrast.mjs</code>, and updates <code>DESIGN_COLOR.md</code>. No
+      component sweep — that is what the two-layer system bought.</p>
+  </section>
+</div>

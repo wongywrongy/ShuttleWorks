@@ -391,7 +391,11 @@ export function MeetDisplayPage() {
     <div
       ref={rootRef}
       data-tv-preset={tvPreset}
-      className="min-h-[100dvh] bg-background text-foreground selection:bg-accent/30"
+      /* `relative` anchors the progress footer below. It used to be
+         viewport-`fixed`, which is right on the real fullscreen board but
+         wrong in the in-shell Preview: the bar spanned the whole window and
+         ran underneath the icon rail and the workspace sidebar. */
+      className="relative min-h-[100dvh] bg-background text-foreground selection:bg-accent/30"
     >
       {/* Subtle film-grain overlay — adds a barely-there texture to the
           full-screen TV surface so the pure flats don't read as
@@ -502,7 +506,7 @@ export function MeetDisplayPage() {
       </div>
 
       {/* ---------- Progress footer ------------------------------------- */}
-      <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/90 px-6 py-3 backdrop-blur">
+      <div className="sticky inset-x-0 bottom-0 border-t border-border bg-background/90 px-6 py-3 backdrop-blur">
         <div className="flex items-center justify-between text-base">
           <div className="text-muted-foreground">
             {finishedCount} / {totalCount} matches complete · {progressPct}%

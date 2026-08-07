@@ -25,9 +25,10 @@ import {
   PlayerEventsField,
 } from '../roster/PlayerDetailPanel';
 import { EVENT_LABEL } from '../roster/positionGrid/helpers';
+import { EYEBROW_CLASS } from '../../../lib/utils';
 
 const FIELD_LABEL_CLASSES =
-  'text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground';
+  `${EYEBROW_CLASS} text-muted-foreground`;
 
 export function MatchDetailPanel({
   match,
@@ -73,7 +74,7 @@ export function MatchDetailPanel({
             {/* Read-only pill — Operations owns run-state; never interactive. */}
             <span
               data-testid="match-status-pill"
-              className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] ${STATUS_CLASS[status]}`}
+              className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
             >
               {STATUS_LABEL[status]}
             </span>

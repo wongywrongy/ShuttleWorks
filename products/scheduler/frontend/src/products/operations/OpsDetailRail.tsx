@@ -14,7 +14,7 @@
  */
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { MatchDetailPanel } from '../bracket/MatchDetailPanel';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
 import { SourceChip } from '../../components/SourceChip';
@@ -74,7 +74,7 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: 
     <aside key={block.key} className={`${RAIL} sw-panel-in`}>
       <Identity block={block} />
       {block.done ? (
-        <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-done">Done</div>
+        <div className={`${EYEBROW_CLASS} text-status-done`}>Done</div>
       ) : live && block.source === 'meet' ? (
         <div className="flex flex-wrap gap-2">
           {block.started ? (

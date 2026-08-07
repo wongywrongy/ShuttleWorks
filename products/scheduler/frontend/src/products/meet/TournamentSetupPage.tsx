@@ -18,64 +18,35 @@
  * as `border-b` ribbon rows between the bar and the content.
  */
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTournament } from '../../hooks/useTournament';
+import { useTournamentId } from '../../hooks/useTournamentId';
 import { useLockGuard } from '../../hooks/useLockGuard';
+import { useMatchStateSync } from '../../hooks/useMatchStateSync';
+import { useMeetResultsLock } from '../../hooks/useMeetResultsLock';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
-import { useSearchParamState } from '../../hooks/useSearchParamState';
-import { MeetStructureForm } from './tournaments/MeetStructureForm';
 import { LockRibbon } from '../../components/status/LockRibbon';
 import { EngineConfigForm } from '../../platform/settings/EngineConfigForm';
-import { ConfigSurface } from '../../platform/settings/ConfigSurface';
+import { ConfigSurface, LockedFieldset } from '../../platform/settings/ConfigSurface';
 import { IconDone } from '@scheduler/design-system';
-import type { TournamentConfig } from '../../api/dto';
 
 const FORM_ID = 'meet-config-form';
 
-const SECTION_OPTIONS = [
-  { value: 'engine' as const, label: 'Engine' },
-  // Label is 'Events' (shared grammar with Bracket Configuration); the
-  // value stays 'meet' — it's URL state (?section=meet).
-  { value: 'meet' as const, label: 'Events' },
-];
-
 export function TournamentSetupPage() {
-  const { config, loading, error, updateConfig } = useTournament();
+  const { config, loading, error } = useTournament();
+  const tid = useTournamentId();
   const { isLocked, confirmUnlock } = useLockGuard();
+  // Configuration doesn't mount the live-tracking machinery, so match state
+  // would be empty here and the results lock would silently answer false.
+  // Same lightweight loader OperationsProduct and DisplayLayoutEditor use.
+  useMatchStateSync(tid);
+  const resultsLocked = useMeetResultsLock();
   const [busy, setBusy] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [section, setSection] = useSearchParamState('section', 'engine', {
-    debounceMs: 0,
-  });
+  // Save errors now render inside EngineConfigForm, which owns the save.
+  const [saveError] = useState<string | null>(null);
   const justSaved = useSuccessFlash(busy);
 
-  const handleSave = async (newConfig: TournamentConfig) => {
-    if (!(await confirmUnlock())) return;
-    try {
-      setBusy(true);
-      setSaveError(null);
-      await updateConfig(newConfig);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save configuration');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Show default config if tournament doesn't exist (404 error)
-  const defaultConfig: TournamentConfig = {
-    intervalMinutes: 30,
-    dayStart: '09:00',
-    dayEnd: '18:00',
-    breaks: [],
-    courtCount: 4,
-    defaultRestMinutes: 30,
-    freezeHorizonSlots: 0,
-    rankCounts: { MS: 3, WS: 3, MD: 2, WD: 2, XD: 2 },
-  };
-
-  const displayConfig = config || defaultConfig;
   const isNewTournament = !config && error && error.includes('not found');
-  const activeSection = section === 'meet' ? 'meet' : 'engine';
 
   if (loading && !config && !error) {
     return (
@@ -87,10 +58,10 @@ export function TournamentSetupPage() {
 
   return (
     <ConfigSurface
-      sections={SECTION_OPTIONS}
-      section={activeSection}
-      onSectionChange={(v) => setSection(v)}
       actions={
+        /* No Save under the results lock — a disabled Save would just beg the
+           question the ribbon already answers. Mirrors Bracket. */
+        resultsLocked ? null : (
         <button
           type="submit"
           form={FORM_ID}
@@ -108,11 +79,31 @@ export function TournamentSetupPage() {
             'Save'
           )}
         </button>
+        )
       }
       ribbons={
         <>
-          {/* Page-level banners — full-bleed border-b ribbons, each shrink-0. */}
-          {isLocked ? <LockRibbon tier="soft" locked /> : null}
+          {/* Page-level banners — full-bleed border-b ribbons, each shrink-0.
+              The results lock supersedes the schedule lock: once scores exist
+              the surface is read-only, so "saving will clear the schedule" is
+              no longer a thing that can happen and stacking both would state
+              two different answers at once. */}
+          {resultsLocked ? (
+            <LockRibbon
+              tier="results"
+              locked
+              action={
+                <Link
+                  to={`/tournaments/${tid}/matches`}
+                  className="ml-1 font-medium text-accent hover:underline"
+                >
+                  View matches →
+                </Link>
+              }
+            />
+          ) : isLocked ? (
+            <LockRibbon tier="schedule" locked />
+          ) : null}
           {isNewTournament ? (
             <div className="motion-enter shrink-0 border-b border-status-started/40 bg-status-started/5 px-4 py-2 text-xs text-status-started">
               <span className="font-semibold">New tournament — </span>
@@ -132,23 +123,19 @@ export function TournamentSetupPage() {
         </>
       }
     >
-      {/* Only one form is mounted at a time; both share FORM_ID so the bar
-          Save targets the active one. */}
-      {activeSection === 'meet' ? (
-        <MeetStructureForm
-          formId={FORM_ID}
-          config={displayConfig}
-          onSave={handleSave}
-          saving={busy}
-        />
-      ) : (
+      {/* ONE form, one save path. Configuration used to be an Engine/Events
+          switch over two forms that each spread the whole config on submit;
+          the meet-structure fields now live in this form's own state, so
+          Format and Events are just its first two sections. */}
+      <LockedFieldset locked={resultsLocked}>
         <EngineConfigForm
           module="meet"
           formId={FORM_ID}
           onBusyChange={setBusy}
-          guardSave={() => confirmUnlock('save engine settings')}
+          guardSave={() => confirmUnlock('save configuration')}
+          readOnly={resultsLocked}
         />
-      )}
+      </LockedFieldset>
     </ConfigSurface>
   );
 }

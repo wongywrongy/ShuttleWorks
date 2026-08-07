@@ -13,7 +13,7 @@ import { useBracketApi } from '../../api/bracketClient';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { BracketScoreEntry } from './BracketScoreEntry';
 import { BracketInlineNotice } from './BracketInlineNotice';
@@ -89,7 +89,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
       className="h-full w-full p-4 space-y-3 overflow-auto sw-panel-in"
     >
       {/* Match id eyebrow */}
-      <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
         {pu.id}
       </div>
 
@@ -118,7 +118,7 @@ export function MatchDetailPanel({ data, onChange }: Props) {
 
       {/* Result summary (when finished) */}
       {result && (
-        <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
           Done — {result.winner_side === 'A' ? labelA : labelB} wins
         </div>
       )}
