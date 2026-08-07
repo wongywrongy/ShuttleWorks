@@ -238,4 +238,18 @@ describe('the entry form, unhydrated', () => {
     // And no total: the total is the server's, from the quote/persist path.
     expect(html).toContain('The organiser confirms the total when they receive');
   });
+
+  it('states the bundle schedule verbatim from the projection', async () => {
+    // Carry-over from the Task 16 review: `entry.form.tsx` renders
+    // `page.page.feeSchedule` and NOTHING asserted it, so the fixture's
+    // `{ '2': 2500 }` could have vanished silently. R14 §4 requires the
+    // pricing rule to be stated BEFORE submission, and the tier prices are
+    // exactly the rule an entrant cannot infer from the per-event fees
+    // (2500 is not 1500 + 2000). Formatted, never computed.
+    const html = await render();
+
+    expect(html).toContain('Bundle pricing');
+    expect(html).toContain('2 events');
+    expect(html).toContain('25.00');
+  });
 });

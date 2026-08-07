@@ -792,3 +792,177 @@ def test_two_submissions_without_a_key_are_two_acts(client, page, entrant):
     assert _submit(client, page).status_code == 303
     assert _submit(client, page).status_code == 303
     assert len(_submissions()) == 2
+
+
+# ---- POST /e/api/quote/{slug}, as a BROWSER navigation --------------------
+#
+# The no-JS half of R14 (spec §7). A native <form method=post> cannot read
+# JSON — pressing "Update events and total" is a navigation — so a browser
+# Accept gets a 303 back to the entry page carrying its own body plus the
+# server's total. This is what makes the unhydrated round trip a shipped
+# path rather than a degraded one, and it is the only shape that gets a
+# total onto that page without node relaying the entrant's credential.
+
+_BROWSER = dict(CSRF)
+_BROWSER["accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+
+def _echo(response):
+    """The redirect target's query, parsed."""
+    from urllib.parse import parse_qs, urlparse
+
+    return parse_qs(urlparse(response.headers["location"]).query)
+
+
+def test_a_browser_quote_redirects_back_to_the_entry_page_with_the_total(
+    client, page, entrant
+):
+    r = client.post(
+        f"/e/api/quote/{page['slug']}",
+        data={
+            "playerName": "Alice Chen",
+            "gender": "F",
+            "club": "Kingsway",
+            "events": [f"0:{page['ms']}", f"0:{page['ws']}"],
+            "_csrf": _form_token(client, page),
+        },
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+
+    # 303, not 302: the browser must re-issue as GET so a reload never
+    # re-posts. Same choice submit_entry_json makes.
+    assert r.status_code == 303, r.text
+    location = r.headers["location"]
+    assert location.startswith(f"/e/{page['slug']}?")
+    assert location.endswith("#enter")
+
+    echo = _echo(r)
+    # The typing survives...
+    assert echo["playerName"] == ["Alice Chen"]
+    assert echo["gender"] == ["F"]
+    assert echo["club"] == ["Kingsway"]
+    assert sorted(echo["events"]) == sorted([f"0:{page['ms']}", f"0:{page['ws']}"])
+    # ...and the number is compute_fee_total's, identical to the JSON path's.
+    assert echo["totalCents"] == [
+        str(_quote(client, page, [f"0:{page['ms']}", f"0:{page['ws']}"]).json()["totalCents"])
+    ]
+
+
+def test_the_browser_echo_drops_the_csrf_token_and_the_idempotency_key(
+    client, page, entrant
+):
+    """Transport, not typing.
+
+    The key especially: it is minted once per rendered form, and echoing a
+    spent one into the address bar would pin it across every re-render, so
+    the entrant's real submission would replay against a key the round trip
+    had already fixed. The token is dropped because a URL is shareable,
+    pasteable and logged, and this one is derived from a session cookie.
+    """
+    r = client.post(
+        f"/e/api/quote/{page['slug']}",
+        data={
+            "playerName": "Alice Chen",
+            "gender": "F",
+            "events": [f"0:{page['ms']}"],
+            "_csrf": _form_token(client, page),
+            "idempotencyKey": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+            "action": "filter",
+        },
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    echo = _echo(r)
+    assert "_csrf" not in echo
+    assert "idempotencyKey" not in echo
+    assert "action" not in echo
+    assert "aaaaaaaa-bbbb" not in r.headers["location"]
+
+
+def test_a_browser_quote_echoes_a_policy_refusal_with_the_rule_stated(
+    client, page, entrant
+):
+    """A refusal the entrant can act on has to survive the redirect too —
+    otherwise the no-JS path shows a total for a basket that will be
+    refused at submit, which is the exact lie the quote exists to prevent."""
+    from database.models import EntryPage
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        row = session.get(EntryPage, uuid.UUID(page["tid"]))
+        row.max_events_per_person = 1
+        session.commit()
+    finally:
+        session.close()
+
+    r = client.post(
+        f"/e/api/quote/{page['slug']}",
+        data={
+            "playerName": "Alice Chen",
+            "gender": "F",
+            "events": [f"0:{page['ms']}", f"0:{page['ws']}"],
+            "_csrf": _form_token(client, page),
+        },
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    echo = _echo(r)
+    # The RULE, not "refused" (R14 §4) — the number survives the round trip.
+    assert "at most 1 event" in echo["refusal"][0]
+
+
+def test_a_fetch_still_gets_json(client, page, entrant):
+    """The negative control on the branch: content negotiation must not have
+    turned the hydrated path into a redirect."""
+    r = _quote(client, page, [f"0:{page['ms']}"])
+
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/json")
+    assert "totalCents" in r.json()
+
+
+def test_a_browser_quote_cannot_inject_a_header_through_the_echo(
+    client, page, entrant
+):
+    """The body is entrant-controlled and it lands in a Location header.
+
+    urlencode percent-encodes CR/LF, so the newline below can never end the
+    header — but nothing else in the request path guarantees that, so it is
+    asserted here rather than assumed.
+    """
+    r = client.post(
+        f"/e/api/quote/{page['slug']}",
+        data={
+            "playerName": "Alice\r\nX-Injected: yes",
+            "gender": "F",
+            "events": [f"0:{page['ms']}"],
+            "_csrf": _form_token(client, page),
+        },
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303
+    assert "\r" not in r.headers["location"]
+    assert "\n" not in r.headers["location"]
+    assert "x-injected" not in {k.lower() for k in r.headers}
+    assert _echo(r)["playerName"] == ["Alice\r\nX-Injected: yes"]
+
+
+def test_an_anonymous_browser_quote_is_still_refused(client, page):
+    """R8-C is not weakened by the Accept header. A fee oracle that answered
+    anyone would answer a scraper that sent `Accept: text/html`."""
+    r = client.post(
+        f"/e/api/quote/{page['slug']}",
+        data={"playerName": "Alice Chen", "gender": "F", "events": [f"0:{page['ms']}"]},
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+
+    assert r.status_code in (401, 403), r.text

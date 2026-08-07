@@ -53,7 +53,16 @@ export function moduleScopedMutableBindings(source: string): string[] {
     const constMatch = line.match(/^(export\s+)?const\s+\w+[^=]*=\s*(.+)$/);
     if (!constMatch) return false;
 
-    return /^(new\s+(Map|Set|WeakMap|WeakSet)\s*\(|\[|\{)/.test(constMatch[2].trim());
+    // The type-argument list is optional in the pattern because it is
+    // optional in the language, and TypeScript source writes it more often
+    // than not: `new Map<string, number>()` is the same shared mutable
+    // container as `new Map()`, and requiring the parenthesis to follow the
+    // name immediately let the annotated spelling straight through. Found in
+    // Task 17 by mutating a route file — the bare fixture went red and the
+    // annotated one beside it did not.
+    return /^(new\s+(Map|Set|WeakMap|WeakSet)\s*(<[^(]*>)?\s*\(|\[|\{)/.test(
+      constMatch[2].trim(),
+    );
   });
 }
 

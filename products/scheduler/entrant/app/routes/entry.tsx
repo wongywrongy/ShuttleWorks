@@ -22,14 +22,20 @@
 import { isRouteErrorResponse, useRouteError } from 'react-router';
 
 import { ApiError, apiGet } from '../lib/apiFetch.server';
+import { parseEcho, type FormEcho } from '../lib/echo';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { formatCents } from '../lib/money';
 import { EntryForm } from './entry.form';
 import type { Route } from './+types/entry';
 
-interface EntryLoaderData {
+export interface EntryLoaderData {
   page: EntryPageDTO;
   idempotencyKey: string;
+  /** The "Update events and total" round trip, coming back. Query-string
+   * only: the quote route redirects a native form post here with the posted
+   * body plus the server's total, and the hydrated path navigates to the same
+   * shape. Nothing in it is trusted — see `parseEcho`. */
+  echo: FormEcho;
 }
 
 /**
@@ -46,6 +52,7 @@ function notFound(): Response {
 }
 
 export async function loader({
+  request,
   params,
 }: {
   request: Request;
@@ -65,11 +72,18 @@ export async function loader({
   // One key, one rendered form. A plain value, never a getter: two reads
   // during one render must be the same string or the double-click property
   // above is lost.
-  return { page, idempotencyKey: crypto.randomUUID() };
+  // The URL is read for its query string and for nothing that carries
+  // identity — the relay guards in `tests/entry.loader.test.ts` hold that
+  // line structurally.
+  return {
+    page,
+    idempotencyKey: crypto.randomUUID(),
+    echo: parseEcho(new URL(request.url).searchParams),
+  };
 }
 
 export default function Entry({ loaderData }: Route.ComponentProps) {
-  const { page, idempotencyKey } = loaderData;
+  const { page, idempotencyKey, echo } = loaderData;
   const next = encodeURIComponent(`/e/${page.page.slug}`);
   const openEvents = page.events.filter((event) => event.isOpen);
 
@@ -110,7 +124,7 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
         {openEvents.length === 0 ? (
           <p className="text-sm">No event is taking entries right now.</p>
         ) : page.viewer.signedIn ? (
-          <EntryForm page={page} idempotencyKey={idempotencyKey} />
+          <EntryForm page={page} idempotencyKey={idempotencyKey} echo={echo} />
         ) : (
           // No session is a login path, never a wall.
           <p className="text-sm">

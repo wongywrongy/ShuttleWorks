@@ -228,6 +228,32 @@ describe('entry loader', () => {
     });
   });
 
+  it('the module-state guard is not vacuous, annotated containers included', () => {
+    // Real fixture text of the exact defect. The third line is the one that
+    // used to sail through: `new Map<string, number>()` is the same shared,
+    // mutable, cross-request container as `new Map()`, but the pattern
+    // required the parenthesis to follow the name immediately. Found by
+    // mutating a route file in Task 17, where the bare spelling went red and
+    // the annotated one beside it did not.
+    const shared = [
+      'let lastEcho: FormEcho | null = null;',
+      'const seen = new Map();',
+      'const seenTotals = new Map<string, number>();',
+      'const pending = new Set<string>();',
+      'export const cache = {};',
+    ].join('\n');
+
+    expect(moduleScopedMutableBindings(shared)).toEqual([
+      'let lastEcho: FormEcho | null = null;',
+      'const seen = new Map();',
+      'const seenTotals = new Map<string, number>();',
+      'const pending = new Set<string>();',
+      'export const cache = {};',
+    ]);
+    // ...and the safe-to-share form still is not a finding.
+    expect(moduleScopedMutableBindings('const G = Object.freeze([1]);')).toEqual([]);
+  });
+
   it('the relay guard is not vacuous: a forwarding loader goes red', () => {
     // Real fixture text of the exact defect, not a description of it.
     const forwarding = [

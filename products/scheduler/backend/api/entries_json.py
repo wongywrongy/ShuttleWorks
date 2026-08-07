@@ -40,6 +40,7 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request
 from fastapi.responses import RedirectResponse
@@ -459,13 +460,54 @@ def _resolve_selections(repo: LocalRepository, tournament_id, parsed: List[dict]
     return resolved
 
 
+# Transport, not typing — none of it belongs in an address bar. The
+# idempotency key especially: it is minted per rendered form, and echoing a
+# spent one would pin it there across re-renders.
+_ECHO_DROP = frozenset({"_csrf", "idempotencyKey", "Idempotency-Key", "action"})
+
+# Bounds on what is reflected back. The body is entrant-controlled, and a
+# ``Location`` header is not the place to discover that: ``urlencode``
+# percent-encodes CR/LF so header injection is already impossible, but an
+# unbounded echo is still a self-inflicted 8k-header 502. Matches the form's
+# own ``maxlength`` on remarks and its two player blocks' worth of fields.
+_ECHO_MAX_FIELDS = 60
+_ECHO_MAX_LEN = 2000
+
+
+def _echo_redirect(slug: str, form, total, refusal) -> RedirectResponse:
+    """The unhydrated answer: 303 back to the form, typing and total intact.
+
+    A native ``<form method=post>`` cannot read JSON, so a browser that
+    pressed "Update events and total" with no script must be *navigated*
+    somewhere useful. 303 (not 302) so the browser re-issues as GET and a
+    reload never re-posts — the same choice ``submit_entry_json`` makes.
+
+    ``totalCents`` rides in the query string as **display**. It is not
+    posted onward by the page that receives it, and the write path runs
+    ``compute_fee_total`` again (:610), so a hand-edited URL changes what
+    its editor reads and nothing that is recorded.
+    """
+    echoed = [
+        (name, value[:_ECHO_MAX_LEN])
+        for name, value in list(form.multi_items())[:_ECHO_MAX_FIELDS]
+        if name not in _ECHO_DROP and isinstance(value, str)
+    ]
+    if total is not None:
+        echoed.append(("totalCents", str(total)))
+    if refusal is not None:
+        echoed.append(("refusal", refusal.message[:_ECHO_MAX_LEN]))
+    return RedirectResponse(
+        url=f"/e/{quote(slug, safe='')}?{urlencode(echoed)}#enter", status_code=303
+    )
+
+
 @router.post("/quote/{slug}", response_model=QuoteResponse)
 async def quote_entry(
     request: Request,
     slug: str = Path(..., max_length=100),
     entrant: AuthEntrant = Depends(get_current_entrant),
     repo: LocalRepository = Depends(get_repository),
-) -> QuoteResponse:
+):
     """R14's "Update events and total", as a route the RR7 form can call.
 
     **Session-gated (ruling R8-C)**, matching the incumbent's filter branch
@@ -481,6 +523,15 @@ async def quote_entry(
 
     Writes nothing, and does not spend the entry budget: the budget counts
     entries, and this is somebody still filling in a form.
+
+    **Two answers, by ``Accept``.** A hydrated caller asks for JSON and gets
+    ``QuoteResponse``. A native form post cannot read JSON at all — it is a
+    navigation — so a browser ``Accept: text/html`` gets a 303 back to the
+    entry page carrying its own body plus the total (``_echo_redirect``).
+    That is what keeps R14's "Update events and total" working with
+    JavaScript disabled (spec §7) without node ever relaying a credential:
+    the browser talks to this route directly, on one origin, and the RR7
+    page just renders what comes back in the query string.
     """
     page, tournament = _resolve(repo, slug)
     form = await request.form()
@@ -496,6 +547,10 @@ async def quote_entry(
         if grouped
         else (None, {})
     )
+    # ``text/html`` in Accept means a navigation, not a fetch: browsers send
+    # it on a native form post and never on `fetch(..., {headers: {}})`.
+    if "text/html" in request.headers.get("accept", ""):
+        return _echo_redirect(page.slug, form, total, refusal)
     return QuoteResponse(
         totalCents=total,
         feeBasis=basis,
