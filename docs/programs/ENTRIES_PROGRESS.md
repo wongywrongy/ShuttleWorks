@@ -133,7 +133,9 @@ the Cloudflare dashboard — cannot proceed from this session without them.
 
 **Branch:** `dev/prog1-p5-e1`. **Prompt:** SP-E1-1 (replaces SP-VERIFY-1).
 
-### Phase A — audit + plan: DONE (2026-08-06). STOP report presented; awaiting go-ahead.
+### Phase A — audit + plan: DONE (2026-08-06). STOP passed — user go-ahead "go begin",
+accepting all four recommendations (recorded as rulings D1–D4 in
+`docs/programs/SP-E1-1.md`, which is now committed to the repo as the executing prompt).
 
 **Gates re-confirmed at baseline on the branch:** frontend 1385/172 green, backend
 1018 passed / 66 skipped — exactly the Phase 0 numbers.
