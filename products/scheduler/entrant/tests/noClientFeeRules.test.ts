@@ -27,15 +27,27 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-/** Accumulation or scaling of a cents value — a fee *rule*. A plain read is not. */
+/**
+ * Accumulation or scaling of a cents value — a fee *rule*. A plain read is
+ * not.
+ *
+ * Scans whole *statements*, not lines: a per-line scan is escapable by
+ * wrapping the accumulator across a line break (a `reduce(` split from the
+ * `+ feeCents` that feeds it lands the "cents" token and the arithmetic
+ * marker on different lines, so a line-local filter never sees them
+ * together). Whitespace — including newlines — is collapsed first, then the
+ * collapsed text is split on statement-terminating `;`, so a multi-line call
+ * reassembles into one candidate before either filter runs.
+ */
 export function feeArithmeticLines(source: string): string[] {
   return source
-    .split('\n')
-    .filter((line) => /cents/i.test(line))
-    .filter((line) =>
-      /(\+=|\breduce\(|[Cc]ents\s*[*+/-]\s|[*+]\s*\w*[Cc]ents)/.test(line),
-    )
-    .map((line) => line.trim());
+    .replace(/\s+/g, ' ')
+    .split(/(?<=;)\s*/)
+    .filter(Boolean)
+    .filter((statement) => /cents/i.test(statement))
+    .filter((statement) =>
+      /(\+=|\breduce\(|[Cc]ents\s*[*+/-]\s|[*+]\s*\w*[Cc]ents)/.test(statement),
+    );
 }
 
 describe('no fee arithmetic exists client-side', () => {
@@ -54,14 +66,18 @@ describe('no fee arithmetic exists client-side', () => {
   });
 
   it('confines the one display division to money.ts', () => {
+    // A regex, not the literal `'/ 100'` string: an unspaced `/100` divides
+    // cents exactly as much as `/ 100` does, and the literal-string match let
+    // it through.
+    const divisionPattern = /\/\s*100\b/;
     const money = readFileSync(join(APP_DIR, MONEY), 'utf8');
-    expect(money).toContain('/ 100');
+    expect(money).toMatch(divisionPattern);
 
     for (const file of sourceFiles(APP_DIR)) {
       if (relative(APP_DIR, file).split(sep).join('/') === MONEY.split(sep).join('/')) {
         continue;
       }
-      expect(readFileSync(file, 'utf8')).not.toContain('/ 100');
+      expect(readFileSync(file, 'utf8')).not.toMatch(divisionPattern);
     }
   });
 
@@ -70,11 +86,16 @@ describe('no fee arithmetic exists client-side', () => {
     const offending = [
       'const totalCents = events.reduce((sum, e) => sum + (e.feeCents ?? 0), 0);',
       'const withLevy = event.feeCents * 1.05;',
+      // The escape a line-local scan missed: the accumulator wrapped across
+      // a line break, so "cents" and the `reduce(` marker never shared a
+      // line.
+      'const total = openEvents.reduce(\n  (sum, e) => sum + (e.feeCents ?? 0),\n  0,\n);',
     ].join('\n');
 
     expect(feeArithmeticLines(offending)).toEqual([
       'const totalCents = events.reduce((sum, e) => sum + (e.feeCents ?? 0), 0);',
       'const withLevy = event.feeCents * 1.05;',
+      'const total = openEvents.reduce( (sum, e) => sum + (e.feeCents ?? 0), 0, );',
     ]);
   });
 });

@@ -139,6 +139,11 @@ describe('the entry form, unhydrated', () => {
     // browser reads it as `enctype` either way; asserting the exact lowercase
     // spelling would be asserting React's serializer, not the contract.
     expect(html).toMatch(/enctype="application\/x-www-form-urlencoded"/i);
+    // A form with no submit control is unsubmittable without script — the
+    // whole point of this tier. `asChild`-ing the Button onto a non-submit
+    // element, or dropping `type="submit"`, would leave every other
+    // assertion in this file green.
+    expect(html).toMatch(/<button[^>]*type="submit"/);
   });
 
   it('carries the double-submit token as a hidden field', async () => {
@@ -168,6 +173,25 @@ describe('the entry form, unhydrated', () => {
     for (const name of ['playerName', 'gender', 'club', 'birthYear', 'remarks']) {
       expect(html.match(new RegExp(`name="${name}"`, 'g'))).toHaveLength(2);
     }
+  });
+
+  it('renders a real birthYear input, not just the hidden fallback, when an open event is age-bracketed', async () => {
+    // Every other fixture in this file sets `ageBracketed: false`, so the
+    // `askBirthYear === true` branch (`entry.form.tsx:130-141`) was only ever
+    // exercised via the hidden-input fallback — the occurrence count of 2
+    // never proved the real `TextField` renders. Flip one open event.
+    const html = await render({
+      ...PAGE,
+      events: PAGE.events.map((event) =>
+        event.id === MS ? { ...event, ageBracketed: true } : event,
+      ),
+    });
+
+    for (const name of ['playerName', 'gender', 'club', 'birthYear', 'remarks']) {
+      expect(html.match(new RegExp(`name="${name}"`, 'g'))).toHaveLength(2);
+    }
+    const birthYearTag = html.match(/<input[^>]*name="birthYear"[^>]*>/g) ?? [];
+    expect(birthYearTag.some((tag) => !tag.includes('type="hidden"'))).toBe(true);
   });
 
   it('uses a native select for gender — Radix Select cannot submit unhydrated', async () => {

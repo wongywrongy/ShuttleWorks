@@ -41,7 +41,7 @@ export interface EntryFormProps {
  * process is shared by every concurrent entrant — see
  * `moduleScopedMutableBindings` in `tests/helpers/sourceGuards.ts`.
  */
-export const PLAYER_BLOCKS = Object.freeze([
+const PLAYER_BLOCKS = Object.freeze([
   { index: 0, heading: 'Player', required: true },
   { index: 1, heading: 'Second player (optional)', required: false },
 ] as const);
@@ -77,7 +77,7 @@ function PlayerBlock({
           name="playerName"
           maxLength={200}
           required={required}
-          autoComplete="off"
+          autoComplete="name"
         />
 
         <div>
@@ -107,7 +107,7 @@ function PlayerBlock({
           label="Club (optional)"
           name="club"
           maxLength={200}
-          autoComplete="off"
+          autoComplete="organization"
         />
 
         {askBirthYear ? (
@@ -171,6 +171,12 @@ export function EntryForm({ page, idempotencyKey }: EntryFormProps) {
   const openEvents = page.events.filter((event) => event.isOpen);
   const askBirthYear = openEvents.some((event) => event.ageBracketed);
   const cap = page.policy.maxEventsPerPerson;
+  // Display only: the server-supplied bundle schedule, formatted verbatim.
+  // No arithmetic — `compute_fee_total` decides what a multi-event entrant
+  // actually pays, and R14 requires stating that rule before submission.
+  const feeTiers = Object.entries(page.page.feeSchedule).sort(
+    ([a], [b]) => Number(a) - Number(b),
+  );
 
   return (
     <form
@@ -193,6 +199,16 @@ export function EntryForm({ page, idempotencyKey }: EntryFormProps) {
       {cap === null ? null : (
         <p className="text-sm text-muted-foreground">
           Up to {cap} {cap === 1 ? 'event' : 'events'} per person.
+        </p>
+      )}
+
+      {feeTiers.length === 0 ? null : (
+        <p className="text-sm text-muted-foreground">
+          Bundle pricing:{' '}
+          {feeTiers
+            .map(([count, cents]) => `${count} events — ${formatCents(cents)}`)
+            .join('; ')}
+          .
         </p>
       )}
 
