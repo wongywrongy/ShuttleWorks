@@ -244,10 +244,20 @@ async def csrf_middleware(request: Request, call_next):
     bearer-token requests, local bootstrap requests (no cookie), and
     all GET/HEAD/OPTIONS are untouched, so nothing existing breaks
     before the frontend migrates.
+
+    **The trigger reads a registry of cookie names, not one name**
+    (SP-E1-2, ruling D-A3). Until the entrant principal arrived there was
+    exactly one session cookie in the system and this line named it
+    directly. A second principal's cookie under a second name would then
+    have authenticated writes that this middleware never looked at — the
+    concrete defect spec Q13 §2 predicted, fail-open and invisible.
+    ``settings.session_cookie_names`` is the single place that list lives,
+    and a guard test derives every ``set_cookie`` in ``backend/api/`` from
+    the source to hold new cookies to it.
     """
     if (
         request.method in {"POST", "PUT", "PATCH", "DELETE"}
-        and settings.session_cookie_name in request.cookies
+        and any(name in request.cookies for name in settings.session_cookie_names)
         and request.headers.get("X-ShuttleWorks-CSRF") != "1"
     ):
         return JSONResponse(
