@@ -135,6 +135,7 @@ export function ColumnHeaderRow({
 export function GroupBandHeader({
   label,
   code,
+  detail,
   count,
   collapsed,
   onToggle,
@@ -143,6 +144,17 @@ export function GroupBandHeader({
   label: string;
   /** Optional accent short-code shown before the label (e.g. "MS"). */
   code?: string;
+  /** Optional band DATA, rendered in normal case after the eyebrow label.
+   *  The label is styled as an eyebrow (uppercase, tracked), which is right
+   *  for a word like "Entered by" and wrong for a value like an email
+   *  address — an address rendered in caps reads as shouting and is not
+   *  even reliably the same string. So bands that carry a value put the
+   *  word in `label` and the value here.
+   *
+   *  A string rather than a node, deliberately: this is a one-line band
+   *  header that truncates, and a slot that took arbitrary markup would
+   *  become the place a second row of controls appeared. */
+  detail?: string;
   count: number;
   collapsed: boolean;
   onToggle: () => void;
@@ -169,9 +181,14 @@ export function GroupBandHeader({
           {code}
         </span>
       ) : null}
-      <span className={`${EYEBROW_CLASS} text-ink-3`}>
+      <span className={`${EYEBROW_CLASS} shrink-0 text-ink-3`}>
         {label}
       </span>
+      {detail ? (
+        <span className="min-w-0 truncate text-2xs text-muted-foreground">
+          {detail}
+        </span>
+      ) : null}
       <span className="text-2xs sw-num text-muted-foreground">{count}</span>
     </button>
   );

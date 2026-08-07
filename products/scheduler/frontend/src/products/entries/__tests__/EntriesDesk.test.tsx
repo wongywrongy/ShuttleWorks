@@ -1,5 +1,5 @@
 /**
- * The Entries desk (SP-E1-1, Phase D).
+ * The Entries desk (SP-E1-1 Phase D, reshaped by SP-E1-2 Phase D).
  *
  * The desk is the operator's half of the walking skeleton: an entry that has
  * landed in the database is worth nothing until someone can see it, confirm
@@ -9,6 +9,13 @@
  * They deliberately do NOT cover a reject/promote/withdraw affordance: those
  * are E2, and a test asserting their absence is what keeps the scope line
  * visible to the next session.
+ *
+ * **Unwound by ruling R13.** `contactName` / `contactEmail` were fields on an
+ * entry row and are now one hop out, under the submission. The test that
+ * asserted the desk shows the contact address is not deleted — it moves to
+ * where the address moved, onto the act's band, and gains the grouping claim
+ * that is the actual point of the level: entries that arrived on one form
+ * are shown as one form.
  */
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -16,7 +23,20 @@ import userEvent from '@testing-library/user-event';
 import { EntriesDesk } from '../EntriesDesk';
 import { apiClient } from '../../../api/client';
 import { useUiStore } from '../../../store/uiStore';
-import type { EntryDTO } from '../../../api/dto';
+import type { EntryDTO, EntrySubmissionDTO } from '../../../api/dto';
+
+function submission(
+  partial: Partial<EntrySubmissionDTO> = {},
+): EntrySubmissionDTO {
+  return {
+    id: 'sub-1',
+    accountEmail: 'parent@club.org',
+    accountName: null,
+    feeTotalCents: null,
+    submittedAt: '2026-08-06T10:00:00Z',
+    ...partial,
+  };
+}
 
 function entry(partial: Partial<EntryDTO> & { id: string }): EntryDTO {
   return {
@@ -24,8 +44,7 @@ function entry(partial: Partial<EntryDTO> & { id: string }): EntryDTO {
     eventCode: 'MS',
     state: 'pending',
     pendingReasons: [],
-    contactName: 'Parent One',
-    contactEmail: 'parent@club.org',
+    submission: submission(),
     playerName: 'Alice Chen',
     remarks: null,
     listOptOut: false,
@@ -69,17 +88,65 @@ describe('EntriesDesk — the list', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the contact email — this is the operator surface, not the public one', async () => {
+  it('shows the submitting address on the act — the operator surface, not the public one', async () => {
     // The public entrant list is a strict projection (names + events only).
     // The desk is the opposite: the operator is the person who has to email
     // someone back about a clash, so withholding it here would be theatre.
+    //
+    // R13 moved WHERE it is shown, not WHETHER: the address belongs to the
+    // act, so it is on the band once instead of on every row of the form.
     vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
-      entry({ id: 'e-1', contactEmail: 'parent@club.org' }),
+      entry({
+        id: 'e-1',
+        submission: submission({ accountEmail: 'parent@club.org' }),
+      }),
     ]);
 
     render(<EntriesDesk tid="t-1" />);
 
-    expect(await screen.findByText('parent@club.org')).toBeInTheDocument();
+    expect(await screen.findByText(/parent@club\.org/)).toBeInTheDocument();
+  });
+
+  it('bands entries that arrived on one form, and separates ones that did not', async () => {
+    // The case the submission level exists for: a parent entering two
+    // children in one sitting. Before R13 an operator inferred this from a
+    // repeated email address — ambiguous exactly when it mattered, since one
+    // account is *expected* to submit many times.
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
+      entry({ id: 'e-1', playerName: 'Alice Chen', submission: submission() }),
+      entry({ id: 'e-2', playerName: 'Bo Chen', submission: submission() }),
+      entry({
+        id: 'e-3',
+        playerName: 'Unrelated Person',
+        submission: submission({ id: 'sub-2', accountEmail: 'other@club.org' }),
+      }),
+    ]);
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-1');
+
+    const first = screen.getByTestId('entry-act-sub-1');
+    expect(within(first).getByText(/parent@club\.org/)).toBeInTheDocument();
+    // The count is the band's, so two children on one form read as one act.
+    expect(within(first).getByText('2')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('entry-act-sub-2')).getByText(/other@club\.org/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the act's fee total once, not per entry", async () => {
+    // Tiered pricing prices the PERSON, not the event: two events for one
+    // player cost one total between them. A per-row fee would read as two
+    // charges.
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
+      entry({ id: 'e-1', submission: submission({ feeTotalCents: 5500 }) }),
+      entry({ id: 'e-2', submission: submission({ feeTotalCents: 5500 }) }),
+    ]);
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-1');
+
+    expect(screen.getAllByText(/55\.00/)).toHaveLength(1);
   });
 
   it('flags a needs_review entry with an attention chip', async () => {
@@ -97,6 +164,28 @@ describe('EntriesDesk — the list', () => {
     // NEGATIVE CONTROL: the chip is driven by the reason, not painted on
     // every row. Without this, a chip rendered unconditionally would pass.
     expect(within(row('e-clean')).queryByText('Needs review')).toBeNull();
+  });
+
+  it('flags a gender mismatch, and does not refuse it', async () => {
+    // Q14 §5: the form filters by gender and offers an override; a mismatch
+    // that comes through is ACCEPTED and flagged. So the desk's job is to
+    // show a normal, actionable row wearing a chip — not to hide it or mark
+    // it broken.
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
+      entry({ id: 'e-x', pendingReasons: ['gender_mismatch'] }),
+      entry({ id: 'e-clean', pendingReasons: [] }),
+    ]);
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-x');
+
+    expect(within(row('e-x')).getByText('Gender mismatch')).toBeInTheDocument();
+    // …and it is still confirmable: the operator decides (invariant I4).
+    expect(
+      within(row('e-x')).getByRole('button', { name: 'Confirm' }),
+    ).toBeInTheDocument();
+    // NEGATIVE CONTROL: driven by the reason, not painted on every row.
+    expect(within(row('e-clean')).queryByText('Gender mismatch')).toBeNull();
   });
 
   it('renders an empty state when nothing has been submitted', async () => {

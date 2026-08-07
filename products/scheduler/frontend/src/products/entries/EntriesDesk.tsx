@@ -19,6 +19,13 @@
  *   opposite number: the operator is the person who has to write back about a
  *   clash, and the entrant's own free-text `remarks` sit here precisely so
  *   the sentence reaches the person building the schedule (spec §4).
+ * - **Rows are banded by the act they arrived on** (ruling R13, SP-E1-2).
+ *   One form covering two children and four events is one agreement, one
+ *   total and one person to write to; before the submission level existed,
+ *   an operator had to infer that from a repeated email address — which is
+ *   ambiguous exactly when it matters, because one parent account is
+ *   *expected* to submit many times. The address and the act's fee total sit
+ *   on the band, once, rather than on every row.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@scheduler/design-system';
@@ -37,6 +44,8 @@ import { useCanEdit } from '../../hooks/useCanEdit';
 import {
   ENTRY_STATE_LABEL,
   ENTRY_STATE_TONE,
+  formatCents,
+  groupBySubmission,
   hasAttention,
   reasonLabel,
   skipReasonLabel,
@@ -137,7 +146,19 @@ export function EntriesDesk({ tid }: { tid: string }) {
         ) : (
           <BandedTable
             columns={COLUMNS}
-            rows={entries}
+            // One band per act. The label is the eyebrow word and the
+            // address is data next to it — an email rendered in the
+            // eyebrow's caps reads as shouting and is not even reliably
+            // the same string.
+            groups={groupBySubmission(entries).map((g) => ({
+              key: g.key,
+              label: 'Entered by',
+              detail: [g.accountEmail ?? 'unknown', formatCents(g.feeTotalCents)]
+                .filter(Boolean)
+                .join(' · '),
+              items: g.entries,
+              testId: `entry-act-${g.key}`,
+            }))}
             rowId={(e) => e.id}
             rowTestId={(e) => `entry-row-${e.id}`}
             renderRow={(e) => (
@@ -145,9 +166,6 @@ export function EntriesDesk({ tid }: { tid: string }) {
                 <span className={`${colClass(COLUMNS[0])} min-w-0`}>
                   <span className="block truncate text-xs text-foreground">
                     {e.playerName}
-                  </span>
-                  <span className="block truncate text-2xs text-muted-foreground">
-                    {e.contactEmail}
                   </span>
                 </span>
                 <span className={`${colClass(COLUMNS[1])} text-xs text-muted-foreground`}>
