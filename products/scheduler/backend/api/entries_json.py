@@ -36,6 +36,7 @@ in the path) is unaffected by design rather than by oversight.
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -49,14 +50,20 @@ from api.entries_public import (
     _events,
     _form_csrf,
     _is_age_bracketed,
+    _lookup_event,
     _moment,
     _optional_entrant,
     _resolve,
 )
 from app.config import settings
+from app.dependencies import AuthEntrant, get_current_entrant
+from app.error_codes import ErrorCode, http_error
+from app.form_csrf import FORM_FIELD
 from database.models import Org
 from repositories import LocalRepository, get_repository
-from services.entry_fees import normalize_fee_schedule
+from services.entry_fees import PlayerSelection, compute_fee_total, normalize_fee_schedule
+from services.entry_form import parse_players
+from services.entry_policy import check_policy
 
 log = logging.getLogger("scheduler.api.entries_json")
 
@@ -295,4 +302,139 @@ def entrant_config() -> EntrantConfigDTO:
     return EntrantConfigDTO(
         turnstileSiteKey=settings.turnstile_site_key,
         authMode=settings.auth_mode,
+    )
+
+
+# ---- POST /quote/{slug} ---------------------------------------------------
+
+
+def require_form_csrf(request: Request, form) -> None:
+    """Channel two, checked at the route (spec §3, R8-B).
+
+    Checked **before anything is read out of the body**: this request
+    carries a session cookie, so until the token is verified it is not
+    known to have been sent deliberately. That ordering is the incumbent's
+    (``api/entries_public.py``'s ``submit_entry``) and is preserved here
+    verbatim — including reusing the SAME session-derived digest
+    (``_form_csrf`` / ``app.form_csrf.form_csrf_token``), never a second
+    derivation.
+
+    This is a route-level check; the CSRF middleware's second channel
+    (``app.form_csrf.form_csrf_proves``) is a separate, complementary
+    guard — the middleware decides whether a cookie-carrying write may
+    proceed at all, and this decides whether *this* form was minted for
+    *this* session. Removing either leaves a hole, so both have their own
+    negative controls.
+    """
+    presented = str(form.get(FORM_FIELD) or "")
+    expected = _form_csrf(
+        request.cookies.get(settings.entrant_session_cookie_name) or ""
+    )
+    if not expected or not secrets.compare_digest(presented, expected):
+        raise http_error(
+            403,
+            ErrorCode.AUTH_CSRF_REQUIRED,
+            "This form has expired. Reload the entry page and try again.",
+        )
+
+
+class RefusalDTO(BaseModel):
+    """A refusal the entrant can act on.
+
+    ``code`` is stable wire vocabulary for a caller that wants to branch;
+    ``message`` **contains the rule** — the number, or the discipline —
+    because "your entry was refused" is not an answer someone can do
+    anything with (R14 §4).
+    """
+
+    code: str
+    message: str
+    subjects: List[str] = []
+
+
+class QuoteResponse(BaseModel):
+    """What a basket costs, and whether it is allowed.
+
+    Both, in one answer, deliberately: a quote that priced a basket policy
+    would refuse is a number the entrant will never be charged, and a
+    refusal with no price makes them re-tick to find out what a legal
+    basket costs.
+    """
+
+    totalCents: Optional[int] = None
+    feeBasis: dict = {}
+    refusal: Optional[RefusalDTO] = None
+
+
+def _resolve_selections(repo: LocalRepository, tournament_id, parsed: List[dict]):
+    """``[(spec, [event, ...]), ...]`` for a parsed form, or a 400.
+
+    The events must belong to *this* workspace and be open. One answer for
+    "not ours", "does not exist" and "closed": a caller holding a real
+    event id from another tenant learns nothing from posting it here.
+    """
+    now = _utcnow()
+    resolved: List[tuple] = []
+    for spec in parsed:
+        events = []
+        for raw_id in spec["events"]:
+            event = _lookup_event(repo, tournament_id, raw_id)
+            if event is None or not _event_is_open(event, now):
+                raise http_error(
+                    400, ErrorCode.INVALID_INPUT, "That event is not taking entries."
+                )
+            events.append(event)
+        resolved.append((spec, events))
+    return resolved
+
+
+@router.post("/quote/{slug}", response_model=QuoteResponse)
+async def quote_entry(
+    request: Request,
+    slug: str = Path(..., max_length=100),
+    entrant: AuthEntrant = Depends(get_current_entrant),
+    repo: LocalRepository = Depends(get_repository),
+) -> QuoteResponse:
+    """R14's "Update events and total", as a route the RR7 form can call.
+
+    **Session-gated (ruling R8-C)**, matching the incumbent's filter branch
+    (``api/entries_public.py``'s ``action=filter``) rather than becoming a
+    public fee oracle: it reads a director's price list against a
+    caller-chosen basket, which is the shape of a scraper.
+
+    It calls the **same** ``check_policy`` and ``compute_fee_total`` the
+    write calls, over the same per-person grouping. That is not
+    convenience — Seam B's invariant is that the total shown to the entrant
+    IS the total recorded, and two implementations cannot promise that
+    however carefully they are kept in step.
+
+    Writes nothing, and does not spend the entry budget: the budget counts
+    entries, and this is somebody still filling in a form.
+    """
+    page, tournament = _resolve(repo, slug)
+    form = await request.form()
+    require_form_csrf(request, form)
+
+    resolved = _resolve_selections(repo, tournament.id, parse_players(form))
+    grouped = [(str(i), events) for i, (_, events) in enumerate(resolved)]
+    refusal = check_policy(page, grouped)
+    total, basis = (
+        compute_fee_total(
+            page, [PlayerSelection(key, events) for key, events in grouped]
+        )
+        if grouped
+        else (None, {})
+    )
+    return QuoteResponse(
+        totalCents=total,
+        feeBasis=basis,
+        refusal=(
+            None
+            if refusal is None
+            else RefusalDTO(
+                code=refusal.code,
+                message=refusal.message,
+                subjects=list(refusal.subjects),
+            )
+        ),
     )

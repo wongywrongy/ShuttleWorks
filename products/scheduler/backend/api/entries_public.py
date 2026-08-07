@@ -127,6 +127,7 @@ from database.models import Entry, EntryEvent, EntryPage, EntryPlayer, Org, Tour
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service
 from services import entrants as entrant_service
+from services import entry_form
 from services import submissions as submission_service
 from services.entry_fees import (
     PlayerSelection,
@@ -1241,60 +1242,19 @@ async def submit_entry(
 
 
 def _parse_players(form) -> List[dict]:
-    """Group a flat form post into per-person selections.
+    """Delegates to ``services.entry_form.parse_players`` (Phase 6).
 
-    The transport shape is documented on ``_player_block``: the player
-    fields repeat positionally and each event checkbox value is
-    ``"<player index>:<event id>"``. A block with no name, no gender or no
-    events is **dropped rather than refused** — the second player block is
-    optional and an empty one is the normal case, not an error.
+    Moved out in Phase 6 (spec §3): the JSON quote and JSON submit routes
+    need the same parser and must not re-derive it. The name survives here
+    only as long as this module's HTML routes do (§9 removes both
+    together).
     """
-    names = form.getlist("playerName")
-    genders = form.getlist("gender")
-    clubs = form.getlist("club")
-    years = form.getlist("birthYear")
-    remarks = form.getlist("remarks")
-
-    chosen: dict[int, List[str]] = {}
-    for raw in form.getlist("events"):
-        index, _, event_id = str(raw).partition(":")
-        if not index.isdigit() or not event_id:
-            continue
-        chosen.setdefault(int(index), []).append(event_id[:100])
-
-    out: List[dict] = []
-    for index, name in enumerate(names):
-        gender = str(genders[index] if index < len(genders) else "").strip()
-        events = chosen.get(index) or []
-        if not str(name).strip() or not gender or not events:
-            continue
-        out.append(
-            {
-                "name": str(name).strip()[:200],
-                "gender": gender[:20],
-                "club": str(clubs[index] if index < len(clubs) else "").strip()[:200]
-                or None,
-                "birthYear": _year(years[index] if index < len(years) else ""),
-                "remarks": str(
-                    remarks[index] if index < len(remarks) else ""
-                ).strip()[:2000]
-                or None,
-                "events": events,
-            }
-        )
-    return out
+    return entry_form.parse_players(form)
 
 
 def _year(raw) -> Optional[int]:
-    """A birth year, or nothing. An unparseable value is dropped rather
-    than refused: it is an optional eligibility field (R5/Q11), and
-    refusing a whole submission over a typo in an optional box would be the
-    software making the strictest possible reading of an optional rule."""
-    try:
-        value = int(str(raw).strip())
-    except (TypeError, ValueError):
-        return None
-    return value if 1900 <= value <= 2100 else None
+    """Delegates to ``services.entry_form.parse_year`` (Phase 6)."""
+    return entry_form.parse_year(raw)
 
 
 def _echo(form) -> dict:

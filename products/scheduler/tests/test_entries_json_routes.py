@@ -277,3 +277,155 @@ def test_the_config_route_reports_the_deployed_auth_mode(client, monkeypatch):
 
     monkeypatch.setattr(settings, "auth_mode", "cloud")
     assert client.get("/e/api/config").json()["authMode"] == "cloud"
+
+
+# ---- POST /e/api/quote/{slug} -------------------------------------------
+#
+# R8-C: session-gated, matching the incumbent's "Update events and total"
+# (api/entries_public.py:1119, the "action=filter" branch). A public fee
+# oracle on an unauthenticated route was rejected — the quote reads a
+# director's price list against a caller-chosen basket, and that is the
+# shape of a scraper.
+
+
+def _form_token(client, page):
+    """The viewer's form token, read off the JSON projection.
+
+    Deliberately read rather than recomputed: a test that recomputed the
+    digest would pass even if the surface stopped emitting it, and the
+    field is the only thing an unhydrated form can prove itself with.
+    """
+    return client.get(f"/e/api/page/{page['slug']}").json()["viewer"]["formCsrf"]
+
+
+def _quote(client, page, events, **overrides):
+    data = {
+        "playerName": "Alice Chen",
+        "gender": "F",
+        "events": events,
+        "_csrf": _form_token(client, page),
+    }
+    data.update(overrides)
+    return client.post(f"/e/api/quote/{page['slug']}", data=data, headers=CSRF)
+
+
+def test_a_quote_prices_the_basket_through_the_fee_schedule(client, page, entrant):
+    r = _quote(client, page, [f"0:{page['ms']}", f"0:{page['ws']}"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    # Two events for one person, priced off the CUMULATIVE schedule's "2"
+    # tier — not 4000+4000, and not the per-event fallback's 1500.
+    assert body["totalCents"] == 5500
+    assert body["feeBasis"]["basis"] == "schedule"
+    assert body["feeBasis"]["players"][0]["eventCount"] == 2
+    assert body["refusal"] is None
+
+
+def test_the_quoted_total_is_the_total_recorded(client, page, entrant):
+    """Seam B, across the two routes that must never disagree.
+
+    The quote and the write call the SAME ``compute_fee_total`` over the
+    same per-person grouping. This asserts the end of that promise: the
+    number the entrant agreed to is the number on the submission row.
+    """
+    quoted = _quote(client, page, [f"0:{page['ms']}", f"0:{page['ws']}"]).json()
+    assert quoted["totalCents"] == 5500
+
+    body = client.get(f"/e/{page['slug']}").text
+    token = re.search(r'name="_csrf" value="([0-9a-f]*)"', body).group(1)
+    r = client.post(
+        f"/e/{page['slug']}/submit",
+        data={
+            "playerName": "Alice Chen",
+            "gender": "F",
+            "events": [f"0:{page['ms']}", f"0:{page['ws']}"],
+            "acknowledged": "on",
+            "_csrf": token,
+        },
+    )
+    assert r.status_code == 201, r.text
+
+    from database.models import Submission
+    from database.session import SessionLocal
+    from sqlalchemy import select
+
+    session = SessionLocal()
+    try:
+        rows = session.scalars(select(Submission)).all()
+        assert len(rows) == 1
+        assert rows[0].fee_total_cents == quoted["totalCents"]
+    finally:
+        session.close()
+
+
+def test_a_quote_reports_a_policy_refusal_with_the_rule_stated(
+    client, page, entrant
+):
+    """``check_policy`` is the write's function, not a preview of it. A
+    refusal that arrived only at submit would make the quote a lie."""
+    from database.models import EntryPage
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        row = session.get(EntryPage, uuid.UUID(page["tid"]))
+        row.max_events_per_person = 1
+        session.commit()
+    finally:
+        session.close()
+
+    body = _quote(client, page, [f"0:{page['ms']}", f"0:{page['ws']}"]).json()
+    assert body["refusal"]["code"] == "MAX_EVENTS_PER_PERSON"
+    assert "at most 1 event" in body["refusal"]["message"]
+
+
+def test_an_anonymous_quote_is_refused(client, page):
+    """R8-C, the negative control.
+
+    ``get_current_entrant`` has no bootstrap fallback in either mode, so
+    the refusal is structural. To prove this is not vacuous: swap the
+    dependency for ``_optional_entrant`` and this goes red while
+    ``test_a_quote_prices_the_basket_through_the_fee_schedule`` — the same
+    request one cookie different — stays green. Put it back.
+    """
+    r = client.post(
+        f"/e/api/quote/{page['slug']}",
+        data={"playerName": "A", "gender": "F", "events": [f"0:{page['ms']}"]},
+        headers=CSRF,
+    )
+    assert r.status_code == 401
+
+
+def test_a_quote_without_the_form_token_is_refused(client, page, entrant):
+    """Channel two at the route. NEGATIVE CONTROL: delete the
+    ``require_form_csrf`` call and this goes red while the priced-basket
+    test stays green."""
+    r = client.post(
+        f"/e/api/quote/{page['slug']}",
+        data={"playerName": "A", "gender": "F", "events": [f"0:{page['ms']}"]},
+        headers=CSRF,
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+
+
+def test_a_quote_carrying_another_sessions_form_token_is_refused(
+    client, page, entrant
+):
+    """The double-submit's whole claim: an attacker's page can make the
+    browser send our cookie, but it can never read it, so it cannot compute
+    this value. A token minted from a DIFFERENT session is the closest a
+    real attacker gets."""
+    stolen = _form_token(client, page)
+    assert client.post("/e/account/logout", headers=CSRF).status_code == 204
+    assert (
+        client.post(
+            "/e/account/login",
+            json={"email": "parent@example.com", "password": GOOD_PW},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+    r = _quote(client, page, [f"0:{page['ms']}"], _csrf=stolen)
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
