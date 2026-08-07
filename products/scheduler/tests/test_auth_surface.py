@@ -28,16 +28,41 @@ import pytest
 
 # (METHOD, PATH) reachable without a session, each with the reason it must be.
 #
-# **This list changed shape in SP-E1-1, and the change is the point.** Until
-# 2026-08-06 the note here read "nothing here exposes workspace data", and it
-# was true: every public route was a read behind a capability token, or an
-# auth endpoint that by definition cannot require auth. Entries breaks that.
-# ``/e/{slug}`` publishes workspace data — the events, the fee, the
-# regulations, and the entrant list — to anyone with the link, and
-# ``/e/{slug}/submit`` lets an anonymous stranger *write a row*. It is the
-# app's first public write, and it is deliberate: an entrant has no account
-# and never will (spec Q4 — no entrant accounts in v1), so requiring one
-# would mean the capability cannot exist.
+# **This list has changed shape twice, and both changes are the point.**
+#
+# Until 2026-08-06 the note here read "nothing here exposes workspace data",
+# and it was true: every public route was a read behind a capability token,
+# or an auth endpoint that by definition cannot require auth. **SP-E1-1**
+# broke that, deliberately: ``/e/{slug}`` publishes workspace data — the
+# events, the fee, the regulations, the entrant list — to anyone with the
+# link, and ``/e/{slug}/submit`` let an anonymous stranger *write a row*.
+# The justification written here was that an entrant "has no account and
+# never will (spec Q4 — no entrant accounts in v1)", so requiring one would
+# mean the capability could not exist.
+#
+# **Ruling R10 (2026-08-07) ended that premise, and SP-E1-2 is unwinding
+# it.** Entrants are now a real principal type with accounts, sessions and a
+# login of their own (spec Q13): ``entrant_accounts`` / ``entrant_sessions``,
+# the ``sw_play_session`` cookie, and ``get_current_entrant``, which has no
+# bootstrap fallback in either mode. So the shape of this list changes with
+# it:
+#
+# - **``POST /e/account/signup`` and ``/login`` go IN.** They are session-free
+#   by nature, not by policy — an account is what the caller is trying to
+#   obtain — exactly as ``/auth/register`` and ``/auth/login`` are. ``/logout``
+#   joins them on ``/auth/logout``'s precedent: nothing to destroy is a no-op.
+# - **``GET /e/{slug}`` STAYS.** The page is still public by design; R10
+#   changed who *writes*, not who reads.
+# - **``POST /e/{slug}/submit`` is on its way OUT.** R10 puts submission
+#   behind a session, so its entry here is temporary and this file is where
+#   that is recorded rather than remembered. It is still listed because the
+#   route is still anonymous: SP-E1-2 Phase B built the principal, and the
+#   Phase C/D slice re-gates the route. Removing the entry before the gate
+#   exists would only mean the gate stopped being checked.
+# - **``GET /e/account/me`` is deliberately NOT here.** It carries the
+#   entrant dependency and answers this gate's 401 like any other guarded
+#   route, which is the point: the second principal is inside the gate, not
+#   an exception to it.
 #
 # What replaces "no workspace data is exposed" as the standard:
 #
@@ -45,10 +70,13 @@ import pytest
 #   data, and rows with ``list_opt_out`` are absent (I6/Q4);
 # - the slug is the only key, so a raw tournament UUID is never a public
 #   address, and an unknown or closed slug gets one uniform 404;
-# - the write carries its own defense stack (server-side Turnstile, a
-#   per-IP throttle, the acknowledgment, a tenant-scoped idempotency key)
-#   and the tests at the bottom of this file exercise each of them, because
-#   an entry in an allowlist is a claim and a claim wants a check.
+# - each write carries its own defense stack — for the entry submit, a
+#   per-IP throttle, the acknowledgment and a tenant-scoped idempotency key;
+#   for signup, the server-side challenge that moved there from submit (Q4's
+#   R3 restack) plus its own throttle namespace and a non-enumerating answer
+#   — and every one of those is exercised, here or in
+#   ``tests/test_entrant_auth_routes.py``, because an entry in an allowlist
+#   is a claim and a claim wants a check.
 PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
     ("POST", "/auth/register"): "account creation — cannot require an account",
     ("POST", "/auth/login"): "the login endpoint itself",
@@ -94,11 +122,15 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "no cookie can end nobody else's session"
     ),
     ("POST", "/e/{slug}/submit"): (
-        "the app's first anonymous WRITE. An entrant has no account and "
-        "never will (Q4), so the guard cannot be a session: it is "
-        "server-side Turnstile + a per-IP throttle + the required "
-        "acknowledgment + a tenant-scoped Idempotency-Key, each asserted "
-        "below rather than assumed"
+        "the app's first anonymous WRITE — and the last slice in which it "
+        "is one. SP-E1-1 justified this by 'an entrant has no account and "
+        "never will (Q4)'; ruling R10 reversed that premise, and the entry "
+        "is TEMPORARY: the submit route moves behind the entrant session "
+        "in the slice that follows SP-E1-2 Phase B, and this line goes "
+        "with it. Until then the route really is anonymous and its shipped "
+        "guards are what stand in front of it — server-side Turnstile, a "
+        "per-IP throttle, the required acknowledgment, a tenant-scoped "
+        "Idempotency-Key — each asserted below rather than assumed"
     ),
 }
 
