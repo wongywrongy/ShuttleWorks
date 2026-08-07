@@ -1,0 +1,78 @@
+/**
+ * Structural guards over entrant-tier source text.
+ *
+ * Both scans here answer questions that no behavioural test can: a
+ * module-scoped mutable binding only *observably* crosses requests once it
+ * already has, and a loader that forwards a Cookie is indistinguishable from
+ * one that does not until the day a real session cookie is in flight. So they
+ * are asserted against the source, at the shape level, before either can
+ * happen.
+ *
+ * Shared by `apiFetch.server.test.ts` (the fetch tier) and
+ * `entry.loader.test.ts` (the loader tier) — the property is the same one at
+ * two altitudes: node renders, and never relays credentials.
+ */
+import { readFileSync } from 'node:fs';
+
+/** Read a file under `app/`, relative to this helper. */
+export function readAppSource(relative: string): string {
+  return readFileSync(new URL(`../../app/${relative}`, import.meta.url), 'utf8');
+}
+
+/**
+ * Lines that declare mutable state at module scope.
+ *
+ * In a node process serving many entrants concurrently, a module-scoped
+ * `let`/`var` is shared by every in-flight request — the exact defect that
+ * rules out `frontend/src/api/client.ts` (`stateEtags` Map at :265, toast
+ * singleton at :6, instance at :1682).
+ *
+ * Also catches the more common real-world form: a top-level `const` bound to a
+ * mutable container (`new Map`/`Set`/`WeakMap`/`WeakSet`, an array literal, an
+ * object literal). A `const` binding does not rebind, but the container it
+ * points at is still shared, mutable, cross-request state — exactly
+ * `client.ts:265`. `Object.freeze(...)` is exempt: the rhs starts with
+ * `Object`, not with `new Map(`/`[`/`{`, and frozen is the safe-to-share form.
+ */
+export function moduleScopedMutableBindings(source: string): string[] {
+  return source.split('\n').filter((line) => {
+    if (/^(export\s+)?(let|var)\s/.test(line)) return true;
+
+    const constMatch = line.match(/^(export\s+)?const\s+\w+[^=]*=\s*(.+)$/);
+    if (!constMatch) return false;
+
+    return /^(new\s+(Map|Set|WeakMap|WeakSet)\s*\(|\[|\{)/.test(constMatch[2].trim());
+  });
+}
+
+/** Strip `//` and block comments so prose about cookies is not a finding. */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
+/**
+ * Lines that would make this module a credential relay.
+ *
+ * `apiFetch.server.ts` refuses to *send* a credential, but nothing in it stops
+ * a caller one tier up from reading `request.headers.get('cookie')` and
+ * handing it over, or from copying an upstream `Set-Cookie` onto its own
+ * `Response`. This is that missing half: a loader may read `request` for its
+ * URL and its method, and for nothing that carries identity.
+ *
+ * `fetch(` is included because the whole guard is void if a loader bypasses
+ * `apiGet` and calls the network directly.
+ */
+export function credentialRelayLines(source: string): string[] {
+  const patterns: RegExp[] = [
+    /\bcookie\b/i, // reading one, or writing one
+    /headers\s*\.\s*get\s*\(/, // any inbound header read
+    /headers\s*:/, // any header map on an outgoing Response/fetch
+    /\bcredentials\b/,
+    /(^|[^.\w])fetch\s*\(/, // must go through apiGet, which owns the allowlist
+  ];
+
+  return stripComments(source)
+    .split('\n')
+    .filter((line) => patterns.some((p) => p.test(line)))
+    .map((line) => line.trim());
+}

@@ -69,6 +69,16 @@ jobs:
         run: npm --prefix products/scheduler/entrant run test:run
       - name: Architecture boundaries (dependency-cruiser)
         run: npm run depcruise:entrant
+      # Not a packaging step — a boundary gate. React Router refuses to build
+      # when a *.server module is reachable from a CLIENT export of a route
+      # ("Server-only module referenced by client"), which is the export-level
+      # half of the rule dependency-cruiser can only state at module level.
+      # Task 15 narrowed the depcruise rule off app/routes/ because a loader
+      # can only live in a route module; this is what took its place, and it
+      # is stronger. Verified by probe: adding `export const PROBE = apiGet` to
+      # app/routes/entry.tsx fails this build and nothing else.
+      - name: Server-only boundary (react-router build)
+        run: npm --prefix products/scheduler/entrant run build
 
       # Report-only for the same reason the frontend job gives above: knip's
       # verdict is a hypothesis, and a gate that fails on a false positive

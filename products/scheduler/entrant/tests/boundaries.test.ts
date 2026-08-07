@@ -95,5 +95,9 @@ test('CI runs the entrant gates', () => {
   expect(ci).toContain('npm run typecheck:entrant');
   expect(ci).toContain('npm --prefix products/scheduler/entrant run test:run');
   expect(ci).toContain('npm run depcruise:entrant');
+  // The export-level half of entrant-server-only-stays-server. Asserted here
+  // so narrowing the depcruise rule off app/routes/ (Task 15) cannot quietly
+  // become "routes are unguarded" if someone later trims the CI job.
+  expect(ci).toContain('npm --prefix products/scheduler/entrant run build');
   expect(ci).toContain('npm run knip:entrant || true');
 });

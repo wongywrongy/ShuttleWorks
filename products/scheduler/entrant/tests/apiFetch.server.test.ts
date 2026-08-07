@@ -8,11 +8,12 @@
  * actual `Request` handed to `globalThis.fetch` — the process boundary,
  * which is the only thing worth asserting about.
  */
-import { readFileSync } from 'node:fs';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, apiGet, apiBaseUrl, OUTBOUND_HEADERS } from '../app/lib/apiFetch.server';
+// Extracted to `tests/helpers/` when the loader tier needed the same scan
+// (Task 15). The guard is unchanged; it now has two callers.
+import { moduleScopedMutableBindings, readAppSource } from './helpers/sourceGuards';
 
 const sent: Request[] = [];
 
@@ -199,7 +200,7 @@ describe('apiGet', () => {
     // which the old `let|var`-only regex sailed straight past. Wrapping in
     // `Object.freeze(...)` (as `OUTBOUND_HEADERS` does) is exempt, since
     // that's the frozen, safe-to-share form.
-    expect(moduleScopedMutableBindings()).toEqual([]);
+    expect(moduleScopedMutableBindings(readAppSource('lib/apiFetch.server.ts'))).toEqual([]);
   });
 
   it('the widened guard is not vacuous: a bare const Map at module scope goes red', () => {
@@ -211,26 +212,6 @@ describe('apiGet', () => {
     expect(moduleScopedMutableBindings(withCacheAdded)).toEqual(['const cache = new Map();']);
   });
 });
-
-/** Shared by both tests above: the structural scan itself, plus the fixture
- * hook so the non-vacuity test can feed it text without touching disk. */
-function moduleScopedMutableBindings(source?: string): string[] {
-  const text =
-    source ??
-    readFileSync(new URL('../app/lib/apiFetch.server.ts', import.meta.url), 'utf8');
-
-  return text.split('\n').filter((line) => {
-    if (/^(export\s+)?(let|var)\s/.test(line)) return true;
-
-    const constMatch = line.match(/^(export\s+)?const\s+\w+[^=]*=\s*(.+)$/);
-    if (!constMatch) return false;
-
-    // Object.freeze(...) does not match — the rhs starts with `Object`, not
-    // directly with `new Map(`/`[`/`{` — so the frozen header constant is
-    // deliberately exempt.
-    return /^(new\s+(Map|Set|WeakMap|WeakSet)\s*\(|\[|\{)/.test(constMatch[2].trim());
-  });
-}
 
 describe('apiBaseUrl', () => {
   it('throws rather than defaulting, so a misconfigured deploy fails loudly', () => {

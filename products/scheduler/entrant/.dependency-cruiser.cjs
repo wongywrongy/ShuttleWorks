@@ -12,9 +12,9 @@ module.exports = {
     {
       name: 'entrant-server-only-stays-server',
       comment:
-        'The SSR-only fetch layer (*.server.ts) forwards no Cookie and relays no Set-Cookie (spec §3, §4). It must stay unreachable from anything that gets bundled to the browser, so client-reachable modules under app/components/ and app/routes/ may not import it — server modules are consumed through loaders and actions only. This is the seam that keeps "no deputy" enforceable rather than remembered. `to.reachable: true` is load-bearing: a plain `to.path` match only catches a DIRECT import, so a one-hop re-export barrel (app/lib/foo.ts importing app/lib/bar.server.ts, then a component importing foo.ts) would sail through undetected. reachable walks the full transitive graph.',
+        'The SSR-only fetch layer (*.server.ts) forwards no Cookie and relays no Set-Cookie (spec §3, §4). It must stay unreachable from anything that gets bundled to the browser, so client-reachable modules under app/components/ may not import it. `to.reachable: true` is load-bearing: a plain `to.path` match only catches a DIRECT import, so a one-hop re-export barrel (app/lib/foo.ts importing app/lib/bar.server.ts, then a component importing foo.ts) would sail through undetected. reachable walks the full transitive graph. NARROWED in Task 15, from `^app/(components|routes)/`: in React Router 7 framework mode a loader can ONLY live in a route module, so "routes may not import *.server" forbids the single sanctioned way to reach the API and has no compliant alternative. Routes are not left unguarded — React Router enforces the same property at EXPORT granularity, which is strictly stronger than this module-granularity rule: `react-router build` hard-fails with "Server-only module referenced by client — \'../lib/apiFetch.server\' imported by route \'app/routes/entry.tsx\' … other route exports depend on it", stripping the import when only loader/action/middleware/headers use it. That build is a required CI step (see the entrant job) and the client bundle was verified free of the server module. app/components/ has no such mechanism, which is why the rule stays there.',
       severity: 'error',
-      from: { path: '^app/(components|routes)/' },
+      from: { path: '^app/components/' },
       to: { path: '\\.server\\.(ts|tsx)$', reachable: true },
     },
     {
