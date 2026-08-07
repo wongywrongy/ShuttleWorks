@@ -1,0 +1,336 @@
+"""Two principals, two credentials, and no path between them.
+
+SP-E1-2 Phase B, task B6 (rule 4's cross-principal control, both
+directions; rulings D-A2/D-A3).
+
+The entrant principal is only safe if a session means exactly one kind of
+caller. Two failures are possible and they are not the same:
+
+1. **An operator session authorizing an entrant action.** Mild on its own
+   — a director acting as an entrant is a product oddity, not an
+   escalation — but it is the same defect as (2) seen from the other end,
+   and a design that permits it has no property to appeal to.
+2. **An entrant session authorizing an operator action.** This is the real
+   one, and the Phase A audit named the two concrete routes: `POST
+   /tournaments` (an entrant would create and *own* a workspace) and
+   `POST /invites/{token}/accept` (an entrant holding a leaked invite link
+   would become a member of somebody's event). Both sit outside
+   `tests/test_tenant_isolation.py`'s reach, because neither carries a
+   `{tournament_id}` path parameter — which is precisely why ruling D-A2
+   put entrants in their own table instead of `users`: not "the resolver
+   checks a discriminator on 27 untested routes", but "an entrant has no
+   row shape that `tournament_members` could hold".
+
+**Every assertion here is a refusal, so every one is paired with a
+control.** A 401 proves nothing unless the same cookie authorizes
+something — otherwise the test passes just as well against a broken
+login. So each direction asserts the refusal *and* shows the credential
+working on its own surface, in the same test where possible.
+
+The last test is the derived one: it sweeps every route in the OpenAPI
+document with an entrant cookie in the jar and requires all of them —
+except the public surface and the entrant's own whoami — to refuse. Three
+examples cover the routes we thought of; the sweep covers the ones a
+later slice adds.
+"""
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from tests.test_auth_surface import (
+    OPS_TOKEN_GATED,
+    PUBLIC_BY_DESIGN,
+    _concrete,
+    _routes,
+)
+
+CSRF = {"X-ShuttleWorks-CSRF": "1"}
+GOOD_PW = "a perfectly fine passphrase"
+
+SIGNUP = "/e/account/signup"
+LOGIN = "/e/account/login"
+ME = "/e/account/me"
+
+# Reachable *with an entrant cookie* and correctly so: everything an
+# anonymous caller may reach (that list is reviewed in test_auth_surface),
+# plus the one route the entrant credential is actually for.
+ENTRANT_REACHABLE = set(PUBLIC_BY_DESIGN) | OPS_TOKEN_GATED | {("GET", ME)}
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    """Cloud mode — the deployed posture, and the only one where the
+    operator side has anything to escalate *to*: in local mode every
+    caller is already the bootstrap operator by design."""
+    monkeypatch.setenv("AUTH_MODE", "cloud")
+    monkeypatch.setenv("ENVIRONMENT", "local")
+    from tests._helpers import isolate_test_database
+
+    isolate_test_database(tmp_path, monkeypatch)
+    from services import turnstile as service
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    monkeypatch.setattr(
+        service, "_post", lambda url, fields, timeout: json.dumps({"success": True})
+    )
+    return TestClient(app)
+
+
+def _operator_cookie(client) -> str:
+    """A real operator session, minted through the real route."""
+    from app.config import settings
+
+    client.cookies.clear()
+    r = client.post(
+        "/auth/register",
+        json={"email": "director@example.com", "password": GOOD_PW},
+        headers=CSRF,
+    )
+    assert r.status_code == 201, r.text
+    return r.cookies[settings.session_cookie_name]
+
+
+def _entrant_cookie(client) -> str:
+    """A real entrant session, minted through the real routes."""
+    from app.config import settings
+
+    client.cookies.clear()
+    r = client.post(
+        SIGNUP,
+        json={
+            "email": "parent@example.com",
+            "password": GOOD_PW,
+            "turnstileToken": "a-solved-token",
+        },
+        headers=CSRF,
+    )
+    assert r.status_code == 202, r.text
+    client.cookies.clear()
+    r = client.post(
+        LOGIN,
+        json={"email": "parent@example.com", "password": GOOD_PW},
+        headers=CSRF,
+    )
+    assert r.status_code == 200, r.text
+    return r.cookies[settings.entrant_session_cookie_name]
+
+
+def _only(client, name: str, value: str) -> None:
+    client.cookies.clear()
+    client.cookies.set(name, value)
+
+
+# ---- Direction 1: operator → entrant surface -------------------------
+
+
+def test_an_operator_session_does_not_authorize_the_entrant_surface(client):
+    """The operator cookie is real — it opens `/auth/me` in the same test —
+    and it opens nothing on the entrant side."""
+    from app.config import settings
+
+    operator = _operator_cookie(client)
+
+    _only(client, settings.session_cookie_name, operator)
+    assert client.get("/auth/me").status_code == 200  # the control
+    assert client.get(ME).status_code == 401
+
+
+def test_an_operator_token_under_the_entrant_cookie_name_resolves_to_nothing(
+    client,
+):
+    """The scoping is the **table**, not the cookie name. Renaming the
+    credential must not carry it across, which is the whole difference
+    between "two tables" and "one table with a discriminator someone
+    remembers to check"."""
+    from app.config import settings
+
+    operator = _operator_cookie(client)
+
+    _only(client, settings.entrant_session_cookie_name, operator)
+
+    assert client.get(ME).status_code == 401
+
+
+# ---- Direction 2: entrant → operator surface -------------------------
+
+
+def test_an_entrant_session_cannot_create_a_workspace(client):
+    """`POST /tournaments` carries no `{tournament_id}`, so it sits outside
+    the OpenAPI-derived tenancy test. An entrant reaching it would not
+    merely see a workspace — they would *own* one."""
+    from app.config import settings
+
+    entrant = _entrant_cookie(client)
+
+    _only(client, settings.entrant_session_cookie_name, entrant)
+    assert client.get(ME).status_code == 200  # the control
+    r = client.post("/tournaments", json={"name": "Not Yours"}, headers=CSRF)
+
+    assert r.status_code == 401
+
+
+def test_an_entrant_session_cannot_accept_an_invite(client):
+    """The escalation the Phase A audit named. A leaked invite link plus an
+    entrant account must not equal membership of someone's event."""
+    from app.config import settings
+
+    _operator_cookie(client)
+    tid = client.post(
+        "/tournaments", json={"name": "Club A Open"}, headers=CSRF
+    ).json()["id"]
+    token = client.post(
+        f"/tournaments/{tid}/invites", json={"role": "operator"}, headers=CSRF
+    ).json()["token"]
+    entrant = _entrant_cookie(client)
+
+    _only(client, settings.entrant_session_cookie_name, entrant)
+    r = client.post(f"/invites/{token}/accept", headers=CSRF)
+
+    assert r.status_code == 401
+
+
+def test_the_invite_was_acceptable_all_along(client):
+    """Negative control for the test above: the same token, presented by an
+    operator session, is accepted. Otherwise the 401 might be an expired
+    invite, a revoked one, or a typo in the URL."""
+    from app.config import settings
+
+    operator = _operator_cookie(client)
+    tid = client.post(
+        "/tournaments", json={"name": "Club A Open"}, headers=CSRF
+    ).json()["id"]
+    token = client.post(
+        f"/tournaments/{tid}/invites", json={"role": "operator"}, headers=CSRF
+    ).json()["token"]
+
+    _only(client, settings.session_cookie_name, operator)
+    r = client.post(f"/invites/{token}/accept", headers=CSRF)
+
+    assert r.status_code == 200, r.text
+
+
+def test_an_entrant_never_becomes_a_tournament_members_principal(client):
+    """The property stated at the level it actually holds: not "the entrant
+    was refused", but "there is no membership row anywhere, and the
+    workspace answers the uniform 404 rather than any part of itself"."""
+    from app.config import settings
+    from database.models import EntrantAccount, TournamentMember
+    from database.session import SessionLocal
+    from sqlalchemy import func, select
+
+    _operator_cookie(client)
+    tid = client.post(
+        "/tournaments", json={"name": "Club A Open"}, headers=CSRF
+    ).json()["id"]
+    entrant = _entrant_cookie(client)
+
+    _only(client, settings.entrant_session_cookie_name, entrant)
+    probe = client.get(f"/tournaments/{tid}")
+
+    assert probe.status_code == 401
+    session = SessionLocal()
+    try:
+        account_id = session.execute(
+            select(EntrantAccount.id).where(
+                func.lower(EntrantAccount.email) == "parent@example.com"
+            )
+        ).scalar_one()
+        members = session.execute(select(TournamentMember)).scalars().all()
+    finally:
+        session.close()
+    # The workspace has exactly its owner, and the entrant's account id
+    # appears in no membership row — which, given the FK points at
+    # ``users``, it could not do even if something tried.
+    assert len(members) == 1
+    assert account_id not in {m.user_id for m in members}
+
+
+def test_an_entrant_token_under_the_operator_cookie_name_resolves_to_nothing(
+    client,
+):
+    """The mirror of the rename test above, and the more dangerous one."""
+    from app.config import settings
+
+    entrant = _entrant_cookie(client)
+
+    _only(client, settings.session_cookie_name, entrant)
+
+    assert client.get("/auth/me").status_code == 401
+    assert (
+        client.post("/tournaments", json={"name": "Not Yours"}, headers=CSRF)
+    ).status_code == 401
+
+
+# ---- The derived sweep ------------------------------------------------
+
+
+def test_no_route_outside_the_public_surface_answers_an_entrant_cookie(client):
+    """Three examples cover the routes we thought of. This covers the ones
+    a later slice adds.
+
+    Every path in the OpenAPI document, called with an entrant cookie in
+    the jar: the public surface and the entrant's own whoami may answer,
+    and nothing else may. Same shape and the same allowlist as
+    `test_auth_surface.py`, with the anonymous caller replaced by a
+    *wrongly-authenticated* one — which is the case that file cannot see.
+    """
+    from app.config import settings
+    from app.main import app
+
+    entrant = _entrant_cookie(client)
+    _only(client, settings.entrant_session_cookie_name, entrant)
+
+    reachable: list[str] = []
+    checked = 0
+    for method, path in _routes(app):
+        if (method, path) in ENTRANT_REACHABLE:
+            continue
+        checked += 1
+        r = client.request(
+            method,
+            _concrete(path),
+            json={} if method in ("POST", "PUT", "PATCH") else None,
+            headers=CSRF,
+        )
+        # 401 = not an operator. 403 = a guard. 404 = the tenancy seam's
+        # uniform answer, itself a refusal.
+        if r.status_code not in (401, 403, 404):
+            reachable.append(f"{method} {path} -> {r.status_code}")
+
+    # A sweep over an empty route table is the failure mode a sweep has.
+    assert checked > 50, f"only {checked} routes swept — the scan is broken"
+    assert not reachable, (
+        "An ENTRANT session reached these operator routes. The entrant "
+        "principal must never resolve outside /e/account/me:\n  "
+        + "\n  ".join(sorted(reachable))
+    )
+
+
+def test_the_sweep_is_not_vacuous(client):
+    """The control for the sweep: with an *operator* cookie the very same
+    loop finds plenty of reachable routes. Without this, a sweep that
+    refused everything for an unrelated reason — a broken app, an empty
+    route list — would look identical to a passing one."""
+    from app.config import settings
+    from app.main import app
+
+    operator = _operator_cookie(client)
+    _only(client, settings.session_cookie_name, operator)
+
+    reachable = 0
+    for method, path in _routes(app):
+        if (method, path) in ENTRANT_REACHABLE:
+            continue
+        r = client.request(
+            method,
+            _concrete(path),
+            json={} if method in ("POST", "PUT", "PATCH") else None,
+            headers=CSRF,
+        )
+        if r.status_code not in (401, 403, 404):
+            reachable += 1
+
+    assert reachable > 0
