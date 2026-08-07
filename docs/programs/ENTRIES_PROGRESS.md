@@ -604,3 +604,21 @@ STOP report. Untouched-by-design list includes `test_entries_commit_seam.py` (ed
 **Go-ahead recorded (2026-08-07, "yes go ahead"):** the four Phase A decisions, the
 F-E1-2 deferral (Seam A byte-for-byte; ruling owed in E2/Phase 7 with F-E1), and
 `gender_mismatch` as an entry-level pending_reason are all accepted. Phases B-E proceed.
+
+### SP-E1-2 Phase B: DONE (2026-08-07, backend 1305/66sk, +108). Rule-1 STOP at Phase C, resolved.
+
+Phase B landed across two runs (a session-limit outage split it; B0-B2 then B3-B8, commits
+`168a46e`..`80d10b7`): entrant principal (accounts/sessions/service), CSRF any-of fix +
+cookie registry guard, throttle namespaces (director-lockout isolation proven), signup/
+login/logout/me as a JSON API (deliberate D3 divergence, reasoned: a form post cannot send
+the CSRF header its own cookie requires), cross-principal controls both directions,
+auth-surface preamble rewrite, infra docs. Unwound: 0 tests (comment blocks only).
+
+**Rule-1 STOP (Phase C agent, correct):** SP-E1-2 demanded both "schema removes
+player_name/remarks/contact/manage_token_hash from entries" and "the 23 commit-seam tests
+pass unedited" — the tests' FIXTURES construct Entry with those columns. Measured: the
+collision is 11 construction lines, zero assertions; the seam module needs zero edits
+(association-proxy reads proven by probe). **Orchestrator ruling under delegated
+authority:** fixture construction may be mechanically adapted (dedicated flagged commit,
+R13/D-A4); assertions and services/entries.py remain untouchable. SP-E1-2.md done-condition
+amended in place with the dated ruling; workflow resumed.
