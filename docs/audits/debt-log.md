@@ -771,3 +771,16 @@ a green 1,100-test suite. The real check is the viewer flow in
   organiser's records) in the most destructive direction. **A ruling is owed BEFORE E2**
   (alternatives: ON DELETE SET NULL + tombstone; soft-delete the account; PII-scrub while
   keeping rows). Size S now, M after E2 ships against the cascade. *(SP-E1-2 verify.)*
+
+- **2026-08-07 · SP-PROGRAM-1 Phase 6 — the CSRF form channel depends on a Starlette
+  internal.** `app/form_csrf.py::form_csrf_proves` reads the request body inside the
+  middleware, and the only thing that keeps the downstream route from receiving an
+  **empty** form is `starlette.middleware.base._CachedRequest.wrapped_receive` replaying
+  `request._body` when `Request.body()` has populated it. That is a private attribute of
+  a private class, not a documented contract. **Verified against Starlette 1.3.1.** If a
+  future upgrade changes that replay branch, every urlencoded route behind the middleware
+  silently receives a blank body — the entrant entry form would accept submissions with
+  no players in them. Mitigation already in place: `tests/test_form_csrf_channel.py`
+  asserts an eight-player ~20 KB submission on **stored rows**, so the breakage is a red
+  test rather than a quiet data loss; grep for `wrapped_receive` before bumping Starlette.
+  Size S. *(SP-PROGRAM-1 Phase 6 Task 6, review round 1.)*

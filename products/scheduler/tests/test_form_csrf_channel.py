@@ -393,3 +393,22 @@ def test_an_unreadable_body_is_a_refusal_and_not_a_500(client, entrant, monkeypa
 
     assert r.status_code == 403
     assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+
+
+def test_a_non_ascii_csrf_field_is_a_refusal_and_not_a_500(client, entrant):
+    """The other half of fail-closed, and the half that is reachable from a
+    cross-site page.
+
+    ``secrets.compare_digest`` raises ``TypeError`` on a ``str`` containing
+    non-ASCII — it is a bytes-or-ASCII-str API. A single accented character
+    in the hidden field is therefore enough to turn the security middleware
+    into a 500 for any browser holding an entrant cookie, which an attacker
+    can trigger without reading anything. It fails closed, so it is not an
+    authorization hole; it is still a denial-of-service primitive handed
+    out for free, and it falsifies this module's stated "never raises"
+    contract.
+    """
+    r = client.post("/e/account/logout", data={"_csrf": "é"}, headers=FORM)
+
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"

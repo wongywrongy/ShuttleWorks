@@ -145,22 +145,6 @@ def issue_play_csrf(response: Response) -> str:
 _URLENCODED = "application/x-www-form-urlencoded"
 
 
-def _cookie_secrets(request: Request) -> list[str]:
-    """The unreadable values this caller could legitimately derive from.
-
-    Entrant cookies only. The operator cookie is deliberately absent — see
-    ``form_csrf_proves``.
-    """
-    return [
-        value
-        for value in (
-            request.cookies.get(settings.entrant_session_cookie_name),
-            request.cookies.get(PLAY_CSRF_COOKIE),
-        )
-        if value
-    ]
-
-
 async def form_csrf_proves(request: Request) -> bool:
     """Does this write present a token derived from one of its own cookies?
 
@@ -176,18 +160,52 @@ async def form_csrf_proves(request: Request) -> bool:
     entrant tier would satisfy the check on an operator write. The bound
     is on the principal, not on the path — a path bound is the exemption
     this channel was built to delete.
+
+    **``await request.body()`` before ``request.form()`` is load-bearing,
+    not a warm-up.** A request stream is consumed once. ``Request.form()``
+    on an urlencoded body feeds ``request.stream()`` straight into the
+    parser, which sets ``_stream_consumed`` and never populates ``_body``;
+    Starlette's ``BaseHTTPMiddleware`` then forwards whatever is left of
+    the channel, which for a consumed stream is *nothing*. The route
+    downstream calls ``await request.form()``, gets an empty ``FormData``,
+    and answers as if the entrant had submitted a blank page — nothing
+    raises and nothing logs, and a family's eight-player entry arrives as
+    zero players. Reading ``body()`` first caches the bytes on ``_body``,
+    ``stream()`` then yields that cached copy to the parser, and
+    ``_CachedRequest.wrapped_receive`` replays the same ``_body``
+    downstream as one complete ``http.request`` message. One buffer, read
+    twice. Verified against Starlette 1.3.1 and pinned by a real
+    multi-player submission in ``tests/test_form_csrf_channel.py`` —
+    a two-field probe passes either way. Buffering costs no new memory
+    ceiling: ``BodyLimitMiddleware`` is outermost and has already read and
+    bounded these bytes.
+
+    **Comparison is on bytes**, because ``secrets.compare_digest`` raises
+    ``TypeError`` on a ``str`` carrying non-ASCII — one accented character
+    in the hidden field would otherwise be a 500 any cross-site page could
+    trigger against a browser holding an entrant cookie.
     """
     if settings.session_cookie_name in request.cookies:
         return False
     if not request.headers.get("content-type", "").startswith(_URLENCODED):
         return False
 
-    expected = [form_csrf_token(secret) for secret in _cookie_secrets(request)]
+    # Entrant cookies only. The operator cookie is deliberately absent —
+    # see the blast-radius paragraph above.
+    expected = [
+        form_csrf_token(secret).encode("ascii")
+        for secret in (
+            request.cookies.get(settings.entrant_session_cookie_name),
+            request.cookies.get(PLAY_CSRF_COOKIE),
+        )
+        if secret
+    ]
     if not expected:
         return False
 
     try:
-        form = await _replayable_form(request)
+        await request.body()
+        form = await request.form()
     except Exception:
         # **Fail closed, and say why the catch is broad.** Everything this
         # can raise — a client that disconnected mid-body, a body that is
@@ -200,39 +218,5 @@ async def form_csrf_proves(request: Request) -> bool:
         # would be an unhandled exception in the security middleware.
         return False
 
-    presented = str(form.get(FORM_FIELD) or "")
+    presented = str(form.get(FORM_FIELD) or "").encode("utf-8", "replace")
     return any(secrets.compare_digest(presented, token) for token in expected)
-
-
-async def _replayable_form(request: Request):
-    """``request.form()``, read in a way the downstream route survives.
-
-    **The defect this line exists to prevent, stated plainly.** A request
-    stream is consumed once. ``Request.form()`` on an urlencoded body feeds
-    ``request.stream()`` straight into the parser, which sets
-    ``_stream_consumed`` and never populates ``_body``; Starlette's
-    ``BaseHTTPMiddleware`` then forwards whatever is left of the channel,
-    which for a consumed stream is *nothing*. The route downstream calls
-    ``await request.form()``, gets an empty ``FormData``, and answers as if
-    the entrant had submitted a blank page. Nothing raises and nothing
-    logs — the failure is a family's eight-player entry arriving as zero
-    players and being refused for "no player given".
-
-    ``await request.body()`` **first** is the whole fix, and it is a fix
-    rather than a workaround: ``Request.body()`` caches the bytes on
-    ``_body``, ``stream()`` then yields the cached copy to the form parser,
-    and ``_CachedRequest.wrapped_receive`` replays that same ``_body`` to
-    everything downstream as one complete ``http.request`` message. One
-    buffer, read twice, no second parse and no new dependency.
-
-    Buffering is not a new memory exposure: ``BodyLimitMiddleware`` is
-    registered outermost and has already read and bounded these bytes
-    before this middleware is entered, so the ceiling is the same one the
-    rest of the API is held to.
-
-    ``tests/test_form_csrf_channel.py`` proves the replay on a real
-    multi-player submission rather than a two-field probe, because a small
-    body is exactly the case a broken implementation can appear to survive.
-    """
-    await request.body()
-    return await request.form()
