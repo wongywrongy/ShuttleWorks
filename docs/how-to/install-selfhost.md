@@ -142,6 +142,8 @@ to start without it, or misbehaves in a way you will not notice.
 | `SESSION_TTL_DAYS` / `SESSION_COOKIE_NAME` / `SESSION_COOKIE_DOMAIN` | `30` / `sw_session` / `''` | ✓ | ✓ | not read | Blank domain = host-only cookie, which is the right default. |
 | `PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH` / `RESET_TOKEN_TTL_MINUTES` | `8` / `128` / `60` | ✓ | ✓ | not read | NIST 800-63B: length only. |
 | `INVITE_TTL_DAYS` | `14.0` | ✓ | ✓ | not read | Email-invite expiry. |
+| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | Cloudflare's **dummy always-pass pair** | leave | **real keys, once entries are public** | not read | The defaults always pass, which is right while nothing routes to `/e/` and wrong the moment something does — an always-pass challenge is no challenge. Get a pair from Cloudflare → Turnstile; the secret belongs in a secret file (`TURNSTILE_SECRET_KEY_FILE`), not in `.env`. |
+| `ENTRIES_MAX_PER_IP` / `ENTRIES_WINDOW_SECONDS` / `ENTRIES_LOCK_SECONDS` | `20` / `600` / `300` | ✓ | ✓ | not read | The durable per-IP budget for public entry submissions, on its own `entry:` namespace so an entry flood cannot lock a venue out of signing in. Too low interrupts a club secretary entering a squad. |
 | `DATA_DIR` | `/app/data` | ✓ | ✓ | ✓ | Runtime scratch; the readiness probe checks it is writable. |
 | `LOG_LEVEL` / `HOST` / `PORT` | `info` / `0.0.0.0` / `8000` | ✓ | ✓ | ✓ | The image hardcodes its bind; `HOST`/`PORT` only affect `python -m app.main`. |
 | `POSTGRES_DATA_DIR` | `./data/postgres` | – | compose-only | – | Must be a real local filesystem. `initdb` fails on synced/network paths. |
@@ -233,6 +235,34 @@ only purpose.
 
 Add both as Bypass rules in the Access application before the first event, and
 re-check them after any Access policy edit.
+:::
+
+### 4b. The public entry surface (`/e/*`) — written, not yet activated
+
+The Entries module adds a genuinely public **write**: `/e/{slug}` is an entry
+page a player opens from a poster, and `/e/{slug}/submit` creates an entry with
+no account involved. The edge configuration for it already exists in
+`frontend/nginx.conf` — a `sw_entries` `limit_req` zone (20 r/m, burst 5) plus
+explicit `location /e/` and `location /api/entries/` blocks, the first of which
+also stops the SPA fallback swallowing entry links.
+
+::: warning Activated at Phase 2 deployment, deliberately not before
+Nothing routes to `/e/` in a shipped deployment today, and nothing should
+until the public-exposure gate has been passed. Turning it on is three
+changes, in this order:
+
+1. **Real Turnstile keys** (`TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`).
+   The shipped defaults are Cloudflare's dummy always-pass pair.
+2. **Ingress by hostname, not by another Access exclusion.** The entry page is
+   served under its own public hostname with no Access policy attached — that
+   is what keeps §4a's exclusion list from growing a `/entries/*` entry every
+   time a public surface appears.
+3. **The CSP question, answered against a real browser.** The page sets its own
+   `Content-Security-Policy` allowing `challenges.cloudflare.com`, while the
+   nginx snippet sets a stricter one; browsers enforce the *intersection* of
+   every policy present, so the widget stays blocked until this location's
+   header handling is resolved. It is left as-is on purpose: a security header
+   loosened on a guess is worse than one that visibly breaks a widget.
 :::
 
 Once the remediation in `SEC_PROGRESS.md` has landed and you want public
