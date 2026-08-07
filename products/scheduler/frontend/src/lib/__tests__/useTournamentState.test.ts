@@ -14,6 +14,7 @@ import { forceSaveNow, _resetSaveStateForTests } from '../../hooks/useTournament
 import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import * as clientModule from '../../api/client';
+import type { PlayerDTO } from '../../api/dto';
 
 // ---- Helpers -----------------------------------------------------------
 
@@ -280,5 +281,88 @@ describe('snapshot — planFinalized persistence', () => {
 
     put1.resolve();
     await p;
+  });
+});
+
+// ---- Snapshot round-trip: Entries provenance (SP-E1-1) ------------------
+//
+// Seam A writes `sourceEntryId` + `remarks` onto the roster player. The
+// backend `PlayerDTO` is a StrictModel, so if the frontend dropped either
+// field the very next autosave would send a player the server no longer
+// recognizes as the one it stored — the provenance link the desk and the
+// operator both rely on would vanish on the first config edit after a commit.
+//
+// The load side is exercised through the 409 re-sync path, which is the one
+// place `hydrate()` runs from a server payload inside a unit test. The save
+// side is the PUT body. Together that is a full server → store → server cycle.
+
+describe('snapshot — Entries provenance survives a load/save cycle', () => {
+  function conflict() {
+    const err = new Error('rejected') as Error & { response: { status: number } };
+    err.response = { status: 409 };
+    return err;
+  }
+
+  /** Drive one 409 re-sync so `hydrate()` runs against `serverState`, then
+   *  return the body of the NEXT PUT. */
+  async function roundTrip(serverState: Record<string, unknown>) {
+    const putSpy = vi
+      .spyOn(clientModule.apiClient, 'putTournamentState')
+      .mockRejectedValueOnce(conflict())
+      .mockResolvedValue(undefined as never);
+    vi.spyOn(clientModule.apiClient, 'getTournamentState').mockResolvedValue({
+      config: useTournamentStore.getState().config,
+      ...serverState,
+    } as never);
+
+    await expect(forceSaveNow()).rejects.toThrow();
+
+    _resetSaveStateForTests();
+    useUiStore.setState({
+      activeTournamentId: 'test-tournament-1',
+      activeTournamentRole: 'owner',
+    });
+    await forceSaveNow();
+    return putSpy.mock.calls.at(-1)?.[1] as Record<string, unknown>;
+  }
+
+  it('a committed player keeps sourceEntryId + remarks through hydrate → PUT', async () => {
+    // Typed as PlayerDTO on purpose: deleting either field from the interface
+    // is then a `tsc -b` failure here, not just a silent runtime pass.
+    const committed: PlayerDTO = {
+      id: 'p1',
+      name: 'Alice',
+      groupId: 'g1',
+      availability: [],
+      sourceEntryId: 'e-9f6d',
+      remarks: "can't play before 6pm Saturday",
+    };
+    const body = await roundTrip({ players: [committed] });
+
+    expect(body.players).toEqual([
+      expect.objectContaining({
+        id: 'p1',
+        sourceEntryId: 'e-9f6d',
+        remarks: "can't play before 6pm Saturday",
+      }),
+    ]);
+  });
+
+  // NEGATIVE CONTROL. The assertion above is only meaningful if `snapshot()`
+  // can actually drop things — otherwise it proves nothing but that objects
+  // are objects. `standings` is server-derived and deliberately excluded from
+  // the snapshot allowlist, so it hydrates into the store and is then dropped
+  // on the way back out. Same cycle, same mechanism, opposite outcome: the
+  // allowlist is real, and `sourceEntryId` survives because it is on it.
+  it('a field OUTSIDE the snapshot allowlist is dropped by the same cycle', async () => {
+    const body = await roundTrip({
+      players: [],
+      standings: [{ groupId: 'g1', wins: 1, losses: 0 }],
+    });
+
+    // It reached the store...
+    expect(useTournamentStore.getState().standings).toHaveLength(1);
+    // ...and did NOT reach the wire.
+    expect(body.standings).toBeUndefined();
   });
 });

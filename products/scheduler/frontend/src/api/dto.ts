@@ -269,6 +269,18 @@ export interface PlayerDTO {
   status?: 'active' | 'withdrawn'; // Player status - defaults to 'active'
   withdrawalReason?: WithdrawalReason; // Reason if withdrawn
   withdrawnAt?: string; // Timestamp when withdrawn
+  /** Entries provenance (SP-E1-1, spec §5 Seam A) — the `entries.id` this
+   *  player was materialized from. Half of the seam's back-reference pair
+   *  (`entries.committed_player_id` is the other half). Declared here because
+   *  the backend `PlayerDTO` is a StrictModel: an undeclared key is REFUSED
+   *  (422), so the autosave PUT must carry the field by name or the whole
+   *  blob write fails once a committed player is in the roster. */
+  sourceEntryId?: string;
+  /** The entrant's own free-text availability sentence, carried verbatim from
+   *  `entries.remarks`. Deliberately NOT `notes` — that is the operator's own
+   *  field, and overwriting it would destroy what the operator wrote and lose
+   *  the attribution. Never parsed, never fed to the solver. */
+  remarks?: string;
 }
 
 export interface AvailabilityWindow {
@@ -287,6 +299,11 @@ export interface BracketPlayerDTO {
    *  day. Mirrors the backend `BracketPlayerDTO.availability` (SP-D7 S2),
    *  which threads it into the CP-SAT solve via player_constraints. */
   availability?: AvailabilityWindow[];
+  /** Entries provenance — mirrors `PlayerDTO`. The Bracket half of Seam A
+   *  writes the `bracket_participants` row *and* this blob entry, because the
+   *  participant table has nowhere to put a remark. */
+  sourceEntryId?: string;
+  remarks?: string;
 }
 
 // Match Type - used for UI selection mode and match categorization
@@ -603,9 +620,76 @@ type TournamentKind = 'meet' | 'bracket';
  *  built, so `coming_soon` is legacy/defensive only — the frontend maps any such
  *  value to `available` in `modulesFromDto` (it never renders a "coming soon" state). */
 export interface WorkspaceModuleDTO {
-  moduleId: 'meet' | 'bracket' | 'display';
+  /** `entries` is CLOUD-ONLY (SP-E1-1 ruling D2): the backend seeds and returns
+   *  the row only when `AUTH_MODE=cloud`, so a local-mode workspace never sees
+   *  it here. The union carries it because the wire can. */
+  moduleId: 'meet' | 'bracket' | 'display' | 'entries';
   status: 'enabled' | 'available' | 'disabled' | 'coming_soon';
   config: Record<string, unknown> | null;
+}
+
+// ---- Entries (SP-E1-1) ------------------------------------------------
+
+/** The entry lifecycle vocabulary (spec §6). E1 only ever *produces*
+ *  `pending` → `confirmed` (ruling D1 — submissions skip `unverified` until
+ *  E2's email verification ships, and reject/promote/withdraw are E2), but the
+ *  desk must render whatever the backend hands it, so the full set is typed. */
+export type EntryState =
+  | 'unverified'
+  | 'pending'
+  | 'confirmed'
+  | 'rejected'
+  | 'waitlisted'
+  | 'withdrawn';
+
+/** One row of the operator's entries desk — mirrors the backend
+ *  `EntryDeskRowDTO`, which is a PROJECTION rather than the table: the
+ *  entrant's `manage_token_hash` and the doubles/payment columns are
+ *  deliberately absent.
+ *
+ *  There is no separate `flags` field on the wire. The R7 soft-duplicate
+ *  signal is the `needs_review` member of `pendingReasons` — one list, one
+ *  source of truth; a parallel flags array would be a second place for the
+ *  same fact to disagree with itself. */
+export interface EntryDTO {
+  id: string;
+  entryEventId: string;
+  /** Denormalized from `entry_events.code` — the same string the commit seam
+   *  turns into `ranks[]`. Null when the event row is missing. */
+  eventCode: string | null;
+  state: EntryState;
+  /** Reason codes: `awaiting_partner` | `awaiting_payment` | `over_cap` |
+   *  `needs_review`. E1 only ever writes `needs_review`. */
+  pendingReasons: string[];
+  contactName: string;
+  contactEmail: string;
+  playerName: string;
+  remarks: string | null;
+  listOptOut: boolean;
+  /** Set once Seam A has materialized this entry as a roster player. */
+  committedPlayerId: string | null;
+  submittedAt: string | null;
+  withdrawnAt: string | null;
+}
+
+/** One committed entry: which entry became which roster player. */
+export interface EntryCommitOutcomeDTO {
+  id: string;
+  playerId: string;
+}
+
+/** One skipped entry + the stable reason code. Spec §5: partial success is
+ *  reported per-entry, not rolled back — so this is a normal outcome, not an
+ *  error body. Codes: `UNMAPPABLE_EVENT` | `DRAW_NOT_EDITABLE` |
+ *  `STATE_CONFLICT` | `INVALID_PLAYER`. */
+export interface EntrySkipDTO {
+  id: string;
+  reason: string;
+}
+
+export interface EntryCommitResultDTO {
+  committed: EntryCommitOutcomeDTO[];
+  skipped: EntrySkipDTO[];
 }
 
 /** Server-computed control-plane signals (mirrors backend

@@ -21,6 +21,8 @@ import type {
   TournamentStateDTO,
   TournamentSummaryDTO,
   WorkspaceModuleDTO,
+  EntryDTO,
+  EntryCommitResultDTO,
   TournamentCreateDTO,
   TournamentUpdateDTO,
   TournamentMemberDTO,
@@ -674,6 +676,45 @@ class ApiClient {
       body,
     );
     return response.data;
+  }
+
+  // ---- Entries desk (SP-E1-1) ------------------------------------------
+
+  /** The operator's entries list, newest submission first. Workspace-scoped
+   *  and session-guarded — the public surface is a different router entirely
+   *  (`/e/{slug}`), and nothing here is reachable without membership. */
+  async listEntries(tid: string, state?: string): Promise<EntryDTO[]> {
+    const r = await this.client.get<EntryDTO[]>(`/tournaments/${tid}/entries`, {
+      params: state ? { state } : undefined,
+    });
+    return r.data;
+  }
+
+  /** `pending → confirmed` — the ONLY lifecycle transition E1 ships (ruling
+   *  D1). Seam A commits only `confirmed` entries, so without this the pipe
+   *  dead-ends one step before the roster. 409 (toasted by the interceptor)
+   *  when the entry is not `pending`. */
+  async confirmEntry(tid: string, entryId: string): Promise<EntryDTO> {
+    const r = await this.client.post<EntryDTO>(
+      `/tournaments/${tid}/entries/${entryId}/confirm`,
+    );
+    return r.data;
+  }
+
+  /** Run Seam A: materialize every confirmed, uncommitted entry as a roster
+   *  player. Idempotent by design (spec §5) — pressing it twice commits
+   *  nothing twice — so the caller may re-run it freely as late entries
+   *  arrive. Partial success comes back per-entry in `skipped`. */
+  async commitEntries(
+    tid: string,
+    entryEventId?: string,
+  ): Promise<EntryCommitResultDTO> {
+    const r = await this.client.post<EntryCommitResultDTO>(
+      `/tournaments/${tid}/entries/commit`,
+      undefined,
+      { params: entryEventId ? { entry_event_id: entryEventId } : undefined },
+    );
+    return r.data;
   }
 
   // ---- Invite links (Step 7) -------------------------------------------
