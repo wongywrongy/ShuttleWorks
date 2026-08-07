@@ -17,14 +17,18 @@ import type { AppTab } from '../../store/uiStore';
 import type { ModuleId } from './types';
 
 export type WsKind = 'meet' | 'bracket' | null;
-export type SectionRole = 'engine' | 'shared' | 'output';
+/** The architectural anatomy: intake → engine → emit. `intake` is new with
+ *  Entries (SP-E1-1). Reusing `shared` would have been cheaper and would have
+ *  lied in the badge — Operations is shared *between* the engines; Entries
+ *  feeds them. */
+export type SectionRole = 'intake' | 'engine' | 'shared' | 'output';
 
 export interface WsNavItem {
   segment: AppTab;
   label: string;
 }
 export interface WsSection {
-  id: 'meet' | 'bracket' | 'operations' | 'display';
+  id: 'entries' | 'meet' | 'bracket' | 'operations' | 'display';
   label: string;
   role: SectionRole;
   items: WsNavItem[];
@@ -52,11 +56,16 @@ export const SHELL_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   ...ADMIN_SEGMENTS,
 ]);
 
+/** Segments owned by the Entries module (SP-E1-1). Exported so the router and
+ *  the kind-guess both read one list instead of hand-repeating the literal. */
+export const ENTRIES_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>(['entries']);
+
 export function isAdminSegment(tab: AppTab): boolean {
   return ADMIN_SEGMENTS.has(tab);
 }
 
 const ROLE_LABEL: Record<SectionRole, string> = {
+  intake: 'Intake',
   engine: 'Engine',
   shared: 'Shared',
   output: 'Output',
@@ -68,6 +77,19 @@ export function roleBadge(role: SectionRole): string {
 export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): WorkspaceNav {
   const sections: WsSection[] = [];
 
+  // Intake sits FIRST — it is where the workspace's people come from, and the
+  // anatomy reads intake → engine → emit down the rail. Absent entirely
+  // unless the module is enabled, which in local mode it can never be
+  // (ruling D2), so a laptop-only director never sees a module they cannot
+  // use (ADR 0005).
+  if (enabled.has('entries')) {
+    sections.push({
+      id: 'entries',
+      label: 'Entries',
+      role: 'intake',
+      items: [{ segment: 'entries', label: 'Desk' }],
+    });
+  }
   if (enabled.has('meet')) {
     sections.push({
       id: 'meet',

@@ -23,16 +23,28 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
   meet: 'Meet',
   bracket: 'Bracket',
   display: 'Display',
+  entries: 'Entries',
 };
 
-/** Fixed display order for the Module Dock / catalog. */
-const MODULE_ORDER: ModuleId[] = ['meet', 'bracket', 'display'];
+/** Fixed display order for the Module Dock / catalog. Entries goes last: it
+ *  is the newest module and the only cloud-only one, so putting it after the
+ *  three every workspace has keeps the dock stable for everyone else.
+ *  `primaryModuleForOpen` repeats this order and MUST stay in step — the
+ *  colocated test pins the two together. */
+const MODULE_ORDER: ModuleId[] = ['meet', 'bracket', 'display', 'entries'];
+
+/** The subset the KIND-DERIVED fallback can produce. Mirrors the backend's
+ *  `derive_modules(kind)`, which knows nothing about Entries — an entries row
+ *  exists only when the backend seeded one in cloud mode, so it can never be
+ *  inferred from `kind` and must not appear in the pre-load catalog. */
+const DERIVED_MODULE_ORDER: ModuleId[] = ['meet', 'bracket', 'display'];
 
 /** Which module owns a given active tab. `tv` is the Display module; any
  *  `bracket-` tab is Bracket; the meet operator tabs are Meet. Unknown tabs
  *  fall back to the workspace kind. Never throws on a null kind. */
 export function moduleForTab(tab: string, kind: Kind): ModuleId {
   if (tab === 'tv') return 'display';
+  if (tab === 'entries') return 'entries';
   if (tab.startsWith('bracket-')) return 'bracket';
   if (MEET_OPERATOR_TABS.has(tab)) return 'meet';
   return kind === 'bracket' ? 'bracket' : 'meet';
@@ -43,16 +55,20 @@ export function moduleForTab(tab: string, kind: Kind): ModuleId {
 export function defaultTabForModule(module: ModuleId): string {
   if (module === 'bracket') return 'bracket-setup';
   if (module === 'display') return 'tv';
+  if (module === 'entries') return 'entries';
   return 'setup'; // meet
 }
 
 /** The module a workspace should open to: first enabled, else first
- *  available, else first present, in meet → bracket → display precedence.
- *  Reads real module state so a hybrid lands on Meet and a bracket-only
- *  workspace lands on Bracket. */
+ *  available, else first present, in meet → bracket → display → entries
+ *  precedence. Reads real module state so a hybrid lands on Meet and a
+ *  bracket-only workspace lands on Bracket.
+ *
+ *  Uses `MODULE_ORDER` rather than a second literal: the two used to be
+ *  hand-mirrored, and a divergence would silently change which module a
+ *  workspace opens into. */
 export function primaryModuleForOpen(modules: WorkspaceModule[]): ModuleId {
-  const order: ModuleId[] = ['meet', 'bracket', 'display'];
-  const present = order.filter((id) => modules.some((m) => m.id === id));
+  const present = MODULE_ORDER.filter((id) => modules.some((m) => m.id === id));
   const byStatus = (s: ModuleStatus) =>
     present.find((id) => modules.find((m) => m.id === id)?.status === s);
   return byStatus('enabled') ?? byStatus('available') ?? present[0] ?? 'meet';
@@ -83,7 +99,7 @@ export function modulesForWorkspace(kind: Kind): WorkspaceModule[] {
     const isThisOperator = (id === 'bracket') === isBracket;
     return isThisOperator ? 'enabled' : 'available';
   };
-  return MODULE_ORDER.map((id) => {
+  return DERIVED_MODULE_ORDER.map((id) => {
     const s = status(id);
     return { id, label: MODULE_LABELS[id], status: s, note: moduleNote(id, s) };
   });

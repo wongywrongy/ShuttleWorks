@@ -23,7 +23,7 @@ import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
 import { MEET_TAB_IDS, BRACKET_TAB_IDS } from '../lib/bracketTabs';
-import { SHELL_SEGMENTS } from '../platform/product-shell/workspaceNav';
+import { SHELL_SEGMENTS, ENTRIES_SEGMENTS } from '../platform/product-shell/workspaceNav';
 
 // URL-routable trailing segments: every meet tab id + every bracket tab id +
 // the workspace-shell segments (overview / display-config / ws-* admin).
@@ -33,6 +33,19 @@ const _TAB_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   ...MEET_TAB_IDS,
   ...BRACKET_TAB_IDS,
   ...SHELL_SEGMENTS,
+  // Entries (SP-E1-1) belongs to neither engine's tab list — it is a module
+  // segment of its own. Without it here the URL /tournaments/:id/entries
+  // would leave `activeTab` on whatever it was, and a poster-following
+  // operator would land on the wrong surface with a correct-looking URL.
+  ...ENTRIES_SEGMENTS,
+]);
+
+/** Kind-agnostic module segments: the URL says nothing about whether this is
+ *  a meet or a bracket, so the optimistic-kind guess below must skip them and
+ *  let `useTournamentKind`'s fetch be the only source of truth. */
+const KIND_AGNOSTIC: ReadonlySet<AppTab> = new Set<AppTab>([
+  ...SHELL_SEGMENTS,
+  ...ENTRIES_SEGMENTS,
 ]);
 
 export function TournamentPage() {
@@ -71,7 +84,7 @@ export function TournamentPage() {
     // for kind-agnostic shell segments (overview / ws-* / display-config) —
     // there ``useTournamentKind``'s async fetch is the only source of truth, so
     // we don't flash the wrong engine's groups on a bracket workspace.
-    if (segment && !SHELL_SEGMENTS.has(segment as AppTab)) {
+    if (segment && !KIND_AGNOSTIC.has(segment as AppTab)) {
       const optimisticKind: 'meet' | 'bracket' = segment.startsWith('bracket-')
         ? 'bracket'
         : 'meet';

@@ -29,6 +29,17 @@ const GLYPH_CLASS: Record<ModuleGlyphId, string> = {
   meet: 'bg-surface-raised text-foreground border border-border',
   display: 'bg-surface-raised text-foreground border border-border',
   bracket: 'bg-surface-raised text-foreground border border-border',
+  entries: 'bg-surface-raised text-foreground border border-border',
+};
+
+/** Glyph → module name for the chip's title. Was a letter-keyed ternary whose
+ *  final `: 'Bracket'` would have called the new E chip "Bracket"; keyed on the
+ *  id, a missing module is now a type error instead of wrong hover text. */
+const GLYPH_TITLE: Record<ModuleGlyphId, string> = {
+  meet: 'Meet',
+  display: 'Display',
+  bracket: 'Bracket',
+  entries: 'Entries',
 };
 
 /** The row's Modules column — enabled modules as solid tinted glyphs, or a
@@ -41,7 +52,7 @@ function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
         <span
           key={g.id}
           data-testid={`row-module-${g.id}`}
-          title={`${g.letter === 'M' ? 'Meet' : g.letter === 'D' ? 'Display' : 'Bracket'} — ${g.enabled ? 'enabled' : 'available'}`}
+          title={`${GLYPH_TITLE[g.id]} — ${g.enabled ? 'enabled' : 'available'}`}
           className={[
             'inline-flex h-5 w-5 items-center justify-center rounded text-[11px] font-semibold',
             g.enabled

@@ -323,7 +323,7 @@ describe('snapshot — Entries provenance survives a load/save cycle', () => {
       activeTournamentRole: 'owner',
     });
     await forceSaveNow();
-    return putSpy.mock.calls.at(-1)?.[1] as Record<string, unknown>;
+    return putSpy.mock.calls.at(-1)?.[1] as unknown as Record<string, unknown>;
   }
 
   it('a committed player keeps sourceEntryId + remarks through hydrate → PUT', async () => {

@@ -8,4 +8,11 @@ describe('MODULE_CATALOG', () => {
     expect(MODULE_CATALOG.display.dependency).toMatch(/Meet or Bracket/i);
     expect(MODULE_CATALOG.bracket.dependency).toBeUndefined();
   });
+
+  it('describes Entries and states its cloud dependency', () => {
+    // The dependency line mirrors the server rule (MODULE_REQUIRES_CLOUD).
+    // Without it the catalog row would offer an Enable the backend refuses.
+    expect(MODULE_CATALOG.entries.capability).toMatch(/sign-up|entry|roster/i);
+    expect(MODULE_CATALOG.entries.dependency).toMatch(/cloud/i);
+  });
 });

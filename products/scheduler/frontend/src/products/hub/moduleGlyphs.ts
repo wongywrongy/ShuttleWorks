@@ -7,7 +7,7 @@
  */
 import type { WorkspaceModuleDTO } from '../../api/dto';
 
-export type ModuleGlyphId = 'meet' | 'display' | 'bracket';
+export type ModuleGlyphId = 'meet' | 'display' | 'bracket' | 'entries';
 
 export interface ModuleGlyph {
   id: ModuleGlyphId;
@@ -15,8 +15,13 @@ export interface ModuleGlyph {
   enabled: boolean;
 }
 
-const GLYPH_ORDER: ModuleGlyphId[] = ['meet', 'display', 'bracket'];
-const GLYPH_LETTER: Record<ModuleGlyphId, string> = { meet: 'M', display: 'D', bracket: 'B' };
+const GLYPH_ORDER: ModuleGlyphId[] = ['meet', 'display', 'bracket', 'entries'];
+const GLYPH_LETTER: Record<ModuleGlyphId, string> = {
+  meet: 'M',
+  display: 'D',
+  bracket: 'B',
+  entries: 'E',
+};
 
 export function moduleGlyphs(
   modules: WorkspaceModuleDTO[],
