@@ -118,11 +118,34 @@ class EntrantDTO(BaseModel):
 def _set_entrant_cookie(response: Response, token: str) -> None:
     """The operator cookie's twin (``api/auth.py``), under the entrant name.
 
-    ``httponly`` so script cannot read it, ``samesite=lax`` so a
-    cross-site form post never carries it, and no ``domain`` — host-only
-    is what keeps the ``app.*`` and ``play.*`` cookie jars separate, which
-    is the mechanism actually doing the session scoping (spec Q13 §2).
+    ``httponly`` so script cannot read it, and no ``domain`` — host-only is
+    what keeps the ``app.*`` and ``play.*`` cookie jars separate, which is
+    the mechanism actually doing the session scoping (spec Q13 §2).
     ``secure`` follows the same setting the cloud validator forces true.
+
+    **What ``samesite=lax`` buys, and what it does not.** It suppresses the
+    cookie on cross-site *subresource* traffic and on cross-site POSTs — a
+    useful default, and defense in depth. It is **not** a CSRF defense on
+    its own, and this file must not be read as claiming it is:
+
+    - Chrome's **Lax+POST intervention** deliberately allows a cross-site
+      top-level POST to carry a cookie less than two minutes old. That
+      window is precisely the one after a login, which is when an entrant
+      submits — the reasoning is spelled out at
+      ``api/entries_public._form_csrf``, and this docstring previously
+      contradicted it.
+    - "Lax" is a browser's promise, not ours. It is unenforced in older
+      clients and in anything that is not a browser.
+
+    The defense that actually holds is carried per write, and there are two
+    of them because the two surfaces post differently. JSON writes need the
+    ``X-ShuttleWorks-CSRF`` header, which the middleware requires of every
+    request carrying a cookie named in ``settings.session_cookie_names`` —
+    this one included, by way of the registry test. The public entry form
+    cannot send a header at all, so it carries a **double-submit token
+    derived from this cookie** (``_form_csrf``): an attacker's page can
+    make the browser send the cookie, it can never read it. ``samesite``
+    narrows the attack surface those two guard; it does not replace them.
 
     The name comes from ``settings.entrant_session_cookie_name``, which is
     also a member of ``settings.session_cookie_names`` — the registry the
