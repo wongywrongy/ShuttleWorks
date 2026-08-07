@@ -220,3 +220,63 @@ def test_the_registry_names_both_principals(client):
     from app.config import settings
 
     assert settings.session_cookie_names == ("sw_session", "sw_play_session")
+
+
+# ---- 3. The one exemption, and the proof that it is the only one ------
+#
+# SP-E1-2 Phase C carved a single route out of the header check:
+# ``POST /e/{slug}/submit``. The reason is structural rather than
+# convenient — it is a native HTML form post on a page with
+# ``script-src 'none'``, and a form cannot attach a custom header, which is
+# the same property this whole defense rests on seen from the other side.
+# That route proves CSRF its own way (a double-submit token derived from
+# the session cookie), so the exemption is from *this check*, not from CSRF.
+#
+# An exemption is exactly the kind of thing that grows, so it is pinned in
+# three directions: the pattern is anchored, the route answers 403 without
+# its own token, and every other cookie-carrying write is still refused.
+
+
+def test_the_form_csrf_exemption_matches_exactly_one_route_shape(client):
+    from app.main import _FORM_CSRF_ROUTES
+
+    assert _FORM_CSRF_ROUTES.match("/e/spring-open/submit")
+    # Anchored at both ends: a prefix match here would exempt anything an
+    # attacker could hang off the same path.
+    assert not _FORM_CSRF_ROUTES.match("/e/spring-open/submit/extra")
+    assert not _FORM_CSRF_ROUTES.match("/e/spring-open/submitx")
+    assert not _FORM_CSRF_ROUTES.match("/x/e/spring-open/submit")
+    assert not _FORM_CSRF_ROUTES.match("/e/a/b/submit")
+    assert not _FORM_CSRF_ROUTES.match("/tournaments/x/entries/commit")
+
+
+def test_the_exempt_route_still_refuses_a_write_with_no_proof_at_all(client):
+    """The exemption is not a hole: the route substitutes its own check.
+
+    A cookie-carrying POST with neither the header nor the form token is
+    refused — by the route rather than by the middleware, which is the
+    whole claim.
+    """
+    from app.config import settings
+
+    client.cookies.clear()
+    client.cookies.set(settings.entrant_session_cookie_name, "an-entrant-token")
+
+    r = client.post("/e/some-slug/submit", data={"playerName": "Alice"})
+
+    assert r.status_code in (401, 403, 404)
+    assert r.status_code != 201
+
+
+def test_every_other_cookie_carrying_write_is_still_covered(client):
+    """Negative control for the exemption: one route, not a category."""
+    from app.config import settings
+
+    client.cookies.clear()
+    client.cookies.set(settings.entrant_session_cookie_name, "an-entrant-token")
+
+    r = client.post(
+        "/auth/register", json={"email": "someone@example.com", "password": GOOD_PW}
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"

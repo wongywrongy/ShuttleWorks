@@ -1,5 +1,6 @@
 """Main FastAPI application - stateless scheduler for school sparring."""
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -233,6 +234,14 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
+# Routes that prove CSRF their own way because they are native HTML form
+# posts and cannot attach a custom header. Anchored at both ends so it
+# matches one route shape and nothing that merely starts like it — a
+# prefix match here would exempt anything an attacker could hang off the
+# same path. See ``csrf_middleware`` for the full argument.
+_FORM_CSRF_ROUTES = re.compile(r"^/e/[^/]+/submit$")
+
+
 @app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
     """Custom-header CSRF check for cookie-authenticated writes.
@@ -255,11 +264,27 @@ async def csrf_middleware(request: Request, call_next):
     ``settings.session_cookie_names`` is the single place that list lives,
     and a guard test derives every ``set_cookie`` in ``backend/api/`` from
     the source to hold new cookies to it.
+
+    **One route is exempt, and it is exempt because it is a form, not
+    because it is convenient** (SP-E1-2 Phase C). ``POST /e/{slug}/submit``
+    is a native ``<form method=post>`` on a page with ``script-src 'none'``,
+    and a form cannot attach a custom header — that is the same property
+    this defense rests on, seen from the other side. Posting it with
+    ``fetch`` would mean the public entry form needs JavaScript to work,
+    which is degraded functionality at exactly the widths ruling R11 makes
+    co-equal. So that route carries its **own** CSRF proof instead: a
+    double-submit token derived from the session cookie
+    (``api/entries_public.py::_form_csrf``), checked before it reads
+    anything else out of the body. An attacker's page can make the browser
+    send our cookie; it can never read it, so it cannot compute the token.
+    The exemption is from *this* check, not from CSRF — and
+    ``tests/test_csrf_cookie_registry.py`` pins that it is the only one.
     """
     if (
         request.method in {"POST", "PUT", "PATCH", "DELETE"}
         and any(name in request.cookies for name in settings.session_cookie_names)
         and request.headers.get("X-ShuttleWorks-CSRF") != "1"
+        and not _FORM_CSRF_ROUTES.match(request.url.path)
     ):
         return JSONResponse(
             status_code=403,

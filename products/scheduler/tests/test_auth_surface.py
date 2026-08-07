@@ -53,12 +53,12 @@ import pytest
 #   joins them on ``/auth/logout``'s precedent: nothing to destroy is a no-op.
 # - **``GET /e/{slug}`` STAYS.** The page is still public by design; R10
 #   changed who *writes*, not who reads.
-# - **``POST /e/{slug}/submit`` is on its way OUT.** R10 puts submission
-#   behind a session, so its entry here is temporary and this file is where
-#   that is recorded rather than remembered. It is still listed because the
-#   route is still anonymous: SP-E1-2 Phase B built the principal, and the
-#   Phase C/D slice re-gates the route. Removing the entry before the gate
-#   exists would only mean the gate stopped being checked.
+# - **``POST /e/{slug}/submit`` is OUT** (SP-E1-2 Phase C). R10 put
+#   submission behind a session; the route now depends on
+#   ``get_current_entrant``, which has no bootstrap fallback in either mode,
+#   so there is no "some entrant" an anonymous caller resolves to. The
+#   listing was kept through Phase B on purpose — removing it before the
+#   gate existed would only have meant the gate stopped being checked.
 # - **``GET /e/account/me`` is deliberately NOT here.** It carries the
 #   entrant dependency and answers this gate's 401 like any other guarded
 #   route, which is the point: the second principal is inside the gate, not
@@ -70,11 +70,10 @@ import pytest
 #   data, and rows with ``list_opt_out`` are absent (I6/Q4);
 # - the slug is the only key, so a raw tournament UUID is never a public
 #   address, and an unknown or closed slug gets one uniform 404;
-# - each write carries its own defense stack — for the entry submit, a
-#   per-IP throttle, the acknowledgment and a tenant-scoped idempotency key;
-#   for signup, the server-side challenge that moved there from submit (Q4's
-#   R3 restack) plus its own throttle namespace and a non-enumerating answer
-#   — and every one of those is exercised, here or in
+# - the one remaining public write is **signup**, and it carries the whole
+#   anti-abuse stack: the server-side challenge that moved there from submit
+#   (Q4's R3 restack), its own throttle namespace, and a non-enumerating
+#   answer — every one of them exercised in
 #   ``tests/test_entrant_auth_routes.py``, because an entry in an allowlist
 #   is a claim and a claim wants a check.
 PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
@@ -121,28 +120,21 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "precedent. It revokes only the token presented, so a caller with "
         "no cookie can end nobody else's session"
     ),
-    ("POST", "/e/{slug}/submit"): (
-        "the app's first anonymous WRITE — and the last slice in which it "
-        "is one. SP-E1-1 justified this by 'an entrant has no account and "
-        "never will (Q4)'; ruling R10 reversed that premise, and the entry "
-        "is TEMPORARY: the submit route moves behind the entrant session "
-        "in the slice that follows SP-E1-2 Phase B, and this line goes "
-        "with it. Until then the route really is anonymous and its shipped "
-        "guards are what stand in front of it — server-side Turnstile, a "
-        "per-IP throttle, the required acknowledgment, a tenant-scoped "
-        "Idempotency-Key — each asserted below rather than assumed"
-    ),
 }
 
-# Note on how the gate below reads that POST. It probes with ``json={}``,
-# and every field on the submit route is optional at the schema level (so a
-# missing field is a rendered refusal rather than a raw 422 blob in the
-# entrant's browser), which means the probe reaches the handler, fails to
-# resolve the random-uuid slug, and answers the uniform 404 — a pass on the
-# gate's own terms even without the allowlist entry. The entry is here
-# anyway: the allowlist records *intent*, and a public write that the gate
-# happens to tolerate silently is exactly the thing this file exists to
-# make visible.
+# Note on the entry that is NO LONGER here, kept because its absence is the
+# deliberate act. ``POST /e/{slug}/submit`` was listed until SP-E1-2 Phase
+# C; it now carries ``get_current_entrant`` and answers this gate's 401 like
+# any other guarded route. The reason the removal is worth a paragraph is
+# that the gate would have tolerated the route either way: it probes with a
+# random-uuid slug and every field on that route is optional at the schema
+# level, so an anonymous probe used to reach the handler and get the uniform
+# 404 — a pass on the gate's own terms, with or without the allowlist line.
+# The allowlist records *intent*, and a public write the gate happens to
+# tolerate silently is exactly what this file exists to make visible. The
+# refusal is asserted directly in
+# ``tests/test_entries_public_routes.py::test_an_anonymous_submit_is_rejected``,
+# with the signed-in submit as its negative control.
 
 # Ops-token-gated rather than session-gated. Separate because they are
 # protected by a DIFFERENT mechanism, and conflating the two would let a
@@ -348,13 +340,18 @@ def _entry_count(tid=None) -> int:
 
 
 def _post_entry(client, workspace, **overrides):
+    """A well-formed submission in the R13 shape.
+
+    No ``contactName`` / ``contactEmail`` (Q13 §6 — the account is who
+    submitted) and no challenge token (R10 — Turnstile guards signup now).
+    The event checkbox value carries the player index, which is how 1–N
+    events per person travel in a flat form post.
+    """
     data = {
-        "eventId": workspace["event"],
         "playerName": "Alice Chen",
-        "contactName": "Parent Chen",
-        "contactEmail": "parent@example.com",
+        "gender": "F",
+        "events": [f"0:{workspace['event']}"],
         "acknowledged": "on",
-        "cf-turnstile-response": "a-solved-token",
     }
     headers = overrides.pop("headers", {})
     data.update(overrides)
@@ -389,88 +386,78 @@ def test_the_page_of_one_workspace_never_carries_another_workspaces_data(
     assert entry_page["b"]["event"] not in body
 
 
-def test_a_failed_challenge_refuses_the_write(cloud_client, entry_page, turnstile):
+# The seven tests that used to sit here asserted the guards standing in
+# front of an ANONYMOUS write: a Turnstile refusal and its always-pass
+# control, the per-IP flood lockout and its under-budget control, and three
+# idempotency claims. **Ruling R10 superseded all seven by removing the
+# thing they guarded** — submit is not anonymous any more.
+#
+# They are replaced rather than deleted, in both directions:
+#
+# - the challenge pair moved *with the challenge*, to
+#   ``tests/test_entrant_auth_routes.py``, which asserts the refusal, the
+#   always-pass control and the throttle-before-the-outbound-call ordering
+#   at signup — the act a stranger can now perform;
+# - the flood and idempotency claims moved *with the route's new shape*, to
+#   ``tests/test_entries_public_routes.py``, where the key is resolved at
+#   the submission level (R13) and the throttle sits behind the session;
+# - and the headline control — "the always-pass secret WRITES the entry" —
+#   inverts into the pair below. That inversion is the point of this file:
+#   the surface's claim about this route changed sign, and the allowlist
+#   above changed with it.
+
+
+def test_an_anonymous_submit_is_rejected(cloud_client, entry_page):
+    """The inversion of E1's headline behavior (R10).
+
+    ``get_current_entrant`` has no bootstrap fallback in either mode, so
+    there is no "some entrant" an anonymous caller resolves to — the
+    refusal is structural rather than a check someone remembered to write.
+    """
     client, _ = cloud_client
-    from app.config import settings
-
-    settings.turnstile_secret_key = ALWAYS_FAIL_SECRET
-    try:
-        r = _post_entry(client, entry_page["a"])
-    finally:
-        settings.turnstile_secret_key = ALWAYS_PASS_SECRET
-
-    assert r.status_code == 403
+    r = _post_entry(client, entry_page["a"])
+    assert r.status_code == 401
     assert _entry_count() == 0
 
 
-def test_the_always_pass_secret_writes_the_entry(cloud_client, entry_page, turnstile):
-    """Negative control for the refusal above — same request, same route,
-    only the configured secret differs."""
+def test_the_same_submit_with_an_entrant_session_is_accepted(
+    cloud_client, entry_page, turnstile
+):
+    """Negative control for the refusal above: same request, same route,
+    one session cookie different. Without it, the assertion above would
+    pass just as happily against a route that refuses everything."""
+    import re as _re
+
     client, _ = cloud_client
-    assert _post_entry(client, entry_page["a"]).status_code == 201
+    assert (
+        client.post(
+            "/e/account/signup",
+            json={
+                "email": "entrant@example.com",
+                "password": "a perfectly fine passphrase",
+                "turnstileToken": "a-solved-token",
+            },
+            headers={"X-ShuttleWorks-CSRF": "1"},
+        ).status_code
+        == 202
+    )
+    assert (
+        client.post(
+            "/e/account/login",
+            json={
+                "email": "entrant@example.com",
+                "password": "a perfectly fine passphrase",
+            },
+            headers={"X-ShuttleWorks-CSRF": "1"},
+        ).status_code
+        == 200
+    )
+
+    body = client.get(f"/e/{entry_page['a']['slug']}").text
+    token = _re.search(r'name="_csrf" value="([0-9a-f]*)"', body).group(1)
+
+    r = _post_entry(client, entry_page["a"], _csrf=token)
+    assert r.status_code == 201, r.text
     assert _entry_count(entry_page["a"]["tid"]) == 1
 
 
-def test_a_flood_from_one_address_is_locked_out(
-    cloud_client, entry_page, turnstile, monkeypatch
-):
-    client, _ = cloud_client
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "entries_max_per_ip", 2)
-    codes = [_post_entry(client, entry_page["a"]).status_code for _ in range(4)]
-
-    assert codes[0] == codes[1] == 201
-    assert codes[-1] == 429
-    assert _entry_count() == 2
-
-
-def test_under_the_budget_the_same_flood_goes_through(
-    cloud_client, entry_page, turnstile, monkeypatch
-):
-    """Negative control: the lockout must be the budget, not the route."""
-    client, _ = cloud_client
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "entries_max_per_ip", 50)
-    codes = [_post_entry(client, entry_page["a"]).status_code for _ in range(4)]
-
-    assert codes == [201] * 4
-
-
-def test_a_replayed_idempotency_key_creates_no_second_entry(
-    cloud_client, entry_page, turnstile
-):
-    client, _ = cloud_client
-    first = _post_entry(client, entry_page["a"], headers={"Idempotency-Key": "k1"})
-    replay = _post_entry(client, entry_page["a"], headers={"Idempotency-Key": "k1"})
-
-    assert first.status_code == 201
-    assert replay.status_code == 200
-    assert _entry_count(entry_page["a"]["tid"]) == 1
-
-
-def test_a_different_key_does_create_a_second_entry(
-    cloud_client, entry_page, turnstile
-):
-    """Negative control: dedup by key, not a route that writes once."""
-    client, _ = cloud_client
-    _post_entry(client, entry_page["a"], headers={"Idempotency-Key": "k1"})
-    _post_entry(client, entry_page["a"], headers={"Idempotency-Key": "k2"})
-
-    assert _entry_count(entry_page["a"]["tid"]) == 2
-
-
-def test_a_key_used_in_one_workspace_does_not_reach_another(
-    cloud_client, entry_page, turnstile
-):
-    """Ruling D4 — the index is tenant-scoped. A global one would let a
-    stranger replay a guessed key against another tenant's slug and be
-    handed that tenant's entry."""
-    client, _ = cloud_client
-    _post_entry(client, entry_page["a"], headers={"Idempotency-Key": "shared"})
-    r = _post_entry(client, entry_page["b"], headers={"Idempotency-Key": "shared"})
-
-    assert r.status_code == 201
-    assert _entry_count(entry_page["a"]["tid"]) == 1
-    assert _entry_count(entry_page["b"]["tid"]) == 1

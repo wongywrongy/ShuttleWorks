@@ -45,7 +45,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database.models import Entry, EntryPlayer, Submission
-from services.entry_policy import GENDER_MISMATCH, NEEDS_REVIEW, gender_flags
+from services.entry_policy import NEEDS_REVIEW, gender_flags
 
 log = logging.getLogger("scheduler.entries")
 

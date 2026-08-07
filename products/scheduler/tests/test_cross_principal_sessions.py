@@ -56,7 +56,18 @@ ME = "/e/account/me"
 # Reachable *with an entrant cookie* and correctly so: everything an
 # anonymous caller may reach (that list is reviewed in test_auth_surface),
 # plus the one route the entrant credential is actually for.
-ENTRANT_REACHABLE = set(PUBLIC_BY_DESIGN) | OPS_TOKEN_GATED | {("GET", ME)}
+ENTRANT_REACHABLE = (
+    set(PUBLIC_BY_DESIGN)
+    | OPS_TOKEN_GATED
+    | {("GET", ME)}
+    # SP-E1-2 Phase C: submit left PUBLIC_BY_DESIGN when it acquired the
+    # session gate, so it has to be named here instead — a logged-in
+    # entrant reaching the route their credential exists for is the
+    # intended outcome, not an escalation. The sweep below would in fact
+    # tolerate it either way (a random-uuid slug answers the uniform 404,
+    # which counts as a refusal), which is exactly why it is written down.
+    | {("POST", "/e/{slug}/submit")}
+)
 
 
 @pytest.fixture
