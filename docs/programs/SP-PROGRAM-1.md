@@ -1,7 +1,7 @@
 # SP-PROGRAM-1 — ShuttleWorks Public Platform Program
 
 **Type:** Master program document. Multi-session. Claude Code executes phases in order.
-**Companion documents:** `docs/superpowers/specs/2026-08-06-entries-design.md` (the Entries spec, provisional), `SP-UI-1.md` (appearance pass), `docs/programs/ENTRIES_PROGRESS.md` (the program ledger — create in Phase 0 if absent).
+**Companion documents:** `docs/superpowers/specs/2026-08-06-entries-design.md` (the Entries spec, provisional, amended by SP-ENTRIES-R2 and SP-ENTRIES-R3), `SP-UI-1.md` (appearance pass), `docs/programs/ENTRIES_PROGRESS.md` (the program ledger — create in Phase 0 if absent), `docs/programs/SP-E1-1.md` (the executed Phase 5 prompt — history) and `docs/programs/SP-E1-2.md` (the Phase 5 delta prompt).
 
 ---
 
@@ -34,9 +34,9 @@
 - **I2 — Prototype domain is `wongworks.dev`.** `app.wongworks.dev` = operator console + API (Cloudflare Access over the whole hostname). `play.wongworks.dev` = public tournament site (no Access; WAF + rate limits). Apex marketing is deferred to Phase 11. Access policy is **hostname-scoped only** — the moment Phase 2 completes, no path-based Access exclusions may remain necessary for new work, and Display's `/display/*` exclusion is scheduled for retirement when its links migrate to `play.*`.
 - **I3 — The dual-mode boundary:** Entries is cloud-only; **the cloud dependency ends at commit**. Event day never reads an entry row. Local mode never sees the Entries module (mode-aware seed omits the row; local mode also filters an inherited row at read time — see R6). No `coming_soon` state may exist in any form, ever, including placeholder phases or "future" UI slots.
 - **I4 — Software flags; operators decide.** No consequential outcome (confirm, reject, promote, default, remove-from-roster) is ever automatic. Auto-waitlist at cap is a queue position, not a decision. Payment clears exactly one pending-reason and never confirms an entry.
-- **I5 — Public writes are deliberate.** Every session-free route is an explicit, justified entry in the auth-surface test. Public submission carries: server-side Turnstile validation, edge + nginx (`sw_entries` zone) + DB-backed app throttles, the global body cap, client `Idempotency-Key` (solve-rail semantics), and uniform-404 behavior. Entrant capability tokens are stored **hashed** (auth_sessions precedent, not the display-token plaintext precedent).
-- **I6 — Entrant-facing data rules.** Public entry pages show names + events only — never emails or contact data. Entrant list is published by default with notice at the acknowledgment checkbox. Regulations/waiver text is versioned; every entry records `regulations_accepted_at` + the accepted version. Withdraw-and-erase ships in E2 (Phase 7), not later.
-- **I7 — Surface split.** Operator app stays desktop-only. Everything on `play.*` is mobile-first. Meet/Bracket/Operations/Display in-module operator UIs are untouched by this program except where a phase explicitly says otherwise.
+- **I5 — Public writes are deliberate.** Every session-free route is an explicit, justified entry in the auth-surface test. **Amended by R10:** the session-free public write is now **account signup**, and it is the surface that carries server-side Turnstile validation; **entry submission sits behind an authenticated `play.*`-scoped session** and is no longer session-free. Both carry edge + nginx (`sw_entries` zone) + DB-backed app throttles (entrant credentials get their own throttle namespace) and the global body cap; uniform-404 behavior is unchanged. The client `Idempotency-Key` (solve-rail semantics) attaches at the **submission** level, not the entry level (R13). Any token that survives — public read links, the E3 partner invite — is stored **hashed** (auth_sessions precedent, not the display-token plaintext precedent); the entrant *manage* token is retired (R10).
+- **I6 — Entrant-facing data rules.** Public entry pages show names + events only — never emails or contact data. Entrant list is published by default with notice at the acknowledgment checkbox. Regulations/waiver text is versioned; **every submission records `regulations_accepted_at` + the accepted version** (R13 moved acceptance from the entry to the submission — one form act, one acceptance). **Erasure rides the account machinery** (R10): withdraw-and-erase and data export are account operations, not capability-link operations, and still ship in E2 (Phase 7), not later. Retention still anonymizes entry PII post-event while accounts persist.
+- **I7 — Surface split (replaced by R11).** Operator app stays desktop-only — unchanged. **`play.*` is responsive with desktop and mobile as co-equal first-class layouts**: the entry flow is desktop-comfortable *and* fully usable at phone width; read surfaces lean mobile; the checkable bar is **no horizontal scrolling and no degraded functionality at either width**. Meet/Bracket/Operations/Display in-module operator UIs are untouched by this program except where a phase explicitly says otherwise. (Superseded text, kept for the record: *"Everything on `play.*` is mobile-first."* See spec §2A (R3).)
 - **I8 — Seams over sync.** Entries → roster is the re-runnable, additive, idempotent commit seam (Seam A in the spec); Meet-blob writes go through `If-Match`/`state_version` fetch-modify-retry, never blind overwrite.
 
 ## STANDING RULINGS (decided by the user; encode, do not relitigate)
@@ -44,12 +44,80 @@
 - **R1** — Entries is a Tier-1 module, mode-aware seed, `MODULE_REQUIRES_CLOUD` guard (spec Q1).
 - **R2** — `entry_events` is Entries-owned; optional `bracket_event_id`; Meet maps via rank codes (spec Q2).
 - **R3** — Commit is re-runnable/additive/idempotent; entries may reopen; post-commit withdrawal = attention flag (spec Q3).
-- **R4** — Public slug for the page + hashed capability token per entrant; no entrant accounts (spec Q4).
+- **R4 — SUPERSEDED BY R10 (2026-08-07). Kept, not deleted:** ~~Public slug for the page + hashed capability token per entrant; no entrant accounts (spec Q4).~~ The public slug for the *page* survives; the no-accounts half is reversed and the per-entrant capability token retires from the manage path. R4's original reasoning is preserved as a rejected alternative with the reversal rationale in **spec Q13** (and Q4's rejected-alternative block).
 - **R5** — Regulations & waiver: director-discretion `waiver_required`, versioned text on `entry_pages`, acknowledgment gates submission; guardian language lives in waiver text at director's discretion; DOB/birth-year is a plain eligibility field. The waiver does not waive GDPR; retention + erasure still ship (E5/E2 respectively).
 - **R6** — Cloud→local inheritance: a workspace restored into local mode has its Entries module row filtered at read time, mirroring the seed logic. Verify feasibility in Phase 1; if the read-path filter is awkward, STOP with alternatives.
-- **R7 — Contact/player model (default ruling; confirm at Phase 1 STOP):** drop the hard `(entry_event_id, lower(contact_email))` unique index. Shared emails are legitimate (parent entering two children; club rep entering many players). Duplicate suspicion (same event + email + same player name) raises a **soft attention flag**, operator resolves. Schema stays forward-compatible with a later contact/players split: keep player-identifying fields distinct from contact fields in the `entries` row so extraction into an `entry_players` table is a migration, not a redesign. The idempotency-key unique index stays (it guards retries, a different failure).
+- **R7 — Contact/player model (confirmed at the Phase 1 STOP; HARDENED BY R13, 2026-08-07).** R13 turns R7's "stay forward-compatible with a later contact/players split" into a **mandatory schema** — `account → submission → entries → players` — so the extraction R7 kept cheap is now required rather than optional. **R7's soft-duplicate flag survives unchanged.** Original text: drop the hard `(entry_event_id, lower(contact_email))` unique index. Shared emails are legitimate (parent entering two children; club rep entering many players). Duplicate suspicion (same event + email + same player name) raises a **soft attention flag**, operator resolves. Schema stays forward-compatible with a later contact/players split: keep player-identifying fields distinct from contact fields in the `entries` row so extraction into an `entry_players` table is a migration, not a redesign. The idempotency-key unique index stays (it guards retries, a different failure).
 - **R8** — Framework for `play.*` is decided in Phase 6, not before, against the real E1 page. Candidates: Astro + React islands; React Router SSR. Decision criteria: mobile weight, SEO/unfurl, design-system reuse, solo maintainability.
 - **R9** — Domain cutover is a Phase 11 checklist item, not a background worry: new zone, DNS, tunnel ingress + Access on new hostnames, re-key Turnstile, re-do SPF/DKIM, flip the two base-URL vars, Cloudflare redirect rules from wongworks hostnames kept for ≥ the entry-retention window, old capability tokens keep resolving (token is the credential, not the hostname).
+
+### Added by the SP-ENTRIES-R3 master amendment (user-decided 2026-08-07)
+
+R10–R14 are transcribed below as ruled, not paraphrased. They arrived **after E1 shipped and
+merged** (`86182af`), so every one of them supersedes a shipped shape rather than a design on
+paper; the divergence report is in `docs/programs/ENTRIES_PROGRESS.md` ("SP-ENTRIES-R3 —
+Master amendment (R10–R14): RULE-4 STOP") and the spec-side encoding is in
+`docs/superpowers/specs/2026-08-06-entries-design.md` §2A (R3), Q4, Q12 (R3), **Q13**, **Q14**.
+
+- **R10** — Entrant accounts REQUIRED, superseding R4's no-accounts model (R4's original
+  reasoning must survive as a rejected alternative + reversal rationale). Account =
+  SUBMITTER not player; one account enters many players (parent→children, club rep→members);
+  self-entering player is the common case not the model. Second principal type through the
+  EXISTING auth machinery (Argon2id, NIST 800-63B sessions, DB-backed throttles); no org
+  membership, no operator roles; sessions scoped to the public host (`play.*` cookie,
+  separate from `app.*`, no sharing). Users-table-vs-sibling-table is an audit-informed
+  implementation decision the spec FRAMES, not fixes. Password-based auth is the DEFAULT
+  `[CONFIRM AT STOP` — marker stays in the text until the user's recorded sign-off; note the
+  user let the default stand on 2026-08-07`]`; rejected alternative recorded: passwordless
+  email-code. Capability tokens RETIRE from the entrant manage path (login-gated "my
+  entries"); tokens remain for public read links (display); E3 partner confirmation becomes
+  an INVITE-TOKEN flow (existing invite-link precedent) driving account creation. GDPR
+  reshape: deletion/export ride account machinery; retention still anonymizes entry PII
+  post-event while accounts persist; minors: accounts held by submitters (typically adults),
+  waiver guardian language covers entered players; a self-entering minor holds an account as
+  on the incumbent platform.
+- **R11** — Responsive posture: public site responsive with desktop and mobile CO-EQUAL
+  first-class layouts. Entry flow desktop-comfortable AND fully usable at phone width; read
+  surfaces lean mobile. Amends invariant I7's "everything on `play.*` is mobile-first";
+  replaces E1's "390px is the bar" with "both widths, no horizontal scrolling, no degraded
+  functionality at either."
+- **R12** — Field policy (GDPR minimization governs): per player: name, GENDER (required —
+  MS/WD/XD event filtering impossible without it), club (free-text optional). Per
+  account/submitter: email (login identity), phone (director-toggleable per tournament, off
+  by default). Never in v1: postal address, federation/member IDs, DOB except as plain
+  eligibility field where an age-bracketed event requires it (R5). Gender enforcement SOFT:
+  form filters eligible events by default, override path exists, mismatch =
+  operator-resolvable attention flag, never a hard block.
+- **R13** — Submission model, R7's split now MANDATORY schema: account → submission →
+  entries → players. A submission = one form act covering 1–N events; `Idempotency-Key`,
+  regulations acceptance (timestamp+version), computed fee total attach to the SUBMISSION;
+  entries remain per event per player-unit; player identity in its own rows/fields (audit
+  decides `entry_players` table vs structured fields; spec states the invariant: player
+  fields never mixed into contact/account fields). R7's soft-duplicate flag survives
+  unchanged (same player name same event across submissions → flag, operator resolves, no
+  hard unique index).
+- **R14** — Pricing/deadlines/policy: TIERED per-person pricing primary (tournament-level fee
+  schedule 1/2/3 events → cumulative price; per-event `fee_cents` fallback); form shows
+  running total; v1 payment manual (R8 boundary untouched); `payment_instructions` free-text
+  on `entry_pages` (Zelle/Venmo/at-the-desk norm) rendered publicly. `withdraws_until` joins
+  `opens_at`/`closes_at` (BWF separates withdrawal from entry deadline; feeds E2 withdrawal +
+  `COMMITTED_ENTRY_WITHDREW`). Entry policy per tournament: max events per person, optional
+  per-discipline caps; form-enforced, operator can override at the desk (I4). Public
+  tournament page adopts the incumbent's proven IA as a rendering of fields we have:
+  fee/instructions block, timeline (opens→closes→withdrawal deadline→start), events+entry
+  counts, organization+venue cards, prominent Enter action. AUDITED FACT: the tree has NO
+  venue name/address anywhere — "venue" is structural scheduling data only
+  (courtCount/intervalMinutes/dayStart/dayEnd, `api/tournaments.py:697-698`); the org card can
+  draw only the org name. The venue card therefore needs a new field (state where it should
+  live) or is explicitly deferred — say which.
+
+*(R14's venue question is answered in the spec, not here: Q14 §6 adds `venue_name` +
+`venue_address` as free text on `entry_pages` — off the state blob deliberately, so a venue
+address can never 409 against the fail-closed `CONFIG_LOCKED` guard.)*
+
+**Note on R8:** R14's phrase "R8 boundary untouched" refers to the **payments** deferral
+boundary, which this program numbers **Q8** in the spec. Program ruling R8 (the `play.*`
+framework decision) is a different thing and is likewise untouched — see Phase 6.
 
 ---
 
@@ -64,6 +132,12 @@
 **Exit:** single up-to-date main; ledger exists. **Done check:** `git branch` shows no stacked dev branches pending; ledger committed.
 
 ### Phase 1 — SP-ENTRIES-R2: spec delta pass
+
+**STATUS (historical): DONE 2026-08-06.** The instructions below are kept as the executed
+record and are **not re-run**. Two of them were superseded the following day by the
+SP-ENTRIES-R3 amendment and are annotated inline so nobody re-executes them as written:
+item 2's "**mobile-first** frontend" (→ **R11**: co-equal desktop and mobile) and item 4's
+entry-level acceptance fields (→ **R13**: the acceptance pair moves to the submission).
 
 **Entry:** Phase 0 complete. **Deliverable: spec amendments only — zero production code** (same discipline as R1: `git status` = spec + ledger changes only).
 Amend `2026-08-06-entries-design.md`:
@@ -98,6 +172,12 @@ Runs at the first real event after Phase 2; does not block Phases 3/5 from proce
 
 ### Phase 5 — E1: the walking skeleton (public-write pipe)
 
+**STATUS (2026-08-07): E1 is SHIPPED and merged (`86182af`), executed locally under program
+AMENDMENT A1** (user-authorized: development proceeds before Phase 2; the [USER SIGN-OFF]
+public-exposure gate below is preserved in full and now sits after Phase 2). **The phase is
+not closed** — SP-ENTRIES-R3 adds a delta slice, E1-2, inside this same phase. Do not
+renumber; the two slices are 5 and 5-delta.
+
 **Entry:** Phase 2 complete; Phase 3 recommended-complete. **Scope is the spec's E1, amended by Phase 1 — nothing more.** Cloud-only; one `entry_event`; singles; no payment/partner/cap/email-verification.
 1. Backend: migrations for the Phase-1-amended schema (create all E1-relevant tables/columns now to avoid churn, use only the E1 subset); module row + mode-aware seed + `MODULE_REQUIRES_CLOUD` (R1); public routes: slug page data, submit (I5 stack complete), operator desk list, commit (Seam A contract from the spec, including `If-Match` retry — characterization-test the Meet blob path first).
 2. Auth-surface test: the deliberate allowlist edits, each justified.
@@ -107,35 +187,80 @@ Runs at the first real event after Phase 2; does not block Phases 3/5 from proce
 **STOP [USER SIGN-OFF] before DNS/tunnel makes the form publicly reachable** — a security review gate: present the auth-surface diff, the defense stack evidence, and the negative-control results. Then: end-to-end proof — a phone on mobile data submits an entry; the operator commits it; the player appears on the roster; the workspace then runs **offline** (I3 demonstrated, recorded in the ledger).
 **Done check:** if no migration files and no auth-surface test edits exist, the phase did not complete.
 
+#### Phase 5 (delta) — E1-2: the R3 slice over a shipped E1
+
+**Entry:** E1 merged (done) + the SP-ENTRIES-R3 documents amended. **Scope is spec §7's
+E1-2 row — a delta over working code, not a rewrite.** Prompt: SP-E1-2. The E1 record above
+and its Phase E ledger entry are **history and must not be retro-edited**.
+
+1. **Audit first (rule 2), and it owes three answers the spec deliberately left open:**
+   entrant storage — `users` table vs sibling table (spec Q13 §3, recorded bias toward a
+   sibling table, four questions to close); session scoping and the **CSRF trap** — the
+   middleware triggers on a *single* cookie name (`app/main.py:250`), so an entrant cookie
+   under a different name would fall outside enforcement, and the audit must close this
+   explicitly (Q13 §2); whether player identity is an `entry_players` table or structured
+   fields (R13).
+2. **Accounts in the pipe** (R10 / Q13): signup, login, logout, all on the existing
+   machinery; `play.*`-scoped session; entrant throttle namespace; **Turnstile moves from
+   submit to signup** (I5 as amended). **Email verification and password reset are NOT in
+   this slice** — they are E2 / Phase 7 (spec §7, SP-E1-2 non-goals). Until they exist,
+   an unverified account may submit and its entries land in **`pending`** (ruling D1,
+   unamended by R10–R14 — spec §6); `unverified` stays unentered, because its only exit is
+   the verification transition and Seam A commits only `confirmed`.
+3. **The submission model** (R13): `account → submission → entries → players`; multi-event
+   form; `Idempotency-Key`, regulations acceptance and computed fee total move to the
+   submission; `UNIQUE (tournament_id, idempotency_key)` (ruling D4) becomes submission-level.
+   R7's soft duplicate flag is preserved verbatim in behavior.
+4. **Fields** (R12/R14): gender required with **soft** filtering + attention flag; club;
+   director-toggled phone; fee schedule + running total; `payment_instructions`;
+   `withdraws_until`; entry policy caps; venue fields on `entry_pages`. **Migration posture:
+   additive-then-narrowing** — every step keeps a green suite behind it. `gender` is the one
+   lossy backfill (no source on existing rows): mark unknown-and-flagged, never guess.
+5. **Token retirement** (R10): drop `Entry.manage_token_hash`, delete the success-page code
+   card, remove the `POST /e/{slug}/submit` auth-surface allowlist entry and rewrite the
+   preamble sentence that says an entrant has no account. Each removal is an auth-surface
+   test edit and is justified in the diff — the allowlist only ever shrinks silently by
+   mistake.
+6. **R11** applies to whatever renders the form; if that is still the throwaway E1
+   `HTMLResponse` page, the co-equal-width bar lands as a **Phase 6 acceptance criterion**
+   rather than a retrofit (spec §2A (R3)).
+
+**Unaffected by design, and a check on scope creep:** the operator desk, the Seam A commit
+contract, the entry-page/entry-event config routes, and the module system. Finding **F-E1**
+(Meet rank-slot mapping, spec §9.3) stays open and is **not** in this slice — do not patch it
+ad hoc.
+**Done check:** `manage_token_hash` is gone from the models *and* the tests; a submission row
+carries the idempotency key; test counts strictly up despite the deletions.
+
 ### Phase 6 — Public-site scaffold + email infrastructure
 
 **Entry:** Phase 5 exit proof done.
-1. **Framework decision (R8): STOP [USER SIGN-OFF]** — present both candidates *against the real E1 page* with a one-page tradeoff (mobile weight, SSR/unfurl, token reuse, maintenance). On approval, this is the sanctioned new-dependency exception.
-2. Scaffold the `play.*` app as the fourth compose service: design tokens imported from the shared design system; the E1 FastAPI page's routes re-served through it; SEO basics (meta, OG unfurl, sitemap for slugs); light-page budget stated and measured.
-3. Transactional email provider: pick (Postmark/SES/Resend-class), configure SMTP backend via the existing seam, SPF/DKIM/DMARC on wongworks.dev, deliverability-test verification + partner emails. Start DNS records on day one of the phase (propagation).
+1. **Framework decision (R8): STOP [USER SIGN-OFF]** — present both candidates *against the real E1 page* with a one-page tradeoff (mobile weight, SSR/unfurl, token reuse, maintenance). **Amended by R11: the criteria are no longer mobile-weight-first.** Candidates are judged on serving **co-equal desktop and mobile layouts** for a **form-heavy** flow — multi-event selection with a running fee total (R14) is a table-shaped interaction — plus authenticated session rendering (R10) alongside the public read pages. A candidate that is excellent at static mobile reads and poor at a wide authenticated form now loses on the primary criterion, not a secondary one. On approval, this is the sanctioned new-dependency exception.
+2. Scaffold the `play.*` app as the fourth compose service: design tokens imported from the shared design system; the E1 FastAPI page's routes re-served through it; SEO basics (meta, OG unfurl, sitemap for slugs); light-page budget stated and measured. **R11 acceptance criterion (inherited from the E1-2 slice): no horizontal scrolling and no degraded functionality at either width**, checked on the entry flow and the read surfaces, screenshots at both.
+3. Transactional email provider: pick (Postmark/SES/Resend-class), configure SMTP backend via the existing seam, SPF/DKIM/DMARC on wongworks.dev, deliverability-test verification + partner emails. Start DNS records on day one of the phase (propagation). **R10 raises the stakes here:** account verification and password reset are login-path dependencies, which is one of the three reasons passwordless was rejected (spec Q13 §4) — deliverability is now a login concern, not only a notification concern.
 4. Install docs + compose docs updated; CI guard extended if the provider introduces URLs.
-**Exit:** `play.*` serves the entry page from the new app; a real verification-class email lands in a real inbox.
+**Exit:** `play.*` serves the entry page from the new app at both widths; a real verification-class email lands in a real inbox.
 
 ### Phase 7 — E2: lifecycle
 
-**Entry:** Phase 6 complete. Spec E2 as amended: double-opt-in email verification; hashed manage-entry capability link with **withdraw-and-erase** (I6 — erasure is in this phase by design, it is nearly free here); caps + waitlist (auto-waitlist = queue position only, I4); pending-reasons; operator desk confirm/reject/promote; regulations acknowledgment recording finalized (versions bump on edit); entrant-list opt-out honored on the public page; remarks field through the commit seam. Uniform-response rule: nothing public ever reveals whether an email already entered.
+**Entry:** Phase 6 complete. Spec E2 **as amended by R10/R14**: **account** email verification (double-opt-in) and **password reset** finalized on the existing machinery; a **login-gated "my entries"** surface carrying manage / withdraw / **withdraw-and-erase** — this **replaces the hashed capability-link manage path**, which E1-2 already retired (I6: erasure is in this phase by design, it is nearly free here, and cheaper still riding the account than a token the entrant must still possess); **withdrawal is checked against `withdraws_until`** (R14), and a post-commit withdrawal still raises `COMMITTED_ENTRY_WITHDREW` rather than mutating the roster (R3); caps + waitlist (auto-waitlist = queue position only, I4); pending-reasons; operator desk confirm/reject/promote; regulations acknowledgment recording finalized **at the submission level** (versions bump on edit); entrant-list opt-out honored on the public page; remarks field through the commit seam. Uniform-response rule: nothing public ever reveals whether an email already entered — **and R10 extends it to signup and reset**, which must not become account-enumeration oracles.
 **Exit gates:** full suites + a lifecycle state-machine test module covering every transition and actor from spec §6, with negative controls on the operator-only transitions.
 
 ### Phase 8 — E3: doubles
 
-**Entry:** Phase 7 complete. Spec E3: partner nomination by email; partner confirmation via their own capability link; `awaiting_partner` pending-reason; pair conflicts double-flagged and operator-resolved (never auto). Unpartnered ≠ over-cap: the two states stay independent (the incumbent-beating design point — preserve it). Deferred items stay deferred (partner pool, swaps, splits, identity merge).
+**Entry:** Phase 7 complete. Spec E3 **as amended by R10**: partner nomination by email; partner confirmation via an **invite token on the existing invite-link precedent**, which **drives account creation** — the invited partner signs up or logs in and *then* accepts, so acceptance is an authenticated act by a principal rather than possession of a link (this replaces "their own capability link"); the invite token is stored hashed (I5); `awaiting_partner` pending-reason; pair conflicts double-flagged and operator-resolved (never auto). Unpartnered ≠ over-cap: the two states stay independent (the incumbent-beating design point — preserve it). Deferred items stay deferred (partner pool, swaps, splits, identity merge).
 
 ### Phase 9 — E4: signals, phases, public reads
 
 **Entry:** Phase 8 complete (needs real entry states).
 1. Extend `_derive_phase` to the seven-value vocabulary (spec Q9) — additive; the four existing values keep exact meanings; workspaces without the Entries module still derive only the original four.
 2. Six attention codes with spec trigger conditions, via the Phase-3 shared constant; Hub next-action mappings; Overview absorbs the new phases through the SP-UI-1 panel seam (this should be data + panels, not redesign — if it isn't, STOP: the seam failed and that's a finding).
-3. Public read surfaces on `play.*`: entrant lists per event (opt-outs honored), and post-close acceptance/reserve lists in order.
+3. Public read surfaces on `play.*`: entrant lists per event (opt-outs honored), and post-close acceptance/reserve lists in order. **Plus the R14 §6 public tournament page IA** (spec §7's E4 row): fee + `payment_instructions` block, the `opens_at → closes_at → withdraws_until →` start timeline with timezones, events + entry counts, org and venue cards, prominent **Enter** action — the real rendering of what E1-2 sketched on the throwaway page.
 **Exit:** phase/attention behavior fully unit-tested; Overview screenshots across entries phases.
 
 ### Phase 10 — E5: money, retention, compliance
 
-**Entry:** Phase 9 complete. Fee display + operator manual paid/unpaid + `awaiting_payment` reason; retention default + the anonymization job (PII scrubbed N days post-event, aggregate rows kept; job is idempotent and tested); GDPR verification pass: withdraw-and-erase actually erases (test proves the PII is gone), retention documented, the debt-log GDPR entry updated to reflect what Entries added and resolved. Stripe remains **post-program** — the Q8 boundary is documented, not built.
+**Entry:** Phase 9 complete. Fee display + operator manual paid/unpaid **at the submission level** (R13/R14: the total and the payment record are properties of one act) + `awaiting_payment` reason; retention default + the anonymization job (entry PII scrubbed N days post-event, aggregate rows kept, **accounts persist** — I6/R10; job is idempotent and tested); GDPR verification pass covering **both layers** (R10): withdraw-and-erase actually erases (test proves the PII is gone), **account deletion and account-level data export** work and are tested, retention documented, the debt-log GDPR entry updated to reflect what Entries added and resolved. Stripe remains **post-program** — the Q8 boundary is documented, not built.
 **Exit:** the public-launch blockers named in spec Q10 are closed.
 
 ### Phase 11 — Cutover + marketing (post-prototype; entry condition is the user declaring prototyping done)
@@ -153,13 +278,13 @@ Deploy waits for the spec delta because the hostname plan is deployment input �
 
 ## GLOBAL NON-GOALS (entire program)
 
-Stripe processing · partner-search pool · entrant accounts · cross-tournament registry · Entries in local mode · seeding automation · duplicate-identity merging · refunds · waitlist lotteries · mobile/responsive work on the operator app · any redesign of Meet/Bracket/Operations/Display operator surfaces · orchestrators/HA beyond the stated two-node posture · logo design.
+Stripe processing · partner-search pool · ~~entrant accounts~~ **(R10, 2026-08-07: no longer a non-goal — entrant accounts are v1; see the R10 ruling above and spec Q13)** · cross-tournament registry · Entries in local mode · seeding automation · duplicate-identity merging · refunds · waitlist lotteries · mobile/responsive work on the operator app · any redesign of Meet/Bracket/Operations/Display operator surfaces · orchestrators/HA beyond the stated two-node posture · logo design.
 
 ## PROGRAM DONE CONDITIONS
 
 - [ ] Every phase's STOP/sign-off recorded in the ledger with date and outcome
 - [ ] All invariants I1–I8 hold; the I1 grep guard is green in CI
-- [ ] Spec status: accepted, amended through Phase 1, discrepancies inherited forward
+- [ ] Spec status: accepted, amended through Phase 1 **and the SP-ENTRIES-R3 master amendment (R10–R14)**, discrepancies inherited forward
 - [ ] Test counts strictly above the Phase 0 baseline; all gates green on main
 - [ ] Install/selfhost docs accurate to the deployed reality (verified by the Phase 2 literal walkthrough and kept current per rule 6)
 - [ ] The I3 demonstration (entry submitted publicly → committed → event runs offline) is recorded in the ledger
