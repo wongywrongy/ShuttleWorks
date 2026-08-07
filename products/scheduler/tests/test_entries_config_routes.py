@@ -249,6 +249,172 @@ def test_keeping_your_own_slug_is_not_a_conflict(client, workspace):
     assert _put_page(client, workspace, slug="spring-open").status_code == 200
 
 
+# ---- the entry page: the R12/R14 fields (SP-E1-2, F-E1-2-D1) -----------
+#
+# ADDITIVE. Everything above this line is SP-E1-1's and is unedited: the
+# fields below are all optional, and a body written against the older
+# shape behaves exactly as it did. What is new is that the columns ruling
+# R12/R14 added to ``entry_pages`` — read by the public page, the pricing
+# and the policy check — finally have a route that can write them. Until
+# this commit the only way to price a tournament was a SQL client, which
+# is the state this module's docstring says it exists to end.
+
+
+def test_the_r12_r14_fields_round_trip_through_the_route(client, workspace):
+    """Set them, read them back off the response, and off the stored row.
+
+    Both halves matter: the DTO could agree with itself while persisting
+    nothing, and the row could be right while the operator's screen shows
+    them nothing back.
+    """
+    tid = workspace
+    r = _put_page(
+        client,
+        tid,
+        feeSchedule={"1": 4000, "2": 5500},
+        paymentInstructions="Zelle to treasurer@club.example.",
+        maxEventsPerPerson=3,
+        disciplineCaps={"Men's Singles": 1},
+        collectPhone=True,
+        venueName="Riverside Sports Hall",
+        venueAddress="12 Mill Lane",
+    )
+    assert r.status_code == 200, r.text
+
+    body = r.json()
+    assert body["feeSchedule"] == {"1": 4000, "2": 5500}
+    assert body["paymentInstructions"] == "Zelle to treasurer@club.example."
+    assert body["maxEventsPerPerson"] == 3
+    assert body["disciplineCaps"] == {"Men's Singles": 1}
+    assert body["collectPhone"] is True
+    assert body["venueName"] == "Riverside Sports Hall"
+
+    row = _page_row(tid)
+    assert row.fee_schedule == {"1": 4000, "2": 5500}
+    assert row.payment_instructions == "Zelle to treasurer@club.example."
+    assert row.max_events_per_person == 3
+    assert row.discipline_caps == {"Men's Singles": 1}
+    assert row.collect_phone is True
+    assert row.venue_name == "Riverside Sports Hall"
+    assert row.venue_address == "12 Mill Lane"
+
+
+def test_a_page_configured_here_prices_and_renders_publicly(client, workspace):
+    """The point of the route, end to end: a schedule authored through the
+    API is the price list the public page prints, with no SQL anywhere."""
+    _put_page(
+        client,
+        workspace,
+        feeSchedule={"1": 4000, "2": 5500},
+        paymentInstructions="Cash at check-in.",
+        venueName="Riverside Sports Hall",
+    )
+
+    body = client.get("/e/spring-open").text
+    assert "40.00" in body and "55.00" in body
+    assert "Cash at check-in." in body
+    assert "Riverside Sports Hall" in body
+
+
+def test_omitting_the_new_fields_clears_them_like_every_other_field(
+    client, workspace
+):
+    """The PUT's whole-state semantics, unchanged. An omitted optional
+    field means "clear it" on this route (the DTO says so), and the new
+    fields do not get to be the exception — an operator who removes the
+    fee schedule from their body has removed the fee schedule."""
+    tid = workspace
+    _put_page(client, tid, feeSchedule={"1": 4000}, maxEventsPerPerson=2)
+    assert _page_row(tid).fee_schedule == {"1": 4000}
+
+    assert _put_page(client, tid).status_code == 200
+    assert _page_row(tid).fee_schedule is None
+    assert _page_row(tid).max_events_per_person is None
+
+
+@pytest.mark.parametrize(
+    "schedule",
+    [
+        {"1": "4000"},        # a price as a string of digits
+        {"1": 4000, "2": "on request"},  # a price that is not a number
+        {"0": 4000},          # zero events is not a count
+        {"-1": 4000},         # nor is a negative one
+        {"one": 4000},        # nor is a word
+        {"1": -4000},         # a negative price
+        {"1": 40.5},          # cents are whole
+    ],
+)
+def test_an_unusable_fee_tier_is_refused_with_the_rule_stated(
+    client, workspace, schedule
+):
+    """**Never a silent drop** — R14 §4's rule for the policy caps, applied
+    to the schedule for the same reason.
+
+    ``normalize_fee_schedule`` is lenient by design: it drops what it
+    cannot use rather than raising, because a malformed tier must not take
+    down the public page. That is the right posture for a reader and the
+    wrong one for a writer. An operator who typed a price the pricing
+    ignores would have configured a number nobody is ever charged, and
+    would find out from an entrant.
+
+    (``{"1": "4000"}`` is the interesting one: the normalization *coerces*
+    it rather than dropping it, so it would price correctly — and still be
+    a stored row that does not equal what was sent. The writer refuses
+    coercion as well as dropping, for that reason.)
+    """
+    r = _put_page(client, workspace, feeSchedule=schedule)
+
+    assert r.status_code in (400, 422), r.text
+    assert _page_row(workspace) is None
+
+
+def test_a_usable_fee_schedule_is_the_negative_control(client, workspace):
+    """Without this, every refusal above would pass against a route that
+    had simply stopped accepting a fee schedule at all."""
+    r = _put_page(client, workspace, feeSchedule={"1": 4000, "3": 6000})
+
+    assert r.status_code == 200, r.text
+    assert _page_row(workspace).fee_schedule == {"1": 4000, "3": 6000}
+
+
+def test_a_refused_schedule_leaves_an_existing_page_untouched(client, workspace):
+    """The validation runs before the row is touched. A director fixing a
+    typo must not lose the page they already had to a rejected tier."""
+    tid = workspace
+    _put_page(client, tid, feeSchedule={"1": 4000}, introText="All welcome.")
+
+    assert _put_page(
+        client, tid, feeSchedule={"1": "on request"}, introText="Changed."
+    ).status_code == 400
+
+    row = _page_row(tid)
+    assert row.fee_schedule == {"1": 4000}
+    assert row.intro_text == "All welcome."
+
+
+@pytest.mark.parametrize("caps", [{"MS": "1"}, {"MS": -1}, {"MS": True}])
+def test_an_unusable_discipline_cap_is_refused(client, workspace, caps):
+    """``services/entry_policy`` skips a cap that is not an ``int``, so an
+    unusable one here is a limit the director believes they set and the
+    form does not enforce. (``True`` is an ``int`` in Python and is not a
+    cap of one.)"""
+    assert _put_page(client, workspace, disciplineCaps=caps).status_code == 400
+    assert _page_row(workspace) is None
+
+
+def test_a_usable_discipline_cap_is_the_negative_control(client, workspace):
+    r = _put_page(client, workspace, disciplineCaps={"Men's Singles": 1})
+    assert r.status_code == 200, r.text
+    assert _page_row(workspace).discipline_caps == {"Men's Singles": 1}
+
+
+def test_a_cap_of_zero_events_per_person_is_refused(client, workspace):
+    """A page nobody may enter is ``isOpen=False``, which says so without
+    the confusion of a policy that refuses every submission."""
+    assert _put_page(client, workspace, maxEventsPerPerson=0).status_code == 422
+    assert _page_row(workspace) is None
+
+
 # ---- the entry page: the role matrix -----------------------------------
 
 
@@ -343,6 +509,82 @@ def test_an_empty_code_is_refused(client, workspace):
     a bracket event. An empty one is an entry that can never be committed."""
     assert _post_event(client, workspace, code="   ").status_code == 400
     assert _events(workspace) == []
+
+
+# ---- entry events: the R12/R14 fields (SP-E1-2, F-E1-2-D1) -------------
+#
+# ADDITIVE, same posture as the page section above: both fields optional,
+# an event created without them is what every event created before this
+# commit already was.
+
+
+def test_an_event_round_trips_its_gender_constraint_and_withdrawal_deadline(
+    client, workspace
+):
+    r = _post_event(
+        client,
+        workspace,
+        genderConstraint="M",
+        withdrawsUntil="2026-09-05T17:00:00+00:00",
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["genderConstraint"] == "M"
+    assert r.json()["withdrawsUntil"].startswith("2026-09-05T17:00:00")
+
+    (row,) = _events(workspace)
+    assert row.gender_constraint == "M"
+    assert row.withdraws_until is not None
+
+
+def test_an_event_without_them_is_open_and_has_no_withdrawal_deadline(
+    client, workspace
+):
+    """Negative control for the round-trip: the fields are genuinely
+    optional, and their absence is the open event R12 makes the default."""
+    r = _post_event(client, workspace)
+    assert r.status_code == 201, r.text
+    assert r.json()["genderConstraint"] is None
+    assert r.json()["withdrawsUntil"] is None
+
+    (row,) = _events(workspace)
+    assert row.gender_constraint is None and row.withdraws_until is None
+
+
+@pytest.mark.parametrize("value", ["male", "F ", "x", "womens", ""])
+def test_a_gender_constraint_outside_the_vocabulary_is_refused(
+    client, workspace, value
+):
+    """``entryType``'s reason, for the same kind of field. The vocabulary
+    is closed — ``services/entry_policy`` folds a constraint onto
+    'M' / 'F' / 'mixed' — and an unrecognised one does not refuse anything
+    at submit time, it silently flags every entrant who chose the event.
+    Refusing here is the only place it can be caught."""
+    assert _post_event(client, workspace, genderConstraint=value).status_code == 422
+    assert _events(workspace) == []
+
+
+@pytest.mark.parametrize("value", ["M", "F", "mixed"])
+def test_the_whole_vocabulary_is_accepted(client, workspace, value):
+    """Negative control for the refusals above."""
+    assert _post_event(client, workspace, genderConstraint=value).status_code == 201
+
+
+def test_an_unreadable_withdrawal_deadline_names_its_own_field(client, workspace):
+    """``_parse_moment``'s existing contract, extended to the third
+    timestamp on this route: the answer says which field was unreadable,
+    because an operator hand-types all three."""
+    r = _post_event(client, workspace, withdrawsUntil="next Wednesday")
+
+    assert r.status_code == 400, r.text
+    assert "withdrawsUntil" in r.json()["detail"]["message"]
+    assert _events(workspace) == []
+
+
+def test_a_readable_withdrawal_deadline_is_the_negative_control(client, workspace):
+    assert _post_event(
+        client, workspace, withdrawsUntil="2026-09-05T17:00:00Z"
+    ).status_code == 201
+    assert _events(workspace)[0].withdraws_until is not None
 
 
 def test_a_viewer_cannot_create_an_entry_event(client, workspace):

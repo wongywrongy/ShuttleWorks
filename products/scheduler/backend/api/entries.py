@@ -56,6 +56,7 @@ from app.schemas import (
 from database.models import Entry, EntryEvent, EntryPage
 from repositories import LocalRepository, get_repository
 from services.entries import commit_entries
+from services.entry_fees import normalize_fee_schedule
 
 router = APIRouter(prefix="/tournaments", tags=["entries"])
 
@@ -233,6 +234,115 @@ def _parse_moment(value: Optional[str], field: str) -> Optional[datetime]:
         )
 
 
+def _tier_is_usable(key, value) -> bool:
+    """One fee-schedule tier, judged **without** relying on coercion.
+
+    The reader's normalization coerces (``"5500"`` becomes ``5500``) and
+    drops (``"on request"`` disappears). Both are correct for a reader —
+    the public page must render whatever is in the column — and neither is
+    an acceptable answer to an operator pressing Save. A coerced tier is a
+    stored row that no longer equals what was sent; a dropped one is a
+    price that is never charged. Here both are simply not usable.
+
+    JSON object keys are strings on the wire; the ``int`` branch is for a
+    direct call.
+    """
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return False
+    if isinstance(key, bool):
+        return False
+    if isinstance(key, int):
+        count = key
+    elif isinstance(key, str) and key.strip().isdigit():
+        count = int(key.strip())
+    else:
+        return False
+    return count > 0
+
+
+def _validated_fee_schedule(raw: Optional[dict]) -> Optional[dict]:
+    """A fee schedule this route accepts is one the pricing will honour.
+
+    ``services/entry_fees.normalize_fee_schedule`` is deliberately lenient:
+    it drops what it cannot use rather than raising, because a malformed
+    tier must never take down the public page. That is the right posture
+    for a *reader*, and exactly the wrong one for a writer — an operator
+    who typed ``{"1": "40"}`` and got a 200 would have configured a price
+    the running total silently ignores, and would find out from an entrant.
+
+    So the route refuses the tier and states the rule, in the style R14 §4
+    fixed for the policy caps: never a silent drop. Two checks, and the
+    second is why the reader is still consulted rather than reimplemented —
+    ``{"1": 4000, "01": 5000}`` is two usable-looking tiers that normalize
+    onto one count, and only the normalization knows that.
+
+    What is stored is the **normalized** form, with string keys: a JSON
+    object has no integer keys, and storing exactly what the pricing will
+    read keeps a later equality check against the configured schedule
+    honest.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise http_error(
+            400,
+            ErrorCode.INVALID_INPUT,
+            "feeSchedule must be an object of event count to price in cents",
+        )
+    rejected = sorted(
+        str(key) for key, value in raw.items() if not _tier_is_usable(key, value)
+    )
+    if rejected:
+        raise http_error(
+            400,
+            ErrorCode.INVALID_INPUT,
+            "feeSchedule tiers must map a positive whole number of events to "
+            "a price in whole cents of zero or more; these are not usable "
+            f"and would be ignored when pricing: {rejected}",
+        )
+    normalized = normalize_fee_schedule(raw)
+    if len(normalized) != len(raw):
+        raise http_error(
+            400,
+            ErrorCode.INVALID_INPUT,
+            "feeSchedule has two tiers for the same event count; only one "
+            "of them could ever be used",
+        )
+    return {str(count): cents for count, cents in sorted(normalized.items())}
+
+
+def _validated_discipline_caps(raw: Optional[dict]) -> Optional[dict]:
+    """Same contract as the fee schedule, for R14 §4's per-discipline caps.
+
+    ``services/entry_policy._discipline_breach`` skips a cap whose value is
+    not an ``int``, so an unusable entry here is a limit the director
+    believes they set and the form does not enforce. Refused with the rule
+    rather than stored and ignored.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise http_error(
+            400,
+            ErrorCode.INVALID_INPUT,
+            "disciplineCaps must be an object of discipline to a cap",
+        )
+    rejected = sorted(
+        str(key)
+        for key, value in raw.items()
+        # ``bool`` is an ``int`` in Python and ``True`` is not a cap of one.
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0
+    )
+    if rejected:
+        raise http_error(
+            400,
+            ErrorCode.INVALID_INPUT,
+            "disciplineCaps values must be whole numbers of zero or more; "
+            f"these are not usable and would be ignored: {rejected}",
+        )
+    return {str(key): int(value) for key, value in raw.items()}
+
+
 @router.put(
     "/{tournament_id}/entry-page",
     response_model=EntryPageDTO,
@@ -253,7 +363,22 @@ def upsert_entry_page(
     changes (Q11.4). Every entry records the version it accepted, so a
     bump on every save would silently invalidate every acknowledgment on
     file the next time an operator fixed a typo in the intro paragraph.
+
+    **The R12/R14 columns are written here too** (SP-E1-2, finding
+    F-E1-2-D1). They were added to ``entry_pages`` by the schema reshape
+    and read by the public page, the pricing and the policy check, but no
+    route ever set them — so the only way to configure a price was a SQL
+    client, which is the state this module was written to end. Additive:
+    every field is optional and the PUT's whole-state semantics are
+    unchanged, so a body written against the older shape still clears them
+    exactly as it clears ``introText``.
     """
+    # Validated before the row is touched: a refusal must leave the stored
+    # page exactly as it was, and the slug checks below already establish
+    # that order.
+    fee_schedule = _validated_fee_schedule(body.feeSchedule)
+    discipline_caps = _validated_discipline_caps(body.disciplineCaps)
+
     slug = body.slug.strip()
     if not _SLUG_RE.match(slug):
         raise http_error(
@@ -293,6 +418,13 @@ def upsert_entry_page(
     row.intro_text = body.introText
     row.regulations_text = body.regulationsText
     row.waiver_required = body.waiverRequired
+    row.fee_schedule = fee_schedule
+    row.payment_instructions = body.paymentInstructions
+    row.max_events_per_person = body.maxEventsPerPerson
+    row.discipline_caps = discipline_caps
+    row.collect_phone = body.collectPhone
+    row.venue_name = body.venueName
+    row.venue_address = body.venueAddress
 
     try:
         repo.session.commit()
@@ -332,6 +464,15 @@ def create_entry_event(
     No uniqueness on ``code``: two events can legitimately share one — a
     workspace running the same discipline in two age bands maps both onto
     the same rank — and the desk shows the discipline alongside.
+
+    **``genderConstraint`` and ``withdrawsUntil`` are set here** (SP-E1-2,
+    finding F-E1-2-D1). Both columns exist and are read — the first drives
+    the public form's default event filter (R12), the second is R14 §3's
+    deliberately separate withdrawal deadline, rendered on the page's
+    timeline — and until now neither had a route that could write them.
+    Additive and optional: an event created without them is open to every
+    entrant and carries no withdrawal deadline, which is what every event
+    created before this commit already is.
     """
     code = body.code.strip()
     if not code:
@@ -348,8 +489,10 @@ def create_entry_event(
         bracket_event_id=body.bracketEventId,
         cap=body.cap,
         fee_cents=body.feeCents,
+        gender_constraint=body.genderConstraint,
         opens_at=_parse_moment(body.opensAt, "opensAt"),
         closes_at=_parse_moment(body.closesAt, "closesAt"),
+        withdraws_until=_parse_moment(body.withdrawsUntil, "withdrawsUntil"),
     )
     repo.session.add(row)
     repo.session.commit()

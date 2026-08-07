@@ -769,6 +769,30 @@ class EntryPageUpsertDTO(StrictModel):
     regulationsText: Optional[Regulations] = None
     waiverRequired: bool = False
 
+    # ---- R14 money & payment -------------------------------------------
+    # CUMULATIVE totals in cents by event count — ``{"1": 4000, "2": 5500}``
+    # — the price list a director copies, not increments. Typed as a bare
+    # dict and validated in the route rather than by a Pydantic shape,
+    # because the rule is not "these types" but "every tier this route
+    # accepts is a tier the pricing will honour", which only
+    # ``services.entry_fees.normalize_fee_schedule`` can answer.
+    feeSchedule: Optional[dict] = None
+    paymentInstructions: Optional[Notes] = None
+
+    # ---- R14 §4 entry policy -------------------------------------------
+    # Form-enforced with the rule stated, operator-overridable at the desk
+    # (I4). ``ge=1``: a cap of zero is an entry page nobody may enter, and
+    # ``isOpen=False`` already says that without the confusion.
+    maxEventsPerPerson: Optional[int] = Field(None, ge=1, le=MAX_PLAYERS)
+    disciplineCaps: Optional[dict] = None
+
+    # ---- R12 field policy ----------------------------------------------
+    collectPhone: bool = False
+
+    # ---- R14 §6 public page identity -----------------------------------
+    venueName: Optional[Name] = None
+    venueAddress: Optional[Notes] = None
+
 
 class EntryPageDTO(BaseModel):
     """The stored entry page as the operator sees it back."""
@@ -778,6 +802,13 @@ class EntryPageDTO(BaseModel):
     regulationsText: Optional[str] = None
     waiverRequired: bool
     regulationsVersion: int
+    feeSchedule: Optional[dict] = None
+    paymentInstructions: Optional[str] = None
+    maxEventsPerPerson: Optional[int] = None
+    disciplineCaps: Optional[dict] = None
+    collectPhone: bool = False
+    venueName: Optional[str] = None
+    venueAddress: Optional[str] = None
 
     @classmethod
     def from_row(cls, row) -> "EntryPageDTO":
@@ -788,6 +819,13 @@ class EntryPageDTO(BaseModel):
             regulationsText=row.regulations_text,
             waiverRequired=bool(row.waiver_required),
             regulationsVersion=row.regulations_version,
+            feeSchedule=row.fee_schedule,
+            paymentInstructions=row.payment_instructions,
+            maxEventsPerPerson=row.max_events_per_person,
+            disciplineCaps=row.discipline_caps,
+            collectPhone=bool(row.collect_phone),
+            venueName=row.venue_name,
+            venueAddress=row.venue_address,
         )
 
 
@@ -810,8 +848,18 @@ class EntryEventCreateDTO(StrictModel):
     bracketEventId: Optional[Identifier] = None
     cap: Optional[int] = Field(None, ge=1, le=MAX_PLAYERS)
     feeCents: Optional[int] = Field(None, ge=0, le=100_000_000)
+    # R12: the form's default event filter. A ``Literal`` for
+    # ``entryType``'s reason — the vocabulary is closed
+    # (``services.entry_policy`` folds onto 'M' / 'F' / 'mixed'), and an
+    # unrecognised constraint would not refuse anything, it would silently
+    # flag every entrant who chose the event. ``None`` is open, and is the
+    # default because most events are.
+    genderConstraint: Optional[Literal["M", "F", "mixed"]] = None
     opensAt: Optional[Timestamp] = None
     closesAt: Optional[Timestamp] = None
+    # R14 §3: separate from ``closesAt`` on purpose — organisers use the
+    # gap between closing entries and closing withdrawals.
+    withdrawsUntil: Optional[Timestamp] = None
 
 
 class EntryEventDTO(BaseModel):
@@ -822,8 +870,10 @@ class EntryEventDTO(BaseModel):
     bracketEventId: Optional[str] = None
     cap: Optional[int] = None
     feeCents: Optional[int] = None
+    genderConstraint: Optional[str] = None
     opensAt: Optional[str] = None
     closesAt: Optional[str] = None
+    withdrawsUntil: Optional[str] = None
 
     @classmethod
     def from_row(cls, row) -> "EntryEventDTO":
@@ -835,8 +885,12 @@ class EntryEventDTO(BaseModel):
             bracketEventId=row.bracket_event_id,
             cap=row.cap,
             feeCents=row.fee_cents,
+            genderConstraint=row.gender_constraint,
             opensAt=row.opens_at.isoformat() if row.opens_at else None,
             closesAt=row.closes_at.isoformat() if row.closes_at else None,
+            withdrawsUntil=(
+                row.withdraws_until.isoformat() if row.withdraws_until else None
+            ),
         )
 
 
