@@ -1197,6 +1197,155 @@ class EntrantSession(Base):
     )
 
 
+class Submission(Base):
+    """One form act, covering 1–N events (ruling R13, spec Q12 §R3).
+
+    **This table is a level boundary, and the block comments below say
+    which level.** R7 kept the submitter block and the player block
+    structurally separate inside one ``entries`` row and promised the split
+    would then be a column move; R13 collects on that promise, and this is
+    where the *act* half landed.
+
+    Three things moved **up** from ``entries`` and the reason is the same
+    for all three: a form act covering three events is **one** agreement,
+    **one** retry unit and **one** payment. Left on the entry they would
+    either duplicate across N rows — three rows each claiming to be "the"
+    fee total — or have to be reconstructed later by grouping on a
+    timestamp.
+
+    ``uq_submissions_tournament_idempotency_key`` is ruling D4 carried up a
+    level intact: **tenant-scoped**, unlike the solve rail's global index.
+    The submit route is reachable by anyone holding a public slug, so
+    resolving a client-supplied key globally would let an outsider probe
+    another tenant's keyspace and learn that some other workspace used the
+    same key. NULL keys stay exempt on both dialects.
+    """
+
+    __tablename__ = "submissions"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entrant_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # ---- the act (R13) ------------------------------------------------
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Q11: acknowledgment gates the submission, and the version agreed to is
+    # recorded at that instant. "They agreed to something at some point" is
+    # not a record.
+    regulations_accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    regulations_version_accepted: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+
+    # ---- money (R14; Q8's payment boundary untouched) ------------------
+    # The running total the form showed, snapshotted. Spec Seam B: the total
+    # shown to the entrant IS the total recorded — never recomputed silently
+    # afterwards, because a price that changes after agreement is not a
+    # price.
+    fee_total_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # How the total was derived (the schedule that applied, the per-event
+    # components, the basis name), so a dispute months later is answerable
+    # without re-deriving prices from a config that has since been edited.
+    fee_basis: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    payment_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    account = relationship("EntrantAccount", lazy="joined")
+
+    __table_args__ = (
+        # Ruling D4, one level up. NULLs compare distinct on both dialects.
+        Index(
+            "uq_submissions_tournament_idempotency_key",
+            "tournament_id",
+            "idempotency_key",
+            unique=True,
+        ),
+        Index("ix_submissions_account", "account_id"),
+    )
+
+
+class EntryPlayer(Base):
+    """The human being entered (ruling R13's leaf, decision D-A4).
+
+    **Its own table rather than namespaced fields on the entry**, decided
+    against the tree rather than the spec (D-A4): the §4 index the soft
+    duplicate flag runs on is ``(entry_event_id, entry_player_id)``, which
+    needs a player id to point at, and ``remarks`` describes a *human's*
+    availability — three events for one child must not carry three copies
+    of one sentence, because the commit seam writes it onto a roster
+    **player**.
+
+    The invariant R13 states and this table enforces structurally: **player
+    fields are never mixed into contact/account fields.** Contact data
+    lives on ``entrant_accounts`` (the person who *acts*); this is the
+    person who *plays*, and the two are routinely different — a parent
+    entering two children, a club representative entering eight players.
+
+    ``account_id`` says who may act for this player. It is not ownership of
+    a human being; it is the join that lets "my entries" (E2) show a parent
+    their children's entries without a second identity system.
+
+    **R12's never-in-v1 list, recorded because absence is a decision:** no
+    postal address, no federation or member id, no date of birth beyond
+    ``birth_year`` as an eligibility field. GDPR minimization governs
+    (Q10), and a column that does not exist cannot be collected by
+    accident.
+    """
+
+    __tablename__ = "entry_players"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entrant_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    # Published on the public entrant list (unless the entry opts out).
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # R12: REQUIRED. Without it MS/WD/XD event filtering is impossible,
+    # which is the only reason the field exists. Enforcement of the *match*
+    # is soft (Q14 §5) — the form filters by default, an override path
+    # exists, and a mismatch is an attention flag an operator resolves.
+    # NOT NULL is about the field being collected, not about the match.
+    gender: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Free text, optional, never validated against a club registry we do
+    # not have and are not going to invent.
+    club: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # A plain eligibility field (U15, O40) — never a trigger for automatic
+    # behavior, and emphatically not a GDPR special category.
+    birth_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The free-text availability note, carried verbatim onto the roster
+    # player by the commit seam. Never parsed, never inferred from, never
+    # fed to the solver: a free-text field that silently became a
+    # constraint would be the worst kind of automatic decision (I4). It
+    # lives HERE and not on the entry because it describes a human.
+    remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    __table_args__ = (Index("ix_entry_players_account", "account_id"),)
+
+
 class EntryEvent(Base):
     """One entry-facing event within a workspace (spec Q2).
 
@@ -1229,11 +1378,27 @@ class EntryEvent(Base):
     )
     bracket_event_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     cap: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # R14: the PER-EVENT FALLBACK, kept rather than replaced. It is how
+    # flight-tiered pricing (CAN-AM: $50 A flight, $30 all others) is
+    # expressed, and it is unused when the tournament carries a fee
+    # schedule on ``entry_pages``.
     fee_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # R12: 'M' | 'F' | 'mixed' | NULL (open). Drives the form's default
+    # event filtering. SOFT — never a hard block (Q14 §5).
+    gender_constraint: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
     opens_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     closes_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # R14 §3: SEPARATE from closes_at, because the incumbent models the two
+    # separately and organisers use the gap (Badminton Ontario closes
+    # entries Tuesday and accepts withdrawals until Wednesday). Feeds E2's
+    # withdrawal path and COMMITTED_ENTRY_WITHDREW.
+    withdraws_until: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     retention_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -1283,6 +1448,11 @@ class Entry(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     entry_event_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    # ---- the levels this entry hangs between (R13) ---------------------
+    # The act it belongs to, and the human it enters. Nullable only while
+    # the narrowing half of this reshape is in flight; the writer sets both.
+    submission_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    entry_player_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
     # See the lifecycle state machine in the design spec §6. E1 submissions
     # land directly in 'pending' (ruling D1); 'unverified' exists in the
     # vocabulary but is only entered once E2's email verification ships.
@@ -1375,6 +1545,12 @@ class Entry(Base):
         ),
         # NON-unique on purpose (Q12). Powers the soft duplicate flag.
         Index("ix_entries_event_contact_email", "entry_event_id", "contact_email"),
+        # The R13 successor to the line above, and non-unique for exactly
+        # the same reason: one account legitimately enters the same event
+        # for two different players, and the *same* player twice is a
+        # judgment an operator makes rather than a 409 a database returns.
+        Index("ix_entries_event_player", "entry_event_id", "entry_player_id"),
+        Index("ix_entries_submission", "submission_id"),
     )
 
 
@@ -1408,6 +1584,46 @@ class EntryPage(Base):
     regulations_version: Mapped[int] = mapped_column(
         Integer, default=1, nullable=False
     )
+
+    # ---- money & payment (R14) ----------------------------------------
+    # CUMULATIVE totals in cents by event count — {"1":4000,"2":5500} — not
+    # increments, because that is how directors *publish* them: "$40 / $55 /
+    # $60" is a price list they copy, "$40 then +$15" is a derivation they
+    # would have to perform and get wrong. NULL falls back to summing
+    # ``entry_events.fee_cents``.
+    fee_schedule: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Free text, rendered publicly: Zelle, cash at check-in, a PayPal
+    # address, in the director's own words. v1 payment is manual and Q8's
+    # integration boundary is untouched.
+    payment_instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # ---- entry policy (R14 §4) -----------------------------------------
+    # Form-enforced with the rule stated, operator-overridable at the desk
+    # (I4): the software prevents the accident, the operator decides the
+    # exception.
+    max_events_per_person: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    discipline_caps: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    # ---- field policy (R12) --------------------------------------------
+    # OFF by default. The phone number lands on the ACCOUNT, not the entry,
+    # because it is submitter contact data.
+    collect_phone: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+
+    # ---- public page identity (R14 §6) ---------------------------------
+    # AUDITED FACT: the tree has no venue name or address anywhere —
+    # "venue" in ShuttleWorks is structural scheduling data only
+    # (courtCount / intervalMinutes / dayStart / dayEnd). These two columns
+    # live HERE rather than on ``tournaments`` or in the state blob:
+    # publication data read only by the public page, and deliberately
+    # outside the blob so a venue address can never 409 against the
+    # fail-closed CONFIG_LOCKED guard.
+    venue_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    venue_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
