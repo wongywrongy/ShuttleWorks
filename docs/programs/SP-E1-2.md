@@ -73,7 +73,7 @@ E1 was implemented, adversarially verified, demoed end to end and **merged to `m
 6. **Map the landing zones with file paths**, at minimum: signup/login route placement and their auth-surface consequences; where the entrant session cookie is set and resolved; the throttle namespace registration and its settings triple; Turnstile's move from submit to signup; the fee-schedule computation seam (one place, server-side — the form's running total is a *display* of it, never the source of truth); the desk's grouping query; `build_signals` (this slice adds nothing there — confirm and say so).
 7. **Produce a task list with test-first ordering**, and state which existing tests each task will unwind, with the ruling per group.
 
-**STOP.** Report: the map, the four decisions (2, 3, 4, 5), the plan, the unwind inventory, and any spec/tree contradiction. Wait for go-ahead. The standing **`[CONFIRM AT STOP]`** item — password-based auth as the default (Q13 §4; the user let it stand on 2026-08-07) — is re-presented here for the recorded sign-off.
+**STOP.** Report: the map, the four decisions (2, 3, 4, 5), the plan, the unwind inventory, and any spec/tree contradiction. Wait for go-ahead. (The former `[CONFIRM AT STOP]` password-default item is **already discharged** — the user confirmed it on 2026-08-07 at the combined R2+R3 sign-off, recorded in Q13 §4 and the ledger; do not re-ask.)
 
 ## PHASE B — The entrant principal (signup, login, session)
 

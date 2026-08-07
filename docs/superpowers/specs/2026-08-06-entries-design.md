@@ -1,7 +1,9 @@
 # Entries — Design
 
 **Date:** 2026-08-06
-**Status:** Provisional — research and design complete, decisions awaiting review (SP-ENTRIES-R1)
+**Status:** **Accepted** — user sign-off recorded 2026-08-07, covering the R2 and R3
+amendment passes together (the Phase 1 gate and the R3 combined STOP). Previously:
+Provisional (SP-ENTRIES-R1, decisions awaiting review).
 **Amended by SP-ENTRIES-R2 (SP-PROGRAM-1 Phase 1), 2026-08-06** — standing rulings R5–R7
 folded in as decision sections, the three-surface architecture added (§2A), Q4/Q5/§4/§7
 amended, open question #6 resolved, R6 feasibility verified against the tree and written
@@ -1082,9 +1084,10 @@ if so it must show how each of the four is closed.
 
 #### 4. Password-based auth is the default
 
-**Decision: password + email verification, matching the incumbent.** `[CONFIRM AT STOP]` —
-*this marker stays in the text until the user's recorded sign-off. Noted: at the
-2026-08-07 STOP the user let the default stand.*
+**Decision: password + email verification, matching the incumbent.** **CONFIRMED — user
+sign-off recorded 2026-08-07** at the combined R2+R3 gate ("confirm"). The former
+`[CONFIRM AT STOP]` marker is discharged; the passwordless email-code alternative below
+remains recorded as rejected.
 
 Grounding: TournamentSoftware is login-name + password with email activation, and **no
 code/magic-link auth appears anywhere in its flow** (signup form observed 2026-08-07,
@@ -1750,10 +1753,9 @@ from entry data · duplicate-identity merging · refund processing · waitlist l
    (Q13 §2) is decided by the same audit, and its CSRF-coverage trap is named there.
 
 *No other open question is added. R10–R14 are decisions, and a ruling that leaves a question
-behind says so — this one does; the other four do not.* The `[CONFIRM AT STOP]` marker on
-password-vs-passwordless (Q13 §4) is a **sign-off item**, not an open design question: the
-default is decided and the user let it stand on 2026-08-07; the marker stays in the text until
-the sign-off is recorded.
+behind says so — this one does; the other four do not.* The password-vs-passwordless
+sign-off item (Q13 §4) is **discharged**: the user confirmed the password default on
+2026-08-07 at the combined R2+R3 gate, and the marker has been resolved in place.
 
 ---
 

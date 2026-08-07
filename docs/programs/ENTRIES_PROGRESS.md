@@ -12,7 +12,7 @@ program brief — that file is the plan; deviation is a STOP).
 | Phase | Name | Status | Gate outcome |
 |---|---|---|---|
 | 0 | Consolidate and baseline | **DONE 2026-08-06** | Merge sign-off delegated (see Phase 0 entry) |
-| 1 | SP-ENTRIES-R2 spec delta | **DONE 2026-08-06** | STOP report presented; spec stays provisional until user confirms (flip = user's act) |
+| 1 | SP-ENTRIES-R2 spec delta | **DONE 2026-08-06** | **SIGNED OFF 2026-08-07** — combined R2+R3 gate; spec flipped provisional→accepted (user's recorded act: "confirm") |
 | 2 | Deploy on wongworks.dev | not started | — |
 | 3 | SP-UI-1 appearance pass | **pre-executed** (see contradiction C1) | — |
 | 4 | Dogfood (floating) | not started | — |
@@ -549,3 +549,16 @@ zero modified.
 See §9 of the spec. The two that need a human: **minors/DOB collection**, and whether the
 `entry_events.code` → Meet `ranks[]` mapping holds up in practice or Meet needs a thin events
 concept sooner than Q2 assumes.
+
+---
+
+## Combined R2+R3 sign-off: RECORDED (2026-08-07)
+
+The user confirmed both acts with "confirm":
+1. **Spec status flipped provisional → ACCEPTED** (header edited; covers the R2 and R3
+   amendment passes together — this also closes the Phase 1 gate open since 2026-08-06).
+2. **Password-based entrant auth confirmed as the default** (Q13 §4 marker discharged;
+   passwordless email-code stays recorded as rejected). SP-E1-2 Phase A must not re-ask.
+
+**Next task:** SP-E1-2 Phase A (audit: account storage, session scoping + CSRF trap,
+player-level physical form, migration data premise → STOP report).
