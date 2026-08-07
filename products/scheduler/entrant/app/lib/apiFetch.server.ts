@@ -68,6 +68,16 @@ export async function apiGet<T>(
   path: string,
   init: { signal?: AbortSignal } = {},
 ): Promise<T> {
+  // Pins "public projection only" in code, not just convention: a raw path
+  // segment (e.g. a slug) concatenated below could otherwise steer the
+  // request at a different backend route via `..`, `?`, or `#` surviving
+  // URL normalization. Reject the prefix miss AND a dot-segment/query/
+  // fragment anywhere in the path — a path starting with `/e/api/` that
+  // still contains `..` can normalize outside it once concatenated.
+  if (!/^\/e\/api\//.test(path) || path.includes('..') || /[?#]/.test(path)) {
+    throw new Error(`apiGet: rejected non-public-projection path ${path}`);
+  }
+
   const response = await fetch(`${apiBaseUrl()}${path}`, {
     method: 'GET',
     // Spread, so a caller cannot mutate the shared allowlist into a leak.
@@ -78,10 +88,21 @@ export async function apiGet<T>(
     redirect: 'manual',
   });
 
-  const body: unknown = await response.json().catch(() => null);
+  let parseFailed = false;
+  const body: unknown = await response.json().catch(() => {
+    parseFailed = true;
+    return null;
+  });
 
   if (!response.ok) {
     throw new ApiError(response.status, errorCode(body));
+  }
+
+  // A 2xx with an unparseable body (an ingress HTML page, a 204) must not
+  // masquerade as `T` — that surfaces as a TypeError deep in a component
+  // render instead of an ApiError at the boundary.
+  if (parseFailed) {
+    throw new ApiError(response.status, 'BAD_RESPONSE');
   }
 
   return body as T;

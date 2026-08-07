@@ -116,6 +116,40 @@ describe('apiGet', () => {
     expect(String(err)).not.toContain('entries_json.py');
   });
 
+  it('rejects a path outside the public-projection prefix', async () => {
+    vi.stubGlobal('fetch', stubFetch(json({})));
+
+    await expect(apiGet('/api/ops/health')).rejects.toThrow(/rejected non-public-projection path/);
+    expect(sent).toEqual([]); // fetch must never even be attempted
+  });
+
+  it('rejects a traversal-shaped path even when it starts with the prefix', async () => {
+    // A prefix-only check would let this through — it does start with
+    // `/e/api/` — yet after concatenation with the base URL and normal URL
+    // parsing, `..` segments can walk the request outside `/e/api/`
+    // entirely. The guard must reject on the dot-segment itself, not just
+    // the prefix.
+    vi.stubGlobal('fetch', stubFetch(json({})));
+
+    await expect(apiGet('/e/api/page/../../ops/health')).rejects.toThrow(
+      /rejected non-public-projection path/,
+    );
+    expect(sent).toEqual([]);
+  });
+
+  it('turns an unparseable 2xx body into ApiError, not a null cast to T', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubFetch(new Response('<html>ingress error page</html>', { status: 200 })),
+    );
+
+    const err = await apiGet('/e/api/config').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(200);
+    expect((err as ApiError).code).toBe('BAD_RESPONSE');
+  });
+
   it('serves interleaved concurrent calls without crossing their data', async () => {
     // The demonstration for negative control 2. NB it is a demonstration, not
     // the control: a `let` at module scope only smears when its write and its
@@ -155,17 +189,48 @@ describe('apiGet', () => {
     // of the module's shape, and by the time a test can observe it crossing,
     // it already has. Verified non-vacuous by adding `let lastBody` to
     // `apiFetch.server.ts`, which turns this red.
-    const source = readFileSync(
-      new URL('../app/lib/apiFetch.server.ts', import.meta.url),
-      'utf8',
-    );
-    const moduleScoped = source
-      .split('\n')
-      .filter((line) => /^(export\s+)?(let|var)\s/.test(line));
+    //
+    // Widened to also catch the more common real-world form: a top-level
+    // `const` bound to a mutable container (`new Map`/`Set`/`WeakMap`/
+    // `WeakSet`, an array literal, an object literal). A `const` binding
+    // doesn't rebind, but the container it points at is still shared,
+    // mutable state across concurrent requests — exactly `stateEtags` at
+    // `client.ts:265` (`const stateEtags = new Map<string, string>();`),
+    // which the old `let|var`-only regex sailed straight past. Wrapping in
+    // `Object.freeze(...)` (as `OUTBOUND_HEADERS` does) is exempt, since
+    // that's the frozen, safe-to-share form.
+    expect(moduleScopedMutableBindings()).toEqual([]);
+  });
 
-    expect(moduleScoped).toEqual([]);
+  it('the widened guard is not vacuous: a bare const Map at module scope goes red', () => {
+    // Proves the widened regex actually fires on the `client.ts:265` shape
+    // (`const stateEtags = new Map<string, string>();`) rather than being
+    // satisfied by construction. Real fixture text, not a description.
+    const withCacheAdded = `export const OUTBOUND_HEADERS = Object.freeze({\n  accept: 'application/json',\n});\n\nconst cache = new Map();\n`;
+
+    expect(moduleScopedMutableBindings(withCacheAdded)).toEqual(['const cache = new Map();']);
   });
 });
+
+/** Shared by both tests above: the structural scan itself, plus the fixture
+ * hook so the non-vacuity test can feed it text without touching disk. */
+function moduleScopedMutableBindings(source?: string): string[] {
+  const text =
+    source ??
+    readFileSync(new URL('../app/lib/apiFetch.server.ts', import.meta.url), 'utf8');
+
+  return text.split('\n').filter((line) => {
+    if (/^(export\s+)?(let|var)\s/.test(line)) return true;
+
+    const constMatch = line.match(/^(export\s+)?const\s+\w+[^=]*=\s*(.+)$/);
+    if (!constMatch) return false;
+
+    // Object.freeze(...) does not match — the rhs starts with `Object`, not
+    // directly with `new Map(`/`[`/`{` — so the frozen header constant is
+    // deliberately exempt.
+    return /^(new\s+(Map|Set|WeakMap|WeakSet)\s*\(|\[|\{)/.test(constMatch[2].trim());
+  });
+}
 
 describe('apiBaseUrl', () => {
   it('throws rather than defaulting, so a misconfigured deploy fails loudly', () => {
