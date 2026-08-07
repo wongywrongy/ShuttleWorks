@@ -280,6 +280,70 @@ public page http://localhost:8600/e/wongworks-open, API :8600, stack `sw-e1-demo
 (`make stop` will NOT stop it — use `docker compose -p sw-e1-demo -f
 products/scheduler/docker-compose.cloud.yml down`; add `-v` to discard the demo data).
 
+---
+
+## SP-ENTRIES-R3 — Master amendment (R10–R14): RULE-4 STOP (2026-08-07)
+
+**Branch:** `dev/prog1-r3-amendment`. **Prompt rule 4 triggered:** `dev/prog1-p5-e1` is
+not merely non-empty — **SP-E1-1 was fully implemented, adversarially verified, demoed
+end-to-end, and merged to `main` (`86182af`) before this prompt arrived.** Divergence
+report below; NO document amendments made pending the STOP outcome. (Locating note: the
+E1 prompt lives at `docs/programs/SP-E1-1.md`, in-repo — no amended copy under
+`docs/superpowers/plans/` is needed.)
+
+### Divergence report — what already landed that R10–R14 reshape
+
+**Schema (migration `r2c7e1f4a9b3`, deployed to the demo Postgres and to every dev
+SQLite from now on):**
+- `entries` carries the R7 *soft* split (contact block / player block in one row) — R13
+  now mandates the hard `account → submission → entries → players` shape. The
+  idempotency key, regulations acceptance (`regulations_accepted_at` +
+  `regulations_version_accepted`) and `fee_cents` snapshot all live **on the entry**;
+  R13 moves all three to a new `submissions` table. `UNIQUE (tournament_id,
+  idempotency_key)` (ruling D4) becomes submission-level.
+- **`manage_token_hash` exists and the raw token is already minted and returned once on
+  the public success page** — R10 retires this entire path (login-gated "my entries").
+  The E1 success-page copy ("Keep this code…") and its tests pin the behavior R10
+  deletes.
+- No account/principal rows for entrants anywhere; `contact_email`/`contact_name` are
+  plain entry columns (R10 turns these into account-linked data).
+- `entry_events` has `cap/fee_cents/opens_at/closes_at/retention_days` but **no
+  `withdraws_until`, no gender/`gender_constraint`, no policy fields** (R12/R14 adds).
+- `entry_pages` has regulations/waiver/version but **no `payment_instructions`, no fee
+  schedule, no phone toggle** (R14/R12 adds).
+
+**Routes/behavior (all tested, ~230 entries tests pin them):**
+- `POST /e/{slug}/submit` is **anonymous + Turnstile-guarded** — R10 moves Turnstile to
+  signup and puts submission behind a `play.*`-scoped session. The auth-surface
+  allowlist entries + rewritten docstring (`tests/test_auth_surface.py`) encode the
+  now-superseded "anonymous public write" posture.
+- One form act = one entry, single event — R13's 1–N-event submission with running fee
+  total (R14) replaces the form and the submit contract.
+- Public page built to the 390px bar (ruling D3/E1) — R11 replaces the bar with
+  co-equal dual-width.
+- Operator desk, Seam A commit, confirm action, entry-page/entry-event config routes:
+  **substantially unaffected by R10–R14** (Seam A contract survives; commit traceability
+  gains the submission hop).
+
+**Consequences for the amendment the prompt did not anticipate:**
+1. **The rulings now imply a schema *migration and behavior rework*, not greenfield
+   design** — entries/submissions reshape, token-path retirement, form rebuild, and the
+   deliberate unwinding of allowlisted public-write tests. The spec amendment should
+   speak in "supersedes the shipped E1 shape" terms and the E1-prompt amendment (Phase D)
+   describes a **delta slice over a shipped E1** (suggest naming it SP-E1-2), not a
+   rewrite of an unexecuted prompt.
+2. E1's Phase E walkthrough artifacts (success-page token copy, anonymous submit demos,
+   R7 flag at entry level) are recorded in this ledger as *completed history* — the
+   amendment must not retroactively edit that record.
+3. Live-run finding F-E1 (rank-slot mapping, spec §9.3) is untouched by R10–R14 and
+   stays open.
+4. The demo stack `sw-e1-demo` still runs the shipped shape; nothing in this session
+   changes it.
+
+**STOP presented to the user; awaiting go-ahead on how the amendment proceeds given the
+shipped E1, plus the standing [CONFIRM AT STOP] item (password vs passwordless default)
+which will be re-presented at the combined sign-off.**
+
 **Decisions proposed at the STOP (see report):** cloud-mode predicate for R6 (spec's
 `environment=="cloud"` collides with `docker-compose.cloud.yml`'s deliberate
 `ENVIRONMENT=local` — S1); E1 lifecycle gap (no email verification + no confirm UI ⇒
