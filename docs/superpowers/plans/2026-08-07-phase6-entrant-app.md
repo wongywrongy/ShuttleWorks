@@ -40,9 +40,16 @@ Every task's requirements implicitly include this section.
 | 13 | Replay fix | account-scope `submissions.replay` — a guessed key must not return another entrant's receipt |
 | 14–18 | Entry flow | the entry page, the form, the quote round-trip, loader-minted idempotency key, the receipt route |
 | 19–21 | Account pages | signup / login / logout — the F-E1-2-E1 closure |
-| 22–24 | Deployment | nginx locations + the cookie `map`, the `entrant` compose service, env, node 22 |
+| 21b | Local launch | `make entrant-dev` / `make local-dev`, the port map, the Docker-stack trap |
 | 25–27 | SEO | meta/OG from the loader, cached sitemap, robots.txt, the measured page-weight gate |
+| 22–24 | Deployment | nginx locations + the cookie `map`, the `entrant` compose service, env, node 22 |
 | 28–32 | Cutover | retire the HTML routes + delete the exemption (one commit), migrate ~90 tests, R11 evidence, ledgers |
+
+## Execution order (amended by the owner, 2026-08-07)
+
+Build and prove everything **locally** first; anything internet-facing goes last. The task table above is renumbered in execution order: **1-3, 4-7, 8-13, 14-18, 19-21, 21b, 25-27, 22-24, 28-32**. Deployment (22-24) moved from the middle to the end.
+
+**One dependency that constrains how late deployment can go, stated rather than discovered:** the cutover (28-32) deletes the FastAPI HTML routes that currently serve `/e/{slug}`. In the Docker stacks, `location /e/` still points at the backend until Task 22 repoints it at the `entrant` service. So 22-24 must land **before** 28-32, or the containerised stacks serve a 404 at the entrant page between the two. Local development is unaffected either way — the dev servers do not go through nginx. Deployment is therefore last-but-one, not last.
 
 **Ordering dependency worth reading twice:** the CSRF exemption (Task 4–7 group) **cannot be deleted while the old HTML route lives**, so its deletion lands in the cutover commit (Task 28–32 group), not in its own group. There is no two-implementation window.
 
@@ -8310,6 +8317,134 @@ All three pages follow R11 (co-equal desktop/mobile widths), use native forms wi
 ---
 
 Now I'll draft the implementation plan for Tasks 22-24 based on the spec and codebase analysis.
+
+### Task 21b: One obvious way to launch each surface locally
+
+Two products now run side by side — the **operator product** (the Vite SPA, `:scheduler`) and the **public entrant site** (the SSR app, `:entrant`) — against one backend. Today a developer has to know three commands and one trap to see them both. This task makes each surface launchable by name and writes the recipe down. It is deliberately **local only**: no nginx, no compose, no tunnel. Those land in Tasks 22-24.
+
+**Files:**
+- Modify: `Makefile` (new targets alongside the existing `scheduler` / `scheduler-dev` / `stop`)
+- Modify: `products/scheduler/entrant/README.md` (create if absent)
+- Modify: `docs/getting-started/` — add the local-launch recipe to the existing page that covers running the app; do not create a competing page
+- Test: `products/scheduler/entrant/tests/launch-scripts.test.ts`
+
+**Interfaces:**
+- Consumes: the root scripts wired in Task 3 (`dev:scheduler`, `dev:entrant`, `build:*`, `test:*`).
+- Produces: `make entrant-dev`, `make local-dev`; a documented port map. Tasks 22-24 reuse the port map when writing the compose service.
+
+**The trap this task exists to document.** `products/scheduler/frontend/vite.config.ts` defaults its `/api` proxy to `:8000`, which is exactly where the Docker backend listens. If the Docker stack is up, the browser talks to the *container* — a possibly weeks-stale baked image plus its bind-mounted `data/local.db` — while a host `uvicorn` on `:8600` serves nothing. Backend edits then silently "don't work". Port `:8000` is also unusable for a host uvicorn on Windows (reserved range → `PermissionError`). The recipe must state this, not just work around it.
+
+**The port map to document and use consistently:**
+
+| Surface | Port | Command |
+|---|---|---|
+| Backend (host uvicorn) | 8600 | `uvicorn app.main:app --port 8600` from `products/scheduler/backend` |
+| Operator product (SPA) | 5173 | `npm run dev:scheduler` |
+| Public entrant site (SSR) | 5174 | `npm run dev:entrant` |
+
+- [ ] **Step 1: Write the failing test**
+
+The launch commands are the contract; a rename that silently breaks `make local-dev` is the failure this guards.
+
+```ts
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test } from 'vitest';
+
+const REPO_ROOT = join(import.meta.dirname, '..', '..', '..', '..');
+
+function rootScripts(): Record<string, string> {
+  return JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).scripts;
+}
+
+test('each surface has a launch script named after it', () => {
+  const scripts = rootScripts();
+  // The operator product and the public entrant site are launched by name.
+  // If either is renamed, the Makefile targets and the docs recipe go stale
+  // silently — this is the assertion that makes that loud.
+  expect(scripts['dev:scheduler']).toBeDefined();
+  expect(scripts['dev:entrant']).toBeDefined();
+});
+
+test('the Makefile targets invoke the scripts that actually exist', () => {
+  const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
+  const scripts = rootScripts();
+
+  expect(makefile).toContain('entrant-dev:');
+  expect(makefile).toContain('local-dev:');
+
+  // Every `npm run X` the Makefile invokes must be a real root script.
+  const invoked = [...makefile.matchAll(/npm run ([a-z:.-]+)/g)].map((m) => m[1]);
+  const missing = invoked.filter((name) => !(name in scripts));
+  expect(missing).toEqual([]);
+});
+
+test('the entrant dev server does not collide with the operator dev server', () => {
+  const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
+  // 5173 is the SPA; the entrant app must not silently steal it, because Vite
+  // would quietly increment the port and the docs recipe would be wrong.
+  expect(makefile).toContain('5174');
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npm --prefix products/scheduler/entrant run test:run -- tests/launch-scripts.test.ts`
+
+Expected: FAIL — `expect(makefile).toContain('entrant-dev:')` fails; the target does not exist yet.
+
+- [ ] **Step 3: Write minimal implementation**
+
+Add to the `Makefile`, following the idiom of the existing `scheduler-dev` target and extending the `.PHONY` list at line 1:
+
+```makefile
+entrant-dev:  ## Run the PUBLIC entrant site (SSR) at :5174 against a host backend on :8600
+	VITE_API_PROXY_TARGET=http://localhost:8600 PORT=5174 npm run dev:entrant
+
+local-dev:  ## Run BOTH surfaces: operator product :5173 + public entrant site :5174
+	@echo "Backend must already be running on :8600 — see docs/getting-started."
+	@echo "  operator product     http://localhost:5173"
+	@echo "  public entrant site  http://localhost:5174"
+	npm run dev:scheduler & npm run dev:entrant
+```
+
+Then write the recipe into the getting-started docs page and `products/scheduler/entrant/README.md`, covering: the port map above, the two-surface distinction (which URL is which audience), and the Docker-stack trap in full — `docker ps` first, `make stop` before running a host backend, and why `:8000` is unusable on Windows.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npm --prefix products/scheduler/entrant run test:run -- tests/launch-scripts.test.ts`
+
+Expected: PASS — 3 tests.
+
+- [ ] **Step 5: Prove the control is not vacuous**
+
+Temporarily rename the root script `dev:entrant` to `dev:entrant-x` and re-run.
+
+Expected: FAIL on both the first test and the Makefile cross-check. Restore and confirm green. If renaming the script does not fail the test, the guard is decorative and must be fixed.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Makefile products/scheduler/entrant/README.md products/scheduler/entrant/tests/launch-scripts.test.ts docs/getting-started
+git commit -m "chore(dx): make each surface launchable by name
+
+Two products now run side by side against one backend: the operator
+product (SPA, :5173) and the public entrant site (SSR, :5174). Adds
+make entrant-dev and make local-dev, and documents the port map.
+
+Local only by design - nginx, compose and the tunnel are Tasks 22-24.
+
+Documents the Docker-stack trap rather than working around it: the SPA
+proxies /api to :8000, which is where the CONTAINER backend listens, so
+with the stack up a host backend on :8600 serves nothing and backend
+edits silently do not take. Port 8000 is unusable for a host uvicorn on
+Windows anyway - it sits in a reserved range.
+
+The test asserts the Makefile only invokes root scripts that exist, so
+renaming a launch script fails loudly instead of rotting the docs."
+```
+
+---
 
 ### Task 22: nginx configuration — entrant tier routing and cookie rewrite
 
