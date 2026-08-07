@@ -23,6 +23,8 @@ import { isRouteErrorResponse, useRouteError } from 'react-router';
 
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
+import { formatCents } from '../lib/money';
+import { EntryForm } from './entry.form';
 import type { Route } from './+types/entry';
 
 interface EntryLoaderData {
@@ -68,15 +70,88 @@ export async function loader({
 
 export default function Entry({ loaderData }: Route.ComponentProps) {
   const { page, idempotencyKey } = loaderData;
+  const next = encodeURIComponent(`/e/${page.page.slug}`);
+  const openEvents = page.events.filter((event) => event.isOpen);
 
   return (
-    <main>
-      <h1>{page.tournament.name}</h1>
-      {/* The form itself is the next slice. What is here now is the one part
-          the loader owns: the key, in the markup, reachable without a script. */}
-      <form method="post">
-        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
-      </form>
+    <main className="mx-auto grid max-w-3xl gap-6 p-4">
+      <header>
+        <h1 className="text-2xl font-semibold">{page.tournament.name}</h1>
+        {page.tournament.date ? (
+          <p className="text-sm text-muted-foreground">{page.tournament.date}</p>
+        ) : null}
+        {page.venue?.name ? (
+          <p className="text-sm text-muted-foreground">
+            {page.venue.name}
+            {page.venue.address ? `, ${page.venue.address}` : ''}
+          </p>
+        ) : null}
+        {page.page.introText ? (
+          <p className="mt-2 text-sm">{page.page.introText}</p>
+        ) : null}
+      </header>
+
+      <section>
+        <h2 className="text-lg font-semibold">Events</h2>
+        <ul className="grid gap-1 text-sm">
+          {page.events.map((event) => (
+            <li key={event.id}>
+              {event.discipline} ({event.code}) — {event.isOpen ? 'Open' : 'Closed'}
+              {event.feeCents === null ? '' : ` · ${formatCents(event.feeCents)}`} ·{' '}
+              {event.entryCount} entered
+            </li>
+          ))}
+          {page.events.length === 0 ? <li>No events yet.</li> : null}
+        </ul>
+      </section>
+
+      <section id="enter">
+        <h2 className="text-lg font-semibold">Enter</h2>
+        {openEvents.length === 0 ? (
+          <p className="text-sm">No event is taking entries right now.</p>
+        ) : page.viewer.signedIn ? (
+          <EntryForm page={page} idempotencyKey={idempotencyKey} />
+        ) : (
+          // No session is a login path, never a wall.
+          <p className="text-sm">
+            Entries are made from an entrant account.{' '}
+            <a className="underline" href={`/e/account/login?next=${next}`}>
+              Sign in
+            </a>{' '}
+            or{' '}
+            <a className="underline" href={`/e/account/signup?next=${next}`}>
+              create one
+            </a>
+            , then come back to this page.
+          </p>
+        )}
+      </section>
+
+      {page.page.regulationsText ? (
+        <section>
+          <h2 className="text-lg font-semibold">Regulations</h2>
+          <p className="whitespace-pre-line text-sm">{page.page.regulationsText}</p>
+        </section>
+      ) : null}
+
+      {page.page.paymentInstructions ? (
+        <section>
+          <h2 className="text-lg font-semibold">Payment</h2>
+          <p className="whitespace-pre-line text-sm">
+            {page.page.paymentInstructions}
+          </p>
+        </section>
+      ) : null}
+
+      <section>
+        <h2 className="text-lg font-semibold">Who has entered</h2>
+        <ul className="grid gap-1 text-sm">
+          {page.entrants.map((row, i) => (
+            <li key={`${row.eventId}-${i}`}>{row.name}</li>
+          ))}
+          {page.entrants.length === 0 ? <li>Nobody yet.</li> : null}
+        </ul>
+      </section>
     </main>
   );
 }
