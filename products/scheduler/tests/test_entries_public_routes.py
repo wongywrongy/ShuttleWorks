@@ -858,6 +858,47 @@ def test_the_global_body_cap_applies_to_this_route_too(client, page, turnstile):
     assert _entries(page["tid"]) == []
 
 
+def test_a_body_just_under_the_cap_is_accepted_through_the_same_route(
+    client, page, turnstile
+):
+    """Negative control for the 413 above.
+
+    Without it that test passes just as happily against a route that
+    refuses every large-ish post, or none at all — 413 proves a ceiling
+    exists only if something below the ceiling gets through. So: the same
+    route, the same well-formed submission, padded to just under the cap.
+
+    The padding rides in unrecognised form fields rather than in
+    ``remarks``, which the route bounds separately at 2000 characters
+    (``app/limits.py``'s per-field ceilings and the transport cap are
+    complementary, and this test is about the transport one). ``remarks``
+    is still sent at its own maximum, so the accepted request is the
+    largest legitimate shape this form can produce. It is spread over
+    several fields because Starlette's form parser caps a single field at
+    1024 KB well below the body cap — one 4 MB field answers 400, which
+    would have made this control pass for the wrong reason.
+    """
+    from app.config import settings
+
+    parts = 8
+    each = (settings.max_request_body_bytes - 8 * 1024) // parts
+    data = {
+        "eventId": page["ms"],
+        "playerName": "Alice Chen",
+        "contactName": "Parent Chen",
+        "contactEmail": "parent@example.com",
+        "remarks": "x" * 2000,
+        "acknowledged": "on",
+        "cf-turnstile-response": "a-solved-token",
+    }
+    data.update({f"pad{i}": "y" * each for i in range(parts)})
+
+    r = client.post(f"/e/{page['slug']}/submit", data=data)
+    assert r.status_code == 201, r.text[:800]
+    (entry,) = _entries(page["tid"])
+    assert entry.remarks == "x" * 2000
+
+
 def test_both_public_routes_are_registered(client):
     from app.main import app
 
