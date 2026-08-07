@@ -37,10 +37,12 @@ from __future__ import annotations
 
 import logging
 import secrets
+import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Path, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from api.entries_public import (
@@ -55,17 +57,26 @@ from api.entries_public import (
     _optional_entrant,
     _resolve,
 )
+from app.client_ip import client_ip
 from app.config import settings
 from app.dependencies import AuthEntrant, get_current_entrant
 from app.error_codes import ErrorCode, http_error
 from app.form_csrf import FORM_FIELD
 from database.models import Org
 from repositories import LocalRepository, get_repository
+from services import auth as auth_service
+from services import submissions as submission_service
 from services.entry_fees import PlayerSelection, compute_fee_total, normalize_fee_schedule
 from services.entry_form import parse_players
 from services.entry_policy import check_policy
 
 log = logging.getLogger("scheduler.api.entries_json")
+
+# An HTML checkbox posts its value only when ticked, so presence is the
+# signal; the values are what browsers and hand-rolled clients actually
+# send. Mirrors ``api/entries_public._TICKED``, which §9 deletes with the
+# module that owns it.
+_TICKED = frozenset({"on", "true", "1", "yes"})
 
 # ``/e/api`` — a sibling of ``/e/account``, both under the ``/e`` prefix
 # nginx routes to FastAPI by longest match while ``/e/{slug}`` falls
@@ -437,4 +448,142 @@ async def quote_entry(
                 subjects=list(refusal.subjects),
             )
         ),
+    )
+
+
+# ---- POST /submit/{slug} --------------------------------------------------
+
+
+@router.post("/submit/{slug}")
+async def submit_entry_json(
+    request: Request,
+    slug: str = Path(..., max_length=100),
+    idempotency_key: Optional[str] = Header(
+        None, alias="Idempotency-Key", max_length=64
+    ),
+    entrant: AuthEntrant = Depends(get_current_entrant),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Record one submission. **The order of the guards is the contract**,
+    and it is ``api/entries_public.submit_entry``'s verbatim.
+
+    1. the entrant session (the dependency above — no bootstrap fallback);
+    2. slug -> page -> tournament, or the uniform 404;
+    3. the form CSRF token, before anything is read out of the body;
+    4. the per-IP budget on its own ``entry:`` namespace, so an entry flood
+       cannot lock a venue out of *signing in*;
+    5. the acknowledgment, with the version agreed to recorded at that
+       instant on the submission;
+    6. entry policy, refused WITH THE RULE STATED;
+    7-9. replay, flags and the write, all inside the submission service.
+
+    **What is different from the incumbent, and only this.** The answer is
+    a **303** to an RR7 receipt route instead of a rendered page: a
+    POST/redirect/GET target means a reload never re-posts. And the
+    ``action=filter`` branch is gone — it is ``POST /e/api/quote/{slug}``
+    now, which is a better shape for the same act (it writes nothing and it
+    said so only in a comment before).
+
+    **The Idempotency-Key is read from the body as well as the header**,
+    and the body is what makes it reachable. A native form cannot send a
+    header, so until this phase the key was always NULL for a real entrant
+    and ``UNIQUE (tournament_id, idempotency_key)`` guarded nothing they
+    could hit. The key is minted in the loader that renders the form —
+    not at submit, where a double-click mints two.
+
+    The body is read as a raw form rather than declared as ``Form(...)``
+    parameters because the payload is 1-N players each with 1-N events,
+    which FastAPI's form binding cannot express.
+    """
+    page, tournament = _resolve(repo, slug)
+    form = await request.form()
+
+    # 3 — the form CSRF token, before the body is read for anything else.
+    require_form_csrf(request, form)
+
+    ip = client_ip(request)
+    throttle_key = auth_service.entries_key(ip)
+
+    # 4 — the per-IP budget. Turnstile guards signup, not this: a challenge
+    # in front of a route that already requires an account would charge
+    # every honest entrant a puzzle to slow down an attacker who has
+    # already signed up.
+    remaining = auth_service.throttle_check(repo.session, throttle_key)
+    if remaining is not None:
+        raise http_error(
+            429,
+            ErrorCode.AUTH_THROTTLED,
+            "Too many entries from this connection — try again later",
+            extra={"retryAfterSeconds": int(remaining) + 1},
+        )
+
+    def refuse(status: int, message: str):
+        auth_service.throttle_record_entry(repo.session, throttle_key)
+        repo.session.commit()
+        return http_error(status, ErrorCode.INVALID_INPUT, message)
+
+    # 5 — the acknowledgment. One given after the fact is not one.
+    if str(form.get("acknowledged") or "").strip().lower() not in _TICKED:
+        raise refuse(400, "Please accept the regulations before submitting.")
+
+    parsed = parse_players(form)
+    if not parsed:
+        raise refuse(
+            400, "Please give a player's name, their gender, and at least one event."
+        )
+
+    try:
+        resolved = _resolve_selections(repo, tournament.id, parsed)
+    except HTTPException:
+        raise refuse(400, "That event is not taking entries.")
+
+    grouped = [(str(i), events) for i, (_, events) in enumerate(resolved)]
+
+    # 6 — entry policy, refused WITH THE RULE STATED (R14 §4).
+    refusal = check_policy(page, grouped)
+    if refusal is not None:
+        raise refuse(400, refusal.message)
+
+    # The fee, computed server-side in one place. The total shown to the
+    # entrant IS the total recorded (Seam B) — never recomputed afterwards,
+    # and computed by the same call POST /e/api/quote/{slug} makes.
+    total, basis = compute_fee_total(
+        page, [PlayerSelection(key, events) for key, events in grouped]
+    )
+
+    # The key: header first (a hydrated fetch), hidden field second (an
+    # unhydrated native form, which cannot send a header at all). Bounded
+    # to the column's 64 characters on both paths.
+    key = idempotency_key or str(form.get("idempotencyKey") or "")[:64] or None
+
+    # 7-9 — replay, flags and the write, all inside the submission service.
+    result = submission_service.create_submission(
+        repo.session,
+        tournament_id=tournament.id,
+        page=page,
+        account_id=uuid.UUID(entrant.id),
+        players=[
+            submission_service.PlayerInput(
+                full_name=spec["name"],
+                gender=spec["gender"],
+                club=spec["club"],
+                birth_year=spec["birthYear"],
+                remarks=spec["remarks"],
+                events=events,
+            )
+            for spec, events in resolved
+        ],
+        fee_total_cents=total,
+        fee_basis=basis,
+        idempotency_key=key,
+    )
+
+    auth_service.throttle_record_entry(repo.session, throttle_key)
+    repo.session.commit()
+    # 303, not 302: the browser must re-issue as GET. A replay redirects to
+    # the SAME receipt — a retrying client that saw a different answer would
+    # conclude its first attempt had failed.
+    return RedirectResponse(
+        url=f"/e/{page.slug}/receipt/{result.submission.id}",
+        status_code=303,
     )

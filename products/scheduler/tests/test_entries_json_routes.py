@@ -429,3 +429,238 @@ def test_a_quote_carrying_another_sessions_form_token_is_refused(
     r = _quote(client, page, [f"0:{page['ms']}"], _csrf=stolen)
     assert r.status_code == 403
     assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+
+
+# ---- POST /e/api/submit/{slug} ------------------------------------------
+#
+# The guard order is the contract, and it is the incumbent's verbatim
+# (api/entries_public.py's ``submit_entry``): session, slug, form CSRF,
+# per-IP throttle, acknowledgment, parse, events-open, policy, fee, write.
+# What changes is only the answer shape — 303 to an RR7 receipt route, so a
+# reload never re-posts.
+
+
+def _submit(client, page, **overrides):
+    data = {
+        "playerName": "Alice Chen",
+        "gender": "F",
+        "club": "",
+        "birthYear": "",
+        "remarks": "cannot play before 6pm Saturday",
+        "events": [f"0:{page['ws']}"],
+        "acknowledged": "on",
+        "_csrf": _form_token(client, page),
+    }
+    headers = dict(CSRF)
+    headers.update(overrides.pop("headers", {}))
+    data.update({k: v for k, v in overrides.items() if v is not None})
+    for key, value in overrides.items():
+        if value is None:
+            data.pop(key, None)
+    return client.post(
+        f"/e/api/submit/{page['slug']}",
+        data=data,
+        headers=headers,
+        follow_redirects=False,
+    )
+
+
+def _submissions():
+    from database.models import Submission
+    from database.session import SessionLocal
+    from sqlalchemy import select
+
+    session = SessionLocal()
+    try:
+        return list(session.scalars(select(Submission)).all())
+    finally:
+        session.close()
+
+
+def test_a_submission_answers_303_to_the_receipt_route(client, page, entrant):
+    r = _submit(client, page)
+    assert r.status_code == 303, r.text
+    rows = _submissions()
+    assert len(rows) == 1
+    assert r.headers["location"] == f"/e/{page['slug']}/receipt/{rows[0].id}"
+    # The fee is computed server-side in one place and stored as computed.
+    assert rows[0].fee_total_cents == 4000
+    # Q11: the version agreed to, recorded at that instant.
+    assert rows[0].regulations_version_accepted == 3
+
+
+def test_the_quoted_total_is_the_total_the_json_write_records(client, page, entrant):
+    """R14 / Seam B across the two JSON routes that must never disagree.
+
+    Nothing is hardcoded on purpose: the assertion is that the number the
+    entrant was quoted is the number on their row, whatever the director's
+    schedule happens to say. NEGATIVE CONTROL: give the write its own
+    arithmetic (e.g. ``total = sum(ev.fee_cents or 0 ...)``) and this goes
+    red while the 303 test above stays green.
+    """
+    quoted = _quote(client, page, [f"0:{page['ms']}", f"0:{page['ws']}"]).json()
+    assert quoted["refusal"] is None
+    r = _submit(client, page, events=[f"0:{page['ms']}", f"0:{page['ws']}"])
+    assert r.status_code == 303, r.text
+    rows = _submissions()
+    assert len(rows) == 1
+    assert rows[0].fee_total_cents == quoted["totalCents"]
+
+
+def test_an_anonymous_submission_is_refused(client, page):
+    """NEGATIVE CONTROL for the session gate. ``get_current_entrant`` has no
+    bootstrap fallback in either mode. To prove it is not vacuous: swap it
+    for ``_optional_entrant`` and this goes red while the 303 test — the
+    same request, one cookie different — stays green. Put it back."""
+    r = client.post(
+        f"/e/api/submit/{page['slug']}",
+        data={
+            "playerName": "Alice Chen",
+            "gender": "F",
+            "events": [f"0:{page['ws']}"],
+            "acknowledged": "on",
+        },
+        headers=CSRF,
+        follow_redirects=False,
+    )
+    assert r.status_code == 401
+    assert _submissions() == []
+
+
+def test_a_submission_with_no_csrf_proof_at_all_is_refused(client, page, entrant):
+    """Guard 3 with neither channel present: no form field, and no
+    ``X-ShuttleWorks-CSRF`` header for the middleware either."""
+    r = client.post(
+        f"/e/api/submit/{page['slug']}",
+        data={
+            "playerName": "Alice Chen",
+            "gender": "F",
+            "events": [f"0:{page['ws']}"],
+            "acknowledged": "on",
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+    assert _submissions() == []
+
+
+def test_a_submission_with_a_foreign_form_token_is_refused_and_writes_nothing(
+    client, page, entrant
+):
+    """NEGATIVE CONTROL for guard 3. A token minted from a DIFFERENT session
+    is the closest a real attacker gets — they can make the browser send our
+    cookie, they can never read it. Delete the ``require_form_csrf`` call
+    and this goes red."""
+    stolen = _form_token(client, page)
+    assert client.post("/e/account/logout", headers=CSRF).status_code == 204
+    assert (
+        client.post(
+            "/e/account/login",
+            json={"email": "parent@example.com", "password": GOOD_PW},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+    r = _submit(client, page, _csrf=stolen)
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+    assert _submissions() == []
+
+
+def test_a_cheap_refusal_short_circuits_before_the_write(
+    client, page, entrant, monkeypatch
+):
+    """GUARD ORDER. The contract is that a refusal reached early never runs
+    the expensive tail — here the submission service, the one step that
+    touches rows. Sabotage it so reaching it at all is loud, then drive a
+    bad-token request: it must still answer 403, from a guard that ran
+    first.
+
+    Non-vacuity is the 303 test above, which reaches this same call in the
+    green path — move ``require_form_csrf`` below ``create_submission`` and
+    this goes red (500, not 403).
+    """
+    from api import entries_json
+
+    def explode(*args, **kwargs):  # pragma: no cover - must never be reached
+        raise AssertionError("the write ran before the CSRF guard refused")
+
+    monkeypatch.setattr(entries_json.submission_service, "create_submission", explode)
+    r = _submit(client, page, _csrf="0" * 64)
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+    assert _submissions() == []
+
+
+def test_an_unacknowledged_submission_is_refused_and_writes_nothing(
+    client, page, entrant
+):
+    """Guard 5. An acknowledgment given after the fact is not one (Q11) —
+    one of the few places this software genuinely refuses."""
+    r = _submit(client, page, acknowledged=None)
+    assert r.status_code == 400
+    assert "regulations" in r.json()["detail"]["message"]
+    assert _submissions() == []
+
+
+def test_a_policy_breach_is_refused_with_the_rule_stated(client, page, entrant):
+    """Guard 6, R14 §4: never a silent drop of the selections that did not
+    fit, and the refusal carries the number that produced it."""
+    from database.models import EntryPage
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        row = session.get(EntryPage, uuid.UUID(page["tid"]))
+        row.max_events_per_person = 1
+        session.commit()
+    finally:
+        session.close()
+
+    r = _submit(client, page, events=[f"0:{page['ms']}", f"0:{page['ws']}"])
+    assert r.status_code == 400
+    assert "at most 1 event" in r.json()["detail"]["message"]
+    assert _submissions() == []
+
+
+def test_the_idempotency_key_travels_in_the_HIDDEN_FIELD_and_is_honoured(
+    client, page, entrant
+):
+    """This makes ``UNIQUE (tournament_id, idempotency_key)`` reachable for
+    the first time.
+
+    A native form cannot send a header, so until Phase 6 the key was always
+    NULL for a real entrant and the index guarded nothing they could reach.
+    The key is minted in the loader that RENDERS the form (not at submit —
+    a double-click would mint two) and carried as a hidden field, so it
+    works unhydrated. Both posts must answer the SAME receipt: a retrying
+    client that saw a different answer would conclude its first attempt had
+    failed.
+    """
+    key = "1f2e3d4c-5b6a-4798-8899-aabbccddeeff"
+    first = _submit(client, page, idempotencyKey=key)
+    assert first.status_code == 303, first.text
+    second = _submit(client, page, idempotencyKey=key)
+    assert second.status_code == 303, second.text
+    assert second.headers["location"] == first.headers["location"]
+    rows = _submissions()
+    assert len(rows) == 1
+    assert rows[0].idempotency_key == key
+
+
+def test_the_idempotency_key_is_also_honoured_in_the_header(client, page, entrant):
+    """The hydrated-fetch channel. Same key, same receipt, one row."""
+    key = "2f2e3d4c-5b6a-4798-8899-aabbccddeeff"
+    first = _submit(client, page, headers={"Idempotency-Key": key})
+    second = _submit(client, page, headers={"Idempotency-Key": key})
+    assert first.status_code == 303, first.text
+    assert second.headers["location"] == first.headers["location"]
+    assert len(_submissions()) == 1
+
+
+def test_two_submissions_without_a_key_are_two_acts(client, page, entrant):
+    """Non-vacuity for the replay above: the route is not collapsing
+    everything onto one row. A NULL key is not a key."""
+    assert _submit(client, page).status_code == 303
+    assert _submit(client, page).status_code == 303
+    assert len(_submissions()) == 2
