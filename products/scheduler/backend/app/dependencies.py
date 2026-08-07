@@ -15,6 +15,14 @@ the path's ``tournament_id``, looks up the caller's role in
 (Rule 5) / 403 for members with an insufficient role. It has **no
 bypass** — local-dev records real member rows, so the same code path
 runs in both modes.
+
+``get_current_entrant`` is the SECOND principal's resolver (SP-E1-2,
+ruling D-A3) and is deliberately a **separate function reading a separate
+cookie against a separate table** — not a mode of the one above. The two
+never meet: an operator token is not in ``entrant_sessions`` and an
+entrant token is not in ``auth_sessions``, so "sessions are scoped to
+their principal" is a property of the schema rather than a check someone
+has to remember to write.
 """
 from __future__ import annotations
 
@@ -29,6 +37,7 @@ from app.config import settings
 from app.error_codes import ErrorCode, http_error
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service
+from services import entrants as entrant_service
 
 log = logging.getLogger("scheduler.auth")
 
@@ -84,6 +93,68 @@ def get_current_user(
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not signed in",
+    )
+
+
+# ---- The entrant principal (SP-E1-2, ruling D-A3) --------------------
+
+
+class AuthEntrant(BaseModel):
+    """The entrant identity a route consumes.
+
+    A separate type from ``AuthUser`` on purpose: they are not
+    interchangeable, and a shared type is how a route ends up accepting
+    either. Nothing here carries an org, a role or a workspace — an
+    entrant has none, and a field that does not exist cannot be read by
+    mistake.
+    """
+    id: str
+    email: str
+    display_name: Optional[str] = None
+    email_verified: bool = False
+
+    def as_uuid(self) -> Optional[uuid.UUID]:
+        try:
+            return uuid.UUID(self.id)
+        except (ValueError, TypeError):
+            return None
+
+
+def get_current_entrant(
+    request: Request,
+    repo: LocalRepository = Depends(get_repository),
+) -> AuthEntrant:
+    """Resolve the caller as an ENTRANT, or 401. There is no third case.
+
+    **No local-bootstrap fallback, in either mode.** ``get_current_user``
+    has one because a solo director running an event on a laptop should
+    never meet a login screen (Rule 3's zero-friction flow). There is no
+    equivalent claim for a stranger on a public form: a bootstrap identity
+    here would mean every anonymous caller *is* some entrant, which is the
+    fail-open shape ruling D-A3 chose a separate table to prevent. The
+    absence of the ``settings.auth_mode`` branch below is therefore
+    load-bearing, and ``tests/test_entrant_auth_routes.py`` pins it in
+    local mode specifically — the mode where an accidental fallback would
+    look like it worked.
+
+    Reads ``entrant_sessions`` and nothing else, so an operator's session
+    token cannot resolve here whatever cookie name it arrives under.
+    """
+    token = request.cookies.get(settings.entrant_session_cookie_name)
+    if token:
+        account = entrant_service.resolve_session(repo.session, token)
+        if account is not None:
+            repo.session.commit()  # persist the rolling last_seen touch
+            return AuthEntrant(
+                id=str(account.id),
+                email=account.email,
+                display_name=account.display_name,
+                email_verified=account.email_verified,
+            )
+    raise http_error(
+        status.HTTP_401_UNAUTHORIZED,
+        ErrorCode.AUTH_NOT_SIGNED_IN,
+        "Not signed in",
     )
 
 

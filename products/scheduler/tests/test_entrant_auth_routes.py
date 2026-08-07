@@ -59,6 +59,26 @@ def client(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def proxied_client(tmp_path, monkeypatch):
+    """A client whose socket peer is a **trusted** proxy, so
+    ``CF-Connecting-IP`` is honoured and two callers can have two
+    addresses. Stands in for the cloudflared connector, behind which the
+    peer is the same for every client on the internet."""
+    connector = "10.42.0.9"
+    monkeypatch.setenv("AUTH_MODE", "cloud")
+    monkeypatch.setenv("ENVIRONMENT", "local")
+    from tests._helpers import isolate_test_database
+
+    isolate_test_database(tmp_path, monkeypatch)
+    from app.config import settings
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    monkeypatch.setattr(settings, "trusted_proxy_ips", [connector])
+    return TestClient(app, client=(connector, 51000))
+
+
+@pytest.fixture
 def turnstile(client, monkeypatch):
     """Cloudflare's dummy-key semantics without Cloudflare, and a call
     counter — the ordering assertions need to know whether the outbound
@@ -366,3 +386,332 @@ def test_signup_answers_an_anonymous_caller_in_cloud_mode(client, turnstile):
     """It must: an account is what the caller is trying to obtain. This is
     the negative control for every 401 asserted in the login block."""
     assert _signup(client).status_code == 202
+
+
+# ---- Login, logout, whoami (task B5) ---------------------------------
+
+
+def _login(client, email="parent@example.com", password=GOOD_PW):
+    return client.post(
+        LOGIN, json={"email": email, "password": password}, headers=CSRF
+    )
+
+
+@pytest.fixture
+def account(client, turnstile):
+    """A signed-up entrant, created through the real route."""
+    assert _signup(client).status_code == 202
+    client.cookies.clear()
+    return "parent@example.com"
+
+
+def _sessions(account_email=None):
+    from database.models import EntrantAccount, EntrantSession
+    from database.session import SessionLocal
+    from sqlalchemy import func, select
+
+    session = SessionLocal()
+    try:
+        stmt = select(EntrantSession)
+        if account_email is not None:
+            stmt = stmt.join(
+                EntrantAccount, EntrantAccount.id == EntrantSession.account_id
+            ).where(func.lower(EntrantAccount.email) == account_email.lower())
+        return session.execute(stmt).scalars().all()
+    finally:
+        session.close()
+
+
+def test_correct_credentials_hand_out_the_play_session_cookie(client, account):
+    from app.config import settings
+
+    r = _login(client)
+
+    assert r.status_code == 200, r.text
+    assert r.json()["email"] == account
+    assert settings.entrant_session_cookie_name in r.cookies
+    assert r.cookies[settings.entrant_session_cookie_name] != ""
+
+
+def test_the_cookie_carries_the_shipped_session_attributes(client, account):
+    """Mirrors ``api/auth.py``'s operator cookie: httponly (so script cannot
+    read it), lax (so a cross-site form post never carries it), host-only
+    path=/. ``secure`` follows ``session_cookie_secure``, which the cloud
+    validator forces true — off here because the fixture runs plain HTTP."""
+    raw = _login(client, account).headers["set-cookie"].lower()
+
+    assert "sw_play_session=" in raw
+    assert "httponly" in raw
+    assert "samesite=lax" in raw
+    assert "path=/" in raw
+
+
+def test_the_raw_token_is_not_what_the_database_stores(client, account):
+    import hashlib
+
+    from app.config import settings
+
+    token = _login(client).cookies[settings.entrant_session_cookie_name]
+    rows = _sessions(account)
+
+    assert len(rows) == 1
+    assert rows[0].token_hash == hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def test_the_session_resolves_on_the_entrant_whoami(client, account):
+    _login(client)
+
+    r = client.get(ME)
+
+    assert r.status_code == 200, r.text
+    assert r.json()["email"] == account
+    assert r.json()["emailVerified"] is False
+
+
+def test_a_wrong_password_is_refused_and_hands_out_nothing(client, account):
+    from app.config import settings
+
+    r = _login(client, password="the wrong passphrase entirely")
+
+    assert r.status_code == 401
+    assert r.json()["detail"]["code"] == "AUTH_INVALID_CREDENTIALS"
+    assert settings.entrant_session_cookie_name not in r.cookies
+    assert _sessions() == []
+
+
+def test_an_unknown_address_is_refused_identically(client, account):
+    """Non-enumeration at login, matching signup's: same status, same code,
+    same message whether the address exists, has no password, or the
+    password is wrong."""
+    wrong = _login(client, password="the wrong passphrase entirely")
+    unknown = _login(client, email="nobody@example.com")
+
+    assert wrong.status_code == unknown.status_code == 401
+    assert wrong.json() == unknown.json()
+
+
+def test_a_flood_of_bad_passwords_locks_that_address_out(
+    client, account, monkeypatch
+):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "auth_throttle_max_failures", 2)
+    codes = [_login(client, password=f"wrong one {i}").status_code for i in range(4)]
+
+    assert codes[0] == codes[1] == 401
+    assert codes[-1] == 429
+
+
+def test_the_lockout_does_not_stop_the_operator_signing_in(
+    client, account, monkeypatch
+):
+    """**The route-level isolation control, credential half.** Entrant login
+    failures charge ``eacct:``/``eip:``. If they charged ``account:``/``ip:``,
+    guessing at a director's *entrant* password would lock their operator
+    account — from a public form, with no credential required to try."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "auth_throttle_max_failures", 2)
+    for i in range(6):
+        _login(client, email="director@example.com", password=f"wrong {i}")
+    assert _login(client, email="director@example.com").status_code == 429
+
+    r = client.post(
+        "/auth/login",
+        json={"email": "director@example.com", "password": GOOD_PW},
+        headers=CSRF,
+    )
+
+    assert r.status_code == 401
+
+
+def test_guessing_at_many_addresses_from_one_place_is_also_bounded(
+    client, account, monkeypatch
+):
+    """Two keys, not one. The address bucket bounds guessing at *an*
+    account; the ``eip:`` bucket bounds guessing at *many*, which a
+    per-address budget alone would leave completely open."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "auth_throttle_max_failures", 2)
+    for i in range(4):
+        _login(client, email=f"victim{i}@example.com", password="wrong")
+
+    assert _login(client).status_code == 429
+
+
+def test_a_different_client_is_not_caught_by_someone_elses_lockout(
+    proxied_client, monkeypatch
+):
+    """Negative control for both budgets: neither lock is global, so a
+    guesser cannot deny the whole entry page a login. A trusted proxy is
+    configured here so the two callers have genuinely different addresses
+    — behind a tunnel the socket peer is the connector for everyone, and
+    without this seam the assertion below would be testing nothing."""
+    from app.config import settings
+    from services import turnstile as service
+
+    monkeypatch.setattr(
+        service, "_post", lambda url, fields, timeout: json.dumps({"success": True})
+    )
+    monkeypatch.setattr(settings, "auth_throttle_max_failures", 2)
+    attacker = {"CF-Connecting-IP": "198.51.100.7", **CSRF}
+    entrant = {"CF-Connecting-IP": "203.0.113.4", **CSRF}
+
+    proxied_client.post(
+        SIGNUP,
+        json={
+            "email": "parent@example.com",
+            "password": GOOD_PW,
+            "turnstileToken": "a-solved-token",
+        },
+        headers=entrant,
+    )
+    for i in range(6):
+        proxied_client.post(
+            LOGIN,
+            json={"email": "victim@example.com", "password": f"wrong {i}"},
+            headers=attacker,
+        )
+
+    r = proxied_client.post(
+        LOGIN,
+        json={"email": "parent@example.com", "password": GOOD_PW},
+        headers=entrant,
+    )
+
+    assert r.status_code == 200, r.text
+
+
+def test_a_successful_login_clears_the_address_budget(client, account, monkeypatch):
+    """The shipped credential behaviour, reused: getting it right resets the
+    count, so a typo does not accumulate toward a lockout across weeks."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "auth_throttle_max_failures", 3)
+    _login(client, password="wrong once")
+    _login(client, password="wrong twice")
+    assert _login(client).status_code == 200
+    client.cookies.clear()
+
+    assert _login(client, password="wrong again").status_code == 401
+
+
+# ---- Logout ----------------------------------------------------------
+
+
+def test_logout_revokes_the_session_and_clears_the_cookie(client, account):
+    _login(client)
+
+    r = client.post(LOGOUT, headers=CSRF)
+
+    assert r.status_code == 204
+    assert client.get(ME).status_code == 401
+
+
+def test_revocation_is_a_timestamp_not_a_delete(client, account):
+    """The row outlives the credential so an audit can still see it
+    happened — the shipped operator behaviour, re-proved for this table."""
+    _login(client)
+    client.post(LOGOUT, headers=CSRF)
+
+    rows = _sessions(account)
+    assert len(rows) == 1
+    assert rows[0].revoked_at is not None
+
+
+def test_logout_without_a_session_is_a_no_op(client, account):
+    """``/auth/logout``'s precedent: nothing to destroy is not an error.
+    An entrant who has already been logged out elsewhere gets a clean
+    answer, not a 401 they cannot act on."""
+    client.cookies.clear()
+
+    assert client.post(LOGOUT, headers=CSRF).status_code == 204
+
+
+def test_logout_revokes_only_the_presented_session(client, account):
+    """Logging out of a library computer must not log the entrant out of
+    their phone. Only the token in the request is revoked."""
+    from app.config import settings
+
+    phone = _login(client).cookies[settings.entrant_session_cookie_name]
+    client.cookies.clear()
+    _login(client)
+    client.post(LOGOUT, headers=CSRF)
+
+    client.cookies.clear()
+    client.cookies.set(settings.entrant_session_cookie_name, phone)
+    assert client.get(ME).status_code == 200
+
+
+def test_a_revoked_token_replayed_resolves_to_nothing(client, account):
+    """Negative control for the test above: the revoked one really is dead,
+    so "the other session survived" is not "revocation does nothing"."""
+    from app.config import settings
+
+    token = _login(client).cookies[settings.entrant_session_cookie_name]
+    client.post(LOGOUT, headers=CSRF)
+
+    client.cookies.clear()
+    client.cookies.set(settings.entrant_session_cookie_name, token)
+    assert client.get(ME).status_code == 401
+
+
+# ---- The resolver's own posture --------------------------------------
+
+
+def test_whoami_refuses_an_anonymous_caller(client):
+    r = client.get(ME)
+
+    assert r.status_code == 401
+    assert r.json()["detail"]["code"] == "AUTH_NOT_SIGNED_IN"
+
+
+def test_a_garbage_entrant_cookie_resolves_to_nothing(client, account):
+    from app.config import settings
+
+    client.cookies.set(settings.entrant_session_cookie_name, "not-a-real-token")
+
+    assert client.get(ME).status_code == 401
+
+
+def test_a_dead_cookie_does_not_stop_a_fresh_login(client, account):
+    """Browsers keep stale cookies across database resets. Presenting one
+    must be indistinguishable from presenting none."""
+    from app.config import settings
+
+    client.cookies.set(settings.entrant_session_cookie_name, "stale-token")
+
+    assert _login(client).status_code == 200
+
+
+@pytest.fixture
+def local_client(tmp_path, monkeypatch):
+    """The same app in ``AUTH_MODE=local`` — the solo-operator posture."""
+    monkeypatch.setenv("AUTH_MODE", "local")
+    from tests._helpers import isolate_test_database
+
+    isolate_test_database(tmp_path, monkeypatch)
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    return TestClient(app)
+
+
+def test_the_entrant_resolver_has_no_local_bootstrap_identity(local_client):
+    """Ruling D-A3, stated as a behaviour: **401 or nothing.**
+
+    ``get_current_user`` resolves a credential-less request in local mode
+    to the zero-UUID bootstrap operator, because a solo director running
+    an event on a laptop should never meet a login screen. There is no
+    equivalent claim for a stranger on a public form, and a fallback here
+    would mean every anonymous caller *is* some entrant — the fail-open
+    shape this whole slice is arranged to make impossible."""
+    assert local_client.get(ME).status_code == 401
+
+
+def test_the_operator_resolver_does_still_bootstrap_in_local_mode(local_client):
+    """Negative control for the test above: the 401 is the entrant
+    resolver's own posture, not local mode failing to work."""
+    assert local_client.get("/auth/me").status_code == 200
+

@@ -43,11 +43,13 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 
 from app.client_ip import client_ip
+from app.config import settings
+from app.dependencies import AuthEntrant, get_current_entrant
 from app.error_codes import ErrorCode, http_error
 from app.limits import Email, Name, Password, StrictModel
 from repositories import LocalRepository, get_repository
@@ -94,7 +96,56 @@ class SignupResponse(BaseModel):
     message: str = _UNIFORM_SIGNUP_MESSAGE
 
 
+class LoginRequest(StrictModel):
+    email: Email
+    password: Password
+
+
+class EntrantDTO(BaseModel):
+    """What an entrant is told about themselves. Note what is absent: no
+    org, no role, no workspace, no membership — an entrant has none, and
+    a DTO that carried the fields would invite a client to look for them."""
+
+    id: str
+    email: str
+    displayName: Optional[str] = None
+    emailVerified: bool = False
+
+
 # ---- Helpers ---------------------------------------------------------
+
+
+def _set_entrant_cookie(response: Response, token: str) -> None:
+    """The operator cookie's twin (``api/auth.py``), under the entrant name.
+
+    ``httponly`` so script cannot read it, ``samesite=lax`` so a
+    cross-site form post never carries it, and no ``domain`` — host-only
+    is what keeps the ``app.*`` and ``play.*`` cookie jars separate, which
+    is the mechanism actually doing the session scoping (spec Q13 §2).
+    ``secure`` follows the same setting the cloud validator forces true.
+
+    The name comes from ``settings.entrant_session_cookie_name``, which is
+    also a member of ``settings.session_cookie_names`` — the registry the
+    CSRF middleware reads. ``tests/test_csrf_cookie_registry.py`` derives
+    this call from the source and fails if it ever names a cookie the
+    registry does not.
+    """
+    response.set_cookie(
+        key=settings.entrant_session_cookie_name,
+        value=token,
+        max_age=int(settings.session_ttl_days * 86400),
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _clear_entrant_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.entrant_session_cookie_name,
+        path="/",
+    )
 
 
 def _throttled(remaining: float, message: str):
@@ -201,3 +252,102 @@ def signup(
     auth_service.throttle_record_entrant_signup(repo.session, throttle_key)
     repo.session.commit()
     return SignupResponse()
+
+
+@router.post("/login", response_model=EntrantDTO)
+def login(
+    body: LoginRequest,
+    request: Request,
+    response: Response,
+    repo: LocalRepository = Depends(get_repository),
+) -> EntrantDTO:
+    """Credentials → an entrant session cookie.
+
+    Two throttle keys, both in the entrant namespaces: the address
+    (``eacct:``) so guessing at one account is bounded, and the client IP
+    (``eip:``) so guessing at *many* accounts from one place is bounded
+    too. Neither is the operator's bucket — a public form must not be able
+    to lock a director out of the console, and that is the property
+    ``tests/test_entrant_auth_routes.py`` asserts at route level.
+
+    One failure answer for every cause (unknown address, no password set,
+    wrong password), with the Argon2 cost paid on the miss as well, so
+    neither the body nor the timing tells a caller which it was. The
+    uniformity is ``services/entrants.authenticate``'s, not this route's —
+    it returns an account or ``None`` and offers no way to ask why.
+    """
+    try:
+        email = auth_service.normalize_email(body.email)
+    except AuthError as exc:
+        raise _auth_error(exc)
+
+    account_key = auth_service.entrant_account_key(email)
+    ip_key = auth_service.entrant_ip_key(client_ip(request))
+    for key in (account_key, ip_key):
+        remaining = auth_service.throttle_check(repo.session, key)
+        if remaining is not None:
+            raise _throttled(remaining, "Too many attempts — try again later")
+
+    account = entrant_service.authenticate(
+        repo.session, email=email, password=body.password
+    )
+    if account is None:
+        auth_service.throttle_record_failure(repo.session, account_key)
+        auth_service.throttle_record_failure(repo.session, ip_key)
+        repo.session.commit()
+        raise http_error(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.AUTH_INVALID_CREDENTIALS,
+            "Invalid email or password",
+        )
+
+    auth_service.throttle_record_success(repo.session, account_key)
+    token, _ = entrant_service.create_session(repo.session, account.id)
+    repo.session.commit()
+    _set_entrant_cookie(response, token)
+    return EntrantDTO(
+        id=str(account.id),
+        email=account.email,
+        displayName=account.display_name,
+        emailVerified=account.email_verified,
+    )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    request: Request,
+    response: Response,
+    repo: LocalRepository = Depends(get_repository),
+) -> Response:
+    """Revoke the presented session and clear the cookie.
+
+    Idempotent, following ``/auth/logout``: nothing to destroy is a no-op,
+    not a 401 the caller cannot act on. **Only the presented token** is
+    revoked — logging out of a library computer must not log the entrant
+    out of their phone — and revocation is a timestamp, never a delete, so
+    the row outlives the credential.
+    """
+    token = request.cookies.get(settings.entrant_session_cookie_name)
+    if token:
+        entrant_service.revoke_session(repo.session, token)
+        repo.session.commit()
+    _clear_entrant_cookie(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
+
+
+@router.get("/me", response_model=EntrantDTO)
+def me(entrant: AuthEntrant = Depends(get_current_entrant)) -> EntrantDTO:
+    """Who the entrant cookie says you are — 401 if it says nothing.
+
+    Declares ``get_current_entrant`` itself rather than inheriting an
+    app-wide dependency, which is what keeps the two principals from being
+    resolvable by one seam. There is no repository read here: everything
+    the answer contains came out of the session resolution already.
+    """
+    return EntrantDTO(
+        id=entrant.id,
+        email=entrant.email,
+        displayName=entrant.display_name,
+        emailVerified=entrant.email_verified,
+    )

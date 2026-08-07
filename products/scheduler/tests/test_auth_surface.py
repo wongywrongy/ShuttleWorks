@@ -82,6 +82,17 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "a uniform non-enumerating answer that never reveals whether an "
         "address is already registered"
     ),
+    ("POST", "/e/account/login"): (
+        "the entrant login endpoint itself — the twin of /auth/login and "
+        "public for the same reason. Its own credential namespaces "
+        "(eacct:/eip:), a uniform 401 whatever the cause, and the Argon2 "
+        "cost paid on a miss so timing is not the oracle the body is not"
+    ),
+    ("POST", "/e/account/logout"): (
+        "idempotent; no session to destroy is a no-op — /auth/logout's "
+        "precedent. It revokes only the token presented, so a caller with "
+        "no cookie can end nobody else's session"
+    ),
     ("POST", "/e/{slug}/submit"): (
         "the app's first anonymous WRITE. An entrant has no account and "
         "never will (Q4), so the guard cannot be a session: it is "
