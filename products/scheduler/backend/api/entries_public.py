@@ -20,6 +20,20 @@ program explicitly calls throwaway is the wrong trade — Phase 6 (R8)
 decides the real ``play.*`` framework against this page, and then deletes
 it.
 
+**Two co-equal widths (ruling R11), and what that costs a page with no
+script.** E1's bar was "usable at 390px"; R11 makes phone and desktop
+equally first-class, so the page carries its own grid and one breakpoint
+(``_CSS``). The harder half is *no degraded functionality*: the two things
+a modern entry form does live — narrow the event list to the player, and
+total the fee as events are ticked — normally need JavaScript, and this
+page has ``script-src 'none'``. Both are therefore a **server round trip**
+the entrant asks for: the form's second submit button posts
+``action=filter``, and the route re-renders with the list filtered and the
+total recomputed, writing nothing. That is slower than a script and it is
+honest: the total the entrant reads is produced by the same function that
+computes the total we store (Seam B), rather than by a second
+implementation that agrees with it until it doesn't.
+
 **Response shapes.** Three, on a rule:
 
 - Conditions a *human filling in the form* can fix — a failed challenge, an
@@ -32,6 +46,14 @@ it.
   point of the answer is that it is identical either way.
 - The **429** is ``api/auth.py``'s throttle shape verbatim, ``retryAfter``
   and all. A rate-limit answer is for a machine.
+
+**The public page's information architecture is the incumbent's** (R14
+§6), because it is proven and entrants already read it: fee schedule +
+payment instructions, the ``opens_at → closes_at → withdraws_until →
+tournament date`` timeline, events with their entry counts, the
+organisation, the venue, and a prominent Enter action. Every block is
+drawn from a field this design created; the venue card is the one that had
+no field behind it at all until ``entry_pages`` grew two columns for it.
 
 **The submit stack, in order** (program invariant I5):
 
@@ -86,6 +108,7 @@ from __future__ import annotations
 import hashlib
 import html
 import logging
+import re
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -93,19 +116,19 @@ from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, Header, Path, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.client_ip import client_ip
 from app.config import settings
 from app.dependencies import AuthEntrant, get_current_entrant
 from app.error_codes import ErrorCode, http_error
-from database.models import Entry, EntryEvent, EntryPage, EntryPlayer, Tournament
+from database.models import Entry, EntryEvent, EntryPage, EntryPlayer, Org, Tournament
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service
 from services import entrants as entrant_service
 from services import submissions as submission_service
 from services.entry_fees import PlayerSelection, compute_fee_total
-from services.entry_policy import check_policy
+from services.entry_policy import check_policy, gender_flags
 
 log = logging.getLogger("scheduler.api.entries_public")
 
@@ -289,36 +312,90 @@ def _entrants(
 
 # ---- rendering -----------------------------------------------------------
 
-# Mobile-first and deliberately plain: one column, generous tap targets,
-# 16px inputs (below that iOS Safari zooms on focus and leaves the entrant
-# scrolled sideways mid-typing). The bar for E1 is *usable at 390px*;
-# pretty is Phase 6's job.
+# **Two co-equal widths (ruling R11).** SP-E1-1's bar was "usable at 390px —
+# that is the bar", and R11 replaced it: no horizontal scrolling and no
+# degraded functionality at a phone width *or* a desktop one. So the page
+# is still written phone-first — one column, generous tap targets, 16px
+# inputs (below that iOS Safari zooms on focus and leaves the entrant
+# scrolled sideways mid-typing) — and then earns a second column at
+# 60rem, where a single 34rem strip in the middle of a monitor reads as a
+# phone page someone forgot to finish.
+#
+# Two rules carry the "no sideways scroll" half mechanically, because they
+# are the two ways a page acquires a horizontal scrollbar: **nothing is
+# sized in pixels** (every width is relative, and a colocated test greps
+# for `width: <n>px`), and **long unbroken strings wrap** — a pasted
+# address or a URL in the regulations is otherwise wider than a 390px
+# viewport all by itself.
 _CSS = """
-:root { color-scheme: light dark; --line: #d5d8dd; --muted: #5b6270; --bg: #ffffff; --fg: #14171c; --accent: #1d4ed8; }
-@media (prefers-color-scheme: dark) { :root { --line: #333842; --muted: #9aa2b1; --bg: #14171c; --fg: #eceef2; --accent: #9db4ff; } }
+:root { color-scheme: light dark; --line: #d5d8dd; --muted: #5b6270; --bg: #ffffff; --fg: #14171c; --accent: #1d4ed8; --soft: rgba(0,0,0,.03); }
+@media (prefers-color-scheme: dark) { :root { --line: #333842; --muted: #9aa2b1; --bg: #14171c; --fg: #eceef2; --accent: #9db4ff; --soft: rgba(255,255,255,.04); } }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }
-main { max-width: 34rem; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; overflow-wrap: anywhere; }
+main { width: 100%; max-width: 34rem; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+img, table, pre { max-width: 100%; }
 h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
-h2 { font-size: 1.05rem; margin: 2rem 0 .5rem; }
+h2 { font-size: 1.05rem; margin: 1.75rem 0 .5rem; }
+h3 { font-size: .95rem; margin: 1.5rem 0 .25rem; }
 p { margin: .5rem 0; }
 .sub { color: var(--muted); margin-top: 0; }
-.card { border: 1px solid var(--line); border-radius: 10px; padding: .75rem 1rem; margin: .75rem 0; }
-.tag { font-size: .8rem; border: 1px solid var(--line); border-radius: 99px; padding: .1rem .5rem; color: var(--muted); }
+.layout { display: grid; gap: 1rem; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: .25rem 1rem 1rem; margin: 1rem 0; background: var(--soft); }
+.card h2 { margin-top: 1rem; }
+.tag { font-size: .8rem; border: 1px solid var(--line); border-radius: 99px; padding: .1rem .5rem; color: var(--muted); white-space: nowrap; }
 .fee { color: var(--muted); font-size: .9rem; }
+.rows { display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; font-size: .9rem; }
+.rows dt { color: var(--muted); }
+.rows dd { margin: 0; }
 .regs { white-space: pre-wrap; border-left: 3px solid var(--line); padding-left: .75rem; color: var(--fg); }
 .banner { border: 1px solid var(--accent); border-radius: 10px; padding: .75rem 1rem; margin: 0 0 1rem; }
+.cta { font-weight: 600; }
+.fields { display: grid; gap: 0 1rem; grid-template-columns: minmax(0, 1fr); }
+.full { grid-column: 1 / -1; }
 label { display: block; margin: 1rem 0 .25rem; font-weight: 600; }
 input, select, textarea { width: 100%; font-size: 16px; padding: .7rem; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
 textarea { min-height: 5rem; }
-.check { display: flex; gap: .6rem; align-items: flex-start; margin: 1.25rem 0; font-weight: 400; }
+.check { display: flex; gap: .6rem; align-items: flex-start; margin: .5rem 0; font-weight: 400; }
 .check input { width: 1.4rem; height: 1.4rem; min-height: 1.4rem; flex: none; margin-top: .15rem; }
+.total { border: 1px solid var(--accent); border-radius: 10px; padding: .5rem 1rem; margin: 1.25rem 0; }
 button { width: 100%; min-height: 48px; font-size: 16px; font-weight: 600; border: 0; border-radius: 8px; background: var(--accent); color: #fff; margin-top: 1rem; }
+button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--line); min-height: 44px; font-weight: 500; }
 ul { list-style: none; padding: 0; margin: 0; }
 li { padding: .4rem 0; border-bottom: 1px solid var(--line); }
-code { word-break: break-all; font-size: 15px; }
-.foot { color: var(--muted); font-size: .85rem; margin-top: 2.5rem; }
+code { font-size: 15px; }
+.foot { color: var(--muted); font-size: .85rem; margin-top: 2rem; }
+@media (min-width: 60rem) {
+  main { max-width: 68rem; padding: 2rem 2rem 5rem; }
+  .layout { grid-template-columns: minmax(0, 1fr) 20rem; gap: 2.5rem; align-items: start; }
+  .main { grid-column: 1; grid-row: 1; }
+  .side { grid-column: 2; grid-row: 1; }
+  .fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  button { width: auto; min-width: 14rem; padding: 0 1.5rem; }
+  .cta { display: none; }
+}
 """
+
+# What makes an event "age-bracketed", and therefore what makes a birth
+# year worth asking for (R12: collected **only where an age-bracketed
+# event requires it**).
+#
+# **This is a heuristic, and it is one deliberately.** The schema carries
+# no age-bracket field — spec §4 lists `birth_year` as "collected only
+# where an age-bracketed event requires it" without giving the event a
+# column that says so — so the trigger is read off the two strings a
+# director already writes: the code and the discipline. `U15`, `O40`,
+# `Under-15`, `40+` are how they are published. Getting it wrong in the
+# permissive direction shows an optional field nobody fills in; getting it
+# wrong in the strict direction hides one, which is why the pattern is
+# broad rather than clever. A structured field is the honest fix and is
+# recorded for the config surface rather than invented here.
+_AGE_BRACKET_RE = re.compile(
+    r"(?:^|[^a-z])[uo]-?\s?\d{1,2}(?![0-9])"
+    r"|\bunder[\s-]?\d{1,2}"
+    r"|\bover[\s-]?\d{2}"
+    r"|\b\d{2}\s?\+",
+    re.IGNORECASE,
+)
 
 
 def _document(title: str, body: str) -> str:
@@ -375,18 +452,23 @@ def _page_markup(
     what to do next; the page still shows the events, the money and the
     regulations, because those are what they came to read.
 
-    This is still ruling D3's hand-rendered page and still throwaway. The
-    multi-event selection is deliberately minimal — two player blocks, a
-    checkbox per open event, and the fee schedule stated rather than
-    totalled live (there is no script, by CSP). The running total, the
-    gender filtering, the timeline and the venue/org cards are Phase D's
-    work on this same markup.
+    **The information architecture is the incumbent's** (R14 §6), because
+    it is proven and entrants already read it: fee + payment, the timeline,
+    the events with their entry counts, the organisation, the venue, and a
+    prominent Enter action. Every block is drawn from a field this design
+    created rather than from copy invented here.
+
+    **Layout, per ruling R11:** the side column carries what an entrant
+    *reads* and the main column what they *do*. They are two grid cells at
+    a desktop width and one stacked column on a phone, in that DOM order,
+    so the phone reads information-then-action with no reordering trick.
     """
     now = _utcnow()
     events = _events(repo, tournament.id)
     open_events = [ev for ev in events if _event_is_open(ev, now)]
     values = values or {}
     codes = {ev.id: ev.code for ev in events}
+    counts = _entry_counts(repo, tournament.id)
 
     parts: List[str] = []
     if banner:
@@ -397,7 +479,21 @@ def _page_markup(
         parts.append(f'<p class="sub">{_e(tournament.tournament_date)}</p>')
     if page.intro_text:
         parts.append(f"<p>{_e(page.intro_text)}</p>")
+    if open_events:
+        parts.append('<p class="cta"><a href="#enter">Enter this tournament</a></p>')
 
+    parts.append('<div class="layout">')
+
+    # ---- the side column: what an entrant reads ------------------------
+    parts.append('<aside class="side">')
+    parts.extend(_timeline_markup(events, tournament))
+    parts.extend(_money_markup(page))
+    parts.extend(_venue_markup(page))
+    parts.extend(_org_markup(repo, tournament))
+    parts.append("</aside>")
+
+    # ---- the main column: what they do ---------------------------------
+    parts.append('<div class="main">')
     parts.append("<h2>Events</h2><ul>")
     for ev in events:
         state = "Open" if _event_is_open(ev, now) else "Closed"
@@ -405,27 +501,19 @@ def _page_markup(
         fee_markup = f' <span class="fee">Fee {_e(fee)}</span>' if fee else ""
         parts.append(
             f'<li>{_e(ev.discipline)} <span class="tag">{_e(state)}</span>'
-            f"{fee_markup}</li>"
+            f"{fee_markup}"
+            f' <span class="fee">{_e(counts.get(ev.id, 0))} entered</span></li>'
         )
     if not events:
         parts.append("<li>No events yet.</li>")
     parts.append("</ul>")
-
-    parts.extend(_money_markup(page))
-
-    if page.venue_name or page.venue_address:
-        parts.append("<h2>Venue</h2>")
-        if page.venue_name:
-            parts.append(f"<p>{_e(page.venue_name)}</p>")
-        if page.venue_address:
-            parts.append(f'<p class="fee">{_e(page.venue_address)}</p>')
 
     if page.regulations_text:
         parts.append("<h2>Regulations</h2>")
         parts.append(f'<div class="regs">{_e(page.regulations_text)}</div>')
         parts.append(f'<p class="fee">Version {_e(page.regulations_version)}</p>')
 
-    parts.append("<h2>Enter</h2>")
+    parts.append('<h2 id="enter">Enter</h2>')
     if not open_events:
         parts.append("<p>No event is taking entries right now.</p>")
     elif entrant is None:
@@ -440,24 +528,7 @@ def _page_markup(
         )
     else:
         parts.append(f'<p class="fee">Signed in as {_e(entrant.email)}.</p>')
-        parts.append(f'<form method="post" action="/e/{_e(page.slug)}/submit">')
-        # The double-submit CSRF token. ``_form_csrf`` explains why a hidden
-        # field rather than the custom header the rest of the app uses.
-        parts.append(f'<input type="hidden" name="_csrf" value="{_e(csrf)}">')
-        parts.extend(_player_block(0, "Player", open_events, values, required=True))
-        parts.extend(_player_block(1, "Second player (optional)", open_events, values))
-        # The acknowledgment carries the entrant-list notice, because notice
-        # belongs next to the action and not in a policy page nobody opens
-        # (Q4). ``required`` gates submit in the browser with no script. The
-        # server checks it again; that is the check that counts.
-        parts.append(
-            '<label class="check"><input type="checkbox" name="acknowledged" '
-            'value="on" required> I have read and accept the regulations, and I '
-            "understand each player's name will appear on this page's public "
-            "entrant list.</label>"
-        )
-        parts.append('<button type="submit">Submit entry</button>')
-        parts.append("</form>")
+        parts.extend(_form_markup(page, open_events, values, csrf))
 
     parts.append("<h2>Who has entered</h2><ul>")
     entrants = _entrants(repo, tournament.id)
@@ -467,23 +538,284 @@ def _page_markup(
     if not entrants:
         parts.append("<li>Nobody yet.</li>")
     parts.append("</ul>")
+    parts.append("</div>")  # .main
+    parts.append("</div>")  # .layout
     parts.append('<p class="foot">Entries are handled by the tournament organiser.</p>')
 
     return _document(tournament.name or "Entries", "\n".join(parts))
 
 
+def _form_markup(
+    page: EntryPage, open_events: List[EntryEvent], values: dict, csrf: str
+) -> List[str]:
+    """The multi-event entry form (R12/R13/R14).
+
+    One ``<form>``, two submit buttons, and that is the whole mechanism
+    behind the gender filtering and the running total. The page has
+    ``script-src 'none'``, so anything that has to *react* to what the
+    entrant typed is a server round trip: **Update events** posts the same
+    form with ``action=filter``, and the server re-renders it with the
+    event list narrowed and the total recalculated. Nothing is written, and
+    the entrant's typing comes back with it.
+
+    The alternative — filtering in JavaScript — was rejected twice over: it
+    would need the CSP loosened for a page whose whole security posture is
+    that it runs no script, and it would make the total shown to the
+    entrant a *second implementation* of the fee rules, which is precisely
+    what Seam B's "the total shown is the total recorded" forbids.
+    """
+    show_all = bool(values.get("showAllEvents"))
+    ask_birth_year = any(_is_age_bracketed(ev) for ev in open_events)
+
+    parts = [f'<form method="post" action="/e/{_e(page.slug)}/submit">']
+    # The double-submit CSRF token. ``_form_csrf`` explains why a hidden
+    # field rather than the custom header the rest of the app uses.
+    parts.append(f'<input type="hidden" name="_csrf" value="{_e(csrf)}">')
+    parts.extend(
+        _player_block(
+            0,
+            "Player",
+            open_events,
+            values,
+            required=True,
+            show_all=show_all,
+            ask_birth_year=ask_birth_year,
+        )
+    )
+    parts.extend(
+        _player_block(
+            1,
+            "Second player (optional)",
+            open_events,
+            values,
+            show_all=show_all,
+            ask_birth_year=ask_birth_year,
+        )
+    )
+
+    # The override, at the level it applies to: one entrant filling in one
+    # form for a family. Q14 §5 calls for an *explicit* path back to the
+    # full list, and a checkbox the entrant ticks is explicit in a way that
+    # silently showing everything is not.
+    checked = " checked" if show_all else ""
+    parts.append(
+        '<label class="check"><input type="checkbox" name="showAllEvents" '
+        f'value="on"{checked}> Show every event, including ones not usually '
+        "open to this player. A mismatch is accepted — the organiser "
+        "sees a flag and decides.</label>"
+    )
+    parts.append(
+        '<button type="submit" class="secondary" name="action" value="filter" '
+        "formnovalidate>Update events and total</button>"
+    )
+
+    parts.extend(_total_markup(page, open_events, values))
+
+    # The acknowledgment carries the entrant-list notice, because notice
+    # belongs next to the action and not in a policy page nobody opens
+    # (Q4). ``required`` gates submit in the browser with no script. The
+    # server checks it again; that is the check that counts.
+    ack = " checked" if values.get("acknowledged") else ""
+    parts.append(
+        '<label class="check"><input type="checkbox" name="acknowledged" '
+        f'value="on"{ack} required> I have read and accept the regulations, '
+        "and I understand each player's name will appear on this page's "
+        "public entrant list.</label>"
+    )
+    parts.append('<button type="submit">Submit entry</button>')
+    parts.append("</form>")
+    return parts
+
+
+def _total_markup(
+    page: EntryPage, open_events: List[EntryEvent], values: dict
+) -> List[str]:
+    """The running total — a **display** of ``services.entry_fees``.
+
+    Never a second implementation of the fee rules. Seam B's invariant is
+    that the total shown to the entrant *is* the total recorded on the
+    submission, and two implementations cannot promise that however
+    carefully they are kept in step. So this calls the same function the
+    write path calls, with the same per-person grouping, and prints what it
+    returns.
+
+    ``None`` prints as an invitation rather than as ``0.00``: a tournament
+    that has configured no prices has not declared its entries free, and a
+    zero on a receipt is a claim about money nobody made.
+    """
+    selections = _selections(open_events, values)
+    total, basis = compute_fee_total(page, selections) if selections else (None, {})
+    if total is None:
+        return ['<p class="total" data-total="">Select events to see the total.</p>']
+
+    parts = [
+        f'<p class="total" data-total="{total}">Running total '
+        f"<strong>{_e(_money(total))}</strong></p>"
+    ]
+    priced = [p for p in basis.get("players") or [] if p.get("cents") is not None]
+    if len(priced) > 1:
+        parts.append('<p class="fee">')
+        parts.append(
+            " &middot; ".join(
+                f'{_e(_player_label(values, row["key"]))}: '
+                f'{_e(_money(row["cents"]))} ({_e(row["eventCount"])} event(s))'
+                for row in priced
+            )
+        )
+        parts.append("</p>")
+    return parts
+
+
+def _player_label(values: dict, key: str) -> str:
+    """A person's name for the fee breakdown, or their block number."""
+    said = values.get(f"p{key}") or {}
+    return said.get("name") or f"Player {int(key) + 1}"
+
+
+def _selections(open_events: List[EntryEvent], values: dict) -> List[PlayerSelection]:
+    """What is ticked, grouped per person — the shape both server-side
+    rules (pricing and policy) already take."""
+    by_id = {str(ev.id): ev for ev in open_events}
+    out: List[PlayerSelection] = []
+    for index in _player_indexes(values):
+        said = values.get(f"p{index}") or {}
+        chosen = [
+            by_id[str(raw).partition(":")[2]]
+            for raw in said.get("events") or []
+            if str(raw).partition(":")[2] in by_id
+        ]
+        if chosen:
+            out.append(PlayerSelection(str(index), chosen))
+    return out
+
+
+def _player_indexes(values: dict) -> List[int]:
+    return sorted(
+        int(key[1:]) for key in values if key.startswith("p") and key[1:].isdigit()
+    )
+
+
+def _timeline_markup(events: List[EntryEvent], tournament: Tournament) -> List[str]:
+    """Entry opens, entry closes, withdrawal deadline, tournament date.
+
+    The incumbent renders exactly these, each with its timezone, and
+    entrants read the withdrawal deadline as a different promise from the
+    entry close — which is why R14 §3 gave it its own column instead of
+    reusing ``closes_at``.
+
+    **Where events disagree, the card says so rather than picking one.**
+    Two events with two closing dates have no single headline date, and
+    printing the earlier one is a false statement about the later event;
+    the per-event list carries the detail.
+    """
+    rows: List[Tuple[str, str]] = []
+    for label, attr in (
+        ("Entries open", "opens_at"),
+        ("Entries close", "closes_at"),
+        ("Withdrawal deadline", "withdraws_until"),
+    ):
+        moments = {
+            _moment(value)
+            for value in (getattr(ev, attr) for ev in events)
+            if value is not None
+        }
+        if not moments:
+            continue
+        rows.append((label, moments.pop() if len(moments) == 1 else "Varies by event"))
+    if tournament.tournament_date:
+        rows.append(("Tournament date", str(tournament.tournament_date)))
+    if not rows:
+        return []
+
+    parts = ['<div class="card"><h2>Timeline</h2><dl class="rows">']
+    for label, text in rows:
+        parts.append(f"<dt>{_e(label)}</dt><dd>{_e(text)}</dd>")
+    parts.append("</dl></div>")
+    return parts
+
+
+def _moment(value: datetime) -> str:
+    """A stored instant, stated in UTC and saying so.
+
+    The column is timezone-aware and SQLite hands it back naive, so
+    ``_aware`` is what keeps the two dialects rendering the same string.
+    Naming the zone is not decoration: an entry deadline read in the wrong
+    zone is a missed entry.
+    """
+    return _aware(value).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _venue_markup(page: EntryPage) -> List[str]:
+    """R14 §6's venue card — the one block of the incumbent's IA that had
+    no field behind it until this design added two columns to
+    ``entry_pages`` (deliberately not to ``tournaments``, where a venue
+    address could 409 against the fail-closed config lock)."""
+    if not (page.venue_name or page.venue_address):
+        return []
+    parts = ['<div class="card"><h2>Venue</h2>']
+    if page.venue_name:
+        parts.append(f"<p>{_e(page.venue_name)}</p>")
+    if page.venue_address:
+        parts.append(f'<p class="fee">{_e(page.venue_address)}</p>')
+    parts.append("</div>")
+    return parts
+
+
+def _org_markup(repo: LocalRepository, tournament: Tournament) -> List[str]:
+    """R14 §6's organization card. The org **name** is the only field
+    behind it — the audit that produced that section found the tree
+    carries nothing else, and a card padded with invented fields would be
+    worse than a short one."""
+    if tournament.org_id is None:
+        return []
+    org = repo.session.get(Org, tournament.org_id)
+    if org is None or not org.name:
+        return []
+    return ['<div class="card"><h2>Organiser</h2>', f"<p>{_e(org.name)}</p>", "</div>"]
+
+
+def _entry_counts(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
+    """``entry_event_id`` to published entry count (R14 §6's entry counts).
+
+    One grouped query, counting exactly what the public list shows: the
+    same live states, opt-outs excluded, so the number over the events list
+    and the names under it cannot disagree.
+    """
+    rows = repo.session.execute(
+        select(Entry.entry_event_id, func.count(Entry.id))
+        .where(
+            Entry.tournament_id == tournament_id,
+            Entry.list_opt_out.is_(False),
+            Entry.state.in_(_LISTED_STATES),
+        )
+        .group_by(Entry.entry_event_id)
+    ).all()
+    return {event_id: count for event_id, count in rows}
+
+
+def _is_age_bracketed(event: EntryEvent) -> bool:
+    """Does this event's own vocabulary say it is age-bracketed?
+
+    See ``_AGE_BRACKET_RE``: a heuristic over the code and the discipline,
+    because the schema has no age-bracket field and R12 asks for a birth
+    year only where one is needed.
+    """
+    return bool(_AGE_BRACKET_RE.search(f"{event.code or ''} {event.discipline or ''}"))
+
+
 def _money_markup(page: EntryPage) -> List[str]:
     """The fee schedule and the payment instructions (R14 §1/§2).
 
-    Stated, not totalled. The running total is Phase D's, and it will be a
-    *display* of ``services.entry_fees`` rather than a second implementation
-    of it — Seam B's invariant is that the total shown is the total
-    recorded, which two implementations cannot promise.
+    The published price list, printed as the director published it —
+    cumulative totals by event count. The *running* total for what is
+    actually ticked lives in the form (``_total_markup``) and is computed
+    by ``services.entry_fees``; this card is the price list, and payment is
+    prose because v1 payment is manual and Q8's boundary is untouched.
     """
     parts: List[str] = []
     schedule = page.fee_schedule if isinstance(page.fee_schedule, dict) else None
     if schedule:
-        parts.append("<h2>Fees</h2><ul>")
+        parts.append('<div class="card"><h2>Fees</h2><ul>')
         for count in sorted(schedule, key=lambda k: int(k) if str(k).isdigit() else 0):
             parts.append(
                 f"<li>{_e(count)} event(s) "
@@ -494,9 +826,11 @@ def _money_markup(page: EntryPage) -> List[str]:
             '<p class="foot">Prices are per player, for the number of events '
             "that player enters.</p>"
         )
+        parts.append("</div>")
     if page.payment_instructions:
-        parts.append("<h2>Payment</h2>")
+        parts.append('<div class="card"><h2>Payment</h2>')
         parts.append(f'<div class="regs">{_e(page.payment_instructions)}</div>')
+        parts.append("</div>")
     return parts
 
 
@@ -507,6 +841,8 @@ def _player_block(
     values: dict,
     *,
     required: bool = False,
+    show_all: bool = False,
+    ask_birth_year: bool = False,
 ) -> List[str]:
     """One person's fields plus their event checkboxes.
 
@@ -516,35 +852,71 @@ def _player_block(
     rather than an "add another player" button for the same reason: this
     page has ``script-src 'none'``, and a server round-trip to grow a form
     is worse than one spare block.
+
+    **The event list is filtered by this player's gender by default**
+    (R12), and three things keep that filter honest:
+
+    - an event this player has **already ticked is never hidden**, because
+      a selection that disappears off the screen is the silent drop R14 §4
+      refuses to make about caps, arriving through a side door;
+    - the override (``show_all``) puts everything back **marked**, rather
+      than hiding the fact that a mismatch is a mismatch;
+    - nothing here refuses anything. A mismatch that is submitted is
+      accepted carrying ``gender_mismatch`` (Q14 §5). This is a default,
+      not a gate.
     """
     prefix = f"p{index}"
     said = values.get(prefix) or {}
-    parts = [f"<h3>{_e(heading)}</h3>"]
+    gender = said.get("gender", "")
+    chosen = set(said.get("events") or [])
+    parts = [f"<h3>{_e(heading)}</h3>", '<div class="fields">']
     req = " required" if required else ""
+    parts.append('<div class="field">')
     parts.append(f'<label for="{prefix}name">Full name</label>')
     parts.append(
         f'<input id="{prefix}name" name="playerName" maxlength="200"{req} '
         f'value="{_e(said.get("name", ""))}">'
     )
+    parts.append("</div>")
     # R12: required, because MS/WD/XD filtering is impossible without it.
-    # Enforcement of the *match* is soft (Q14 §5) — that is the route's job,
-    # and it flags rather than refuses.
+    # Enforcement of the *match* is soft (Q14 §5) — that is the route's
+    # job, and it flags rather than refuses.
+    parts.append('<div class="field">')
     parts.append(f'<label for="{prefix}gender">Gender</label>')
     parts.append(f'<select id="{prefix}gender" name="gender"{req}>')
-    for value, label in (("", "\u2014"), ("F", "Female"), ("M", "Male")):
-        selected = " selected" if said.get("gender") == value else ""
+    for value, label in (("", "—"), ("F", "Female"), ("M", "Male")):
+        selected = " selected" if gender == value else ""
         parts.append(f'<option value="{_e(value)}"{selected}>{_e(label)}</option>')
     parts.append("</select>")
+    parts.append("</div>")
+    parts.append('<div class="field">')
     parts.append(f'<label for="{prefix}club">Club (optional)</label>')
     parts.append(
         f'<input id="{prefix}club" name="club" maxlength="200" '
         f'value="{_e(said.get("club", ""))}">'
     )
-    parts.append(f'<label for="{prefix}year">Birth year (optional)</label>')
-    parts.append(
-        f'<input id="{prefix}year" name="birthYear" inputmode="numeric" '
-        f'maxlength="4" value="{_e(said.get("birthYear", ""))}">'
-    )
+    parts.append("</div>")
+    if ask_birth_year:
+        # R12: collected only where an age-bracketed event needs it, and the
+        # label says why — an unexplained birth-year box on a public form
+        # is how data minimization stops being believed (Q10).
+        parts.append('<div class="field">')
+        parts.append(f'<label for="{prefix}year">Birth year</label>')
+        parts.append(
+            f'<input id="{prefix}year" name="birthYear" inputmode="numeric" '
+            f'maxlength="4" value="{_e(said.get("birthYear", ""))}">'
+        )
+        parts.append(
+            '<p class="fee">This tournament runs age-bracketed events, so the '
+            "organiser needs a year to place this player.</p>"
+        )
+        parts.append("</div>")
+    else:
+        # The field still has to round-trip **positionally**: the parser reads
+        # these lists by index, so a block that omitted the input entirely
+        # would shift every later player's year onto the wrong person.
+        parts.append('<input type="hidden" name="birthYear" value="">')
+    parts.append('<div class="field full">')
     parts.append(
         f'<label for="{prefix}remarks">Anything the organiser should know</label>'
     )
@@ -553,16 +925,49 @@ def _player_block(
         'placeholder="e.g. can&#x27;t play before 6pm Saturday">'
         f'{_e(said.get("remarks", ""))}</textarea>'
     )
+    parts.append("</div>")
+
+    parts.append('<div class="field full">')
     parts.append("<label>Events</label>")
-    chosen = set(said.get("events") or [])
+    offered = 0
     for ev in open_events:
         value = f"{index}:{ev.id}"
+        # No gender chosen yet is nothing to filter *on*, not a mismatch
+        # with everything: an entrant who has typed nothing must see the
+        # whole list, or the first thing the form does is hide itself.
+        mismatch = bool(gender) and bool(gender_flags(gender, ev))
+        if mismatch and not (show_all or value in chosen):
+            continue
+        offered += 1
         checked = " checked" if value in chosen else ""
+        note = (
+            ' <span class="tag">not usually open to this player</span>'
+            if mismatch
+            else ""
+        )
         parts.append(
             f'<label class="check"><input type="checkbox" name="events" '
             f'value="{_e(value)}"{checked}> {_e(ev.discipline)} '
-            f"({_e(ev.code)})</label>"
+            f"({_e(ev.code)}){note}</label>"
         )
+    if offered == 0:
+        parts.append(
+            '<p class="fee">No event matches this player. Tick "Show every '
+            'event" below, then press "Update events and total".</p>'
+        )
+    elif gender:
+        parts.append(
+            '<p class="fee">Showing the events this player is usually entered '
+            'in. Change the gender, or tick "Show every event" below, then '
+            'press "Update events and total".</p>'
+        )
+    else:
+        parts.append(
+            '<p class="fee">Choose a gender, then press "Update events and '
+            'total" to narrow this list.</p>'
+        )
+    parts.append("</div>")
+    parts.append("</div>")
     return parts
 
 
@@ -634,8 +1039,10 @@ def _success_markup(
     if page.payment_instructions:
         parts.append(f'<div class="regs">{_e(page.payment_instructions)}</div>')
     parts.append(
-        '<p class="foot">Manage or withdraw an entry by signing in to your '
-        "entrant account.</p>"
+        '<p class="foot">This entry is attached to your entrant account. '
+        "Signing in will show you “my entries”, where you can check "
+        "or withdraw it — that page is the next slice, and nothing here "
+        "hands you a code to keep instead (R10).</p>"
     )
     parts.append(f'<p><a href="/e/{_e(page.slug)}">Back to the entry page</a></p>')
     return _document("Entry received", "\n".join(parts))
@@ -743,6 +1150,26 @@ async def submit_entry(
             ErrorCode.AUTH_THROTTLED,
             "Too many entries from this connection — try again later",
             extra={"retryAfterSeconds": int(remaining) + 1},
+        )
+
+    # 4b — "Update events and total". The page runs no script, so the only
+    # way a filtered event list and a running total can react to what the
+    # entrant typed is to ask the server; this is that ask. It is **not** a
+    # submission: nothing is written, no acknowledgment is required to
+    # press it, and it does not spend the entry budget — the budget counts
+    # entries, and this is somebody still filling in a form. The throttle
+    # *check* above still applies, so a locked-out connection gets no free
+    # renders out of it.
+    if str(form.get("action") or "") == "filter":
+        return _respond(
+            _page_markup(
+                repo,
+                page,
+                tournament,
+                entrant=entrant,
+                csrf=expected,
+                values=values,
+            )
         )
 
     def refuse(status: int, message: str):
@@ -895,7 +1322,16 @@ def _echo(form) -> dict:
     years = form.getlist("birthYear")
     remarks = form.getlist("remarks")
     selected = [str(v) for v in form.getlist("events")]
-    values: dict = {}
+    values: dict = {
+        # Form-wide state, alongside the per-player blocks. Both survive a
+        # round trip for the same reason the typing does: an entrant who
+        # pressed "Update events" with the override on must not find it
+        # switched back off, and one who already accepted the regulations
+        # must not have to re-read them because a checkbox reset itself.
+        "showAllEvents": str(form.get("showAllEvents") or "").strip().lower()
+        in _TICKED,
+        "acknowledged": str(form.get("acknowledged") or "").strip().lower() in _TICKED,
+    }
     for index in range(max(len(names), 2)):
 
         def at(seq, i=index):

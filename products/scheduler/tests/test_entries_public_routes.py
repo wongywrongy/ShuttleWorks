@@ -28,6 +28,14 @@ changed here, group by group:
 - **the manage token (R10).** Gone. Managing an entry is login-gated "my
   entries", which E2 builds.
 
+**Phase D adds, rather than unwinds, four groups**: the incumbent's
+information architecture (R14 §6 — timeline, organisation, venue, entry
+counts), ruling **R11**'s two co-equal widths asserted the only way a text
+assertion honestly can (the breakpoint exists, and nothing is sized in
+pixels), the **gender filter and its override** (R12 / Q14 §5), and the
+**running total** — which is pinned to the thing that actually matters:
+the number rendered is the number stored on the submission.
+
 **No test reaches Cloudflare.** The turnstile fixture stays because signup
 runs through it, and the entrant fixture here signs up for real.
 """
@@ -196,6 +204,23 @@ def _submit(client, page, **overrides):
         if v is None:
             data.pop(k, None)
     return client.post(f"/e/{page['slug']}/submit", data=data, headers=headers)
+
+
+def _refresh(client, page, **overrides):
+    """Press "Update events" — the script-free round trip (Phase D).
+
+    The page has ``script-src 'none'``, so the only way a filtered event
+    list and a running total can react to what the entrant typed is to ask
+    the server. This is the same form, posted with ``action=filter``: it
+    re-renders and writes nothing.
+    """
+    overrides.setdefault("acknowledged", None)
+    return _submit(client, page, action="filter", **overrides)
+
+
+def _events_offered(body, index=0):
+    """The event ids whose checkbox is rendered for player ``index``."""
+    return set(re.findall(rf'name="events" value="{index}:([0-9a-f-]+)"', body))
 
 
 def _entries(tid=None):
@@ -460,6 +485,328 @@ def test_the_form_offers_a_checkbox_per_open_event_carrying_the_player_index(
     assert f'value="0:{page["ms"]}"' in body
     assert f'value="0:{page["ws"]}"' in body
     assert f'value="1:{page["ms"]}"' in body
+
+
+# ---- the page: the incumbent's IA (R14 §6) ------------------------------
+
+
+def _set_dates(page, *, event="ws", **columns):
+    from database.models import EntryEvent
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        row = session.get(
+            EntryEvent, (uuid.UUID(page["tid"]), uuid.UUID(page[event]))
+        )
+        for key, value in columns.items():
+            setattr(row, key, value)
+        session.commit()
+    finally:
+        session.close()
+
+
+def test_the_timeline_runs_open_close_withdraw_then_the_tournament(client, page):
+    """R14 §3/§6: four moments in the order the incumbent renders them.
+
+    The withdrawal deadline is a first-class row rather than a footnote,
+    because organisers deliberately separate it from the entry close
+    (Badminton Ontario closes entries Tuesday, accepts withdrawals until
+    Wednesday) and an entrant reads it as a different promise.
+    """
+    from datetime import datetime, timezone
+
+    for key in ("ms", "ws"):
+        _set_dates(
+            page,
+            event=key,
+            opens_at=datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc),
+            closes_at=datetime(2026, 9, 1, 23, 59, tzinfo=timezone.utc),
+            withdraws_until=datetime(2026, 9, 3, 23, 59, tzinfo=timezone.utc),
+        )
+
+    body = client.get(f"/e/{page['slug']}").text
+    positions = [
+        body.index(label)
+        for label in ("Entries open", "Entries close", "Withdrawal deadline")
+    ]
+    assert positions == sorted(positions)
+    assert "2026-08-01" in body and "2026-09-01" in body and "2026-09-03" in body
+    assert "UTC" in body
+    # The tournament date closes the timeline.
+    assert body.index("Withdrawal deadline") < body.index("Tournament date")
+    assert "2026-09-12" in body
+
+
+def test_a_deadline_that_differs_between_events_says_so_rather_than_picking_one(
+    client, page
+):
+    """Two events, two closing dates: a single headline date would be a
+    statement about the other event that is simply false."""
+    from datetime import datetime, timezone
+
+    _set_dates(page, event="ms", closes_at=datetime(2026, 9, 1, tzinfo=timezone.utc))
+    _set_dates(page, event="ws", closes_at=datetime(2026, 9, 5, tzinfo=timezone.utc))
+
+    body = client.get(f"/e/{page['slug']}").text
+    assert "Varies by event" in body
+
+
+def test_one_shared_deadline_is_stated_plainly(client, page):
+    """Negative control for the line above."""
+    from datetime import datetime, timezone
+
+    for key in ("ms", "ws"):
+        _set_dates(
+            page, event=key, closes_at=datetime(2026, 9, 5, 12, 0, tzinfo=timezone.utc)
+        )
+    body = client.get(f"/e/{page['slug']}").text
+    assert "2026-09-05 12:00 UTC" in body
+    assert "Varies by event" not in body
+
+
+def test_the_page_names_the_organisation_running_the_tournament(client, page):
+    """R14 §6's organization card. The org name is the only field behind
+    it — the audit found the tree carries nothing else."""
+    from database.models import Org, Tournament
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        org = Org(name="Riverside Badminton Club")
+        session.add(org)
+        session.flush()
+        session.get(Tournament, uuid.UUID(page["tid"])).org_id = org.id
+        session.commit()
+    finally:
+        session.close()
+
+    body = client.get(f"/e/{page['slug']}").text
+    assert "Riverside Badminton Club" in body
+    assert "Organiser" in body
+
+
+def test_a_workspace_with_no_org_renders_no_organiser_card(client, page):
+    """Negative control: the card is data, not decoration."""
+    from database.models import Tournament
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        session.get(Tournament, uuid.UUID(page["tid"])).org_id = None
+        session.commit()
+    finally:
+        session.close()
+
+    body = client.get(f"/e/{page['slug']}").text
+    assert "<h2>Organiser</h2>" not in body
+
+
+# ---- the page: R11's two co-equal widths --------------------------------
+
+
+def test_the_page_carries_both_a_phone_layout_and_a_desktop_layout(client, page):
+    """**Ruling R11.** SP-E1-1's bar was "usable at 390px — that is the
+    bar"; R11 makes the two widths co-equal, so the page carries its own
+    scoped grid and a width breakpoint rather than one column forever.
+    """
+    body = client.get(f"/e/{page['slug']}").text
+    # The phone half, retained verbatim from E1.
+    assert 'name="viewport"' in body
+    assert "font-size: 16px" in body
+    # The desktop half, new.
+    assert "@media (min-width:" in body
+    assert "grid-template-columns" in body
+
+
+def test_nothing_in_the_stylesheet_fixes_a_pixel_width(client, page):
+    """The mechanical half of "no horizontal scrolling at 390px".
+
+    A rule that pins a container to a pixel width is how a page acquires a
+    sideways scrollbar on a phone, and it is the one class of mistake a
+    text assertion can catch without a browser. Long unbroken strings —
+    a pasted address, a URL in the regulations — are the other, and
+    ``overflow-wrap`` is what stops them.
+    """
+    body = client.get(f"/e/{page['slug']}").text
+    style = body.split("<style>")[1].split("</style>")[0]
+    assert not re.search(r"[^-]width:\s*\d+px", style), "a fixed pixel width"
+    assert "overflow-wrap" in style
+    assert "max-width: 100%" in style
+
+
+# ---- the form: gender filtering and its override (R12 / Q14 §5) ---------
+
+
+def test_the_event_list_narrows_to_the_players_gender(client, page, entrant):
+    """R12: the form filters eligible events by gender **by default**.
+
+    The page has no script, so the narrowing is a server round trip the
+    entrant asks for — which also means the filtered list is rendered by
+    the same code that flags a mismatch, rather than by a second opinion
+    written in JavaScript.
+    """
+    body = _refresh(client, page, gender="F", events=None).text
+    assert _events_offered(body) == {page["ws"]}
+
+
+def test_the_override_control_puts_every_event_back(client, page, entrant):
+    """Q14 §5's explicit override path. The filter is a default, never a
+    block: the research could verify no in-form eligibility refusal on the
+    incumbent, and a hard block here would be the software making a
+    director's judgment."""
+    body = _refresh(client, page, gender="F", events=None, showAllEvents="on").text
+    assert _events_offered(body) == {page["ms"], page["ws"]}
+    assert "not usually open" in body
+
+
+def test_an_event_already_chosen_is_never_hidden_by_the_filter(client, page, entrant):
+    """The silent-drop guard. An entrant who ticks MS and then sets their
+    gender to F must not have that tick disappear off the screen while it
+    is still in the form — a selection that vanishes is exactly the silent
+    drop R14 §4 refuses to make about caps."""
+    body = _refresh(client, page, gender="F", events=[f"0:{page['ms']}"]).text
+    assert page["ms"] in _events_offered(body)
+
+
+def test_no_gender_chosen_yet_offers_every_event(client, page, entrant):
+    """Negative control: with nothing to filter on the form hides nothing,
+    and says which control narrows the list."""
+    body = client.get(f"/e/{page['slug']}").text
+    assert _events_offered(body) == {page["ms"], page["ws"]}
+    assert "Update events" in body
+
+
+def test_the_refresh_round_trip_writes_nothing(client, page, entrant):
+    """Pressing "Update events" is not a submission and must not behave
+    like one — no act, no entry, and no acknowledgment required to press
+    it."""
+    r = _refresh(client, page, gender="F")
+    assert r.status_code == 200
+    assert _submissions(page["tid"]) == []
+    assert _entries(page["tid"]) == []
+
+
+def test_the_refresh_keeps_what_the_entrant_already_typed(client, page, entrant):
+    body = _refresh(
+        client, page, playerName="Alice Chen", gender="F", club="Riverside BC"
+    ).text
+    assert 'value="Alice Chen"' in body
+    assert 'value="Riverside BC"' in body
+
+
+# ---- the form: the running total (R14 §1, Seam B's invariant) -----------
+
+
+def _total_shown(body):
+    match = re.search(r'data-total="(\d*)"', body)
+    return int(match.group(1)) if match and match.group(1) else None
+
+
+def test_the_running_total_is_shown_from_the_server_side_computation(
+    client, page, entrant
+):
+    body = _refresh(
+        client, page, events=[f"0:{page['ws']}", f"0:{page['ms']}"], showAllEvents="on"
+    ).text
+    assert _total_shown(body) == 5500
+    assert "55.00" in body
+
+
+def test_the_total_shown_is_the_total_recorded(client, page, entrant):
+    """**Seam B's invariant, asserted end to end.** The running total is a
+    *display* of ``services.entry_fees`` and never a second implementation
+    of it: the number the entrant agreed to is the number stored on the
+    submission."""
+    selection = [f"0:{page['ws']}", f"0:{page['ms']}"]
+    shown = _total_shown(_refresh(client, page, events=selection, showAllEvents="on").text)
+
+    assert _submit(client, page, events=selection).status_code == 201
+    assert _submissions(page["tid"])[0].fee_total_cents == shown
+
+
+def test_the_total_covers_every_player_in_the_act(client, page, entrant):
+    """Per-person pricing (R14 §1): two single-event children are two
+    single-event prices, not one two-event price."""
+    body = _refresh(
+        client,
+        page,
+        playerName=["Alice Chen", "Bo Chen"],
+        gender=["F", "M"],
+        events=[f"0:{page['ws']}", f"1:{page['ms']}"],
+    ).text
+    assert _total_shown(body) == 8000
+
+
+def test_nothing_selected_shows_no_total_rather_than_zero(client, page, entrant):
+    """``0.00`` would be a claim about money nobody made."""
+    body = client.get(f"/e/{page['slug']}").text
+    assert _total_shown(body) is None
+    line = body.split('class="total"')[1].split("</p>")[0]
+    assert "0.00" not in line
+    assert "Select events" in line
+
+
+# ---- the form: R12's field policy ---------------------------------------
+
+
+def test_the_birth_year_field_is_absent_when_no_event_is_age_bracketed(
+    client, page, entrant
+):
+    """R12: birth year is collected **only where an age-bracketed event
+    requires it**. Two open singles events with no age band need nothing,
+    and a field nobody needs is data minimization failing quietly (Q10).
+
+    The input still exists as a hidden empty field, because the transport
+    reads the player lists positionally and a block that dropped it would
+    shift the next player's year onto the wrong person. What must be
+    absent is the *question*.
+    """
+    body = client.get(f"/e/{page['slug']}").text
+    assert "Birth year" not in body
+    assert 'id="p0year"' not in body
+
+
+def test_the_birth_year_field_appears_for_an_age_bracketed_event(
+    client, page, entrant
+):
+    """Negative control, and the case the field exists for."""
+    from database.models import EntryEvent
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        session.add(
+            EntryEvent(
+                tournament_id=uuid.UUID(page["tid"]),
+                code="U15BS",
+                discipline="Under-15 Boys' Singles",
+                entry_type="singles",
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    body = client.get(f"/e/{page['slug']}").text
+    assert 'name="birthYear"' in body
+    assert "age" in body.lower()
+
+
+def test_the_gender_field_is_required_and_the_club_field_is_not(client, page, entrant):
+    body = client.get(f"/e/{page['slug']}").text
+    assert re.search(r'name="gender"[^>]*required', body)
+    assert not re.search(r'name="club"[^>]*required', body)
+
+
+def test_the_acknowledgment_notice_names_the_public_entrant_list(
+    client, page, entrant
+):
+    """Notice belongs at the point of consent, not in a policy page nobody
+    opens (Q4)."""
+    body = client.get(f"/e/{page['slug']}").text
+    checkbox = body.split('name="acknowledged"')[1][:400]
+    assert "entrant list" in checkbox
 
 
 # ---- submit: the session gate (ruling R10) -------------------------------

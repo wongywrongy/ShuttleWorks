@@ -269,11 +269,17 @@ changes, in this order:
    served under its own public hostname with no Access policy attached — that
    is what keeps §4a's exclusion list from growing a `/entries/*` entry every
    time a public surface appears.
-3. **The CSP question, answered against a real browser.** The page sets its own
-   `Content-Security-Policy` allowing `challenges.cloudflare.com`, while the
-   nginx snippet sets a stricter one; browsers enforce the *intersection* of
-   every policy present, so the widget stays blocked until this location's
-   header handling is resolved. It is left as-is on purpose: a security header
+3. **The CSP question, still open but now only for the signup route.** SP-E1-2
+   moved the challenge off the entry page and onto entrant **signup** (ruling
+   R10 — a puzzle in front of a route that already requires an account charges
+   every honest entrant to slow an attacker who has already signed up). The
+   entry page itself now sets `script-src 'none'`: it runs no JavaScript at
+   all, the acknowledgment gate is the HTML `required` attribute, and the
+   gender filtering and running fee total are server round trips rather than
+   script. So there is nothing left on `/e/{slug}` for the intersection of the
+   page policy and the nginx policy to break. What still needs answering
+   against a real browser is where the Turnstile widget renders for signup,
+   and under which policy. It is left as-is on purpose: a security header
    loosened on a guess is worse than one that visibly breaks a widget.
 :::
 
