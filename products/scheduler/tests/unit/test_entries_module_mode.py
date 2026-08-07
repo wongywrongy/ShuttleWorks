@@ -319,3 +319,111 @@ def test_an_unknown_module_seed_still_answers_invalid_input(client, mode):
     )
     assert r.status_code == 400, r.text
     assert r.json()["detail"]["code"] == "INVALID_INPUT"
+
+
+# ---- Backfill: workspaces that predate the module ---------------------
+#
+# The seed half of R6 only fires on a workspace with *zero* module rows.
+# Every workspace that already existed when Entries shipped — and every
+# workspace created while the deployment ran in local mode — carries three
+# rows, so the seed branch never runs for it again. Without an explicit
+# backfill those workspaces would never gain Entries under cloud mode, and
+# spec Q1(R2)'s "lazy-seeds on read" would be true only of new workspaces.
+#
+# The backfill is scoped to ``CLOUD_ONLY_MODULES``: it exists because the
+# *mode* changed under a workspace, not as a general module reconciler.
+
+
+def _raw_module_ids(tid: str) -> list[str]:
+    """Module rows straight from the table — no mode filter, no route.
+
+    The read paths project; this reads. A test that only ever looks through
+    the routes cannot tell "row inserted" from "row rendered", which is the
+    exact distinction the backfill and the local-mode control turn on.
+    """
+    from database.models import WorkspaceModule
+    from repositories import open_repository
+    from sqlalchemy import select
+
+    with open_repository() as repo:
+        return sorted(
+            repo.session.scalars(
+                select(WorkspaceModule.module_id).where(
+                    WorkspaceModule.tournament_id == uuid.UUID(tid)
+                )
+            )
+        )
+
+
+def _legacy_workspace(client, mode, name: str = "Legacy WS") -> str:
+    """A workspace whose module rows predate Entries.
+
+    Created in local mode, which persists exactly the three pre-Entries
+    rows — the same shape as a workspace that existed before the module
+    shipped, without needing to hand-write rows.
+    """
+    mode("local")
+    tid = _create(client, name)
+    assert _raw_module_ids(tid) == ["bracket", "display", "meet"]
+    return tid
+
+
+def test_cloud_mode_backfills_entries_onto_a_pre_existing_workspace(client, mode):
+    """Q1(R2)'s lazy seed must reach workspaces that already have rows."""
+    tid = _legacy_workspace(client, mode)
+
+    mode("cloud")
+    assert "entries" in _module_ids(client, tid)
+    assert _raw_module_ids(tid) == ["bracket", "display", "entries", "meet"]
+
+
+def test_cloud_mode_backfills_entries_on_the_batched_hub_path_too(client, mode):
+    """The Hub list is a separate query and would otherwise show a different
+    module set from the workspace it links to."""
+    tid = _legacy_workspace(client, mode, "Legacy Hub WS")
+
+    mode("cloud")
+    assert "entries" in _module_ids_from_hub(client, tid)
+    assert _raw_module_ids(tid) == ["bracket", "display", "entries", "meet"]
+
+
+def test_local_mode_backfills_nothing_onto_the_same_workspace(client, mode):
+    """Negative control: the backfill is the *mode*, not the read.
+
+    The identical reads, on the identical workspace, in local mode. If this
+    also inserted a row the tests above would pass for the wrong reason and
+    local mode would be persisting a module it refuses to operate.
+    """
+    tid = _legacy_workspace(client, mode, "Stays Legacy WS")
+
+    assert "entries" not in _module_ids(client, tid)
+    assert "entries" not in _module_ids_from_hub(client, tid)
+    assert _raw_module_ids(tid) == ["bracket", "display", "meet"]
+
+
+def test_the_backfilled_row_carries_the_derived_status_and_then_filters(client, mode):
+    """The row the backfill writes is the row ``derive_modules`` describes,
+    and it is filtered — not deleted — when the deployment goes local."""
+    from database.models import derive_modules
+
+    tid = _legacy_workspace(client, mode, "Round Trip WS")
+
+    mode("cloud")
+    rows = client.get(f"/tournaments/{tid}/modules").json()
+    entries = next(m for m in rows if m["moduleId"] == "entries")
+    assert entries["status"] == derive_modules(None, include_cloud_only=True)["entries"]
+
+    mode("local")
+    assert "entries" not in _module_ids(client, tid)
+    assert _raw_module_ids(tid) == ["bracket", "display", "entries", "meet"]
+
+
+def test_the_backfill_is_idempotent_across_repeated_reads(client, mode):
+    """Write-on-read that writes on *every* read is a leak. Both paths, twice."""
+    tid = _legacy_workspace(client, mode, "Repeat WS")
+
+    mode("cloud")
+    for _ in range(2):
+        assert "entries" in _module_ids(client, tid)
+        assert "entries" in _module_ids_from_hub(client, tid)
+    assert _raw_module_ids(tid) == ["bracket", "display", "entries", "meet"]

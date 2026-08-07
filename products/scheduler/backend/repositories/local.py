@@ -1435,6 +1435,18 @@ class _LocalModuleRepo:
     table untouched, so moving that database back to a cloud deployment
     restores the module with its status and config intact. Filtering is a
     projection, not a migration.
+
+    The seed is **lazy on read** (spec Q1 R2), and "lazy" has to mean more
+    than "on the first read ever". A workspace that already existed when a
+    cloud-only module shipped — or one created while the deployment ran in
+    local mode — carries rows, so the zero-rows seed branch never fires for
+    it again and it would stay permanently without the module. So cloud
+    mode also **backfills the missing ``CLOUD_ONLY_MODULES`` rows onto a
+    workspace that already has rows**, with the status ``derive_modules``
+    gives them. Scoped to the cloud-only set on purpose: this reconciles
+    the one thing the *deployment mode* changes under a workspace, and is
+    not a general module reconciler that would quietly resurrect a module
+    an operator or a migration had removed.
     """
 
     def __init__(self, session: Session) -> None:
@@ -1452,17 +1464,32 @@ class _LocalModuleRepo:
 
         If the tournament has zero module rows, insert the derived set
         (from ``derive_modules(tournament.kind)``), flush, and return it;
-        otherwise return the existing rows. Idempotent — a second call
+        otherwise backfill any missing cloud-only rows (cloud mode only —
+        see the class docstring) and return. Idempotent — a second call
         never duplicates rows. Ordered by ``module_id`` for stable output.
         """
         existing = self._rows_for(tournament.id)
         if existing:
-            return existing
+            missing = self._missing_cloud_only(tournament, existing)
+            if not missing:
+                return existing
+            self._add_module_rows(tournament, missing)
+            self.session.flush()
+            self.session.commit()
+            return self._rows_for(tournament.id)
         derived = derive_modules(
             getattr(tournament, "kind", None),
             include_cloud_only=cloud_modules_enabled(),
         )
-        for module_id, status in derived.items():
+        self._add_module_rows(tournament, derived)
+        self.session.flush()
+        self.session.commit()
+        return self._rows_for(tournament.id)
+
+    def _add_module_rows(
+        self, tournament: Tournament, statuses: dict[str, str]
+    ) -> None:
+        for module_id, status in statuses.items():
             self.session.add(
                 WorkspaceModule(
                     tournament_id=tournament.id,
@@ -1471,9 +1498,28 @@ class _LocalModuleRepo:
                     config=None,
                 )
             )
-        self.session.flush()
-        self.session.commit()
-        return self._rows_for(tournament.id)
+
+    def _missing_cloud_only(
+        self, tournament: Tournament, present_rows: list[WorkspaceModule]
+    ) -> dict[str, str]:
+        """``{module_id: status}`` for the cloud-only rows this workspace
+        lacks — empty in local mode, and empty in cloud mode once backfilled.
+
+        Safe to call with rows read through the mode filter: in local mode
+        the answer is unconditionally empty, so the filtered read cannot be
+        mistaken for "the row is missing" and trigger a duplicate insert.
+        """
+        if not cloud_modules_enabled():
+            return {}
+        present = {row.module_id for row in present_rows}
+        derived = derive_modules(
+            getattr(tournament, "kind", None), include_cloud_only=True
+        )
+        return {
+            module_id: derived[module_id]
+            for module_id in CLOUD_ONLY_MODULES
+            if module_id in derived and module_id not in present
+        }
 
     def ensure_modules_for(
         self, tournaments: list[Tournament]
@@ -1502,6 +1548,21 @@ class _LocalModuleRepo:
         for t in tournaments:
             if not by_tid.get(t.id):
                 by_tid[t.id] = self.ensure_modules(t)
+        # …and backfill the cloud-only rows onto the ones that DO have rows,
+        # so the Hub list agrees with the workspace it links to. Costs
+        # nothing in the steady state: ``_missing_cloud_only`` is a pure
+        # set difference over rows already in hand, and the extra reads
+        # happen only for the workspaces actually backfilled — once each,
+        # ever. Doing it here rather than delegating to ``ensure_modules``
+        # keeps the batch at one commit instead of one per workspace.
+        pending = [t for t in tournaments if self._missing_cloud_only(t, by_tid[t.id])]
+        if pending:
+            for t in pending:
+                self._add_module_rows(t, self._missing_cloud_only(t, by_tid[t.id]))
+            self.session.flush()
+            self.session.commit()
+            for t in pending:
+                by_tid[t.id] = self._rows_for(t.id)
         return by_tid
 
     def _rows_for(self, tournament_id: uuid.UUID) -> list[WorkspaceModule]:
