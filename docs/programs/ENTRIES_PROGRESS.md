@@ -600,3 +600,7 @@ ruling in E2/Phase 7; Seam A stays byte-for-byte in this slice.
 
 Landing-zone map, 19-task test-first plan, and the per-ruling unwind inventory are in the
 STOP report. Untouched-by-design list includes `test_entries_commit_seam.py` (edit = STOP).
+
+**Go-ahead recorded (2026-08-07, "yes go ahead"):** the four Phase A decisions, the
+F-E1-2 deferral (Seam A byte-for-byte; ruling owed in E2/Phase 7 with F-E1), and
+`gender_mismatch` as an entry-level pending_reason are all accepted. Phases B-E proceed.
