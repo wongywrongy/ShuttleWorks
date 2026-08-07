@@ -784,3 +784,14 @@ a green 1,100-test suite. The real check is the viewer flow in
   asserts an eight-player ~20 KB submission on **stored rows**, so the breakage is a red
   test rather than a quiet data loss; grep for `wrapped_receive` before bumping Starlette.
   Size S. *(SP-PROGRAM-1 Phase 6 Task 6, review round 1.)*
+
+- **2026-08-07 · SP-PROGRAM-1 Phase 6 Task 12b — the CSRF `secrets.compare_digest`
+  comparison is now triplicated.** `api/entries_json.py`'s `require_form_csrf`,
+  `api/entries_public.py`'s `submit_entry`, and `app/form_csrf.py` each independently
+  encode-and-compare a presented token against one or more expected ones. All three are
+  correct today (every candidate is encoded to bytes before the comparison), but the same
+  non-ASCII `TypeError` defect — an accented character in the hidden field turning a 403
+  into a 500 — had to be fixed in each copy separately, in three different passes; the
+  third copy was found only because someone thought to ask whether one existed. The
+  durable fix is one shared helper the three call sites delegate to; left out of a
+  review-fix pass on purpose as a cross-file refactor outside that pass's scope. Size S.

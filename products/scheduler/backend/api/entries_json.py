@@ -44,6 +44,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from api.entries_public import (
     _entrants,
@@ -62,7 +63,7 @@ from app.config import settings
 from app.dependencies import AuthEntrant, get_current_entrant
 from app.error_codes import ErrorCode, http_error
 from app.form_csrf import FORM_FIELD, PLAY_CSRF_COOKIE
-from database.models import Org
+from database.models import EntryPage, Org
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service
 from services import submissions as submission_service
@@ -314,6 +315,38 @@ def entrant_config() -> EntrantConfigDTO:
         turnstileSiteKey=settings.turnstile_site_key,
         authMode=settings.auth_mode,
     )
+
+
+class EntryPageListItemDTO(BaseModel):
+    slug: str
+
+
+@router.get("/pages", response_model=List[EntryPageListItemDTO])
+def entry_page_list(
+    repo: LocalRepository = Depends(get_repository),
+) -> List[EntryPageListItemDTO]:
+    """Every OPEN entry page's slug — the list Task 26's ``sitemap.xml``
+    route crawls.
+
+    **``is_open`` is the entire point of this route, not an incidental
+    filter.** ``EntryPage.is_open`` (default ``False``) is what makes a page
+    public at all — ``_resolve`` answers the same uniform 404 for a closed
+    page as for an unknown slug. A list that ignored it would publish the
+    addresses of unopened events into a crawlable sitemap: worse than the
+    404, because it discloses that a workspace and its slug exist *before*
+    the director has opened entries.
+
+    Ordered by ``slug``, which carries its own unique index
+    (``uq_entry_pages_slug``) — unlike a random-UUID primary key, two rows
+    can never tie on it, so no second tiebreaker is needed for a stable
+    order across SQLite and Postgres.
+    """
+    slugs = repo.session.scalars(
+        select(EntryPage.slug)
+        .where(EntryPage.is_open.is_(True))
+        .order_by(EntryPage.slug)
+    ).all()
+    return [EntryPageListItemDTO(slug=slug) for slug in slugs]
 
 
 # ---- POST /quote/{slug} ---------------------------------------------------

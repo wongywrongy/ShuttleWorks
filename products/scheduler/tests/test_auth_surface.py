@@ -120,6 +120,16 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "setting — is checked in tests/test_entries_json_routes.py::"
         "test_the_config_route_never_publishes_the_turnstile_secret"
     ),
+    ("GET", "/e/api/pages"): (
+        "the open entry pages' slugs — the list Task 26's sitemap.xml route "
+        "crawls. Public for the same reason GET /e/{slug} is: a poster URL "
+        "is meant to be discoverable. Filtered on is_open, which is checked "
+        "as a negative control in "
+        "tests/test_entries_json_routes.py::"
+        "test_a_closed_pages_slug_never_appears_in_the_list — an unfiltered "
+        "list would publish a closed workspace's address into a crawlable "
+        "sitemap, disclosing it exists before the director opened entries"
+    ),
     ("POST", "/e/account/signup"): (
         "entrant account creation — cannot require an account, for the same "
         "reason /auth/register cannot. Session-free BY NATURE, not by policy. "
