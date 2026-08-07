@@ -326,6 +326,98 @@ def test_the_page_shows_the_fee_schedule_and_the_payment_instructions(client, pa
     assert "per player" in body
 
 
+def _set_fee_schedule(page, schedule):
+    """Write a fee schedule onto the page row, exactly as stored.
+
+    Through the database rather than through the config route on purpose:
+    this section is about what the *renderer* does with a column whose
+    contents it did not choose. A director editing JSON by hand, an older
+    row written before the config route validated anything, a restored
+    backup — the page has to survive all three, and the route's own
+    validation is asserted in ``test_entries_config_routes.py``.
+    """
+    from database.models import EntryPage
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        row = session.get(EntryPage, uuid.UUID(page["tid"]))
+        row.fee_schedule = schedule
+        session.commit()
+    finally:
+        session.close()
+
+
+def _fee_tiers(body):
+    """The tiers the Fees card actually prints, as ``{count: "40.00"}``."""
+    card = re.search(r"<h2>Fees</h2><ul>(.*?)</ul>", body, re.S)
+    if card is None:
+        return {}
+    return {
+        int(count): amount
+        for count, amount in re.findall(
+            r"<li>(\d+) event\(s\) <span class=\"fee\">([0-9.]+)</span></li>",
+            card.group(1),
+        )
+    }
+
+
+def test_a_malformed_fee_tier_does_not_take_the_public_page_down(client, page):
+    """A string-valued tier is an unauthenticated 500 if the card iterates
+    the raw column: ``_money`` divides by 100 and a string does not divide.
+
+    Nothing about this row is exotic — ``fee_schedule`` is free-form JSON
+    and the normalization in ``services/entry_fees`` exists precisely
+    because a director may leave anything in it. The renderer reads the
+    column through that same normalization now, so a bad tier is dropped
+    exactly where the price is dropped, not raised at the one point in the
+    stack an anonymous visitor can reach.
+    """
+    _set_fee_schedule(
+        page, {"1": 4000, "2": "5500", "0": 100, "3": -500, "4": "free"}
+    )
+
+    r = client.get(f"/e/{page['slug']}")
+
+    assert r.status_code == 200, r.text
+    # "5500" is coerced, exactly as the pricing coerces it; the zero count,
+    # the negative price and the unparseable tier are dropped, exactly
+    # where the pricing drops them.
+    assert _fee_tiers(r.text) == {1: "40.00", 2: "55.00"}
+
+
+def test_the_card_shows_exactly_the_tiers_the_total_honours(client, page, entrant):
+    """The divergence, stated as the invariant it breaks.
+
+    A tier the normalization drops is a price the *total* will never
+    charge — so printing it is the page quoting a number the submission
+    contradicts. R14's rule is that the total shown is the total recorded;
+    a price list that outruns the schedule is the same lie one screen
+    earlier. Here tier 2 is unusable, so two events fall back to tier 1 —
+    and the card must not be advertising 55.00 while the form charges
+    40.00.
+    """
+    _set_fee_schedule(page, {"1": 4000, "2": "on request", "3": 6000})
+
+    body = client.get(f"/e/{page['slug']}").text
+    assert _fee_tiers(body) == {1: "40.00", 3: "60.00"}
+    assert "on request" not in body
+
+    shown = _refresh(
+        client, page, events=[f"0:{page['ws']}", f"0:{page['ms']}"], showAllEvents="on"
+    ).text
+    assert _total_shown(shown) == 4000
+
+
+def test_a_clean_schedule_still_prints_every_tier(client, page):
+    """Negative control for both refusals above: the dropping is the
+    normalization's, not the renderer quietly printing less than it has."""
+    _set_fee_schedule(page, {"1": 4000, "2": 5500, "3": 6000})
+
+    tiers = _fee_tiers(client.get(f"/e/{page['slug']}").text)
+    assert tiers == {1: "40.00", 2: "55.00", 3: "60.00"}
+
+
 def test_the_page_shows_the_venue(client, page):
     """R14 §6: the one block of the incumbent's IA that had no field behind
     it until this slice added two columns."""

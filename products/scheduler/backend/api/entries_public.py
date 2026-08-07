@@ -127,7 +127,11 @@ from repositories import LocalRepository, get_repository
 from services import auth as auth_service
 from services import entrants as entrant_service
 from services import submissions as submission_service
-from services.entry_fees import PlayerSelection, compute_fee_total
+from services.entry_fees import (
+    PlayerSelection,
+    compute_fee_total,
+    normalize_fee_schedule,
+)
 from services.entry_policy import check_policy, gender_flags
 
 log = logging.getLogger("scheduler.api.entries_public")
@@ -811,12 +815,20 @@ def _money_markup(page: EntryPage) -> List[str]:
     actually ticked lives in the form (``_total_markup``) and is computed
     by ``services.entry_fees``; this card is the price list, and payment is
     prose because v1 payment is manual and Q8's boundary is untouched.
+
+    **Read through ``normalize_fee_schedule``, never off the raw column.**
+    ``fee_schedule`` is free-form JSON, and this card is the one place in
+    the product an anonymous visitor can reach a tier the director typed.
+    Iterating the raw dict cost two things at once: a string-valued tier
+    reached ``_money``'s division and 500'd a public page, and a tier the
+    pricing drops was still printed — the card quoting a number the
+    submission would never charge. One reader closes both.
     """
     parts: List[str] = []
-    schedule = page.fee_schedule if isinstance(page.fee_schedule, dict) else None
+    schedule = normalize_fee_schedule(page.fee_schedule)
     if schedule:
         parts.append('<div class="card"><h2>Fees</h2><ul>')
-        for count in sorted(schedule, key=lambda k: int(k) if str(k).isdigit() else 0):
+        for count in sorted(schedule):
             parts.append(
                 f"<li>{_e(count)} event(s) "
                 f'<span class="fee">{_e(_money(schedule[count]))}</span></li>'

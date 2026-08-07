@@ -75,7 +75,7 @@ def compute_fee_total(
     free, and ``0`` is a claim about money that would be printed on a
     success page.
     """
-    schedule = _schedule(getattr(page, "fee_schedule", None))
+    schedule = normalize_fee_schedule(getattr(page, "fee_schedule", None))
 
     players: list[dict] = []
     for selection in selections:
@@ -112,11 +112,19 @@ def compute_fee_total(
     }
 
 
-# ---- internals -----------------------------------------------------------
-
-
-def _schedule(raw: Any) -> dict[int, int]:
+def normalize_fee_schedule(raw: Any) -> dict[int, int]:
     """Normalize the stored JSON into ``{count: cents}``.
+
+    **Public, and the only reading of ``entry_pages.fee_schedule`` anyone
+    may do.** The column is free-form JSON: a director may edit it by hand,
+    a backup may restore an older shape, and the config route's validation
+    is younger than some rows. So every consumer — the price computed here,
+    the price *card* the public page prints
+    (``api/entries_public._money_markup``), and the operator route that
+    accepts a new one — reads it through this one function. A second reader
+    that iterated the raw dict would print tiers this one drops, which is
+    the total quoting one number and charging another; that is exactly the
+    invariant R14 §1 exists to hold, seen one screen earlier.
 
     JSON object keys are strings; a director editing the row by hand may
     leave an integer. Anything unparseable is dropped rather than raising —
@@ -140,6 +148,9 @@ def _schedule(raw: Any) -> dict[int, int]:
         if count > 0 and cents >= 0:
             out[count] = cents
     return out
+
+
+# ---- internals -----------------------------------------------------------
 
 
 def _distinct(events: Sequence[Any]) -> list[Any]:
