@@ -562,3 +562,41 @@ The user confirmed both acts with "confirm":
 
 **Next task:** SP-E1-2 Phase A (audit: account storage, session scoping + CSRF trap,
 player-level physical form, migration data premise → STOP report).
+
+---
+
+## SP-E1-2 Phase A — audit and plan: DONE (2026-08-07). STOP presented; awaiting go-ahead.
+
+**Branch:** `dev/prog1-p5-e1-2`. **Baseline re-confirmed:** backend 1197/66sk, frontend
+1433/175. Audit by fresh-context Opus agent (217k tokens), all citations file-verified.
+
+**The four decisions (evidence in the session STOP report):**
+- **D-A2 — account storage: sibling `entrant_accounts` table; `users` reuse REFUSED.**
+  Decisive evidence beyond the spec: **27 session-gated routes carry no `{tournament_id}`**
+  and sit outside the OpenAPI-derived tenancy test — incl. `POST /tournaments`
+  (`api/tournaments.py:322-395`, an entrant would create and own a workspace) and
+  `POST /invites/{token}/accept` (`api/invites.py:234-275`, an entrant with a leaked token
+  becomes a member). Reuse = discriminator checks on 27 untested routes (fail-open);
+  sibling table makes entrant-membership unrepresentable via the FK to `users`. Password/
+  throttle/token-hash helpers are principal-agnostic module functions — reused, not forked.
+- **D-A3 — sessions: separate `entrant_sessions` table + `sw_play_session` cookie +
+  `get_current_entrant` resolver (no bootstrap fallback).** Unconfusable-by-construction
+  over a fail-open discriminator. CSRF fix: `session_cookie_names` tuple in config,
+  `main.py:250` checks any-of, plus a cookie-name registry guard test.
+- **D-A4 — player level: `entry_players` table.** The spec's §4 index
+  `(entry_event_id, entry_player_id)` requires it; `remarks` at player level demands it.
+- **D-A5 — data premise VERIFIED: 4 entries rows exist in the world, all demo**
+  (`sw-e1-demo` Postgres = the Phase E walkthrough; every dev SQLite predates the entries
+  migration). **Clean rebuild authorised** per rule 6, recorded as an evidence-resolved
+  deviation from spec §4's additive posture.
+
+**New finding F-E1-2 (reported, not patched):** multi-event submissions break the
+per-entry ≡ per-human coincidence — Seam A's `entry-<id>` roster ids will produce
+duplicate roster players per human (one per event). Compounds F-E1 (§9.3); recommend
+ruling in E2/Phase 7; Seam A stays byte-for-byte in this slice.
+
+**Proposal for confirmation:** `gender_mismatch` is an entry-level `pending_reason`
+(R7 `needs_review` precedent), NOT one of Q9's six workspace attention codes.
+
+Landing-zone map, 19-task test-first plan, and the per-ruling unwind inventory are in the
+STOP report. Untouched-by-design list includes `test_entries_commit_seam.py` (edit = STOP).
