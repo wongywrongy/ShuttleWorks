@@ -855,3 +855,23 @@ entry, so a human in three events reaches the roster three times — the
 ruling is owed in E2/Phase 7 alongside F-E1). Nothing in this phase touched
 `services/entries.py`, `api/entries.py`'s confirm/commit routes, the module
 system, or the `GET /e/{slug}` allowlist entry.
+
+### SP-E1-2 adversarial-review fix pass: DONE (2026-08-07, backend 1454/66sk)
+
+Commits `da18f19`..`aed00ce` on `dev/prog1-p5-e1-2`, one per finding. Gates:
+backend **1454 passed / 66 skipped** (Phase D baseline 1418/66 — **+36**, skips
+unchanged, zero regressions); `ruff check products/scheduler scheduler_core`
+clean. The frontend is untouched by this pass.
+
+| Finding | Fix | Tests |
+|---|---|---|
+| 1 — coverage regression | Commit `81458f1` moved the Turnstile challenge to signup (R10) and dropped two negative controls that had **no route-level successor**: the unreachable-verifier fail-closed control and the "refusal leaks nothing" control. Restored at `/e/account/signup`, where the challenge now lives. **No production change** — this is coverage the unwind owed | `test_entrant_auth_routes.py` 39 → 43. Includes the `verdict.retryable` branch asserted against the other branch's message rather than a literal. Proven as controls by mutation: with `verify_turnstile`'s transport handler returning `success=True`, three of the four fail |
+| 2 — public 500 + price divergence | `_money_markup` iterated `page.fee_schedule` **raw** while the pricing read it normalized. A string-valued tier reached `_money`'s division → `TypeError` on the one route an anonymous visitor can reach; a dropped tier printed a price the total never charges. `entry_fees._schedule` promoted to the public **`normalize_fee_schedule`** — now the single reader of that column (card, total, and the config route below) | `test_entries_public_routes.py` 87 → 90 (TDD: the first two failed with the `TypeError`). Negative control: a clean three-tier schedule still prints all three |
+| 4 — contradictory docstring | `_set_entrant_cookie` claimed `samesite=lax` means "a cross-site form post never carries it", contradicting `entries_public._form_csrf`'s own Chrome Lax+POST reasoning — on the function that *sets* the cookie, where the next author decides whether a new write needs CSRF proof. Rewritten to state what Lax buys and why it is insufficient alone, pointing at the header and the double-submit token | Docstring-only commit |
+| 5 — **F-E1-2-D1** (blocked Phase E) | The config routes never learned the R12/R14 fields, so Phase E step 1's "seeded through real paths" was impossible. `PUT entry-page` gains all seven page fields; `POST entry-events` gains `genderConstraint` (closed vocabulary) and `withdrawsUntil`. Additive: every field optional, PUT whole-state semantics unchanged. Unusable fee tiers and discipline caps are **refused with the rule stated**, never silently dropped — the writer refuses coercion as well as dropping, and consults `normalize_fee_schedule` for tier collisions a type check cannot see. Validation precedes the write, so a rejected tier cannot cost a director the page they had | `test_entries_config_routes.py` 22 → 51, **the 22 existing tests unedited**; every refusal paired with its control |
+
+**No tests were edited or deleted in this pass** — the four commits are
+additive plus one docstring, so there is no unwind tally. Untouched, as the
+slice requires: `services/entries.py`, the confirm/commit/desk routes, Seam A,
+the module system, the `GET /e/{slug}` allowlist entry. **F-E1-2-D1 is closed;
+Phase E's step 1 can now seed through real routes.**
