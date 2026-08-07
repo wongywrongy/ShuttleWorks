@@ -215,9 +215,42 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     # Public origin used to build absolute links in emails (invite /
     # reset URLs). Blank = relative links (local mode).
+    #
+    # This is program invariant I1 — the domain is configuration, never
+    # code — and it already existed before Entries needed it. The public
+    # entry surface composes its links from here too rather than growing a
+    # second, subtly different origin setting.
     public_app_origin: str = ""
     # Cloud email invites expire; local link invites may be eternal.
     invite_ttl_days: float = 14.0
+
+    # ---- Entries: public write surface (SP-E1-1) -----------------------
+    # Cloudflare Turnstile. The defaults are Cloudflare's **documented
+    # dummy pair** — sitekey ``1x00000000000000000000AA`` /  secret
+    # ``1x0000000000000000000000000000000AA`` — which always pass. That is
+    # deliberate on three counts: development and CI never depend on a
+    # network call to a third party; the *code path* under test is the real
+    # one (the widget renders, the token posts, the server verifies), so
+    # nothing about the integration is stubbed out; and a default that was
+    # a real key would be a real key committed to a git repository. Real
+    # keys arrive as Phase 2 deployment configuration.
+    #
+    # The always-FAIL secret (``2x0000000000000000000000000000000AA``) is
+    # what the refusal tests configure, so both verdicts are exercised
+    # against the same code.
+    turnstile_site_key: str = "1x00000000000000000000AA"
+    turnstile_secret_key: str = "1x0000000000000000000000000000000AA"
+    # Submission volume per client IP for the public entry form. A THIRD
+    # bucket, separate from the credential and registration triples above,
+    # for the same reason those two are separate from each other: they
+    # count different things and a shared budget lets one surface's abuse
+    # lock a venue out of another. A club secretary entering a squad
+    # legitimately submits many times in a sitting, so the budget is
+    # roomier than registration's and the window shorter — enough to stop
+    # an automated flood, not enough to interrupt a human doing bulk entry.
+    entries_max_per_ip: int = 20
+    entries_window_seconds: float = 600.0
+    entries_lock_seconds: float = 300.0
 
     @model_validator(mode="before")
     @classmethod
