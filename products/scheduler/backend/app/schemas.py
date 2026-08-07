@@ -629,6 +629,50 @@ class WorkspaceModuleDTO(BaseModel):
 
 # ---- Entries (SP-E1-1) -----------------------------------------------
 
+class EntrySubmissionDTO(BaseModel):
+    """The act an entry belongs to, as much of it as a desk needs (R13).
+
+    Four fields, and the restraint is the point. ``id`` is the **grouping
+    key** — the desk shows "these four entries arrived on one form" by
+    reading it, not by grouping on a repeated email string, which is what
+    an operator had to do by eye before R13. The account's address is who
+    to write to. The fee total belongs to the act rather than to any entry
+    under it, because tiered pricing prices the *person*, not the event.
+
+    What is deliberately not here: the idempotency key (a retry mechanism,
+    not information), and anything at all from the account beyond a name
+    and an address — a password hash and a session token are the material
+    this projection exists to keep off an operator screen (a colocated test
+    greps the serialized row for it).
+    """
+    id: str
+    accountEmail: Optional[str] = None
+    accountName: Optional[str] = None
+    feeTotalCents: Optional[int] = None
+    submittedAt: Optional[str] = None
+
+    @classmethod
+    def from_row(cls, row) -> Optional["EntrySubmissionDTO"]:
+        """``None`` for an entry with no act behind it.
+
+        Nothing the writer produces looks like that — ``create_submission``
+        writes the submission first and every entry under it. It stays
+        possible in the type because the column is nullable and a desk that
+        500s on a row it cannot fully explain is worse than one that shows
+        the row.
+        """
+        if row is None:
+            return None
+        account = getattr(row, "account", None)
+        return cls(
+            id=str(row.id),
+            accountEmail=getattr(account, "email", None),
+            accountName=getattr(account, "display_name", None),
+            feeTotalCents=row.fee_total_cents,
+            submittedAt=row.submitted_at.isoformat() if row.submitted_at else None,
+        )
+
+
 class EntryDeskRowDTO(BaseModel):
     """One row of the operator's entries desk.
 
@@ -654,8 +698,12 @@ class EntryDeskRowDTO(BaseModel):
     eventCode: Optional[str] = None
     state: str
     pendingReasons: List[str] = Field(default_factory=list)
-    contactName: str
-    contactEmail: str
+    # R13: the contact block became a level. ``contactName`` /
+    # ``contactEmail`` were columns on this row and are now one hop out,
+    # under the act that carried them — because "who to write to about this"
+    # is a property of the submission, and a desk that shows it per entry
+    # shows the same address three times for one form.
+    submission: Optional[EntrySubmissionDTO] = None
     playerName: str
     remarks: Optional[str] = None
     listOptOut: bool = False
@@ -671,8 +719,7 @@ class EntryDeskRowDTO(BaseModel):
             eventCode=event_code,
             state=row.state,
             pendingReasons=list(row.pending_reasons or []),
-            contactName=row.contact_name,
-            contactEmail=row.contact_email,
+            submission=EntrySubmissionDTO.from_row(row.submission),
             playerName=row.player_name,
             remarks=row.remarks,
             listOptOut=bool(row.list_opt_out),

@@ -121,13 +121,25 @@ def list_entries(
     ),
     repo: LocalRepository = Depends(get_repository),
 ):
-    """The desk list: newest submission first.
+    """The desk list: newest submission first, each row naming its act.
 
     ``submitted_at`` is this table's created_at. It alone ties
     non-deterministically across SQLite and Postgres — several entries can
     genuinely land in the same tick — so ``id`` is the tiebreaker, per the
     house rule for every list query. Without it the same page reorders
     between reads and an operator loses their place mid-review.
+
+    **Submission grouping (R13), and why it costs no extra query.** Each
+    row carries the submission that produced it, with the submitting
+    account and the act's fee total, so the desk can show "these four
+    entries arrived on one form" instead of leaving an operator to group by
+    eye on a repeated email address. Both hops are declared ``lazy="joined"``
+    on the models — ``Entry.submission`` and ``Submission.account`` — so
+    this is still **one** SELECT with two joins, batched by the database
+    rather than by a second round trip per page. A colocated test counts
+    the statements, because that property is a loader-configuration
+    decision one edit away from becoming an N+1 nobody notices until a desk
+    has four hundred rows on it.
     """
     stmt = select(Entry).where(Entry.tournament_id == tournament_id)
     if state:

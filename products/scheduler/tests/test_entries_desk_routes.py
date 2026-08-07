@@ -106,6 +106,7 @@ def _seed_entries(tid, specs):
         session.flush()
         ids = []
         accounts: dict[str, EntrantAccount] = {}
+        acts: dict[str, Submission] = {}
         for spec in specs:
             email = spec.get("email", "parent@example.com")
             account = accounts.get(email)
@@ -114,9 +115,18 @@ def _seed_entries(tid, specs):
                 session.add(account)
                 session.flush()
                 accounts[email] = account
-            submission = Submission(
-                tournament_id=_uuid.UUID(tid), account_id=account.id
-            )
+            # Specs sharing an ``act`` label land under one submission —
+            # the parent-with-two-children shape R13 built the level for.
+            act = spec.get("act")
+            submission = acts.get(act) if act is not None else None
+            if submission is None:
+                submission = Submission(
+                    tournament_id=_uuid.UUID(tid),
+                    account_id=account.id,
+                    fee_total_cents=spec.get("fee_total_cents"),
+                )
+                if act is not None:
+                    acts[act] = submission
             player = EntryPlayer(
                 tournament_id=_uuid.UUID(tid),
                 account_id=account.id,
@@ -209,6 +219,125 @@ def test_the_desk_list_never_leaks_entrant_credential_material(client, workspace
     from database.models import Entry
 
     assert not hasattr(Entry, "manage_token_hash")
+
+
+def test_each_row_names_the_act_that_produced_it(client, workspace):
+    """**Ruling R13's desk delta.** ``contactName`` / ``contactEmail`` were
+    columns on the entry row; they are now one hop out, under the
+    submission, because "who to write to about this" is a property of the
+    act rather than of each event inside it."""
+    tid = workspace
+    _seed_entries(
+        tid,
+        [
+            {
+                "player_name": "Alice Chen",
+                "email": "parent@club.org",
+                "fee_total_cents": 5500,
+            }
+        ],
+    )
+
+    row = client.get(f"/tournaments/{tid}/entries").json()[0]
+    assert row["submission"]["accountEmail"] == "parent@club.org"
+    assert row["submission"]["feeTotalCents"] == 5500
+    assert row["submission"]["id"]
+    # The retired shape is gone from the wire, not merely unread.
+    assert "contactEmail" not in row
+    assert "contactName" not in row
+
+
+def test_entries_from_one_act_share_one_submission_id(client, workspace):
+    """The grouping key, and the case it exists for: one parent, two
+    children, one form. Before R13 the desk had to group by eye on a
+    repeated email address, which is exactly what a shared account makes
+    ambiguous."""
+    tid = workspace
+    _seed_entries(
+        tid,
+        [
+            {"player_name": "Alice Chen", "act": "one", "fee_total_cents": 8000},
+            {"player_name": "Bo Chen", "act": "one", "fee_total_cents": 8000},
+            {"player_name": "Unrelated Person", "email": "other@club.org"},
+        ],
+    )
+
+    rows = client.get(f"/tournaments/{tid}/entries").json()
+    by_name = {r["playerName"]: r["submission"]["id"] for r in rows}
+    assert by_name["Alice Chen"] == by_name["Bo Chen"]
+    assert by_name["Unrelated Person"] != by_name["Alice Chen"]
+
+
+def test_the_act_fee_total_is_the_acts_and_not_the_rows(client, workspace):
+    """Negative control against the tempting per-entry read: tiered pricing
+    prices the **person**, not the event, so two entries of one act carry
+    one total between them rather than one each."""
+    tid = workspace
+    _seed_entries(
+        tid,
+        [
+            {"player_name": "Alice Chen", "act": "one", "fee_total_cents": 5500},
+            {"player_name": "Bo Chen", "act": "one", "fee_total_cents": 5500},
+        ],
+    )
+    rows = client.get(f"/tournaments/{tid}/entries").json()
+    assert {r["submission"]["feeTotalCents"] for r in rows} == {5500}
+    assert len({r["submission"]["id"] for r in rows}) == 1
+
+
+def test_the_desk_surfaces_the_gender_mismatch_flag(client, workspace):
+    """Q14 §5: a mismatch is accepted and **flagged**, and the operator is
+    the one who decides. It rides ``pendingReasons`` next to
+    ``needs_review`` — one list, one truth, no parallel flags array."""
+    tid = workspace
+    _seed_entries(
+        tid,
+        [
+            {
+                "player_name": "Alice Chen",
+                "pending_reasons": ["gender_mismatch"],
+            },
+            {"player_name": "Bo Lin"},
+        ],
+    )
+
+    rows = client.get(f"/tournaments/{tid}/entries").json()
+    flags = {r["playerName"]: r["pendingReasons"] for r in rows}
+    assert flags["Alice Chen"] == ["gender_mismatch"]
+    # NEGATIVE CONTROL: the flag is data, not decoration on every row.
+    assert flags["Bo Lin"] == []
+
+
+def test_the_grouping_costs_no_extra_query_per_row(client, workspace):
+    """The N+1 guard, because "one query" here is a **loader-configuration**
+    decision (``lazy="joined"`` on two relationships) that one edit could
+    silently turn into a query per row — invisible until a desk has four
+    hundred entries on it and the operator is at a venue on hotel wifi.
+    """
+    from sqlalchemy import event
+
+    from database.session import engine
+
+    tid = workspace
+    _seed_entries(
+        tid, [{"player_name": f"Player {i}", "email": f"p{i}@club.org"} for i in range(6)]
+    )
+
+    seen: list[str] = []
+
+    def record(conn, cursor, statement, params, context, executemany):
+        seen.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        rows = client.get(f"/tournaments/{tid}/entries").json()
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert len(rows) == 6
+    assert all(r["submission"]["accountEmail"] for r in rows)
+    entry_reads = [s for s in seen if "FROM entries" in s]
+    assert len(entry_reads) == 1, seen
 
 
 def test_the_desk_list_is_newest_first_with_a_stable_tiebreaker(client, workspace):
