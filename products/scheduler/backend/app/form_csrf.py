@@ -31,7 +31,7 @@ import hashlib
 import secrets
 from typing import Optional
 
-from fastapi import Response
+from fastapi import Request, Response
 
 from app.config import settings
 
@@ -138,3 +138,101 @@ def issue_play_csrf(response: Response) -> str:
         path="/",
     )
     return form_csrf_token(nonce)
+
+
+# Channel two only reads a body it can cheaply understand. A JSON write
+# has a header available to it and does not need this.
+_URLENCODED = "application/x-www-form-urlencoded"
+
+
+def _cookie_secrets(request: Request) -> list[str]:
+    """The unreadable values this caller could legitimately derive from.
+
+    Entrant cookies only. The operator cookie is deliberately absent — see
+    ``form_csrf_proves``.
+    """
+    return [
+        value
+        for value in (
+            request.cookies.get(settings.entrant_session_cookie_name),
+            request.cookies.get(PLAY_CSRF_COOKIE),
+        )
+        if value
+    ]
+
+
+async def form_csrf_proves(request: Request) -> bool:
+    """Does this write present a token derived from one of its own cookies?
+
+    The second of two enumerated CSRF proof channels (R8-B). Returns
+    ``False`` — never raises — on every path that cannot produce a proof,
+    so the caller's ``and not`` composition stays readable and a
+    malformed body is a refusal rather than a 500.
+
+    **An operator cookie disables this channel outright.** Channel two
+    exists for a surface that physically cannot attach a header; the
+    operator SPA can, and does. Under R8-A both principals' cookies can
+    ride the same origin, so without this line a token minted for the
+    entrant tier would satisfy the check on an operator write. The bound
+    is on the principal, not on the path — a path bound is the exemption
+    this channel was built to delete.
+    """
+    if settings.session_cookie_name in request.cookies:
+        return False
+    if not request.headers.get("content-type", "").startswith(_URLENCODED):
+        return False
+
+    expected = [form_csrf_token(secret) for secret in _cookie_secrets(request)]
+    if not expected:
+        return False
+
+    try:
+        form = await _replayable_form(request)
+    except Exception:
+        # **Fail closed, and say why the catch is broad.** Everything this
+        # can raise — a client that disconnected mid-body, a body that is
+        # not the urlencoded it claimed to be — means the same thing here:
+        # no proof was obtained. Returning ``False`` refuses; letting the
+        # exception out would 500, and a 500 on the CSRF check is a worse
+        # answer to a malformed request than a 403 is. Narrowing this to a
+        # list of exception types would be a list that has to stay in step
+        # with Starlette's parser, and the day it fell behind the failure
+        # would be an unhandled exception in the security middleware.
+        return False
+
+    presented = str(form.get(FORM_FIELD) or "")
+    return any(secrets.compare_digest(presented, token) for token in expected)
+
+
+async def _replayable_form(request: Request):
+    """``request.form()``, read in a way the downstream route survives.
+
+    **The defect this line exists to prevent, stated plainly.** A request
+    stream is consumed once. ``Request.form()`` on an urlencoded body feeds
+    ``request.stream()`` straight into the parser, which sets
+    ``_stream_consumed`` and never populates ``_body``; Starlette's
+    ``BaseHTTPMiddleware`` then forwards whatever is left of the channel,
+    which for a consumed stream is *nothing*. The route downstream calls
+    ``await request.form()``, gets an empty ``FormData``, and answers as if
+    the entrant had submitted a blank page. Nothing raises and nothing
+    logs — the failure is a family's eight-player entry arriving as zero
+    players and being refused for "no player given".
+
+    ``await request.body()`` **first** is the whole fix, and it is a fix
+    rather than a workaround: ``Request.body()`` caches the bytes on
+    ``_body``, ``stream()`` then yields the cached copy to the form parser,
+    and ``_CachedRequest.wrapped_receive`` replays that same ``_body`` to
+    everything downstream as one complete ``http.request`` message. One
+    buffer, read twice, no second parse and no new dependency.
+
+    Buffering is not a new memory exposure: ``BodyLimitMiddleware`` is
+    registered outermost and has already read and bounded these bytes
+    before this middleware is entered, so the ceiling is the same one the
+    rest of the API is held to.
+
+    ``tests/test_form_csrf_channel.py`` proves the replay on a real
+    multi-player submission rather than a two-field probe, because a small
+    body is exactly the case a broken implementation can appear to survive.
+    """
+    await request.body()
+    return await request.form()

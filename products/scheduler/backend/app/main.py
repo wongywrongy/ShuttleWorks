@@ -35,6 +35,7 @@ from app.body_limit import BodyLimitMiddleware
 from app.config import settings
 from app.dependencies import get_current_user
 from app.exceptions import ConflictError, PreconditionFailedError
+from app.form_csrf import form_csrf_proves
 
 log = logging.getLogger("scheduler.app")
 
@@ -265,25 +266,42 @@ async def csrf_middleware(request: Request, call_next):
     and a guard test derives every ``set_cookie`` in ``backend/api/`` from
     the source to hold new cookies to it.
 
-    **One route is exempt, and it is exempt because it is a form, not
-    because it is convenient** (SP-E1-2 Phase C). ``POST /e/{slug}/submit``
-    is a native ``<form method=post>`` on a page with ``script-src 'none'``,
-    and a form cannot attach a custom header — that is the same property
-    this defense rests on, seen from the other side. Posting it with
-    ``fetch`` would mean the public entry form needs JavaScript to work,
-    which is degraded functionality at exactly the widths ruling R11 makes
-    co-equal. So that route carries its **own** CSRF proof instead: a
-    double-submit token derived from the session cookie
-    (``api/entries_public.py::_form_csrf``), checked before it reads
-    anything else out of the body. An attacker's page can make the browser
-    send our cookie; it can never read it, so it cannot compute the token.
-    The exemption is from *this* check, not from CSRF — and
+    **Two enumerated proof channels** (SP-PROGRAM-1 Phase 6, ruling R8-B).
+    The header is channel one and proves "a same-origin browser sent this
+    deliberately", because a cross-site page cannot attach it without a
+    preflight we do not approve. A native ``<form method=post>`` cannot
+    attach it either — that is the same property seen from the other side
+    — so an unhydrated entrant form would be refused the moment it carried
+    a cookie, and a public entry form that needs JavaScript to submit is
+    degraded functionality at exactly the widths ruling R11 makes co-equal.
+
+    Channel two is a **double-submit token derived from a cookie the
+    attacker's page can make the browser send but can never read**
+    (``app/form_csrf.py``). It is what will let the path regex below go:
+    an exemption is a hole that grows and has to be re-argued every time a
+    path changes shape, while a channel is a property every write in the
+    application is measured against. The trigger reads
+    ``settings.csrf_relevant_cookie_names``, which is wider than the
+    session registry by exactly the pre-session nonce — the login post
+    carries no session and was therefore never checked at all.
+
+    **The exempt route is still exempt, and the clause is evaluated last**
+    (SP-E1-2 Phase C). ``POST /e/{slug}/submit`` is a native form post that
+    proves CSRF its own way inside the route
+    (``api/entries_public.py``), and it cannot be deleted from here until
+    that FastAPI-rendered route retires at the Phase 6 cutover. Ordering
+    the clause after ``form_csrf_proves`` means submit runs through channel
+    two from now on rather than around it, so the two proofs are exercised
+    together instead of the exemption hiding the new channel.
     ``tests/test_csrf_cookie_registry.py`` pins that it is the only one.
     """
     if (
         request.method in {"POST", "PUT", "PATCH", "DELETE"}
-        and any(name in request.cookies for name in settings.session_cookie_names)
+        and any(
+            name in request.cookies for name in settings.csrf_relevant_cookie_names
+        )
         and request.headers.get("X-ShuttleWorks-CSRF") != "1"
+        and not await form_csrf_proves(request)
         and not _FORM_CSRF_ROUTES.match(request.url.path)
     ):
         return JSONResponse(
