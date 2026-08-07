@@ -614,6 +614,33 @@ login/logout/me as a JSON API (deliberate D3 divergence, reasoned: a form post c
 the CSRF header its own cookie requires), cross-principal controls both directions,
 auth-surface preamble rewrite, infra docs. Unwound: 0 tests (comment blocks only).
 
+### SP-E1-2 Phases C-D + adversarial verify: DONE (2026-08-07)
+
+Resumed workflow (`wf_dc5cc1bd-c13`): Phase C landed the clean-rebuild migration
+`s3d8f2b5c0e1` (deviation recorded in a 40-line docstring; `r2c7e1f4a9b3` untouched),
+`submissions`/`entry_players`/re-pointed `entries` with association-proxy reads keeping
+Seam A byte-for-byte (verified: 0-byte diff on `services/entries.py`; the 23 seam tests'
+only touched "assert" is in a docstring), the submission service (replay returns the
+original act + all entries), server-side fee seam, policy refusals, `gender_mismatch`
+flag, and the submit re-gate (anonymous-submit controls inverted in the same commits).
+Notable Phase C deviation, accepted: form CSRF via a session-bound double-submit token
+(SameSite=Lax alone rejected on Chrome's Lax+POST evidence; fetch rejected because the
+page ships `script-src 'none'`), with exactly one anchored middleware exemption.
+Phase D landed the multi-event form (R14 §6 IA, gender filter + override, server-computed
+running total, R11 both-width CSS), the manage-token close-out, desk submission grouping,
+and the frontend reshape. Backend **1418/66sk** (+221 over the slice baseline), frontend
+**1442/175**; all eight gates green; depcruise edge count held at 2268.
+
+**Verify:** all four Phase A decisions + D4 + Seam A verified against the tree; **five
+negative controls proven by inversion** (bootstrap resolver, cross-resolver fallback,
+cookie-registry narrowing, second fee implementation, form double-submit). Unwind tally
+reconstructed from git: every modified group ruling-named; the untouchable files all have
+empty diffs. Four minor findings → fix agent (Turnstile fail-closed successors at signup;
+fee-card normalization divergence incl. a public 500; SameSite docstring contradiction;
+**F-E1-2-D1** — config routes lacked the R12/R14 fields Phase E seeds through, extended
+additively per the Phase A plan's own allowance). Fifth finding (entrant-account CASCADE
+pre-decides E2 erasure) recorded in the debt-log as a **ruling owed before E2**.
+
 **Rule-1 STOP (Phase C agent, correct):** SP-E1-2 demanded both "schema removes
 player_name/remarks/contact/manage_token_hash from entries" and "the 23 commit-seam tests
 pass unedited" — the tests' FIXTURES construct Entry with those columns. Measured: the
