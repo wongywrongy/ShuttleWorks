@@ -15,6 +15,7 @@ from api import (
     display as display_api,  # SP-CLOUD-2 — capability-token spectator display
     entries as entries_api,  # SP-E1-1 — the operator's Entries desk
     entries_public as entries_public_api,  # SP-E1-1 — the public entry page + submit
+    entries_json as entries_json_api,  # SP-PROGRAM-1 Phase 6 — the entrant tier's JSON surface
     entrants as entrants_api,  # SP-E1-2 — the entrant principal's auth surface
     schedule,
     solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
@@ -444,6 +445,14 @@ app.include_router(entries_api.router, dependencies=_AUTH_DEP)
 # public surface can never be a side effect of touching the operator's
 # routes.
 app.include_router(entries_public_api.router)
+# Entries, entrant-tier JSON (Phase 6): what the React Router 7 app reads
+# and writes. Registered WITHOUT the app-wide dependency for the same
+# reason the HTML surface above is — its public routes are named
+# individually in tests/test_auth_surface.py, and its writes declare
+# ``get_current_entrant`` themselves. ``/e/api/...`` cannot be shadowed by
+# ``/e/{slug}`` (different segment counts), regardless of registration
+# order.
+app.include_router(entries_json_api.router)
 # Entrant auth (SP-E1-2, ruling R10): the second principal's front door,
 # registered WITHOUT ``_AUTH_DEP`` for the same reason ``auth_api`` below
 # is — signup and login are how a session is *obtained*, so requiring one

@@ -99,6 +99,17 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "entrant names + events only, opt-outs excluded, no contact data "
         "selected; unknown or closed slug answers the uniform 404"
     ),
+    ("GET", "/e/api/page/{slug}"): (
+        "the entry page as JSON — the same public read as GET /e/{slug}, "
+        "which the RR7 loader consumes instead of scraping HTML. Identical "
+        "posture and identical guards: strict projection (entrant names + "
+        "event ids only, opt-outs excluded, no contact data selected), the "
+        "slug as the only key so a raw tournament UUID is never a public "
+        "address, and the uniform 404 for an unknown or closed page. The "
+        "leak claim is checked, not assumed, in "
+        "tests/test_entries_json_routes.py::"
+        "test_the_projection_never_carries_an_entrants_contact_data"
+    ),
     ("POST", "/e/account/signup"): (
         "entrant account creation — cannot require an account, for the same "
         "reason /auth/register cannot. Session-free BY NATURE, not by policy. "
