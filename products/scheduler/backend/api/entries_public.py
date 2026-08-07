@@ -1111,10 +1111,14 @@ async def submit_entry(
     # 3 — the form CSRF token. Checked before anything is read out of the
     # body: this request carries a session cookie, so until the token is
     # verified it is not known to have been sent deliberately.
-    presented = str(form.get(FORM_FIELD) or "")
+    # Bytes on both sides: ``compare_digest`` raises TypeError on a ``str``
+    # holding non-ASCII, so an accented character in the hidden field would
+    # be a 500 instead of the 403 below. ``errors="replace"`` cannot raise,
+    # and cannot cause a false match — ``?`` is not a hex digit.
+    presented = str(form.get(FORM_FIELD) or "").encode("utf-8", "replace")
     expected = _form_csrf(
         request.cookies.get(settings.entrant_session_cookie_name) or ""
-    )
+    ).encode("ascii")
     if not expected or not secrets.compare_digest(presented, expected):
         raise http_error(
             403,

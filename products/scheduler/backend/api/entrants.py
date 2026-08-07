@@ -134,11 +134,16 @@ _FORM_CONTENT_TYPES = frozenset(
 # goes back to, and neither is a property of an account.
 _TRANSPORT_FIELDS = frozenset({"_csrf", "next"})
 
-# Optional text inputs post ``""`` when left blank, which is a VALUE to a
-# StrictModel and would fail ``Name``'s bounds where a JSON caller simply
-# omits the key. Dropped for these two only — never for ``password``, where
-# an empty string must reach ``validate_password`` and come back as a
-# readable AUTH_WEAK_PASSWORD rather than a 422 about a missing field.
+# Optional text inputs post ``""`` when left blank; a JSON caller simply
+# omits the key. Both validate — ``Name`` has a max_length and no minimum —
+# so this is not a validation guard, it is TRANSPORT PARITY: dropped, a
+# blank box stores ``None`` exactly as an omitted key does, and one account
+# does not read differently for having been created through a form. Without
+# it ``display_name`` is ``""``, which is a value everything downstream has
+# to remember is really an absence. Dropped for these two only — never for
+# ``password``, where an empty string must reach ``validate_password`` and
+# come back as a readable AUTH_WEAK_PASSWORD rather than a 422 about a
+# missing field.
 _OPTIONAL_TEXT = frozenset({"displayName", "phone"})
 
 # The one prefix the entrant tier owns. Anchored, so ``//host`` and
@@ -362,8 +367,17 @@ def _auth_error(exc: AuthError):
 # ---- Endpoints -------------------------------------------------------
 
 
+# ``responses`` on both of these declares the *form* answer, which FastAPI
+# cannot infer: a handler that returns a ``Response`` short-circuits
+# ``response_model``, so runtime is right either way — but the OpenAPI
+# document is what ``make generate-api`` reads, and one that never mentions
+# a 303 (or, on login, drops ``EntrantDTO`` for an untyped 200) generates a
+# client for a surface that does not exist.
 @router.post(
-    "/signup", response_model=SignupResponse, status_code=status.HTTP_202_ACCEPTED
+    "/signup",
+    response_model=SignupResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={303: {"description": "Form post: redirect to the login page"}},
 )
 def signup(
     request: Request,
@@ -455,7 +469,14 @@ def signup(
     return SignupResponse()
 
 
-@router.post("/login")
+@router.post(
+    "/login",
+    response_model=None,
+    responses={
+        200: {"model": EntrantDTO},
+        303: {"description": "Form post: redirect carrying the session cookie"},
+    },
+)
 def login(
     request: Request,
     response: Response,

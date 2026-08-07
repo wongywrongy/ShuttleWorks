@@ -971,6 +971,18 @@ def test_the_right_token_is_the_negative_control(client, page, entrant):
     assert _submit(client, page).status_code == 201
 
 
+def test_a_non_ascii_form_token_is_a_refusal_and_not_a_500(client, page, entrant):
+    """``secrets.compare_digest`` raises ``TypeError`` on a ``str`` holding
+    non-ASCII, so one accented character in the hidden field turns this
+    guard into a 500 instead of the 403 above. The header is what makes
+    this the ROUTE's answer: the middleware channel is satisfied by it and
+    never inspects the body. Drop the ``.encode`` calls in ``submit_entry``
+    and this raises instead of answering."""
+    r = _submit(client, page, _csrf="é", headers=CSRF)
+    assert r.status_code == 403, r.text
+    assert _submissions(page["tid"]) == []
+
+
 def test_the_token_is_bound_to_the_session_that_rendered_the_form(
     client, page, entrant
 ):

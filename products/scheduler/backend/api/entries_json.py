@@ -347,10 +347,19 @@ def require_form_csrf(request: Request, form) -> None:
     ``app.form_csrf.form_csrf_proves`` does, costs the session-gated callers
     nothing: they never carry a ``sw_play_csrf`` cookie, so that candidate is
     simply absent from ``expected`` for them.
+
+    **Comparison is on bytes**, the same as ``app.form_csrf.form_csrf_proves``
+    and for the same reason: ``secrets.compare_digest`` raises ``TypeError``
+    on a ``str`` carrying non-ASCII, so one accented character in the hidden
+    field is a 500 rather than the 403 below. Task 12 made this reachable
+    pre-session by anyone with the poster URL, which is what turned a latent
+    hazard into a free denial-of-service primitive. ``errors="replace"``
+    cannot itself raise (a lone surrogate becomes ``?``) and cannot cause a
+    false match either, because ``?`` never appears in a hex digest.
     """
-    presented = str(form.get(FORM_FIELD) or "")
+    presented = str(form.get(FORM_FIELD) or "").encode("utf-8", "replace")
     expected = [
-        token
+        token.encode("ascii")
         for token in (
             _form_csrf(request.cookies.get(settings.entrant_session_cookie_name) or ""),
             _form_csrf(request.cookies.get(PLAY_CSRF_COOKIE) or ""),

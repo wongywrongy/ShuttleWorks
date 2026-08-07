@@ -1267,6 +1267,64 @@ def test_an_unreadable_json_body_is_still_a_422_and_not_a_500(client, turnstile)
         assert r.json()["detail"][0]["type"] == "json_invalid", r.text
 
 
+def test_a_non_ascii_form_token_is_a_refusal_and_not_a_500(client, turnstile):
+    """THE ROUTE-LEVEL TWIN of the middleware's bytes comparison.
+
+    ``secrets.compare_digest`` is a bytes-or-ASCII-str API: it raises
+    ``TypeError`` on a ``str`` carrying one accented character. The
+    middleware channel (``app.form_csrf.form_csrf_proves``) was taught to
+    encode both sides for exactly that reason; ``api.entries_json``'s
+    ``require_form_csrf`` — the route-level check these public account
+    routes now go through — was not, and Task 12 made it reachable
+    pre-session by anyone with the poster URL.
+
+    The header is what makes this the ROUTE's answer rather than the
+    middleware's: with ``X-ShuttleWorks-CSRF: 1`` the middleware is
+    satisfied and never inspects the body, so the only thing that can
+    see ``_csrf=é`` is the route-level comparison.
+
+    To prove this is not vacuous: drop the ``.encode`` calls in
+    ``require_form_csrf`` and this becomes an unhandled ``TypeError``.
+    """
+    client.cookies.set(PLAY_CSRF, "v")
+    r = client.post(
+        LOGIN,
+        data={"email": "nobody@example.com", "password": GOOD_PW, "_csrf": "é"},
+        headers=CSRF,
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+
+
+def test_the_openapi_document_still_describes_both_form_and_json_answers(client):
+    """The generated client reads this document, not the handler.
+
+    FastAPI short-circuits ``response_model`` when a handler returns a
+    ``Response``, so the 303 form path works whatever the decorator says —
+    but ``make generate-api`` reads the OpenAPI document, and a document
+    that describes login as an untyped 200 drops ``EntrantDTO`` from the
+    generated schema and never mentions the redirect either route can
+    answer. Asserted through ``app.openapi()["paths"]`` because newer
+    FastAPI keeps included routers nested rather than flattened onto
+    ``app.routes``.
+    """
+    from app.main import app
+
+    paths = app.openapi()["paths"]
+    login = paths["/e/account/login"]["post"]["responses"]
+    signup = paths["/e/account/signup"]["post"]["responses"]
+
+    assert "303" in login and "303" in signup
+    assert "202" in signup
+    assert (
+        login["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
+            "EntrantDTO"
+        )
+    ), login["200"]
+
+
 def test_the_422_still_says_which_part_of_the_request_was_wrong(client, turnstile):
     """REGRESSION CONTROL. ``loc``'s leading ``"body"`` is FastAPI's, added
     by the route body parser this dependency replaced — pydantic does not
