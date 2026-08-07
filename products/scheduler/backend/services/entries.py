@@ -52,10 +52,20 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.exceptions import ConflictError
 from app.schemas import BracketPlayerDTO, PlayerDTO
 from database.models import Entry, EntryEvent
 from repositories.local import LocalRepository
+# Resolved at raise/except time, not bound at import time — and imported
+# from the repository rather than re-derived, so the two cannot drift.
+# ``app.exceptions`` can be wiped and re-imported mid-suite (several test
+# modules purge backend packages at collection), leaving several
+# ``ConflictError`` classes alive at once; a module-level
+# ``from app.exceptions import ConflictError`` here binds one of them and
+# then silently fails to catch the other. That is not hypothetical — it is
+# how this line came to look like this: the seam's retry tests passed in
+# isolation and failed in the full run, with the conflict escaping the
+# except clause.
+from repositories.local import _conflict_error_class
 
 log = logging.getLogger("scheduler.entries")
 
@@ -288,7 +298,7 @@ def _commit_meet(
             repo.commit_tournament_state(
                 tournament_id, document, expected_version=seen
             )
-        except ConflictError:
+        except _conflict_error_class():
             log.info(
                 "entries: state_version conflict committing to %s, refetching",
                 tournament_id,
@@ -460,7 +470,7 @@ def _commit_bracket(
             repo.commit_tournament_state(
                 tournament_id, document, expected_version=seen
             )
-        except ConflictError:
+        except _conflict_error_class():
             log.info(
                 "entries: state_version conflict on the bracket roster of %s",
                 tournament_id,

@@ -97,6 +97,16 @@ class ErrorCode(str, Enum):
     # module doesn't exist. Also the create-seed refusal.
     MODULE_REQUIRES_CLOUD = "MODULE_REQUIRES_CLOUD"
 
+    # Entries (SP-E1-1). Both are *operator-facing* — the desk is behind
+    # the tenancy seam, so unlike the public surface these may say exactly
+    # what went wrong. ENTRY_NOT_FOUND is scoped to the workspace in the
+    # path: an id belonging to another workspace is simply not here.
+    ENTRY_NOT_FOUND = "ENTRY_NOT_FOUND"
+    # A lifecycle action attempted from a state that does not allow it —
+    # today only ``pending → confirmed`` (ruling D1). Almost always a stale
+    # desk screen, so the answer names the state it actually found.
+    ENTRY_INVALID_STATE = "ENTRY_INVALID_STATE"
+
     # Tenancy (SP-CLOUD-2) — the uniform cross-tenant answer. A caller
     # without membership can never learn whether the workspace exists.
     TOURNAMENT_NOT_FOUND = "TOURNAMENT_NOT_FOUND"

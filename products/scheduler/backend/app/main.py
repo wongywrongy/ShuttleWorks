@@ -12,6 +12,7 @@ from api import (
     auth as auth_api,  # SP-CLOUD-2 — self-hosted accounts + cookie sessions
     health as health_api,  # SP-CLOUD-3 — liveness / readiness / queue metrics
     display as display_api,  # SP-CLOUD-2 — capability-token spectator display
+    entries as entries_api,  # SP-E1-1 — the operator's Entries desk
     schedule,
     solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
     match_state,
@@ -356,6 +357,11 @@ app.include_router(commands.router, dependencies=_AUTH_DEP)
 app.include_router(brackets.router, dependencies=_AUTH_DEP)
 app.include_router(tournaments.router, dependencies=_AUTH_DEP)
 app.include_router(workspace_modules.router, dependencies=_AUTH_DEP)
+# Entries: the operator desk only. The public slug page and submit
+# endpoint are a separate surface with their own (allowlisted) auth
+# posture — deliberately not folded into this router, so that widening
+# the public surface can never be a side effect of touching the desk.
+app.include_router(entries_api.router, dependencies=_AUTH_DEP)
 # Invites: registered WITHOUT the router-level auth dep so the public
 # ``GET /invites/{token}`` resolve endpoint stays unauthenticated. The
 # accept + revoke endpoints declare their own auth requirements.

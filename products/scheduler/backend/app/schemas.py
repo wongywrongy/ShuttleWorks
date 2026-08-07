@@ -626,6 +626,75 @@ class WorkspaceModuleDTO(BaseModel):
         return cls(moduleId=row.module_id, status=row.status, config=row.config)
 
 
+# ---- Entries (SP-E1-1) -----------------------------------------------
+
+class EntryDeskRowDTO(BaseModel):
+    """One row of the operator's entries desk.
+
+    A **projection**, not the table. Two fields are deliberately absent:
+    ``manage_token_hash``, because the entrant's capability material has no
+    business on an operator screen even hashed; and the doubles/payment
+    columns, which exist in the schema (created now to avoid migration
+    churn) but mean nothing until E3/E5 and would read as broken features.
+
+    ``eventCode`` is denormalized from ``entry_events`` so the desk can
+    render a row without a second lookup per entry — it is the same string
+    the commit seam turns into ``ranks[]``.
+    """
+    id: str
+    entryEventId: str
+    eventCode: Optional[str] = None
+    state: str
+    pendingReasons: List[str] = Field(default_factory=list)
+    contactName: str
+    contactEmail: str
+    playerName: str
+    remarks: Optional[str] = None
+    listOptOut: bool = False
+    committedPlayerId: Optional[str] = None
+    submittedAt: Optional[str] = None
+    withdrawnAt: Optional[str] = None
+
+    @classmethod
+    def from_row(cls, row, *, event_code: Optional[str] = None) -> "EntryDeskRowDTO":
+        return cls(
+            id=str(row.id),
+            entryEventId=str(row.entry_event_id),
+            eventCode=event_code,
+            state=row.state,
+            pendingReasons=list(row.pending_reasons or []),
+            contactName=row.contact_name,
+            contactEmail=row.contact_email,
+            playerName=row.player_name,
+            remarks=row.remarks,
+            listOptOut=bool(row.list_opt_out),
+            committedPlayerId=row.committed_player_id,
+            submittedAt=row.submitted_at.isoformat() if row.submitted_at else None,
+            withdrawnAt=row.withdrawn_at.isoformat() if row.withdrawn_at else None,
+        )
+
+
+class EntryCommitOutcomeDTO(BaseModel):
+    """One committed entry: which entry, which roster player it became."""
+    id: str
+    playerId: str
+
+
+class EntrySkipDTO(BaseModel):
+    """One skipped entry and the stable reason code for the skip.
+
+    Spec §5: partial success is reported per-entry, not rolled back
+    wholesale — so this list is a normal outcome, not an error body.
+    """
+    id: str
+    reason: str
+
+
+class EntryCommitResultDTO(BaseModel):
+    committed: List[EntryCommitOutcomeDTO] = Field(default_factory=list)
+    skipped: List[EntrySkipDTO] = Field(default_factory=list)
+
+
 # Health
 class HealthResponse(BaseModel):
     status: str
