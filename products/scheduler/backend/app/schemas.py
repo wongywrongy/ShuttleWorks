@@ -632,11 +632,18 @@ class WorkspaceModuleDTO(BaseModel):
 class EntryDeskRowDTO(BaseModel):
     """One row of the operator's entries desk.
 
-    A **projection**, not the table. Two fields are deliberately absent:
-    ``manage_token_hash``, because the entrant's capability material has no
-    business on an operator screen even hashed; and the doubles/payment
-    columns, which exist in the schema (created now to avoid migration
-    churn) but mean nothing until E3/E5 and would read as broken features.
+    A **projection**, not the table. The doubles columns are deliberately
+    absent: they exist in the schema (created now to avoid migration churn)
+    but mean nothing until E3 and would read as broken features.
+
+    **The credential material this projection used to exclude no longer
+    exists.** E1 carried ``Entry.manage_token_hash`` and this docstring
+    named it as the field kept off an operator screen; ruling R10 deleted
+    the column, and managing an entry is login-gated "my entries" against
+    an entrant account (E2). The claim survives its column, one level out:
+    the account's password hash and its session token are what must never
+    reach here now, which is why nothing below reaches through
+    ``submission.account`` for anything but a name and an address.
 
     ``eventCode`` is denormalized from ``entry_events`` so the desk can
     render a row without a second lookup per entry — it is the same string

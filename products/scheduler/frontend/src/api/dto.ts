@@ -644,8 +644,12 @@ export type EntryState =
 
 /** One row of the operator's entries desk — mirrors the backend
  *  `EntryDeskRowDTO`, which is a PROJECTION rather than the table: the
- *  entrant's `manage_token_hash` and the doubles/payment columns are
- *  deliberately absent.
+ *  doubles columns are deliberately absent, and so is every piece of
+ *  entrant credential material. (This comment used to name
+ *  `manage_token_hash` as the thing being withheld; ruling R10 deleted
+ *  that column outright — managing an entry is login-gated "my entries"
+ *  now, and the material to keep off this screen is the account's
+ *  password hash and session token.)
  *
  *  There is no separate `flags` field on the wire. The R7 soft-duplicate
  *  signal is the `needs_review` member of `pendingReasons` — one list, one

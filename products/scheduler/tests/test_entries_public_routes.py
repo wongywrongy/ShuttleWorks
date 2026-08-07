@@ -1033,6 +1033,38 @@ def test_the_success_page_carries_no_manage_code(client, page, entrant):
     assert "data-manage-token" not in r.text
 
 
+def test_the_public_module_mints_no_capability_material_at_all(client, page):
+    """The deletion guard for the manage-token path (R10 / Q13 §6).
+
+    The success-page card and the column are gone, and the two tests above
+    and in ``test_entries_desk_routes.py`` pin their absence from the
+    *output*. This pins the absence of the *mint*: E1 called
+    ``secrets.token_urlsafe`` here to create the token it printed once, and
+    a capability that is never minted cannot be leaked by a renderer added
+    later. ``secrets`` itself stays imported — for ``compare_digest`` on the
+    form CSRF token, which is a comparison, not a credential.
+    """
+    import inspect
+
+    from api import entries_public
+
+    source = inspect.getsource(entries_public)
+    assert "token_urlsafe" not in source
+    assert "token_bytes" not in source
+    assert "token_hex" not in source
+
+
+def test_the_success_page_points_at_my_entries_without_pretending_it_exists(
+    client, page, entrant
+):
+    """R10's replacement is an account, not another code. The success state
+    says where the entry lives — and does **not** link a page this slice
+    did not build, because a dead link is a worse answer than a sentence."""
+    r = _submit(client, page)
+    assert "my entries" in r.text
+    assert 'href="/e/account' not in r.text
+
+
 def test_the_entry_lands_under_the_tournament_the_slug_resolves_to(
     client, page, entrant
 ):
