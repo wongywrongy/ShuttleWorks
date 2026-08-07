@@ -814,8 +814,6 @@ async def submit_entry(
         fee_total_cents=total,
         fee_basis=basis,
         idempotency_key=idempotency_key or None,
-        account_email=entrant.email,
-        account_name=entrant.display_name,
     )
 
     auth_service.throttle_record_entry(repo.session, throttle_key)

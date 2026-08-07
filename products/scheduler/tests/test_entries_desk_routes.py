@@ -72,13 +72,26 @@ def workspace(client):
 
 
 def _seed_entries(tid, specs):
-    """Insert entry rows directly.
+    """Insert entry rows directly, at the level boundary ruling R13 drew.
 
-    There is no public submit route yet — it is the next slice — and the
-    desk contract is worth pinning before it exists rather than after.
+    Seeded rather than submitted because the desk contract is worth pinning
+    independently of the public write, which has its own file.
+
+    **SP-E1-2 changed the construction here and nothing else** (ruling
+    R13 / decision D-A4): the contact block moved to ``entrant_accounts``
+    and the player block to ``entry_players``, so one act now builds an
+    account, a submission, a player and an entry. Every assertion below is
+    untouched — the desk projection reads the same fields through the level
+    boundary.
     """
     import uuid as _uuid
-    from database.models import Entry, EntryEvent
+    from database.models import (
+        EntrantAccount,
+        Entry,
+        EntryEvent,
+        EntryPlayer,
+        Submission,
+    )
     from database.session import SessionLocal
 
     session = SessionLocal()
@@ -92,17 +105,36 @@ def _seed_entries(tid, specs):
         session.add(event)
         session.flush()
         ids = []
-        for index, spec in enumerate(specs):
+        accounts: dict[str, EntrantAccount] = {}
+        for spec in specs:
+            email = spec.get("email", "parent@example.com")
+            account = accounts.get(email)
+            if account is None:
+                account = EntrantAccount(email=email, password_hash="x")
+                session.add(account)
+                session.flush()
+                accounts[email] = account
+            submission = Submission(
+                tournament_id=_uuid.UUID(tid), account_id=account.id
+            )
+            player = EntryPlayer(
+                tournament_id=_uuid.UUID(tid),
+                account_id=account.id,
+                full_name=spec["player_name"],
+                # New fixture data, not a backfill: R12 makes the field
+                # required and no old column could have supplied it.
+                gender=spec.get("gender", "F"),
+                remarks=spec.get("remarks"),
+            )
+            session.add_all([submission, player])
+            session.flush()
             row = Entry(
                 tournament_id=_uuid.UUID(tid),
                 entry_event_id=event.id,
+                submission_id=submission.id,
+                entry_player_id=player.id,
                 state=spec.get("state", "pending"),
                 pending_reasons=spec.get("pending_reasons", []),
-                contact_name="Parent Chen",
-                contact_email=spec.get("email", "parent@example.com"),
-                manage_token_hash=f"{index:064d}",
-                player_name=spec["player_name"],
-                remarks=spec.get("remarks"),
             )
             session.add(row)
             session.flush()
@@ -154,18 +186,29 @@ def test_the_desk_list_carries_state_flags_and_remarks(client, workspace):
     assert row["committedPlayerId"] is None
 
 
-def test_the_desk_list_never_leaks_the_capability_token(client, workspace):
-    """``manage_token_hash`` is the entrant's credential material. It is
-    stored hashed following ``auth_sessions``, and even the hash has no
-    business on an operator screen."""
+def test_the_desk_list_never_leaks_entrant_credential_material(client, workspace):
+    """**The successor to the manage-token control** (ruling R10).
+
+    This test used to assert that ``manage_token_hash`` never reached an
+    operator screen. R10 deleted that column, which would have left the
+    assertion passing for the wrong reason — trivially true against a field
+    that no longer exists. The claim it was making is still worth holding,
+    so it moves to the credential material that *does* exist now: the
+    entrant account's password hash and its session token. Neither has any
+    business on an operator screen, and the projection is what keeps them
+    off it.
+    """
     tid = workspace
     _seed_entries(tid, [{"player_name": "Alice Chen"}])
 
     row = client.get(f"/tournaments/{tid}/entries").json()[0]
-    serialized = repr(row)
-    assert "manage_token" not in serialized
-    assert "manageToken" not in serialized
-    assert "0" * 64 not in serialized
+    serialized = repr(row).lower()
+    for leak in ("password", "token", "hash", "secret"):
+        assert leak not in serialized, f"the desk row mentions {leak!r}"
+    # And the retired column is gone rather than merely hidden.
+    from database.models import Entry
+
+    assert not hasattr(Entry, "manage_token_hash")
 
 
 def test_the_desk_list_is_newest_first_with_a_stable_tiebreaker(client, workspace):

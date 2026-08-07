@@ -196,8 +196,6 @@ def create_submission(
     fee_total_cents: Optional[int],
     fee_basis: Optional[dict],
     idempotency_key: Optional[str] = None,
-    account_email: Optional[str] = None,
-    account_name: Optional[str] = None,
 ) -> SubmissionResult:
     """Record one act: a submission, its players, and one entry per event.
 
@@ -224,8 +222,6 @@ def create_submission(
             fee_total_cents=fee_total_cents,
             fee_basis=fee_basis,
             idempotency_key=idempotency_key,
-            account_email=account_email,
-            account_name=account_name,
         )
     except IntegrityError:
         # The other half of the retry race — see the module docstring. The
@@ -254,8 +250,6 @@ def _write(
     fee_total_cents: Optional[int],
     fee_basis: Optional[dict],
     idempotency_key: Optional[str],
-    account_email: Optional[str],
-    account_name: Optional[str],
 ) -> SubmissionResult:
     now = _utcnow()
     submission = Submission(
@@ -303,17 +297,6 @@ def _write(
                 state=LANDING_STATE,
                 pending_reasons=reasons,
                 fee_cents=share,
-                # --- transitional, removed with the columns -------------
-                # The superseded contact/player block is still NOT NULL on
-                # `entries` for one more commit in this series, and the
-                # desk projection still reads it. Written from the account
-                # and the player so the two agree while both exist; the
-                # narrowing commit drops the columns and the projection
-                # reads through the level boundary instead.
-                contact_name=(account_name or account_email or "")[:200],
-                contact_email=(account_email or "")[:320],
-                player_name=player.full_name,
-                remarks=player.remarks,
             )
             session.add(entry)
             created_entries.append(entry)

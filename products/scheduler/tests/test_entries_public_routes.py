@@ -261,10 +261,6 @@ def _add_entry(tid, event_id, **kwargs):
             submission_id=submission.id,
             entry_player_id=player.id,
             state=kwargs.pop("state", "pending"),
-            player_name=player.full_name,
-            remarks=player.remarks,
-            contact_name="Seed",
-            contact_email="seed@example.com",
             **kwargs,
         )
         session.add(row)
@@ -317,7 +313,9 @@ def test_the_page_lists_entrant_names_and_events_only(client, page):
     _add_entry(page["tid"], page["ms"], player_name="Bo Ferrar")
     body = client.get(f"/e/{page['slug']}").text
     assert "Bo Ferrar" in body
-    assert "seed@example.com" not in body
+    # The projection reaches the player and stops. The account behind the
+    # entry is one hop further out and is never selected.
+    assert "@example.com" not in body
 
 
 def test_an_opted_out_entrant_is_absent_but_a_listed_one_is_present(client, page):

@@ -96,8 +96,6 @@ def _create(session, world, players, *, key=None, total=5500, basis=None):
         fee_total_cents=total,
         fee_basis=basis if basis is not None else {"basis": "schedule", "players": []},
         idempotency_key=key,
-        account_email=world["account"].email,
-        account_name="Parent Chen",
     )
 
 

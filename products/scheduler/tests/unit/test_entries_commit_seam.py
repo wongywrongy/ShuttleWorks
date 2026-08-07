@@ -31,7 +31,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import Base, Entry, EntryEvent
+from database.models import (
+    Base,
+    EntrantAccount,
+    Entry,
+    EntryEvent,
+    EntryPlayer,
+)
 from repositories.local import LocalRepository
 from services.entries import SkipReason, commit_entries
 
@@ -120,6 +126,24 @@ def _entry_event(session, tournament_id, *, code="MS", bracket_event_id=None):
     return row
 
 
+def _account(session, email="parent@example.com"):
+    """One entrant account, reused across a test's entries.
+
+    Reused rather than minted per entry because that is what the model
+    means: one account acts for many players (a parent, a club rep).
+    """
+    row = session.scalars(
+        __import__("sqlalchemy").select(EntrantAccount).where(
+            EntrantAccount.email == email
+        )
+    ).first()
+    if row is None:
+        row = EntrantAccount(email=email, password_hash="x")
+        session.add(row)
+        session.commit()
+    return row
+
+
 def _entry(
     session,
     tournament_id,
@@ -128,18 +152,33 @@ def _entry(
     player_name="Alice Chen",
     state="confirmed",
     remarks=None,
-    contact_email="parent@example.com",
 ):
+    """One confirmed entry, built at the level boundary ruling R13 drew.
+
+    **This helper is the only thing in this file that SP-E1-2 changed.**
+    ``player_name`` and ``remarks`` used to be columns on ``entries`` and
+    are now columns on ``entry_players``; the seam reads them through
+    association proxies, so ``services/entries.py`` is byte-for-byte
+    unedited and every assertion below is untouched. ``gender`` is new
+    fixture data (R12 makes the field required) rather than a backfill —
+    there is no old value it could have come from, which is exactly why
+    ruling D-A5 authorised a clean rebuild instead of one.
+    """
+    player = EntryPlayer(
+        tournament_id=tournament_id,
+        account_id=_account(session).id,
+        full_name=player_name,
+        gender="F",
+        remarks=remarks,
+    )
+    session.add(player)
+    session.commit()
     row = Entry(
         tournament_id=tournament_id,
         entry_event_id=entry_event.id,
+        entry_player_id=player.id,
         state=state,
         pending_reasons=[],
-        contact_name="Parent Chen",
-        contact_email=contact_email,
-        manage_token_hash="0" * 64,
-        player_name=player_name,
-        remarks=remarks,
     )
     session.add(row)
     session.commit()

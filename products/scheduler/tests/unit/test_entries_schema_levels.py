@@ -158,6 +158,112 @@ def test_a_player_without_a_gender_is_refused_by_the_database(session):
     session.rollback()
 
 
+def test_one_player_can_be_entered_into_several_events(session):
+    """The parent-with-one-child-in-three-events case, which is the reason
+    the player level exists at all: three entries, one human, one remark.
+
+    Also the proof that ``entries`` no longer carries a player block —
+    nothing here supplies a name, and the rows are complete.
+    """
+    tid = _tournament(session)
+    account = _account(session)
+    player = EntryPlayer(
+        tournament_id=tid,
+        account_id=account.id,
+        full_name="Alice Chen",
+        gender="F",
+        remarks="leaving at 4",
+    )
+    session.add(player)
+    submission = Submission(tournament_id=tid, account_id=account.id)
+    session.add(submission)
+    session.commit()
+
+    for code in ("WS", "WD", "XD"):
+        event = EntryEvent(
+            tournament_id=tid, code=code, discipline=code, entry_type="singles"
+        )
+        session.add(event)
+        session.commit()
+        session.add(
+            Entry(
+                tournament_id=tid,
+                entry_event_id=event.id,
+                submission_id=submission.id,
+                entry_player_id=player.id,
+                state="pending",
+                pending_reasons=[],
+            )
+        )
+    session.commit()
+
+    rows = list(session.scalars(sa.select(Entry).where(Entry.tournament_id == tid)))
+    assert len(rows) == 3
+    assert {r.entry_player_id for r in rows} == {player.id}
+    assert {r.submission_id for r in rows} == {submission.id}
+    # One human, one remark — read through the level boundary by the same
+    # name Seam A has always used.
+    assert {r.player_name for r in rows} == {"Alice Chen"}
+    assert {r.remarks for r in rows} == {"leaving at 4"}
+
+
+def test_the_contact_fields_read_through_to_the_account(session):
+    """The other half of the read-through, and why the desk projection did
+    not have to change: ``contact_email`` names the submitting account."""
+    tid = _tournament(session)
+    account = _account(session, email="parent@example.com")
+    player = EntryPlayer(
+        tournament_id=tid, account_id=account.id, full_name="Alice", gender="F"
+    )
+    submission = Submission(tournament_id=tid, account_id=account.id)
+    session.add_all([player, submission])
+    event = EntryEvent(
+        tournament_id=tid, code="WS", discipline="WS", entry_type="singles"
+    )
+    session.add(event)
+    session.commit()
+    entry = Entry(
+        tournament_id=tid,
+        entry_event_id=event.id,
+        submission_id=submission.id,
+        entry_player_id=player.id,
+        state="pending",
+        pending_reasons=[],
+    )
+    session.add(entry)
+    session.commit()
+
+    assert entry.contact_email == "parent@example.com"
+    # No display name was set, so the address is the honest fallback.
+    assert entry.contact_name == "parent@example.com"
+
+
+def test_the_superseded_columns_are_gone_not_merely_unused(session):
+    """Negative control for the two tests above.
+
+    They would pass just as happily if the old columns were still there and
+    simply left NULL — which is the shape a half-finished narrowing leaves
+    behind. The columns are named individually so the failure says which
+    one survived.
+    """
+    columns = set(Base.metadata.tables["entries"].columns.keys())
+    for gone in (
+        "contact_name",
+        "contact_email",
+        "email_verified_at",
+        "manage_token_hash",
+        "player_name",
+        "birth_year",
+        "remarks",
+        "idempotency_key",
+        "regulations_accepted_at",
+        "regulations_version_accepted",
+        "paid_at",
+        "payment_note",
+    ):
+        assert gone not in columns, f"entries.{gone} survived the R13 narrowing"
+
+
 # ---- the R14 configuration columns --------------------------------------
 
 
@@ -247,6 +353,33 @@ def test_the_duplicate_flag_index_is_not_unique(session):
     ix = _index("entries", "ix_entries_event_player")
     assert not ix.unique
     assert [c.name for c in ix.columns] == ["entry_event_id", "entry_player_id"]
+
+
+def test_no_natural_key_is_unique_at_any_level(session):
+    """The claim R13 makes verbatim, asserted as an absence.
+
+    Every unique index in the entries family is enumerated and checked
+    against the two the rulings actually authorise: the submission-level
+    idempotency key (D4) and the entry-page slug. Anything else appearing
+    here is a natural key that acquired uniqueness by accident.
+    """
+    authorised = {
+        "uq_submissions_tournament_idempotency_key",
+        "uq_entry_pages_slug",
+    }
+    found = {
+        ix.name
+        for table in (
+            "entries",
+            "entry_players",
+            "entry_events",
+            "submissions",
+            "entry_pages",
+        )
+        for ix in Base.metadata.tables[table].indexes
+        if ix.unique
+    }
+    assert found <= authorised, f"unauthorised uniqueness: {sorted(found - authorised)}"
 
 
 def test_the_submission_idempotency_index_is_unique_and_tenant_scoped(session):
