@@ -259,6 +259,32 @@ class Settings(BaseSettings):
     entries_window_seconds: float = 600.0
     entries_lock_seconds: float = 300.0
 
+    # ---- Entrant accounts (SP-E1-2, ruling R10) ------------------------
+    # Entrant SIGNUP volume per client IP — a FOURTH bucket
+    # (``esignup:<ip>``), for the reason the three above are separate from
+    # each other and one more besides. The general reason: they count
+    # different things, and a shared budget lets one surface's abuse close
+    # another. The specific one: ``api/auth.py`` guards operator login with
+    # ``ip:<ip>``, so an entrant-facing surface that charged the operator
+    # bucket would let anyone on the internet lock a director out of their
+    # own event from a public form. That is the failure mode
+    # ``tests/unit/test_entrant_throttle_namespaces.py`` exists to refuse.
+    #
+    # Sized between registration's and entries': creating an account is
+    # expensive (an Argon2id hash plus a row) and a human does it once, but
+    # a family or a club secretary legitimately creates several from one
+    # venue address in a sitting — so the budget is a small handful per
+    # hour rather than registration's five, and the lock is short enough
+    # that a mistake costs a coffee break rather than the entry deadline.
+    entrant_signup_max_per_ip: int = 8
+    entrant_signup_window_seconds: float = 3600.0
+    entrant_signup_lock_seconds: float = 300.0
+    # Entrant LOGIN failures reuse the credential triple above
+    # (``auth_throttle_*``) — the same budget for the same kind of event —
+    # but in their own key namespaces (``eacct:`` / ``eip:``). Same
+    # numbers, different buckets: what must not be shared is the *budget*,
+    # not the policy.
+
     @model_validator(mode="before")
     @classmethod
     def _read_file_backed_secrets(cls, values: Any) -> Any:

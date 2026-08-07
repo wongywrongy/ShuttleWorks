@@ -498,6 +498,74 @@ def throttle_record_entry(session: Session, key: str) -> None:
     )
 
 
+# ---- Entrant namespaces (SP-E1-2, ruling R10) ------------------------
+#
+# The entrant principal gets three more key namespaces. They are declared
+# here, beside the operator ones, rather than in ``services/entrants.py``,
+# because the property that matters about them is a property of the SET:
+# every key namespace in the system must be disjoint from every other, and
+# that is only reviewable where the list is. The engine underneath is
+# principal-agnostic (a key string and three numbers), which is exactly why
+# the keys are where the care goes.
+
+
+def entrant_signup_key(ip: str) -> str:
+    """Bucket key for entrant account creation from one client IP.
+
+    Separate from ``reg:`` — which counts *operator* registrations — for
+    the same reason ``reg:`` is separate from ``ip:``, plus a sharper one:
+    this bucket is charged by a route a stranger can reach without any
+    credential at all. It must therefore be impossible for that route to
+    spend a budget any operator surface reads. ``api/auth.py`` guards
+    operator login on ``ip:<ip>``; if a public signup charged that key, an
+    entrant flood from a venue's shared address would lock the venue's own
+    director out of signing in.
+    """
+    return f"esignup:{ip}"
+
+
+def throttle_record_entrant_signup(session: Session, key: str) -> None:
+    """Count one entrant signup — accepted or refused — against the IP.
+
+    Both outcomes count, as with ``throttle_record_entry``: signup is a
+    non-enumerating endpoint, so a script cannot tell an accepted signup
+    from a refused one, and charging only successes would leave the
+    address-probing case unbounded.
+    """
+    throttle_record_attempt(
+        session,
+        key,
+        max_attempts=settings.entrant_signup_max_per_ip,
+        window_seconds=settings.entrant_signup_window_seconds,
+        lock_seconds=settings.entrant_signup_lock_seconds,
+    )
+
+
+def entrant_account_key(email: str) -> str:
+    """Credential bucket for one entrant address.
+
+    Case-folded, because ``uq_entrant_accounts_email_lower`` makes
+    ``Parent@x`` and ``parent@x`` one account — a case-sensitive key would
+    hand an attacker as many budgets as the address has capitalisations.
+    Distinct from the operator ``account:`` namespace even for the same
+    string: one human may legitimately hold both kinds of account on one
+    address (see ``EntrantAccount``), and locking one must not lock the
+    other.
+    """
+    return f"eacct:{email.lower()}"
+
+
+def entrant_ip_key(ip: str) -> str:
+    """Credential bucket for entrant logins from one client IP — the
+    ``ip:`` twin, in the entrant namespace, for the reason above.
+
+    Failures here are counted with ``throttle_record_failure``: the
+    *policy* for a bad password is the same whoever typed it, so it reads
+    the same ``auth_throttle_*`` triple. Only the bucket differs.
+    """
+    return f"eip:{ip}"
+
+
 def throttle_record_success(session: Session, key: str) -> None:
     row = session.get(AuthThrottle, key)
     if row is not None:
