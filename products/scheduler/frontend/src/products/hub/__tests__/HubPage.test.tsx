@@ -1,8 +1,9 @@
 /**
  * Hub navigation + the control plane. Open and the post-Create handler must
  * target /bracket-setup for bracket tournaments (was /bracket pre-Bundle-3).
- * The Hub filters workspaces by status facet (All / Active / Draft / Shared /
- * Needs attention) and shows them as one time-sorted flat list.
+ * The Hub filters workspaces by lifecycle facet (All / Setup / Ready / Live /
+ * Complete / Shared / Needs attention / Archived — derived phase, not the
+ * operator-set status) and shows them as one time-sorted flat list.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -96,21 +97,20 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.queryByRole('button', { name: /new event/i })).not.toBeInTheDocument();
   });
 
-  it('offers the status-facet strip (All / Active / Draft / Shared / Needs attention)', async () => {
+  it('offers the lifecycle facet strip (All / Setup / Ready / Live / Complete / Shared / attention / Archived)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /^All\b/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Active\b/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Draft\b/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Shared\b/ })).toBeInTheDocument();
+    for (const name of [/^All\b/, /^Setup\b/, /^Ready\b/, /^Live\b/, /^Complete\b/, /^Shared\b/, /^Archived\b/]) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
     expect(screen.getByRole('button', { name: /Needs attention/ })).toBeInTheDocument();
   });
 
-  it('a status facet filters the flat list (Active hides both drafts)', async () => {
+  it('a lifecycle facet filters the flat list (Live hides both un-started workspaces)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    // Both seeded workspaces are status:'draft', so the Active facet empties the list.
-    fireEvent.click(screen.getByRole('button', { name: /^Active\b/ }));
+    // Neither seeded workspace has been played, so the Live facet empties the list.
+    fireEvent.click(screen.getByRole('button', { name: /^Live\b/ }));
     expect(screen.queryByText('Bracket A')).not.toBeInTheDocument();
     expect(screen.queryByText('Meet A')).not.toBeInTheDocument();
   });

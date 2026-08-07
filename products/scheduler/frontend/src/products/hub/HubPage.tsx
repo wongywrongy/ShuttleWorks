@@ -2,11 +2,12 @@
  * Workspace Hub — the control-plane landing page at `/`.
  *
  * A full-width operational control plane: a top command bar (wordmark, search,
- * New workspace, account chip), a status-facet filter strip (All / Active /
- * Draft / Shared / Needs attention) with overlapping counts, a dense workspace
- * list (see WorkspaceRow) sorted by operational time order, and a right-side
- * inspector for the selected workspace. "New workspace" routes to the
- * dedicated `/new` create surface.
+ * New workspace, account chip), a lifecycle filter strip (All / Setup / Ready
+ * / Live / Complete / Shared / Needs attention / Archived — see hubFacets for
+ * why these read the derived phase rather than the operator-set status), a
+ * dense workspace list (see WorkspaceRow) sorted by operational time order,
+ * and a right-side inspector for the selected workspace. "New workspace"
+ * routes to the dedicated `/new` create surface.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -38,23 +39,30 @@ function sinceLabel(ms: number): string {
   return `${Math.round(m / 60)}h ago`;
 }
 
-/** One status-facet chip (All / Active / Draft / Shared / Needs attention)
- *  with an overlapping count. Prototype grammar: quiet text; the ACTIVE facet
- *  is a raised pill (no border chrome — surface does the work). `emphasize`
- *  warms a non-zero count to amber (the "Needs attention" facet). */
+/** One facet chip with its count. Prototype grammar: quiet text; the SELECTED
+ *  facet is a raised pill (no border chrome — surface does the work).
+ *  `emphasize` warms a non-zero count: amber for "Needs attention", live-green
+ *  for "Live" — the two facets an operator scans for. A zero count stays quiet
+ *  whatever the tone, so an empty facet never shouts. */
 function FilterChip({
   label,
   count,
   active,
-  emphasize = false,
+  emphasize,
   onClick,
 }: {
   label: string;
   count: number;
   active: boolean;
-  emphasize?: boolean;
+  emphasize?: 'attention' | 'live';
   onClick: () => void;
 }) {
+  const countTone =
+    count > 0 && emphasize === 'attention'
+      ? 'text-status-warning'
+      : count > 0 && emphasize === 'live'
+        ? 'text-status-live'
+        : 'text-ink-faint';
   return (
     <button
       type="button"
@@ -66,10 +74,7 @@ function FilterChip({
           : 'text-muted-foreground hover:text-foreground'
       }`}
     >
-      {label}{' '}
-      <span className={`sw-num ${emphasize && count > 0 ? 'text-status-warning' : 'text-ink-faint'}`}>
-        {count}
-      </span>
+      {label} <span className={`sw-num ${countTone}`}>{count}</span>
     </button>
   );
 }
@@ -265,7 +270,9 @@ export function HubPage() {
                   label={f.label}
                   count={counts[f.id]}
                   active={facet === f.id}
-                  emphasize={f.id === 'attention'}
+                  emphasize={
+                    f.id === 'attention' ? 'attention' : f.id === 'live' ? 'live' : undefined
+                  }
                   onClick={() => setFacet(f.id)}
                 />
               ))}

@@ -503,3 +503,40 @@ Verified live against the host backend at 1600px in `setup`, `ready` and
 - Pre-existing, seen while verifying: the shell identity bar can show
   `Untitled` while the Overview shows the real name — the two read different
   sources. Not touched here (debt log).
+
+### Follow-up (same session) — the Hub facets
+
+The strip was the last control-plane surface still contradicting the rest. It
+split on the operator-managed `status` column, which `hubFacets.ts` defended
+deliberately ("a dated-but-still-draft workspace stays Draft on purpose"). That
+reasoning held in isolation but not in practice: on the live database nothing
+had ever been marked Active, so the strip read `Active 0 / Draft 14` — one
+bucket holding everything, including the four events that were mid-play. A
+filter that cannot separate a running tournament from an empty one is not
+narrowing anything, and the Hub was calling those four events *Draft* while the
+Overview stepper, the shell badge and the row action all said *Live*.
+
+The lifecycle facets now read `signals.phase`:
+`All / Setup / Ready / Live / Complete / Shared / Needs attention / Archived`.
+The same database now reads `Setup 8 · Ready 2 · Live 4 · Complete 0`.
+
+- **Archived outranks the phase**, applying the same precedence as
+  `platform/domain/lifecycle.ts`. Match rows persist, so an archived tournament
+  keeps `phase: live|complete` forever; without the rule it would sit in *Live*
+  next to events actually being played. Archived also gains a facet of its own
+  — it used to be reachable only under *All*.
+- The lifecycle facets **partition** the list (a test pins that every row lands
+  in exactly one); `Shared` / `Needs attention` still overlap them by design.
+- `status` keeps the two jobs it is good at: driving `health` (and so the row
+  dot) and marking a workspace archived. The row dot and the shell pill were
+  deliberately **not** changed — health ("does this need me") and phase ("where
+  is this event") are separate axes, and `lifecycleBadge` already handles the
+  shell's precedence.
+- The `Live` count is tinted live-green the way `Needs attention` is tinted
+  amber — the two facets an operator scans for. A zero count stays quiet in
+  either tone, so an empty facet never shouts.
+
+Gates: vitest **1381 → 1385**; `tsc -b`, eslint (0 errors), build green.
+Verified live: `Live 4` filters to exactly the four workspaces whose row action
+is "Open live day". Screenshots `after-hub-facets.png`,
+`after-hub-facet-live.png`.
