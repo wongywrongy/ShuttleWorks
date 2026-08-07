@@ -242,6 +242,126 @@ def test_a_missing_challenge_token_never_reaches_cloudflare(client, turnstile):
     assert turnstile == []
 
 
+def test_an_unreachable_verifier_refuses_the_signup(client, turnstile, monkeypatch):
+    """**Fail closed.** The successor, at route level, of the control the
+    submit route carried before ruling R10 moved the challenge here.
+
+    The failure being simulated is ours, not Cloudflare's verdict: the
+    transport never completes. ``services/turnstile`` answers every such
+    failure with ``success=False``, and the property that matters is what
+    this *route* does with it — refuse, and write nothing. "The verifier is
+    unreachable, so let accounts through" would turn somebody else's outage
+    into our open door during the window when nobody is reading our logs,
+    and an account created then outlives the outage.
+
+    The negative control is ``test_the_always_pass_secret_writes_the_account``
+    above: same request, same route, a reachable verifier, and a row.
+    """
+    from services import turnstile as service
+
+    def unreachable(url, fields, timeout):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(service, "_post", unreachable)
+
+    r = _signup(client)
+
+    assert r.status_code == 403, r.text
+    assert _accounts() == 0
+
+
+def test_an_unreachable_verifier_says_it_could_not_check_rather_than_you_failed(
+    client, turnstile, monkeypatch
+):
+    """The ``verdict.retryable`` branch of the refusal, which exists so a
+    transport failure reads as "try again" rather than as an accusation.
+
+    Retryable never means accepted (``services/turnstile``'s docstring): the
+    status code and the empty table are identical to the branch below, and
+    only the sentence differs. Asserted against the *other* branch rather
+    than against a literal, so the two cannot drift into the same string
+    without this failing.
+    """
+    from app.config import settings
+    from services import turnstile as service
+
+    # The verdict branch first, through the dummy always-FAIL secret — the
+    # same code path Phase 2's real keys will take.
+    settings.turnstile_secret_key = ALWAYS_FAIL_SECRET
+    try:
+        refused_body = _signup(client).json()
+    finally:
+        settings.turnstile_secret_key = ALWAYS_PASS_SECRET
+
+    def unreachable(url, fields, timeout):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(service, "_post", unreachable)
+    unreachable_body = _signup(client, email="other@example.com").json()
+
+    assert unreachable_body["detail"]["message"] != refused_body["detail"]["message"]
+    assert "could not check" in unreachable_body["detail"]["message"]
+    assert _accounts() == 0
+
+
+@pytest.mark.parametrize("mode", ["verdict", "unreachable"])
+def test_a_challenge_refusal_leaks_nothing_an_attacker_can_use(
+    client, turnstile, monkeypatch, mode
+):
+    """Whatever the cause, the refusal body says nothing operational.
+
+    Three things must not be in it, and each has a distinct reader:
+
+    - **the Cloudflare error codes** (``invalid-input-response``,
+      ``internal-error``) — they tell a bot author which of their forgeries
+      the far end objected to, which is a free tuning signal;
+    - **the secret** — a configured credential must never reach a body, and
+      this route is the one place it is in scope;
+    - **anything about the address**. Signup's non-enumeration invariant
+      does not stop applying because the challenge failed first: the
+      refusal for an address that is already registered is byte-identical
+      to the refusal for one that is not, so a refused challenge cannot be
+      turned into the enumeration oracle the 202 path is written to avoid.
+    """
+    from app.config import settings
+    from services import turnstile as service
+
+    _signup(client)  # a registered address, through the passing path
+    assert _accounts("parent@example.com") == 1
+
+    if mode == "unreachable":
+        def unreachable(url, fields, timeout):
+            raise OSError("connection refused")
+
+        monkeypatch.setattr(service, "_post", unreachable)
+        registered = _signup(client)
+        fresh = _signup(client, email="stranger@example.com")
+    else:
+        settings.turnstile_secret_key = ALWAYS_FAIL_SECRET
+        try:
+            registered = _signup(client)
+            fresh = _signup(client, email="stranger@example.com")
+        finally:
+            settings.turnstile_secret_key = ALWAYS_PASS_SECRET
+
+    assert registered.status_code == fresh.status_code == 403
+    assert registered.json() == fresh.json()
+
+    body = registered.text
+    for leak in (
+        "invalid-input-response",
+        "internal-error",
+        "missing-input-response",
+        ALWAYS_FAIL_SECRET,
+        ALWAYS_PASS_SECRET,
+        "parent@example.com",
+    ):
+        assert leak not in body, leak
+
+    # And nothing was written on either address by the refused attempts.
+    assert _accounts() == 1
+
+
 # ---- Signup: throttle, and its ordering ------------------------------
 
 
