@@ -1074,6 +1074,127 @@ class AuthThrottle(Base):
 # (``CLOUD_ONLY_MODULES`` above), so a database that moves cloud → local
 # hides the Entries module but keeps every entry intact and readable when it
 # moves back. Filtering is a projection, never a migration.
+#
+# ---- the account level (SP-E1-2 / ruling R10, Phase A ruling D-A2) -------
+#
+# Entrants are a SECOND PRINCIPAL TYPE, and they live in their own tables —
+# not as rows in ``users``. The audit that decided it (spec Q13 §3 named the
+# four questions; the tree answered them) turned on one measurement: 27
+# session-gated routes carry no ``{tournament_id}`` and therefore sit outside
+# the OpenAPI-derived tenancy test, ``POST /tournaments`` and ``POST
+# /invites/{token}/accept`` among them. Reusing ``users`` would have made an
+# entrant a principal those 27 routes already accept, and the guard would
+# have been a discriminator check on each — a check that is fail-OPEN when
+# forgotten. A sibling table makes entrant membership unrepresentable: the
+# membership tables' FKs point at ``users``, and nothing here can satisfy
+# them.
+
+
+class EntrantAccount(Base):
+    """A public entrant's account — a credential for acting on their own
+    submissions, and nothing else (spec Q13 §5).
+
+    **No org. No role. No ``tournament_members`` row. Ever.** That sentence
+    is what keeps the tenancy model from acquiring a second meaning, and the
+    absence of the columns is how it is enforced rather than remembered.
+
+    Password storage, policy and token hashing are the shipped mechanisms
+    reused verbatim (``services/auth.py``): Argon2id PHC strings, NIST
+    800-63B length-only policy, SHA-256 of a mailed reset token. What is not
+    reused is the session plumbing — see ``EntrantSession``.
+
+    **Not workspace-scoped**, unlike every other table in this block: an
+    account outlives any one tournament, which is the entire point of it.
+    So there is no ``tournament_id`` and no cascade from ``tournaments``.
+
+    Email uniqueness is case-insensitive **within the entrant namespace**
+    only. One human may hold an operator account and an entrant account on
+    the same address; that is a mild product oddity and a deliberate one —
+    a shared namespace would let an entrant signup collide with, or probe
+    for, a director's account.
+    """
+
+    __tablename__ = "entrant_accounts"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    # Argon2id PHC string (contains its own salt + parameters).
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    email_verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # R12: the ONLY optional contact field, collected only where the director
+    # turned it on (``entry_pages.collect_phone``). It lands on the ACCOUNT
+    # rather than the entry because it is submitter contact data.
+    phone: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Verification and reset are E2 (program Phase 7); the columns exist now
+    # so that slice is feature work rather than migration churn, exactly as
+    # the doubles and payment columns below already do.
+    reset_token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    reset_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("uq_entrant_accounts_email_lower", text("lower(email)"), unique=True),
+    )
+
+
+class EntrantSession(Base):
+    """Server-side session record behind the ``play.*`` entrant cookie.
+
+    Structurally a twin of ``AuthSession`` — opaque random token in the
+    cookie, only its SHA-256 stored, revocation as a timestamp — and
+    deliberately **not the same table** (ruling D-A3).
+
+    The alternative was an audience discriminator on ``AuthSession``. Both
+    designs have a failure mode and they are not symmetrical: a discriminator
+    fails *open* the day a resolver forgets to check it, while a second table
+    cannot be confused by construction — this FK points at
+    ``entrant_accounts``, so an entrant session that named a ``users`` row
+    would be a database error rather than a privilege escalation.
+
+    The cost is the ~40 lines of session plumbing in ``services/entrants.py``
+    that mirror ``services/auth.py``. That duplication is the price of the
+    property and is held to the original's behaviour by
+    ``tests/unit/test_entrants_service.py`` against
+    ``tests/unit/test_auth_characterization.py``.
+    """
+
+    __tablename__ = "entrant_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entrant_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("uq_entrant_sessions_token_hash", "token_hash", unique=True),
+        Index("ix_entrant_sessions_account", "account_id"),
+    )
 
 
 class EntryEvent(Base):
