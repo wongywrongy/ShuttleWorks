@@ -43,6 +43,39 @@ jobs:
       - name: Unused files and exports (knip, report-only)
         run: npm run knip || true
 
+  entrant:
+    name: Entrant (lint + types + tests + boundaries)
+    runs-on: ubuntu-latest
+    # Mirrors the frontend job step for step. Separate rather than folded in,
+    # because a failure here should name the entrant tier: it is a different
+    # runtime (node SSR, not a static SPA) with a different trust boundary
+    # (see products/scheduler/entrant/.dependency-cruiser.cjs).
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install workspaces
+        run: npm ci
+      - name: Lint
+        run: npm run lint:entrant
+      # `react-router typegen && tsc`. The frontend gets its type gate for free
+      # inside `build`; this tier's build does typegen too, but running the gate
+      # on its own makes a type error report as a type error.
+      - name: Typecheck
+        run: npm run typecheck:entrant
+      - name: Request-level tests
+        run: npm --prefix products/scheduler/entrant run test:run
+      - name: Architecture boundaries (dependency-cruiser)
+        run: npm run depcruise:entrant
+
+      # Report-only for the same reason the frontend job gives above: knip's
+      # verdict is a hypothesis, and a gate that fails on a false positive
+      # trains people to delete load-bearing code.
+      - name: Unused files and exports (knip, report-only)
+        run: npm run knip:entrant || true
+
   backend:
     name: Backend (ruff + pytest)
     runs-on: ubuntu-latest

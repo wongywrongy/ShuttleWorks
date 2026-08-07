@@ -8,8 +8,11 @@
     "build": "react-router build",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
+    "lint": "eslint .",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "depcruise": "depcruise app",
+    "knip": "knip"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -21,14 +24,21 @@
     "react-router": "^7.15.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@react-router/dev": "^7.15.0",
     "@types/node": "^24.10.10",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.20",
+    "dependency-cruiser": "^18.0.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^16.5.0",
+    "knip": "^6.23.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4"
   }
 }
