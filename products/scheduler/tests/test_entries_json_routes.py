@@ -234,3 +234,46 @@ def test_the_projection_never_carries_an_entrants_contact_data(
     # must not disagree.
     by_id = {ev["id"]: ev for ev in body["events"]}
     assert by_id[page["ws"]]["entryCount"] == 1
+
+
+# ---- GET /e/api/config ---------------------------------------------------
+
+
+def test_the_config_route_publishes_the_site_key_and_the_auth_mode(client):
+    """``turnstile_site_key`` is exposed to no client today and the signup
+    widget needs it. A second env var on node would be a second source of
+    truth for a value the backend already validates."""
+    r = client.get("/e/api/config")
+    assert r.status_code == 200, r.text
+    assert r.json() == {
+        # Cloudflare's documented always-pass dummy sitekey (app/config.py:248).
+        "turnstileSiteKey": "1x00000000000000000000AA",
+        "authMode": "local",
+    }
+
+
+def test_the_config_route_never_publishes_the_turnstile_secret(client, monkeypatch):
+    """NEGATIVE CONTROL. The site key and the secret key are adjacent
+    settings with near-identical names and near-identical dummy values —
+    exactly the pair a copy-paste swaps. Verifying a *server* secret is what
+    the secret is for; publishing it hands anyone a free pass over signup.
+
+    To prove this is not vacuous: change the route to return
+    ``settings.turnstile_secret_key`` and this goes red. Put it back.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "turnstile_secret_key", "2xSECRET-do-not-publish")
+    r = client.get("/e/api/config")
+    assert r.status_code == 200, r.text
+    assert "do-not-publish" not in r.text
+    assert r.json()["turnstileSiteKey"] == settings.turnstile_site_key
+
+
+def test_the_config_route_reports_the_deployed_auth_mode(client, monkeypatch):
+    """Non-vacuity for the field above: it reads the setting, it is not a
+    literal. Cloud mode is the deployed posture the entrant app renders for."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "auth_mode", "cloud")
+    assert client.get("/e/api/config").json()["authMode"] == "cloud"

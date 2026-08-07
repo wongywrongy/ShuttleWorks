@@ -53,6 +53,7 @@ from api.entries_public import (
     _optional_entrant,
     _resolve,
 )
+from app.config import settings
 from database.models import Org
 from repositories import LocalRepository, get_repository
 from services.entry_fees import normalize_fee_schedule
@@ -166,6 +167,24 @@ class EntryPageProjection(BaseModel):
     viewer: ViewerDTO
 
 
+class EntrantConfigDTO(BaseModel):
+    """The two values the entrant app cannot compute for itself.
+
+    Small on purpose. This is a **publication** route, not a settings
+    dump: everything on it is already public by nature (a Turnstile
+    sitekey is rendered into every signup page; the auth mode is
+    observable from whether an anonymous write is refused). Nothing that
+    is secret, or that would become interesting in aggregate, belongs
+    here — and the negative control in
+    ``tests/test_entries_json_routes.py`` exists because the secret key
+    sits one line away from the sitekey in ``app/config.py`` with a
+    near-identical name.
+    """
+
+    turnstileSiteKey: str
+    authMode: str
+
+
 # ---- routes --------------------------------------------------------------
 
 
@@ -256,4 +275,24 @@ def entry_page_projection(
             email=entrant.email if entrant is not None else None,
             formCsrf=_form_csrf(token),
         ),
+    )
+
+
+@router.get("/config", response_model=EntrantConfigDTO)
+def entrant_config() -> EntrantConfigDTO:
+    """Public runtime configuration for the entrant app.
+
+    Read by the RR7 signup route to render the Turnstile widget. The
+    alternative — a second ``TURNSTILE_SITE_KEY`` env var on the node
+    service — would be a second source of truth for a value whose *pair*
+    (the secret) is validated only here, and a sitekey that drifts from
+    its secret fails the challenge for every honest entrant while looking
+    like a Cloudflare outage.
+
+    No repository access and no session: this is configuration, not data,
+    which is why it needs neither a slug nor a tenancy seam.
+    """
+    return EntrantConfigDTO(
+        turnstileSiteKey=settings.turnstile_site_key,
+        authMode=settings.auth_mode,
     )

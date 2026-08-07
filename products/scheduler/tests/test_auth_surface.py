@@ -110,6 +110,16 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "tests/test_entries_json_routes.py::"
         "test_the_projection_never_carries_an_entrants_contact_data"
     ),
+    ("GET", "/e/api/config"): (
+        "public runtime configuration for the entrant app: the Turnstile "
+        "SITEKEY (rendered into every signup page — public by nature) and "
+        "the auth mode. It cannot require a session: it is read by the "
+        "signup page, which is where a session is obtained. Two fields, no "
+        "repository access, no tenant scope. The claim that it never "
+        "carries the SECRET key — the adjacent, near-identically-named "
+        "setting — is checked in tests/test_entries_json_routes.py::"
+        "test_the_config_route_never_publishes_the_turnstile_secret"
+    ),
     ("POST", "/e/account/signup"): (
         "entrant account creation — cannot require an account, for the same "
         "reason /auth/register cannot. Session-free BY NATURE, not by policy. "
