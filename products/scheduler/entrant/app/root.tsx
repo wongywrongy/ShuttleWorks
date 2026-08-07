@@ -1,4 +1,8 @@
-import { Links, Meta, Outlet, Scripts } from 'react-router';
+import { Links, Meta, Outlet, Scripts, type LinksFunction } from 'react-router';
+
+import stylesheet from './app.css?url';
+
+export const links: LinksFunction = () => [{ rel: 'stylesheet', href: stylesheet }];
 
 export default function Root() {
   return (

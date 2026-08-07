@@ -1,0 +1,16 @@
+/* Entrant tier — top-level CSS.
+ *
+ * Design tokens, typography, density, animation keyframes and texture
+ * utilities all live in @scheduler/design-system; this file is the thin
+ * shell that wires the design system + Tailwind directives, exactly as
+ * products/scheduler/frontend/src/index.css does.
+ *
+ * If you find yourself adding rules here, ask first: does it belong in
+ * the design system instead? See packages/design-system/DESIGN.md.
+ */
+@import '@scheduler/design-system/tokens.css';
+@import '@scheduler/design-system/globals.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
