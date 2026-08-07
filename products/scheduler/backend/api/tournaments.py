@@ -20,11 +20,13 @@ from app.dependencies import (
     get_current_user,
     require_tournament_access,
 )
+from app.config import cloud_modules_enabled
 from app.error_codes import ErrorCode, http_error
 from app.exceptions import ConflictError
 from app.limits import Code, Identifier, StrictModel
 from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO, state_dto_from_document
 from database.models import (
+    CLOUD_ONLY_MODULES,
     Tournament,
     TournamentMember,
     normalize_module_seed,
@@ -341,8 +343,25 @@ def create_tournament(
     # Validate the seed up front (both checks are pure — no row needed) so a
     # rejected seed never leaves an orphan tournament/member row behind.
     if body.modules is not None:
+        include_cloud_only = cloud_modules_enabled()
+        # Pre-check before ``normalize_module_seed``, which raises a plain
+        # ValueError that the handler below flattens into the generic
+        # INVALID_INPUT. A cloud-only module named in local mode is a
+        # specific, explainable refusal, not malformed input.
+        if not include_cloud_only:
+            for module in body.modules:
+                if module.moduleId in CLOUD_ONLY_MODULES:
+                    raise http_error(
+                        400,
+                        ErrorCode.MODULE_REQUIRES_CLOUD,
+                        f"module '{module.moduleId}' requires a cloud-mode "
+                        "deployment",
+                    )
         try:
-            seed_rows = normalize_module_seed([m.model_dump() for m in body.modules])
+            seed_rows = normalize_module_seed(
+                [m.model_dump() for m in body.modules],
+                include_cloud_only=include_cloud_only,
+            )
         except ValueError as exc:
             raise http_error(400, ErrorCode.INVALID_INPUT, str(exc))
         statuses = {r["module_id"]: r["status"] for r in seed_rows}

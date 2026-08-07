@@ -1,5 +1,11 @@
-/** The three suite modules that can be enabled inside an open workspace. */
-export type ModuleId = 'meet' | 'bracket' | 'display';
+/** The suite modules that can be enabled inside an open workspace.
+ *
+ *  `entries` is CLOUD-ONLY (SP-E1-1 ruling D2): the backend seeds and returns
+ *  its `workspace_modules` row only under `AUTH_MODE=cloud`, so a local-mode
+ *  workspace never sees it and ADR 0005 ("every module a workspace shows is
+ *  actionable") stays true. This union is the vocabulary, not the policy —
+ *  presence in the real catalog is what drives the nav. */
+export type ModuleId = 'meet' | 'bracket' | 'display' | 'entries';
 
 /** A module's enablement status within a workspace. Real state comes from the
  *  backend `workspace_modules` table; when absent it is derived from `kind`

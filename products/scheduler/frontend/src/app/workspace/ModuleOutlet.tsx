@@ -24,6 +24,11 @@ const OperationsProduct = lazy(() =>
     default: m.OperationsProduct,
   })),
 );
+const EntriesProduct = lazy(() =>
+  import('../../products/entries/EntriesProduct').then((m) => ({
+    default: m.EntriesProduct,
+  })),
+);
 
 interface ModuleOutletProps {
   /** True only when BOTH Meet and Bracket are enabled (resolved from the
@@ -50,6 +55,8 @@ export function ModuleOutlet({ bothEnginesEnabled = false }: ModuleOutletProps) 
       <BracketProduct />
     ) : module === 'display' ? (
       <DisplayProduct />
+    ) : module === 'entries' ? (
+      <EntriesProduct />
     ) : (
       <MeetProduct />
     );

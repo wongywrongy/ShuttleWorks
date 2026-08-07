@@ -22,7 +22,12 @@ export const DEFAULT_CUSTOM: CustomState = { meet: 'enabled', bracket: 'off', di
 
 const toStatus = (s: ModuleState): WorkspaceModuleDTO['status'] => (s === 'off' ? 'disabled' : s);
 
-/** A custom build's tri-state → the `modules[]` create seed (off → disabled). */
+/** A custom build's tri-state → the `modules[]` create seed (off → disabled).
+ *
+ *  Deliberately does NOT include `entries`, and this is not an oversight to
+ *  fix: the entries row is seeded SERVER-side and only under `AUTH_MODE=cloud`
+ *  (SP-E1-1 ruling D2). Offering it in the create form would let a local-mode
+ *  director build a workspace around a module the backend then refuses. */
 export function customSeed(s: CustomState): WorkspaceModuleDTO[] {
   return (['meet', 'bracket', 'display'] as const).map((moduleId) => ({
     moduleId,

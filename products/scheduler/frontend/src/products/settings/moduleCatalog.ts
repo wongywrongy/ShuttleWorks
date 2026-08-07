@@ -1,4 +1,4 @@
-export type CatalogModuleId = 'meet' | 'bracket' | 'display';
+export type CatalogModuleId = 'meet' | 'bracket' | 'display' | 'entries';
 
 export interface ModuleMeta {
   id: CatalogModuleId;
@@ -28,6 +28,15 @@ export const MODULE_CATALOG: Record<CatalogModuleId, ModuleMeta> = {
     name: 'Display',
     capability: 'Read-only public display — live matches, draw, or results.',
     dependency: 'Needs Meet or Bracket enabled.',
+  },
+  entries: {
+    id: 'entries',
+    name: 'Entries',
+    capability: 'Public sign-up page, entry review, and commit to the roster.',
+    // Mirrors the server rule (MODULE_REQUIRES_CLOUD, ruling D2): a public
+    // entry page is meaningless without real operator accounts, so the row is
+    // seeded — and this catalog entry only ever rendered — in cloud mode.
+    dependency: 'Needs a cloud-hosted workspace.',
   },
 };
 

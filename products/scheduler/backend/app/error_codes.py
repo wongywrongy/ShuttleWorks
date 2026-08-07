@@ -90,6 +90,30 @@ class ErrorCode(str, Enum):
     MODULE_DEPENDENCY_UNMET = "MODULE_DEPENDENCY_UNMET"
     MODULE_LAST_OPERATIONAL = "MODULE_LAST_OPERATIONAL"
     MODULE_HAS_DATA = "MODULE_HAS_DATA"
+    # A cloud-only module (CLOUD_ONLY_MODULES — today just ``entries``)
+    # touched on a local-mode deployment. The read filter already hides
+    # such a module, so the generic MODULE_NOT_FOUND would fire anyway;
+    # this code exists so the answer says *why* instead of implying the
+    # module doesn't exist. Also the create-seed refusal.
+    MODULE_REQUIRES_CLOUD = "MODULE_REQUIRES_CLOUD"
+
+    # Entries (SP-E1-1). Both are *operator-facing* — the desk is behind
+    # the tenancy seam, so unlike the public surface these may say exactly
+    # what went wrong. ENTRY_NOT_FOUND is scoped to the workspace in the
+    # path: an id belonging to another workspace is simply not here.
+    ENTRY_NOT_FOUND = "ENTRY_NOT_FOUND"
+    # A lifecycle action attempted from a state that does not allow it —
+    # today only ``pending → confirmed`` (ruling D1). Almost always a stale
+    # desk screen, so the answer names the state it actually found.
+    ENTRY_INVALID_STATE = "ENTRY_INVALID_STATE"
+    # The entry page's slug is globally unique — it is the public address
+    # a player types off a poster, so two workspaces cannot share one. The
+    # bare integrity error would surface as a 500; this names the field so
+    # the operator can fix it in one edit. It says only "taken", never by
+    # whom: the slug namespace is public but the workspaces behind it are
+    # not, and a message naming the holder would be a cross-tenant leak on
+    # an otherwise ordinary validation error.
+    ENTRY_PAGE_SLUG_TAKEN = "ENTRY_PAGE_SLUG_TAKEN"
 
     # Tenancy (SP-CLOUD-2) — the uniform cross-tenant answer. A caller
     # without membership can never learn whether the workspace exists.

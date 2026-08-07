@@ -33,6 +33,9 @@ export type AppTab =
   | 'bracket-matches'
   | 'bracket-schedule'
   | 'bracket-live'
+  // The Entries desk (SP-E1-1). Kind-agnostic — an entries workspace is a
+  // meet or a bracket, and the desk is the same either way.
+  | 'entries'
   // Workspace-shell segments (left-sidebar IA): the readiness landing,
   // the Display configuration page, and the in-workspace admin sections
   // (the former standalone /settings tabs, re-homed under WORKSPACE).

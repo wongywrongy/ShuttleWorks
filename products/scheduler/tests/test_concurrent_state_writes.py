@@ -363,6 +363,257 @@ def test_the_write_is_a_compare_and_swap_not_just_a_precheck(client, tid):
         session.close()
 
 
+# ---- SP-E1-1: characterization of the blob write path Seam A enters ------
+#
+# The Entries commit seam (spec §5, Seam A) writes roster players into this
+# same versioned blob from a background-ish service rather than from a
+# client holding an ETag. It therefore depends on three properties of the
+# code below that no test pinned before, and that a refactor could remove
+# without any existing test noticing. SP-E1-1 rule 5 requires them
+# golden-mastered BEFORE the seam is built on top of them.
+#
+# These tests assert the CURRENT behavior, including the parts that are
+# traps. Where the behavior is a trap it is characterized as a trap, not
+# quietly asserted as if it were the desired design.
+
+
+def _repo_session():
+    """A second, independent session — the seam's own unit of work."""
+    from database.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    return session, LocalRepository(session)
+
+
+def test_conflict_error_carries_the_versions_a_retry_loop_needs(client, tid):
+    """Property 1: the CAS failure is *recoverable by inspection*.
+
+    A fetch-modify-retry loop needs to distinguish "someone else moved the
+    blob" (retry against the new version) from "this row is gone" (give up).
+    ``upsert_data`` answers the first with a ConflictError whose
+    ``current_version`` / ``seen_version`` are both populated, and the second
+    with ``KeyError``. Neither is incidental — the seam branches on both.
+    """
+    import uuid as _uuid
+
+    from app.exceptions import ConflictError
+
+    _seed(client, tid)
+    session, repo = _repo_session()
+    try:
+        row = repo.tournaments.get_by_id(_uuid.UUID(tid))
+        seen = row.state_version or 0
+        payload = dict(row.data or {})
+
+        repo.tournaments.upsert_data(_uuid.UUID(tid), payload)
+
+        with pytest.raises(ConflictError) as caught:
+            repo.tournaments.upsert_data(
+                _uuid.UUID(tid), payload, expected_version=seen
+            )
+        err = caught.value
+        assert err.seen_version == seen
+        assert err.current_version == seen + 1, (
+            "the seam retries against current_version; if it stops being "
+            "populated the loop has nothing to retry with"
+        )
+
+        # The other failure mode is a different exception entirely, so a
+        # retry loop that catches ConflictError cannot spin on a deleted row.
+        with pytest.raises(KeyError):
+            repo.tournaments.upsert_data(_uuid.uuid4(), payload)
+    finally:
+        session.close()
+
+
+def test_commit_state_preserves_server_managed_keys_the_payload_omits(client, tid):
+    """Property 2: ``bracket_session`` survives a payload that omits it.
+
+    ``commit_tournament_state`` merges a fixed list of server-managed keys
+    from the prior document. The Entries seam writes through this method, so
+    a Meet-side commit cannot erase the bracket engine's persisted state.
+    """
+    import uuid as _uuid
+
+    _seed(client, tid)
+    session, repo = _repo_session()
+    try:
+        tid_uuid = _uuid.UUID(tid)
+        row = repo.tournaments.get_by_id(tid_uuid)
+        seeded = dict(row.data or {})
+        seeded["bracket_session"] = {"assignments": {"pu-1": 3}}
+        repo.tournaments.upsert_data(tid_uuid, seeded)
+
+        # A Meet-shaped payload — no ``bracket_session`` key at all.
+        meet_only = {
+            k: v for k, v in seeded.items() if k != "bracket_session"
+        }
+        repo.commit_tournament_state(tid_uuid, meet_only)
+
+        session.expire_all()
+        after = repo.tournaments.get_by_id(tid_uuid)
+        assert after.data["bracket_session"] == {"assignments": {"pu-1": 3}}
+    finally:
+        session.close()
+
+
+def test_the_merge_list_is_exactly_bracket_session_and_nothing_else(client, tid):
+    """Property 2, negative control — and the reason the seam must
+    read-modify-write the WHOLE document.
+
+    The merge is a hardcoded one-key list, not "preserve anything absent".
+    ``bracketPlayers`` is server-side roster data that the merge does NOT
+    protect, so a partial payload silently erases it. The Entries seam
+    therefore has to fetch the full document, mutate it, and write it back —
+    never construct a payload containing only the section it cares about.
+
+    If a future change generalised the merge, this test fails and the seam's
+    read-modify-write requirement can be revisited deliberately.
+    """
+    import uuid as _uuid
+
+    _seed(client, tid)
+    session, repo = _repo_session()
+    try:
+        tid_uuid = _uuid.UUID(tid)
+        row = repo.tournaments.get_by_id(tid_uuid)
+        seeded = dict(row.data or {})
+        seeded["bracketPlayers"] = [{"id": "bp1", "name": "Casey"}]
+        repo.tournaments.upsert_data(tid_uuid, seeded)
+
+        partial = {k: v for k, v in seeded.items() if k != "bracketPlayers"}
+        repo.commit_tournament_state(tid_uuid, partial)
+
+        session.expire_all()
+        after = repo.tournaments.get_by_id(tid_uuid)
+        assert "bracketPlayers" not in after.data, (
+            "the merge list grew; the seam's read-modify-write contract "
+            "should be re-derived rather than left to this assumption"
+        )
+    finally:
+        session.close()
+
+
+def test_a_stale_session_snapshot_defeats_the_cas_entirely(client, tid):
+    """Property 3 — THE TRAP, and it is worse than "the retry spins".
+
+    ``SessionLocal`` sets ``expire_on_commit=False``
+    (``database/session.py``), and ``get_by_id`` is ``session.get`` — which
+    answers from the identity map without touching the database. So the
+    compare-and-swap inside ``upsert_data`` compares against **the version
+    this session last saw**, not the version in the row.
+
+    Consequence, asserted below: when the competing write lands on a
+    *different* session (which is what genuine concurrency looks like — one
+    session per request), the CAS does not fire at all. The stale write is
+    accepted and the other writer's change is gone.
+
+    This is NOT contradicted by
+    ``test_the_write_is_a_compare_and_swap_not_just_a_precheck`` above: that
+    test's competing write goes through the SAME session, which refreshes
+    the instance on commit, so the second call does see the new version.
+    The guard works exactly when the two writers share a session and fails
+    exactly when they do not.
+
+    Recorded here, unfixed, because fixing it changes the behavior of a
+    shared load-bearing write path (SP-E1-1 forbids that under a seam
+    task). What it *obliges* is that the Entries commit seam must expire its
+    own snapshot before every attempt rather than trusting the CAS to catch
+    a cross-session move — which is what the next test pins.
+    """
+    import uuid as _uuid
+
+    _seed(client, tid)
+    tid_uuid = _uuid.UUID(tid)
+
+    session, repo = _repo_session()
+    other_session, other_repo = _repo_session()
+    try:
+        row = repo.tournaments.get_by_id(tid_uuid)
+        seen = row.state_version or 0
+        mine = dict(row.data or {})
+
+        # A concurrent writer, on its own session, moves the blob on.
+        theirs = dict(mine)
+        theirs["planFinalized"] = True
+        other_repo.tournaments.upsert_data(tid_uuid, theirs)
+        assert other_repo.tournaments.get_by_id(tid_uuid).state_version == seen + 1
+
+        # Our session still believes it is at ``seen`` — and the CAS agrees.
+        assert repo.tournaments.get_by_id(tid_uuid) is row
+        assert (row.state_version or 0) == seen
+        repo.tournaments.upsert_data(tid_uuid, mine, expected_version=seen)
+
+        # …and the other writer's change is gone. A lost update, through a
+        # guard whose whole purpose is to prevent one.
+        other_session.rollback()
+        other_session.expire_all()
+        final = other_repo.tournaments.get_by_id(tid_uuid)
+        assert final.data.get("planFinalized") is not True
+    finally:
+        session.close()
+        other_session.close()
+
+
+def test_expiring_the_snapshot_is_what_makes_the_cas_fire(client, tid):
+    """Property 3, negative control — the same sequence with the discipline
+    the Entries seam adopts, proving the discipline is what does the work.
+
+    Identical setup to the test above; the only difference is
+    ``rollback() + expire_all()`` before the read. Now the version read is
+    real, the stale ``expected_version`` is genuinely stale, and the CAS
+    raises. Then the refreshed retry succeeds — so the seam's loop
+    terminates instead of spinning on its own cached copy.
+    """
+    import uuid as _uuid
+
+    from app.exceptions import ConflictError
+
+    _seed(client, tid)
+    tid_uuid = _uuid.UUID(tid)
+
+    session, repo = _repo_session()
+    other_session, other_repo = _repo_session()
+    try:
+        row = repo.tournaments.get_by_id(tid_uuid)
+        seen = row.state_version or 0
+        mine = dict(row.data or {})
+
+        theirs = dict(mine)
+        theirs["planFinalized"] = True
+        other_repo.tournaments.upsert_data(tid_uuid, theirs)
+
+        # The discipline: end the read transaction, drop the cached state.
+        session.rollback()
+        session.expire_all()
+        fresh = repo.tournaments.get_by_id(tid_uuid)
+        assert (fresh.state_version or 0) == seen + 1, (
+            "the snapshot did not move — the seam's refresh step is not "
+            "doing what it is there for"
+        )
+
+        with pytest.raises(ConflictError):
+            repo.tournaments.upsert_data(tid_uuid, mine, expected_version=seen)
+
+        # The retry, against the version actually observed, goes through —
+        # and it carries the other writer's change forward because it was
+        # rebuilt from the refreshed document.
+        merged = dict(fresh.data or {})
+        merged["courtLanes"] = ["A"]
+        repo.tournaments.upsert_data(
+            tid_uuid, merged, expected_version=fresh.state_version or 0
+        )
+        session.rollback()
+        session.expire_all()
+        after = repo.tournaments.get_by_id(tid_uuid)
+        assert after.data.get("planFinalized") is True
+        assert after.data.get("courtLanes") == ["A"]
+    finally:
+        session.close()
+        other_session.close()
+
+
 def test_conflicts_are_visible_on_the_metrics_endpoint(client, tid):
     """0.F: counted is not the same as observable.
 

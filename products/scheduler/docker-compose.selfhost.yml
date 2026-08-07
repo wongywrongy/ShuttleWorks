@@ -130,6 +130,21 @@ services:
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM=${SMTP_FROM}
+      # Entries (SP-E1-1). Passed through so the runbook's env table is
+      # true — a variable documented but never handed to the container is
+      # a setting an operator sets and watches do nothing.
+      #
+      # The defaults are Cloudflare's documented DUMMY keypair, which
+      # always passes. That is right for a deployment that has not turned
+      # the entry surface on yet (nothing routes to /e/ until the Phase 2
+      # ingress exists) and WRONG the moment it does: an always-pass
+      # challenge is no challenge. Replace both with real keys in the same
+      # change that publishes the entry hostname.
+      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-1x00000000000000000000AA}
+      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY:-1x0000000000000000000000000000000AA}
+      - ENTRIES_MAX_PER_IP=${ENTRIES_MAX_PER_IP:-20}
+      - ENTRIES_WINDOW_SECONDS=${ENTRIES_WINDOW_SECONDS:-600}
+      - ENTRIES_LOCK_SECONDS=${ENTRIES_LOCK_SECONDS:-300}
       # Guards /health/ready|deep|metrics, which carry worker
       # identities, live job ids and the deployed schema revision.
       # Required in cloud mode: the tunnel publishes a HOSTNAME, not a

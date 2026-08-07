@@ -119,6 +119,177 @@ the Cloudflare dashboard — cannot proceed from this session without them.
 
 ---
 
+## PROGRAM AMENDMENT A1 (user-authorized, 2026-08-06 — recorded verbatim per SP-E1-1)
+
+> **AMENDMENT A1 (user-authorized):** Phase 5 development proceeds locally before Phase 2.
+> The original ordering protected against *public exposure* on an unvalidated deployment;
+> development does not expose anything. The Phase 5 **[USER SIGN-OFF] public-exposure
+> security gate is preserved in full** and now sits after Phase 2 completes: no tunnel
+> ingress, DNS record, or Access change for entries may be made in this or any session
+> until that gate is passed. Phase 2 remains blocked on user-provided infrastructure
+> access; Phase 3's open item (attention-code shared constant) remains Phase 3 scope.
+
+## Phase 5 / SP-E1-1 — E1 walking skeleton, locally: IN PROGRESS (2026-08-06)
+
+**Branch:** `dev/prog1-p5-e1`. **Prompt:** SP-E1-1 (replaces SP-VERIFY-1).
+
+### Phase A — audit + plan: DONE (2026-08-06). STOP passed — user go-ahead "go begin",
+accepting all four recommendations (recorded as rulings D1–D4 in
+`docs/programs/SP-E1-1.md`, which is now committed to the repo as the executing prompt).
+
+**Gates re-confirmed at baseline on the branch:** frontend 1385/172 green, backend
+1018 passed / 66 skipped — exactly the Phase 0 numbers.
+
+**Mapping:** five parallel Opus agents (`wf_18b696b7-a13`, 526k tokens), domains =
+modules / security surface / write paths / infra / Turnstile research. All citations
+verified by the agents opening files. Full maps in the session transcript; the
+load-bearing facts and the contradiction list are in the STOP report (session of
+2026-08-06). Key landing zones confirmed: `MODULE_IDS` `models.py:606` +
+`derive_modules:620` + `normalize_module_seed:650`; module reads at `local.py:1400-1448`
+(3 sites) + `seed_modules:1485`; PATCH rules `api/workspace_modules.py:91-186`;
+auth-surface allowlist `tests/test_auth_surface.py:34-51` (mechanism: OpenAPI-derived,
+pass = 401/403/404); uniform-404 `app/dependencies.py:95-140` +
+`tests/test_tenant_isolation.py` (`_PARAM_FILLERS:25-33` needs an `entry_id` filler);
+hashing precedent `services/auth.py:281-296` (SHA-256 of `token_urlsafe(32)`,
+`AuthSession.token_hash` `models.py:962-992`) vs display plaintext anti-precedent
+(`api/display.py:49-50`); `AuthThrottle` `models.py:995-1015` + engine
+`services/auth.py:387-477` (blessed for reuse, callers own commits); body cap
+`app/body_limit.py` (4 MB, route-agnostic); client IP `app/client_ip.py`
+(CF-Connecting-IP, trusted-proxy gated); CSRF does NOT cover cookie-less public writes
+(`main.py:233-260`); Idempotency-Key replay contract `api/solve_jobs.py:98-156` +
+`services/solve_jobs.py:165-225`; Meet blob CAS `repositories/local.py:199-259` +
+`commit_tournament_state:1555-1606`; bracket participants `models.py:447-481` +
+`bulk_create_participants` `local.py:670-699` (NO additive path exists);
+`build_signals`/`_derive_phase` pure (`workspace_signals.py:297-414`), E1 adds nothing
+there; alembic head `q1b4c8d2e6f7`, next id `r2…`, migrations NOT exercised by tests
+(`tests/_helpers.py` uses `create_all`); email seam `services/email.py` confirmed
+UNUSED by E1; base-URL seam EXISTS (`public_app_origin` `config.py:216-218` — spec
+discrepancy #10 is itself wrong); nginx zones `nginx.conf:47,52` + SPA-fallback trap
+`:171-177` + CSP blocks Turnstile (`security-headers.conf:50`); Turnstile dummy keys +
+siteverify contract confirmed from Cloudflare docs (secret drives outcome; dummy token
+literal usable in tests).
+
+### Phases B–D — implemented (2026-08-06), via sequential fresh-context Opus workflow
+
+Workflow `wf_8d56337b-c8f`: 4 implementation stages + 1 adversarial verify (1.07M tokens,
+505 tool calls, ~2h). 18 commits, 60 files, +7630/−71.
+
+- **Foundations** (`b10fa98`, `ebb34fe`): migration `r2c7e1f4a9b3` = the full amended §4
+  schema (D4 tenant-scoped idempotency unique index; non-unique email index, Q12;
+  contact/player block separation preserved in models AND migration); module system —
+  `CLOUD_ONLY_MODULES`, mode via `cloud_modules_enabled()` (`auth_mode=="cloud"`, D2),
+  both read queries filtered, `MODULE_REQUIRES_CLOUD` on PATCH + create. First
+  programmatic alembic round-trip test in the repo (6 tests) + 16 module-mode tests.
+- **Commit seam** (`9fc9b4f`…`6def4dc`): 5 characterization tests golden-mastering the
+  blob CAS (incl. the `expire_on_commit=False` stale-identity trap); `PlayerDTO`/
+  `BracketPlayerDTO` gain `sourceEntryId`+`remarks`; additive `add_participants`;
+  `services/entries.py` Seam A (idempotent, additive, CAS retry w/ rollback+expire_all,
+  per-entry partial reporting, skip reasons); desk routes list/confirm(D1)/commit;
+  tenant-isolation coverage 67→70 ops. Backend 1097.
+- **Public write** (4 commits): Turnstile service (stdlib urllib, fail-closed, dummy-key
+  defaults); `GET /e/{slug}` server-rendered page (D3 — every interpolation escaped,
+  strict entrant-list projection, page-scoped CSP, 390px-usable) + `POST /e/{slug}/submit`
+  (uniform-404, Turnstile, `entry:<ip>` throttle triple, acknowledgment gating + version
+  recording, D4 replay semantics w/ IntegrityError re-read, R7 soft flag `needs_review`,
+  hashed manage token returned raw once); auth-surface allowlist + docstring rewrite +
+  sibling guard tests; `sw_entries` nginx zone + `/e/` location + install-docs rows
+  ("activated at Phase 2"). Backend 1167.
+- **Desk** (`0a32f0a`…`a55e429`): all six frontend module-id unions (a 6th found:
+  `WorkspaceRow` glyph title ternary), `SectionRole += 'intake'`, contract + baselines,
+  AppShell fail-closed guard, snapshot round-trip of the new player fields, EntriesDesk
+  (list, confirm, commit + result summary). Frontend 1433/175.
+
+**Adversarial verify: FINDINGS.** All gates green and counts strictly up (backend
+1167/66sk vs 1018 baseline; frontend 1433 vs 1385); scope guard clean (zero operator
+in-module files touched); all rulings D1–D4 hold; **seven negative controls proven real
+by guard inversion** (Turnstile, D4 scoping, batched-path filter, escaping, throttle,
+operator-only, uniform-404). One MAJOR: `ensure_modules` early-return means pre-existing
+workspaces never gain the entries row in cloud mode (spec Q1(R2) "lazy-seeds on read"
+fails for the non-empty case) — plus 4 minors (guard ordering Turnstile-before-throttle;
+speculative nginx `/api/entries/` block; body-cap control not colocated; no real path to
+create `entry_pages`/`entry_events`, colliding with Phase E "seed through real paths").
+**All five dispatched to a fix agent** (Phase E enabler routes: PUT entry-page + POST
+entry-events, operator-only, recorded as a deliberate scope addition).
+
+**Fix pass (same day, 5 commits `f725249`…`96f7410`): all five closed.** Cloud-mode
+backfill now unions missing `CLOUD_ONLY_MODULES` rows on both read paths (idempotent,
+one commit per Hub page, zero steady-state cost; +5 tests); throttle lock is read before
+Turnstile so a locked IP costs no outbound call (+2, transport-must-not-be-called
+control); speculative nginx `/api/entries/` block removed (zone + `/e/` kept, docs
+updated); body-cap negative control colocated (+1 — padding split across fields because
+Starlette caps a single form field at 1 MB); operator config routes `PUT entry-page` /
+`POST entry-events` (Q11.4 version-bump-only-on-change, slug conflict 409 without naming
+the holder; tenant-isolation auto-coverage now 72 ops; +22).
+**Backend after fixes: 1197 passed / 66 skipped.** ruff clean; all six compose files
+validate.
+
+### Phase E — end-to-end demo: DONE (2026-08-06/07), servers left running
+
+**Stack:** `docker compose -p sw-e1-demo -f docker-compose.cloud.yml` (fresh disposable
+Postgres volume scoped to project `sw-e1-demo` — no real-data DB anywhere near this) +
+Vite dev on **:5174** (5173 was taken) with `VITE_API_PROXY_TARGET=http://localhost:8600`.
+Migration chain ran clean on Postgres through `r2c7e1f4a9b3`.
+
+**Walkthrough (screenshots in `.playwright-mcp/sp-e1/`, untracked by design):**
+1. Seeded through real paths only: `POST /auth/register` (director@example.com),
+   `POST /tournaments` (Meet kind), module PATCH `entries available→enabled` (the row was
+   auto-seeded by cloud mode — R1 visible), `PUT entry-page` (slug `wongworks-open`,
+   waiver on, regulations v1), `POST entry-events` (MS1, fee 2500).
+2. `01-public-page-390px` — the public page at 390px: events, fee, regulations + version,
+   acknowledgment checkbox with the entrant-list notice, Turnstile (dummy keys).
+3. Submitted Alex Silva from the form → `02-entry-received-390px` — success page with the
+   one-time manage token (hashed at rest). Public list then shows "Alex Silva MS1" —
+   names + events only (I6).
+4. **Replay demo:** same `Idempotency-Key` twice → same reference id, 201 then 200,
+   one row. **R7 demo:** Sam Silva on the same contact email accepted CLEAN (the
+   parent-two-children case — no flag, per spec Q12); a second "Alex Silva" on the same
+   email+event flagged `needs_review`. (SP-E1-1 Phase E wording says "different player
+   name → soft flag"; the spec's trigger is same-name — both sides demonstrated, spec
+   followed.)
+5. `03-entries-desk` — desk shows 4 entries, states, attention chip, remarks; confirmed
+   the three legitimate entries, left the flagged duplicate pending (operator judgment).
+6. Commit → `04-commit-result` "3 committed to the roster."; second commit → "Nothing
+   new to commit" (Seam A idempotency proven in the UI, matching the test proof).
+7. `05-roster-committed` — Meet roster shows the 3 players; state blob carries
+   `sourceEntryId` + verbatim remarks + group per event code.
+8. **I3/R6 negative, live:** a one-off backend container with `AUTH_MODE=local` on the
+   SAME database — new workspace seeds without entries, GET shows none, PATCH answers
+   `409 MODULE_REQUIRES_CLOUD`. Stopped after the demonstration.
+
+**No tunnel, DNS, Access, or Cloudflare-dashboard change of any kind was made** (asserted
+per Amendment A1; Turnstile ran on the documented dummy keypair).
+
+### Findings from the live run (inputs to later phases)
+
+- **F-E1 (real, for E2/Phase 7 design + spec §9.3): the Meet rank-slot mapping is wrong
+  in practice.** `rankCounts: {MS: 3}` declares SLOTS MS1/MS2/MS3 (one player per school
+  per singles slot — `useRankValidation.ts`), but the seam maps every entrant of event
+  "MS1" onto the SAME slot in the SAME seam-created group, so the roster UI's
+  normalization stripped `ranks` from the 2nd and 3rd players on its next autosave
+  (state v3/v4 were SPA autosaves; v2 was the commit). Players, remarks, sourceEntryId
+  and groups all survived — only the rank slot collided. This is spec open question §9.3
+  answered concretely: entry events map onto a *division* (MS), not a *slot* (MS1);
+  the seam needs either slot assignment or a division-level mapping. Do NOT patch ad hoc.
+- **F-E2 (observation): the operator SPA autosaves the state blob and will normalize
+  seam-written data** through Meet's domain rules. Any future seam-written field must
+  either round-trip the SPA store (as sourceEntryId/remarks now do, by test) or be
+  written to survive normalization. Worth a characterization test in E2.
+
+**Servers left running:** operator app http://localhost:5174 (director@example.com),
+public page http://localhost:8600/e/wongworks-open, API :8600, stack `sw-e1-demo`
+(`make stop` will NOT stop it — use `docker compose -p sw-e1-demo -f
+products/scheduler/docker-compose.cloud.yml down`; add `-v` to discard the demo data).
+
+**Decisions proposed at the STOP (see report):** cloud-mode predicate for R6 (spec's
+`environment=="cloud"` collides with `docker-compose.cloud.yml`'s deliberate
+`ENVIRONMENT=local` — S1); E1 lifecycle gap (no email verification + no confirm UI ⇒
+nothing reaches `confirmed` ⇒ Seam A commits nothing — needs a ruling); public page
+via hand-rolled `HTMLResponse` (Jinja2 not installed; rule 8); entries idempotency
+index scoped per-tenant (deliberate divergence from the global solve-job index — a
+cross-tenant disclosure vector on an unauthenticated route otherwise).
+
+---
+
 **Context.** ShuttleWorks has no intake capability — operators put players into workspaces
 by hand (Meet: a flat roster in the `tournaments.data` blob; Bracket: a per-event
 participant picker). Entries adds public self-service registration: players sign up for

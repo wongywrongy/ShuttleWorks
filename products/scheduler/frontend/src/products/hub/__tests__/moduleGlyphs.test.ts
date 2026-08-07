@@ -26,6 +26,23 @@ describe('moduleGlyphs', () => {
     ]);
   });
 
+  it('gives Entries an E glyph, after the three every workspace has', () => {
+    expect(
+      moduleGlyphs([mod('entries', 'enabled'), mod('meet', 'enabled')], 'meet'),
+    ).toEqual([
+      { id: 'meet', letter: 'M', enabled: true },
+      { id: 'entries', letter: 'E', enabled: true },
+    ]);
+  });
+
+  it('shows no E on a workspace without the module (local mode)', () => {
+    // NEGATIVE CONTROL: the glyph row is driven by the sent rows, and in
+    // local mode the backend never sends an entries row (ruling D2).
+    expect(
+      moduleGlyphs([mod('meet', 'enabled')], 'meet').map((g) => g.letter),
+    ).not.toContain('E');
+  });
+
   it('ignores disabled / coming_soon modules', () => {
     expect(
       moduleGlyphs([mod('meet', 'enabled'), mod('display', 'coming_soon'), mod('bracket', 'disabled')], 'meet'),

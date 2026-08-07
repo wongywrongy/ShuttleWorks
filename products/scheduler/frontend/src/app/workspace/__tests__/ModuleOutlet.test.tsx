@@ -15,6 +15,9 @@ vi.mock('../../../products/display/DisplayProduct', () => ({
 vi.mock('../../../products/operations/OperationsProduct', () => ({
   OperationsProduct: () => <div data-testid="operations-product" />,
 }));
+vi.mock('../../../products/entries/EntriesProduct', () => ({
+  EntriesProduct: () => <div data-testid="entries-product" />,
+}));
 
 function setTabAndKind(tab: string, kind: 'meet' | 'bracket' | null) {
   useUiStore.getState().setActiveTab(tab as never);
@@ -42,6 +45,18 @@ describe('ModuleOutlet', () => {
     setTabAndKind('bracket-draw', 'bracket');
     render(<ModuleOutlet />);
     expect(await screen.findByTestId('bracket-product')).toBeInTheDocument();
+  });
+
+  it('renders EntriesProduct for the entries tab, on either kind', async () => {
+    // The outlet's final `else` is MeetProduct, so an unrouted module id
+    // renders the Meet product under someone else's URL — this is the
+    // assertion that catches that, and the AppShell guard is what catches it
+    // for a module this workspace does not have at all.
+    setTabAndKind('entries', 'bracket');
+    render(<ModuleOutlet />);
+    expect(await screen.findByTestId('entries-product')).toBeInTheDocument();
+    expect(screen.queryByTestId('meet-product')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bracket-product')).not.toBeInTheDocument();
   });
 
   // --- Unified Operations (both engines enabled) ---------------------------

@@ -602,8 +602,24 @@ class BracketResult(Base):
 # enablement) read and mutate first-class state rather than re-deriving.
 
 # Canonical module ids. ``meet`` / ``bracket`` are the data-producing
-# operator modules; ``display`` is the read-only public surface.
-MODULE_IDS = ("meet", "bracket", "display")
+# operator modules; ``display`` is the read-only public surface;
+# ``entries`` is the public *intake* surface (see CLOUD_ONLY_MODULES).
+MODULE_IDS = ("meet", "bracket", "display", "entries")
+
+# Modules that only exist where the deployment can actually operate them.
+# Entries is public self-service registration: it needs real operator
+# accounts and a reachable public surface, so a local-mode deployment can
+# never enable it. ADR 0005 retired ``coming_soon`` precisely so that every
+# module a workspace shows is actionable — a permanently-unenableable module
+# would resurrect the state that ADR deleted. So local mode does not seed
+# these, and filters them out of both module read paths.
+#
+# This module stays SETTINGS-FREE: the mode arrives as the explicit
+# ``include_cloud_only`` argument below, supplied by the caller. The
+# predicate behind it lives in ``app.config.cloud_modules_enabled`` and keys
+# on ``AUTH_MODE`` (ruling D2) — deliberately not ``ENVIRONMENT``, which
+# ``docker-compose.cloud.yml`` pins to ``local`` on purpose.
+CLOUD_ONLY_MODULES = ("entries",)
 
 # Module lifecycle vocabulary. ``enabled`` — active/operable; ``available``
 # — installable but off; ``disabled`` — turned off by the operator;
@@ -617,7 +633,9 @@ MODULE_STATUSES = ("enabled", "available", "disabled", "coming_soon")
 OPERATIONAL_MODULES = ("meet", "bracket")
 
 
-def derive_modules(kind: Optional[str]) -> dict[str, str]:
+def derive_modules(
+    kind: Optional[str], *, include_cloud_only: bool = False
+) -> dict[str, str]:
     """Map a tournament's legacy ``kind`` to its seed module status set.
 
     The kind's own operator is ``enabled``; the foreign operator is
@@ -626,11 +644,22 @@ def derive_modules(kind: Optional[str]) -> dict[str, str]:
     ``display`` is ``available`` for both kinds — the bracket public display
     (SP-B3) renders the draw / live matches / results. Unknown / ``None``
     kinds fall back to the meet shape.
+
+    ``include_cloud_only`` adds ``CLOUD_ONLY_MODULES`` (``entries``, also
+    ``available`` for both kinds). Keyword-only and defaulting to ``False``
+    on purpose: the default is the safe direction — a caller that forgets to
+    ask omits a module, rather than seeding one the deployment cannot
+    operate. The mode is the caller's to know; this layer imports no
+    settings.
     """
     if kind == "bracket":
-        return {"bracket": "enabled", "display": "available", "meet": "available"}
-    # ``meet`` and any unknown / None kind.
-    return {"meet": "enabled", "display": "available", "bracket": "available"}
+        modules = {"bracket": "enabled", "display": "available", "meet": "available"}
+    else:
+        # ``meet`` and any unknown / None kind.
+        modules = {"meet": "enabled", "display": "available", "bracket": "available"}
+    if include_cloud_only:
+        modules.update({module_id: "available" for module_id in CLOUD_ONLY_MODULES})
+    return modules
 
 
 def display_dependency_satisfied(statuses: dict[str, str]) -> bool:
@@ -647,24 +676,42 @@ def display_dependency_satisfied(statuses: dict[str, str]) -> bool:
     return any(statuses.get(m) == "enabled" for m in OPERATIONAL_MODULES)
 
 
-def normalize_module_seed(seeds: list[dict]) -> list[dict]:
+def normalize_module_seed(
+    seeds: list[dict], *, include_cloud_only: bool = False
+) -> list[dict]:
     """Validate and complete an explicit create-time module seed.
 
     ``seeds`` is the create endpoint's optional ``modules[]`` — each item a
     dict with ``moduleId``, ``status``, and optional ``config``. Validates
-    structure (known id, no duplicates, valid status), backfills any of the
-    three modules not named, and returns an ordered (by ``MODULE_IDS``) list
-    of ``{"module_id", "status", "config"}`` rows ready to persist.
+    structure (known id, no duplicates, valid status), backfills any
+    seedable module not named, and returns an ordered (by ``MODULE_IDS``)
+    list of ``{"module_id", "status", "config"}`` rows ready to persist.
 
     Backfill: any unnamed module becomes ``available`` (installable) — display
     included, since it is fully built for both operators (meet + bracket). Raises
     ``ValueError`` on malformed input; the caller maps that to a 400 and separately
     applies ``display_dependency_satisfied``.
+
+    ``include_cloud_only`` mirrors ``derive_modules``: without it,
+    ``CLOUD_ONLY_MODULES`` are neither backfilled nor accepted when named
+    explicitly. Naming one is an error rather than a silent drop — persisting
+    a row the read path would then hide is the confusing outcome. The route
+    catches this case first and answers ``MODULE_REQUIRES_CLOUD``; this
+    ValueError is the defence-in-depth for any other caller.
     """
+    seedable = tuple(
+        module_id
+        for module_id in MODULE_IDS
+        if include_cloud_only or module_id not in CLOUD_ONLY_MODULES
+    )
     named: dict[str, dict] = {}
     for item in seeds:
         module_id = item.get("moduleId")
         status = item.get("status")
+        if module_id in CLOUD_ONLY_MODULES and not include_cloud_only:
+            raise ValueError(
+                f"moduleId {module_id!r} requires a cloud-mode deployment"
+            )
         if module_id not in MODULE_IDS:
             raise ValueError(f"unknown moduleId: {module_id!r}")
         if module_id in named:
@@ -687,7 +734,7 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
     # *enabled* when an operational module is enabled — the dependency rule
     # (display_dependency_satisfied), applied separately by the caller.
     rows: list[dict] = []
-    for module_id in MODULE_IDS:
+    for module_id in seedable:
         if module_id in named:
             rows.append(named[module_id])
         else:
@@ -1013,3 +1060,238 @@ class AuthThrottle(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
+
+
+# ---- Entries (SP-PROGRAM-1 Phase 5 / SP-E1-1) ----------------------------
+#
+# Public self-service registration: the first public *write* surface. The
+# full schema from the design spec's §4 sketch lands in one migration (E1
+# rule 6) even though the E1 walking skeleton uses only a subset — the
+# doubles pointers, the payment columns and the verification timestamp are
+# created now precisely so E2/E3/E5 are feature work, not migration churn.
+#
+# Nothing here is mode-aware. The cloud-only rule lives on the *module* row
+# (``CLOUD_ONLY_MODULES`` above), so a database that moves cloud → local
+# hides the Entries module but keeps every entry intact and readable when it
+# moves back. Filtering is a projection, never a migration.
+
+
+class EntryEvent(Base):
+    """One entry-facing event within a workspace (spec Q2).
+
+    Entries owns its own events table rather than borrowing one, because
+    Meet has no events concept at all — it carries a flat player list inside
+    the state blob and expresses divisions through ``PlayerDTO.ranks[]``
+    codes. So ``code`` is the pivot: for a Meet workspace it maps onto that
+    rank vocabulary, and for a Bracket workspace ``bracket_event_id`` points
+    at the matching ``bracket_events`` row.
+
+    ``bracket_event_id`` is a deliberately **unconstrained** pointer (see the
+    migration docstring): the commit seam already specifies "an unmappable
+    code is skipped and reported, never guessed", so a dangling pointer is a
+    handled state — whereas a real FK would have to cascade, letting a draw
+    rebuild silently destroy entry configuration and every entry under it.
+    """
+
+    __tablename__ = "entry_events"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    # 'MS', 'XD1' — the Meet ranks[] vocabulary or a bracket event id.
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    discipline: Mapped[str] = mapped_column(String(200), nullable=False)
+    # 'singles' | 'doubles'. E1 is singles-only; doubles is E3.
+    entry_type: Mapped[str] = mapped_column(
+        String(20), default="singles", nullable=False
+    )
+    bracket_event_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    cap: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    fee_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    opens_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closes_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    retention_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_entry_events_bracket_event", "tournament_id", "bracket_event_id"),
+    )
+
+
+class Entry(Base):
+    """One submitted entry (spec §4, Q12).
+
+    **The block discipline in this class is load-bearing.** Submitter/contact
+    fields and player fields are kept structurally separate and are never
+    interleaved, so extracting an ``entry_players`` table when doubles or a
+    real registry arrives is a column move — a migration, not a redesign.
+    Additions belong *inside* the block they describe.
+
+    Two dedup mechanisms, deliberately not conflated (the trap ``SolveJob``
+    already documents from the other side):
+
+    - ``uq_entries_tournament_idempotency_key`` — mechanical retry safety. A
+      form re-posted on a flaky connection returns the original entry. Unlike
+      the solve rail's global index this one is **tenant-scoped** (ruling
+      D4): the submit route is unauthenticated, so a global key lookup would
+      let an outsider probe another tenant's keyspace.
+    - **No** natural-key uniqueness on ``(entry_event_id, contact_email)``.
+      Ruled out in Q12: one parent enters two children, one club rep enters
+      eight players. Duplicate *suspicion* (same event + same normalized
+      email + same player name) is a soft attention flag an operator
+      resolves; the plain index below powers that lookup. ``contact_email``
+      is normalized (lowercased) at write time rather than indexed through a
+      ``lower()`` expression, which keeps the index identical on SQLite and
+      Postgres.
+    """
+
+    __tablename__ = "entries"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    entry_event_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    # See the lifecycle state machine in the design spec §6. E1 submissions
+    # land directly in 'pending' (ruling D1); 'unverified' exists in the
+    # vocabulary but is only entered once E2's email verification ships.
+    state: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    pending_reasons: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
+    # ---- submitter / contact block (Q12) ------------------------------
+    # Who submitted and how we reach them. May legitimately repeat across
+    # entries: one parent, several children; one club rep, several players.
+    contact_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Stored pre-normalized (lowercased at write time) — see the class
+    # docstring for why this is not a functional index.
+    contact_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    email_verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # SHA-256 of the entrant's capability token, following AuthSession's
+    # hashed storage rather than DisplayToken's plaintext: entrant tokens are
+    # numerous and long-lived, so the stronger precedent wins.
+    manage_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # ---- player block (Q12) -------------------------------------------
+    # Who is actually playing. Deliberately NOT interleaved with the block
+    # above: these are the columns that move, whole, into `entry_players`
+    # if/when the split happens. Keep additions to this block in this block.
+    player_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # A plain eligibility field (U15, O40) — never a trigger for automatic
+    # behavior, and emphatically not a GDPR special category.
+    birth_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Free-text availability note, carried verbatim onto the roster player by
+    # the commit seam. Never parsed, never inferred from, never fed to the
+    # solver: a free-text field that silently became a constraint would be
+    # the worst kind of automatic decision.
+    remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # ---- doubles (created now, unused in E1 — doubles is E3) ----------
+    partner_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    partner_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
+
+    # ---- publication & consent ----------------------------------------
+    # Absent from the public entrant list; still fully entered (Q4/I6).
+    list_opt_out: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    # Q11: acknowledgment gates submission from day one, and the version
+    # agreed to is recorded at that moment — "they agreed to something at
+    # some point" is not a record.
+    regulations_accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    regulations_version_accepted: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+
+    # ---- money / traceability -----------------------------------------
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    fee_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    payment_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Back-reference into the roster, written by the commit seam. Its
+    # presence is what makes re-running the seam idempotent.
+    committed_player_id: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+    withdrawn_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tournament_id", "entry_event_id"],
+            ["entry_events.tournament_id", "entry_events.id"],
+            ondelete="CASCADE",
+        ),
+        # Ruling D4 — tenant-scoped, unlike the solve rail's global index.
+        # NULL keys are exempt on both dialects (NULLs compare distinct).
+        Index(
+            "uq_entries_tournament_idempotency_key",
+            "tournament_id",
+            "idempotency_key",
+            unique=True,
+        ),
+        # NON-unique on purpose (Q12). Powers the soft duplicate flag.
+        Index("ix_entries_event_contact_email", "entry_event_id", "contact_email"),
+    )
+
+
+class EntryPage(Base):
+    """The public entry page for a workspace (spec Q4, Q11).
+
+    One row per workspace. ``slug`` is the discoverable public address of
+    the *page* — deliberately not a capability token, because an entry page
+    is meant to be shared, which is exactly what a capability URL exists to
+    prevent. Per-entrant capability lives on ``Entry.manage_token_hash``.
+
+    ``regulations_text`` is the director's own words; ShuttleWorks ships no
+    template and no default legal copy. ``waiver_required`` is director
+    discretion — the software never requires a waiver on the operator's
+    behalf. ``regulations_version`` bumps on every text edit so an entry's
+    recorded ``regulations_version_accepted`` means something in a dispute.
+    """
+
+    __tablename__ = "entry_pages"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    slug: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_open: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    intro_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    regulations_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    waiver_required: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    regulations_version: Mapped[int] = mapped_column(
+        Integer, default=1, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    __table_args__ = (Index("uq_entry_pages_slug", "slug", unique=True),)

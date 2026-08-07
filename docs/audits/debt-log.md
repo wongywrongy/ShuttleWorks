@@ -720,3 +720,44 @@ a green 1,100-test suite. The real check is the viewer flow in
     the field is dead weight that invites someone to resurface it. Removing it
     touches the DTO contract both sides. Size S, needs a contract call.
     *(2026-08-06 SP-UI-1.)*
+- **2026-08-06 · SP-E1-1 Seam A characterization findings** (recorded, deliberately
+  not fixed inside a seam task):
+  - **`upsert_data`'s compare-and-swap is identity-map-scoped, so it does not
+    detect a cross-session concurrent write.** `get_by_id` is `session.get`,
+    which answers from the identity map, and `SessionLocal` sets
+    `expire_on_commit=False` (`database/session.py:97`). The re-read the CAS
+    performs "immediately before the mutation" therefore returns *the version
+    this session last saw*, not the row's version. Two writers on the same
+    session are caught (that is what
+    `test_the_write_is_a_compare_and_swap_not_just_a_precheck` pins); two
+    writers on different sessions — which is what real concurrency looks like,
+    one session per request — are not: the stale write is accepted and the
+    other writer's change is lost. Characterized in
+    `tests/test_concurrent_state_writes.py::test_a_stale_session_snapshot_defeats_the_cas_entirely`
+    with its negative control
+    (`…::test_expiring_the_snapshot_is_what_makes_the_cas_fire`). The HTTP
+    `PUT /state` path is unaffected in practice because each request gets a
+    fresh session that reads the row once; the exposure is any in-request code
+    that reads, does other work, then writes with `expected_version` — which is
+    exactly the shape of the Entries commit seam, and why that seam expires its
+    own snapshot before every attempt instead of trusting the guard. Fixing it
+    properly means either expiring inside `upsert_data` or moving the compare
+    into the `UPDATE … WHERE state_version = :seen` statement (the
+    `services/members.py` correlated-subquery pattern). Size M, touches a
+    shared load-bearing write path. *(2026-08-06 SP-E1-1 Task 1.)*
+
+- **2026-08-07 · SP-E1-1 Phase E live-run findings** (design inputs for E2/Phase 7,
+  deliberately not patched ad hoc — spec §9.3 owns the redesign):
+  - **The Meet mapping targets a rank *slot*, not a division.** `rankCounts: {MS: 3}`
+    declares slots MS1/MS2/MS3 with one player per school per singles slot
+    (`products/meet/roster/hooks/useRankValidation.ts`), but Seam A maps every entrant
+    of entry event "MS1" onto that same slot inside the same seam-created group, so the
+    roster's normalization stripped `ranks[]` from all but the first committed player on
+    the SPA's next autosave. Names, remarks, `sourceEntryId` and groups survived. The
+    fix is a design decision (division-level mapping or seam-side slot assignment), not
+    a patch. Size M, blocks nothing in E1. *(SP-E1-1 Phase E, workspace `sw-e1-demo`.)*
+  - **The operator SPA autosaves the state blob and re-normalizes seam-written data**
+    through Meet's domain rules (observed as state_version bumps v3/v4 after the seam's
+    v2). Any future seam-written roster field needs either a snapshot round-trip test
+    (as `sourceEntryId`/`remarks` have) or a shape that survives normalization. Size S:
+    one characterization test in E2. *(Same run.)*

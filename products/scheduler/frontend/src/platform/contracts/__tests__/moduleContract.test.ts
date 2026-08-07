@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bracketContract,
   displayContract,
+  entriesContract,
   meetContract,
   moduleContracts,
   operationsContract,
@@ -35,7 +36,15 @@ import type { AppTab } from '../../../store/uiStore';
 // Helpers — all pure, no side effects.
 // ---------------------------------------------------------------------------
 
-const ALL_MODULES: Set<ModuleId> = new Set<ModuleId>(['meet', 'bracket', 'display']);
+// BASELINE EDIT (SP-E1-1): `entries` added. The nav renders a section only for
+// an ENABLED module, so without it here the Entries section never appears and
+// `ownedSegments` would have nothing to be checked against.
+const ALL_MODULES: Set<ModuleId> = new Set<ModuleId>([
+  'meet',
+  'bracket',
+  'display',
+  'entries',
+]);
 
 /** The exact set of segments the real nav renders for each section id, taken
  *  as the union across both engine kinds (Operations' Courts/Live items differ
@@ -77,6 +86,7 @@ const CONTRACT_BY_ID: Record<ArchModuleId, ModuleContract> = {
   bracket: bracketContract,
   operations: operationsContract,
   display: displayContract,
+  entries: entriesContract,
 };
 
 // ---------------------------------------------------------------------------
@@ -84,12 +94,18 @@ const CONTRACT_BY_ID: Record<ArchModuleId, ModuleContract> = {
 // ---------------------------------------------------------------------------
 
 describe('moduleContract — descriptor set', () => {
-  it('exposes exactly the four architectural modules, keyed by their id', () => {
+  it('exposes exactly the five architectural modules, keyed by their id', () => {
+    // BASELINE EDIT (SP-E1-1): `entries` appended. The assertion is ORDER
+    // SENSITIVE and the position is a decision, not an accident — entries is
+    // last here for the same reason it is last in `MODULE_ORDER`: it is the
+    // only cloud-only module, and putting it after the three every workspace
+    // has keeps the existing order stable for everyone.
     expect(moduleContracts.map((c) => c.id)).toEqual([
       'meet',
       'bracket',
       'operations',
       'display',
+      'entries',
     ]);
     for (const contract of moduleContracts) {
       expect(CONTRACT_BY_ID[contract.id]).toBe(contract);
@@ -100,6 +116,10 @@ describe('moduleContract — descriptor set', () => {
     expect(meetContract.enableable).toBe(true);
     expect(bracketContract.enableable).toBe(true);
     expect(displayContract.enableable).toBe(true);
+    // BASELINE EDIT (SP-E1-1): Entries is Tier-1 enableable (Q1) — its
+    // cloud-only-ness is a SEEDING rule, not a tier. Asserting `false` here
+    // would conflate "not present in local mode" with "always on".
+    expect(entriesContract.enableable).toBe(true);
     expect(operationsContract.enableable).toBe(false);
   });
 });
@@ -113,8 +133,10 @@ describe('moduleContract — ownedSegments match buildWorkspaceNav', () => {
 
   it('every module section the nav renders has a descriptor', () => {
     // The nav's section ids are exactly the architectural module ids.
+    // BASELINE EDIT (SP-E1-1): `entries` added — a nav section without a
+    // descriptor is precisely the drift this assertion exists to catch.
     expect([...sectionSegments.keys()].sort()).toEqual(
-      ['bracket', 'display', 'meet', 'operations'].sort(),
+      ['bracket', 'display', 'entries', 'meet', 'operations'].sort(),
     );
   });
 
@@ -194,6 +216,11 @@ describe('moduleContract — named seam edges are honest', () => {
     'scheduleFinalized',
     'drawGenerated',
     'matchStateChanged',
+    // BASELINE EDIT (SP-E1-1): Seam A. Unlike its three siblings this edge is
+    // an operator-pressed server-side write rather than a store subscription;
+    // it is admitted because it is REAL, which is the only criterion this set
+    // has ever applied.
+    'entriesCommitted',
   ]);
 
   it('every emitted / reacted edge is in the honest §3 set', () => {
@@ -216,6 +243,19 @@ describe('moduleContract — named seam edges are honest', () => {
   it('display only reacts (read-only) and emits nothing', () => {
     expect(displayContract.emits).toEqual([]);
     expect(displayContract.reactsTo).toEqual(['matchStateChanged']);
+  });
+
+  it('the commit edge is emitted by Entries and reacted to by nobody', () => {
+    // The Seam-C guard's sibling. The commit is a SERVER-side write; Meet and
+    // Bracket see the new players on their next `/state` read, not through a
+    // subscription. Declaring `reactsTo: ['entriesCommitted']` on either
+    // engine would claim a client-side wire that does not exist — and if one
+    // is ever built, this assertion is what forces the descriptor to say so.
+    expect(entriesContract.emits).toEqual(['entriesCommitted']);
+    expect(entriesContract.reactsTo).toEqual([]);
+    for (const contract of moduleContracts) {
+      expect(contract.reactsTo).not.toContain('entriesCommitted');
+    }
   });
 });
 
@@ -247,5 +287,13 @@ describe('moduleContract — DTO seams are non-empty and named', () => {
     expect(operationsContract.produces).toContain('MatchStateDTO');
     expect(meetContract.consumes).toContain('MatchStateDTO');
     expect(displayContract.consumes).toContain('MatchStateDTO');
+  });
+
+  it("Seam A's product closes: Entries produces the roster player Meet consumes", () => {
+    // The whole point of the module (spec §5): a confirmed entry becomes a
+    // PlayerDTO on the Meet roster. If `produces` here ever stopped naming
+    // it, the desk would be an inbox that goes nowhere.
+    expect(entriesContract.produces).toContain('PlayerDTO');
+    expect(meetContract.consumes).toContain('PlayerDTO');
   });
 });

@@ -55,8 +55,10 @@ from fastapi import Request
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import cloud_modules_enabled
 from app.time_utils import now_iso
 from database.models import (
+    CLOUD_ONLY_MODULES,
     BracketEvent,
     BracketMatch,
     BracketParticipant,
@@ -678,6 +680,49 @@ class _LocalBracketRepo:
         Each ``participants`` entry: ``id``, ``name``, ``type``,
         optional ``member_ids``, ``seed``, ``meta``. Returns the
         number of rows inserted.
+        """
+        return self._insert_participants(tournament_id, event_id, participants)
+
+    def add_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        participants: list[dict],
+    ) -> int:
+        """Insert participants **without disturbing the existing list**.
+
+        Same input shape and defaults as ``bulk_create_participants`` — one
+        participant vocabulary, not two. The difference is the calling
+        contract, not the row shape.
+
+        Every participant write before this one arrived through
+        ``upsert_event``, which deletes the event and recreates it from the
+        payload: correct for the roster editor, which owns the whole list,
+        and wrong for the Entries commit seam, which adds one entrant at a
+        time to a list it did not author. Seam A's invariant is "never
+        mutates or deletes an existing roster player", and there was no
+        method that could honour it.
+
+        Deliberately **unguarded on event status.** Whether a generated or
+        started draw may take a late entrant is a policy question, and the
+        answer (no — the seam skips and reports rather than mutating a live
+        draw) belongs with the policy in ``services/entries.py``, not
+        hard-coded into a persistence primitive that a future promote /
+        late-entry flow may need with different rules.
+        """
+        return self._insert_participants(tournament_id, event_id, participants)
+
+    def _insert_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        participants: list[dict],
+    ) -> int:
+        """Shared row construction for both participant writers.
+
+        The two public methods differ only in their calling contract (own
+        the list vs. add to it), so the dict → row mapping lives once. A
+        second copy would drift the moment either grows a field.
         """
         if not participants:
             return 0
@@ -1377,6 +1422,31 @@ class _LocalModuleRepo:
     mutate path calls it, so a fresh ``create_all`` DB (tests), a
     freshly-created tournament, and an existing prod row all converge on
     the derived set without depending on the Alembic backfill.
+
+    This class is also where the deployment mode enters the module system
+    (spec Q1 / ruling R6). ``CLOUD_ONLY_MODULES`` rows are seeded only in
+    cloud mode and filtered out of **both** read queries in local mode —
+    the batched ``ensure_modules_for`` reads ``WorkspaceModule`` directly
+    and does not inherit ``_rows_for``'s filter, so applying it to only one
+    of the two leaks the module onto the Hub list.
+
+    Rows are **filtered, never deleted**. An inherited row (a database
+    restored from a cloud backup, or copied onto a laptop) stays in the
+    table untouched, so moving that database back to a cloud deployment
+    restores the module with its status and config intact. Filtering is a
+    projection, not a migration.
+
+    The seed is **lazy on read** (spec Q1 R2), and "lazy" has to mean more
+    than "on the first read ever". A workspace that already existed when a
+    cloud-only module shipped — or one created while the deployment ran in
+    local mode — carries rows, so the zero-rows seed branch never fires for
+    it again and it would stay permanently without the module. So cloud
+    mode also **backfills the missing ``CLOUD_ONLY_MODULES`` rows onto a
+    workspace that already has rows**, with the status ``derive_modules``
+    gives them. Scoped to the cloud-only set on purpose: this reconciles
+    the one thing the *deployment mode* changes under a workspace, and is
+    not a general module reconciler that would quietly resurrect a module
+    an operator or a migration had removed.
     """
 
     def __init__(self, session: Session) -> None:
@@ -1394,14 +1464,32 @@ class _LocalModuleRepo:
 
         If the tournament has zero module rows, insert the derived set
         (from ``derive_modules(tournament.kind)``), flush, and return it;
-        otherwise return the existing rows. Idempotent — a second call
+        otherwise backfill any missing cloud-only rows (cloud mode only —
+        see the class docstring) and return. Idempotent — a second call
         never duplicates rows. Ordered by ``module_id`` for stable output.
         """
         existing = self._rows_for(tournament.id)
         if existing:
-            return existing
-        derived = derive_modules(getattr(tournament, "kind", None))
-        for module_id, status in derived.items():
+            missing = self._missing_cloud_only(tournament, existing)
+            if not missing:
+                return existing
+            self._add_module_rows(tournament, missing)
+            self.session.flush()
+            self.session.commit()
+            return self._rows_for(tournament.id)
+        derived = derive_modules(
+            getattr(tournament, "kind", None),
+            include_cloud_only=cloud_modules_enabled(),
+        )
+        self._add_module_rows(tournament, derived)
+        self.session.flush()
+        self.session.commit()
+        return self._rows_for(tournament.id)
+
+    def _add_module_rows(
+        self, tournament: Tournament, statuses: dict[str, str]
+    ) -> None:
+        for module_id, status in statuses.items():
             self.session.add(
                 WorkspaceModule(
                     tournament_id=tournament.id,
@@ -1410,9 +1498,28 @@ class _LocalModuleRepo:
                     config=None,
                 )
             )
-        self.session.flush()
-        self.session.commit()
-        return self._rows_for(tournament.id)
+
+    def _missing_cloud_only(
+        self, tournament: Tournament, present_rows: list[WorkspaceModule]
+    ) -> dict[str, str]:
+        """``{module_id: status}`` for the cloud-only rows this workspace
+        lacks — empty in local mode, and empty in cloud mode once backfilled.
+
+        Safe to call with rows read through the mode filter: in local mode
+        the answer is unconditionally empty, so the filtered read cannot be
+        mistaken for "the row is missing" and trigger a duplicate insert.
+        """
+        if not cloud_modules_enabled():
+            return {}
+        present = {row.module_id for row in present_rows}
+        derived = derive_modules(
+            getattr(tournament, "kind", None), include_cloud_only=True
+        )
+        return {
+            module_id: derived[module_id]
+            for module_id in CLOUD_ONLY_MODULES
+            if module_id in derived and module_id not in present
+        }
 
     def ensure_modules_for(
         self, tournaments: list[Tournament]
@@ -1425,10 +1532,15 @@ class _LocalModuleRepo:
             return {}
         ids = [t.id for t in tournaments]
         by_tid: dict[uuid.UUID, list[WorkspaceModule]] = {tid: [] for tid in ids}
+        stmt = select(WorkspaceModule).where(WorkspaceModule.tournament_id.in_(ids))
+        # The second of the two filtered queries. This one reads
+        # WorkspaceModule directly rather than going through _rows_for, so
+        # it needs its own copy of the mode filter — missing it here is the
+        # obvious bug, and it leaks the module onto the Hub list only.
+        if not cloud_modules_enabled():
+            stmt = stmt.where(WorkspaceModule.module_id.notin_(CLOUD_ONLY_MODULES))
         rows = self.session.scalars(
-            select(WorkspaceModule)
-            .where(WorkspaceModule.tournament_id.in_(ids))
-            .order_by(WorkspaceModule.module_id.asc())
+            stmt.order_by(WorkspaceModule.module_id.asc())
         )
         for m in rows:
             by_tid.setdefault(m.tournament_id, []).append(m)
@@ -1436,15 +1548,34 @@ class _LocalModuleRepo:
         for t in tournaments:
             if not by_tid.get(t.id):
                 by_tid[t.id] = self.ensure_modules(t)
+        # …and backfill the cloud-only rows onto the ones that DO have rows,
+        # so the Hub list agrees with the workspace it links to. Costs
+        # nothing in the steady state: ``_missing_cloud_only`` is a pure
+        # set difference over rows already in hand, and the extra reads
+        # happen only for the workspaces actually backfilled — once each,
+        # ever. Doing it here rather than delegating to ``ensure_modules``
+        # keeps the batch at one commit instead of one per workspace.
+        pending = [t for t in tournaments if self._missing_cloud_only(t, by_tid[t.id])]
+        if pending:
+            for t in pending:
+                self._add_module_rows(t, self._missing_cloud_only(t, by_tid[t.id]))
+            self.session.flush()
+            self.session.commit()
+            for t in pending:
+                by_tid[t.id] = self._rows_for(t.id)
         return by_tid
 
     def _rows_for(self, tournament_id: uuid.UUID) -> list[WorkspaceModule]:
+        """Both branches of ``ensure_modules`` return through here, so this
+        is one of the two places the mode filter lives (the other is the
+        batched select above)."""
+        stmt = select(WorkspaceModule).where(
+            WorkspaceModule.tournament_id == tournament_id
+        )
+        if not cloud_modules_enabled():
+            stmt = stmt.where(WorkspaceModule.module_id.notin_(CLOUD_ONLY_MODULES))
         return list(
-            self.session.scalars(
-                select(WorkspaceModule)
-                .where(WorkspaceModule.tournament_id == tournament_id)
-                .order_by(WorkspaceModule.module_id.asc())
-            )
+            self.session.scalars(stmt.order_by(WorkspaceModule.module_id.asc()))
         )
 
     def get(

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import type { ModuleId } from '../../product-shell/types';
 import {
+  MODULE_LABELS,
   moduleForTab,
   defaultTabForModule,
   primaryModuleForOpen,
@@ -39,7 +41,7 @@ describe('defaultTabForModule', () => {
 });
 
 describe('primaryModuleForOpen', () => {
-  const wm = (id: 'meet' | 'bracket' | 'display', status: string) =>
+  const wm = (id: ModuleId, status: string) =>
     ({ id, label: id, status, note: undefined }) as never;
   it('prefers the first enabled module in meet>bracket>display order', () => {
     expect(
@@ -55,6 +57,66 @@ describe('primaryModuleForOpen', () => {
     ).toBe('meet');
     expect(primaryModuleForOpen([wm('display', 'coming-soon')])).toBe('display');
     expect(primaryModuleForOpen([])).toBe('meet');
+  });
+
+  it('ranks Entries last, so an engine at the same status always wins', () => {
+    // Entries is intake; the operator opening a workspace wants the thing
+    // that runs the event. It goes last in the order for that reason.
+    expect(
+      primaryModuleForOpen([wm('entries', 'enabled'), wm('meet', 'enabled')]),
+    ).toBe('meet');
+    expect(
+      primaryModuleForOpen([wm('entries', 'available'), wm('bracket', 'available')]),
+    ).toBe('bracket');
+  });
+
+  it('still opens INTO Entries when it is the only ENABLED module', () => {
+    // Status beats order — that is the function's existing contract, not
+    // something Entries changes. Landing on the desk here is right: it is the
+    // one module this workspace has actually turned on, and it has a real
+    // surface to land on.
+    expect(
+      primaryModuleForOpen([wm('entries', 'enabled'), wm('bracket', 'available')]),
+    ).toBe('entries');
+  });
+});
+
+describe('the Entries module wiring (SP-E1-1)', () => {
+  it('routes the entries segment to the entries module, whatever the kind', () => {
+    // Kind-agnostic on purpose: an entries workspace is a meet or a bracket,
+    // and the desk is the same either way.
+    expect(moduleForTab('entries', 'meet')).toBe('entries');
+    expect(moduleForTab('entries', 'bracket')).toBe('entries');
+    expect(moduleForTab('entries', null)).toBe('entries');
+  });
+
+  it('has a label and a default tab like every other module', () => {
+    expect(MODULE_LABELS.entries).toBe('Entries');
+    expect(defaultTabForModule('entries')).toBe('entries');
+  });
+
+  it('is absent from the KIND-DERIVED fallback catalog', () => {
+    // The fallback mirrors the backend's `derive_modules(kind)`, which knows
+    // nothing about Entries — the row exists only where cloud mode seeded
+    // one. Emitting it here would show a module in the dock that the server
+    // will not confirm, and (before the AppShell guard) let a local-mode
+    // workspace walk into the desk.
+    for (const kind of ['meet', 'bracket'] as const) {
+      expect(modulesForWorkspace(kind).map((m) => m.id)).not.toContain('entries');
+    }
+  });
+
+  it('renders in the dock only when the backend actually sent the row', () => {
+    const withIt = modulesFromDto([
+      { moduleId: 'meet', status: 'enabled', config: null },
+      { moduleId: 'entries', status: 'enabled', config: null },
+    ]);
+    expect(withIt.map((m) => m.id)).toEqual(['meet', 'entries']);
+    // NEGATIVE CONTROL — the local-mode shape.
+    const without = modulesFromDto([
+      { moduleId: 'meet', status: 'enabled', config: null },
+    ]);
+    expect(without.map((m) => m.id)).toEqual(['meet']);
   });
 });
 

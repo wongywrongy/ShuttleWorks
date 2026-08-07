@@ -44,6 +44,8 @@ import type {
   ScheduleDTO,
   MatchStateDTO,
   TournamentStateDTO,
+  EntryDTO,
+  EntryCommitResultDTO,
 } from '../../api/dto';
 import type {
   BracketTournamentDTO,
@@ -79,6 +81,8 @@ interface DtoRegistry {
   ResultDTO: ResultDTO;
   AssignmentDTO: AssignmentDTO;
   PlayUnitDTO: PlayUnitDTO;
+  EntryDTO: EntryDTO;
+  EntryCommitResultDTO: EntryCommitResultDTO;
 }
 
 /** A DTO type name that exists in the wire vocabulary (compile-time checked). */
@@ -97,7 +101,16 @@ export type ApiEndpoint = (...args: never[]) => unknown;
  * store-subscription / poll edges (NOT a new event bus). The test pins
  * descriptors to this set so an unwired seam can't be claimed.
  */
-export type SeamEdge = 'scheduleFinalized' | 'drawGenerated' | 'matchStateChanged';
+export type SeamEdge =
+  | 'scheduleFinalized'
+  | 'drawGenerated'
+  | 'matchStateChanged'
+  /** Entries → Meet | Bracket, spec §5 Seam A. Unlike the other three this is
+   *  NOT a store subscription or a poll: it is an operator-pressed, server-side
+   *  commit that writes roster players. Named here because it is a real,
+   *  wired, cross-module write — the honesty rule is about whether the edge
+   *  exists, not about which mechanism carries it. */
+  | 'entriesCommitted';
 
 export interface ModuleContract {
   id: ArchModuleId;
@@ -127,7 +140,7 @@ export interface ModuleContract {
 }
 
 // ---------------------------------------------------------------------------
-// Four honest descriptors
+// Five honest descriptors
 // ---------------------------------------------------------------------------
 
 /**
@@ -262,10 +275,47 @@ export const displayContract: ModuleContract = {
   reactsTo: ['matchStateChanged'], // via its independent poll
 };
 
-/** All four descriptors, in declaration order. */
+/**
+ * Entries — the INTAKE module (SP-E1-1). Owns the operator desk segment and
+ * the three workspace-scoped desk routes. Its other surface, the public
+ * `/e/{slug}` page and submit, is served by FastAPI and has no frontend at
+ * all — so it is named here in prose and claimed in no field, because the
+ * contract is checked against `apiClient` and the SPA nav, and claiming a
+ * surface neither of them can see would be exactly the aspirational entry
+ * this file exists to forbid.
+ *
+ * `produces: PlayerDTO` is Seam A: a confirmed entry becomes a roster player.
+ * That is a genuine cross-module product — `meetContract` already declares
+ * `PlayerDTO` in `consumes`, so the pairing closes. The Bracket half of the
+ * same seam writes `bracket_participants` plus the blob's bracket roster, but
+ * neither shape is in the wire registry, so nothing is claimed for it.
+ *
+ * The edge is emitted and, deliberately, reacted to by NOBODY client-side:
+ * the commit is a server-side write, and Meet/Bracket pick the new players up
+ * on their next `/state` read. A `reactsTo` on either engine would be a claim
+ * about a subscription that does not exist.
+ */
+export const entriesContract: ModuleContract = {
+  id: 'entries',
+  enableable: true,
+  ownedSegments: ['entries'],
+  ownedEndpoints: [
+    apiClient.listEntries,
+    apiClient.confirmEntry,
+    apiClient.commitEntries,
+  ],
+  consumedEndpoints: [],
+  produces: ['PlayerDTO'], // via Seam A, into the Meet roster blob
+  consumes: ['EntryDTO', 'EntryCommitResultDTO'],
+  emits: ['entriesCommitted'],
+  reactsTo: [],
+};
+
+/** All five descriptors, in declaration order. */
 export const moduleContracts: readonly ModuleContract[] = [
   meetContract,
   bracketContract,
   operationsContract,
   displayContract,
+  entriesContract,
 ];

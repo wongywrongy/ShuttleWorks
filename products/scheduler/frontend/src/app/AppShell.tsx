@@ -22,6 +22,7 @@ import {
   modulesForWorkspace,
   primaryModuleForOpen,
   isModuleEnterable,
+  MODULE_LABELS,
 } from '../platform/domain/moduleModel';
 import type { ModuleId, WorkspaceModule } from '../platform/product-shell/types';
 import { useWorkspaceModules } from '../platform/domain/useWorkspaceModules';
@@ -30,12 +31,21 @@ import { WorkspaceShellSurface } from '../products/workspace/WorkspaceShellSurfa
 import { SHELL_SEGMENTS, isAdminSegment } from '../platform/product-shell/workspaceNav';
 
 /** Whether the active module's pane is the normal module outlet or the
- *  unavailable panel. A missing active module (empty/partial list) resolves
- *  to the outlet defensively. In practice no false guard fires during load
- *  for a second reason: the caller passes `modulesForWorkspace(kind)` until
- *  the real catalog arrives, and that fallback always has the workspace's own
- *  operator module enterable (and TournamentPage sets the optimistic kind
- *  synchronously before paint), so the active tab's module is enterable. */
+ *  unavailable panel.
+ *
+ *  A missing active module resolves to the outlet WHILE THE CATALOG IS STILL
+ *  LOADING, and to the panel once it has arrived. Before SP-E1-1 the absent
+ *  case failed open unconditionally, which was harmless only because every
+ *  module in the union also appeared in the kind-derived fallback. Entries
+ *  breaks that: it is cloud-only, so it is in no fallback and absent from
+ *  every local-mode catalog — and `ModuleOutlet` defaults to `MeetProduct`,
+ *  so `/tournaments/{id}/entries` on a workspace without the module would
+ *  have silently rendered the Meet product under an Entries URL.
+ *
+ *  The loading window keeps the old behavior deliberately: the caller passes
+ *  `modulesForWorkspace(kind)` until the real catalog arrives, and failing
+ *  closed there would flash the unavailable panel at an operator whose module
+ *  is in fact enabled. */
 export type ActivePane =
   | { kind: 'outlet' }
   | {
@@ -50,18 +60,26 @@ export type ActivePane =
 export function resolveActivePane(
   activeModule: ModuleId,
   modules: WorkspaceModule[],
+  /** Has the REAL module catalog arrived? Defaults to false so the guard
+   *  never fires on an indeterminate list. */
+  catalogLoaded = false,
 ): ActivePane {
   const active = modules.find((m) => m.id === activeModule);
-  if (!active || isModuleEnterable(active.status)) return { kind: 'outlet' };
+  if (active && isModuleEnterable(active.status)) return { kind: 'outlet' };
+  if (!active && !catalogLoaded) return { kind: 'outlet' };
   const primary = primaryModuleForOpen(modules);
   const primaryWm = modules.find((m) => m.id === primary);
   return {
     kind: 'panel',
-    label: active.label,
-    note: active.note,
+    // An absent module has no row to read a label off, so fall back to the
+    // canonical label table rather than showing the operator a raw id.
+    label: active?.label ?? MODULE_LABELS[activeModule] ?? activeModule,
+    note:
+      active?.note ??
+      `${MODULE_LABELS[activeModule] ?? activeModule} is not available in this workspace.`,
     primary,
     primaryLabel: primaryWm?.label ?? primary,
-    canOpenSettings: active.status === 'disabled',
+    canOpenSettings: active?.status === 'disabled',
   };
 }
 
@@ -100,8 +118,10 @@ export function AppShell() {
     (m) => m.id === 'bracket' && m.status === 'enabled',
   );
   const bothEnginesEnabled = meetEnabled && bracketEnabled;
-  // Whether to render the module outlet or the unavailable panel.
-  const pane = resolveActivePane(activeModule, modules);
+  // Whether to render the module outlet or the unavailable panel. The third
+  // argument is what makes the absent-module case fail CLOSED once we know
+  // what this workspace actually has.
+  const pane = resolveActivePane(activeModule, modules, realModules != null);
 
   // Discard any in-flight proposal when the operator switches tabs.
   // Otherwise the next visit to the originating tab re-opens the

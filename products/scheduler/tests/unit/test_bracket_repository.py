@@ -262,6 +262,111 @@ def test_bulk_create_participants_empty_returns_zero(repo, tournament_id):
     assert repo.brackets.bulk_create_participants(tournament_id, "MS", []) == 0
 
 
+# ---- Participants: the additive path (SP-E1-1) -------------------------
+#
+# Every participant write before this one went through ``upsert_event``,
+# which is delete-then-recreate: the route replaces the event's whole
+# participant list in one shot. That is the right shape for the roster
+# editor and the wrong shape for the Entries commit seam, which adds one
+# entrant at a time to a list it did not author and must not disturb
+# (spec §5, Seam A: "never mutates or deletes an existing roster player").
+
+
+def _singles_event(repo, tournament_id, event_id="MS"):
+    repo.brackets.create_event(
+        tournament_id,
+        event_id,
+        discipline="Men's Singles",
+        format="se",
+        duration_slots=2,
+    )
+
+
+def test_add_participants_leaves_the_existing_list_alone(repo, tournament_id):
+    _singles_event(repo, tournament_id)
+    repo.brackets.bulk_create_participants(
+        tournament_id, "MS", [{"id": "P1", "name": "Alice", "type": "PLAYER", "seed": 1}]
+    )
+
+    added = repo.brackets.add_participants(
+        tournament_id, "MS", [{"id": "P2", "name": "Bob", "type": "PLAYER"}]
+    )
+    assert added == 1
+
+    participants = repo.brackets.list_participants(tournament_id, "MS")
+    assert [p.id for p in participants] == ["P1", "P2"]
+    # Alice is untouched — same row, seed intact. The delete-then-recreate
+    # path would have rebuilt her from whatever the caller happened to send.
+    assert participants[0].name == "Alice"
+    assert participants[0].seed == 1
+
+
+def test_add_participants_is_the_only_additive_write(repo, tournament_id):
+    """Negative control for the test above.
+
+    Proves the guarantee comes from ``add_participants`` and not from
+    something incidental about the fixture: the same second write done the
+    way the rest of the codebase does it — through ``upsert_event`` — loses
+    Alice entirely.
+    """
+    _singles_event(repo, tournament_id)
+    repo.brackets.bulk_create_participants(
+        tournament_id, "MS", [{"id": "P1", "name": "Alice", "type": "PLAYER", "seed": 1}]
+    )
+
+    repo.brackets.delete_event(tournament_id, "MS")
+    _singles_event(repo, tournament_id)
+    repo.brackets.bulk_create_participants(
+        tournament_id, "MS", [{"id": "P2", "name": "Bob", "type": "PLAYER"}]
+    )
+    assert [p.id for p in repo.brackets.list_participants(tournament_id, "MS")] == ["P2"]
+
+
+def test_add_participants_defaults_match_the_bulk_path(repo, tournament_id):
+    """Same input dict shape, same defaults — one participant vocabulary."""
+    _singles_event(repo, tournament_id)
+    repo.brackets.add_participants(
+        tournament_id,
+        "MS",
+        [
+            {"id": "P1", "name": "Alice", "type": "PLAYER"},
+            {
+                "id": "T1",
+                "name": "Alice & Bob",
+                "type": "TEAM",
+                "member_ids": ["P1", "P2"],
+                "meta": {"club": "Riverside"},
+                "seed": 3,
+            },
+        ],
+    )
+    rows = {p.id: p for p in repo.brackets.list_participants(tournament_id, "MS")}
+    assert rows["P1"].member_ids == []
+    assert rows["P1"].meta == {}
+    assert rows["P1"].seed is None
+    assert rows["T1"].type == "TEAM"
+    assert rows["T1"].member_ids == ["P1", "P2"]
+    assert rows["T1"].seed == 3
+
+
+def test_add_participants_empty_returns_zero(repo, tournament_id):
+    _singles_event(repo, tournament_id)
+    assert repo.brackets.add_participants(tournament_id, "MS", []) == 0
+
+
+def test_add_participants_touches_only_the_named_event(repo, tournament_id):
+    _singles_event(repo, tournament_id, "MS")
+    _singles_event(repo, tournament_id, "WS")
+    repo.brackets.bulk_create_participants(
+        tournament_id, "WS", [{"id": "P9", "name": "Cara", "type": "PLAYER"}]
+    )
+    repo.brackets.add_participants(
+        tournament_id, "MS", [{"id": "P1", "name": "Alice", "type": "PLAYER"}]
+    )
+    assert [p.id for p in repo.brackets.list_participants(tournament_id, "WS")] == ["P9"]
+    assert [p.id for p in repo.brackets.list_participants(tournament_id, "MS")] == ["P1"]
+
+
 # ---- Matches -----------------------------------------------------------
 
 

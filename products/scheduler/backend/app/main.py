@@ -12,6 +12,8 @@ from api import (
     auth as auth_api,  # SP-CLOUD-2 — self-hosted accounts + cookie sessions
     health as health_api,  # SP-CLOUD-3 — liveness / readiness / queue metrics
     display as display_api,  # SP-CLOUD-2 — capability-token spectator display
+    entries as entries_api,  # SP-E1-1 — the operator's Entries desk
+    entries_public as entries_public_api,  # SP-E1-1 — the public entry page + submit
     schedule,
     solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
     match_state,
@@ -356,6 +358,23 @@ app.include_router(commands.router, dependencies=_AUTH_DEP)
 app.include_router(brackets.router, dependencies=_AUTH_DEP)
 app.include_router(tournaments.router, dependencies=_AUTH_DEP)
 app.include_router(workspace_modules.router, dependencies=_AUTH_DEP)
+# Entries: the operator desk only. The public slug page and submit
+# endpoint are a separate surface with their own (allowlisted) auth
+# posture — deliberately not folded into this router, so that widening
+# the public surface can never be a side effect of touching the desk.
+app.include_router(entries_api.router, dependencies=_AUTH_DEP)
+# Entries, public surface: registered WITHOUT the auth dep, following the
+# display public_router precedent below — an entrant has no account, by
+# definition, and never will (Q4: no entrant accounts in v1). This is the
+# app's first ANONYMOUS WRITE, so unlike display it is not enough for the
+# route to be read-only and token-shaped; its guards are in the module
+# itself (Turnstile server-side, per-IP throttle, acknowledgment,
+# tenant-scoped idempotency, uniform 404) and the two routes are named
+# individually in tests/test_auth_surface.py with the reason each must be
+# reachable. Deliberately a separate router from the desk above so that
+# widening the public surface can never be a side effect of touching the
+# operator's routes.
+app.include_router(entries_public_api.router)
 # Invites: registered WITHOUT the router-level auth dep so the public
 # ``GET /invites/{token}`` resolve endpoint stays unauthenticated. The
 # accept + revoke endpoints declare their own auth requirements.

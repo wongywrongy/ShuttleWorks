@@ -36,6 +36,7 @@ from app.limits import (
     Identifier,
     Name,
     Notes,
+    Regulations,
     StrictModel,
     Timestamp,
 )
@@ -229,6 +230,20 @@ class PlayerDTO(StrictModel):
     # If not provided, uses config.defaultRestMinutes
     minRestMinutes: Optional[int] = Field(None, ge=0, le=1440)
     notes: Optional[Notes] = None
+    # ---- Entries provenance (SP-E1-1, spec §5 Seam A) ----------------
+    # Half of the commit seam's back-reference pair: the ``entries.id``
+    # this player was materialized from. ``entries.committed_player_id``
+    # is the other half, and its presence is what makes re-running the
+    # seam idempotent. Optional because almost no player has one — a
+    # hand-added roster player never came from an entry, and requiring it
+    # would fail every existing payload on the next autosave.
+    sourceEntryId: Optional[Identifier] = None
+    # The entrant's own free-text availability sentence, carried verbatim
+    # from ``entries.remarks``. Kept distinct from ``notes`` (the
+    # operator's own field) so the seam never overwrites what an operator
+    # wrote, and so "what the entrant said" stays attributable. Never
+    # parsed, never inferred from, never fed to the solver.
+    remarks: Optional[Notes] = None
 
 
 class BracketPlayerDTO(StrictModel):
@@ -249,6 +264,12 @@ class BracketPlayerDTO(StrictModel):
     availability: List[AvailabilityWindow] = Field(
         default_factory=list, max_length=MAX_WINDOWS
     )
+    # Entries provenance — mirrors PlayerDTO. The Bracket half of Seam A
+    # writes the participant row *and* this blob entry, because
+    # ``bracket_participants`` has nowhere to put a remark and the
+    # availability controls the operator uses read from here.
+    sourceEntryId: Optional[Identifier] = None
+    remarks: Optional[Notes] = None
 
 
 # Match - simplified for school sparring (supports dual and tri-meets)
@@ -604,6 +625,165 @@ class WorkspaceModuleDTO(BaseModel):
     def from_row(cls, row) -> "WorkspaceModuleDTO":
         """Build the DTO from a ``WorkspaceModule`` ORM row (duck-typed)."""
         return cls(moduleId=row.module_id, status=row.status, config=row.config)
+
+
+# ---- Entries (SP-E1-1) -----------------------------------------------
+
+class EntryDeskRowDTO(BaseModel):
+    """One row of the operator's entries desk.
+
+    A **projection**, not the table. Two fields are deliberately absent:
+    ``manage_token_hash``, because the entrant's capability material has no
+    business on an operator screen even hashed; and the doubles/payment
+    columns, which exist in the schema (created now to avoid migration
+    churn) but mean nothing until E3/E5 and would read as broken features.
+
+    ``eventCode`` is denormalized from ``entry_events`` so the desk can
+    render a row without a second lookup per entry — it is the same string
+    the commit seam turns into ``ranks[]``.
+    """
+    id: str
+    entryEventId: str
+    eventCode: Optional[str] = None
+    state: str
+    pendingReasons: List[str] = Field(default_factory=list)
+    contactName: str
+    contactEmail: str
+    playerName: str
+    remarks: Optional[str] = None
+    listOptOut: bool = False
+    committedPlayerId: Optional[str] = None
+    submittedAt: Optional[str] = None
+    withdrawnAt: Optional[str] = None
+
+    @classmethod
+    def from_row(cls, row, *, event_code: Optional[str] = None) -> "EntryDeskRowDTO":
+        return cls(
+            id=str(row.id),
+            entryEventId=str(row.entry_event_id),
+            eventCode=event_code,
+            state=row.state,
+            pendingReasons=list(row.pending_reasons or []),
+            contactName=row.contact_name,
+            contactEmail=row.contact_email,
+            playerName=row.player_name,
+            remarks=row.remarks,
+            listOptOut=bool(row.list_opt_out),
+            committedPlayerId=row.committed_player_id,
+            submittedAt=row.submitted_at.isoformat() if row.submitted_at else None,
+            withdrawnAt=row.withdrawn_at.isoformat() if row.withdrawn_at else None,
+        )
+
+
+class EntryCommitOutcomeDTO(BaseModel):
+    """One committed entry: which entry, which roster player it became."""
+    id: str
+    playerId: str
+
+
+class EntrySkipDTO(BaseModel):
+    """One skipped entry and the stable reason code for the skip.
+
+    Spec §5: partial success is reported per-entry, not rolled back
+    wholesale — so this list is a normal outcome, not an error body.
+    """
+    id: str
+    reason: str
+
+
+class EntryCommitResultDTO(BaseModel):
+    committed: List[EntryCommitOutcomeDTO] = Field(default_factory=list)
+    skipped: List[EntrySkipDTO] = Field(default_factory=list)
+
+
+class EntryPageUpsertDTO(StrictModel):
+    """The operator's entry-page configuration, whole.
+
+    A PUT body, so it is the complete desired state and an omitted optional
+    field means "clear it" — the alternative (omission means "keep") gives
+    a route with no way to erase an intro paragraph.
+
+    ``regulationsVersion`` is deliberately **not** here. It is derived: the
+    server bumps it when ``regulationsText`` actually changes (Q11.4), so
+    an entry's recorded ``regulations_version_accepted`` refers to words
+    that really were on the page. A client-settable version is a client
+    that can rewrite the terms without invalidating consent to the old ones.
+    """
+    slug: Identifier
+    isOpen: bool = False
+    introText: Optional[Notes] = None
+    regulationsText: Optional[Regulations] = None
+    waiverRequired: bool = False
+
+
+class EntryPageDTO(BaseModel):
+    """The stored entry page as the operator sees it back."""
+    slug: str
+    isOpen: bool
+    introText: Optional[str] = None
+    regulationsText: Optional[str] = None
+    waiverRequired: bool
+    regulationsVersion: int
+
+    @classmethod
+    def from_row(cls, row) -> "EntryPageDTO":
+        return cls(
+            slug=row.slug,
+            isOpen=bool(row.is_open),
+            introText=row.intro_text,
+            regulationsText=row.regulations_text,
+            waiverRequired=bool(row.waiver_required),
+            regulationsVersion=row.regulations_version,
+        )
+
+
+class EntryEventCreateDTO(StrictModel):
+    """One entry-facing event (spec Q2/§4).
+
+    ``entryType`` is a ``Literal`` rather than a validated string so an
+    unknown value is refused by the schema, before the route: E1 is
+    singles-only and doubles is E3, and anything else would reach the
+    commit seam as an event it cannot map.
+
+    ``bracketEventId`` stays a plain string, matching the column's
+    deliberately unconstrained pointer — the seam skips-and-reports an
+    unmappable code rather than guessing, so a dangling pointer is a
+    handled state and not one worth a foreign key that would cascade.
+    """
+    code: Code
+    discipline: Name
+    entryType: Literal["singles", "doubles"] = "singles"
+    bracketEventId: Optional[Identifier] = None
+    cap: Optional[int] = Field(None, ge=1, le=MAX_PLAYERS)
+    feeCents: Optional[int] = Field(None, ge=0, le=100_000_000)
+    opensAt: Optional[Timestamp] = None
+    closesAt: Optional[Timestamp] = None
+
+
+class EntryEventDTO(BaseModel):
+    id: str
+    code: str
+    discipline: str
+    entryType: str
+    bracketEventId: Optional[str] = None
+    cap: Optional[int] = None
+    feeCents: Optional[int] = None
+    opensAt: Optional[str] = None
+    closesAt: Optional[str] = None
+
+    @classmethod
+    def from_row(cls, row) -> "EntryEventDTO":
+        return cls(
+            id=str(row.id),
+            code=row.code,
+            discipline=row.discipline,
+            entryType=row.entry_type,
+            bracketEventId=row.bracket_event_id,
+            cap=row.cap,
+            feeCents=row.fee_cents,
+            opensAt=row.opens_at.isoformat() if row.opens_at else None,
+            closesAt=row.closes_at.isoformat() if row.closes_at else None,
+        )
 
 
 # Health
