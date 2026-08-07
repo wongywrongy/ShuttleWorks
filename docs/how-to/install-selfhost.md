@@ -239,12 +239,22 @@ re-check them after any Access policy edit.
 
 ### 4b. The public entry surface (`/e/*`) — written, not yet activated
 
-The Entries module adds a genuinely public **write**: `/e/{slug}` is an entry
-page a player opens from a poster, and `/e/{slug}/submit` creates an entry with
-no account involved. The edge configuration for it already exists in
-`frontend/nginx.conf` — a `sw_entries` `limit_req` zone (20 r/m, burst 5) and an
-explicit `location /e/` block, which also stops the SPA fallback swallowing
-entry links. The operator's entries desk needs nothing of its own: it is
+The Entries module adds a genuinely public surface: `/e/{slug}` is an entry
+page a player opens from a poster, `/e/{slug}/submit` creates an entry, and
+`/e/account/signup` | `/login` | `/logout` are the **entrant account** routes
+added by SP-E1-2 (ruling R10 — entrants have real accounts, held in their own
+tables with their own `sw_play_session` cookie, never `users`). The edge
+configuration for all of it already exists in `frontend/nginx.conf` — a
+`sw_entries` `limit_req` zone (20 r/m, burst 5) and an explicit `location /e/`
+block, which also stops the SPA fallback swallowing entry links.
+
+**The zone did not change when the account routes arrived, and that is
+correct**: a `limit_req` zone is path-scoped, and `/e/account/*` is inside
+`/e/`. It is left under `/e/` rather than moved under `/api/` on purpose —
+`/api/` is served on the Access-fronted operator hostname, and an entrant login
+behind Cloudflare Access is an entrant login nobody can reach.
+
+The operator's entries desk needs nothing of its own: it is
 `/tournaments/{id}/entries`, session-guarded, and rides the general `/api/`
 block.
 
