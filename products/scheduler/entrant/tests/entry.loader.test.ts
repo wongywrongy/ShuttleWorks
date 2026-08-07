@@ -20,6 +20,7 @@ import {
   credentialRelayLines,
   moduleScopedMutableBindings,
   readAppSource,
+  routeFiles,
 } from './helpers/sourceGuards';
 
 /**
@@ -204,14 +205,27 @@ describe('entry loader', () => {
     expect([...sent[0].headers.keys()]).toEqual(['accept']);
   });
 
-  it('declares no credential relay at all — structural, not behavioural', () => {
-    // The half that actually bites. `apiGet`'s signature happens to leave no
-    // room for a forwarded header today, so the behavioural test above would
-    // stay green even if a loader hand-rolled `fetch` with the entrant's
-    // cookie. This scans the module for the shapes that would do it: reading
-    // an inbound header, naming a cookie, attaching headers to an outgoing
-    // Response, or calling `fetch` directly.
-    expect(credentialRelayLines(readAppSource('routes/entry.tsx'))).toEqual([]);
+  // Enumerated from disk (`routeFiles()`), not hardcoded to `entry.tsx`: every
+  // route module under app/routes/ is covered the moment it lands, with no
+  // human step. A failure here names the offending file.
+  describe.each(routeFiles())('route-tier relay guards: %s', (relative) => {
+    it('declares no credential relay at all — structural, not behavioural', () => {
+      // The half that actually bites. `apiGet`'s signature happens to leave no
+      // room for a forwarded header today, so the behavioural test above would
+      // stay green even if a loader hand-rolled `fetch` with the entrant's
+      // cookie. This scans the module for the shapes that would do it: reading
+      // an inbound header, naming a cookie, attaching headers to an outgoing
+      // Response, or calling `fetch` directly.
+      expect(credentialRelayLines(readAppSource(relative))).toEqual([]);
+    });
+
+    it('declares no mutable binding at module scope', () => {
+      // Same hazard as `apiFetch.server.ts`: one node process, many entrants,
+      // and module scope is shared by all of them. A per-request value cached
+      // at module scope here would be a cross-USER leak of somebody's page —
+      // or of somebody's idempotency key.
+      expect(moduleScopedMutableBindings(readAppSource(relative))).toEqual([]);
+    });
   });
 
   it('the relay guard is not vacuous: a forwarding loader goes red', () => {
@@ -227,13 +241,6 @@ describe('entry loader', () => {
     ]);
   });
 
-  it('declares no mutable binding at module scope', () => {
-    // Same hazard as `apiFetch.server.ts`: one node process, many entrants,
-    // and module scope is shared by all of them. A per-request value cached at
-    // module scope here would be a cross-USER leak of somebody's page — or of
-    // somebody's idempotency key.
-    expect(moduleScopedMutableBindings(readAppSource('routes/entry.tsx'))).toEqual([]);
-  });
 });
 
 // ---- request level: the route as the browser gets it ----------------------
@@ -250,7 +257,22 @@ async function fetchEntrant(path: string, mode = 'development'): Promise<Respons
 
 describe('GET /e/{slug}', () => {
   it('server-renders the page and the key, with no JavaScript in play', async () => {
-    vi.stubGlobal('fetch', stubJson(PAGE));
+    // The upstream response carries a Set-Cookie so the assertion below has
+    // something it could actually fail on — a loader that copied every
+    // upstream header onto its own Response would have left a bare `stubJson`
+    // (content-type only) unable to catch it.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        return new Response(JSON.stringify(PAGE), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'set-cookie': 'sw_entrant_session=leaked',
+          },
+        });
+      }),
+    );
 
     const res = await fetchEntrant('/e/spring-open');
     const body = await res.text();
@@ -264,7 +286,10 @@ describe('GET /e/{slug}', () => {
     expect(body).toMatch(
       /name="idempotencyKey" value="[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"/,
     );
-    // Node renders; it never relays a credential back down either.
+    // Node renders; it never relays a credential back down either. `apiGet`
+    // returns parsed JSON, so the upstream Response never escapes
+    // `apiFetch.server.ts` — this pins that property against a real
+    // upstream Set-Cookie, not an absent one.
     expect(res.headers.get('set-cookie')).toBeNull();
   });
 

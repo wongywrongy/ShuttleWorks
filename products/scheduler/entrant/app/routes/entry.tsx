@@ -25,7 +25,7 @@ import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import type { Route } from './+types/entry';
 
-export interface EntryLoaderData {
+interface EntryLoaderData {
   page: EntryPageDTO;
   idempotencyKey: string;
 }

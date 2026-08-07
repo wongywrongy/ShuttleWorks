@@ -12,11 +12,23 @@
  * `entry.loader.test.ts` (the loader tier) — the property is the same one at
  * two altitudes: node renders, and never relays credentials.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 /** Read a file under `app/`, relative to this helper. */
 export function readAppSource(relative: string): string {
   return readFileSync(new URL(`../../app/${relative}`, import.meta.url), 'utf8');
+}
+
+/**
+ * Every route module under `app/routes/`, as `readAppSource`-relative paths.
+ *
+ * Enumerated from disk rather than hardcoded, so a new route file is covered
+ * by the relay guards the moment it lands — no line to remember to add.
+ */
+export function routeFiles(): string[] {
+  return readdirSync(new URL('../../app/routes/', import.meta.url))
+    .filter((name) => name.endsWith('.ts') || name.endsWith('.tsx'))
+    .map((name) => `routes/${name}`);
 }
 
 /**
@@ -61,6 +73,16 @@ function stripComments(source: string): string {
  *
  * `fetch(` is included because the whole guard is void if a loader bypasses
  * `apiGet` and calls the network directly.
+ *
+ * **Known blind spot:** this is a one-file, one-hop *lexical* scan — it reads
+ * the given source text only, not anything it imports. A relay delegated one
+ * module away (`const jar = readSession(request)`, with `readSession` living
+ * in, say, `app/lib/session.ts`) matches none of the five patterns above and
+ * passes clean, even though the module it calls does the actual credential
+ * read. Nothing today does this, but as the primary route-tier control, a
+ * new helper that wraps `request.headers.get('cookie')` needs its own
+ * coverage (or this scan needs to grow), not an assumption that this file
+ * would catch it.
  */
 export function credentialRelayLines(source: string): string[] {
   const patterns: RegExp[] = [
