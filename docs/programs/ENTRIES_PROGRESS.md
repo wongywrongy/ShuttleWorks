@@ -169,6 +169,60 @@ discrepancy #10 is itself wrong); nginx zones `nginx.conf:47,52` + SPA-fallback 
 siteverify contract confirmed from Cloudflare docs (secret drives outcome; dummy token
 literal usable in tests).
 
+### Phases B–D — implemented (2026-08-06), via sequential fresh-context Opus workflow
+
+Workflow `wf_8d56337b-c8f`: 4 implementation stages + 1 adversarial verify (1.07M tokens,
+505 tool calls, ~2h). 18 commits, 60 files, +7630/−71.
+
+- **Foundations** (`b10fa98`, `ebb34fe`): migration `r2c7e1f4a9b3` = the full amended §4
+  schema (D4 tenant-scoped idempotency unique index; non-unique email index, Q12;
+  contact/player block separation preserved in models AND migration); module system —
+  `CLOUD_ONLY_MODULES`, mode via `cloud_modules_enabled()` (`auth_mode=="cloud"`, D2),
+  both read queries filtered, `MODULE_REQUIRES_CLOUD` on PATCH + create. First
+  programmatic alembic round-trip test in the repo (6 tests) + 16 module-mode tests.
+- **Commit seam** (`9fc9b4f`…`6def4dc`): 5 characterization tests golden-mastering the
+  blob CAS (incl. the `expire_on_commit=False` stale-identity trap); `PlayerDTO`/
+  `BracketPlayerDTO` gain `sourceEntryId`+`remarks`; additive `add_participants`;
+  `services/entries.py` Seam A (idempotent, additive, CAS retry w/ rollback+expire_all,
+  per-entry partial reporting, skip reasons); desk routes list/confirm(D1)/commit;
+  tenant-isolation coverage 67→70 ops. Backend 1097.
+- **Public write** (4 commits): Turnstile service (stdlib urllib, fail-closed, dummy-key
+  defaults); `GET /e/{slug}` server-rendered page (D3 — every interpolation escaped,
+  strict entrant-list projection, page-scoped CSP, 390px-usable) + `POST /e/{slug}/submit`
+  (uniform-404, Turnstile, `entry:<ip>` throttle triple, acknowledgment gating + version
+  recording, D4 replay semantics w/ IntegrityError re-read, R7 soft flag `needs_review`,
+  hashed manage token returned raw once); auth-surface allowlist + docstring rewrite +
+  sibling guard tests; `sw_entries` nginx zone + `/e/` location + install-docs rows
+  ("activated at Phase 2"). Backend 1167.
+- **Desk** (`0a32f0a`…`a55e429`): all six frontend module-id unions (a 6th found:
+  `WorkspaceRow` glyph title ternary), `SectionRole += 'intake'`, contract + baselines,
+  AppShell fail-closed guard, snapshot round-trip of the new player fields, EntriesDesk
+  (list, confirm, commit + result summary). Frontend 1433/175.
+
+**Adversarial verify: FINDINGS.** All gates green and counts strictly up (backend
+1167/66sk vs 1018 baseline; frontend 1433 vs 1385); scope guard clean (zero operator
+in-module files touched); all rulings D1–D4 hold; **seven negative controls proven real
+by guard inversion** (Turnstile, D4 scoping, batched-path filter, escaping, throttle,
+operator-only, uniform-404). One MAJOR: `ensure_modules` early-return means pre-existing
+workspaces never gain the entries row in cloud mode (spec Q1(R2) "lazy-seeds on read"
+fails for the non-empty case) — plus 4 minors (guard ordering Turnstile-before-throttle;
+speculative nginx `/api/entries/` block; body-cap control not colocated; no real path to
+create `entry_pages`/`entry_events`, colliding with Phase E "seed through real paths").
+**All five dispatched to a fix agent** (Phase E enabler routes: PUT entry-page + POST
+entry-events, operator-only, recorded as a deliberate scope addition).
+
+**Fix pass (same day, 5 commits `f725249`…`96f7410`): all five closed.** Cloud-mode
+backfill now unions missing `CLOUD_ONLY_MODULES` rows on both read paths (idempotent,
+one commit per Hub page, zero steady-state cost; +5 tests); throttle lock is read before
+Turnstile so a locked IP costs no outbound call (+2, transport-must-not-be-called
+control); speculative nginx `/api/entries/` block removed (zone + `/e/` kept, docs
+updated); body-cap negative control colocated (+1 — padding split across fields because
+Starlette caps a single form field at 1 MB); operator config routes `PUT entry-page` /
+`POST entry-events` (Q11.4 version-bump-only-on-change, slug conflict 409 without naming
+the holder; tenant-isolation auto-coverage now 72 ops; +22).
+**Backend after fixes: 1197 passed / 66 skipped.** ruff clean; all six compose files
+validate.
+
 **Decisions proposed at the STOP (see report):** cloud-mode predicate for R6 (spec's
 `environment=="cloud"` collides with `docker-compose.cloud.yml`'s deliberate
 `ENVIRONMENT=local` — S1); E1 lifecycle gap (no email verification + no confirm UI ⇒
