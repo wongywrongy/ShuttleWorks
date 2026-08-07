@@ -875,3 +875,54 @@ additive plus one docstring, so there is no unwind tally. Untouched, as the
 slice requires: `services/entries.py`, the confirm/commit/desk routes, Seam A,
 the module system, the `GET /e/{slug}` allowlist entry. **F-E1-2-D1 is closed;
 Phase E's step 1 can now seed through real routes.**
+
+### SP-E1-2 Phase E — dual-width demo: DONE (2026-08-07), servers left running
+
+**Stack:** `docker compose -p sw-e1-2-demo -f docker-compose.cloud.yml` — fresh disposable
+Postgres (old `sw-e1-demo` torn down with `-v`; its 4 demo rows were the only entries data
+in existence, per D-A5). Migration chain ran clean through `s3d8f2b5c0e1` on first boot.
+Vite dev on :5174 (HMR picked up the branch live).
+
+**Walkthrough (screenshots in `.playwright-mcp/sp-e1-2/`, both widths):**
+1. Seeded through real routes only: operator register + workspace + module enable;
+   `PUT entry-page` with tiered `feeSchedule {1:2500,2:4000,3:5000}`, payment
+   instructions, venue name/address, `maxEventsPerPerson`; three `POST entry-events`
+   with `genderConstraint` (M/F/mixed) and `withdrawsUntil`.
+2. `01-public-page-390px` / `06-public-page-1440px` — the R14 §6 IA at both widths:
+   Timeline (withdrawal deadline distinct), Fees (tier list), Payment, Venue, Organiser,
+   Events with live entered-counts, Regulations, entrant list.
+3. Entrant signup (Turnstile dummy keys, server-side; non-enumerating 202) → login →
+   `sw_play_session`. **Finding F-E1-2-E1:** the logged-out page names the account
+   endpoints but ships no HTML signup/login form (the JSON-API divergence) — a human
+   cannot self-serve an account without the Phase 6 `play.*` scaffold; demo used the API
+   + cookie injection. Recorded as a Phase 6 input (below).
+4. `02-form-total-390px` — the multi-event form: two player blocks, gender-filtered
+   events, override control with honest copy, server-round-trip running total
+   (**80.00 = 40.00 × 2 players at the 2-event tier** — per-person tiered pricing, R14).
+5. `03-submission-received-390px` — **R13's headline: one act → submission `03160a43`,
+   four entries across two players, one acceptance, one total**, payment instructions,
+   and a success page pointing at "my entries" (E2) with no token.
+6. **Replay at submission level:** same `Idempotency-Key` → same submission `3b17a6bd`,
+   201 then 200, one act. **Gender override:** Riley Chen (F) into MS accepted with
+   `gender_mismatch`. **Duplicate:** second "Alex Silva" into MS → `needs_review`.
+   **Anonymous submit → 401** (the E1 headline behavior, inverted).
+7. `04-desk-grouped-1440px` — desk bands by act ("Entered by maria… · 80.00 (4)"),
+   both flag chips. Confirmed the 5 legitimate entries, left both flagged pending.
+8. `05-commit-result-1440px` — "5 committed to the roster."; second commit → "Nothing
+   new" (Seam A idempotent, contract untouched). Roster shows 5 players with
+   `sourceEntryId` + verbatim remarks — **and F-E1-2 demonstrated as predicted:**
+   Alex ×2 / Sam ×2 roster players (one per entry), the E2 ruling input.
+9. **Dual-mode negative retained:** one-off `AUTH_MODE=local` backend on the same DB —
+   no Entries on create/read, PATCH → `409 MODULE_REQUIRES_CLOUD`.
+
+**No tunnel/DNS/Access/dashboard change of any kind** (Amendment A1 asserted again).
+
+**Findings for Phase 6/7:** F-E1-2-E1 (no human-usable entrant auth UI until the play.*
+scaffold — Phase 6 must treat signup/login pages as first-class scope); F-E1-2 (per-entry
+roster duplication, ruling owed in E2/Phase 7 with F-E1); entrant-account CASCADE ruling
+owed before E2 (debt-log).
+
+**Servers running:** public page http://localhost:8600/e/wongworks-open · operator app
+http://localhost:5174 (director@example.com) · entrant maria.silva@example.com · stack
+`sw-e1-2-demo` (`docker compose -p sw-e1-2-demo -f
+products/scheduler/docker-compose.cloud.yml down -v` to discard).
