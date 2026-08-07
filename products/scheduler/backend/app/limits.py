@@ -66,6 +66,12 @@ MAX_EMAIL = 320         # RFC 5321 maximum
 MAX_PASSWORD = 1_024    # above the 128-char policy so an over-long
                         # password is a clean policy error, not a 422
 MAX_TOKEN = 512         # reset tokens, idempotency keys
+MAX_REGULATIONS = 20_000  # a director's own entry regulations. Its own
+                        # number because it is the one field here that
+                        # holds a document rather than a note — club rules
+                        # plus a waiver run past MAX_NOTES easily, and a
+                        # bound that truncates an operator's terms is worse
+                        # than a generous one.
 
 Name = Annotated[str, StringConstraints(max_length=MAX_NAME)]
 Identifier = Annotated[str, StringConstraints(min_length=1, max_length=MAX_IDENTIFIER)]
@@ -77,6 +83,7 @@ Description = Annotated[str, StringConstraints(max_length=MAX_DESCRIPTION)]
 Email = Annotated[str, StringConstraints(max_length=MAX_EMAIL)]
 Password = Annotated[str, StringConstraints(max_length=MAX_PASSWORD)]
 Token = Annotated[str, StringConstraints(max_length=MAX_TOKEN)]
+Regulations = Annotated[str, StringConstraints(max_length=MAX_REGULATIONS)]
 
 # ``#RRGGBB`` or bare ``RRGGBB``. The frontend already normalizes this
 # (``resolveTvAccent``), but that is a client-side control on a

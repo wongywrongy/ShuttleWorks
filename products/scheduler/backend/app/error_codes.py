@@ -106,6 +106,14 @@ class ErrorCode(str, Enum):
     # today only ``pending → confirmed`` (ruling D1). Almost always a stale
     # desk screen, so the answer names the state it actually found.
     ENTRY_INVALID_STATE = "ENTRY_INVALID_STATE"
+    # The entry page's slug is globally unique — it is the public address
+    # a player types off a poster, so two workspaces cannot share one. The
+    # bare integrity error would surface as a 500; this names the field so
+    # the operator can fix it in one edit. It says only "taken", never by
+    # whom: the slug namespace is public but the workspaces behind it are
+    # not, and a message naming the holder would be a cross-tenant leak on
+    # an otherwise ordinary validation error.
+    ENTRY_PAGE_SLUG_TAKEN = "ENTRY_PAGE_SLUG_TAKEN"
 
     # Tenancy (SP-CLOUD-2) — the uniform cross-tenant answer. A caller
     # without membership can never learn whether the workspace exists.

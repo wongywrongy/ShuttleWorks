@@ -91,9 +91,10 @@ def _probe_all(client, app, tid, headers):
 def test_enumeration_is_nonempty_and_covers_the_known_surface(harness):
     app, _, _ = harness
     ops = _workspace_operations(app)
-    # 70 workspace-scoped operations after SP-E1-1 added the Entries desk
-    # (67 after SP-CLOUD-3 Phase 1's member management; 61 at the
-    # SP-CLOUD-2 Phase 0.E enumeration).
+    # 72 workspace-scoped operations after SP-E1-1 added the Entries desk
+    # and its two configuration routes (70 with the desk alone; 67 after
+    # SP-CLOUD-3 Phase 1's member management; 61 at the SP-CLOUD-2
+    # Phase 0.E enumeration).
     # Growth is fine; shrinkage below the audited floor means routes
     # moved off the {tournament_id} convention — the seam binds to that
     # name, so investigate before lowering this number.

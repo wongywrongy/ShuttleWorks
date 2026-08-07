@@ -1,8 +1,23 @@
-"""The operator's Entries desk (SP-E1-1, spec §5 + ruling D1).
+"""The operator's Entries desk and its minimal configuration surface
+(SP-E1-1, spec §5 + ruling D1).
 
-Three workspace-scoped routes. Everything public — the slug page, the
+Five workspace-scoped routes. Everything public — the slug page, the
 submit endpoint, the entrant's capability link — is a separate surface and
 a separate slice; nothing in this module is reachable without a session.
+
+**The two configuration routes** (``PUT .../entry-page``,
+``POST .../entry-events``) exist because until they did, no API route
+could create an ``entry_pages`` or ``entry_events`` row at all: both were
+reachable only by writing to the database by hand. That is tolerable in a
+test fixture and not tolerable in the walkthrough, which is required to
+seed "through real paths" — a demo that proves the pipe works while
+stepping around the API for the first two rows proves less than it looks
+like it does.
+
+They are the minimum that lets an entry page exist without a SQL client,
+and deliberately no more: no list, no delete, no event update. An
+operator configuration UI is a later slice with its own design, and
+routes added now against no caller would be guesses shipped as contract.
 
 **Why ``confirm`` exists in E1 at all.** Phase D of the plan says "no
 confirm/reject/promote UI", and read literally that leaves the walking
@@ -19,16 +34,26 @@ here named ``workspace_id`` would silently leave the tenancy suite.
 """
 from __future__ import annotations
 
+import re
 import uuid
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
-from app.schemas import EntryCommitResultDTO, EntryDeskRowDTO
-from database.models import Entry, EntryEvent
+from app.schemas import (
+    EntryCommitResultDTO,
+    EntryDeskRowDTO,
+    EntryEventCreateDTO,
+    EntryEventDTO,
+    EntryPageDTO,
+    EntryPageUpsertDTO,
+)
+from database.models import Entry, EntryEvent, EntryPage
 from repositories import LocalRepository, get_repository
 from services.entries import commit_entries
 
@@ -36,6 +61,19 @@ router = APIRouter(prefix="/tournaments", tags=["entries"])
 
 # The only lifecycle transition E1 ships (ruling D1).
 _CONFIRMABLE_FROM = "pending"
+
+# The slug alphabet, deliberately narrower than a URL path segment allows.
+#
+# It ends up on a poster, is typed on a phone, and is read aloud at a club
+# night, so the constraints that matter are human ones: no case (nobody
+# reproduces capitals from a printed page reliably, and the lookup is
+# exact), no spaces or underscores (invisible or lost in a line break), no
+# separators that could change the shape of the route it lives on. Three
+# characters is the floor because a one- or two-character public namespace
+# is enumerable in an afternoon; sixty is a ceiling nobody meets by
+# accident. Conservative on purpose — widening an accepted alphabet later
+# is additive, narrowing it breaks every printed poster.
+_SLUG_RE = re.compile(r"^[a-z0-9-]{3,60}$")
 
 
 def _event_codes(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
@@ -159,3 +197,149 @@ def confirm_entry(
     repo.session.commit()
     codes = _event_codes(repo, tournament_id)
     return EntryDeskRowDTO.from_row(row, event_code=codes.get(row.entry_event_id))
+
+
+# ---- configuration: the entry page and its events -----------------------
+
+
+def _parse_moment(value: Optional[str], field: str) -> Optional[datetime]:
+    """ISO-8601 → datetime, or a 400 naming the field.
+
+    Pydantic would coerce a ``datetime`` for us, but it answers 422 with a
+    validation blob; these two fields are the ones an operator hand-types
+    most often, so the answer says which of them was unreadable.
+    """
+    if value is None or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise http_error(
+            400,
+            ErrorCode.INVALID_INPUT,
+            f"{field} is not an ISO-8601 timestamp: {value!r}",
+        )
+
+
+@router.put(
+    "/{tournament_id}/entry-page",
+    response_model=EntryPageDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def upsert_entry_page(
+    body: EntryPageUpsertDTO,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Create or replace this workspace's entry page.
+
+    One row per workspace — the table's primary key *is* ``tournament_id``
+    — so PUT is the honest verb and there is nothing for a POST to create
+    a second of.
+
+    ``regulations_version`` bumps only when ``regulationsText`` actually
+    changes (Q11.4). Every entry records the version it accepted, so a
+    bump on every save would silently invalidate every acknowledgment on
+    file the next time an operator fixed a typo in the intro paragraph.
+    """
+    slug = body.slug.strip()
+    if not _SLUG_RE.match(slug):
+        raise http_error(
+            400,
+            ErrorCode.INVALID_INPUT,
+            "slug must be 3-60 characters of lowercase letters, digits and "
+            f"hyphens: {body.slug!r}",
+        )
+
+    # Slugs are globally unique — the slug alone resolves the public page,
+    # with no workspace in the URL. Checked explicitly so the answer names
+    # the field; the IntegrityError below is the race's backstop, not the
+    # normal path. Neither answer says which workspace holds it: the
+    # namespace is public, the workspaces behind it are not.
+    taken = repo.session.execute(
+        select(EntryPage.tournament_id).where(
+            EntryPage.slug == slug,
+            EntryPage.tournament_id != tournament_id,
+        )
+    ).first()
+    if taken is not None:
+        raise http_error(
+            409,
+            ErrorCode.ENTRY_PAGE_SLUG_TAKEN,
+            f"the slug {slug!r} is already in use",
+        )
+
+    row = repo.session.get(EntryPage, tournament_id)
+    if row is None:
+        row = EntryPage(tournament_id=tournament_id, regulations_version=1)
+        repo.session.add(row)
+    elif (row.regulations_text or "") != (body.regulationsText or ""):
+        row.regulations_version = (row.regulations_version or 1) + 1
+
+    row.slug = slug
+    row.is_open = body.isOpen
+    row.intro_text = body.introText
+    row.regulations_text = body.regulationsText
+    row.waiver_required = body.waiverRequired
+
+    try:
+        repo.session.commit()
+    except IntegrityError:
+        # Two workspaces claiming one slug in the same instant. The unique
+        # index is the arbiter; the loser gets the same answer it would
+        # have got a millisecond earlier.
+        repo.session.rollback()
+        raise http_error(
+            409,
+            ErrorCode.ENTRY_PAGE_SLUG_TAKEN,
+            f"the slug {slug!r} is already in use",
+        )
+    repo.session.refresh(row)
+    return EntryPageDTO.from_row(row)
+
+
+@router.post(
+    "/{tournament_id}/entry-events",
+    response_model=EntryEventDTO,
+    status_code=201,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def create_entry_event(
+    body: EntryEventCreateDTO,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Add one entry-facing event to this workspace.
+
+    ``code`` is the pivot the commit seam maps onto Meet's ``ranks[]`` or a
+    bracket event, so a blank one is an entry that can never be committed —
+    refused here rather than discovered at commit time, where the seam
+    would (correctly) skip-and-report it and the operator would have to
+    work out why.
+
+    No uniqueness on ``code``: two events can legitimately share one — a
+    workspace running the same discipline in two age bands maps both onto
+    the same rank — and the desk shows the discipline alongside.
+    """
+    code = body.code.strip()
+    if not code:
+        raise http_error(400, ErrorCode.INVALID_INPUT, "code must not be empty")
+    discipline = body.discipline.strip()
+    if not discipline:
+        raise http_error(400, ErrorCode.INVALID_INPUT, "discipline must not be empty")
+
+    row = EntryEvent(
+        tournament_id=tournament_id,
+        code=code,
+        discipline=discipline,
+        entry_type=body.entryType,
+        bracket_event_id=body.bracketEventId,
+        cap=body.cap,
+        fee_cents=body.feeCents,
+        opens_at=_parse_moment(body.opensAt, "opensAt"),
+        closes_at=_parse_moment(body.closesAt, "closesAt"),
+    )
+    repo.session.add(row)
+    repo.session.commit()
+    repo.session.refresh(row)
+    return EntryEventDTO.from_row(row)

@@ -36,6 +36,7 @@ from app.limits import (
     Identifier,
     Name,
     Notes,
+    Regulations,
     StrictModel,
     Timestamp,
 )
@@ -693,6 +694,96 @@ class EntrySkipDTO(BaseModel):
 class EntryCommitResultDTO(BaseModel):
     committed: List[EntryCommitOutcomeDTO] = Field(default_factory=list)
     skipped: List[EntrySkipDTO] = Field(default_factory=list)
+
+
+class EntryPageUpsertDTO(StrictModel):
+    """The operator's entry-page configuration, whole.
+
+    A PUT body, so it is the complete desired state and an omitted optional
+    field means "clear it" — the alternative (omission means "keep") gives
+    a route with no way to erase an intro paragraph.
+
+    ``regulationsVersion`` is deliberately **not** here. It is derived: the
+    server bumps it when ``regulationsText`` actually changes (Q11.4), so
+    an entry's recorded ``regulations_version_accepted`` refers to words
+    that really were on the page. A client-settable version is a client
+    that can rewrite the terms without invalidating consent to the old ones.
+    """
+    slug: Identifier
+    isOpen: bool = False
+    introText: Optional[Notes] = None
+    regulationsText: Optional[Regulations] = None
+    waiverRequired: bool = False
+
+
+class EntryPageDTO(BaseModel):
+    """The stored entry page as the operator sees it back."""
+    slug: str
+    isOpen: bool
+    introText: Optional[str] = None
+    regulationsText: Optional[str] = None
+    waiverRequired: bool
+    regulationsVersion: int
+
+    @classmethod
+    def from_row(cls, row) -> "EntryPageDTO":
+        return cls(
+            slug=row.slug,
+            isOpen=bool(row.is_open),
+            introText=row.intro_text,
+            regulationsText=row.regulations_text,
+            waiverRequired=bool(row.waiver_required),
+            regulationsVersion=row.regulations_version,
+        )
+
+
+class EntryEventCreateDTO(StrictModel):
+    """One entry-facing event (spec Q2/§4).
+
+    ``entryType`` is a ``Literal`` rather than a validated string so an
+    unknown value is refused by the schema, before the route: E1 is
+    singles-only and doubles is E3, and anything else would reach the
+    commit seam as an event it cannot map.
+
+    ``bracketEventId`` stays a plain string, matching the column's
+    deliberately unconstrained pointer — the seam skips-and-reports an
+    unmappable code rather than guessing, so a dangling pointer is a
+    handled state and not one worth a foreign key that would cascade.
+    """
+    code: Code
+    discipline: Name
+    entryType: Literal["singles", "doubles"] = "singles"
+    bracketEventId: Optional[Identifier] = None
+    cap: Optional[int] = Field(None, ge=1, le=MAX_PLAYERS)
+    feeCents: Optional[int] = Field(None, ge=0, le=100_000_000)
+    opensAt: Optional[Timestamp] = None
+    closesAt: Optional[Timestamp] = None
+
+
+class EntryEventDTO(BaseModel):
+    id: str
+    code: str
+    discipline: str
+    entryType: str
+    bracketEventId: Optional[str] = None
+    cap: Optional[int] = None
+    feeCents: Optional[int] = None
+    opensAt: Optional[str] = None
+    closesAt: Optional[str] = None
+
+    @classmethod
+    def from_row(cls, row) -> "EntryEventDTO":
+        return cls(
+            id=str(row.id),
+            code=row.code,
+            discipline=row.discipline,
+            entryType=row.entry_type,
+            bracketEventId=row.bracket_event_id,
+            cap=row.cap,
+            feeCents=row.fee_cents,
+            opensAt=row.opens_at.isoformat() if row.opens_at else None,
+            closesAt=row.closes_at.isoformat() if row.closes_at else None,
+        )
 
 
 # Health
