@@ -681,6 +681,49 @@ class _LocalBracketRepo:
         optional ``member_ids``, ``seed``, ``meta``. Returns the
         number of rows inserted.
         """
+        return self._insert_participants(tournament_id, event_id, participants)
+
+    def add_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        participants: list[dict],
+    ) -> int:
+        """Insert participants **without disturbing the existing list**.
+
+        Same input shape and defaults as ``bulk_create_participants`` — one
+        participant vocabulary, not two. The difference is the calling
+        contract, not the row shape.
+
+        Every participant write before this one arrived through
+        ``upsert_event``, which deletes the event and recreates it from the
+        payload: correct for the roster editor, which owns the whole list,
+        and wrong for the Entries commit seam, which adds one entrant at a
+        time to a list it did not author. Seam A's invariant is "never
+        mutates or deletes an existing roster player", and there was no
+        method that could honour it.
+
+        Deliberately **unguarded on event status.** Whether a generated or
+        started draw may take a late entrant is a policy question, and the
+        answer (no — the seam skips and reports rather than mutating a live
+        draw) belongs with the policy in ``services/entries.py``, not
+        hard-coded into a persistence primitive that a future promote /
+        late-entry flow may need with different rules.
+        """
+        return self._insert_participants(tournament_id, event_id, participants)
+
+    def _insert_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        participants: list[dict],
+    ) -> int:
+        """Shared row construction for both participant writers.
+
+        The two public methods differ only in their calling contract (own
+        the list vs. add to it), so the dict → row mapping lives once. A
+        second copy would drift the moment either grows a field.
+        """
         if not participants:
             return 0
         rows = [
