@@ -223,6 +223,63 @@ the holder; tenant-isolation auto-coverage now 72 ops; +22).
 **Backend after fixes: 1197 passed / 66 skipped.** ruff clean; all six compose files
 validate.
 
+### Phase E — end-to-end demo: DONE (2026-08-06/07), servers left running
+
+**Stack:** `docker compose -p sw-e1-demo -f docker-compose.cloud.yml` (fresh disposable
+Postgres volume scoped to project `sw-e1-demo` — no real-data DB anywhere near this) +
+Vite dev on **:5174** (5173 was taken) with `VITE_API_PROXY_TARGET=http://localhost:8600`.
+Migration chain ran clean on Postgres through `r2c7e1f4a9b3`.
+
+**Walkthrough (screenshots in `.playwright-mcp/sp-e1/`, untracked by design):**
+1. Seeded through real paths only: `POST /auth/register` (director@example.com),
+   `POST /tournaments` (Meet kind), module PATCH `entries available→enabled` (the row was
+   auto-seeded by cloud mode — R1 visible), `PUT entry-page` (slug `wongworks-open`,
+   waiver on, regulations v1), `POST entry-events` (MS1, fee 2500).
+2. `01-public-page-390px` — the public page at 390px: events, fee, regulations + version,
+   acknowledgment checkbox with the entrant-list notice, Turnstile (dummy keys).
+3. Submitted Alex Silva from the form → `02-entry-received-390px` — success page with the
+   one-time manage token (hashed at rest). Public list then shows "Alex Silva MS1" —
+   names + events only (I6).
+4. **Replay demo:** same `Idempotency-Key` twice → same reference id, 201 then 200,
+   one row. **R7 demo:** Sam Silva on the same contact email accepted CLEAN (the
+   parent-two-children case — no flag, per spec Q12); a second "Alex Silva" on the same
+   email+event flagged `needs_review`. (SP-E1-1 Phase E wording says "different player
+   name → soft flag"; the spec's trigger is same-name — both sides demonstrated, spec
+   followed.)
+5. `03-entries-desk` — desk shows 4 entries, states, attention chip, remarks; confirmed
+   the three legitimate entries, left the flagged duplicate pending (operator judgment).
+6. Commit → `04-commit-result` "3 committed to the roster."; second commit → "Nothing
+   new to commit" (Seam A idempotency proven in the UI, matching the test proof).
+7. `05-roster-committed` — Meet roster shows the 3 players; state blob carries
+   `sourceEntryId` + verbatim remarks + group per event code.
+8. **I3/R6 negative, live:** a one-off backend container with `AUTH_MODE=local` on the
+   SAME database — new workspace seeds without entries, GET shows none, PATCH answers
+   `409 MODULE_REQUIRES_CLOUD`. Stopped after the demonstration.
+
+**No tunnel, DNS, Access, or Cloudflare-dashboard change of any kind was made** (asserted
+per Amendment A1; Turnstile ran on the documented dummy keypair).
+
+### Findings from the live run (inputs to later phases)
+
+- **F-E1 (real, for E2/Phase 7 design + spec §9.3): the Meet rank-slot mapping is wrong
+  in practice.** `rankCounts: {MS: 3}` declares SLOTS MS1/MS2/MS3 (one player per school
+  per singles slot — `useRankValidation.ts`), but the seam maps every entrant of event
+  "MS1" onto the SAME slot in the SAME seam-created group, so the roster UI's
+  normalization stripped `ranks` from the 2nd and 3rd players on its next autosave
+  (state v3/v4 were SPA autosaves; v2 was the commit). Players, remarks, sourceEntryId
+  and groups all survived — only the rank slot collided. This is spec open question §9.3
+  answered concretely: entry events map onto a *division* (MS), not a *slot* (MS1);
+  the seam needs either slot assignment or a division-level mapping. Do NOT patch ad hoc.
+- **F-E2 (observation): the operator SPA autosaves the state blob and will normalize
+  seam-written data** through Meet's domain rules. Any future seam-written field must
+  either round-trip the SPA store (as sourceEntryId/remarks now do, by test) or be
+  written to survive normalization. Worth a characterization test in E2.
+
+**Servers left running:** operator app http://localhost:5174 (director@example.com),
+public page http://localhost:8600/e/wongworks-open, API :8600, stack `sw-e1-demo`
+(`make stop` will NOT stop it — use `docker compose -p sw-e1-demo -f
+products/scheduler/docker-compose.cloud.yml down`; add `-v` to discard the demo data).
+
 **Decisions proposed at the STOP (see report):** cloud-mode predicate for R6 (spec's
 `environment=="cloud"` collides with `docker-compose.cloud.yml`'s deliberate
 `ENVIRONMENT=local` — S1); E1 lifecycle gap (no email verification + no confirm UI ⇒

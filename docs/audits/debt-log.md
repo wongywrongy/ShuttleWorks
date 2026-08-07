@@ -745,3 +745,19 @@ a green 1,100-test suite. The real check is the viewer flow in
     into the `UPDATE … WHERE state_version = :seen` statement (the
     `services/members.py` correlated-subquery pattern). Size M, touches a
     shared load-bearing write path. *(2026-08-06 SP-E1-1 Task 1.)*
+
+- **2026-08-07 · SP-E1-1 Phase E live-run findings** (design inputs for E2/Phase 7,
+  deliberately not patched ad hoc — spec §9.3 owns the redesign):
+  - **The Meet mapping targets a rank *slot*, not a division.** `rankCounts: {MS: 3}`
+    declares slots MS1/MS2/MS3 with one player per school per singles slot
+    (`products/meet/roster/hooks/useRankValidation.ts`), but Seam A maps every entrant
+    of entry event "MS1" onto that same slot inside the same seam-created group, so the
+    roster's normalization stripped `ranks[]` from all but the first committed player on
+    the SPA's next autosave. Names, remarks, `sourceEntryId` and groups survived. The
+    fix is a design decision (division-level mapping or seam-side slot assignment), not
+    a patch. Size M, blocks nothing in E1. *(SP-E1-1 Phase E, workspace `sw-e1-demo`.)*
+  - **The operator SPA autosaves the state blob and re-normalizes seam-written data**
+    through Meet's domain rules (observed as state_version bumps v3/v4 after the seam's
+    v2). Any future seam-written roster field needs either a snapshot round-trip test
+    (as `sourceEntryId`/`remarks` have) or a shape that survives normalization. Size S:
+    one characterization test in E2. *(Same run.)*
