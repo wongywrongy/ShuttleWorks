@@ -1472,7 +1472,13 @@ class Entry(Base):
     # SHA-256 of the entrant's capability token, following AuthSession's
     # hashed storage rather than DisplayToken's plaintext: entrant tokens are
     # numerous and long-lived, so the stronger precedent wins.
-    manage_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Nullable for the length of the R10 narrowing only: the entrant's
+    # capability link has no reason to exist now that managing an entry is
+    # login-gated, so the new writer mints nothing and the column is
+    # dropped a commit from here.
+    manage_token_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )
 
     # ---- player block (Q12) -------------------------------------------
     # Who is actually playing. Deliberately NOT interleaved with the block
