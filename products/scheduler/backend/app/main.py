@@ -240,6 +240,15 @@ async def request_id_middleware(request: Request, call_next):
 # matches one route shape and nothing that merely starts like it — a
 # prefix match here would exempt anything an attacker could hang off the
 # same path. See ``csrf_middleware`` for the full argument.
+#
+# **Retires with the HTML route it names, in the Phase 6 cutover** (ruling
+# R8-B), not before — deleting it while ``POST /e/{slug}/submit`` still
+# serves entrants breaks the shipping entry page. That commit must also
+# port, BY NAME: ``test_csrf_cookie_registry.py``'s
+# ``test_the_form_csrf_exemption_matches_exactly_one_route_shape`` (which
+# inverts to "there is no exemption", derived from this source), and
+# ``test_form_csrf_channel.py``'s two ``_rendered_csrf``-scraping body-replay
+# tests, which scrape a hidden field off a page that will no longer exist.
 _FORM_CSRF_ROUTES = re.compile(r"^/e/[^/]+/submit$")
 
 

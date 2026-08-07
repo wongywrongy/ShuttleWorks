@@ -380,6 +380,11 @@ def test_a_relayed_operator_cookie_without_the_header_reaches_no_write(client):
 
     reachable: list[str] = []
     checked = 0
+    # BLIND SPOT, on purpose: ``POST /e/{slug}/submit`` passes this sweep
+    # *vacuously*. ``_concrete`` fills the slug with a random UUID, which
+    # answers the uniform 404 before CSRF matters — so this is no proof of
+    # that route's own CSRF gate (today, the ``_FORM_CSRF_ROUTES`` exemption
+    # in app/main.py). Its real proofs live in test_form_csrf_channel.py.
     for method, path in _routes(app):
         if method not in ("POST", "PUT", "PATCH", "DELETE"):
             continue
