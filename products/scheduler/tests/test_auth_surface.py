@@ -72,6 +72,16 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "entrant names + events only, opt-outs excluded, no contact data "
         "selected; unknown or closed slug answers the uniform 404"
     ),
+    ("POST", "/e/account/signup"): (
+        "entrant account creation — cannot require an account, for the same "
+        "reason /auth/register cannot. Session-free BY NATURE, not by policy. "
+        "Its guards are asserted in tests/test_entrant_auth_routes.py rather "
+        "than assumed: server-side Turnstile (the challenge moved here from "
+        "submit — spec Q4, R3 restack), its own esignup: throttle namespace "
+        "read before the outbound call, the shared NIST password policy, and "
+        "a uniform non-enumerating answer that never reveals whether an "
+        "address is already registered"
+    ),
     ("POST", "/e/{slug}/submit"): (
         "the app's first anonymous WRITE. An entrant has no account and "
         "never will (Q4), so the guard cannot be a session: it is "

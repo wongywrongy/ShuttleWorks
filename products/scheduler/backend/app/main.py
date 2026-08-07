@@ -14,6 +14,7 @@ from api import (
     display as display_api,  # SP-CLOUD-2 — capability-token spectator display
     entries as entries_api,  # SP-E1-1 — the operator's Entries desk
     entries_public as entries_public_api,  # SP-E1-1 — the public entry page + submit
+    entrants as entrants_api,  # SP-E1-2 — the entrant principal's auth surface
     schedule,
     solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
     match_state,
@@ -374,17 +375,34 @@ app.include_router(workspace_modules.router, dependencies=_AUTH_DEP)
 # the public surface can never be a side effect of touching the desk.
 app.include_router(entries_api.router, dependencies=_AUTH_DEP)
 # Entries, public surface: registered WITHOUT the auth dep, following the
-# display public_router precedent below — an entrant has no account, by
-# definition, and never will (Q4: no entrant accounts in v1). This is the
-# app's first ANONYMOUS WRITE, so unlike display it is not enough for the
-# route to be read-only and token-shaped; its guards are in the module
-# itself (Turnstile server-side, per-IP throttle, acknowledgment,
-# tenant-scoped idempotency, uniform 404) and the two routes are named
-# individually in tests/test_auth_surface.py with the reason each must be
-# reachable. Deliberately a separate router from the desk above so that
-# widening the public surface can never be a side effect of touching the
-# operator's routes.
+# display public_router precedent below. **This comment described a world
+# that ruling R10 ended** — it used to say an entrant "has no account, by
+# definition, and never will (Q4)", which was true of the shipped E1 and
+# is now false: entrants are a real principal type with accounts, sessions
+# and a login (spec Q13, and the router below this one).
+#
+# What stays true is the *shape* of the risk. ``GET /e/{slug}`` is a
+# public read of workspace data — a poster URL, not a capability URL — and
+# the router is registered without the app-wide dependency so it can be.
+# Its guards live in the module itself (strict projection, uniform 404 for
+# an unknown or closed slug, per-IP throttle, the global body cap) and
+# every session-free route in it is named individually in
+# tests/test_auth_surface.py with the reason it must be reachable.
+# Deliberately a separate router from the desk above so that widening the
+# public surface can never be a side effect of touching the operator's
+# routes.
 app.include_router(entries_public_api.router)
+# Entrant auth (SP-E1-2, ruling R10): the second principal's front door,
+# registered WITHOUT ``_AUTH_DEP`` for the same reason ``auth_api`` below
+# is — signup and login are how a session is *obtained*, so requiring one
+# would make the capability unreachable. This is not a widening of the
+# public surface but a narrowing of it: the act that used to be anonymous
+# (submitting an entry) moves behind a session, and what is left
+# unauthenticated is account creation, which cannot be anything else.
+# ``/e/account/me`` declares ``get_current_entrant`` itself rather than
+# inheriting the operator dependency — the two principals must never be
+# resolvable by the same seam (ruling D-A3).
+app.include_router(entrants_api.router)
 # Invites: registered WITHOUT the router-level auth dep so the public
 # ``GET /invites/{token}`` resolve endpoint stays unauthenticated. The
 # accept + revoke endpoints declare their own auth requirements.
