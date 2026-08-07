@@ -167,10 +167,15 @@ deliberately serving one of those two badly, and neither is the minority.
 
 ### Spec invariant — domain is configuration, never code (program I1)
 
-> **Every absolute URL the product emits — verification emails, entrant capability links,
+> **Every absolute URL the product emits — verification emails, reset and invite links,
 > share links, QR targets, unfurl metadata — is composed from a base-URL setting, never a
 > literal. Internal navigation is relative. A CI grep guard fails the build on a hardcoded
 > hostname outside config, docs and tests.**
+
+*(R3 note: the **examples** changed, the invariant did not. R1 wrote "entrant capability
+links" here; R10 retires the entrant manage token, so the entrant-facing absolute URLs are
+now account verification, password reset and the E3 partner invite — Q13, Q6. Display's
+capability link is unaffected.)*
 
 This is cheap to hold now and expensive to retrofit, and the tree is currently on the right
 side of it by accident rather than by design: the backend generates **no absolute URLs at
@@ -680,6 +685,24 @@ invalidate anything here.
 The operator marks paid/unpaid manually. `awaiting_payment` exists as a pending-reason from
 day one.
 
+> **Amended by R13/R14 (R3) — the boundary is untouched; the level moves.** Two corrections
+> to the sentence above, both mechanical:
+>
+> 1. **Money attaches to the act, not the event.** Tiered per-person pricing (Q14 §1) prices
+>    a *person entering N events*, so the recorded total (`fee_total_cents`), its derivation
+>    (`fee_basis`) and the payment record (`paid_at`, `payment_note`) live on **`submissions`**,
+>    not on `entries` (§4). `entry_events.fee_cents` survives as the **per-event fallback**,
+>    which is what the R1 sentence was really describing, and `entries.fee_cents` survives only
+>    as this entry's *component* of the submission total.
+> 2. **Payment instructions are a first-class field** (`entry_pages.payment_instructions`,
+>    Q14 §2) rather than prose the director emails out.
+>
+> Everything else here stands verbatim: the later Stripe shape, the one-pending-reason rule,
+> the replay-safe webhook index, and — the load-bearing half — **payment clears a flag and
+> never confirms an entry.** When Stripe lands, the Checkout Session is created for a
+> **submission** (one act, one total, one payment) and its webhook clears `awaiting_payment`
+> on that submission's entries.
+
 **The later Stripe shape, fixed now so nothing is redone:** a Checkout Session is created at
 submit; the entry carries `awaiting_payment`; the `checkout.session.completed` webhook clears
 **exactly that one pending-reason** and nothing else. Webhook idempotency is a unique index
@@ -784,9 +807,15 @@ prove.
    few places where the software genuinely refuses, and it refuses because a waiver
    acknowledged after the fact is not an acknowledgment.
 4. **Everything is versioned.** `entry_pages.regulations_version` bumps whenever the text is
-   edited; every entry records `regulations_accepted_at` and the exact
-   `regulations_version_accepted`. "They agreed to *something* at some point" is not a
-   record; "they agreed to v3 at 14:02 on 12 March" is.
+   edited; the acceptance pair — `regulations_accepted_at` and the exact
+   `regulations_version_accepted` — is recorded at the moment of the act. "They agreed to
+   *something* at some point" is not a record; "they agreed to v3 at 14:02 on 12 March" is.
+   **R13 (R3) moves where that pair lives, not what it means:** R1 wrote "every *entry*
+   records" it, which was right when one form act was one entry. A submission now covers
+   1–N events, and one form act is **one agreement**, so the pair lives on the
+   **submission** (Q12 (R3), §4) and every entry in that act inherits it. E1 shipped it on
+   the entry (`backend/database/models.py:1131-1257`); the move is part of the additive
+   migration.
 
 **Guardian consent lives in the waiver text, at the director's discretion.** The spec does
 not build a guardian-consent workflow, a minor-detection rule, or an age gate. A director
@@ -1503,15 +1532,19 @@ work rather than a rewrite of the thing that touches the roster.
 
 - **Input:** an **authenticated submission** — a `play.*`-scoped entrant session (Q13), a
   public slug, **1–N event selections each bound to a player** (§4), a regulations
-  acknowledgment, and an `Idempotency-Key`. **No Turnstile token here**: the challenge moved
-  to signup, which is now the public unauthenticated act (Q4 anti-abuse stack).
+  acknowledgment, and an `Idempotency-Key`. **No Turnstile token is *required* here**: the
+  challenge moved to signup, which is now the public unauthenticated act (Q4 anti-abuse
+  stack). Whether submit *also* keeps a challenge is left to the E1-2 audit — the ruling
+  requires one at signup and does not forbid one at submit (Q4); this seam states the floor,
+  not a prohibition.
 - **Guarding, restated so the move is unambiguous:** *Turnstile at signup, session at submit.*
   Throttles cover both, in separate key namespaces.
-- **Output:** one `submissions` row plus one `entries` row per selected event, each in
-  `pending` (or `unverified` where the account is unverified — §6), plus the account
-  verification email whose links are composed from the base-URL setting
-  (`public_app_origin`, `backend/app/config.py:223`) per §2A / invariant I1 — never a literal
-  hostname.
+- **Output:** one `submissions` row plus one `entries` row per selected event, each in the
+  landing state §6 fixes for the slice (`pending` while no verification machinery exists —
+  ruling D1's posture; `unverified` once E2 gates the transition on a verified account), plus
+  — **from E2, when the verification machinery exists** — the account verification email,
+  whose links are composed from the base-URL setting (`public_app_origin`,
+  `backend/app/config.py:223`) per §2A / invariant I1, never a literal hostname.
 - **Invariants:** never reveals whether an email is already entered (uniform response) — this
   survived Q12 and survives R13, because a repeat submitter is a *legitimate* act, not a
   detectable collision, and it now additionally applies to **signup**, where email enumeration
@@ -1565,7 +1598,7 @@ unreasonable-about.
 
 | Transition | Actor | Account requirement (R3) |
 |---|---|---|
-| submit → `unverified` | entrant (public, **logged in**) | an account exists; **verification not yet required** — see the note below |
+| submit → `unverified` \| `pending` | entrant (public, **logged in**) | an account exists; **verification not yet required**. `unverified` when the submitting account is unverified *and* the verification machinery exists (E2); `pending` otherwise — see the note below |
 | `unverified` → `pending` | automatic, on **account** email verification | verified account. *R1 read this as verifying the entry's email; R10 makes it the account's — one verification covers every entry that account ever makes* |
 | → `waitlisted` | automatic, when the event is at cap | none (an automatic queue position, not an act) |
 | pair-conflict flag | automatic | none |
@@ -1577,13 +1610,21 @@ unreasonable-about.
 | withdraw-and-**erase** | entrant (logged in) | **verified account**; rides the account machinery (Q10) |
 | partner accepts a doubles invite | partner | an account, created or logged into **through the invite** (Q6) |
 
-**Unverified accounts may exist, and — per the E1-2 slice — may submit locally.** E2 adds
-verification; until it does, an account that has signed up but not verified can submit, and
-its entries sit in `unverified` exactly as the state name says. This is the same posture
-ruling D1 took for E1 (submissions landed directly in `pending` because the verification
-machinery did not exist yet), applied one slice later to the account rather than the entry.
-It is a **slice-ordering** statement, not a permanent design: once E2 ships, `unverified →
-pending` is gated on a verified account and nothing else changes.
+**Unverified accounts may exist, and — per the E1-2 slice — may submit.** E2 adds
+verification; until it does, an account that has signed up but not verified can submit.
+
+**Where those entries land, stated precisely, because getting it wrong strands them.**
+Ruling **D1 stands unamended by R10–R14**: while no verification machinery exists,
+submissions land directly in **`pending`**, and `unverified` stays in the vocabulary
+without being entered. This is not a nicety — `unverified` has exactly one exit
+(`unverified → pending`, automatic on verification), so an E1-2 entry parked there could
+never be confirmed, and Seam A commits only `confirmed` entries. The slice would ship a
+pipe that cannot reach the roster. R10 changes *what* gets verified (the account, once, for
+every entry it ever makes) and not *when* the state becomes reachable.
+
+It is a **slice-ordering** statement, not a permanent design: once E2 ships, a submission
+from an unverified account lands in `unverified`, `unverified → pending` is gated on the
+account's verification, and nothing else in this machine changes.
 
 Nothing consequential is automatic. Auto-waitlisting is a *queue position*, not a decision,
 and is always operator-reversible — matching RunSignup, whose waitlist promotion sends an
@@ -1606,7 +1647,7 @@ row rather than rewriting one. E1's row below is kept as the historical record i
 | Slice | Program phase | Contents | Why here |
 |---|---|---|---|
 | **E1 — walking skeleton** ✅ **SHIPPED** (2026-08-06, merged `86182af`) | **Phase 5** | Cloud-only. One `entry_event`, singles only, no payment, no partner, no cap. Public slug page → **anonymous Turnstile-guarded** submit → entry row → operator desk list → commit to roster. Rate-limit zone + allowlist entries; page served from a hand-built `HTMLResponse` under `play.*` (ruling D3, no framework — §2A). | **Tested the riskiest assumption first: that a public write can be exposed safely at all**, and that the commit seam survives the `If-Match` blob contract. It did. Everything else is product surface on top of a proven pipe — which is exactly why R10–R14 reshape intake without touching the pipe. |
-| **E1-2 — the R3 delta** *(new)* | **Phase 5** (delta) | **Entrant accounts in the pipe** (Q13: signup / login / reset, `play.*`-scoped session, throttle namespace, Turnstile moved to signup) · **the mandatory submission model** (R13: `account → submission → entries → players`, multi-event form, idempotency at submission level) · **R12 fields** (gender required + soft filtering, club, phone behind the director toggle) · **R14 fields** (fee schedule + running total, `payment_instructions`, `withdraws_until`, entry policy, venue) · **token retirement** (`manage_token_hash` dropped, success-page code deleted, the `POST /e/{slug}/submit` allowlist entry removed) · **R11 both-width** acceptance on whatever renders the form. | The rulings supersede a shipped shape. Doing this as a delta over a working pipe is strictly cheaper than doing it as part of E2, because the migration is additive-then-narrowing and every step has a green suite behind it. **Its Phase E record must not be retro-edited** — E1 happened. |
+| **E1-2 — the R3 delta** *(new)* | **Phase 5** (delta) | **Entrant accounts in the pipe** (Q13: signup / login / logout, `play.*`-scoped session, throttle namespace, Turnstile moved to signup — **email verification and password reset stay in E2**, and until they exist submissions land in `pending` per D1: §6) · **the mandatory submission model** (R13: `account → submission → entries → players`, multi-event form, idempotency at submission level) · **R12 fields** (gender required + soft filtering, club, phone behind the director toggle) · **R14 fields** (fee schedule + running total, `payment_instructions`, `withdraws_until`, entry policy, venue) · **token retirement** (`manage_token_hash` dropped, success-page code deleted, the `POST /e/{slug}/submit` allowlist entry removed) · **R11 both-width** acceptance on whatever renders the form. | The rulings supersede a shipped shape. Doing this as a delta over a working pipe is strictly cheaper than doing it as part of E2, because the migration is additive-then-narrowing and every step has a green suite behind it. **Its Phase E record must not be retro-edited** — E1 happened. |
 | *(public-site scaffold)* | **Phase 6** | Not an Entries slice: the `play.*` frontend app (framework decision R8 / §2A), design-token import, SEO + unfurl, and the transactional email provider with SPF/DKIM/DMARC. **R11 is a framework criterion here**: candidates are judged on serving **co-equal desktop and mobile layouts** for a **form-heavy** flow (multi-event selection with a running total), not on mobile weight alone. | E2 sends real email to real strangers; the delivery infrastructure has to exist and be *proven* before the lifecycle depends on it. The framework decision waits for E1 so it is judged against a real page. |
 | **E2 — lifecycle** | **Phase 7** | **Account email verification + password reset** (R10) · **login-gated "my entries"** with manage / withdraw / **withdraw-and-erase** (R10 — replaces the capability-link manage path) · caps + waitlist, pending-reasons, operator confirm/reject/promote, regulations versions finalized (Q11), entrant-list opt-out honored (Q4), `remarks` through the commit seam, withdrawal against `withdraws_until` (R14). | Erasure is nearly free here and expensive later (Q10) — and R10 makes it cheaper still, because it rides the account rather than a token the entrant must still possess. |
 | **E3 — doubles** | **Phase 8** | Partner nomination by email → **invite token** on the `invite_links` precedent → partner signs up or logs in and accepts → pair conflicts as operator-resolved flags. | The incumbent's weakest area; needs E2's email machinery and the account model R10 supplies. |
@@ -1757,7 +1798,7 @@ cost, so each row names it.
 | 16 | §2A / program I7: "`play.*` is mobile-first and stays mobile-first"; E1's "usable at 390px — that is the bar" | **Replaced by R11:** desktop and mobile are **co-equal first-class layouts**; the bar is "no horizontal scrolling and no degraded functionality at either width". The E1 page (`api/entries_public.py:291`, `:298`) is throwaway by design, so this lands as a Phase 6 acceptance criterion, not a retrofit. I7's operator-console half is untouched. | **rework, cheap** |
 | 17 | `tests/test_auth_surface.py` "contains zero public writes to workspace data" (R1) → E1 added two allowlist entries and a preamble stating "an entrant has no account and never will" | **Both directions are now history.** `PUBLIC_BY_DESIGN` (`products/scheduler/tests/test_auth_surface.py:52`) gained `GET /e/{slug}` (`:69`) and `POST /e/{slug}/submit` (`:75`). R10 removes the **write** entry and rewrites the preamble (`:38-40`) and the entry's own text (`:77`); the **read** entry stays. Editing a passing test is sanctioned here precisely because a user ruling superseded the behavior it pins. | **rework** |
 | 18 | R14 §6 assumed the public tournament page could render the incumbent's IA "from fields we have" | **Partly false, and audited.** Fee, timeline, events, org name and the Enter action all have fields. **The tree has no venue name or address anywhere** — `tournaments` has no location column, `TournamentConfig` (`frontend/src/api/dto.ts:18`) has none, and "venue" in this codebase means `courtCount` / `intervalMinutes` / `dayStart` / `dayEnd` (`backend/api/tournaments.py:697-698`). **Decision: add `venue_name` + `venue_address` to `entry_pages`** (Q14 §6) — publication data, outside the state blob, so it can never 409 against the fail-closed CONFIG_LOCKED guard (`api/tournaments.py:691-703`). Not deferred. | **additive** |
-| 19 | Q1 (R2): the cloud-mode predicate is `settings.environment == "cloud"` | **Stale, and it was stale before it shipped.** Ruling D2 (SP-E1-1 Phase A) changed it to `settings.auth_mode == "cloud"` because `docker-compose.cloud.yml` deliberately sets `ENVIRONMENT=local`; the shipped helper is `cloud_modules_enabled()` (`backend/app/config.py:368-386`). D2 said the spec would get an amendment paragraph; it never did. Written into Q1 by this pass. Nothing to do with R10–R14 — recorded here because a reader following the spec's stated mechanism would build the wrong predicate. |
+| 19 | Q1 (R2): the cloud-mode predicate is `settings.environment == "cloud"` | **Stale, and it was stale before it shipped.** Ruling D2 (SP-E1-1 Phase A) changed it to `settings.auth_mode == "cloud"` because `docker-compose.cloud.yml` deliberately sets `ENVIRONMENT=local`; the shipped helper is `cloud_modules_enabled()` (`backend/app/config.py:368-386`). D2 said the spec would get an amendment paragraph; it never did. Written into Q1 by this pass. Nothing to do with R10–R14 — recorded here because a reader following the spec's stated mechanism would build the wrong predicate. | **none** — docs-only |
 
 **Two research-sourced corrections to assumptions this spec has carried since R1**, recorded
 because they change what "match the incumbent" means:

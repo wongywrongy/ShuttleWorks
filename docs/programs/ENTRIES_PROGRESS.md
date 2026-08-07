@@ -16,7 +16,7 @@ program brief — that file is the plan; deviation is a STOP).
 | 2 | Deploy on wongworks.dev | not started | — |
 | 3 | SP-UI-1 appearance pass | **pre-executed** (see contradiction C1) | — |
 | 4 | Dogfood (floating) | not started | — |
-| 5 | E1 walking skeleton | not started | — |
+| 5 | E1 walking skeleton | **E1 SHIPPED 2026-08-06** (merged `86182af`, under Amendment A1); **phase open** — delta slice E1-2 (SP-ENTRIES-R3) not started | public-exposure [USER SIGN-OFF] gate still owed, after Phase 2 |
 | 6 | play.* scaffold + email | not started | — |
 | 7 | E2 lifecycle | not started | — |
 | 8 | E3 doubles | not started | — |
@@ -340,9 +340,11 @@ SQLite from now on):**
 4. The demo stack `sw-e1-demo` still runs the shipped shape; nothing in this session
    changes it.
 
-**STOP presented to the user; awaiting go-ahead on how the amendment proceeds given the
-shipped E1, plus the standing [CONFIRM AT STOP] item (password vs passwordless default)
-which will be re-presented at the combined sign-off.**
+**STOP presented to the user; go-ahead given 2026-08-07** — the amendment proceeds as a
+*supersedes-a-shipped-shape* pass (see the amendment record below). The standing
+[CONFIRM AT STOP] item (password vs passwordless default) stands as the default and its
+marker stays in the spec until the sign-off is recorded; it is re-presented at SP-E1-2's
+Phase A STOP.
 
 **Decisions proposed at the STOP (see report):** cloud-mode predicate for R6 (spec's
 `environment=="cloud"` collides with `docker-compose.cloud.yml`'s deliberate
@@ -351,6 +353,79 @@ nothing reaches `confirmed` ⇒ Seam A commits nothing — needs a ruling); publ
 via hand-rolled `HTMLResponse` (Jinja2 not installed; rule 8); entries idempotency
 index scoped per-tenant (deliberate divergence from the global solve-job index — a
 cross-tenant disclosure vector on an unauthenticated route otherwise).
+
+### Amendment executed (2026-08-07) — documents only, four stages
+
+**Branch:** `dev/prog1-r3-amendment`. **Discipline held: zero source, zero migrations, zero
+tests.** `git diff 86182af..HEAD --name-status` = four documents, nothing else.
+
+| Stage | Commit | File |
+|---|---|---|
+| B — spec | `b84ef14` | `docs/superpowers/specs/2026-08-06-entries-design.md` (+1026/−171) |
+| C — program | `137519a` | `docs/programs/SP-PROGRAM-1.md` (+127/−12) |
+| D — delta prompt | `23ffd7f` | `docs/programs/SP-E1-2.md` (new, 148 lines) |
+| E — adversarial consistency pass | this entry's commit | the three above + this ledger |
+
+**What landed.** R10–R14 transcribed verbatim into SP-PROGRAM-1's standing rulings (R4 struck
+through and pointed at R10, R7 re-headed "hardened by R13", I5/I6/I7 rewritten, the
+"entrant accounts" global non-goal struck); the spec gains **Q13** (the entrant account),
+**Q14** (pricing/deadlines/policy), a rewritten §4 four-level schema with a per-table
+migration-posture table, a rewritten Seam B, an §2A responsive subsection, an E1-2 row in §7,
+open question #7 and discrepancy-log rows 12–21; **SP-E1-2** is the delta prompt over the
+shipped E1 (deletion table, the 152-backend/18-frontend test-unwind inventory, four Phase-A
+decisions, clean-rebuild migration conditional on a data-premise verification).
+
+**Two judgment calls recorded for review:** the venue card is **answered, not deferred** —
+`venue_name` + `venue_address` as free text on `entry_pages`, off the state blob so an address
+can never 409 against the fail-closed `CONFIG_LOCKED` guard; and SP-E1-2 rule 6 **pre-resolves**
+a spec/prompt disagreement (spec §4 says additive-then-narrowing with backfills; the prompt
+orders a clean rebuild) by making it conditional on a Phase-A verification that every entries
+store is disposable — STOP and execute the spec's posture if it is not.
+
+**Phase E (adversarial pass) — what it found and fixed.** All R10–R14 text verified
+**verbatim** against the ruling; every new tree citation opened and confirmed (models/auth/
+config/main/dependencies/entries_public/entries/invites/tournaments/test_auth_surface/dto.ts/
+workspaceNav.ts); SP-E1-2's per-file test counts re-counted and exact (47/17/15/23/21/16/7/6 =
+152 backend, 11+7 = 18 frontend); `SP-E1-1.md` untouched by the diff; §9.3 (F-E1) still open;
+the `[CONFIRM AT STOP]` marker present in spec Q13 §4, §9 and SP-E1-2 Phase A. **Seven
+inconsistencies fixed**, all of them sentences that survived the amendment carrying a
+superseded premise:
+
+1. **Q8 still put the payment record on the entry** and described per-event pricing as the
+   v1 model — amended to move `paid_at`/`payment_note`/the total to `submissions` (R13/R14)
+   with Q8's boundary and the "payment never confirms an entry" rule intact.
+2. **Q11 item 4 still read "every *entry* records `regulations_accepted_at`"** — R13 puts the
+   acceptance pair on the submission; amended in place with the reasoning.
+3. **§6 stranded E1-2's entries.** The R3 note said an unverified account's entries "sit in
+   `unverified`", whose only exit is the verification transition — which E1-2 does not build,
+   while Seam A commits only `confirmed`. Ruling **D1 restated as unamended**: entries land in
+   `pending` until E2 gates the transition. Mirrored into the §6 table row, Seam B's output,
+   SP-E1-2 Phase B and program Phase 5 (delta).
+4. **A three-way scope contradiction on verification/reset:** program Phase 5 (delta) put both
+   in E1-2, spec §7's E1-2 row put reset in E1-2, while SP-E1-2's non-goals, spec §7's E2 row
+   and program Phase 7 put both in E2. Resolved to **E2** in all three documents.
+5. **Seam B forbade a Turnstile challenge at submit** while Q4 explicitly left it to the E1-2
+   audit ("requires it at signup, does not forbid it at submit") — Seam B now states the floor,
+   not a prohibition.
+6. **The spec's I1 invariant still listed "entrant capability links"** among the absolute URLs
+   the product emits — replaced by verification / reset / invite links, with the change noted
+   as an example change, not an invariant change.
+7. **Cross-document gaps closed:** program Phase 1 annotated as historical (its "mobile-first"
+   and entry-level acceptance instructions are superseded by R11/R13, not re-run); Phase 9
+   gained the R14 §6 public tournament page IA that spec §7's E4 row assigns to it; Phase 10
+   gained account deletion + export (R10) alongside withdraw-and-erase; the program's done
+   condition and companion-document list updated. Also fixed: discrepancy-log row 19 was
+   missing its Cost cell.
+
+**Not fixed, recorded instead:** the spec's status line still reads **Provisional** (the
+provisional→accepted flip is the user's act, per Phase 1); and R12's gender-mismatch flag has
+no named home in Q9's six attention codes — it reads as an entry-level flag on R7's
+`needs_review` precedent, which is how SP-E1-2 Phase C specifies it, but the vocabulary is not
+stated outright. Input to the SP-E1-2 audit.
+
+**Gate:** `npm run docs:build` green (link gate) after every stage.
+
+**Next task:** SP-E1-2 Phase A (audit + STOP) on branch `dev/prog1-p5-e1-2`.
 
 ---
 

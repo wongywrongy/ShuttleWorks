@@ -1,7 +1,7 @@
 # SP-PROGRAM-1 — ShuttleWorks Public Platform Program
 
 **Type:** Master program document. Multi-session. Claude Code executes phases in order.
-**Companion documents:** `docs/superpowers/specs/2026-08-06-entries-design.md` (the Entries spec, provisional), `SP-UI-1.md` (appearance pass), `docs/programs/ENTRIES_PROGRESS.md` (the program ledger — create in Phase 0 if absent).
+**Companion documents:** `docs/superpowers/specs/2026-08-06-entries-design.md` (the Entries spec, provisional, amended by SP-ENTRIES-R2 and SP-ENTRIES-R3), `SP-UI-1.md` (appearance pass), `docs/programs/ENTRIES_PROGRESS.md` (the program ledger — create in Phase 0 if absent), `docs/programs/SP-E1-1.md` (the executed Phase 5 prompt — history) and `docs/programs/SP-E1-2.md` (the Phase 5 delta prompt).
 
 ---
 
@@ -133,6 +133,12 @@ framework decision) is a different thing and is likewise untouched — see Phase
 
 ### Phase 1 — SP-ENTRIES-R2: spec delta pass
 
+**STATUS (historical): DONE 2026-08-06.** The instructions below are kept as the executed
+record and are **not re-run**. Two of them were superseded the following day by the
+SP-ENTRIES-R3 amendment and are annotated inline so nobody re-executes them as written:
+item 2's "**mobile-first** frontend" (→ **R11**: co-equal desktop and mobile) and item 4's
+entry-level acceptance fields (→ **R13**: the acceptance pair moves to the submission).
+
 **Entry:** Phase 0 complete. **Deliverable: spec amendments only — zero production code** (same discipline as R1: `git status` = spec + ledger changes only).
 Amend `2026-08-06-entries-design.md`:
 1. Fold in rulings R5–R7 as decision sections with rejected alternatives (R7: record the rejected hard-index option and why).
@@ -194,9 +200,13 @@ and its Phase E ledger entry are **history and must not be retro-edited**.
    under a different name would fall outside enforcement, and the audit must close this
    explicitly (Q13 §2); whether player identity is an `entry_players` table or structured
    fields (R13).
-2. **Accounts in the pipe** (R10 / Q13): signup, login, email verification, reset, all on the
-   existing machinery; `play.*`-scoped session; entrant throttle namespace; **Turnstile moves
-   from submit to signup** (I5 as amended).
+2. **Accounts in the pipe** (R10 / Q13): signup, login, logout, all on the existing
+   machinery; `play.*`-scoped session; entrant throttle namespace; **Turnstile moves from
+   submit to signup** (I5 as amended). **Email verification and password reset are NOT in
+   this slice** — they are E2 / Phase 7 (spec §7, SP-E1-2 non-goals). Until they exist,
+   an unverified account may submit and its entries land in **`pending`** (ruling D1,
+   unamended by R10–R14 — spec §6); `unverified` stays unentered, because its only exit is
+   the verification transition and Seam A commits only `confirmed`.
 3. **The submission model** (R13): `account → submission → entries → players`; multi-event
    form; `Idempotency-Key`, regulations acceptance and computed fee total move to the
    submission; `UNIQUE (tournament_id, idempotency_key)` (ruling D4) becomes submission-level.
@@ -245,12 +255,12 @@ carries the idempotency key; test counts strictly up despite the deletions.
 **Entry:** Phase 8 complete (needs real entry states).
 1. Extend `_derive_phase` to the seven-value vocabulary (spec Q9) — additive; the four existing values keep exact meanings; workspaces without the Entries module still derive only the original four.
 2. Six attention codes with spec trigger conditions, via the Phase-3 shared constant; Hub next-action mappings; Overview absorbs the new phases through the SP-UI-1 panel seam (this should be data + panels, not redesign — if it isn't, STOP: the seam failed and that's a finding).
-3. Public read surfaces on `play.*`: entrant lists per event (opt-outs honored), and post-close acceptance/reserve lists in order.
+3. Public read surfaces on `play.*`: entrant lists per event (opt-outs honored), and post-close acceptance/reserve lists in order. **Plus the R14 §6 public tournament page IA** (spec §7's E4 row): fee + `payment_instructions` block, the `opens_at → closes_at → withdraws_until →` start timeline with timezones, events + entry counts, org and venue cards, prominent **Enter** action — the real rendering of what E1-2 sketched on the throwaway page.
 **Exit:** phase/attention behavior fully unit-tested; Overview screenshots across entries phases.
 
 ### Phase 10 — E5: money, retention, compliance
 
-**Entry:** Phase 9 complete. Fee display + operator manual paid/unpaid + `awaiting_payment` reason; retention default + the anonymization job (PII scrubbed N days post-event, aggregate rows kept; job is idempotent and tested); GDPR verification pass: withdraw-and-erase actually erases (test proves the PII is gone), retention documented, the debt-log GDPR entry updated to reflect what Entries added and resolved. Stripe remains **post-program** — the Q8 boundary is documented, not built.
+**Entry:** Phase 9 complete. Fee display + operator manual paid/unpaid **at the submission level** (R13/R14: the total and the payment record are properties of one act) + `awaiting_payment` reason; retention default + the anonymization job (entry PII scrubbed N days post-event, aggregate rows kept, **accounts persist** — I6/R10; job is idempotent and tested); GDPR verification pass covering **both layers** (R10): withdraw-and-erase actually erases (test proves the PII is gone), **account deletion and account-level data export** work and are tested, retention documented, the debt-log GDPR entry updated to reflect what Entries added and resolved. Stripe remains **post-program** — the Q8 boundary is documented, not built.
 **Exit:** the public-launch blockers named in spec Q10 are closed.
 
 ### Phase 11 — Cutover + marketing (post-prototype; entry condition is the user declaring prototyping done)
@@ -274,7 +284,7 @@ Stripe processing · partner-search pool · ~~entrant accounts~~ **(R10, 2026-08
 
 - [ ] Every phase's STOP/sign-off recorded in the ledger with date and outcome
 - [ ] All invariants I1–I8 hold; the I1 grep guard is green in CI
-- [ ] Spec status: accepted, amended through Phase 1, discrepancies inherited forward
+- [ ] Spec status: accepted, amended through Phase 1 **and the SP-ENTRIES-R3 master amendment (R10–R14)**, discrepancies inherited forward
 - [ ] Test counts strictly above the Phase 0 baseline; all gates green on main
 - [ ] Install/selfhost docs accurate to the deployed reality (verified by the Phase 2 literal walkthrough and kept current per rule 6)
 - [ ] The I3 demonstration (entry submitted publicly → committed → event runs offline) is recorded in the ledger
