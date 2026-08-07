@@ -709,3 +709,122 @@ created — it is an E3 column and was outside C2's list. F-E1-2 stands
 unchanged: multi-event submissions produce one roster player per entry, so
 a human in three events reaches the roster three times; the ruling is owed
 in E2/Phase 7 alongside F-E1.
+
+### SP-E1-2 Phase D (D1-D4): DONE (2026-08-07, backend 1418/66sk, frontend 1442/175)
+
+Commits `2f4af8d`..`2c99d5f` on `dev/prog1-p5-e1-2`. Gates: backend
+**1418 passed / 66 skipped** (Phase C baseline 1390/66 — **+28**, skips
+unchanged, zero regressions); frontend **1442 passed / 175 files**
+(baseline 1433 — **+9**); `ruff check backend tests` clean; eslint **0
+errors / 104 warnings** (unchanged); depcruise **14 warnings, 2268 edges**
+(unchanged — see below); `vite build` (with the `tsc -b` gate) green.
+
+**D1 — the multi-event form.** The incumbent's information architecture
+(R14 §6) rendered from fields this design created: a timeline card
+(`opens_at → closes_at → withdraws_until →` tournament date, each stated
+in UTC, and **"Varies by event"** rather than a headline date that would
+be false about the other event), fee schedule + payment prose, venue,
+organiser (`orgs.name` — the only field the audit found behind that card),
+and per-event entry counts drawn from the same projection the public list
+uses so the number and the names cannot disagree.
+
+**The mechanism decision worth carrying forward: gender filtering and the
+running total are server round trips, not script.** The page has
+`script-src 'none'` (Phase C's tightening), so the form's second submit
+button posts `action=filter` and the route re-renders with the list
+narrowed and the total recomputed, writing nothing and spending no entry
+budget. JavaScript was rejected twice over — it would loosen the CSP of a
+page whose whole posture is that it runs no script, and it would make the
+total shown a **second implementation** of the fee rules, which is exactly
+what Seam B's "the total shown is the total recorded" forbids.
+`_total_markup` calls `services.entry_fees.compute_fee_total`, and a test
+asserts the rendered number equals the stored `fee_total_cents` for the
+same selection.
+
+Three things keep the filter a default rather than a gate: an
+already-ticked event is **never hidden** (a selection vanishing off screen
+is R14 §4's silent drop through a side door), the override checkbox puts
+everything back **marked**, and a submitted mismatch is still accepted
+carrying `gender_mismatch` (Q14 §5).
+
+**R11 both-width.** The page keeps its phone-first stylesheet and earns a
+second column at 60rem. The "no horizontal scroll" half is mechanical
+rather than aspirational — nothing is sized in pixels (a test greps the
+stylesheet for `width: <n>px`) and long unbroken strings wrap. Screenshots
+at both widths are Phase E's.
+
+**D2 — manage token.** Verification, mostly: Phase C had already deleted
+the column, the mint and the success card, each with its successor test in
+the same commit. What was left was two docstrings still claiming to
+withhold a column that no longer exists, and a missing guard on the
+**mint** (rather than on the output) — `secrets.token_*` now provably
+absent from the public module.
+
+**D3 — desk delta, minimal.** `GET .../entries` only; confirm and commit
+byte-for-byte unchanged. `EntryDeskRowDTO` loses `contactName` /
+`contactEmail` to a `submission` block (id as the grouping key, account
+address, act fee total). **It costs no extra query** — both hops are
+already `lazy="joined"`, so it stays one SELECT with two joins, and
+`test_the_grouping_costs_no_extra_query_per_row` counts the statements,
+because that is a loader-configuration property one edit away from an N+1.
+
+**D4 — frontend.** Rows band by act (`groupBySubmission`, a pure function
+keeping the **server's** order — re-sorting would compete with the
+documented ordering and move an operator's place between reads); the
+address and total sit on the band once. `GroupBandHeader` gained an
+optional `detail` **string** (an email in the eyebrow's uppercase reads as
+shouting); the first cut typed it `ReactNode` and **raised the depcruise
+edge count by one**, so it was narrowed back — the count is unchanged at
+2268.
+
+**Test unwind tally, per ruling.**
+
+| Ruling | File | Change |
+|---|---|---|
+| — | `test_entries_public_routes.py` | **+23, none unwound** (64 → 87). Every prior assertion holds, including the 390px bar, which R11 widens rather than replaces |
+| — | `test_entries_desk_routes.py` | **+5, none unwound** (17 → 22). No backend test ever asserted the contact block, so the R13 removal had no backend successor to write. `_seed_entries` gained two fixture-only knobs (`act`, `fee_total_cents`); zero assertions touched |
+| R13 | `EntriesDesk.test.tsx` | **1 edited, 0 deleted.** "shows the contact email" → "shows the submitting address on the act": same claim (this is the operator surface, not the public projection), same address asserted on screen, different place. +3 added (banding, once-per-act total, the gender flag *and* its confirmability) |
+| R12 / Q14 §5 | `entryDisplay.test.ts` | **1 edited, 0 deleted.** "hasAttention is true only when needs_review" widens to "the reasons that are a question for the operator". No assertion weakened; the negative control gained two members (`awaiting_payment`, `awaiting_partner` must NOT light up) |
+
+**Deviations and findings, reported rather than worked around.**
+
+1. **FINDING F-E1-2-D1 (blocks Phase E as written).** SP-E1-2's CONTEXT
+   lists the entry-page / entry-event **config routes as explicitly
+   unaffected — "treat a need to touch as a finding"** — while **Phase E
+   step 1 requires seeding through them with the R14 fields**
+   (`PUT entry-page` carrying fee schedule / payment instructions / venue /
+   policy caps; `POST entry-events` carrying `gender_constraint` and
+   `withdraws_until`). `EntryPageUpsertDTO` and `EntryEventCreateDTO` carry
+   none of those fields and the routes write none of them, so today those
+   columns are reachable only by writing SQL — which Phase E's "seeded
+   through real paths only" forbids. Phase D did not touch them. **Phase E
+   needs a ruling:** widen the two config DTOs (a small, additive change
+   this finding recommends), or accept a documented deviation in the
+   walkthrough.
+2. **The birth-year trigger is a heuristic, deliberately.** R12 asks for a
+   birth year "only where an age-bracketed event requires it" and the
+   schema has **no age-bracket field**, so `_AGE_BRACKET_RE` reads the two
+   strings a director already writes (`U15`, `Under-15`, `40+`, `O40`) off
+   the code and the discipline. Broad rather than clever, because the
+   permissive error shows an optional field nobody fills in and the strict
+   error hides one. A structured column is the honest fix and belongs with
+   the config surface.
+3. **`entry_pages.collect_phone` is still unread.** The column exists
+   (Phase C) and the form offers no phone field: the phone lands on the
+   **account**, and editing an account is E2's "my account". Recorded so
+   the column's silence is a decision rather than an oversight.
+4. **Two Phase-D tests were corrected while red**, both written in the same
+   commit and both asserting the wrong thing about my own markup (the
+   hidden positional `birthYear` input; `"0.00"` matching `"40.00"` in the
+   fee card). No pre-existing assertion was involved.
+5. **`install-selfhost.md` §4b's CSP paragraph was false** — it said the
+   entry page allows `challenges.cloudflare.com`. The challenge moved to
+   signup in Phase C and the page is `script-src 'none'`; the open question
+   is now restated against the route it actually applies to (rule 10).
+
+**Open for Phase E.** Finding 1 above is the first thing to settle. F-E1-2
+stands unchanged (multi-event submissions produce one roster player per
+entry, so a human in three events reaches the roster three times — the
+ruling is owed in E2/Phase 7 alongside F-E1). Nothing in this phase touched
+`services/entries.py`, `api/entries.py`'s confirm/commit routes, the module
+system, or the `GET /e/{slug}` allowlist entry.
